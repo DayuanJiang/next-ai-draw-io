@@ -81,6 +81,11 @@ lib/                  # Utility functions and helpers
 public/               # Static assets including example images
 ```
 
+## TODOs
+
+-   [ ] Allow the LLM to modify the XML instead of generating it from scratch everytime.
+-   [ ] Improve the smoothness of shape streaming updates.
+
 ## License
 
 This project is licensed under the MIT License.
