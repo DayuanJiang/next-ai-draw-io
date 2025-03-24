@@ -13,8 +13,9 @@ export const maxDuration = 30;
 const guide = readFileSync(resolve('./app/api/chat/xml_guide.md'), 'utf8');
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const body = await req.json();
 
+  const { messages, data = {} } = body;
 
   // Read and escape the guide content
   const systemMessage = `
@@ -50,12 +51,22 @@ ${guide}
 """
 `;
 
-  // Add system message if only user message is provided
-  const enhancedMessages = messages.length === 1
-    ? [{ role: "system", content: systemMessage }, ...messages]
+  const lastMessage = messages[messages.length - 1];
+  const formattedContent = `
+Current diagram XML:
+"""xml
+${data.xml || ''}
+"""
+User input:
+"""md
+${lastMessage.content}
+"""`;
 
-    : messages;
+  let enhancedMessages = messages.length === 1
+    ? [{ role: "system", content: systemMessage }, { ...lastMessage, content: formattedContent }]
+    : [...messages.slice(0, -1), { ...lastMessage, content: formattedContent }];
 
+  console.log(enhancedMessages);
   const result = streamText({
     // model: google("gemini-2.0-flash"),
     model: openai("gpt-4o"),

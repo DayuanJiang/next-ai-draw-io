@@ -47,7 +47,7 @@ export default function ChatPanel({
         error,
         setInput,
         setMessages,
-        data,
+        append,
     } = useChat({
         maxSteps: 5,
         async onToolCall({ toolCall }) {
@@ -70,37 +70,24 @@ export default function ChatPanel({
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
-        console.log("Data updated:", data);
     }, [messages]);
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (input.trim() && status !== "streaming") {
             try {
-                // Hide examples panel after sending a message
-
                 // Fetch chart data before setting input
                 const chartXml = await onFetchChart();
-
-                // Now use the fetched data to set input
-                setInput(
-                    `
-                    Current diagram XML:
-                    """xml
-                    ${chartXml}
-                    """
-                    User input:
-                    """md
-                    ${input}
-                    """
-                    `
-                );
                 handleSubmit(e, {
+                    data: {
+                        xml: chartXml,
+                    },
                     experimental_attachments: files,
                 });
 
                 // Clear files after submission
                 setFiles(undefined);
+                console.log("messages", messages);
             } catch (error) {
                 console.error("Error fetching chart data:", error);
             }
