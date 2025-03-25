@@ -27,7 +27,7 @@ export default function ChatPanel({
     onAddToHistory = () => {},
 }: ChatPanelProps) {
     // Add a step counter to track updates
-    const stepCounterRef = useRef<number>(0);
+
     // Add state for file attachments
     const [files, setFiles] = useState<FileList | undefined>(undefined);
     // Add state for showing the history dialog
@@ -109,7 +109,6 @@ export default function ChatPanel({
                     setInput={setInput}
                     setFiles={handleFileChange}
                     onDisplayChart={onDisplayChart}
-                    stepCounterRef={stepCounterRef}
                 />
             </CardContent>
 

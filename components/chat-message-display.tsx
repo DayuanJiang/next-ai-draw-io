@@ -14,7 +14,6 @@ interface ChatMessageDisplayProps {
     setInput: (input: string) => void;
     setFiles: (files: FileList | undefined) => void;
     onDisplayChart: (xml: string) => void;
-    stepCounterRef: React.MutableRefObject<number>;
 }
 
 export function ChatMessageDisplay({
@@ -23,10 +22,9 @@ export function ChatMessageDisplay({
     setInput,
     setFiles,
     onDisplayChart,
-    stepCounterRef,
 }: ChatMessageDisplayProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
+    const stepCounterRef = useRef<number>(0);
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -39,18 +37,24 @@ export function ChatMessageDisplay({
         switch (toolInvocation.toolName) {
             case "display_diagram": {
                 switch (toolInvocation.state) {
-                    case "partial-call": {
-                        const currentXml = toolInvocation.args?.xml || "";
+                    case "partial-call":
+                        {
+                            const currentXml = toolInvocation.args?.xml || "";
 
-                        // Increment the step counter
-                        stepCounterRef.current += 1;
+                            // Increment the step counter
+                            stepCounterRef.current += 1;
 
-                        // Determine whether to show details based on a simple threshold
-                        if (
-                            stepCounterRef.current >= 50 &&
-                            stepCounterRef.current % 20 === 0
-                        ) {
-                            onDisplayChart(convertToLegalXml(currentXml));
+                            // Determine whether to show details based on a simple threshold
+                            if (stepCounterRef.current % 20 === 0) {
+                                const convertedXml =
+                                    convertToLegalXml(currentXml);
+                                // if "/root" in convertedXml
+                                if (convertedXml.includes("/root")) {
+                                    onDisplayChart(convertedXml);
+                                    console.log("converted xml", convertedXml);
+                                }
+                                // if convertedXml changed
+                            }
                         }
                         return (
                             <div
@@ -68,7 +72,6 @@ export function ChatMessageDisplay({
                                 </div>
                             </div>
                         );
-                    }
                     case "call":
                         return (
                             <div
