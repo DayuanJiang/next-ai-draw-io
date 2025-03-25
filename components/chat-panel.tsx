@@ -23,6 +23,7 @@ interface ChatPanelProps {
 export default function ChatPanel({
     onDisplayChart,
     onFetchChart,
+    mergeXML,
     diagramHistory = [],
     onAddToHistory = () => {},
 }: ChatPanelProps) {
