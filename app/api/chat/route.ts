@@ -66,9 +66,9 @@ ${lastMessage.content}
     ? [{ role: "system", content: systemMessage }, { ...lastMessage, content: formattedContent }]
     : [...messages.slice(0, -1), { ...lastMessage, content: formattedContent }];
 
-  console.log(enhancedMessages);
   const result = streamText({
     // model: google("gemini-2.0-flash"),
+    // model: openai("chatgpt-4o-latest"),
     model: openai("gpt-4o"),
     toolCallStreaming: true,
     messages: enhancedMessages,

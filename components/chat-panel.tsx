@@ -12,10 +12,10 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
 import { useChat } from "@ai-sdk/react";
 import { ChatInput } from "@/components/chat-input";
 import { convertToLegalXml } from "@/lib/utils";
+import ExamplePanel from "./chat-example-panel";
 interface ChatPanelProps {
     onDisplayChart: (xml: string) => void;
     onFetchChart: () => Promise<string>;
@@ -47,13 +47,9 @@ export default function ChatPanel({
         error,
         setInput,
         setMessages,
-        append,
     } = useChat({
         maxSteps: 5,
         async onToolCall({ toolCall }) {
-            console.log("Tool call:", toolCall);
-            console.log("Tool call name:", toolCall.toolName);
-            console.log("Tool call arguments:", toolCall.args);
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.args as { xml: string };
                 onDisplayChart(xml);
@@ -97,30 +93,6 @@ export default function ChatPanel({
     // Helper function to handle file changes
     const handleFileChange = (newFiles: FileList | undefined) => {
         setFiles(newFiles);
-    };
-
-    // New utility function to create a FileList from a File
-    const createFileList = (file: File): FileList => {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        return dt.files;
-    };
-
-    // New handler for the "Replicate this flowchart" button
-    const handleReplicateFlowchart = async () => {
-        setInput("Replicate this flowchart.");
-
-        try {
-            // Fetch the example image
-            const response = await fetch("/example.png");
-            const blob = await response.blob();
-            const file = new File([blob], "example.png", { type: "image/png" });
-
-            // Set the file to the files state
-            setFiles(createFileList(file));
-        } catch (error) {
-            console.error("Error loading example image:", error);
-        }
     };
 
     // Function to handle history item selection
@@ -200,34 +172,6 @@ export default function ChatPanel({
         }
     };
 
-    const examplePanel = (
-        <div className="px-4 py-2 border-t border-b border-gray-100">
-            <p className="text-sm text-gray-500 mb-2">
-                {" "}
-                Start a conversation to generate or modify diagrams.
-            </p>
-            <p className="text-sm text-gray-500 mb-2">
-                {" "}
-                You can also upload images to use as references.
-            </p>
-            <p className="text-sm text-gray-500 mb-2">Try these examples:</p>
-            <div className="flex flex-wrap gap-5">
-                <button
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
-                    onClick={handleReplicateFlowchart}
-                >
-                    Replicate this flowchart
-                </button>
-                <button
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
-                    onClick={() => setInput("Draw a cat for me")}
-                >
-                    Draw a cat for me
-                </button>
-            </div>
-        </div>
-    );
-
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">
             <CardHeader className="p-4 text-center">
@@ -235,95 +179,100 @@ export default function ChatPanel({
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
                 <ScrollArea className="h-full pr-4">
-                    {messages.length === 0
-                        ? examplePanel
-                        : messages.map((message) => (
-                              <div
-                                  key={message.id}
-                                  className={`mb-4 ${
-                                      message.role === "user"
-                                          ? "text-right"
-                                          : "text-left"
-                                  }`}
-                              >
-                                  <div
-                                      className={`inline-block px-4 py-2 whitespace-pre-wrap text-sm rounded-lg max-w-[85%] break-words ${
-                                          message.role === "user"
-                                              ? "bg-primary text-primary-foreground"
-                                              : "bg-muted text-muted-foreground"
-                                      }`}
-                                  >
-                                      {/* Render message content based on parts if available */}
-                                      {message.parts
-                                          ? message.parts.map((part, index) => {
-                                                switch (part.type) {
-                                                    case "text":
-                                                        return (
-                                                            <div key={index}>
-                                                                {part.text}
-                                                            </div>
-                                                        );
-                                                    case "tool-invocation":
-                                                        return renderToolInvocation(
-                                                            part.toolInvocation
-                                                        );
-                                                    default:
-                                                        return null;
-                                                }
-                                            })
-                                          : // Fallback to simple content for older format
-                                            message.content}
-                                  </div>
-
-                                  {/* Display image attachments */}
-                                  {message?.experimental_attachments
-                                      ?.filter((attachment) =>
-                                          attachment?.contentType?.startsWith(
-                                              "image/"
-                                          )
-                                      )
-                                      .map((attachment, index) => (
-                                          <div
-                                              key={`${message.id}-${index}`}
-                                              className={`mt-2 ${
-                                                  message.role === "user"
-                                                      ? "text-right"
-                                                      : "text-left"
-                                              }`}
-                                          >
-                                              <div className="inline-block">
-                                                  <Image
-                                                      src={attachment.url}
-                                                      width={200}
-                                                      height={200}
-                                                      alt={
-                                                          attachment.name ??
-                                                          `attachment-${index}`
-                                                      }
-                                                      className="rounded-md border"
-                                                      style={{
-                                                          objectFit: "contain",
-                                                      }}
-                                                  />
-                                              </div>
-                                          </div>
-                                      ))}
-
-                                  {/* Legacy support for function_call format */}
-                                  {(message as any).function_call && (
-                                      <div className="mt-2 text-left">
-                                          <div className="text-xs text-gray-500">
-                                              Using tool:{" "}
-                                              {
-                                                  (message as any).function_call
-                                                      .name
+                    {messages.length === 0 ? (
+                        <ExamplePanel
+                            setInput={setInput}
+                            setFiles={handleFileChange}
+                        />
+                    ) : (
+                        messages.map((message) => (
+                            <div
+                                key={message.id}
+                                className={`mb-4 ${
+                                    message.role === "user"
+                                        ? "text-right"
+                                        : "text-left"
+                                }`}
+                            >
+                                <div
+                                    className={`inline-block px-4 py-2 whitespace-pre-wrap text-sm rounded-lg max-w-[85%] break-words ${
+                                        message.role === "user"
+                                            ? "bg-primary text-primary-foreground"
+                                            : "bg-muted text-muted-foreground"
+                                    }`}
+                                >
+                                    {/* Render message content based on parts if available */}
+                                    {message.parts
+                                        ? message.parts.map((part, index) => {
+                                              switch (part.type) {
+                                                  case "text":
+                                                      return (
+                                                          <div key={index}>
+                                                              {part.text}
+                                                          </div>
+                                                      );
+                                                  case "tool-invocation":
+                                                      return renderToolInvocation(
+                                                          part.toolInvocation
+                                                      );
+                                                  default:
+                                                      return null;
                                               }
-                                              ...
-                                          </div>
-                                      </div>
-                                  )}
-                              </div>
-                          ))}
+                                          })
+                                        : // Fallback to simple content for older format
+                                          message.content}
+                                </div>
+
+                                {/* Display image attachments */}
+                                {message?.experimental_attachments
+                                    ?.filter((attachment) =>
+                                        attachment?.contentType?.startsWith(
+                                            "image/"
+                                        )
+                                    )
+                                    .map((attachment, index) => (
+                                        <div
+                                            key={`${message.id}-${index}`}
+                                            className={`mt-2 ${
+                                                message.role === "user"
+                                                    ? "text-right"
+                                                    : "text-left"
+                                            }`}
+                                        >
+                                            <div className="inline-block">
+                                                <Image
+                                                    src={attachment.url}
+                                                    width={200}
+                                                    height={200}
+                                                    alt={
+                                                        attachment.name ??
+                                                        `attachment-${index}`
+                                                    }
+                                                    className="rounded-md border"
+                                                    style={{
+                                                        objectFit: "contain",
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                {/* Legacy support for function_call format */}
+                                {(message as any).function_call && (
+                                    <div className="mt-2 text-left">
+                                        <div className="text-xs text-gray-500">
+                                            Using tool:{" "}
+                                            {
+                                                (message as any).function_call
+                                                    .name
+                                            }
+                                            ...
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
                     {error && (
                         <div className="text-red-500 text-sm mt-2">
                             Error: {error.message}

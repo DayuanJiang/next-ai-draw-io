@@ -4,7 +4,7 @@ import { DrawIoEmbed, DrawIoEmbedRef } from "react-drawio";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { extractDiagramXML } from "./extract_xml";
-import ChatPanel from "@/components/chatPanel";
+import ChatPanel from "@/components/chat-panel";
 
 export default function Home() {
     const drawioRef = useRef<DrawIoEmbedRef>(null);
