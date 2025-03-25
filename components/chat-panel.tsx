@@ -14,6 +14,7 @@ import { useChat } from "@ai-sdk/react";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 interface ChatPanelProps {
+    chartXML: string;
     onDisplayChart: (xml: string) => void;
     onFetchChart: () => Promise<string>;
     diagramHistory?: { svg: string; xml: string }[];
@@ -21,9 +22,9 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({
+    chartXML,
     onDisplayChart,
     onFetchChart,
-    mergeXML,
     diagramHistory = [],
     onAddToHistory = () => {},
 }: ChatPanelProps) {
@@ -49,7 +50,8 @@ export default function ChatPanel({
         async onToolCall({ toolCall }) {
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.args as { xml: string };
-                onDisplayChart(xml);
+                // do nothing because we will handle this streamingly in the ChatMessageDisplay component
+                // onDisplayChart(xml);
                 return "Successfully displayed the flowchart.";
             }
         },
@@ -105,6 +107,7 @@ export default function ChatPanel({
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
                 <ChatMessageDisplay
+                    chartXML={chartXML}
                     messages={messages}
                     error={error}
                     setInput={setInput}

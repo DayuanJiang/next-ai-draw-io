@@ -75,7 +75,16 @@ ${lastMessage.content}
     tools: {
       // Client-side tool that will be executed on the client
       display_diagram: {
-        description: "Display a diagram on draw.io",
+        description: `Display a diagram on draw.io. You only need to pass the nodes inside the <root> tag (including the <root> tag itself) in the XML string.
+        For example:
+        <root>
+          <mxCell id="0"/>
+          <mxCell id="1" parent="0"/>
+          <mxGeometry x="20" y="20" width="100" height="100" as="geometry"/>
+          <mxCell id="2" value="Hello, World!" style="shape=rectangle" parent="1">
+            <mxGeometry x="20" y="20" width="100" height="100" as="geometry"/>
+          </mxCell>
+        </root>`,
         parameters: z.object({
           xml: z.string().describe("XML string to be displayed on draw.io")
         })

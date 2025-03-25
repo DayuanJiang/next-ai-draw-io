@@ -6,9 +6,10 @@ import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { Message } from "ai";
-import { convertToLegalXml } from "@/lib/utils";
+import { convertToLegalXml, replaceNodes } from "@/lib/utils";
 
 interface ChatMessageDisplayProps {
+    chartXML: string;
     messages: Message[];
     error?: Error | null;
     setInput: (input: string) => void;
@@ -17,6 +18,7 @@ interface ChatMessageDisplayProps {
 }
 
 export function ChatMessageDisplay({
+    chartXML,
     messages,
     error,
     setInput,
@@ -24,7 +26,7 @@ export function ChatMessageDisplay({
     onDisplayChart,
 }: ChatMessageDisplayProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const stepCounterRef = useRef<number>(0);
+    const previousXML = useRef<string>("");
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -42,19 +44,26 @@ export function ChatMessageDisplay({
                             const currentXml = toolInvocation.args?.xml || "";
 
                             // Increment the step counter
-                            stepCounterRef.current += 1;
 
                             // Determine whether to show details based on a simple threshold
-                            if (stepCounterRef.current % 20 === 0) {
-                                const convertedXml =
-                                    convertToLegalXml(currentXml);
+                            const convertedXml = convertToLegalXml(currentXml);
+                            if (convertedXml !== previousXML.current) {
+                                previousXML.current = convertedXml;
                                 // if "/root" in convertedXml
-                                if (convertedXml.includes("/root")) {
-                                    onDisplayChart(convertedXml);
-                                    console.log("converted xml", convertedXml);
-                                }
+                                const replacedXML = replaceNodes(
+                                    chartXML,
+                                    convertedXml
+                                );
+                                console.log("currentXml", currentXml);
+                                console.log("converted xml", convertedXml);
+                                console.log("replaced xml", replacedXML);
+                                onDisplayChart(replacedXML);
+
                                 // if convertedXml changed
                             }
+                            // if "/root" in convertedXml
+
+                            // if convertedXml changed
                         }
                         return (
                             <div
