@@ -82,7 +82,6 @@ export default function ChatPanel({
 
                 // Clear files after submission
                 setFiles(undefined);
-                console.log("messages", messages);
             } catch (error) {
                 console.error("Error fetching chart data:", error);
             }

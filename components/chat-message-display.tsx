@@ -54,16 +54,10 @@ export function ChatMessageDisplay({
                                     chartXML,
                                     convertedXml
                                 );
-                                console.log("currentXml", currentXml);
-                                console.log("converted xml", convertedXml);
-                                console.log("replaced xml", replacedXML);
                                 onDisplayChart(replacedXML);
 
                                 // if convertedXml changed
                             }
-                            // if "/root" in convertedXml
-
-                            // if convertedXml changed
                         }
                         return (
                             <div

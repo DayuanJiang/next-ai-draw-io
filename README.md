@@ -84,7 +84,7 @@ public/               # Static assets including example images
 ## TODOs
 
 -   [ ] Allow the LLM to modify the XML instead of generating it from scratch everytime.
--   [ ] Improve the smoothness of shape streaming updates.
+-   [x] Improve the smoothness of shape streaming updates.
 
 ## License
 

@@ -27,7 +27,6 @@ export default function Home() {
 
     const loadDiagram = (chart: string) => {
         if (drawioRef.current) {
-            console.log("xml before load", chart);
             drawioRef.current.load({
                 xml: chart,
             });

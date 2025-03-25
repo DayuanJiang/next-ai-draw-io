@@ -45,6 +45,9 @@ Note that:
 - When artistic drawings are requested, creatively compose them using standard diagram shapes and connectors while maintaining visual clarity.
 - **Don't** write out the XML string. Just return the XML string in the tool call.
 - If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
+
+
+
 Here are the guide of XML format for draw.io:
 """md
 ${guide}
