@@ -8,23 +8,22 @@ import ExamplePanel from "./chat-example-panel";
 import { Message } from "ai";
 import { convertToLegalXml, replaceNodes } from "@/lib/utils";
 
+import { useDiagram } from "@/contexts/diagram-context";
+
 interface ChatMessageDisplayProps {
-    chartXML: string;
     messages: Message[];
     error?: Error | null;
     setInput: (input: string) => void;
     setFiles: (files: FileList | undefined) => void;
-    onDisplayChart: (xml: string) => void;
 }
 
 export function ChatMessageDisplay({
-    chartXML,
     messages,
     error,
     setInput,
     setFiles,
-    onDisplayChart,
 }: ChatMessageDisplayProps) {
+    const { chartXML, loadDiagram: onDisplayChart } = useDiagram();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const previousXML = useRef<string>("");
     useEffect(() => {

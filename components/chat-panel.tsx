@@ -13,21 +13,23 @@ import {
 import { useChat } from "@ai-sdk/react";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
-interface ChatPanelProps {
-    chartXML: string;
-    onDisplayChart: (xml: string) => void;
-    onFetchChart: () => Promise<string>;
-    diagramHistory?: { svg: string; xml: string }[];
-    onAddToHistory?: () => void;
-}
+import { useDiagram } from "@/contexts/diagram-context";
 
-export default function ChatPanel({
-    chartXML,
-    onDisplayChart,
-    onFetchChart,
-    diagramHistory = [],
-    onAddToHistory = () => {},
-}: ChatPanelProps) {
+export default function ChatPanel() {
+    const {
+        chartXML,
+        loadDiagram: onDisplayChart,
+        handleExport: onExport,
+        resolverRef,
+        diagramHistory,
+    } = useDiagram();
+
+    const onFetchChart = () => {
+        return new Promise<string>((resolve) => {
+            resolverRef.current = resolve; // Store the resolver
+            onExport(); // Trigger the export
+        });
+    };
     // Add a step counter to track updates
 
     // Add state for file attachments
@@ -106,12 +108,10 @@ export default function ChatPanel({
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
                 <ChatMessageDisplay
-                    chartXML={chartXML}
                     messages={messages}
                     error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
-                    onDisplayChart={onDisplayChart}
                 />
             </CardContent>
 
@@ -122,11 +122,8 @@ export default function ChatPanel({
                     onSubmit={onFormSubmit}
                     onChange={handleInputChange}
                     setMessages={setMessages}
-                    onDisplayChart={onDisplayChart}
                     files={files}
                     onFileChange={handleFileChange}
-                    diagramHistory={diagramHistory}
-                    onSelectHistoryItem={handleSelectHistoryItem}
                     showHistory={showHistory}
                     setShowHistory={setShowHistory}
                 />

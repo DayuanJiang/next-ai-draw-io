@@ -27,17 +27,16 @@ import {
 } from "@/components/ui/dialog";
 import Image from "next/image";
 
+import { useDiagram } from "@/contexts/diagram-context";
+
 interface ChatInputProps {
     input: string;
     status: "submitted" | "streaming" | "ready" | "error";
     onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     setMessages: (messages: any[]) => void;
-    onDisplayChart: (xml: string) => void;
     files?: FileList;
     onFileChange?: (files: FileList | undefined) => void;
-    diagramHistory?: { svg: string; xml: string }[];
-    onSelectHistoryItem?: (xml: string) => void;
     showHistory?: boolean;
     setShowHistory?: (show: boolean) => void;
 }
@@ -48,14 +47,12 @@ export function ChatInput({
     onSubmit,
     onChange,
     setMessages,
-    onDisplayChart,
     files,
     onFileChange,
-    diagramHistory = [],
-    onSelectHistoryItem = () => {},
     showHistory = false,
     setShowHistory = () => {},
 }: ChatInputProps) {
+    const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -289,9 +286,10 @@ export function ChatInput({
                                         <div
                                             key={index}
                                             className="border rounded-md p-2 cursor-pointer hover:border-primary transition-colors"
-                                            onClick={() =>
-                                                onSelectHistoryItem(item.xml)
-                                            }
+                                            onClick={() => {
+                                                onDisplayChart(item.xml);
+                                                setShowHistory(false);
+                                            }}
                                         >
                                             <div className="aspect-video bg-white rounded overflow-hidden flex items-center justify-center">
                                                 <Image
