@@ -64,11 +64,9 @@ User input:
 """md
 ${lastMessage.content}
 """`;
-
-  let enhancedMessages = messages.length === 1
-    ? [{ role: "system", content: systemMessage }, { ...lastMessage, content: formattedContent }]
-    : [...messages.slice(0, -1), { ...lastMessage, content: formattedContent }];
-
+  let enhancedMessages = [{ role: "system", content: systemMessage }, ...messages];
+  enhancedMessages = [...enhancedMessages.slice(0, -1), { ...lastMessage, content: formattedContent }];
+  console.log("Enhanced messages:", enhancedMessages);
   const result = streamText({
     // model: google("gemini-2.0-flash"),
     // model: openai("chatgpt-4o-latest"),
