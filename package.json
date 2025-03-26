@@ -15,6 +15,7 @@
     "@radix-ui/react-scroll-area": "^1.2.3",
     "@radix-ui/react-slot": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.8",
+    "@vercel/analytics": "^1.5.0",
     "@xmldom/xmldom": "^0.9.8",
     "ai": "^4.1.62",
     "base-64": "^1.0.0",
