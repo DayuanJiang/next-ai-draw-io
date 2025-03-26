@@ -12,12 +12,7 @@ import {
     X,
     History,
 } from "lucide-react";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 import Image from "next/image";
 
 import { useDiagram } from "@/contexts/diagram-context";
@@ -207,23 +202,15 @@ export function ChatInput({
 
             <div className="flex items-center gap-2">
                 <div className="mr-auto">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setShowClearDialog(true)}
-                                >
-                                    <RotateCcw className="mr-2 h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                Clear current conversation and diagram
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    <ButtonWithTooltip
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowClearDialog(true)}
+                        tooltipContent="Clear current conversation and diagram"
+                    >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                    </ButtonWithTooltip>
 
                     {/* Warning Modal */}
                     <ResetWarningModal
@@ -239,28 +226,20 @@ export function ChatInput({
                 </div>
                 <div className="flex gap-2">
                     {/* History Button */}
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => setShowHistory(true)}
-                                    disabled={
-                                        status === "streaming" ||
-                                        diagramHistory.length === 0
-                                    }
-                                    title="Diagram History"
-                                >
-                                    <History className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                View diagram history
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    <ButtonWithTooltip
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowHistory(true)}
+                        disabled={
+                            status === "streaming" ||
+                            diagramHistory.length === 0
+                        }
+                        title="Diagram History"
+                        tooltipContent="View diagram history"
+                    >
+                        <History className="h-4 w-4" />
+                    </ButtonWithTooltip>
 
                     <Button
                         type="button"
