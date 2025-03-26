@@ -3,6 +3,7 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ResetWarningModal } from "@/components/reset-warning-modal";
 import {
     Loader2,
     Send,
@@ -17,14 +18,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import Image from "next/image";
 
 import { useDiagram } from "@/contexts/diagram-context";
@@ -233,35 +226,11 @@ export function ChatInput({
                     </TooltipProvider>
 
                     {/* Warning Modal */}
-                    <Dialog
+                    <ResetWarningModal
                         open={showClearDialog}
                         onOpenChange={setShowClearDialog}
-                    >
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Clear Everything?</DialogTitle>
-                                <DialogDescription>
-                                    This will clear the current conversation and
-                                    reset the diagram. This action cannot be
-                                    undone.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setShowClearDialog(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    variant="destructive"
-                                    onClick={handleClear}
-                                >
-                                    Clear Everything
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                        onClear={handleClear}
+                    />
 
                     <HistoryDialog
                         showHistory={showHistory}
