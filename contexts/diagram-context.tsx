@@ -10,8 +10,8 @@ interface DiagramContextType {
     diagramHistory: { svg: string; xml: string }[];
     loadDiagram: (chart: string) => void;
     handleExport: () => void;
-    resolverRef: React.MutableRefObject<((value: string) => void) | null>;
-    drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>;
+    resolverRef: React.Ref<((value: string) => void) | null>;
+    drawioRef: React.Ref<DrawIoEmbedRef | null>;
     handleDiagramExport: (data: any) => void;
 }
 
@@ -23,7 +23,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [diagramHistory, setDiagramHistory] = useState<
         { svg: string; xml: string }[]
     >([]);
-    const drawioRef = useRef<DrawIoEmbedRef>(null);
+    const drawioRef = useRef<DrawIoEmbedRef | null>(null);
     const resolverRef = useRef<((value: string) => void) | null>(null);
 
     const handleExport = () => {
