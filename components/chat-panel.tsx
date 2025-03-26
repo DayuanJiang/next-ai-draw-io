@@ -17,16 +17,16 @@ import { useDiagram } from "@/contexts/diagram-context";
 
 export default function ChatPanel() {
     const {
-        chartXML,
         loadDiagram: onDisplayChart,
         handleExport: onExport,
         resolverRef,
-        diagramHistory,
     } = useDiagram();
 
     const onFetchChart = () => {
         return new Promise<string>((resolve) => {
-            resolverRef.current = resolve; // Store the resolver
+            if (resolverRef && "current" in resolverRef) {
+                resolverRef.current = resolve; // Store the resolver
+            }
             onExport(); // Trigger the export
         });
     };
@@ -94,12 +94,7 @@ export default function ChatPanel() {
     const handleFileChange = (newFiles: FileList | undefined) => {
         setFiles(newFiles);
     };
-
-    // Function to handle history item selection
-    const handleSelectHistoryItem = (xml: string) => {
-        onDisplayChart(xml);
-        setShowHistory(false);
-    };
+    // Helper function to handle file input change
 
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">
