@@ -20,6 +20,7 @@ export default function ChatPanel() {
         loadDiagram: onDisplayChart,
         handleExport: onExport,
         resolverRef,
+        clearDiagram,
     } = useDiagram();
 
     const onFetchChart = () => {
@@ -123,7 +124,10 @@ export default function ChatPanel() {
                     status={status}
                     onSubmit={onFormSubmit}
                     onChange={handleInputChange}
-                    onClearChat={() => setMessages([])}
+                    onClearChat={() => {
+                        setMessages([]);
+                        clearDiagram();
+                    }}
                     files={files}
                     onFileChange={handleFileChange}
                     showHistory={showHistory}

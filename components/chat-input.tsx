@@ -40,7 +40,7 @@ export function ChatInput({
     showHistory = false,
     onToggleHistory = () => {},
 }: ChatInputProps) {
-    const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
+    const { diagramHistory } = useDiagram();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -132,14 +132,6 @@ export function ChatInput({
     // Handle clearing conversation and diagram
     const handleClear = () => {
         onClearChat();
-        onDisplayChart(`<mxfile host="embed.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36" version="26.1.1">
-            <diagram name="Page-1" id="NsivuNt5aJDXaP8udwGv">
-                <mxGraphModel dx="394" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
-                    <root>
-                    </root>
-                </mxGraphModel>
-            </diagram>
-        </mxfile>`);
         setShowClearDialog(false);
     };
 

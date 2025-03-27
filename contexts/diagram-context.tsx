@@ -13,6 +13,7 @@ interface DiagramContextType {
     resolverRef: React.Ref<((value: string) => void) | null>;
     drawioRef: React.Ref<DrawIoEmbedRef | null>;
     handleDiagramExport: (data: any) => void;
+    clearDiagram: () => void;
 }
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined);
@@ -59,6 +60,14 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const clearDiagram = () => {
+        const emptyDiagram = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`;
+        loadDiagram(emptyDiagram);
+        setChartXML(emptyDiagram);
+        setLatestSvg("");
+        setDiagramHistory([]);
+    };
+
     return (
         <DiagramContext.Provider
             value={{
@@ -70,6 +79,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 resolverRef,
                 drawioRef,
                 handleDiagramExport,
+                clearDiagram,
             }}
         >
             {children}
