@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useRef, useState } from "react";
 import type { DrawIoEmbedRef } from "react-drawio";
-import { extractDiagramXML } from "@/app/extract_xml";
+import { extractDiagramXML } from "../lib/utils";
 
 interface DiagramContextType {
     chartXML: string;
