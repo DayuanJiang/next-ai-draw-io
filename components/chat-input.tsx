@@ -13,8 +13,7 @@ import {
     History,
 } from "lucide-react";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
-import Image from "next/image";
-
+import { FilePreviewList } from "./file-preview-list";
 import { useDiagram } from "@/contexts/diagram-context";
 import { HistoryDialog } from "@/components/history-dialog";
 
@@ -24,8 +23,8 @@ interface ChatInputProps {
     onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     onClearChat: () => void;
-    files?: FileList;
-    onFileChange?: (files: FileList | undefined) => void;
+    files?: File[];
+    onFileChange?: (files: File[]) => void;
     showHistory?: boolean;
     onToggleHistory?: (show: boolean) => void;
 }
@@ -36,8 +35,8 @@ export function ChatInput({
     onSubmit,
     onChange,
     onClearChat,
-    files,
-    onFileChange,
+    files = [],
+    onFileChange = () => {},
     showHistory = false,
     onToggleHistory = () => {},
 }: ChatInputProps) {
@@ -73,19 +72,24 @@ export function ChatInput({
 
     // Handle file changes
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (onFileChange) {
-            onFileChange(e.target.files || undefined);
+        const newFiles = Array.from(e.target.files || []);
+        onFileChange([...files, ...newFiles]);
+    };
+
+    // Remove individual file
+    const handleRemoveFile = (fileToRemove: File) => {
+        onFileChange(files.filter((file) => file !== fileToRemove));
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
         }
     };
 
-    // Clear file selection
+    // Clear all files
     const clearFiles = () => {
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
-        if (onFileChange) {
-            onFileChange(undefined);
-        }
+        onFileChange([]);
     };
 
     // Trigger file input click
@@ -116,17 +120,12 @@ export function ChatInput({
         const droppedFiles = e.dataTransfer.files;
 
         // Only process image files
-        if (droppedFiles.length > 0) {
-            const imageFiles = Array.from(droppedFiles).filter((file) =>
-                file.type.startsWith("image/")
-            );
+        const imageFiles = Array.from(droppedFiles).filter((file) =>
+            file.type.startsWith("image/")
+        );
 
-            if (imageFiles.length > 0 && onFileChange) {
-                // Create a new FileList-like object with only image files
-                const dt = new DataTransfer();
-                imageFiles.forEach((file) => dt.items.add(file));
-                onFileChange(dt.files);
-            }
+        if (imageFiles.length > 0) {
+            onFileChange([...files, ...imageFiles]);
         }
     };
 
@@ -156,38 +155,7 @@ export function ChatInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            {/* File preview area */}
-            {files && files.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2 p-2 bg-muted/50 rounded-md">
-                    {Array.from(files).map((file, index) => (
-                        <div key={index} className="relative group">
-                            <div className="w-20 h-20 border rounded-md overflow-hidden bg-muted">
-                                {file.type.startsWith("image/") ? (
-                                    <Image
-                                        src={URL.createObjectURL(file)}
-                                        alt={file.name}
-                                        width={80}
-                                        height={80}
-                                        className="object-cover w-full h-full"
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-xs text-center p-1">
-                                        {file.name}
-                                    </div>
-                                )}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={clearFiles}
-                                className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                aria-label="Remove file"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
+            <FilePreviewList files={files} onRemoveFile={handleRemoveFile} />
 
             <Textarea
                 ref={textareaRef}

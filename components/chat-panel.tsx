@@ -33,9 +33,16 @@ export default function ChatPanel() {
     // Add a step counter to track updates
 
     // Add state for file attachments
-    const [files, setFiles] = useState<FileList | undefined>(undefined);
+    const [files, setFiles] = useState<File[]>([]);
     // Add state for showing the history dialog
     const [showHistory, setShowHistory] = useState(false);
+
+    // Convert File[] to FileList for experimental_attachments
+    const createFileList = (files: File[]): FileList => {
+        const dt = new DataTransfer();
+        files.forEach((file) => dt.items.add(file));
+        return dt.files;
+    };
 
     // Remove the currentXmlRef and related useEffect
     const {
@@ -79,11 +86,12 @@ export default function ChatPanel() {
                     data: {
                         xml: chartXml,
                     },
-                    experimental_attachments: files,
+                    experimental_attachments:
+                        files.length > 0 ? createFileList(files) : undefined,
                 });
 
                 // Clear files after submission
-                setFiles(undefined);
+                setFiles([]);
             } catch (error) {
                 console.error("Error fetching chart data:", error);
             }
@@ -91,10 +99,9 @@ export default function ChatPanel() {
     };
 
     // Helper function to handle file changes
-    const handleFileChange = (newFiles: FileList | undefined) => {
+    const handleFileChange = (newFiles: File[]) => {
         setFiles(newFiles);
     };
-    // Helper function to handle file input change
 
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">

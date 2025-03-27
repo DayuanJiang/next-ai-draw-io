@@ -3,13 +3,8 @@ export default function ExamplePanel({
     setFiles,
 }: {
     setInput: (input: string) => void;
-    setFiles: (files: FileList | undefined) => void;
+    setFiles: (files: File[]) => void;
 }) {
-    const createFileList = (file: File): FileList => {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        return dt.files;
-    };
     // New handler for the "Replicate this flowchart" button
     const handleReplicateFlowchart = async () => {
         setInput("Replicate this flowchart.");
@@ -21,7 +16,7 @@ export default function ExamplePanel({
             const file = new File([blob], "example.png", { type: "image/png" });
 
             // Set the file to the files state
-            setFiles(createFileList(file));
+            setFiles([file]);
         } catch (error) {
             console.error("Error loading example image:", error);
         }

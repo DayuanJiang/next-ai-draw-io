@@ -14,7 +14,7 @@ interface ChatMessageDisplayProps {
     messages: Message[];
     error?: Error | null;
     setInput: (input: string) => void;
-    setFiles: (files: FileList | undefined) => void;
+    setFiles: (files: File[]) => void;
 }
 
 export function ChatMessageDisplay({
