@@ -9,7 +9,6 @@ import {
     Send,
     RotateCcw,
     Image as ImageIcon,
-    X,
     History,
 } from "lucide-react";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
@@ -82,14 +81,6 @@ export function ChatInput({
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
-    };
-
-    // Clear all files
-    const clearFiles = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
-        onFileChange([]);
     };
 
     // Trigger file input click
