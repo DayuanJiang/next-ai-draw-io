@@ -14,17 +14,17 @@ import { useDiagram } from "@/contexts/diagram-context";
 
 interface HistoryDialogProps {
     showHistory: boolean;
-    setShowHistory: (show: boolean) => void;
+    onToggleHistory: (show: boolean) => void;
 }
 
 export function HistoryDialog({
     showHistory,
-    setShowHistory,
+    onToggleHistory,
 }: HistoryDialogProps) {
     const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
 
     return (
-        <Dialog open={showHistory} onOpenChange={setShowHistory}>
+        <Dialog open={showHistory} onOpenChange={onToggleHistory}>
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Diagram History</DialogTitle>
@@ -48,7 +48,7 @@ export function HistoryDialog({
                                 className="border rounded-md p-2 cursor-pointer hover:border-primary transition-colors"
                                 onClick={() => {
                                     onDisplayChart(item.xml);
-                                    setShowHistory(false);
+                                    onToggleHistory(false);
                                 }}
                             >
                                 <div className="aspect-video bg-white rounded overflow-hidden flex items-center justify-center">
@@ -71,7 +71,7 @@ export function HistoryDialog({
                 <DialogFooter>
                     <Button
                         variant="outline"
-                        onClick={() => setShowHistory(false)}
+                        onClick={() => onToggleHistory(false)}
                     >
                         Close
                     </Button>

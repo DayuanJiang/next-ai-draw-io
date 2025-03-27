@@ -23,11 +23,11 @@ interface ChatInputProps {
     status: "submitted" | "streaming" | "ready" | "error";
     onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-    setMessages: (messages: any[]) => void;
+    onClearChat: () => void;
     files?: FileList;
     onFileChange?: (files: FileList | undefined) => void;
     showHistory?: boolean;
-    setShowHistory?: (show: boolean) => void;
+    onToggleHistory?: (show: boolean) => void;
 }
 
 export function ChatInput({
@@ -35,11 +35,11 @@ export function ChatInput({
     status,
     onSubmit,
     onChange,
-    setMessages,
+    onClearChat,
     files,
     onFileChange,
     showHistory = false,
-    setShowHistory = () => {},
+    onToggleHistory = () => {},
 }: ChatInputProps) {
     const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -132,7 +132,7 @@ export function ChatInput({
 
     // Handle clearing conversation and diagram
     const handleClear = () => {
-        setMessages([]);
+        onClearChat();
         onDisplayChart(`<mxfile host="embed.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36" version="26.1.1">
             <diagram name="Page-1" id="NsivuNt5aJDXaP8udwGv">
                 <mxGraphModel dx="394" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
@@ -221,7 +221,7 @@ export function ChatInput({
 
                     <HistoryDialog
                         showHistory={showHistory}
-                        setShowHistory={setShowHistory}
+                        onToggleHistory={onToggleHistory}
                     />
                 </div>
                 <div className="flex gap-2">
@@ -230,7 +230,7 @@ export function ChatInput({
                         type="button"
                         variant="outline"
                         size="icon"
-                        onClick={() => setShowHistory(true)}
+                        onClick={() => onToggleHistory(true)}
                         disabled={
                             status === "streaming" ||
                             diagramHistory.length === 0

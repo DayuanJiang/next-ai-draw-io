@@ -116,11 +116,11 @@ export default function ChatPanel() {
                     status={status}
                     onSubmit={onFormSubmit}
                     onChange={handleInputChange}
-                    setMessages={setMessages}
+                    onClearChat={() => setMessages([])}
                     files={files}
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
-                    setShowHistory={setShowHistory}
+                    onToggleHistory={setShowHistory}
                 />
             </CardFooter>
         </Card>
