@@ -58,13 +58,47 @@ export function ChatInput({
         adjustTextareaHeight();
     }, [input, adjustTextareaHeight]);
 
-    // Handle keyboard shortcuts
+    // Handle keyboard shortcuts and paste events
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();
             const form = e.currentTarget.closest("form");
             if (form && input.trim() && status !== "streaming") {
                 form.requestSubmit();
+            }
+        }
+    };
+
+    // Handle clipboard paste
+    const handlePaste = async (e: React.ClipboardEvent) => {
+        if (status === "streaming") return;
+
+        const items = e.clipboardData.items;
+        const imageItems = Array.from(items).filter((item) =>
+            item.type.startsWith("image/")
+        );
+
+        if (imageItems.length > 0) {
+            const imageFiles = await Promise.all(
+                imageItems.map(async (item) => {
+                    const file = item.getAsFile();
+                    if (!file) return null;
+                    // Create a new file with a unique name
+                    return new File(
+                        [file],
+                        `pasted-image-${Date.now()}.${file.type.split("/")[1]}`,
+                        {
+                            type: file.type,
+                        }
+                    );
+                })
+            );
+
+            const validFiles = imageFiles.filter(
+                (file): file is File => file !== null
+            );
+            if (validFiles.length > 0) {
+                onFileChange([...files, ...validFiles]);
             }
         }
     };
@@ -145,6 +179,7 @@ export function ChatInput({
                 value={input}
                 onChange={onChange}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 placeholder="Describe what changes you want to make to the diagram... (Press Cmd/Ctrl + Enter to send)"
                 disabled={status === "streaming"}
                 aria-label="Chat input"
