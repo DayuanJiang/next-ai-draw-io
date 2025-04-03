@@ -14,12 +14,14 @@ import { useChat } from "@ai-sdk/react";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
+import { replaceNodes } from "@/lib/utils";
 
 export default function ChatPanel() {
     const {
         loadDiagram: onDisplayChart,
         handleExport: onExport,
         resolverRef,
+        chartXML,
         clearDiagram,
     } = useDiagram();
 
@@ -61,7 +63,7 @@ export default function ChatPanel() {
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.args as { xml: string };
                 // do nothing because we will handle this streamingly in the ChatMessageDisplay component
-                // onDisplayChart(xml);
+                onDisplayChart(replaceNodes(chartXML, xml));
                 return "Successfully displayed the flowchart.";
             }
         },

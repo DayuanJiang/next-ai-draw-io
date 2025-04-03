@@ -1,17 +1,9 @@
-import { google } from "@ai-sdk/google";
-import { openai } from "@ai-sdk/openai";
+import { bedrock } from '@ai-sdk/amazon-bedrock';
+
 import { streamText } from "ai";
 import { z } from "zod";
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-
-// Allow streaming responses up to 30 seconds
-export const maxDuration = 30;
 
 // Read the XML guide from file
-
-const guide = readFileSync(resolve('./app/api/chat/xml_guide.md'), 'utf8');
-
 export async function POST(req: Request) {
   const body = await req.json();
 
@@ -40,18 +32,10 @@ Core capabilities:
 - Structure complex systems into clear, organized visual components
 
 Note that:
-- Always validate XML string integrity before output.
 - Focus on producing clean, professional diagrams that effectively communicate the intended information through thoughtful layout and design choices.
 - When artistic drawings are requested, creatively compose them using standard diagram shapes and connectors while maintaining visual clarity.
 - **Don't** write out the XML string. Just return the XML string in the tool call.
 - If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
-
-
-
-Here are the guide of XML format for draw.io:
-"""md
-${guide}
-"""
 `;
 
   const lastMessage = messages[messages.length - 1];
@@ -66,11 +50,14 @@ ${lastMessage.content}
 """`;
   let enhancedMessages = [{ role: "system", content: systemMessage }, ...messages];
   enhancedMessages = [...enhancedMessages.slice(0, -1), { ...lastMessage, content: formattedContent }];
-  console.log("Enhanced messages:", enhancedMessages);
+  // console.log("Enhanced messages:", enhancedMessages);
+
   const result = streamText({
-    // model: google("gemini-2.0-flash"),
-    // model: openai("chatgpt-4o-latest"),
-    model: openai("gpt-4o"),
+    // model: google("gemini-2.5-pro-exp-03-25"),
+    // model: google("gemini-2.0-flash-001"),
+    // model: openrouter("google/gemini-2.0-flash-exp:free"),
+    model: bedrock('anthropic.claude-3-5-sonnet-20241022-v2:0'),
+    // model: openai("gpt-4o"),
     toolCallStreaming: true,
     messages: enhancedMessages,
     tools: {
@@ -93,6 +80,5 @@ ${lastMessage.content}
     },
     temperature: 0,
   });
-
   return result.toDataStreamResponse();
 }

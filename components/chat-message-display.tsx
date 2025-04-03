@@ -42,6 +42,7 @@ export function ChatMessageDisplay({
                         {
                             const currentXml = toolInvocation.args?.xml || "";
 
+                            console.log("toolInvocation", toolInvocation);
                             // Increment the step counter
 
                             // Determine whether to show details based on a simple threshold
@@ -54,7 +55,6 @@ export function ChatMessageDisplay({
                                     convertedXml
                                 );
                                 onDisplayChart(replacedXML);
-
                                 // if convertedXml changed
                             }
                         }
@@ -69,7 +69,12 @@ export function ChatMessageDisplay({
                                 <div className="text-xs text-gray-500 mt-1">
                                     Tool: display_diagram
                                     <div className="mt-1 font-mono text-xs">
-                                        onDisplayChart
+                                        Args:{" "}
+                                        {JSON.stringify(
+                                            toolInvocation.args,
+                                            null,
+                                            2
+                                        )}
                                     </div>
                                 </div>
                             </div>
