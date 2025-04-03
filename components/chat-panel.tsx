@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
+import { FaGithub } from "react-icons/fa";
 
 import {
     Card,
@@ -63,7 +64,7 @@ export default function ChatPanel() {
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.args as { xml: string };
                 // do nothing because we will handle this streamingly in the ChatMessageDisplay component
-                onDisplayChart(replaceNodes(chartXML, xml));
+                // onDisplayChart(replaceNodes(chartXML, xml));
                 return "Successfully displayed the flowchart.";
             }
         },
@@ -108,8 +109,16 @@ export default function ChatPanel() {
 
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">
-            <CardHeader className="p-4 text-center">
+            <CardHeader className="p-4 flex justify-between items-center">
                 <CardTitle>Next-AI-Drawio</CardTitle>
+                <a
+                    href="https://github.com/DayuanJiang/next-ai-draw-io"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                    <FaGithub className="w-6 h-6" />
+                </a>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
                 <ChatMessageDisplay
