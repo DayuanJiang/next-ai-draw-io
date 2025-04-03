@@ -180,7 +180,9 @@ export function ChatInput({
                 onChange={onChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder="Describe what changes you want to make to the diagram... (Press Cmd/Ctrl + Enter to send)"
+                placeholder="Describe what changes you want to make to the diagram
+                or upload(paste) an image to replicate a diagram.
+                 (Press Cmd/Ctrl + Enter to send)"
                 disabled={status === "streaming"}
                 aria-label="Chat input"
                 className="min-h-[80px] resize-none transition-all duration-200 px-1 py-0"
