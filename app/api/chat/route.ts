@@ -59,7 +59,7 @@ ${lastMessage.content}
     // model: openrouter("google/gemini-2.0-flash-exp:free"),
     model: bedrock('anthropic.claude-3-5-sonnet-20241022-v2:0'),
     // model: openai("gpt-4o"),
-    toolCallStreaming: true,
+    // toolCallStreaming: true,
     messages: enhancedMessages,
     tools: {
       // Client-side tool that will be executed on the client
