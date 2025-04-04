@@ -4,6 +4,9 @@ import { google } from '@ai-sdk/google';
 import { streamText } from "ai";
 import { z } from "zod";
 
+export const maxDuration = 60
+
+
 // Read the XML guide from file
 export async function POST(req: Request) {
   const body = await req.json();
