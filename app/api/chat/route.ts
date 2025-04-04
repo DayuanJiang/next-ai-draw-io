@@ -1,5 +1,6 @@
 import { bedrock } from '@ai-sdk/amazon-bedrock';
-
+import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
 import { streamText } from "ai";
 import { z } from "zod";
 

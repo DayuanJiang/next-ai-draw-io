@@ -32,83 +32,40 @@ export function ChatMessageDisplay({
         }
     }, [messages]);
 
+    function handleDisplayChart(xml: string) {
+        const currentXml = xml || "";
+        const convertedXml = convertToLegalXml(currentXml);
+        if (convertedXml !== previousXML.current) {
+            previousXML.current = convertedXml;
+            const replacedXML = replaceNodes(chartXML, convertedXml);
+            onDisplayChart(replacedXML);
+        }
+    }
+
     const renderToolInvocation = (toolInvocation: any) => {
         const callId = toolInvocation.toolCallId;
+        const { toolName, args, state } = toolInvocation;
+        handleDisplayChart(args?.xml);
 
-        switch (toolInvocation.toolName) {
-            case "display_diagram": {
-                switch (toolInvocation.state) {
-                    case "partial-call":
-                        {
-                            const currentXml = toolInvocation.args?.xml || "";
-
-                            console.log("toolInvocation", toolInvocation);
-                            // Increment the step counter
-
-                            // Determine whether to show details based on a simple threshold
-                            const convertedXml = convertToLegalXml(currentXml);
-                            if (convertedXml !== previousXML.current) {
-                                previousXML.current = convertedXml;
-                                // if "/root" in convertedXml
-                                const replacedXML = replaceNodes(
-                                    chartXML,
-                                    convertedXml
-                                );
-                                onDisplayChart(replacedXML);
-                                // if convertedXml changed
-                            }
-                        }
-                        return (
-                            <div
-                                key={callId}
-                                className="mt-2 text-sm bg-blue-50 p-2 rounded border border-blue-200"
-                            >
-                                <div className="font-medium">
-                                    Generating diagram...
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Tool: display_diagram
-                                    <div className="mt-1 font-mono text-xs">
-                                        Args:{" "}
-                                        {JSON.stringify(
-                                            toolInvocation.args,
-                                            null,
-                                            2
-                                        )}
-                                    </div>
-                                </div>
+        return (
+            <div
+                key={callId}
+                className="p-4 my-2 text-gray-500 border border-gray-300 rounded"
+            >
+                <div className="flex flex-col gap-2">
+                    <div className="text-xs">Tool: display_diagram</div>
+                    <div className="mt-2 text-sm">
+                        {state === "partial-call" ? (
+                            <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        ) : state === "result" ? (
+                            <div className="text-green-600">
+                                Diagram generated
                             </div>
-                        );
-                    case "call":
-                        return (
-                            <div
-                                key={callId}
-                                className="mt-2 text-sm bg-yellow-50 p-2 rounded border border-yellow-200"
-                            >
-                                <div className="font-medium">
-                                    Displaying diagram...
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Tool: display_diagram
-                                    <div className="mt-1 font-mono text-xs">
-                                        Args:{" "}
-                                        {JSON.stringify(
-                                            toolInvocation.args,
-                                            null,
-                                            2
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    case "result":
-                        return null;
-                }
-                break;
-            }
-            default:
-                return null;
-        }
+                        ) : null}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
