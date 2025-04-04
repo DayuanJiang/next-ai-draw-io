@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
@@ -26,10 +26,33 @@ export function ChatMessageDisplay({
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const previousXML = useRef<string>("");
+    const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
+        {}
+    );
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
+    }, [messages]);
+
+    // Auto-collapse args when diagrams are generated
+    useEffect(() => {
+        messages.forEach((message) => {
+            if (message.parts) {
+                message.parts.forEach((part) => {
+                    if (
+                        part.type === "tool-invocation" &&
+                        part.toolInvocation.state === "result"
+                    ) {
+                        const callId = part.toolInvocation.toolCallId;
+                        setExpandedTools((prev) => ({
+                            ...prev,
+                            [callId]: false,
+                        }));
+                    }
+                });
+            }
+        });
     }, [messages]);
 
     function handleDisplayChart(xml: string) {
@@ -45,7 +68,15 @@ export function ChatMessageDisplay({
     const renderToolInvocation = (toolInvocation: any) => {
         const callId = toolInvocation.toolCallId;
         const { toolName, args, state } = toolInvocation;
+        const isExpanded = expandedTools[callId] ?? true;
         handleDisplayChart(args?.xml);
+
+        const toggleExpanded = () => {
+            setExpandedTools((prev) => ({
+                ...prev,
+                [callId]: !isExpanded,
+            }));
+        };
 
         return (
             <div
@@ -53,8 +84,18 @@ export function ChatMessageDisplay({
                 className="p-4 my-2 text-gray-500 border border-gray-300 rounded"
             >
                 <div className="flex flex-col gap-2">
-                    <div className="text-xs">Tool: display_diagram</div>
-                    {args && (
+                    <div className="flex items-center justify-between">
+                        <div className="text-xs">Tool: display_diagram</div>
+                        {args && Object.keys(args).length > 0 && (
+                            <button
+                                onClick={toggleExpanded}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                                {isExpanded ? "Hide Args" : "Show Args"}
+                            </button>
+                        )}
+                    </div>
+                    {args && isExpanded && (
                         <div className="mt-1 font-mono text-xs overflow-hidden">
                             {typeof args === "object" &&
                                 Object.keys(args).length > 0 &&
