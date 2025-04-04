@@ -1,7 +1,8 @@
 import { bedrock } from '@ai-sdk/amazon-bedrock';
 import { openai } from '@ai-sdk/openai';
 import { google } from '@ai-sdk/google';
-import { streamText } from "ai";
+import { smoothStream, streamText } from 'ai';
+
 import { z } from "zod";
 
 export const maxDuration = 60
@@ -59,7 +60,6 @@ ${lastMessage.content}
   const result = streamText({
     // model: google("gemini-2.5-pro-exp-03-25"),
     // model: google("gemini-2.0-flash-001"),
-    // model: openrouter("google/gemini-2.0-flash-exp:free"),
     model: bedrock('anthropic.claude-3-5-sonnet-20241022-v2:0'),
     // model: openai("gpt-4o"),
     toolCallStreaming: true,
@@ -84,5 +84,7 @@ ${lastMessage.content}
     },
     temperature: 0,
   });
-  return result.toDataStreamResponse();
+  return result.toDataStreamResponse({
+
+  });
 }

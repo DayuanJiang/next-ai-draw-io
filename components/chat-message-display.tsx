@@ -54,6 +54,13 @@ export function ChatMessageDisplay({
             >
                 <div className="flex flex-col gap-2">
                     <div className="text-xs">Tool: display_diagram</div>
+                    {args && (
+                        <div className="mt-1 font-mono text-xs overflow-hidden">
+                            {typeof args === "object" &&
+                                Object.keys(args).length > 0 &&
+                                `Args: ${JSON.stringify(args, null, 2)}`}
+                        </div>
+                    )}
                     <div className="mt-2 text-sm">
                         {state === "partial-call" ? (
                             <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
