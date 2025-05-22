@@ -2,17 +2,20 @@ import { bedrock } from '@ai-sdk/amazon-bedrock';
 import { openai } from '@ai-sdk/openai';
 import { google } from '@ai-sdk/google';
 import { smoothStream, streamText } from 'ai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 import { z } from "zod";
 
 export const maxDuration = 60
-
-
+const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 // Read the XML guide from file
 export async function POST(req: Request) {
   const body = await req.json();
 
   const { messages, data = {} } = body;
+  const guide = readFileSync(resolve('./app/api/chat/xml_guide.md'), 'utf8');
 
   // Read and escape the guide content
   const systemMessage = `
@@ -41,6 +44,8 @@ Note that:
 - When artistic drawings are requested, creatively compose them using standard diagram shapes and connectors while maintaining visual clarity.
 - **Don't** write out the XML string. Just return the XML string in the tool call.
 - If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
+
+here is a guide for the XML format: ${guide}
 `;
 
   const lastMessage = messages[messages.length - 1];
@@ -58,10 +63,19 @@ ${lastMessage.content}
   // console.log("Enhanced messages:", enhancedMessages);
 
   const result = streamText({
-    // model: google("gemini-2.5-pro-exp-03-25"),
+    // model: google("gemini-2.5-flash-preview-05-20"),
     // model: google("gemini-2.0-flash-001"),
-    model: bedrock('anthropic.claude-3-5-sonnet-20241022-v2:0'),
-    // model: openai("gpt-4o"),
+    // model: bedrock('anthropic.claude-3-5-sonnet-20241022-v2:0'),
+    model: openai("gpt-4.1"),
+    // model: openrouter('google/gemini-2.5-pro-exp-03-25'),
+    // model: model,
+    // providerOptions: {
+    //   google: {
+    //     thinkingConfig: {
+    //       thinkingBudget: 0,
+    //     },
+    //   }
+    // },
     toolCallStreaming: true,
     messages: enhancedMessages,
     tools: {
@@ -82,7 +96,7 @@ ${lastMessage.content}
         })
       },
     },
-    temperature: 0,
+    // temperature: 0.5,
   });
   return result.toDataStreamResponse({
 
