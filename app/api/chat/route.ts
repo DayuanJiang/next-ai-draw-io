@@ -65,9 +65,9 @@ ${lastMessage.content}
   const result = streamText({
     // model: google("gemini-2.5-flash-preview-05-20"),
     // model: google("gemini-2.0-flash-001"),
-    // model: bedrock('anthropic.claude-3-5-sonnet-20241022-v2:0'),
-    // model: openai("gpt-4.1"),
-    model: openrouter('openrouter/horizon-alpha'),
+    // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
+    model: openai("gpt-4.1"),
+    // model: openrouter('moonshotai/kimi-k2:free'),
     // model: model,
     // providerOptions: {
     //   google: {
