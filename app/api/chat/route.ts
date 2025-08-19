@@ -5,6 +5,8 @@ import { smoothStream, streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 
 import { z } from "zod";
 
@@ -66,7 +68,7 @@ ${lastMessage.content}
     // model: google("gemini-2.5-flash-preview-05-20"),
     // model: google("gemini-2.0-flash-001"),
     // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
-    model: openai("gpt-4.1"),
+    model: openai.chat('gpt-5'),
     // model: openrouter('moonshotai/kimi-k2:free'),
     // model: model,
     // providerOptions: {
@@ -76,6 +78,11 @@ ${lastMessage.content}
     //     },
     //   }
     // },
+    providerOptions: {
+      openai: {
+        reasoningEffort: "minimal"
+      },
+    },
     toolCallStreaming: true,
     messages: enhancedMessages,
     tools: {
@@ -98,7 +105,26 @@ ${lastMessage.content}
     },
     // temperature: 0.5,
   });
-  return result.toDataStreamResponse({
 
+  // Error handler function to provide detailed error messages
+
+  function errorHandler(error: unknown) {
+    if (error == null) {
+      return 'unknown error';
+    }
+
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return JSON.stringify(error);
+  }
+
+  return result.toDataStreamResponse({
+    getErrorMessage: errorHandler,
   });
 }
