@@ -9,6 +9,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 
 import { z } from "zod/v3";
+import { replaceXMLParts } from "@/lib/utils";
 
 export const maxDuration = 60
 const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
@@ -16,19 +17,26 @@ const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 export async function POST(req: Request) {
   const body = await req.json();
 
-  const { messages, data = {} } = body;
+  // Extract messages and xml directly from the body
+  const { messages, xml } = body;
   const guide = readFileSync(resolve('./app/api/chat/xml_guide.md'), 'utf8');
 
   // Read and escape the guide content
   const systemMessage = `
 You are an expert diagram creation assistant specializing in draw.io XML generation. Your primary function is crafting clear, well-organized visual diagrams through precise XML specifications.
 You can see the image that user uploaded.
-You utilize the following tool:
+You utilize the following tools:
 ---Tool1---
 tool name: display_diagram
 description: Display a diagram on draw.io
 parameters: {
   xml: string
+}
+---Tool2---
+tool name: edit_diagram
+description: Edit specific parts of the current diagram
+parameters: {
+  edits: Array<{search: string, replace: string}>
 }
 ---End of tools---
 
@@ -47,6 +55,12 @@ Note that:
 - **Don't** write out the XML string. Just return the XML string in the tool call.
 - If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
 
+When using edit_diagram tool:
+- Keep edits minimal - only include the specific line being changed plus 1-2 context lines
+- Example GOOD edit: {"search": "  <mxCell id=\"2\" value=\"Old Text\">", "replace": "  <mxCell id=\"2\" value=\"New Text\">"}
+- Example BAD edit: Including 10+ unchanged lines just to change one attribute
+- For multiple changes, use separate edits: [{"search": "line1", "replace": "new1"}, {"search": "line2", "replace": "new2"}]
+
 here is a guide for the XML format: ${guide}
 `;
 
@@ -58,7 +72,7 @@ here is a guide for the XML format: ${guide}
   const formattedContent = `
 Current diagram XML:
 """xml
-${data.xml || ''}
+${xml || ''}
 """
 User input:
 """md
@@ -67,10 +81,10 @@ ${lastMessageText}
 
   // Convert UIMessages to ModelMessages and add system message
   const modelMessages = convertToModelMessages(messages);
-  let enhancedMessages = [{ role: "system" as const, content: systemMessage }, ...modelMessages];
+  let enhancedMessages = [...modelMessages];
 
   // Update the last message with formatted content if it's a user message
-  if (enhancedMessages.length > 1) {
+  if (enhancedMessages.length >= 1) {
     const lastModelMessage = enhancedMessages[enhancedMessages.length - 1];
     if (lastModelMessage.role === 'user') {
       enhancedMessages = [
@@ -80,12 +94,13 @@ ${lastMessageText}
     }
   }
 
-  // console.log("Enhanced messages:", enhancedMessages);
+  console.log("Enhanced messages:", enhancedMessages);
 
   const result = streamText({
     // model: google("gemini-2.5-flash-preview-05-20"),
     // model: google("gemini-2.5-pro"),
     // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
+    system: systemMessage,
     model: openai.chat('gpt-5'),
     // model: openrouter('moonshotai/kimi-k2:free'),
     // model: model,
@@ -117,6 +132,21 @@ ${lastMessageText}
         </root>`,
         inputSchema: z.object({
           xml: z.string().describe("XML string to be displayed on draw.io")
+        })
+      },
+      edit_diagram: {
+        description: `Edit specific parts of the current diagram by replacing exact line matches. Use this tool to make targeted fixes without regenerating the entire XML. 
+        
+IMPORTANT: Keep edits concise:
+- Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
+- Break large changes into multiple smaller edits
+- Each search must contain complete lines (never truncate mid-line)
+- First match only - be specific enough to target the right element`,
+        inputSchema: z.object({
+          edits: z.array(z.object({
+            search: z.string().describe("Exact lines to search for (including whitespace and indentation)"),
+            replace: z.string().describe("Replacement lines")
+          })).describe("Array of search/replace pairs to apply sequentially")
         })
       },
     },

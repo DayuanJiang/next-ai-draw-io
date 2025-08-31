@@ -6,6 +6,53 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Format XML string with proper indentation and line breaks
+ * @param xml - The XML string to format
+ * @param indent - The indentation string (default: '  ')
+ * @returns Formatted XML string
+ */
+export function formatXML(xml: string, indent: string = '  '): string {
+  let formatted = '';
+  let pad = 0;
+
+  // Remove existing whitespace between tags
+  xml = xml.replace(/>\s*</g, '><').trim();
+
+  // Split on tags
+  const tags = xml.split(/(?=<)|(?<=>)/g).filter(Boolean);
+
+  tags.forEach((node) => {
+    if (node.match(/^<\/\w/)) {
+      // Closing tag - decrease indent
+      pad = Math.max(0, pad - 1);
+      formatted += indent.repeat(pad) + node + '\n';
+    } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) {
+      // Opening tag
+      formatted += indent.repeat(pad) + node;
+      // Only add newline if next item is a tag
+      const nextIndex = tags.indexOf(node) + 1;
+      if (nextIndex < tags.length && tags[nextIndex].startsWith('<')) {
+        formatted += '\n';
+        if (!node.match(/^<\w[^>]*\/>$/)) {
+          pad++;
+        }
+      }
+    } else if (node.match(/^<\w[^>]*\/>$/)) {
+      // Self-closing tag
+      formatted += indent.repeat(pad) + node + '\n';
+    } else if (node.startsWith('<')) {
+      // Other tags (like <?xml)
+      formatted += indent.repeat(pad) + node + '\n';
+    } else {
+      // Text content
+      formatted += node;
+    }
+  });
+
+  return formatted.trim();
+}
+
 /** 
  * Efficiently converts a potentially incomplete XML string to a legal XML string by closing any open tags properly.
  * Additionally, if an <mxCell> tag does not have an mxGeometry child (e.g. <mxCell id="3">),
@@ -129,7 +176,135 @@ export function replaceNodes(currentXML: string, nodes: string): string {
   }
 }
 
+/**
+ * Replace specific parts of XML content using search and replace pairs
+ * @param xmlContent - The original XML string
+ * @param searchReplacePairs - Array of {search: string, replace: string} objects
+ * @returns The updated XML string with replacements applied
+ */
+export function replaceXMLParts(
+  xmlContent: string,
+  searchReplacePairs: Array<{ search: string; replace: string }>
+): string {
+  // Format the XML first to ensure consistent line breaks
+  let result = formatXML(xmlContent);
+  let lastProcessedIndex = 0;
 
+  for (const { search, replace } of searchReplacePairs) {
+    // Also format the search content for consistency
+    const formattedSearch = formatXML(search);
+    const searchLines = formattedSearch.split('\n');
+
+    // Split into lines for exact line matching
+    const resultLines = result.split('\n');
+
+    // Remove trailing empty line if exists (from the trailing \n in search content)
+    if (searchLines[searchLines.length - 1] === '') {
+      searchLines.pop();
+    }
+
+    // Find the line number where lastProcessedIndex falls
+    let startLineNum = 0;
+    let currentIndex = 0;
+    while (currentIndex < lastProcessedIndex && startLineNum < resultLines.length) {
+      currentIndex += resultLines[startLineNum].length + 1; // +1 for \n
+      startLineNum++;
+    }
+
+    // Try to find exact match starting from lastProcessedIndex
+    let matchFound = false;
+    let matchStartLine = -1;
+    let matchEndLine = -1;
+
+    // First try: exact match
+    for (let i = startLineNum; i <= resultLines.length - searchLines.length; i++) {
+      let matches = true;
+
+      for (let j = 0; j < searchLines.length; j++) {
+        if (resultLines[i + j] !== searchLines[j]) {
+          matches = false;
+          break;
+        }
+      }
+
+      if (matches) {
+        matchStartLine = i;
+        matchEndLine = i + searchLines.length;
+        matchFound = true;
+        break;
+      }
+    }
+
+    // Second try: line-trimmed match (fallback)
+    if (!matchFound) {
+      for (let i = startLineNum; i <= resultLines.length - searchLines.length; i++) {
+        let matches = true;
+
+        for (let j = 0; j < searchLines.length; j++) {
+          const originalTrimmed = resultLines[i + j].trim();
+          const searchTrimmed = searchLines[j].trim();
+
+          if (originalTrimmed !== searchTrimmed) {
+            matches = false;
+            break;
+          }
+        }
+
+        if (matches) {
+          matchStartLine = i;
+          matchEndLine = i + searchLines.length;
+          matchFound = true;
+          break;
+        }
+      }
+    }
+
+    // Third try: substring match as last resort (for single-line XML)
+    if (!matchFound) {
+      // Try to find as a substring in the entire content
+      const searchStr = search.trim();
+      const resultStr = result;
+      const index = resultStr.indexOf(searchStr);
+
+      if (index !== -1) {
+        // Found as substring - replace it
+        result = resultStr.substring(0, index) + replace.trim() + resultStr.substring(index + searchStr.length);
+        // Re-format after substring replacement
+        result = formatXML(result);
+        continue; // Skip the line-based replacement below
+      }
+    }
+
+    if (!matchFound) {
+      throw new Error(`Search block not found:\n${search}\n...does not match anything in the file.`);
+    }
+
+    // Replace the matched lines
+    const replaceLines = replace.split('\n');
+
+    // Remove trailing empty line if exists
+    if (replaceLines[replaceLines.length - 1] === '') {
+      replaceLines.pop();
+    }
+
+    // Perform the replacement
+    const newResultLines = [
+      ...resultLines.slice(0, matchStartLine),
+      ...replaceLines,
+      ...resultLines.slice(matchEndLine)
+    ];
+
+    result = newResultLines.join('\n');
+
+    // Update lastProcessedIndex to the position after the replacement
+    lastProcessedIndex = 0;
+    for (let i = 0; i < matchStartLine + replaceLines.length; i++) {
+      lastProcessedIndex += newResultLines[i].length + 1;
+    }
+  }
+
+  return result;
+}
 
 export function extractDiagramXML(xml_svg_string: string): string {
   try {

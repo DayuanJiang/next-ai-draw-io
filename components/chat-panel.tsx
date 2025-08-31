@@ -16,7 +16,7 @@ import { DefaultChatTransport } from "ai";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
-import { replaceNodes } from "@/lib/utils";
+import { replaceNodes, formatXML } from "@/lib/utils";
 
 export default function ChatPanel() {
     const {
@@ -70,6 +70,34 @@ export default function ChatPanel() {
                         toolCallId: toolCall.toolCallId,
                         output: "Successfully displayed the flowchart.",
                     });
+                } else if (toolCall.toolName === "edit_diagram") {
+                    const { edits } = toolCall.input as {
+                        edits: Array<{ search: string; replace: string }>;
+                    };
+
+                    try {
+                        // Fetch current chart XML
+                        const currentXml = await onFetchChart();
+
+                        // Apply edits using the utility function
+                        const { replaceXMLParts } = await import("@/lib/utils");
+                        const editedXml = replaceXMLParts(currentXml, edits);
+
+                        // Load the edited diagram
+                        onDisplayChart(editedXml);
+
+                        addToolResult({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                        });
+                    } catch (error) {
+                        addToolResult({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: `Error editing diagram: ${error}`,
+                        });
+                    }
                 }
             },
             onError: (error) => {
@@ -91,7 +119,10 @@ export default function ChatPanel() {
         if (input.trim() && status !== "streaming") {
             try {
                 // Fetch chart data before sending message
-                const chartXml = await onFetchChart();
+                let chartXml = await onFetchChart();
+
+                // Format the XML to ensure consistency
+                chartXml = formatXML(chartXml);
 
                 // Create message parts
                 const parts: any[] = [{ type: "text", text: input }];

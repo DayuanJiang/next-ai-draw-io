@@ -96,6 +96,7 @@ export function ChatMessageDisplay({
         const callId = part.toolCallId;
         const { state, input } = part;
         const isExpanded = expandedTools[callId] ?? true;
+        const toolName = part.type?.replace("tool-", "");
 
         const toggleExpanded = () => {
             setExpandedTools((prev) => ({
@@ -111,7 +112,7 @@ export function ChatMessageDisplay({
             >
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <div className="text-xs">Tool: display_diagram</div>
+                        <div className="text-xs">Tool: {toolName}</div>
                         {input && Object.keys(input).length > 0 && (
                             <button
                                 onClick={toggleExpanded}
@@ -133,11 +134,19 @@ export function ChatMessageDisplay({
                             <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         ) : state === "output-available" ? (
                             <div className="text-green-600">
-                                Diagram generated
+                                {toolName === "display_diagram"
+                                    ? "Diagram generated"
+                                    : toolName === "edit_diagram"
+                                    ? "Diagram edited"
+                                    : "Tool executed"}
                             </div>
                         ) : state === "output-error" ? (
                             <div className="text-red-600">
-                                Error generating diagram
+                                {toolName === "display_diagram"
+                                    ? "Error generating diagram"
+                                    : toolName === "edit_diagram"
+                                    ? "Error editing diagram"
+                                    : "Tool error"}
                             </div>
                         ) : null}
                     </div>
