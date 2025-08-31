@@ -13,6 +13,8 @@ Demo site: [https://next-ai-draw-io.vercel.app/](https://next-ai-draw-io.vercel.
 -   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
 -   **Smart Editing**: Modify existing diagrams using simple text prompts
+-   **Targeted XML Editing**: AI can now make precise edits to specific parts of diagrams without regenerating the entire XML, making updates faster and more efficient
+-   **Improved XML Handling**: Automatic formatting of single-line XML for better compatibility and reliability
 
 ## How It Works
 
@@ -83,7 +85,7 @@ public/               # Static assets including example images
 
 ## TODOs
 
--   [ ] Allow the LLM to modify the XML instead of generating it from scratch everytime.
+-   [x] Allow the LLM to modify the XML instead of generating it from scratch everytime.
 -   [x] Improve the smoothness of shape streaming updates.
 
 ## License
