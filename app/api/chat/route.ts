@@ -1,14 +1,14 @@
 import { bedrock } from '@ai-sdk/amazon-bedrock';
 import { openai } from '@ai-sdk/openai';
 import { google } from '@ai-sdk/google';
-import { smoothStream, streamText } from 'ai';
+import { smoothStream, streamText, convertToModelMessages } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const maxDuration = 60
 const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
@@ -51,6 +51,10 @@ here is a guide for the XML format: ${guide}
 `;
 
   const lastMessage = messages[messages.length - 1];
+
+  // Extract text from the last message parts
+  const lastMessageText = lastMessage.parts?.find((part: any) => part.type === 'text')?.text || '';
+
   const formattedContent = `
 Current diagram XML:
 """xml
@@ -58,32 +62,45 @@ ${data.xml || ''}
 """
 User input:
 """md
-${lastMessage.content}
+${lastMessageText}
 """`;
-  let enhancedMessages = [{ role: "system", content: systemMessage }, ...messages];
-  enhancedMessages = [...enhancedMessages.slice(0, -1), { ...lastMessage, content: formattedContent }];
+
+  // Convert UIMessages to ModelMessages and add system message
+  const modelMessages = convertToModelMessages(messages);
+  let enhancedMessages = [{ role: "system" as const, content: systemMessage }, ...modelMessages];
+
+  // Update the last message with formatted content if it's a user message
+  if (enhancedMessages.length > 1) {
+    const lastModelMessage = enhancedMessages[enhancedMessages.length - 1];
+    if (lastModelMessage.role === 'user') {
+      enhancedMessages = [
+        ...enhancedMessages.slice(0, -1),
+        { ...lastModelMessage, content: formattedContent }
+      ];
+    }
+  }
+
   // console.log("Enhanced messages:", enhancedMessages);
 
   const result = streamText({
     // model: google("gemini-2.5-flash-preview-05-20"),
-    // model: google("gemini-2.0-flash-001"),
+    model: google("gemini-2.5-pro"),
     // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
-    model: openai.chat('gpt-5'),
+    // model: openai.chat('gpt-5'),
     // model: openrouter('moonshotai/kimi-k2:free'),
     // model: model,
-    // providerOptions: {
-    //   google: {
-    //     thinkingConfig: {
-    //       thinkingBudget: 0,
-    //     },
-    //   }
-    // },
     providerOptions: {
-      openai: {
-        reasoningEffort: "minimal"
-      },
+      google: {
+        thinkingConfig: {
+          thinkingBudget: 128,
+        },
+      }
     },
-    toolCallStreaming: true,
+    // providerOptions: {
+    //   openai: {
+    //     reasoningEffort: "minimal"
+    //   },
+    // },
     messages: enhancedMessages,
     tools: {
       // Client-side tool that will be executed on the client
@@ -98,12 +115,12 @@ ${lastMessage.content}
             <mxGeometry x="20" y="20" width="100" height="100" as="geometry"/>
           </mxCell>
         </root>`,
-        parameters: z.object({
+        inputSchema: z.object({
           xml: z.string().describe("XML string to be displayed on draw.io")
         })
       },
     },
-    // temperature: 0.5,
+    temperature: 0,
   });
 
   // Error handler function to provide detailed error messages
@@ -124,7 +141,7 @@ ${lastMessage.content}
     return JSON.stringify(error);
   }
 
-  return result.toDataStreamResponse({
-    getErrorMessage: errorHandler,
+  return result.toUIMessageStreamResponse({
+    onError: errorHandler,
   });
 }

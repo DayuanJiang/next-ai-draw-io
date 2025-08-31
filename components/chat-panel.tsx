@@ -12,6 +12,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
@@ -48,30 +49,33 @@ export default function ChatPanel() {
         return dt.files;
     };
 
+    // Add state for input management
+    const [input, setInput] = useState("");
+
     // Remove the currentXmlRef and related useEffect
-    const {
-        messages,
-        input,
-        handleInputChange,
-        handleSubmit,
-        status,
-        error,
-        setInput,
-        setMessages,
-    } = useChat({
-        maxSteps: 5,
-        async onToolCall({ toolCall }) {
-            if (toolCall.toolName === "display_diagram") {
-                const { xml } = toolCall.args as { xml: string };
-                // do nothing because we will handle this streamingly in the ChatMessageDisplay component
-                // onDisplayChart(replaceNodes(chartXML, xml));
-                return "Successfully displayed the flowchart.";
-            }
-        },
-        onError: (error) => {
-            console.error("Chat error:", error);
-        },
-    });
+    const { messages, sendMessage, addToolResult, status, error, setMessages } =
+        useChat({
+            transport: new DefaultChatTransport({
+                api: "/api/chat",
+            }),
+            async onToolCall({ toolCall }) {
+                if (toolCall.toolName === "display_diagram") {
+                    const { xml } = toolCall.input as { xml: string };
+                    // do nothing because we will handle this streamingly in the ChatMessageDisplay component
+                    // onDisplayChart(replaceNodes(chartXML, xml));
+
+                    // Use addToolResult instead of returning a value
+                    addToolResult({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: "Successfully displayed the flowchart.",
+                    });
+                }
+            },
+            onError: (error) => {
+                console.error("Chat error:", error);
+            },
+        });
     const messagesEndRef = useRef<HTMLDivElement>(null);
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -80,26 +84,59 @@ export default function ChatPanel() {
         }
     }, [messages]);
 
+    console.log(JSON.stringify(messages, null, 2));
+
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (input.trim() && status !== "streaming") {
             try {
-                // Fetch chart data before setting input
+                // Fetch chart data before sending message
                 const chartXml = await onFetchChart();
-                handleSubmit(e, {
-                    data: {
-                        xml: chartXml,
-                    },
-                    experimental_attachments:
-                        files.length > 0 ? createFileList(files) : undefined,
-                });
 
-                // Clear files after submission
+                // Create message parts
+                const parts: any[] = [{ type: "text", text: input }];
+
+                // Add file parts if files exist
+                if (files.length > 0) {
+                    for (const file of files) {
+                        const reader = new FileReader();
+                        const dataUrl = await new Promise<string>((resolve) => {
+                            reader.onload = () =>
+                                resolve(reader.result as string);
+                            reader.readAsDataURL(file);
+                        });
+
+                        parts.push({
+                            type: "file",
+                            url: dataUrl,
+                            mediaType: file.type,
+                        });
+                    }
+                }
+
+                sendMessage(
+                    { parts },
+                    {
+                        body: {
+                            xml: chartXml,
+                        },
+                    }
+                );
+
+                // Clear input and files after submission
+                setInput("");
                 setFiles([]);
             } catch (error) {
                 console.error("Error fetching chart data:", error);
             }
         }
+    };
+
+    // Handle input change
+    const handleInputChange = (
+        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    ) => {
+        setInput(e.target.value);
     };
 
     // Helper function to handle file changes
