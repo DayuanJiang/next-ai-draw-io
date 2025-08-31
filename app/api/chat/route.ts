@@ -84,23 +84,23 @@ ${lastMessageText}
 
   const result = streamText({
     // model: google("gemini-2.5-flash-preview-05-20"),
-    model: google("gemini-2.5-pro"),
+    // model: google("gemini-2.5-pro"),
     // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
-    // model: openai.chat('gpt-5'),
+    model: openai.chat('gpt-5'),
     // model: openrouter('moonshotai/kimi-k2:free'),
     // model: model,
-    providerOptions: {
-      google: {
-        thinkingConfig: {
-          thinkingBudget: 128,
-        },
-      }
-    },
     // providerOptions: {
-    //   openai: {
-    //     reasoningEffort: "minimal"
-    //   },
+    //   google: {
+    //     thinkingConfig: {
+    //       thinkingBudget: 128,
+    //     },
+    //   }
     // },
+    providerOptions: {
+      openai: {
+        reasoningEffort: "minimal"
+      },
+    },
     messages: enhancedMessages,
     tools: {
       // Client-side tool that will be executed on the client
