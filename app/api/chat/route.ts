@@ -101,7 +101,7 @@ ${lastMessageText}
     // model: google("gemini-2.5-pro"),
     // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
     system: systemMessage,
-    model: openai.chat('gpt-5'),
+    model: bedrock('global.anthropic.claude-sonnet-4-5-20250929-v1:0'),
     // model: openrouter('moonshotai/kimi-k2:free'),
     // model: model,
     // providerOptions: {
@@ -111,11 +111,11 @@ ${lastMessageText}
     //     },
     //   }
     // },
-    providerOptions: {
-      openai: {
-        reasoningEffort: "minimal"
-      },
-    },
+    // providerOptions: {
+    //   openai: {
+    //     reasoningEffort: "minimal"
+    //   },
+    // },
     messages: enhancedMessages,
     tools: {
       // Client-side tool that will be executed on the client

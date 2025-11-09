@@ -9,7 +9,7 @@
         "lint": "next lint"
     },
     "dependencies": {
-        "@ai-sdk/amazon-bedrock": "^2.0.0",
+        "@ai-sdk/amazon-bedrock": "^3.0.52",
         "@ai-sdk/google": "^2.0.0",
         "@ai-sdk/openai": "^2.0.19",
         "@ai-sdk/react": "^2.0.22",
@@ -20,7 +20,7 @@
         "@radix-ui/react-tooltip": "^1.1.8",
         "@vercel/analytics": "^1.5.0",
         "@xmldom/xmldom": "^0.9.8",
-        "ai": "^5.0.22",
+        "ai": "^5.0.89",
         "base-64": "^1.0.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
