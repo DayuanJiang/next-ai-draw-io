@@ -14,6 +14,7 @@ import {
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 import { FilePreviewList } from "./file-preview-list";
 import { useDiagram } from "@/contexts/diagram-context";
+import { useLanguage } from "@/contexts/language-context";
 import { HistoryDialog } from "@/components/history-dialog";
 
 interface ChatInputProps {
@@ -40,6 +41,7 @@ export function ChatInput({
     onToggleHistory = () => {},
 }: ChatInputProps) {
     const { diagramHistory } = useDiagram();
+    const { t } = useLanguage();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -180,11 +182,9 @@ export function ChatInput({
                 onChange={onChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder="Describe what changes you want to make to the diagram
-                or upload(paste) an image to replicate a diagram.
-                 (Press Cmd/Ctrl + Enter to send)"
+                placeholder={t("chat.placeholder")}
                 disabled={status === "streaming"}
-                aria-label="Chat input"
+                aria-label={t("chat.input")}
                 className="min-h-[80px] resize-none transition-all duration-200 px-1 py-0"
             />
 
@@ -195,7 +195,7 @@ export function ChatInput({
                         variant="ghost"
                         size="icon"
                         onClick={() => setShowClearDialog(true)}
-                        tooltipContent="Clear current conversation and diagram"
+                        tooltipContent={t("chat.clearTooltip")}
                     >
                         <RotateCcw className="mr-2 h-4 w-4" />
                     </ButtonWithTooltip>
@@ -223,8 +223,8 @@ export function ChatInput({
                             status === "streaming" ||
                             diagramHistory.length === 0
                         }
-                        title="Diagram History"
-                        tooltipContent="View diagram history"
+                        title={t("chat.history")}
+                        tooltipContent={t("chat.historyTooltip")}
                     >
                         <History className="h-4 w-4" />
                     </ButtonWithTooltip>
@@ -235,7 +235,7 @@ export function ChatInput({
                         size="icon"
                         onClick={triggerFileInput}
                         disabled={status === "streaming"}
-                        title="Upload image"
+                        title={t("chat.uploadImage")}
                     >
                         <ImageIcon className="h-4 w-4" />
                     </Button>
@@ -257,8 +257,8 @@ export function ChatInput({
                     className="transition-opacity"
                     aria-label={
                         status === "streaming"
-                            ? "Sending message..."
-                            : "Send message"
+                            ? t("chat.sending")
+                            : t("chat.send")
                     }
                 >
                     {status === "streaming" ? (
@@ -266,7 +266,7 @@ export function ChatInput({
                     ) : (
                         <Send className="mr-2 h-4 w-4" />
                     )}
-                    Send
+                    {t("chat.send")}
                 </Button>
             </div>
         </form>

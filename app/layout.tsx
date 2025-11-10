@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { DiagramProvider } from "@/contexts/diagram-context";
+import { LanguageProvider } from "@/contexts/language-context";
 
 import "./globals.css";
 
@@ -30,9 +31,11 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <DiagramProvider>{children}</DiagramProvider>
+                <LanguageProvider>
+                    <DiagramProvider>{children}</DiagramProvider>
 
-                <Analytics />
+                    <Analytics />
+                </LanguageProvider>
             </body>
         </html>
     );

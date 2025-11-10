@@ -1,3 +1,7 @@
+"use client";
+
+import { useLanguage } from "@/contexts/language-context";
+
 export default function ExamplePanel({
     setInput,
     setFiles,
@@ -5,6 +9,8 @@ export default function ExamplePanel({
     setInput: (input: string) => void;
     setFiles: (files: File[]) => void;
 }) {
+    const { t } = useLanguage();
+
     // New handler for the "Replicate this flowchart" button
     const handleReplicateFlowchart = async () => {
         setInput("Replicate this flowchart.");
@@ -44,31 +50,31 @@ export default function ExamplePanel({
         <div className="px-4 py-2 border-t border-b border-gray-100">
             <p className="text-sm text-gray-500 mb-2">
                 {" "}
-                Start a conversation to generate or modify diagrams.
+                {t("example.startConversation")}
             </p>
             <p className="text-sm text-gray-500 mb-2">
                 {" "}
-                You can also upload images to use as references.
+                {t("example.uploadImages")}
             </p>
-            <p className="text-sm text-gray-500 mb-2">Try these examples:</p>
+            <p className="text-sm text-gray-500 mb-2">{t("example.tryExamples")}</p>
             <div className="flex flex-wrap gap-5">
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={handleReplicateArchitecture}
                 >
-                    Create this diagram in aws style
+                    {t("example.createAwsStyle")}
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={handleReplicateFlowchart}
                 >
-                    Replicate this flowchart
+                    {t("example.replicateFlowchart")}
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={() => setInput("Draw a cat for me")}
                 >
-                    Draw a cat for me
+                    {t("example.drawCat")}
                 </button>
             </div>
         </div>

@@ -10,11 +10,56 @@ import { z } from "zod/v3";
 import { replaceXMLParts } from "@/lib/utils";
 
 export const maxDuration = 60
-const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+
+// API 配置类型定义
+interface ApiConfig {
+  provider: string;
+  apiKey: string;
+  model?: string;
+}
 
 export async function POST(req: Request) {
   try {
-    const { messages, xml } = await req.json();
+    const { messages, xml, apiConfig } = await req.json();
+
+    // 验证 API 配置
+    if (!apiConfig || !apiConfig.apiKey || !apiConfig.provider) {
+      return Response.json(
+        { error: 'API 配置缺失，请先配置 AI 提供商' },
+        { status: 400 }
+      );
+    }
+
+    const { provider, apiKey, model } = apiConfig as ApiConfig;
+
+    let selectedModel;
+
+    // 根据提供商选择模型
+    switch (provider) {
+      case 'openai':
+        selectedModel = openai(model || 'gpt-4');
+        break;
+      case 'openrouter':
+        const openrouter = createOpenRouter({ apiKey });
+        selectedModel = openrouter(model || 'openai/gpt-4o');
+        break;
+      case 'google':
+        const googleProvider = createGoogleGenerativeAI({ apiKey });
+        selectedModel = googleProvider(model || 'gemini-1.5-pro');
+        break;
+      case 'siliconflow':
+        const siliconflow = createOpenAI({
+          apiKey,
+          baseURL: 'https://api.siliconflow.cn/v1',
+        });
+        selectedModel = siliconflow(model || 'deepseek-chat');
+        break;
+      default:
+        return Response.json(
+          { error: '不支持的 AI 提供商' },
+          { status: 400 }
+        );
+    }
 
     const systemMessage = `
 You are an expert diagram creation assistant specializing in draw.io XML generation.
@@ -31,7 +76,7 @@ parameters: {
 }
 ---Tool2---
 tool name: edit_diagram
-description: Edit specific parts of the EXISTING diagram. Use this when making small targeted changes like adding/removing elements, changing labels, or adjusting properties. This is more efficient than regenerating the entire diagram.
+description: Edit specific parts of the EXISTING diagram. Use this when making small targeted changes like adding/removing elements, changing labels, or adjusting properties. This is more efficient than regenerating the entire XML.
 parameters: {
   edits: Array<{search: string, replace: string}>
 }
@@ -68,7 +113,7 @@ Note that:
 - Note that when you need to generate diagram about aws architecture, use **AWS 2025 icons**.
 
 When using edit_diagram tool:
-- Keep edits minimal - only include the specific line being changed plus 1-2 context lines
+- Keep edits minimal - only include the specific line being changed plus 1-2 surrounding lines for context if needed
 - Example GOOD edit: {"search": "  <mxCell id=\"2\" value=\"Old Text\">", "replace": "  <mxCell id=\"2\" value=\"New Text\">"}
 - Example BAD edit: Including 10+ unchanged lines just to change one attribute
 - For multiple changes, use separate edits: [{"search": "line1", "replace": "new1"}, {"search": "line2", "replace": "new2"}]
@@ -125,25 +170,8 @@ ${lastMessageText}
     console.log("Enhanced messages:", enhancedMessages);
 
     const result = streamText({
-      // model: google("gemini-2.5-flash-preview-05-20"),
-      // model: google("gemini-2.5-pro"),
-      // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
       system: systemMessage,
-      model: bedrock('global.anthropic.claude-sonnet-4-5-20250929-v1:0'),
-      // model: openrouter('moonshotai/kimi-k2:free'),
-      // model: model,
-      // providerOptions: {
-      //   google: {
-      //     thinkingConfig: {
-      //       thinkingBudget: 128,
-      //     },
-      //   }
-      // },
-      // providerOptions: {
-      //   openai: {
-      //     reasoningEffort: "minimal"
-      //   },
-      // },
+      model: selectedModel,
       messages: enhancedMessages,
       tools: {
         // Client-side tool that will be executed on the client

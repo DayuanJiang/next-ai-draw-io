@@ -9,6 +9,7 @@ import { UIMessage } from "ai";
 import { convertToLegalXml, replaceNodes } from "@/lib/utils";
 
 import { useDiagram } from "@/contexts/diagram-context";
+import { useLanguage } from "@/contexts/language-context";
 
 interface ChatMessageDisplayProps {
     messages: UIMessage[];
@@ -24,6 +25,7 @@ export function ChatMessageDisplay({
     setFiles,
 }: ChatMessageDisplayProps) {
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram();
+    const { t } = useLanguage();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const previousXML = useRef<string>("");
     const processedToolCalls = useRef<Set<string>>(new Set());
@@ -112,13 +114,13 @@ export function ChatMessageDisplay({
             >
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                        <div className="text-xs">Tool: {toolName}</div>
+                        <div className="text-xs">{t("message.tool")}: {toolName}</div>
                         {input && Object.keys(input).length > 0 && (
                             <button
                                 onClick={toggleExpanded}
                                 className="text-xs text-gray-500 hover:text-gray-700"
                             >
-                                {isExpanded ? "Hide Args" : "Show Args"}
+                                {isExpanded ? t("message.hideArgs") : t("message.showArgs")}
                             </button>
                         )}
                     </div>
@@ -126,7 +128,7 @@ export function ChatMessageDisplay({
                         <div className="mt-1 font-mono text-xs overflow-hidden">
                             {typeof input === "object" &&
                                 Object.keys(input).length > 0 &&
-                                `Input: ${JSON.stringify(input, null, 2)}`}
+                                `${t("message.input")}: ${JSON.stringify(input, null, 2)}`}
                         </div>
                     )}
                     <div className="mt-2 text-sm">
@@ -135,18 +137,18 @@ export function ChatMessageDisplay({
                         ) : state === "output-available" ? (
                             <div className="text-green-600">
                                 {output || (toolName === "display_diagram"
-                                    ? "Diagram generated"
+                                    ? t("message.diagramGenerated")
                                     : toolName === "edit_diagram"
-                                    ? "Diagram edited"
-                                    : "Tool executed")}
+                                    ? t("message.diagramEdited")
+                                    : t("message.toolExecuted"))}
                             </div>
                         ) : state === "output-error" ? (
                             <div className="text-red-600">
                                 {output || (toolName === "display_diagram"
-                                    ? "Error generating diagram"
+                                    ? t("message.diagramError")
                                     : toolName === "edit_diagram"
-                                    ? "Error editing diagram"
-                                    : "Tool error")}
+                                    ? t("message.editError")
+                                    : t("message.toolError"))}
                             </div>
                         ) : null}
                     </div>
@@ -208,7 +210,7 @@ export function ChatMessageDisplay({
             )}
             {error && (
                 <div className="text-red-500 text-sm mt-2">
-                    Error: {error.message}
+                    {t("message.error")}: {error.message}
                 </div>
             )}
             <div ref={messagesEndRef} />

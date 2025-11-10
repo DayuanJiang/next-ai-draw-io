@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { useDiagram } from "@/contexts/diagram-context";
+import { useLanguage } from "@/contexts/language-context";
 
 interface HistoryDialogProps {
     showHistory: boolean;
@@ -22,23 +23,21 @@ export function HistoryDialog({
     onToggleHistory,
 }: HistoryDialogProps) {
     const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
+    const { t } = useLanguage();
 
     return (
         <Dialog open={showHistory} onOpenChange={onToggleHistory}>
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Diagram History</DialogTitle>
+                    <DialogTitle>{t("history.title")}</DialogTitle>
                     <DialogDescription>
-                        Here saved each diagram before AI modification.
-                        <br />
-                        Click on a diagram to restore it
+                        {t("history.description")}
                     </DialogDescription>
                 </DialogHeader>
 
                 {diagramHistory.length === 0 ? (
                     <div className="text-center p-4 text-gray-500">
-                        No history available yet. Send messages to create
-                        diagram history.
+                        {t("history.empty")}
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
@@ -61,7 +60,7 @@ export function HistoryDialog({
                                     />
                                 </div>
                                 <div className="text-xs text-center mt-1 text-gray-500">
-                                    Version {index + 1}
+                                    {t("history.version")} {index + 1}
                                 </div>
                             </div>
                         ))}
@@ -73,7 +72,7 @@ export function HistoryDialog({
                         variant="outline"
                         onClick={() => onToggleHistory(false)}
                     >
-                        Close
+                        {t("history.close")}
                     </Button>
                 </DialogFooter>
             </DialogContent>

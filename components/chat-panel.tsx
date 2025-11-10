@@ -3,6 +3,8 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
+import { Button } from "@/components/ui/button";
+import { Globe } from "lucide-react";
 
 import {
     Card,
@@ -16,9 +18,12 @@ import { DefaultChatTransport } from "ai";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
+import { useLanguage } from "@/contexts/language-context";
 import { replaceNodes, formatXML } from "@/lib/utils";
+import { ApiConfigDialog } from "./api-config-dialog";
 
 export default function ChatPanel() {
+    const { language, setLanguage, t } = useLanguage();
     const {
         loadDiagram: onDisplayChart,
         handleExport: onExport,
@@ -40,6 +45,27 @@ export default function ChatPanel() {
             )
         ]);
     };
+
+    // Add state for API configuration
+    const [apiConfig, setApiConfig] = useState<{
+        provider: string;
+        apiKey: string;
+        model?: string;
+    } | null>(null);
+
+    // Load API config from localStorage
+    useEffect(() => {
+        const savedConfig = localStorage.getItem("ai-draw-config");
+        if (savedConfig) {
+            try {
+                const config = JSON.parse(savedConfig);
+                setApiConfig(config);
+            } catch (error) {
+                console.error("Failed to parse saved config:", error);
+            }
+        }
+    }, []);
+
     // Add a step counter to track updates
 
     // Add state for file attachments
@@ -56,6 +82,9 @@ export default function ChatPanel() {
 
     // Add state for input management
     const [input, setInput] = useState("");
+
+    // Check if API is configured
+    const isApiConfigured = apiConfig && apiConfig.apiKey && apiConfig.provider;
 
     // Remove the currentXmlRef and related useEffect
     const { messages, sendMessage, addToolResult, status, error, setMessages } =
@@ -121,6 +150,12 @@ export default function ChatPanel() {
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (input.trim() && status !== "streaming") {
+            // Check if API is configured
+            if (!isApiConfigured) {
+                alert(t("message.configureFirst"));
+                return;
+            }
+
             try {
                 // Fetch chart data before sending message
                 let chartXml = await onFetchChart();
@@ -154,6 +189,7 @@ export default function ChatPanel() {
                     {
                         body: {
                             xml: chartXml,
+                            apiConfig: apiConfig, // Include API config
                         },
                     }
                 );
@@ -182,15 +218,40 @@ export default function ChatPanel() {
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">
             <CardHeader className="p-4 flex justify-between items-center">
-                <CardTitle>Next-AI-Drawio</CardTitle>
-                <a
-                    href="https://github.com/DayuanJiang/next-ai-draw-io"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                    <FaGithub className="w-6 h-6" />
-                </a>
+                <CardTitle>{t("chat.title")}</CardTitle>
+                <div className="flex items-center gap-2">
+                    {/* Language Toggle Button */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLanguage(language === "zh" ? "en" : "zh")}
+                        className="flex items-center gap-1"
+                    >
+                        <Globe className="w-4 h-4" />
+                        {language === "zh" ? "中文" : "EN"}
+                    </Button>
+
+                    {/* Show API config status */}
+                    {isApiConfigured ? (
+                        <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                            {apiConfig.provider} {t("chat.configured")}
+                        </span>
+                    ) : (
+                        <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+                            {t("chat.notConfigured")}
+                        </span>
+                    )}
+                    <a
+                        href="https://github.com/DayuanJiang/next-ai-draw-io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-600 hover:text-gray-900 transition-colors"
+                        title={t("chat.github")}
+                    >
+                        <FaGithub className="w-6 h-6" />
+                    </a>
+                    <ApiConfigDialog />
+                </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
                 <ChatMessageDisplay
