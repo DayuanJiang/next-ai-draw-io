@@ -94,7 +94,7 @@ export function ChatMessageDisplay({
 
     const renderToolPart = (part: any) => {
         const callId = part.toolCallId;
-        const { state, input } = part;
+        const { state, input, output } = part;
         const isExpanded = expandedTools[callId] ?? true;
         const toolName = part.type?.replace("tool-", "");
 
@@ -134,19 +134,19 @@ export function ChatMessageDisplay({
                             <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         ) : state === "output-available" ? (
                             <div className="text-green-600">
-                                {toolName === "display_diagram"
+                                {output || (toolName === "display_diagram"
                                     ? "Diagram generated"
                                     : toolName === "edit_diagram"
                                     ? "Diagram edited"
-                                    : "Tool executed"}
+                                    : "Tool executed")}
                             </div>
                         ) : state === "output-error" ? (
                             <div className="text-red-600">
-                                {toolName === "display_diagram"
+                                {output || (toolName === "display_diagram"
                                     ? "Error generating diagram"
                                     : toolName === "edit_diagram"
                                     ? "Error editing diagram"
-                                    : "Tool error"}
+                                    : "Tool error")}
                             </div>
                         ) : null}
                     </div>

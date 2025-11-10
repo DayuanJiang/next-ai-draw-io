@@ -276,7 +276,7 @@ export function replaceXMLParts(
     }
 
     if (!matchFound) {
-      throw new Error(`Search block not found:\n${search}\n...does not match anything in the file.`);
+      throw new Error(`Search pattern not found in the diagram. The pattern may not exist in the current structure.`);
     }
 
     // Replace the matched lines

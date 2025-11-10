@@ -65,24 +65,21 @@ export default function ChatPanel() {
             }),
             async onToolCall({ toolCall }) {
                 if (toolCall.toolName === "display_diagram") {
-                    const { xml } = toolCall.input as { xml: string };
-                    // do nothing because we will handle this streamingly in the ChatMessageDisplay component
-                    // onDisplayChart(replaceNodes(chartXML, xml));
-
-                    // Use addToolResult instead of returning a value
+                    // Diagram is handled streamingly in the ChatMessageDisplay component
                     addToolResult({
                         tool: "display_diagram",
                         toolCallId: toolCall.toolCallId,
-                        output: "Successfully displayed the flowchart.",
+                        output: "Successfully displayed the diagram.",
                     });
                 } else if (toolCall.toolName === "edit_diagram") {
                     const { edits } = toolCall.input as {
                         edits: Array<{ search: string; replace: string }>;
                     };
 
+                    let currentXml = '';
                     try {
                         // Fetch current chart XML
-                        const currentXml = await onFetchChart();
+                        currentXml = await onFetchChart();
 
                         // Apply edits using the utility function
                         const { replaceXMLParts } = await import("@/lib/utils");
@@ -97,10 +94,14 @@ export default function ChatPanel() {
                             output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
                         });
                     } catch (error) {
+                        console.error("Edit diagram failed:", error);
+
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+
                         addToolResult({
                             tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
-                            output: `Error editing diagram: ${error}`,
+                            output: `Failed to edit diagram: ${errorMessage}`,
                         });
                     }
                 }
