@@ -73,7 +73,7 @@ const providers = [
     defaultModel: "Qwen/Qwen2.5-72B-Instruct",
     placeholder: "sk-...",
     apiUrl: "https://cloud.siliconflow.cn/me/account/ak",
-    modelsUrl: "https://cloud.siliconflow.cn/models",
+    modelsUrl: "https://docs.siliconflow.cn/cn/userguide/introduction",
     getModelsApi: "https://api.siliconflow.cn/v1/models",
   },
 ];
