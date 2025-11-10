@@ -28,12 +28,17 @@ export default function ChatPanel() {
     } = useDiagram();
 
     const onFetchChart = () => {
-        return new Promise<string>((resolve) => {
-            if (resolverRef && "current" in resolverRef) {
-                resolverRef.current = resolve; // Store the resolver
-            }
-            onExport(); // Trigger the export
-        });
+        return Promise.race([
+            new Promise<string>((resolve) => {
+                if (resolverRef && "current" in resolverRef) {
+                    resolverRef.current = resolve;
+                }
+                onExport();
+            }),
+            new Promise<string>((_, reject) =>
+                setTimeout(() => reject(new Error("Chart export timed out after 10 seconds")), 10000)
+            )
+        ]);
     };
     // Add a step counter to track updates
 
@@ -111,8 +116,6 @@ export default function ChatPanel() {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
     }, [messages]);
-
-    console.log(JSON.stringify(messages, null, 2));
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();

@@ -30,7 +30,9 @@ export default function ExamplePanel({
             // Fetch the architecture image
             const response = await fetch("/architecture.png");
             const blob = await response.blob();
-            const file = new File([blob], "architecture.png", { type: "image/png" });
+            const file = new File([blob], "architecture.png", {
+                type: "image/png",
+            });
 
             // Set the file to the files state
             setFiles([file]);
@@ -54,7 +56,7 @@ export default function ExamplePanel({
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={handleReplicateArchitecture}
                 >
-                    Replicate this in aws style
+                    Create this diagram in aws style
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"

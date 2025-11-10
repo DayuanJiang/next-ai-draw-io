@@ -70,18 +70,19 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                     onClick={() => setSelectedImage(null)}
                 >
                     <button
-                        className="absolute top-4 right-4 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
+                        className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
                         onClick={() => setSelectedImage(null)}
                         aria-label="Close"
                     >
                         <X className="h-6 w-6" />
                     </button>
-                    <div className="relative max-w-7xl max-h-[90vh] w-full h-full">
+                    <div className="relative w-auto h-auto max-w-[90vw] max-h-[90vh]">
                         <Image
                             src={selectedImage}
                             alt="Preview"
-                            fill
-                            className="object-contain"
+                            width={1200}
+                            height={900}
+                            className="object-contain max-w-full max-h-[90vh] w-auto h-auto"
                             onClick={(e) => e.stopPropagation()}
                         />
                     </div>
