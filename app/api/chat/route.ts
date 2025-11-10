@@ -52,7 +52,8 @@ export async function POST(req: Request) {
           apiKey,
           baseURL: 'https://api.siliconflow.cn/v1',
         });
-        selectedModel = siliconflow(model || 'deepseek-chat');
+        // Use a model that works with SiliconFlow's OpenAI-compatible API
+        selectedModel = siliconflow(model || 'Qwen/Qwen2.5-72B-Instruct');
         break;
       default:
         return Response.json(
