@@ -48,12 +48,15 @@ export async function POST(req: Request) {
         selectedModel = googleProvider(model || 'gemini-1.5-pro');
         break;
       case 'siliconflow':
+        // 使用硅基流动的OpenAI兼容API
+        // 注意：硅基流动使用的是 v1 版本的 API
         const siliconflow = createOpenAI({
           apiKey,
           baseURL: 'https://api.siliconflow.cn/v1',
         });
-        // Use a model that works with SiliconFlow's OpenAI-compatible API
+        // 确保使用支持的模型
         selectedModel = siliconflow(model || 'Qwen/Qwen2.5-72B-Instruct');
+        console.log('Using SiliconFlow model:', model || 'Qwen/Qwen2.5-72B-Instruct');
         break;
       default:
         return Response.json(

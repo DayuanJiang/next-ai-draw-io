@@ -86,13 +86,156 @@ export default function ChatPanel() {
     // Check if API is configured
     const isApiConfigured = apiConfig && apiConfig.apiKey && apiConfig.provider;
 
-    // Remove the currentXmlRef and related useEffect
-    const { messages, sendMessage, addToolResult, status, error, setMessages } =
-        useChat({
-            transport: new DefaultChatTransport({
-                api: "/api/chat",
-            }),
-            async onToolCall({ toolCall }) {
+    // Custom chat implementation to support SiliconFlow
+    const [messages, setMessages] = useState<any[]>([]);
+    const [status, setStatus] = useState<"idle" | "submitted" | "streaming" | "awaiting-message" | "error">("idle");
+    const [error, setError] = useState<Error | null>(null);
+
+    const sendMessage = async (message: any, options?: any) => {
+        setStatus("streaming");
+        setError(null);
+
+        try {
+            // Handle tool calls
+            if (message.toolInvocations) {
+                for (const toolCall of message.toolInvocations) {
+                    if (toolCall.toolName === "display_diagram") {
+                        addToolResult({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Successfully displayed the diagram.",
+                        });
+                    } else if (toolCall.toolName === "edit_diagram") {
+                        const { edits } = toolCall.input as {
+                            edits: Array<{ search: string; replace: string }>;
+                        };
+
+                        let currentXml = '';
+                        try {
+                            // Fetch current chart XML
+                            currentXml = await onFetchChart();
+
+                            // Apply edits using the utility function
+                            const { replaceXMLParts } = await import("@/lib/utils");
+                            const editedXml = replaceXMLParts(currentXml, edits);
+
+                            // Load the edited diagram
+                            onDisplayChart(editedXml);
+
+                            addToolResult({
+                                tool: "edit_diagram",
+                                toolCallId: toolCall.toolCallId,
+                                output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                            });
+                        } catch (error) {
+                            console.error("Edit diagram failed:", error);
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            addToolResult({
+                                tool: "edit_diagram",
+                                toolCallId: toolCall.toolCallId,
+                                output: `Failed to edit diagram: ${errorMessage}`,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // For non-tool messages, send to API
+            if (message.parts && !message.toolInvocations) {
+                // Add user message
+                setMessages((prev) => [...prev, {
+                    id: `msg-${Date.now()}`,
+                    role: "user",
+                    parts: message.parts,
+                }]);
+
+                // Call API
+                const response = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        messages: [...messages, { role: "user", parts: message.parts }],
+                        xml: chartXML,
+                        apiConfig: apiConfig,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                // Handle streaming response
+                const reader = response.body?.getReader();
+                if (reader) {
+                    // Add assistant message
+                    const assistantMessageId = `msg-${Date.now()}`;
+                    setMessages((prev) => [...prev, {
+                        id: assistantMessageId,
+                        role: "assistant",
+                        parts: [],
+                    }]);
+
+                    const decoder = new TextDecoder();
+                    let buffer = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split("\n");
+                        buffer = lines.pop() || "";
+
+                        for (const line of lines) {
+                            if (line.startsWith("data: ")) {
+                                const data = line.slice(6);
+                                if (data === "[DONE]") {
+                                    setStatus("idle");
+                                    return;
+                                }
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    // Handle stream data
+                                    if (parsed.content) {
+                                        setMessages((prev) => {
+                                            const newMessages = [...prev];
+                                            const lastMessage = newMessages[newMessages.length - 1];
+                                            if (lastMessage && lastMessage.role === "assistant") {
+                                                lastMessage.parts = [{ type: "text", text: parsed.content }];
+                                            }
+                                            return newMessages;
+                                        });
+                                    }
+                                } catch (e) {
+                                    // Ignore parse errors
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            setStatus("idle");
+        } catch (err) {
+            console.error("Chat error:", err);
+            setError(err instanceof Error ? err : new Error(String(err)));
+            setStatus("idle");
+        }
+    };
+
+    const addToolResult = (result: { tool: string; toolCallId: string; output: string }) => {
+        setMessages((prev) => [...prev, {
+            id: `msg-${Date.now()}`,
+            role: "tool",
+            parts: [{ type: "text", text: result.output }],
+        }]);
+    };
+
+    const clearChat = () => {
+        setMessages([]);
+        setError(null);
+    };
                 if (toolCall.toolName === "display_diagram") {
                     // Diagram is handled streamingly in the ChatMessageDisplay component
                     addToolResult({
