@@ -2,9 +2,7 @@
 
 A next.js web application that integrates AI capabilities with draw.io diagrams. This app allows you to create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
-
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
-
 
 Demo site: [https://next-ai-draw-io.vercel.app/](https://next-ai-draw-io.vercel.app/)
 
@@ -47,12 +45,15 @@ npm install
 yarn install
 ```
 
-3. Create a `.env.local` file in the root directory with the following variables:
+3. Create a `.env.local` file in the root directory. You can use `env.example` as a template:
 
+```bash
+cp env.example .env.local
 ```
-OPENAI_API_KEY=your_openai_api_key_here
-# Add any other required environment variables
-```
+
+Then update `.env.local` with your actual API keys:
+
+Note: Not all variables are required. At minimum, you'll need at least one AI provider API key (OpenAI, Google, or OpenRouter).
 
 4. Run the development server:
 
