@@ -144,6 +144,13 @@ ${lastMessageText}
       //     reasoningEffort: "minimal"
       //   },
       // },
+      providerOptions: {
+        anthropic: {
+          additionalModelRequestFields: {
+            anthropic_beta: ['fine-grained-tool-streaming-2025-05-14']
+          }
+        }
+      },
       messages: enhancedMessages,
       tools: {
         // Client-side tool that will be executed on the client
