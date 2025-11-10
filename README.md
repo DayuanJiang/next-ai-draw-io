@@ -2,7 +2,9 @@
 
 A next.js web application that integrates AI capabilities with draw.io diagrams. This app allows you to create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
-https://github.com/user-attachments/assets/9f14b5fd-bc7f-4151-b4be-e38d17b77621
+
+https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+
 
 Demo site: [https://next-ai-draw-io.vercel.app/](https://next-ai-draw-io.vercel.app/)
 
