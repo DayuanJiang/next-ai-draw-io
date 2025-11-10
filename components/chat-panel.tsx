@@ -236,52 +236,7 @@ export default function ChatPanel() {
         setMessages([]);
         setError(null);
     };
-                if (toolCall.toolName === "display_diagram") {
-                    // Diagram is handled streamingly in the ChatMessageDisplay component
-                    addToolResult({
-                        tool: "display_diagram",
-                        toolCallId: toolCall.toolCallId,
-                        output: "Successfully displayed the diagram.",
-                    });
-                } else if (toolCall.toolName === "edit_diagram") {
-                    const { edits } = toolCall.input as {
-                        edits: Array<{ search: string; replace: string }>;
-                    };
 
-                    let currentXml = '';
-                    try {
-                        // Fetch current chart XML
-                        currentXml = await onFetchChart();
-
-                        // Apply edits using the utility function
-                        const { replaceXMLParts } = await import("@/lib/utils");
-                        const editedXml = replaceXMLParts(currentXml, edits);
-
-                        // Load the edited diagram
-                        onDisplayChart(editedXml);
-
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
-                        });
-                    } catch (error) {
-                        console.error("Edit diagram failed:", error);
-
-                        const errorMessage = error instanceof Error ? error.message : String(error);
-
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Failed to edit diagram: ${errorMessage}`,
-                        });
-                    }
-                }
-            },
-            onError: (error) => {
-                console.error("Chat error:", error);
-            },
-        });
     const messagesEndRef = useRef<HTMLDivElement>(null);
     // Scroll to bottom when messages change
     useEffect(() => {
