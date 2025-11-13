@@ -90,6 +90,7 @@ public/               # Static assets including example images
 
 -   [x] Allow the LLM to modify the XML instead of generating it from scratch everytime.
 -   [x] Improve the smoothness of shape streaming updates.
+-   [ ] Add multiple AI provider support (Google PaLM, Anthropic Claude, etc.)
 
 ## License
 
