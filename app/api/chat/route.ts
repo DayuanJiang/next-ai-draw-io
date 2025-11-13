@@ -72,7 +72,10 @@ When using edit_diagram tool:
 - Example GOOD edit: {"search": "  <mxCell id=\"2\" value=\"Old Text\">", "replace": "  <mxCell id=\"2\" value=\"New Text\">"}
 - Example BAD edit: Including 10+ unchanged lines just to change one attribute
 - For multiple changes, use separate edits: [{"search": "line1", "replace": "new1"}, {"search": "line2", "replace": "new2"}]
-- CRITICAL: If edit_diagram fails because the search pattern cannot be found, fall back to using display_diagram to regenerate the entire diagram with your changes. Do NOT keep trying edit_diagram with different search patterns.
+- RETRY POLICY: If edit_diagram fails because the search pattern cannot be found:
+  * You may retry edit_diagram up to 3 times with adjusted search patterns
+  * After 3 failed attempts, you MUST fall back to using display_diagram to regenerate the entire diagram
+  * The error message will indicate how many retries remain
 `;
 
     const lastMessage = messages[messages.length - 1];
