@@ -98,10 +98,18 @@ export default function ChatPanel() {
 
                         const errorMessage = error instanceof Error ? error.message : String(error);
 
+                        // Provide detailed error with current diagram XML
                         addToolResult({
                             tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
-                            output: `Failed to edit diagram: ${errorMessage}`,
+                            output: `Edit failed: ${errorMessage}
+
+Current diagram XML:
+\`\`\`xml
+${currentXml}
+\`\`\`
+
+Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
                         });
                     }
                 }
