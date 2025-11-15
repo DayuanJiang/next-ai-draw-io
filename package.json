@@ -10,10 +10,12 @@
     },
     "dependencies": {
         "@ai-sdk/amazon-bedrock": "^3.0.52",
+        "@ai-sdk/anthropic": "^2.0.44",
+        "@ai-sdk/azure": "^2.0.69",
         "@ai-sdk/google": "^2.0.0",
         "@ai-sdk/openai": "^2.0.19",
         "@ai-sdk/react": "^2.0.22",
-        "@openrouter/ai-sdk-provider": "^0.4.6",
+        "@openrouter/ai-sdk-provider": "^1.2.3",
         "@radix-ui/react-dialog": "^1.1.6",
         "@radix-ui/react-scroll-area": "^1.2.3",
         "@radix-ui/react-slot": "^1.1.2",
@@ -27,6 +29,7 @@
         "jsdom": "^26.0.0",
         "lucide-react": "^0.483.0",
         "next": "15.2.3",
+        "ollama-ai-provider-v2": "^1.5.4",
         "pako": "^2.1.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -35,7 +38,7 @@
         "remark-gfm": "^4.0.1",
         "tailwind-merge": "^3.0.2",
         "tailwindcss-animate": "^1.0.7",
-        "zod": "^3.25.76"
+        "zod": "^4.1.12"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4",
