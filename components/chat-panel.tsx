@@ -133,9 +133,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages]);
 
+    // Debug: Log status changes
+    useEffect(() => {
+        console.log('[ChatPanel] Status changed to:', status);
+    }, [status]);
+
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (input.trim() && status !== "streaming") {
+        const isProcessing = status === "streaming" || status === "submitted";
+        if (input.trim() && !isProcessing) {
             try {
                 // Fetch chart data before sending message
                 let chartXml = await onFetchChart();

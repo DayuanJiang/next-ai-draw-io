@@ -4,6 +4,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { azure } from '@ai-sdk/azure';
 import { ollama } from 'ollama-ai-provider-v2';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 export type ProviderName =
   | 'bedrock'
@@ -11,7 +12,8 @@ export type ProviderName =
   | 'anthropic'
   | 'google'
   | 'azure'
-  | 'ollama';
+  | 'ollama'
+  | 'openrouter';
 
 interface ModelConfig {
   model: any;
@@ -38,6 +40,7 @@ function validateProviderCredentials(provider: ProviderName): void {
     google: 'GOOGLE_GENERATIVE_AI_API_KEY',
     azure: 'AZURE_API_KEY',
     ollama: null, // No credentials needed for local Ollama
+    openrouter: 'OPENROUTER_API_KEY',
   };
 
   const requiredVar = requiredEnvVars[provider];
@@ -53,7 +56,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -63,6 +66,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - AZURE_RESOURCE_NAME, AZURE_API_KEY: Azure OpenAI credentials
  * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
  * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to http://localhost:11434)
+ * - OPENROUTER_API_KEY: OpenRouter API key
  */
 export function getAIModel(): ModelConfig {
   const provider = (process.env.AI_PROVIDER || 'bedrock') as ProviderName;
@@ -114,9 +118,16 @@ export function getAIModel(): ModelConfig {
       model = ollama(modelId);
       break;
 
+    case 'openrouter':
+      const openrouter = createOpenRouter({
+        apiKey: process.env.OPENROUTER_API_KEY,
+      });
+      model = openrouter(modelId);
+      break;
+
     default:
       throw new Error(
-        `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama`
+        `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter`
       );
   }
 

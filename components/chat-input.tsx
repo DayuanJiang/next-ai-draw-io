@@ -45,6 +45,12 @@ export function ChatInput({
     const [isDragging, setIsDragging] = useState(false);
     const [showClearDialog, setShowClearDialog] = useState(false);
 
+    // Debug: Log status changes
+    const isDisabled = status === "streaming" || status === "submitted";
+    useEffect(() => {
+        console.log('[ChatInput] Status changed to:', status, '| Input disabled:', isDisabled);
+    }, [status, isDisabled]);
+
     // Auto-resize textarea based on content
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
@@ -63,7 +69,7 @@ export function ChatInput({
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();
             const form = e.currentTarget.closest("form");
-            if (form && input.trim() && status !== "streaming") {
+            if (form && input.trim() && !isDisabled) {
                 form.requestSubmit();
             }
         }
@@ -71,7 +77,7 @@ export function ChatInput({
 
     // Handle clipboard paste
     const handlePaste = async (e: React.ClipboardEvent) => {
-        if (status === "streaming") return;
+        if (isDisabled) return;
 
         const items = e.clipboardData.items;
         const imageItems = Array.from(items).filter((item) =>
@@ -140,7 +146,7 @@ export function ChatInput({
         e.stopPropagation();
         setIsDragging(false);
 
-        if (status === "streaming") return;
+        if (isDisabled) return;
 
         const droppedFiles = e.dataTransfer.files;
 
@@ -183,7 +189,7 @@ export function ChatInput({
                 placeholder="Describe what changes you want to make to the diagram
                 or upload(paste) an image to replicate a diagram.
                  (Press Cmd/Ctrl + Enter to send)"
-                disabled={status === "streaming"}
+                disabled={isDisabled}
                 aria-label="Chat input"
                 className="min-h-[80px] resize-none transition-all duration-200 px-1 py-0"
             />
@@ -220,7 +226,7 @@ export function ChatInput({
                         size="icon"
                         onClick={() => onToggleHistory(true)}
                         disabled={
-                            status === "streaming" ||
+                            isDisabled ||
                             diagramHistory.length === 0
                         }
                         title="Diagram History"
@@ -234,7 +240,7 @@ export function ChatInput({
                         variant="outline"
                         size="icon"
                         onClick={triggerFileInput}
-                        disabled={status === "streaming"}
+                        disabled={isDisabled}
                         title="Upload image"
                     >
                         <ImageIcon className="h-4 w-4" />
@@ -247,21 +253,21 @@ export function ChatInput({
                         onChange={handleFileChange}
                         accept="image/*"
                         multiple
-                        disabled={status === "streaming"}
+                        disabled={isDisabled}
                     />
                 </div>
 
                 <Button
                     type="submit"
-                    disabled={status === "streaming" || !input.trim()}
+                    disabled={isDisabled || !input.trim()}
                     className="transition-opacity"
                     aria-label={
-                        status === "streaming"
+                        isDisabled
                             ? "Sending message..."
                             : "Send message"
                     }
                 >
-                    {status === "streaming" ? (
+                    {isDisabled ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                         <Send className="mr-2 h-4 w-4" />

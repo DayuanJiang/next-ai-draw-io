@@ -15,6 +15,7 @@
         "@ai-sdk/google": "^2.0.0",
         "@ai-sdk/openai": "^2.0.19",
         "@ai-sdk/react": "^2.0.22",
+        "@openrouter/ai-sdk-provider": "^1.2.3",
         "@radix-ui/react-dialog": "^1.1.6",
         "@radix-ui/react-scroll-area": "^1.2.3",
         "@radix-ui/react-slot": "^1.1.2",
