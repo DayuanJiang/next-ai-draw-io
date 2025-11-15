@@ -3,6 +3,7 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 
 import {
     Card,
@@ -17,8 +18,14 @@ import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML } from "@/lib/utils";
+import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 
-export default function ChatPanel() {
+interface ChatPanelProps {
+    isVisible: boolean;
+    onToggleVisibility: () => void;
+}
+
+export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
         handleExport: onExport,
@@ -187,18 +194,51 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         setFiles(newFiles);
     };
 
+    // Collapsed view when chat is hidden
+    if (!isVisible) {
+        return (
+            <Card className="h-full flex flex-col rounded-none py-0 gap-0 items-center justify-start pt-4">
+                <ButtonWithTooltip
+                    tooltipContent="Show chat panel (Ctrl+B)"
+                    variant="ghost"
+                    size="icon"
+                    onClick={onToggleVisibility}
+                >
+                    <PanelRightOpen className="h-5 w-5" />
+                </ButtonWithTooltip>
+                <div
+                    className="text-sm text-gray-500 mt-8"
+                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                >
+                    Chat
+                </div>
+            </Card>
+        );
+    }
+
+    // Full view when chat is visible
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">
-            <CardHeader className="p-4 flex justify-between items-center">
+            <CardHeader className="p-4 flex flex-row justify-between items-center">
                 <CardTitle>Next-AI-Drawio</CardTitle>
-                <a
-                    href="https://github.com/DayuanJiang/next-ai-draw-io"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                    <FaGithub className="w-6 h-6" />
-                </a>
+                <div className="flex items-center gap-2">
+                    <ButtonWithTooltip
+                        tooltipContent="Hide chat panel (Ctrl+B)"
+                        variant="ghost"
+                        size="icon"
+                        onClick={onToggleVisibility}
+                    >
+                        <PanelRightClose className="h-5 w-5" />
+                    </ButtonWithTooltip>
+                    <a
+                        href="https://github.com/DayuanJiang/next-ai-draw-io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                        <FaGithub className="w-6 h-6" />
+                    </a>
+                </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
                 <ChatMessageDisplay
