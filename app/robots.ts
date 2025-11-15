@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
             allow: '/',
             disallow: '/api/',
         },
-        sitemap: 'https://next-ai-draw-io.vercel.app/sitemap.xml',
+        sitemap: 'https://next-ai-drawio.jiang.jp/sitemap.xml',
     }
 }

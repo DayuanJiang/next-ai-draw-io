@@ -18,16 +18,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
     title: "Next AI Draw.io - AI-Powered Diagram Generator",
     description: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating draw.io with AI assistance for professional diagram creation.",
-    keywords: ["AI diagram generator", "AWS architecture", "flowchart creator", "draw.io", "AI drawing tool", "technical diagrams", "diagram automation"],
+    keywords: ["AI diagram generator", "AWS architecture", "flowchart creator", "draw.io", "AI drawing tool", "technical diagrams", "diagram automation", "free diagram generator", "online diagram maker"],
     authors: [{ name: "Next AI Draw.io" }],
     creator: "Next AI Draw.io",
     publisher: "Next AI Draw.io",
-    metadataBase: new URL("https://next-ai-draw-io.vercel.app"),
+    metadataBase: new URL("https://next-ai-drawio.jiang.jp"),
     openGraph: {
         title: "Next AI Draw.io - AI Diagram Generator",
         description: "Create professional diagrams with AI assistance. Supports AWS architecture, flowcharts, and more.",
         type: "website",
-        url: "https://next-ai-draw-io.vercel.app",
+        url: "https://next-ai-drawio.jiang.jp",
         siteName: "Next AI Draw.io",
         locale: "en_US",
         images: [
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     twitter: {
         card: "summary_large_image",
         title: "Next AI Draw.io - AI Diagram Generator",
-        description: "Create professional diagrams with AI assistance",
+        description: "Create professional diagrams with AI assistance. Free, no login required.",
         images: ["/architecture.png"],
     },
     robots: {
@@ -72,29 +72,26 @@ export default function RootLayout({
         name: 'Next AI Draw.io',
         applicationCategory: 'DesignApplication',
         operatingSystem: 'Web Browser',
-        description: 'AI-powered diagram generator that integrates with draw.io for creating AWS architecture diagrams, flowcharts, and technical diagrams.',
-        url: 'https://next-ai-draw-io.vercel.app',
+        description: 'AI-powered diagram generator with targeted XML editing capabilities that integrates with draw.io for creating AWS architecture diagrams, flowcharts, and technical diagrams. Features diagram history, multi-provider AI support, and real-time collaboration.',
+        url: 'https://next-ai-drawio.jiang.jp',
         offers: {
             '@type': 'Offer',
             price: '0',
             priceCurrency: 'USD',
         },
-        aggregateRating: {
-            '@type': 'AggregateRating',
-            ratingValue: '5',
-            ratingCount: '1',
-        },
     };
 
     return (
         <html lang="en">
-            <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-            >
+            <head>
                 <script
                     type="application/ld+json"
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
                 />
+            </head>
+            <body
+                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+            >
                 <DiagramProvider>{children}</DiagramProvider>
 
                 <Analytics />
