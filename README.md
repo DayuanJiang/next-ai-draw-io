@@ -115,6 +115,7 @@ public/               # Static assets including example images
 -   [x] Allow the LLM to modify the XML instead of generating it from scratch everytime.
 -   [x] Improve the smoothness of shape streaming updates.
 -   [x] Add multiple AI provider support (OpenAI, Anthropic, Google, Azure, Ollama)
+-   [ ] Solve the bug that generation will fail for session that longer than 60s.
 
 ## License
 
