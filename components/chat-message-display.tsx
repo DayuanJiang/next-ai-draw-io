@@ -187,7 +187,7 @@ export function ChatMessageDisplay({
                                                     src={part.url}
                                                     width={200}
                                                     height={200}
-                                                    alt={`file-${index}`}
+                                                    alt={`Uploaded diagram or image for AI analysis`}
                                                     className="rounded-md border"
                                                     style={{
                                                         objectFit: "contain",

@@ -79,7 +79,7 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                     <div className="relative w-auto h-auto max-w-[90vw] max-h-[90vh]">
                         <Image
                             src={selectedImage}
-                            alt="Preview"
+                            alt="Full size preview of uploaded diagram or image"
                             width={1200}
                             height={900}
                             className="object-contain max-w-full max-h-[90vh] w-auto h-auto"
