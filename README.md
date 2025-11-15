@@ -26,6 +26,86 @@ The application uses the following technologies:
 
 Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
 
+## Multi-Provider Support
+
+This application supports multiple AI providers, making it easy to deploy with your preferred service. Choose from:
+
+### Supported Providers
+
+| Provider | Status | Best For |
+|----------|--------|----------|
+| **AWS Bedrock** | ✅ Default | Claude models via AWS infrastructure |
+| **OpenAI** | ✅ Supported | GPT-4, GPT-5, and reasoning models |
+| **Anthropic** | ✅ Supported | Direct access to Claude models |
+| **Google AI** | ✅ Supported | Gemini models with multi-modal capabilities |
+| **Azure OpenAI** | ✅ Supported | Enterprise OpenAI deployments |
+| **Ollama** | ✅ Supported | Local/self-hosted open source models |
+
+### Quick Setup by Provider
+
+#### AWS Bedrock (Default)
+```bash
+AI_PROVIDER=bedrock
+AI_MODEL=global.anthropic.claude-sonnet-4-5-20250929-v1:0
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+```
+
+#### OpenAI
+```bash
+AI_PROVIDER=openai
+AI_MODEL=gpt-4o
+OPENAI_API_KEY=sk-...
+```
+
+#### Anthropic
+```bash
+AI_PROVIDER=anthropic
+AI_MODEL=claude-sonnet-4-5
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+#### Google Generative AI
+```bash
+AI_PROVIDER=google
+AI_MODEL=gemini-2.5-flash
+GOOGLE_GENERATIVE_AI_API_KEY=...
+```
+
+#### Azure OpenAI
+```bash
+AI_PROVIDER=azure
+AI_MODEL=your-deployment-name
+AZURE_RESOURCE_NAME=your-resource
+AZURE_API_KEY=...
+```
+
+#### Ollama (Local)
+```bash
+AI_PROVIDER=ollama
+AI_MODEL=phi3
+OLLAMA_BASE_URL=http://localhost:11434/api  # Optional
+```
+Note: Install models locally first with `ollama pull <model-name>`
+
+### Recommended Models
+
+**Best Quality:**
+- AWS Bedrock: `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- Anthropic: `claude-sonnet-4-5`
+- OpenAI: `gpt-4o` or `gpt-5`
+
+**Best Speed:**
+- Google: `gemini-2.5-flash`
+- OpenAI: `gpt-4o`
+- Anthropic: `claude-haiku-4-5`
+
+**Best Cost:**
+- Ollama: Free (local models)
+- Google: `gemini-1.5-flash-8b`
+- OpenAI: `gpt-4o-mini`
+
 ## Getting Started
 
 ### Installation
@@ -45,15 +125,20 @@ npm install
 yarn install
 ```
 
-3. Create a `.env.local` file in the root directory. You can use `env.example` as a template:
+3. Configure your AI provider:
+
+Create a `.env.local` file in the root directory:
 
 ```bash
-cp env.example .env.local
+cp .env.example .env.local
 ```
 
-Then update `.env.local` with your actual API keys:
+Edit `.env.local` and configure your chosen provider:
+- Set `AI_PROVIDER` to your chosen provider (bedrock, openai, anthropic, google, azure, ollama)
+- Set `AI_MODEL` to the specific model you want to use
+- Add the required API keys for your provider
 
-Note: Not all variables are required. At minimum, you'll need at least one AI provider API key (OpenAI, Google, or OpenRouter).
+See the [Multi-Provider Support](#multi-provider-support) section above for provider-specific configuration examples.
 
 4. Run the development server:
 
@@ -90,7 +175,7 @@ public/               # Static assets including example images
 
 -   [x] Allow the LLM to modify the XML instead of generating it from scratch everytime.
 -   [x] Improve the smoothness of shape streaming updates.
--   [ ] Add multiple AI provider support (Google PaLM, Anthropic Claude, etc.)
+-   [x] Add multiple AI provider support (OpenAI, Anthropic, Google, Azure, Ollama)
 
 ## License
 

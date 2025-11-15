@@ -1,16 +1,8 @@
-import { bedrock } from '@ai-sdk/amazon-bedrock';
-import { openai } from '@ai-sdk/openai';
-import { google } from '@ai-sdk/google';
-import { smoothStream, streamText, convertToModelMessages } from 'ai';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
+import { streamText, convertToModelMessages } from 'ai';
+import { getAIModel } from '@/lib/ai-providers';
+import { z } from "zod";
 
-import { z } from "zod/v3";
-import { replaceXMLParts } from "@/lib/utils";
-
-export const maxDuration = 60
-const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
@@ -127,34 +119,14 @@ ${lastMessageText}
 
     console.log("Enhanced messages:", enhancedMessages);
 
+    // Get AI model from environment configuration
+    const { model, providerOptions } = getAIModel();
+
     const result = streamText({
-      // model: google("gemini-2.5-flash-preview-05-20"),
-      // model: google("gemini-2.5-pro"),
-      // model: bedrock('anthropic.claude-sonnet-4-20250514-v1:0'),
+      model,
       system: systemMessage,
-      model: bedrock('global.anthropic.claude-sonnet-4-5-20250929-v1:0'),
-      // model: openrouter('moonshotai/kimi-k2:free'),
-      // model: model,
-      // providerOptions: {
-      //   google: {
-      //     thinkingConfig: {
-      //       thinkingBudget: 128,
-      //     },
-      //   }
-      // },
-      // providerOptions: {
-      //   openai: {
-      //     reasoningEffort: "minimal"
-      //   },
-      // },
-      providerOptions: {
-        anthropic: {
-          additionalModelRequestFields: {
-            anthropic_beta: ['fine-grained-tool-streaming-2025-05-14']
-          }
-        }
-      },
       messages: enhancedMessages,
+      ...(providerOptions && { providerOptions }),
       tools: {
         // Client-side tool that will be executed on the client
         display_diagram: {
