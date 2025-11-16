@@ -4,6 +4,7 @@ import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import Link from "next/link";
 
 import {
     Card,
@@ -226,7 +227,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     return (
         <Card className="h-full flex flex-col rounded-none py-0 gap-0">
             <CardHeader className="p-4 flex flex-row justify-between items-center">
-                <CardTitle>Next-AI-Drawio</CardTitle>
+                <div className="flex items-center gap-3">
+                    <CardTitle>Next-AI-Drawio</CardTitle>
+                    <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                        About
+                    </Link>
+                </div>
                 <div className="flex items-center gap-2">
                     <ButtonWithTooltip
                         tooltipContent="Hide chat panel (Ctrl+B)"
