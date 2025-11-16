@@ -4,7 +4,7 @@ A next.js web application that integrates AI capabilities with draw.io diagrams.
 
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
-Demo site: [https://next-ai-draw-io.vercel.app/](https://next-ai-draw-io.vercel.app/)
+Demo site: [https://next-ai-draw-io.vercel.app](https://next-ai-draw-io.vercel.app)
 
 ## Features
 
@@ -27,18 +27,12 @@ Diagrams are represented as XML that can be rendered in draw.io. The AI processe
 
 ## Multi-Provider Support
 
-This application supports multiple AI providers, making it easy to deploy with your preferred service. Choose from:
-
-### Supported Providers
-
-| Provider         | Status       | Best For                                    |
-| ---------------- | ------------ | ------------------------------------------- |
-| **AWS Bedrock**  | ✅ Default   | Claude models via AWS infrastructure        |
-| **OpenAI**       | ✅ Supported | GPT-4, GPT-5, and reasoning models          |
-| **Anthropic**    | ✅ Supported | Direct access to Claude models              |
-| **Google AI**    | ✅ Supported | Gemini models with multi-modal capabilities |
-| **Azure OpenAI** | ✅ Supported | Enterprise OpenAI deployments               |
-| **Ollama**       | ✅ Supported | Local/self-hosted open source models        |
+-   AWS Bedrock (default)
+-   OpenAI
+-   Anthropic
+-   Google AI
+-   Azure OpenAI
+-   Ollama
 
 Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
 
