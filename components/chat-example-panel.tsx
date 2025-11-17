@@ -54,21 +54,27 @@ export default function ExamplePanel({
             <div className="flex flex-wrap gap-5">
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
+                    onClick={() => setInput("Give me a **animated connector** diagram of transformer's architecture")}
+                >
+                    Draw diagram with Animated Connectors
+                </button>
+                <button
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={handleReplicateArchitecture}
                 >
-                    Create this diagram in aws style
+                    Create AWS architecture
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={handleReplicateFlowchart}
                 >
-                    Replicate this flowchart
+                    Replicate flowchart
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={() => setInput("Draw a cat for me")}
                 >
-                    Draw a cat for me
+                    Draw a cat
                 </button>
             </div>
         </div>
