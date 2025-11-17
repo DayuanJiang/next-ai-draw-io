@@ -141,6 +141,7 @@ ${lastMessageText}
             </mxCell>
           </root>
           - Note that when you need to generate diagram about aws architecture, use **AWS 2025 icons**.
+          - If you are asked to generate animated connectors, make sure to include "flowAnimation=1" in the style of the connector elements.
           `,
           inputSchema: z.object({
             xml: z.string().describe("XML string to be displayed on draw.io")

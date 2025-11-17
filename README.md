@@ -12,8 +12,76 @@ Demo site: [https://next-ai-draw-io.vercel.app](https://next-ai-draw-io.vercel.a
 -   **Image-Based Diagram Replication**: Upload existing diagrams or images and have the AI replicate and enhance them automatically
 -   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
--   **Smart Editing**: Modify existing diagrams using simple text prompts
--   **Targeted XML Editing**: AI can now make precise edits to specific parts of diagrams without regenerating the entire XML, making updates faster and more efficient
+-   **AWS Architecture Diagram Support**: Specialized support for generating AWS architecture diagrams
+-   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
+
+## **Examples**
+
+Here are some example prompts and their generated diagrams:
+
+<table>
+<tr>
+<td width="50%" style="vertical-align:top;height:400px;">
+
+**Prompt:**
+
+```
+Generate a GCP architecture diagram with **GCP icons**. In this diagram, users connect to a frontend hosted on an instance.
+```
+
+<img src="./public/gcp_demo.svg" alt="GCP Architecture Diagram" style="width:100%;height:300px;object-fit:contain;" />
+
+</td>
+<td width="50%" style="vertical-align:top;height:400px;">
+
+**Prompt:**
+
+```
+Generate a AWS architecture diagram with **AWS icons**. In this diagram, users connect to a frontend hosted on an instance.
+```
+
+<img src="./public/aws_demo.svg" alt="AWS Architecture Diagram" style="width:100%;height:300px;object-fit:contain;" />
+
+</td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top;height:400px;">
+
+**Prompt:**
+
+```
+Generate a Azure architecture diagram with **Azure icons**. In this diagram, users connect to a frontend hosted on an instance.
+```
+
+<img src="./public/azure_demo.svg" alt="Azure Architecture Diagram" style="width:100%;height:300px;object-fit:contain;" />
+
+</td>
+<td width="50%" style="vertical-align:top;height:400px;">
+
+**Prompt:**
+
+```
+Draw a cute cat for me.
+```
+
+<img src="./public/cat_demo.svg" alt="Cat Drawing" style="width:100%;height:300px;object-fit:contain;" />
+
+</td>
+</tr>
+<tr>
+<td width="50%" colspan="2" style="vertical-align:top;height:400px;">
+
+**Prompt:**
+
+```
+Give me a **animated connector** diagram of transformer's architecture.
+```
+
+<img src="./public/animated_connectors.svg" alt="Transformer Architecture with Animated Connectors" style="width:50%;height:300px;object-fit:contain;display:block;margin:0 auto;" />
+
+</td>
+</tr>
+</table>
 
 ## How It Works
 
