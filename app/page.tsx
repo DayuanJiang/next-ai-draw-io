@@ -40,20 +40,19 @@ export default function Home() {
         };
     }, []);
 
-    if (isMobile) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-gray-100">
-                <div className="text-center p-8">
-                    <h1 className="text-2xl font-semibold text-gray-800">
-                        Please open this application on a desktop or laptop
-                    </h1>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="flex h-screen bg-gray-100">
+        <div className="flex h-screen bg-gray-100 relative">
+            {/* Mobile warning overlay - keeps components mounted */}
+            {isMobile && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-100">
+                    <div className="text-center p-8">
+                        <h1 className="text-2xl font-semibold text-gray-800">
+                            Please open this application on a desktop or laptop
+                        </h1>
+                    </div>
+                </div>
+            )}
+
             <div className={`${isChatVisible ? 'w-2/3' : 'w-full'} p-1 h-full relative transition-all duration-300 ease-in-out`}>
                 <DrawIoEmbed
                     ref={drawioRef}
