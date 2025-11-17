@@ -19,69 +19,41 @@ Demo site: [https://next-ai-draw-io.vercel.app](https://next-ai-draw-io.vercel.a
 
 Here are some example prompts and their generated diagrams:
 
-<table>
-<tr>
-<td width="50%" style="vertical-align:top;height:400px;">
-
-**Prompt:**
-
-```
-Generate a GCP architecture diagram with **GCP icons**. In this diagram, users connect to a frontend hosted on an instance.
-```
-
-<img src="./public/gcp_demo.svg" alt="GCP Architecture Diagram" style="width:100%;height:300px;object-fit:contain;" />
-
-</td>
-<td width="50%" style="vertical-align:top;height:400px;">
-
-**Prompt:**
-
-```
-Generate a AWS architecture diagram with **AWS icons**. In this diagram, users connect to a frontend hosted on an instance.
-```
-
-<img src="./public/aws_demo.svg" alt="AWS Architecture Diagram" style="width:100%;height:300px;object-fit:contain;" />
-
-</td>
-</tr>
-<tr>
-<td width="50%" style="vertical-align:top;height:400px;">
-
-**Prompt:**
-
-```
-Generate a Azure architecture diagram with **Azure icons**. In this diagram, users connect to a frontend hosted on an instance.
-```
-
-<img src="./public/azure_demo.svg" alt="Azure Architecture Diagram" style="width:100%;height:300px;object-fit:contain;" />
-
-</td>
-<td width="50%" style="vertical-align:top;height:400px;">
-
-**Prompt:**
-
-```
-Draw a cute cat for me.
-```
-
-<img src="./public/cat_demo.svg" alt="Cat Drawing" style="width:100%;height:300px;object-fit:contain;" />
-
-</td>
-</tr>
-<tr>
-<td width="50%" colspan="2" style="vertical-align:top;height:400px;">
-
-**Prompt:**
-
-```
-Give me a **animated connector** diagram of transformer's architecture.
-```
-
-<img src="./public/animated_connectors.svg" alt="Transformer Architecture with Animated Connectors" style="width:50%;height:300px;object-fit:contain;display:block;margin:0 auto;" />
-
-</td>
-</tr>
+<div align="center">
+<table width="100%">
+  <tr>
+    <td width="50%" valign="top">
+      <strong>GCP architecture diagram</strong><br />
+      <p><strong>Prompt:</strong> Generate a GCP architecture diagram with **GCP icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
+      <img src="./public/gcp_demo.svg" alt="GCP Architecture Diagram" width="480" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>AWS architecture diagram</strong><br />
+      <p><strong>Prompt:</strong> Generate a AWS architecture diagram with **AWS icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
+      <img src="./public/aws_demo.svg" alt="AWS Architecture Diagram" width="480" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Azure architecture diagram</strong><br />
+      <p><strong>Prompt:</strong> Generate a Azure architecture diagram with **Azure icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
+      <img src="./public/azure_demo.svg" alt="Azure Architecture Diagram" width="480" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Animated transformer connectors</strong><br />
+      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
+      <img src="./public/animated_connectors.svg" alt="Transformer Architecture with Animated Connectors" width="480" />
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top" align="center">
+      <strong>Cat sketch prompt</strong><br />
+      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
+      <img src="./public/cat_demo.svg" alt="Cat Drawing" width="260" />
+    </td>
+  </tr>
 </table>
+</div>
 
 ## How It Works
 
