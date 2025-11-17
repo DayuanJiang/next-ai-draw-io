@@ -69,7 +69,7 @@ Draw a cute cat for me.
 </td>
 </tr>
 <tr>
-<td width="50%" colspan="2" style="vertical-align:top;height:400px;">
+<td colspan="2" style="vertical-align:top;height:400px;">
 
 **Prompt:**
 
