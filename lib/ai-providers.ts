@@ -1,5 +1,5 @@
 import { bedrock } from '@ai-sdk/amazon-bedrock';
-import { openai } from '@ai-sdk/openai';
+import { openai, createOpenAI } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { azure } from '@ai-sdk/azure';
@@ -61,6 +61,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  *
  * Provider-specific env vars:
  * - OPENAI_API_KEY: OpenAI API key
+ * - OPENAI_BASE_URL: Custom OpenAI-compatible endpoint (optional)
  * - ANTHROPIC_API_KEY: Anthropic API key
  * - GOOGLE_GENERATIVE_AI_API_KEY: Google API key
  * - AZURE_RESOURCE_NAME, AZURE_API_KEY: Azure OpenAI credentials
@@ -97,7 +98,15 @@ export function getAIModel(): ModelConfig {
       break;
 
     case 'openai':
-      model = openai(modelId);
+      if (process.env.OPENAI_BASE_URL) {
+        const customOpenAI = createOpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+          baseURL: process.env.OPENAI_BASE_URL,
+        });
+        model = customOpenAI.chat(modelId);
+      } else {
+        model = openai(modelId);
+      }
       break;
 
     case 'anthropic':

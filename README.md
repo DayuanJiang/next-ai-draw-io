@@ -68,7 +68,7 @@ Diagrams are represented as XML that can be rendered in draw.io. The AI processe
 ## Multi-Provider Support
 
 -   AWS Bedrock (default)
--   OpenAI
+-   OpenAI / OpenAI-compatible APIs (via `OPENAI_BASE_URL`)
 -   Anthropic
 -   Google AI
 -   Azure OpenAI
