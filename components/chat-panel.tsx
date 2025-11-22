@@ -54,6 +54,8 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
     const [files, setFiles] = useState<File[]>([]);
     // Add state for showing the history dialog
     const [showHistory, setShowHistory] = useState(false);
+    // Add state for conversation title
+    const [conversationTitle, setConversationTitle] = useState<string>('New Conversation');
 
     // Convert File[] to FileList for experimental_attachments
     const createFileList = (files: File[]): FileList => {
@@ -126,6 +128,31 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 console.error("Chat error:", error);
             },
         });
+    
+    // Function to generate conversation title using LLM
+    const generateConversationTitle = async (userQuery: string) => {
+        try {
+            const response = await fetch('/api/generate-title', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ userQuery }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate title');
+            }
+
+            const data = await response.json();
+            setConversationTitle(data.title);
+        } catch (error) {
+            console.error('Error generating conversation title:', error);
+            // Fallback to truncated query if API fails
+            setConversationTitle(userQuery.slice(0, 50) + (userQuery.length > 50 ? '...' : ''));
+        }
+    };
+    
     const messagesEndRef = useRef<HTMLDivElement>(null);
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -144,6 +171,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         const isProcessing = status === "streaming" || status === "submitted";
         if (input.trim() && !isProcessing) {
             try {
+                // Generate title for the first message
+                if (messages.length === 0) {
+                    generateConversationTitle(input);
+                }
+
                 // Fetch chart data before sending message
                 let chartXml = await onFetchChart();
 
@@ -204,20 +236,21 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     // Collapsed view when chat is hidden
     if (!isVisible) {
         return (
-            <Card className="h-full flex flex-col rounded-none py-0 gap-0 items-center justify-start pt-4">
+            <Card className="h-full flex flex-col rounded-2xl py-0 gap-0 items-center justify-start pt-4 shadow-md bg-white">
                 <ButtonWithTooltip
                     tooltipContent="Show chat panel (Ctrl+B)"
                     variant="ghost"
                     size="icon"
                     onClick={onToggleVisibility}
+                    className="h-8 w-8 rounded-full hover:bg-gray-100 transition-all duration-200"
                 >
-                    <PanelRightOpen className="h-5 w-5" />
+                    <PanelRightOpen className="h-4 w-4 text-gray-600" />
                 </ButtonWithTooltip>
                 <div
-                    className="text-sm text-gray-500 mt-8"
+                    className="text-xs font-medium text-gray-400 mt-8 tracking-wider"
                     style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                 >
-                    Chat
+                    Next-AI-Drawio
                 </div>
             </Card>
         );
@@ -225,30 +258,34 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
     // Full view when chat is visible
     return (
-        <Card className="h-full flex flex-col rounded-none py-0 gap-0">
-            <CardHeader className="p-4 flex flex-row justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <CardTitle>Next-AI-Drawio</CardTitle>
-                    <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+        <Card className="h-full flex flex-col rounded-2xl py-0 gap-0 shadow-md bg-white">
+            <CardHeader className="px-4 py-3 flex flex-row justify-between items-center rounded-t-2xl bg-white">
+                <div className="flex items-center bg-gray-50 rounded-full px-4 py-1.5 flex-1 max-w-md">
+                    <CardTitle className="text-sm font-medium text-gray-700 tracking-tight truncate">
+                        {conversationTitle}
+                    </CardTitle>
+                </div>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-full px-3 py-1">
+                    <Link href="/about" className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-all duration-200 px-2">
                         About
                     </Link>
-                </div>
-                <div className="flex items-center gap-2">
+                    <div className="h-3 w-px bg-gray-300"></div>
                     <ButtonWithTooltip
                         tooltipContent="Hide chat panel (Ctrl+B)"
                         variant="ghost"
                         size="icon"
                         onClick={onToggleVisibility}
+                        className="h-7 w-7 rounded-full hover:bg-white transition-all duration-200"
                     >
-                        <PanelRightClose className="h-5 w-5" />
+                        <PanelRightClose className="h-4 w-4 text-gray-600" />
                     </ButtonWithTooltip>
                     <a
                         href="https://github.com/DayuanJiang/next-ai-draw-io"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-gray-600 hover:text-gray-900 transition-colors"
+                        className="h-7 w-7 flex items-center justify-center text-gray-600 hover:text-gray-900 transition-all duration-200 rounded-full hover:bg-white"
                     >
-                        <FaGithub className="w-6 h-6" />
+                        <FaGithub className="w-4 h-4" />
                     </a>
                 </div>
             </CardHeader>
@@ -261,7 +298,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 />
             </CardContent>
 
-            <CardFooter className="p-2">
+            <CardFooter className="p-3 rounded-b-2xl bg-white flex flex-col gap-2">
                 <ChatInput
                     input={input}
                     status={status}
@@ -270,12 +307,16 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onClearChat={() => {
                         setMessages([]);
                         clearDiagram();
+                        setConversationTitle('New Conversation');
                     }}
                     files={files}
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
                 />
+                <div className="text-center text-xs text-gray-400 font-medium">
+                    Next-AI-Drawio
+                </div>
             </CardFooter>
         </Card>
     );
