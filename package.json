@@ -46,6 +46,8 @@
         "@types/pako": "^2.0.3",
         "@types/react": "^19",
         "@types/react-dom": "^19",
+        "eslint": "9.39.1",
+        "eslint-config-next": "16.0.5",
         "tailwindcss": "^4",
         "typescript": "^5"
     }
