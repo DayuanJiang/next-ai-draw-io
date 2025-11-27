@@ -182,7 +182,9 @@ export function ChatMessageDisplay({
             {messages.length === 0 ? (
                 <ExamplePanel setInput={setInput} setFiles={setFiles} />
             ) : (
-                messages.map((message) => (
+                messages.map((message) => {
+                    const userMessageText = message.role === "user" ? getMessageTextContent(message) : "";
+                    return (
                     <div
                         key={message.id}
                         className={`mb-4 ${
@@ -225,10 +227,10 @@ export function ChatMessageDisplay({
                                 }
                             })}
                         </div>
-                        {message.role === "user" && getMessageTextContent(message) && (
+                        {userMessageText && (
                             <div className="flex justify-start mt-1">
                                 <button
-                                    onClick={() => copyMessageToClipboard(message.id, getMessageTextContent(message))}
+                                    onClick={() => copyMessageToClipboard(message.id, userMessageText)}
                                     className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
                                     title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
                                 >
@@ -241,7 +243,7 @@ export function ChatMessageDisplay({
                             </div>
                         )}
                     </div>
-                ))
+                )})
             )}
             {error && (
                 <div className="text-red-500 text-sm mt-2">
