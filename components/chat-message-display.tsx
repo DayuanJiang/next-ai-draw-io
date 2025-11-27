@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
 import { convertToLegalXml, replaceNodes } from "@/lib/utils";
+import { Copy, Check } from "lucide-react";
 
 import { useDiagram } from "@/contexts/diagram-context";
 
@@ -30,6 +31,27 @@ export function ChatMessageDisplay({
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {}
     );
+    const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+    const copyMessageToClipboard = async (messageId: string, text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedMessageId(messageId);
+            setTimeout(() => {
+                setCopiedMessageId(null);
+            }, 2000);
+        } catch (err) {
+            console.error("Failed to copy message:", err);
+        }
+    };
+
+    const getMessageTextContent = (message: UIMessage): string => {
+        if (!message.parts) return "";
+        return message.parts
+            .filter((part: any) => part.type === "text")
+            .map((part: any) => part.text)
+            .join("\n");
+    };
     const handleDisplayChart = useCallback(
         (xml: string) => {
             const currentXml = xml || "";
@@ -203,6 +225,21 @@ export function ChatMessageDisplay({
                                 }
                             })}
                         </div>
+                        {message.role === "user" && getMessageTextContent(message) && (
+                            <div className="flex justify-start mt-1">
+                                <button
+                                    onClick={() => copyMessageToClipboard(message.id, getMessageTextContent(message))}
+                                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                    title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
+                                >
+                                    {copiedMessageId === message.id ? (
+                                        <Check className="h-3.5 w-3.5 text-green-500" />
+                                    ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                    )}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ))
             )}
