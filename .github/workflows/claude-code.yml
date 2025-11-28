@@ -38,7 +38,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
           bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
@@ -64,7 +64,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Run Claude Code PR Review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
           bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
