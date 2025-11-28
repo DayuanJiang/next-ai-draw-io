@@ -70,11 +70,19 @@ jobs:
           bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
-            Review this PR and provide feedback on:
-            1. Code quality and best practices
-            2. Potential bugs or issues
-            3. Security concerns
-            4. Performance implications
-            5. Suggestions for improvement
+            Review this PR by examining the diff carefully. For each issue you find:
 
-            Be concise and actionable. Focus on important issues rather than nitpicking style.
+            1. Use the GitHub inline comment tool to add comments directly on the specific lines of code that have issues
+            2. Include code suggestions using GitHub's suggestion syntax when appropriate:
+               ```suggestion
+               // corrected code here
+               ```
+
+            Focus on:
+            - Bugs and logic errors
+            - Security vulnerabilities
+            - Performance issues
+            - Code quality problems
+
+            Be concise. Only comment on significant issues, not style nitpicks.
+            After adding inline comments, provide a brief summary of your review.
