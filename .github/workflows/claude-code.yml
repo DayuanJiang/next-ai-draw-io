@@ -44,7 +44,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   pr-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,21 +71,24 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
-            Review this PR by examining the diff carefully. For each issue you find:
+            This is a personal project - an AI-powered draw.io diagram generator built with:
+            - Next.js 15 with React 19
+            - Vercel AI SDK (streamText, useChat, tool calling)
+            - Multiple AI providers: Bedrock, Anthropic, OpenAI, Google, Azure, OpenRouter, Ollama
 
-            1. Use `mcp__github_inline_comment__create_inline_comment` to add comments directly on specific lines of code
-            2. Include code suggestions using GitHub's suggestion syntax when appropriate:
-               ```suggestion
-               // corrected code here
-               ```
+            Review this PR for ONLY these issues:
+            1. Bugs that would cause runtime errors or broken functionality
+            2. Security issues (exposed secrets, API key leaks)
+            3. AI SDK misuse (wrong patterns for streamText, tool definitions, message handling)
 
-            Focus on:
-            - Bugs and logic errors
-            - Security vulnerabilities
-            - Performance issues
-            - Code quality problems
+            DO NOT comment on:
+            - Performance optimizations
+            - Code style or formatting
+            - "Best practices" suggestions
+            - Type safety improvements
+            - Error handling additions
 
-            Be concise. Only comment on significant issues, not style nitpicks.
-            After adding inline comments, provide a brief summary.
+            Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
+            Be very selective - if there are no real bugs, just say "LGTM" in a PR comment.
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
