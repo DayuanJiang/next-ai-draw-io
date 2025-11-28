@@ -62,15 +62,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-1
 
-      - name: Clean up outdated review comments
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Delete all previous review comments from github-actions bot
-          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments \
-            --jq '.[] | select(.user.login == "github-actions[bot]") | .id' | \
-            xargs -I {} gh api repos/${{ github.repository }}/pulls/comments/{} -X DELETE 2>/dev/null || true
-
       - name: Run Claude Code PR Review
         uses: anthropics/claude-code-action@v1
         with:
