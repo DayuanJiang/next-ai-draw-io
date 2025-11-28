@@ -78,7 +78,9 @@ jobs:
 
             First, check previous review comments from github-actions bot using `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
             For each previous comment:
-            - If the issue is fixed in the current code, reply "Resolved ✓" to that comment
+            - If the issue is fixed in the current code, resolve the comment thread using:
+              `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "THREAD_ID"}) { thread { isResolved } } }'`
+              Get the thread ID from the comment's node_id field.
             - If the issue still exists, leave it alone
 
             Then review the current diff for NEW issues only:
