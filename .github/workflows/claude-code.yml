@@ -29,7 +29,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -41,7 +41,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
-          bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   pr-review:
@@ -67,12 +66,14 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           use_bedrock: "true"
-          bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          direct_prompt: |
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
             Review this PR by examining the diff carefully. For each issue you find:
 
-            1. Use the GitHub inline comment tool to add comments directly on the specific lines of code that have issues
+            1. Use `mcp__github_inline_comment__create_inline_comment` to add comments directly on specific lines of code
             2. Include code suggestions using GitHub's suggestion syntax when appropriate:
                ```suggestion
                // corrected code here
@@ -85,4 +86,6 @@ jobs:
             - Code quality problems
 
             Be concise. Only comment on significant issues, not style nitpicks.
-            After adding inline comments, provide a brief summary of your review.
+            After adding inline comments, provide a brief summary.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
