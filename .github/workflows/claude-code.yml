@@ -87,6 +87,9 @@ jobs:
                - Status handling: Check status (submitted/streaming/ready/error) before actions
                - Stream cleanup: Call stop() when aborting streams
 
+            When reviewing AI SDK usage, fetch https://ai-sdk.dev/docs/ to verify correct patterns.
+            Key doc pages: /docs/ai-sdk-ui/chatbot, /docs/ai-sdk-core/generating-text, /docs/ai-sdk-core/tools-and-tool-calling
+
             DO NOT comment on:
             - Performance optimizations
             - Code style or formatting
@@ -97,4 +100,4 @@ jobs:
             Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
             Be very selective - if there are no real bugs, just say "LGTM" in a PR comment.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),WebFetch(domain:ai-sdk.dev)"
