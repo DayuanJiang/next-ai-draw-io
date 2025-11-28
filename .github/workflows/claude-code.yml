@@ -79,12 +79,18 @@ jobs:
             Review this PR for ONLY these issues:
             1. Bugs that would cause runtime errors or broken functionality
             2. Security issues (exposed secrets, API key leaks)
-            3. AI SDK misuse (wrong patterns for streamText, tool definitions, message handling)
+            3. AI SDK misuse - specifically check for:
+               - Client-side: Should use useChat/useCompletion/useObject hooks, NOT raw fetch()
+               - Server-side: Should use streamText/generateText/streamObject/generateObject
+               - Message handling: Access message.parts array, not legacy content property
+               - Tool definitions: Must use Zod schemas for inputSchema
+               - Status handling: Check status (submitted/streaming/ready/error) before actions
+               - Stream cleanup: Call stop() when aborting streams
 
             DO NOT comment on:
             - Performance optimizations
             - Code style or formatting
-            - "Best practices" suggestions
+            - "Best practices" that don't affect functionality
             - Type safety improvements
             - Error handling additions
 
