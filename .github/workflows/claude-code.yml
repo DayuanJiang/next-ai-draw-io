@@ -77,14 +77,15 @@ jobs:
             - Vercel AI SDK (streamText, useChat, tool calling)
             - Multiple AI providers: Bedrock, Anthropic, OpenAI, Google, Azure, OpenRouter, Ollama
 
-            First, check previous review comments from github-actions bot using `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
-            For each previous comment:
-            - If the issue is fixed in the current code, resolve the comment thread using:
-              `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "THREAD_ID"}) { thread { isResolved } } }'`
-              Get the thread ID from the comment's node_id field.
-            - If the issue still exists, leave it alone
+            STEP 1: Check existing comments to avoid duplicates.
+            Run: `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`
 
-            Then review the current diff for NEW issues only:
+            Build a list of files and line numbers that already have comments. For each existing comment:
+            - If the issue is FIXED in current code, resolve the thread using:
+              `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "THREAD_ID"}) { thread { isResolved } } }'`
+            - If the issue still exists, remember this file:line - DO NOT create a new comment for it
+
+            STEP 2: Review the diff for issues, but SKIP any file:line that already has a comment.
 
             Review this PR for these issues (report ALL that apply):
             1. Bugs that would cause runtime errors or broken functionality
@@ -109,9 +110,9 @@ jobs:
             - Type annotations that don't affect functionality
 
             IMPORTANT:
-            - For EACH issue, use `mcp__github_inline_comment__create_inline_comment` to comment on the specific line
+            - NEVER create a comment on a file:line that already has a comment - this causes duplicates
+            - For each NEW issue, use `mcp__github_inline_comment__create_inline_comment` to comment on the specific line
             - ALWAYS include a suggested fix using GitHub's suggestion syntax: ```suggestion\n<fixed code>\n```
-            - Do NOT dismiss issues as "minor" or "harmless" - if you notice something, report it
-            - Only say "LGTM" if there are truly ZERO issues
+            - Only say "LGTM" if there are truly ZERO new issues to report
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api:*),WebFetch(domain:ai-sdk.dev)"
