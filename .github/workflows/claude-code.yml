@@ -74,7 +74,11 @@ jobs:
 
             This is a personal project - an AI-powered draw.io diagram generator built with:
             - Next.js 15 with React 19
-            - Vercel AI SDK (streamText, useChat, tool calling)
+            - Multiple AI providers: Bedrock, Anthropic, OpenAI, Google, Azure, OpenRouter, Ollama
+
+            First, check previous review comments from github-actions bot using `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
+            For each previous comment:
+            - If the issue is fixed in the current code, resolve the comment thread using:
             - Multiple AI providers: Bedrock, Anthropic, OpenAI, Google, Azure, OpenRouter, Ollama
 
             STEP 1: Check existing comments to avoid duplicates.
