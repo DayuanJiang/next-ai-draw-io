@@ -110,6 +110,7 @@ jobs:
 
             IMPORTANT:
             - For EACH issue, use `mcp__github_inline_comment__create_inline_comment` to comment on the specific line
+            - ALWAYS include a suggested fix using GitHub's suggestion syntax: ```suggestion\n<fixed code>\n```
             - Do NOT dismiss issues as "minor" or "harmless" - if you notice something, report it
             - Only say "LGTM" if there are truly ZERO issues
           claude_args: |
