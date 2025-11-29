@@ -86,7 +86,7 @@ jobs:
 
             Then review the current diff for NEW issues only:
 
-            Review this PR for ONLY these issues:
+            Review this PR for these issues (report ALL that apply):
             1. Bugs that would cause runtime errors or broken functionality
             2. Security issues (exposed secrets, API key leaks)
             3. AI SDK misuse - specifically check for:
@@ -96,18 +96,19 @@ jobs:
                - Tool definitions: Must use Zod schemas for inputSchema
                - Status handling: Check status (submitted/streaming/ready/error) before actions
                - Stream cleanup: Call stop() when aborting streams
+            4. Unrelated changes that should be in separate PRs (scope creep)
+            5. Suspicious .gitignore additions or accidentally committed files
+            6. UI/UX inconsistencies (e.g., alignment issues)
 
             When reviewing AI SDK usage, fetch https://ai-sdk.dev/docs/ to verify correct patterns.
             Key doc pages: /docs/ai-sdk-ui/chatbot, /docs/ai-sdk-core/generating-text, /docs/ai-sdk-core/tools-and-tool-calling
 
             DO NOT comment on:
-            - Performance optimizations
-            - Code style or formatting
-            - "Best practices" that don't affect functionality
-            - Type safety improvements
-            - Error handling additions
+            - Minor performance optimizations
+            - Code style preferences (unless clearly wrong)
+            - Type annotations that don't affect functionality
 
             Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
-            Be very selective - if there are no real bugs, just say "LGTM" in a PR comment.
+            Report ALL issues found - create multiple inline comments if needed. Only say "LGTM" if there are truly no issues.
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api:*),WebFetch(domain:ai-sdk.dev)"
