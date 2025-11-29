@@ -9,7 +9,7 @@ on:
     types: [opened, assigned]
   pull_request_review:
     types: [submitted]
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   pr-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,6 +67,7 @@ jobs:
         with:
           use_bedrock: "true"
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
