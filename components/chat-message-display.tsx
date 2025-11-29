@@ -45,7 +45,8 @@ export function ChatMessageDisplay({
                 textArea.value = text;
                 // 设置样式避免影响页面布局
                 textArea.style.position = "fixed";
-                textArea.style.left = "-9999px";
+                // 降级方案：使用传统的 execCommand 方法（兼容 HTTP 环境）
+                // Fallback: Use textarea selection (works in most browsers)
                 textArea.style.top = "-9999px";
                 textArea.style.opacity = "0";
                 document.body.appendChild(textArea);
