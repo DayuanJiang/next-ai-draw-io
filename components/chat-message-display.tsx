@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
 import { convertToLegalXml, replaceNodes } from "@/lib/utils";
+import { Copy, Check } from "lucide-react";
 
 import { useDiagram } from "@/contexts/diagram-context";
 
@@ -30,6 +31,50 @@ export function ChatMessageDisplay({
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {}
     );
+    const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+    // 复制消息到剪贴板，支持非 HTTPS 环境的降级处理
+    const copyMessageToClipboard = async (messageId: string, text: string) => {
+        try {
+            // 优先使用 Clipboard API（需要 HTTPS 或 localhost）
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // 降级方案：使用传统的 execCommand 方法（兼容 HTTP 环境）
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                // 设置样式避免影响页面布局
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "-9999px";
+                textArea.style.opacity = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                const successful = document.execCommand("copy");
+                document.body.removeChild(textArea);
+
+                if (!successful) {
+                    throw new Error("execCommand copy failed");
+                }
+            }
+            setCopiedMessageId(messageId);
+            setTimeout(() => {
+                setCopiedMessageId(null);
+            }, 2000);
+        } catch (err) {
+            console.error("Failed to copy message:", err);
+        }
+    };
+
+    const getMessageTextContent = (message: UIMessage): string => {
+        if (!message.parts) return "";
+        return message.parts
+            .filter((part: any) => part.type === "text")
+            .map((part: any) => part.text)
+            .join("\n");
+    };
     const handleDisplayChart = useCallback(
         (xml: string) => {
             const currentXml = xml || "";
@@ -160,51 +205,67 @@ export function ChatMessageDisplay({
             {messages.length === 0 ? (
                 <ExamplePanel setInput={setInput} setFiles={setFiles} />
             ) : (
-                messages.map((message) => (
-                    <div
-                        key={message.id}
-                        className={`mb-4 ${
-                            message.role === "user" ? "text-right" : "text-left"
-                        }`}
-                    >
+                messages.map((message) => {
+                    const userMessageText = message.role === "user" ? getMessageTextContent(message) : "";
+                    return (
                         <div
-                            className={`inline-block px-4 py-2 whitespace-pre-wrap text-sm rounded-lg max-w-[85%] break-words ${
-                                message.role === "user"
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-muted-foreground"
-                            }`}
+                            key={message.id}
+                            className={`mb-4 ${message.role === "user" ? "text-right" : "text-left"
+                                }`}
                         >
-                            {message.parts?.map((part: any, index: number) => {
-                                switch (part.type) {
-                                    case "text":
-                                        return (
-                                            <div key={index}>{part.text}</div>
-                                        );
-                                    case "file":
-                                        return (
-                                            <div key={index} className="mt-2">
-                                                <Image
-                                                    src={part.url}
-                                                    width={200}
-                                                    height={200}
-                                                    alt={`Uploaded diagram or image for AI analysis`}
-                                                    className="rounded-md border"
-                                                    style={{
-                                                        objectFit: "contain",
-                                                    }}
-                                                />
-                                            </div>
-                                        );
-                                    default:
-                                        if (part.type?.startsWith("tool-")) {
-                                            return renderToolPart(part);
-                                        }
-                                        return null;
-                                }
-                            })}
+                            <div
+                                className={`inline-block px-4 py-2 whitespace-pre-wrap text-sm rounded-lg max-w-[85%] break-words ${message.role === "user"
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-muted text-muted-foreground"
+                                    }`}
+                            >
+                                {message.parts?.map((part: any, index: number) => {
+                                    switch (part.type) {
+                                        case "text":
+                                            return (
+                                                <div key={index}>{part.text}</div>
+                                            );
+                                        case "file":
+                                            return (
+                                                <div key={index} className="mt-2">
+                                                    <Image
+                                                        src={part.url}
+                                                        width={200}
+                                                        height={200}
+                                                        alt={`Uploaded diagram or image for AI analysis`}
+                                                        className="rounded-md border"
+                                                        style={{
+                                                            objectFit: "contain",
+                                                        }}
+                                                    />
+                                                </div>
+                                            );
+                                        default:
+                                            if (part.type?.startsWith("tool-")) {
+                                                return renderToolPart(part);
+                                            }
+                                            return null;
+                                    }
+                                })}
+                            </div>
+                            {userMessageText && (
+                                <div className="flex justify-start mt-1">
+                                    <button
+                                        onClick={() => copyMessageToClipboard(message.id, userMessageText)}
+                                        className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                                        title={copiedMessageId === message.id ? "Copied!" : "Copy message"}
+                                    >
+                                        {copiedMessageId === message.id ? (
+                                            <Check className="h-3.5 w-3.5 text-green-500" />
+                                        ) : (
+                                            <Copy className="h-3.5 w-3.5" />
+                                        )}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                ))
+                    )
+                })
             )}
             {error && (
                 <div className="text-red-500 text-sm mt-2">
