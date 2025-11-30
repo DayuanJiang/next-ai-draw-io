@@ -9,7 +9,7 @@
         "lint": "next lint"
     },
     "dependencies": {
-        "@ai-sdk/amazon-bedrock": "^3.0.52",
+        "@ai-sdk/amazon-bedrock": "^3.0.62",
         "@ai-sdk/anthropic": "^2.0.44",
         "@ai-sdk/azure": "^2.0.69",
         "@ai-sdk/google": "^2.0.0",
