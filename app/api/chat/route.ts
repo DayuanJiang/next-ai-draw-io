@@ -90,7 +90,30 @@ ${lastMessageText}
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages);
-    let enhancedMessages = [...modelMessages];
+
+    // Log messages with empty content for debugging (helps identify root cause)
+    const emptyMessages = modelMessages.filter((msg: any) =>
+      !msg.content || !Array.isArray(msg.content) || msg.content.length === 0
+    );
+    if (emptyMessages.length > 0) {
+      console.warn('[Chat API] Messages with empty content detected:',
+        JSON.stringify(emptyMessages.map((m: any) => ({ role: m.role, contentLength: m.content?.length })))
+      );
+      console.warn('[Chat API] Original UI messages structure:',
+        JSON.stringify(messages.map((m: any) => ({
+          id: m.id,
+          role: m.role,
+          partsCount: m.parts?.length,
+          partTypes: m.parts?.map((p: any) => p.type)
+        })))
+      );
+    }
+
+    // Filter out messages with empty content arrays (Bedrock API rejects these)
+    // This is a safety measure - ideally convertToModelMessages should handle all cases
+    let enhancedMessages = modelMessages.filter((msg: any) =>
+      msg.content && Array.isArray(msg.content) && msg.content.length > 0
+    );
 
     // Update the last message with formatted content if it's a user message
     if (enhancedMessages.length >= 1) {
