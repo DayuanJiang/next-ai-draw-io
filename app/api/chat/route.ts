@@ -2,7 +2,7 @@ import { streamText, convertToModelMessages } from 'ai';
 import { getAIModel } from '@/lib/ai-providers';
 import { z } from "zod";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
