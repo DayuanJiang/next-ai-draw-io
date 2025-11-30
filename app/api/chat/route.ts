@@ -90,7 +90,10 @@ ${lastMessageText}
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages);
-    let enhancedMessages = [...modelMessages];
+    // Filter out messages with empty content arrays (Bedrock API rejects these)
+    let enhancedMessages = modelMessages.filter((msg: any) =>
+      msg.content && Array.isArray(msg.content) && msg.content.length > 0
+    );
 
     // Update the last message with formatted content if it's a user message
     if (enhancedMessages.length >= 1) {
