@@ -18,15 +18,19 @@ export type ProviderName =
 interface ModelConfig {
   model: any;
   providerOptions?: any;
+  headers?: Record<string, string>;
 }
 
-// Anthropic beta headers for fine-grained tool streaming
-const ANTHROPIC_BETA_OPTIONS = {
-  anthropic: {
-    additionalModelRequestFields: {
-      anthropic_beta: ['fine-grained-tool-streaming-2025-05-14']
-    }
-  }
+// Bedrock provider options for Anthropic beta features
+const BEDROCK_ANTHROPIC_BETA = {
+  bedrock: {
+    anthropicBeta: ['fine-grained-tool-streaming-2025-05-14'],
+  },
+};
+
+// Direct Anthropic API headers for beta features
+const ANTHROPIC_BETA_HEADERS = {
+  'anthropic-beta': 'fine-grained-tool-streaming-2025-05-14',
 };
 
 /**
@@ -87,13 +91,14 @@ export function getAIModel(): ModelConfig {
 
   let model: any;
   let providerOptions: any = undefined;
+  let headers: Record<string, string> | undefined = undefined;
 
   switch (provider) {
     case 'bedrock':
       model = bedrock(modelId);
-      // Add Anthropic beta headers if using Claude models via Bedrock
+      // Add Anthropic beta options if using Claude models via Bedrock
       if (modelId.includes('anthropic.claude')) {
-        providerOptions = ANTHROPIC_BETA_OPTIONS;
+        providerOptions = BEDROCK_ANTHROPIC_BETA;
       }
       break;
 
@@ -112,7 +117,7 @@ export function getAIModel(): ModelConfig {
     case 'anthropic':
       model = anthropic(modelId);
       // Add beta headers for fine-grained tool streaming
-      providerOptions = ANTHROPIC_BETA_OPTIONS;
+      headers = ANTHROPIC_BETA_HEADERS;
       break;
 
     case 'google':
@@ -140,10 +145,10 @@ export function getAIModel(): ModelConfig {
       );
   }
 
-  // Log if provider options are being applied
-  if (providerOptions) {
-    console.log('[AI Provider] Applying provider-specific options');
+  // Log if provider options or headers are being applied
+  if (providerOptions || headers) {
+    console.log('[AI Provider] Applying provider-specific options/headers');
   }
 
-  return { model, providerOptions };
+  return { model, providerOptions, headers };
 }
