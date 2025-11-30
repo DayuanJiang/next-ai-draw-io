@@ -120,13 +120,14 @@ ${lastMessageText}
     console.log("Enhanced messages:", enhancedMessages);
 
     // Get AI model from environment configuration
-    const { model, providerOptions } = getAIModel();
+    const { model, providerOptions, headers } = getAIModel();
 
     const result = streamText({
       model,
       system: systemMessage,
       messages: enhancedMessages,
       ...(providerOptions && { providerOptions }),
+      ...(headers && { headers }),
       tools: {
         // Client-side tool that will be executed on the client
         display_diagram: {
