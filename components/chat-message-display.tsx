@@ -1,14 +1,22 @@
 "use client";
 
-import type React from "react";
 import { useRef, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
 import { convertToLegalXml, replaceNodes } from "@/lib/utils";
+import { Copy, Check, X } from "lucide-react";
 
 import { useDiagram } from "@/contexts/diagram-context";
+
+const getMessageTextContent = (message: UIMessage): string => {
+    if (!message.parts) return "";
+    return message.parts
+        .filter((part: any) => part.type === "text")
+        .map((part: any) => part.text)
+        .join("\n");
+};
 
 interface ChatMessageDisplayProps {
     messages: UIMessage[];
@@ -30,6 +38,21 @@ export function ChatMessageDisplay({
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {}
     );
+    const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+    const [copyFailedMessageId, setCopyFailedMessageId] = useState<string | null>(null);
+
+    const copyMessageToClipboard = async (messageId: string, text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedMessageId(messageId);
+            setTimeout(() => setCopiedMessageId(null), 2000);
+        } catch (err) {
+            console.error("Failed to copy message:", err);
+            setCopyFailedMessageId(messageId);
+            setTimeout(() => setCopyFailedMessageId(null), 2000);
+        }
+    };
+
     const handleDisplayChart = useCallback(
         (xml: string) => {
             const currentXml = xml || "";
@@ -137,16 +160,16 @@ export function ChatMessageDisplay({
                                 {output || (toolName === "display_diagram"
                                     ? "Diagram generated"
                                     : toolName === "edit_diagram"
-                                    ? "Diagram edited"
-                                    : "Tool executed")}
+                                        ? "Diagram edited"
+                                        : "Tool executed")}
                             </div>
                         ) : state === "output-error" ? (
                             <div className="text-red-600">
                                 {output || (toolName === "display_diagram"
                                     ? "Error generating diagram"
                                     : toolName === "edit_diagram"
-                                    ? "Error editing diagram"
-                                    : "Tool error")}
+                                        ? "Error editing diagram"
+                                        : "Tool error")}
                             </div>
                         ) : null}
                     </div>
@@ -160,51 +183,66 @@ export function ChatMessageDisplay({
             {messages.length === 0 ? (
                 <ExamplePanel setInput={setInput} setFiles={setFiles} />
             ) : (
-                messages.map((message) => (
-                    <div
-                        key={message.id}
-                        className={`mb-4 ${
-                            message.role === "user" ? "text-right" : "text-left"
-                        }`}
-                    >
+                messages.map((message) => {
+                    const userMessageText = message.role === "user" ? getMessageTextContent(message) : "";
+                    return (
                         <div
-                            className={`inline-block px-4 py-2 whitespace-pre-wrap text-sm rounded-lg max-w-[85%] break-words ${
-                                message.role === "user"
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-muted-foreground"
-                            }`}
+                            key={message.id}
+                            className={`mb-4 flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                         >
-                            {message.parts?.map((part: any, index: number) => {
-                                switch (part.type) {
-                                    case "text":
-                                        return (
-                                            <div key={index}>{part.text}</div>
-                                        );
-                                    case "file":
-                                        return (
-                                            <div key={index} className="mt-2">
-                                                <Image
-                                                    src={part.url}
-                                                    width={200}
-                                                    height={200}
-                                                    alt={`Uploaded diagram or image for AI analysis`}
-                                                    className="rounded-md border"
-                                                    style={{
-                                                        objectFit: "contain",
-                                                    }}
-                                                />
-                                            </div>
-                                        );
-                                    default:
-                                        if (part.type?.startsWith("tool-")) {
-                                            return renderToolPart(part);
-                                        }
-                                        return null;
-                                }
-                            })}
+                            {message.role === "user" && userMessageText && (
+                                <button
+                                    onClick={() => copyMessageToClipboard(message.id, userMessageText)}
+                                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors self-center mr-1"
+                                    title={copiedMessageId === message.id ? "Copied!" : copyFailedMessageId === message.id ? "Failed to copy" : "Copy message"}
+                                >
+                                    {copiedMessageId === message.id ? (
+                                        <Check className="h-3.5 w-3.5 text-green-500" />
+                                    ) : copyFailedMessageId === message.id ? (
+                                        <X className="h-3.5 w-3.5 text-red-500" />
+                                    ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                    )}
+                                </button>
+                            )}
+                            <div
+                                className={`px-4 py-2 whitespace-pre-wrap text-sm rounded-lg max-w-[85%] break-words ${message.role === "user"
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-muted text-muted-foreground"
+                                    }`}
+                            >
+                                {message.parts?.map((part: any, index: number) => {
+                                    switch (part.type) {
+                                        case "text":
+                                            return (
+                                                <div key={index}>{part.text}</div>
+                                            );
+                                        case "file":
+                                            return (
+                                                <div key={index} className="mt-2">
+                                                    <Image
+                                                        src={part.url}
+                                                        width={200}
+                                                        height={200}
+                                                        alt={`Uploaded diagram or image for AI analysis`}
+                                                        className="rounded-md border"
+                                                        style={{
+                                                            objectFit: "contain",
+                                                        }}
+                                                    />
+                                                </div>
+                                            );
+                                        default:
+                                            if (part.type?.startsWith("tool-")) {
+                                                return renderToolPart(part);
+                                            }
+                                            return null;
+                                    }
+                                })}
+                            </div>
                         </div>
-                    </div>
-                ))
+                    );
+                })
             )}
             {error && (
                 <div className="text-red-500 text-sm mt-2">
