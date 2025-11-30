@@ -1,6 +1,6 @@
 import { bedrock } from '@ai-sdk/amazon-bedrock';
 import { openai, createOpenAI } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { azure } from '@ai-sdk/azure';
 import { ollama } from 'ollama-ai-provider-v2';
@@ -115,7 +115,12 @@ export function getAIModel(): ModelConfig {
       break;
 
     case 'anthropic':
-      model = anthropic(modelId);
+      const customProvider = createAnthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
+        headers: ANTHROPIC_BETA_HEADERS,
+      })
+      model = customProvider(modelId);
       // Add beta headers for fine-grained tool streaming
       headers = ANTHROPIC_BETA_HEADERS;
       break;
