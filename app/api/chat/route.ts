@@ -140,17 +140,49 @@ ${lastMessageText}
       }
     }
 
-    console.log("Enhanced messages:", enhancedMessages);
+    // Add cache point to the last assistant message in conversation history
+    // This caches the entire conversation prefix for subsequent requests
+    // Strategy: system (cached) + history with last assistant (cached) + new user message
+    if (enhancedMessages.length >= 2) {
+      // Find the last assistant message (should be second-to-last, before current user message)
+      for (let i = enhancedMessages.length - 2; i >= 0; i--) {
+        if (enhancedMessages[i].role === 'assistant') {
+          enhancedMessages[i] = {
+            ...enhancedMessages[i],
+            providerOptions: {
+              bedrock: { cachePoint: { type: 'default' } },
+            },
+          };
+          break; // Only cache the last assistant message
+        }
+      }
+    }
 
     // Get AI model from environment configuration
     const { model, providerOptions, headers } = getAIModel();
 
+    // System message with cache point for Bedrock (requires 1024+ tokens)
+    const systemMessageWithCache = {
+      role: 'system' as const,
+      content: systemMessage,
+      providerOptions: {
+        bedrock: { cachePoint: { type: 'default' } },
+      },
+    };
+
     const result = streamText({
       model,
-      system: systemMessage,
-      messages: enhancedMessages,
+      messages: [systemMessageWithCache, ...enhancedMessages],
       ...(providerOptions && { providerOptions }),
       ...(headers && { headers }),
+      onFinish: ({ usage, providerMetadata }) => {
+        console.log('[Cache] Usage:', JSON.stringify({
+          inputTokens: usage?.inputTokens,
+          outputTokens: usage?.outputTokens,
+          cachedInputTokens: usage?.cachedInputTokens,
+        }, null, 2));
+        console.log('[Cache] Provider metadata:', JSON.stringify(providerMetadata, null, 2));
+      },
       tools: {
         // Client-side tool that will be executed on the client
         display_diagram: {
