@@ -1,9 +1,9 @@
 import { bedrock } from '@ai-sdk/amazon-bedrock';
 import { openai, createOpenAI } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { google } from '@ai-sdk/google';
-import { azure } from '@ai-sdk/azure';
-import { ollama } from 'ollama-ai-provider-v2';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { google, createGoogleGenerativeAI } from '@ai-sdk/google';
+import { azure, createAzure } from '@ai-sdk/azure';
+import { ollama, createOllama } from 'ollama-ai-provider-v2';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 export type ProviderName =
@@ -115,26 +115,55 @@ export function getAIModel(): ModelConfig {
       break;
 
     case 'anthropic':
-      model = anthropic(modelId);
+      const customProvider = createAnthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
+        headers: ANTHROPIC_BETA_HEADERS,
+      });
+      model = customProvider(modelId);
       // Add beta headers for fine-grained tool streaming
       headers = ANTHROPIC_BETA_HEADERS;
       break;
 
     case 'google':
-      model = google(modelId);
+      if (process.env.GOOGLE_BASE_URL) {
+        const customGoogle = createGoogleGenerativeAI({
+          apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+          baseURL: process.env.GOOGLE_BASE_URL,
+        });
+        model = customGoogle(modelId);
+      } else {
+        model = google(modelId);
+      }
       break;
 
     case 'azure':
-      model = azure(modelId);
+      if (process.env.AZURE_BASE_URL) {
+        const customAzure = createAzure({
+          apiKey: process.env.AZURE_API_KEY,
+          baseURL: process.env.AZURE_BASE_URL,
+        });
+        model = customAzure(modelId);
+      } else {
+        model = azure(modelId);
+      }
       break;
 
     case 'ollama':
-      model = ollama(modelId);
+      if (process.env.OLLAMA_BASE_URL) {
+        const customOllama = createOllama({
+          baseURL: process.env.OLLAMA_BASE_URL,
+        });
+        model = customOllama(modelId);
+      } else {
+        model = ollama(modelId);
+      }
       break;
 
     case 'openrouter':
       const openrouter = createOpenRouter({
         apiKey: process.env.OPENROUTER_API_KEY,
+        ...(process.env.OPENROUTER_BASE_URL && { baseURL: process.env.OPENROUTER_BASE_URL }),
       });
       model = openrouter(modelId);
       break;
