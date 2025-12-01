@@ -1,12 +1,54 @@
-import { streamText, convertToModelMessages } from 'ai';
+import { streamText, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { getAIModel } from '@/lib/ai-providers';
+import { findCachedResponse } from '@/lib/cached-responses';
 import { z } from "zod";
 
 export const maxDuration = 300;
 
+// Helper function to check if diagram is minimal/empty
+function isMinimalDiagram(xml: string): boolean {
+  const stripped = xml.replace(/\s/g, '');
+  return !stripped.includes('id="2"');
+}
+
+// Helper function to create cached stream response
+function createCachedStreamResponse(xml: string): Response {
+  const toolCallId = `cached-${Date.now()}`;
+
+  const stream = createUIMessageStream({
+    execute: async ({ writer }) => {
+      writer.write({ type: 'start' });
+      writer.write({ type: 'tool-input-start', toolCallId, toolName: 'display_diagram' });
+      writer.write({ type: 'tool-input-delta', toolCallId, inputTextDelta: xml });
+      writer.write({ type: 'tool-input-available', toolCallId, toolName: 'display_diagram', input: { xml } });
+      writer.write({ type: 'finish' });
+    },
+  });
+
+  return createUIMessageStreamResponse({ stream });
+}
+
 export async function POST(req: Request) {
   try {
     const { messages, xml } = await req.json();
+
+    // === CACHE CHECK START ===
+    const isFirstMessage = messages.length === 1;
+    const isEmptyDiagram = !xml || xml.trim() === '' || isMinimalDiagram(xml);
+
+    if (isFirstMessage && isEmptyDiagram) {
+      const lastMessage = messages[0];
+      const textPart = lastMessage.parts?.find((p: any) => p.type === 'text');
+      const filePart = lastMessage.parts?.find((p: any) => p.type === 'file');
+
+      const cached = findCachedResponse(textPart?.text || '', !!filePart);
+
+      if (cached) {
+        console.log('[Cache] Returning cached response for:', textPart?.text);
+        return createCachedStreamResponse(cached.xml);
+      }
+    }
+    // === CACHE CHECK END ===
 
     const systemMessage = `
 You are an expert diagram creation assistant specializing in draw.io XML generation.
