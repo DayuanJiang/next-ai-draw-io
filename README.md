@@ -149,7 +149,8 @@ public/               # Static assets including example images
 -   [x] Allow the LLM to modify the XML instead of generating it from scratch everytime.
 -   [x] Improve the smoothness of shape streaming updates.
 -   [x] Add multiple AI provider support (OpenAI, Anthropic, Google, Azure, Ollama)
--   [ ] Solve the bug that generation will fail for session that longer than 60s.
+-   [x] Solve the bug that generation will fail for session that longer than 60s.
+-   [ ] Add API config on the UI.
 
 ## License
 
@@ -160,5 +161,9 @@ This project is licensed under the MIT License.
 For support or inquiries, please open an issue on the GitHub repository or contact the maintainer at:
 
 -   Email: me[at]jiang.jp
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=DayuanJiang/next-ai-draw-io&type=date&legend=top-left)](https://www.star-history.com/#DayuanJiang/next-ai-draw-io&type=date&legend=top-left)
 
 ---
