@@ -50,7 +50,10 @@ export default function ExamplePanel({
                 {" "}
                 You can also upload images to use as references.
             </p>
-            <p className="text-sm text-gray-500 mb-2">Try these examples:</p>
+            <p className="text-sm text-gray-500 mb-2">
+                Try these examples{" "}
+                <span className="text-xs text-gray-400">(cached for instant response)</span>:
+            </p>
             <div className="flex flex-wrap gap-5">
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
