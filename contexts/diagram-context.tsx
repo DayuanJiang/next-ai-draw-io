@@ -2,12 +2,16 @@
 
 import React, { createContext, useContext, useRef, useState } from "react";
 import type { DrawIoEmbedRef } from "react-drawio";
-import { extractDiagramXML } from "../lib/utils";
+import { extractDiagramXML, formatXML } from "../lib/utils";
 
 interface DiagramContextType {
     chartXML: string;
     latestSvg: string;
     diagramHistory: { svg: string; xml: string }[];
+    lastAgentGeneratedXml: string;
+    getLastAgentGeneratedXml: () => string;
+    setLastAgentGeneratedXml: (xml: string) => void;
+    markAgentDiagramPending: () => void;
     loadDiagram: (chart: string) => void;
     handleExport: () => void;
     resolverRef: React.Ref<((value: string) => void) | null>;
@@ -24,8 +28,25 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [diagramHistory, setDiagramHistory] = useState<
         { svg: string; xml: string }[]
     >([]);
+    const [lastAgentGeneratedXml, setLastAgentGeneratedXmlState] = useState<string>("");
+    const lastAgentGeneratedXmlRef = useRef<string>("");
+    const agentDiagramPendingRef = useRef<boolean>(false);
     const drawioRef = useRef<DrawIoEmbedRef | null>(null);
     const resolverRef = useRef<((value: string) => void) | null>(null);
+
+    // Wrapper to keep ref and state in sync
+    const setLastAgentGeneratedXml = (xml: string) => {
+        lastAgentGeneratedXmlRef.current = xml;
+        setLastAgentGeneratedXmlState(xml);
+    };
+
+    // Getter that returns the ref value (always up-to-date, even in async contexts)
+    const getLastAgentGeneratedXml = () => lastAgentGeneratedXmlRef.current;
+
+    const markAgentDiagramPending = () => {
+        console.log('[DiagramContext] markAgentDiagramPending called');
+        agentDiagramPendingRef.current = true;
+    };
 
     const handleExport = () => {
         if (drawioRef.current) {
@@ -54,6 +75,16 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 xml: extractedXML,
             },
         ]);
+
+        // If agent just generated a diagram, update lastAgentGeneratedXml with the exported XML
+        // This ensures we compare apples-to-apples (both formatted the same way)
+        if (agentDiagramPendingRef.current) {
+            const formatted = formatXML(extractedXML);
+            console.log('[DiagramContext] Setting lastAgentGeneratedXml from export, length:', formatted.length);
+            setLastAgentGeneratedXml(formatted);
+            agentDiagramPendingRef.current = false;
+        }
+
         if (resolverRef.current) {
             resolverRef.current(extractedXML);
             resolverRef.current = null;
@@ -66,6 +97,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setChartXML(emptyDiagram);
         setLatestSvg("");
         setDiagramHistory([]);
+        setLastAgentGeneratedXml("");
     };
 
     return (
@@ -74,6 +106,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 chartXML,
                 latestSvg,
                 diagramHistory,
+                lastAgentGeneratedXml,
+                getLastAgentGeneratedXml,
+                setLastAgentGeneratedXml,
+                markAgentDiagramPending,
                 loadDiagram,
                 handleExport,
                 resolverRef,

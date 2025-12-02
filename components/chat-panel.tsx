@@ -33,6 +33,8 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
         resolverRef,
         chartXML,
         clearDiagram,
+        getLastAgentGeneratedXml,
+        markAgentDiagramPending,
     } = useDiagram();
 
     const onFetchChart = () => {
@@ -73,11 +75,18 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
             }),
             async onToolCall({ toolCall }) {
                 if (toolCall.toolName === "display_diagram") {
-                    // Diagram is handled streamingly in the ChatMessageDisplay component
+                    // Check if this is a cached response by looking at the toolCallId prefix
+                    const isCached = toolCall.toolCallId.startsWith('cached-');
+
+                    // Only mark as pending if agent actually generated it (not cached)
+                    // This ensures lastAgentGeneratedXml stays empty for cached responses
+                    if (!isCached) {
+                        markAgentDiagramPending();
+                    }
+
                     addToolResult({
-                        tool: "display_diagram",
                         toolCallId: toolCall.toolCallId,
-                        output: "Successfully displayed the diagram.",
+                        result: "Successfully displayed the diagram.",
                     });
                 } else if (toolCall.toolName === "edit_diagram") {
                     const { edits } = toolCall.input as {
@@ -96,10 +105,12 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
                         // Load the edited diagram
                         onDisplayChart(editedXml);
 
+                        // Mark that an agent diagram is pending - the next export will update lastAgentGeneratedXml
+                        markAgentDiagramPending();
+
                         addToolResult({
-                            tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
-                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                            result: `Successfully applied ${edits.length} edit(s) to the diagram.`,
                         });
                     } catch (error) {
                         console.error("Edit diagram failed:", error);
@@ -108,9 +119,8 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
 
                         // Provide detailed error with current diagram XML
                         addToolResult({
-                            tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
-                            output: `Edit failed: ${errorMessage}
+                            result: `Edit failed: ${errorMessage}
 
 Current diagram XML:
 \`\`\`xml
@@ -171,11 +181,17 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }
                 }
 
+                const lastGenXml = getLastAgentGeneratedXml();
+                console.log('[ChatPanel] Sending message with xml length:', chartXml.length);
+                console.log('[ChatPanel] lastGeneratedXml length:', lastGenXml.length);
+                console.log('[ChatPanel] Are they equal:', chartXml === lastGenXml);
+
                 sendMessage(
                     { parts },
                     {
                         body: {
                             xml: chartXml,
+                            lastGeneratedXml: lastGenXml,
                         },
                     }
                 );

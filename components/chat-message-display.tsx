@@ -157,19 +157,23 @@ export function ChatMessageDisplay({
                             <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         ) : state === "output-available" ? (
                             <div className="text-green-600">
-                                {output || (toolName === "display_diagram"
-                                    ? "Diagram generated"
-                                    : toolName === "edit_diagram"
-                                        ? "Diagram edited"
-                                        : "Tool executed")}
+                                {typeof output === "object" && output !== null
+                                    ? (output as any).message || JSON.stringify(output)
+                                    : output || (toolName === "display_diagram"
+                                        ? "Diagram generated"
+                                        : toolName === "edit_diagram"
+                                            ? "Diagram edited"
+                                            : "Tool executed")}
                             </div>
                         ) : state === "output-error" ? (
                             <div className="text-red-600">
-                                {output || (toolName === "display_diagram"
-                                    ? "Error generating diagram"
-                                    : toolName === "edit_diagram"
-                                        ? "Error editing diagram"
-                                        : "Tool error")}
+                                {typeof output === "object" && output !== null
+                                    ? (output as any).message || JSON.stringify(output)
+                                    : output || (toolName === "display_diagram"
+                                        ? "Error generating diagram"
+                                        : toolName === "edit_diagram"
+                                            ? "Error editing diagram"
+                                            : "Tool error")}
                             </div>
                         ) : null}
                     </div>

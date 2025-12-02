@@ -19,8 +19,12 @@ function createCachedStreamResponse(xml: string): Response {
     execute: async ({ writer }) => {
       writer.write({ type: 'start' });
       writer.write({ type: 'tool-input-start', toolCallId, toolName: 'display_diagram' });
-      writer.write({ type: 'tool-input-delta', toolCallId, inputTextDelta: xml });
+      // Stream the XML as JSON input so it matches the tool schema exactly
+      writer.write({ type: 'tool-input-delta', toolCallId, inputTextDelta: JSON.stringify({ xml }) });
+      // Input must match the tool schema (only xml field, no extra fields like fromCache)
       writer.write({ type: 'tool-input-available', toolCallId, toolName: 'display_diagram', input: { xml } });
+      // Include tool output so the message is complete for follow-up conversations
+      writer.write({ type: 'tool-output-available', toolCallId, output: 'Successfully displayed the diagram.' });
       writer.write({ type: 'finish' });
     },
   });
@@ -30,7 +34,7 @@ function createCachedStreamResponse(xml: string): Response {
 
 export async function POST(req: Request) {
   try {
-    const { messages, xml } = await req.json();
+    const { messages, xml, lastGeneratedXml } = await req.json();
 
     // === CACHE CHECK START ===
     const isFirstMessage = messages.length === 1;
@@ -74,6 +78,7 @@ parameters: {
 IMPORTANT: Choose the right tool:
 - Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
+- When using edit_diagram: If the current diagram XML is provided in the user message context, use it as the source of truth for constructing search patterns. If no XML is provided, you can use your memory of the diagram structure.
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams
@@ -120,18 +125,33 @@ When using edit_diagram tool:
     // Extract file parts (images) from the last message
     const fileParts = lastMessage.parts?.filter((part: any) => part.type === 'file') || [];
 
-    const formattedTextContent = `
-Current diagram XML:
-"""xml
-${xml || ''}
-"""
-User input:
+    // Check diagram state
+    const hasDiagram = xml && !isMinimalDiagram(xml);
+    const noHistory = !lastGeneratedXml || lastGeneratedXml.trim() === '';
+    const userModified = hasDiagram && lastGeneratedXml && xml !== lastGeneratedXml;
+
+    // Build context based on diagram state
+    let diagramContext = '';
+    if (hasDiagram && noHistory) {
+      // No history (e.g., cached response) - include XML directly
+      diagramContext = `\n\n[Current diagram XML - use this as source of truth for edits:]\n\`\`\`xml\n${xml}\n\`\`\``;
+    } else if (userModified) {
+      // User modified - include XML
+      diagramContext = `\n\n[User modified the diagram. Current XML:]\n\`\`\`xml\n${xml}\n\`\`\``;
+    }
+    // If unchanged and has history, agent can use memory (no XML sent = save tokens)
+
+    const formattedTextContent = `User input:
 """md
 ${lastMessageText}
-"""`;
+"""${diagramContext}`;
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages);
+
+    // Debug: Log the full structure of model messages to diagnose Bedrock API errors
+    console.log('[Debug] Model messages structure:');
+    console.log('[Debug] Full messages JSON:', JSON.stringify(modelMessages, null, 2));
 
     // Log messages with empty content for debugging (helps identify root cause)
     const emptyMessages = modelMessages.filter((msg: any) =>
@@ -217,7 +237,13 @@ ${lastMessageText}
       messages: [systemMessageWithCache, ...enhancedMessages],
       ...(providerOptions && { providerOptions }),
       ...(headers && { headers }),
-      onFinish: ({ usage, providerMetadata }) => {
+      onStepFinish: ({ stepType, toolCalls, toolResults }) => {
+        console.log('[Step] Type:', stepType);
+        console.log('[Step] Tool calls:', toolCalls?.map(t => t.toolName));
+        console.log('[Step] Tool results:', toolResults?.length);
+      },
+      onFinish: ({ usage, providerMetadata, steps }) => {
+        console.log('[Finish] Total steps:', steps?.length);
         console.log('[Cache] Usage:', JSON.stringify({
           inputTokens: usage?.inputTokens,
           outputTokens: usage?.outputTokens,
@@ -261,6 +287,7 @@ IMPORTANT: Keep edits concise:
         },
       },
       temperature: 0,
+      maxSteps: 5, // Allow model to continue after server-side tool execution
     });
 
     // Error handler function to provide detailed error messages
