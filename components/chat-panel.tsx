@@ -234,14 +234,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     </Link>
                 </div>
                 <div className="flex items-center gap-2">
-                    <ButtonWithTooltip
-                        tooltipContent="Hide chat panel (Ctrl+B)"
-                        variant="ghost"
-                        size="icon"
-                        onClick={onToggleVisibility}
-                    >
-                        <PanelRightClose className="h-5 w-5" />
-                    </ButtonWithTooltip>
+                    <iframe
+                        src="https://github.com/sponsors/DayuanJiang/button"
+                        title="Sponsor DayuanJiang"
+                        height="32"
+                        width="114"
+                        style={{ border: 0, borderRadius: 6 }}
+                    />
                     <a
                         href="https://github.com/DayuanJiang/next-ai-draw-io"
                         target="_blank"
@@ -250,6 +249,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     >
                         <FaGithub className="w-6 h-6" />
                     </a>
+                    <ButtonWithTooltip
+                        tooltipContent="Hide chat panel (Ctrl+B)"
+                        variant="ghost"
+                        size="icon"
+                        onClick={onToggleVisibility}
+                    >
+                        <PanelRightClose className="h-5 w-5" />
+                    </ButtonWithTooltip>
                 </div>
             </CardHeader>
             <CardContent className="flex-grow overflow-hidden px-2">
