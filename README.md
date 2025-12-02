@@ -73,6 +73,8 @@ Diagrams are represented as XML that can be rendered in draw.io. The AI processe
 -   Google AI
 -   Azure OpenAI
 -   Ollama
+-   OpenRouter
+-   DeepSeek
 
 Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
 
@@ -105,7 +107,7 @@ cp env.example .env.local
 
 Edit `.env.local` and configure your chosen provider:
 
--   Set `AI_PROVIDER` to your chosen provider (bedrock, openai, anthropic, google, azure, ollama)
+-   Set `AI_PROVIDER` to your chosen provider (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek)
 -   Set `AI_MODEL` to the specific model you want to use
 -   Add the required API keys for your provider
 
