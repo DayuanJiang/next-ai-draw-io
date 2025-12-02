@@ -1,9 +1,13 @@
 import { streamText, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { getAIModel } from '@/lib/ai-providers';
 import { findCachedResponse } from '@/lib/cached-responses';
+import { formatXML } from '@/lib/utils';
 import { z } from "zod";
 
 export const maxDuration = 300;
+
+// Prefix for cached tool call IDs (used by client to detect cached responses)
+export const CACHED_TOOL_PREFIX = 'cached-';
 
 // Helper function to check if diagram is minimal/empty
 function isMinimalDiagram(xml: string): boolean {
@@ -13,7 +17,7 @@ function isMinimalDiagram(xml: string): boolean {
 
 // Helper function to create cached stream response
 function createCachedStreamResponse(xml: string): Response {
-  const toolCallId = `cached-${Date.now()}`;
+  const toolCallId = `${CACHED_TOOL_PREFIX}${Date.now()}`;
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
@@ -35,6 +39,11 @@ function createCachedStreamResponse(xml: string): Response {
 export async function POST(req: Request) {
   try {
     const { messages, xml, lastGeneratedXml } = await req.json();
+
+    // Basic validation for demo app
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return Response.json({ error: 'Invalid messages' }, { status: 400 });
+    }
 
     // === CACHE CHECK START ===
     const isFirstMessage = messages.length === 1;
@@ -125,10 +134,12 @@ When using edit_diagram tool:
     // Extract file parts (images) from the last message
     const fileParts = lastMessage.parts?.filter((part: any) => part.type === 'file') || [];
 
-    // Check diagram state
+    // Check diagram state - use formatted XML for reliable comparison
     const hasDiagram = xml && !isMinimalDiagram(xml);
     const noHistory = !lastGeneratedXml || lastGeneratedXml.trim() === '';
-    const userModified = hasDiagram && lastGeneratedXml && xml !== lastGeneratedXml;
+    const formattedXml = hasDiagram ? formatXML(xml) : '';
+    const formattedLastGenXml = lastGeneratedXml ? formatXML(lastGeneratedXml) : '';
+    const userModified = hasDiagram && formattedLastGenXml && formattedXml !== formattedLastGenXml;
 
     // Build context based on diagram state
     let diagramContext = '';
@@ -148,28 +159,6 @@ ${lastMessageText}
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages);
-
-    // Debug: Log the full structure of model messages to diagnose Bedrock API errors
-    console.log('[Debug] Model messages structure:');
-    console.log('[Debug] Full messages JSON:', JSON.stringify(modelMessages, null, 2));
-
-    // Log messages with empty content for debugging (helps identify root cause)
-    const emptyMessages = modelMessages.filter((msg: any) =>
-      !msg.content || !Array.isArray(msg.content) || msg.content.length === 0
-    );
-    if (emptyMessages.length > 0) {
-      console.warn('[Chat API] Messages with empty content detected:',
-        JSON.stringify(emptyMessages.map((m: any) => ({ role: m.role, contentLength: m.content?.length })))
-      );
-      console.warn('[Chat API] Original UI messages structure:',
-        JSON.stringify(messages.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          partsCount: m.parts?.length,
-          partTypes: m.parts?.map((p: any) => p.type)
-        })))
-      );
-    }
 
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
@@ -237,19 +226,8 @@ ${lastMessageText}
       messages: [systemMessageWithCache, ...enhancedMessages],
       ...(providerOptions && { providerOptions }),
       ...(headers && { headers }),
-      onStepFinish: ({ stepType, toolCalls, toolResults }) => {
-        console.log('[Step] Type:', stepType);
-        console.log('[Step] Tool calls:', toolCalls?.map(t => t.toolName));
-        console.log('[Step] Tool results:', toolResults?.length);
-      },
-      onFinish: ({ usage, providerMetadata, steps }) => {
-        console.log('[Finish] Total steps:', steps?.length);
-        console.log('[Cache] Usage:', JSON.stringify({
-          inputTokens: usage?.inputTokens,
-          outputTokens: usage?.outputTokens,
-          cachedInputTokens: usage?.cachedInputTokens,
-        }, null, 2));
-        console.log('[Cache] Provider metadata:', JSON.stringify(providerMetadata, null, 2));
+      onFinish: ({ usage }) => {
+        console.log('[API] Tokens:', usage?.inputTokens, 'in /', usage?.outputTokens, 'out, cached:', usage?.cachedInputTokens);
       },
       tools: {
         // Client-side tool that will be executed on the client

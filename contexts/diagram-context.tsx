@@ -44,7 +44,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const getLastAgentGeneratedXml = () => lastAgentGeneratedXmlRef.current;
 
     const markAgentDiagramPending = () => {
-        console.log('[DiagramContext] markAgentDiagramPending called');
         agentDiagramPendingRef.current = true;
     };
 
@@ -80,7 +79,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // This ensures we compare apples-to-apples (both formatted the same way)
         if (agentDiagramPendingRef.current) {
             const formatted = formatXML(extractedXML);
-            console.log('[DiagramContext] Setting lastAgentGeneratedXml from export, length:', formatted.length);
             setLastAgentGeneratedXml(formatted);
             agentDiagramPendingRef.current = false;
         }

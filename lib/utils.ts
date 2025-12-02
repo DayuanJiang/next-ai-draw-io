@@ -190,15 +190,9 @@ export function replaceXMLParts(
   let result = formatXML(xmlContent);
   let lastProcessedIndex = 0;
 
-  console.log('[replaceXMLParts] Input XML length:', xmlContent.length);
-  console.log('[replaceXMLParts] Formatted XML length:', result.length);
-  console.log('[replaceXMLParts] Number of edits:', searchReplacePairs.length);
-
   for (const { search, replace } of searchReplacePairs) {
     // Also format the search content for consistency
     const formattedSearch = formatXML(search);
-    console.log('[replaceXMLParts] Search pattern (first 200):', search.substring(0, 200));
-    console.log('[replaceXMLParts] Formatted search (first 200):', formattedSearch.substring(0, 200));
     const searchLines = formattedSearch.split('\n');
 
     // Split into lines for exact line matching
@@ -282,9 +276,6 @@ export function replaceXMLParts(
     }
 
     if (!matchFound) {
-      console.log('[replaceXMLParts] SEARCH FAILED!');
-      console.log('[replaceXMLParts] Current XML content:\n', result);
-      console.log('[replaceXMLParts] Search pattern:\n', formattedSearch);
       throw new Error(`Search pattern not found in the diagram. The pattern may not exist in the current structure.`);
     }
 

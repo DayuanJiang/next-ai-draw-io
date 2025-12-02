@@ -19,6 +19,7 @@ import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML } from "@/lib/utils";
+import { CACHED_TOOL_PREFIX } from "@/app/api/chat/route";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 
 interface ChatPanelProps {
@@ -76,7 +77,7 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
             async onToolCall({ toolCall }) {
                 if (toolCall.toolName === "display_diagram") {
                     // Check if this is a cached response by looking at the toolCallId prefix
-                    const isCached = toolCall.toolCallId.startsWith('cached-');
+                    const isCached = toolCall.toolCallId.startsWith(CACHED_TOOL_PREFIX);
 
                     // Only mark as pending if agent actually generated it (not cached)
                     // This ensures lastAgentGeneratedXml stays empty for cached responses
@@ -85,8 +86,9 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
                     }
 
                     addToolResult({
+                        tool: "display_diagram",
                         toolCallId: toolCall.toolCallId,
-                        result: "Successfully displayed the diagram.",
+                        output: "Successfully displayed the diagram.",
                     });
                 } else if (toolCall.toolName === "edit_diagram") {
                     const { edits } = toolCall.input as {
@@ -109,8 +111,9 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
                         markAgentDiagramPending();
 
                         addToolResult({
+                            tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
-                            result: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
                         });
                     } catch (error) {
                         console.error("Edit diagram failed:", error);
@@ -119,8 +122,9 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
 
                         // Provide detailed error with current diagram XML
                         addToolResult({
+                            tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
-                            result: `Edit failed: ${errorMessage}
+                            output: `Edit failed: ${errorMessage}
 
 Current diagram XML:
 \`\`\`xml
@@ -144,10 +148,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages]);
 
-    // Debug: Log status changes
-    useEffect(() => {
-        console.log('[ChatPanel] Status changed to:', status);
-    }, [status]);
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -182,9 +182,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 }
 
                 const lastGenXml = getLastAgentGeneratedXml();
-                console.log('[ChatPanel] Sending message with xml length:', chartXml.length);
-                console.log('[ChatPanel] lastGeneratedXml length:', lastGenXml.length);
-                console.log('[ChatPanel] Are they equal:', chartXml === lastGenXml);
 
                 sendMessage(
                     { parts },
