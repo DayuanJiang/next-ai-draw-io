@@ -5,6 +5,7 @@ import { google, createGoogleGenerativeAI } from '@ai-sdk/google';
 import { azure, createAzure } from '@ai-sdk/azure';
 import { ollama, createOllama } from 'ollama-ai-provider-v2';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { deepseek, createDeepSeek } from '@ai-sdk/deepseek';
 
 export type ProviderName =
   | 'bedrock'
@@ -13,7 +14,8 @@ export type ProviderName =
   | 'google'
   | 'azure'
   | 'ollama'
-  | 'openrouter';
+  | 'openrouter'
+  | 'deepseek';
 
 interface ModelConfig {
   model: any;
@@ -45,6 +47,7 @@ function validateProviderCredentials(provider: ProviderName): void {
     azure: 'AZURE_API_KEY',
     ollama: null, // No credentials needed for local Ollama
     openrouter: 'OPENROUTER_API_KEY',
+    deepseek: 'DEEPSEEK_API_KEY',
   };
 
   const requiredVar = requiredEnvVars[provider];
@@ -60,7 +63,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -72,6 +75,8 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
  * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to http://localhost:11434)
  * - OPENROUTER_API_KEY: OpenRouter API key
+ * - DEEPSEEK_API_KEY: DeepSeek API key
+ * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  */
 export function getAIModel(): ModelConfig {
   const provider = (process.env.AI_PROVIDER || 'bedrock') as ProviderName;
@@ -168,9 +173,21 @@ export function getAIModel(): ModelConfig {
       model = openrouter(modelId);
       break;
 
+    case 'deepseek':
+      if (process.env.DEEPSEEK_BASE_URL) {
+        const customDeepSeek = createDeepSeek({
+          apiKey: process.env.DEEPSEEK_API_KEY,
+          baseURL: process.env.DEEPSEEK_BASE_URL,
+        });
+        model = customDeepSeek(modelId);
+      } else {
+        model = deepseek(modelId);
+      }
+      break;
+
     default:
       throw new Error(
-        `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter`
+        `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek`
       );
   }
 

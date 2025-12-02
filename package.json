@@ -12,6 +12,7 @@
         "@ai-sdk/amazon-bedrock": "^3.0.62",
         "@ai-sdk/anthropic": "^2.0.44",
         "@ai-sdk/azure": "^2.0.69",
+        "@ai-sdk/deepseek": "^1.0.30",
         "@ai-sdk/google": "^2.0.0",
         "@ai-sdk/openai": "^2.0.19",
         "@ai-sdk/react": "^2.0.22",
