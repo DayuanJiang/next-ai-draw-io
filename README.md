@@ -1,10 +1,23 @@
 # Next AI Draw.io
 
-A next.js web application that integrates AI capabilities with draw.io diagrams. This app allows you to create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
+<div align="center">
+
+**AI-Powered Diagram Creation Tool - Chat, Draw, Visualize**
+
+English | [中文](./README_CN.md) | [日本語](./README_JA.md)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Next.js](https://img.shields.io/badge/Next.js-15.x-black)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io-blue)](https://ghcr.io/dayuanjiang/next-ai-draw-io)
+[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
+
+[🚀 Live Demo](https://next-ai-drawio.jiang.jp/)
+
+</div>
+
+A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
-
-Demo site: [https://next-ai-draw-io.vercel.app](https://next-ai-draw-io.vercel.app)
 
 ## Features
 
@@ -21,6 +34,13 @@ Here are some example prompts and their generated diagrams:
 
 <div align="center">
 <table width="100%">
+  <tr>
+    <td colspan="2" valign="top" align="center">
+      <strong>Animated transformer connectors</strong><br />
+      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
+      <img src="./public/animated_connectors.svg" alt="Transformer Architecture with Animated Connectors" width="480" />
+    </td>
+  </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>GCP architecture diagram</strong><br />
@@ -40,16 +60,9 @@ Here are some example prompts and their generated diagrams:
       <img src="./public/azure_demo.svg" alt="Azure Architecture Diagram" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>Animated transformer connectors</strong><br />
-      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
-      <img src="./public/animated_connectors.svg" alt="Transformer Architecture with Animated Connectors" width="480" />
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top" align="center">
       <strong>Cat sketch prompt</strong><br />
       <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
-      <img src="./public/cat_demo.svg" alt="Cat Drawing" width="260" />
+      <img src="./public/cat_demo.svg" alt="Cat Drawing" width="240" />
     </td>
   </tr>
 </table>
@@ -60,7 +73,7 @@ Here are some example prompts and their generated diagrams:
 The application uses the following technologies:
 
 -   **Next.js**: For the frontend framework and routing
--   **@ai-sdk/react**: For the chat interface and AI interactions
+-   **Vercel AI SDK** (`ai` + `@ai-sdk/*`): For streaming AI responses and multi-provider support
 -   **react-drawio**: For diagram representation and manipulation
 
 Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
@@ -135,14 +148,19 @@ Be sure to **set the environment variables** in the Vercel dashboard as you did 
 ## Project Structure
 
 ```
-app/                  # Next.js application routes and pages
-  extract_xml.ts      # Utilities for XML processing
+app/                  # Next.js App Router
+  api/chat/           # Chat API endpoint with AI tools
+  page.tsx            # Main page with DrawIO embed
 components/           # React components
-  chat-input.tsx      # User input component for AI interaction
-  chatPanel.tsx       # Chat interface with diagram control
+  chat-panel.tsx      # Chat interface with diagram control
+  chat-input.tsx      # User input component with file upload
+  history-dialog.tsx  # Diagram version history viewer
   ui/                 # UI components (buttons, cards, etc.)
+contexts/             # React context providers
+  diagram-context.tsx # Global diagram state management
 lib/                  # Utility functions and helpers
-  utils.ts            # General utilities including XML conversion
+  ai-providers.ts     # Multi-provider AI configuration
+  utils.ts            # XML processing and conversion utilities
 public/               # Static assets including example images
 ```
 
@@ -154,11 +172,9 @@ public/               # Static assets including example images
 -   [x] Solve the bug that generation will fail for session that longer than 60s.
 -   [ ] Add API config on the UI.
 
-## License
-
-This project is licensed under the MIT License.
-
 ## Support & Contact
+
+If you find this project useful, please consider [sponsoring](https://github.com/sponsors/DayuanJiang) to help me host the live demo site!
 
 For support or inquiries, please open an issue on the GitHub repository or contact the maintainer at:
 
