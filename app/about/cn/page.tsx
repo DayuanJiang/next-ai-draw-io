@@ -58,6 +58,12 @@ export default function AboutCN() {
                         </div>
                     </div>
 
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                        <p className="text-amber-800">
+                            本应用设计运行于 Claude Opus 4.5 以获得最佳性能。但由于流量超出预期，运行顶级模型的成本变得难以承受。为避免服务中断并控制成本，我已将后端切换至 Claude Haiku 4.5。
+                        </p>
+                    </div>
+
                     <p className="text-gray-700">
                         一个集成了AI功能的Next.js网页应用，与draw.io图表无缝结合。通过自然语言命令和AI辅助可视化来创建、修改和增强图表。
                     </p>
@@ -149,7 +155,16 @@ export default function AboutCN() {
                     </p>
 
                     {/* Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">支持与联系</h2>
+                    <div className="flex items-center gap-4 mt-10 mb-4">
+                        <h2 className="text-2xl font-semibold text-gray-900">支持与联系</h2>
+                        <iframe
+                            src="https://github.com/sponsors/DayuanJiang/button"
+                            title="Sponsor DayuanJiang"
+                            height="32"
+                            width="114"
+                            style={{ border: 0, borderRadius: 6 }}
+                        />
+                    </div>
                     <p className="text-gray-700">
                         如果您觉得这个项目有用，请考虑{" "}
                         <a href="https://github.com/sponsors/DayuanJiang" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
