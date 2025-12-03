@@ -33,6 +33,7 @@
         "next": "15.2.3",
         "ollama-ai-provider-v2": "^1.5.4",
         "pako": "^2.1.0",
+        "prism-react-renderer": "^2.4.1",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-drawio": "^1.0.3",
