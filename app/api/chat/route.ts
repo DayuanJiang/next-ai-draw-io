@@ -257,6 +257,7 @@ ${lastMessageText}
       messages: [systemMessageWithCache, ...enhancedMessages],
       ...(providerOptions && { providerOptions }),
       ...(headers && { headers }),
+      experimental_telemetry: { isEnabled: true },
       onFinish: ({ usage, providerMetadata }) => {
         console.log('[Cache] Usage:', JSON.stringify({
           inputTokens: usage?.inputTokens,
