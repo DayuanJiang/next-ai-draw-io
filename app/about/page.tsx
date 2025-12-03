@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FaGithub } from "react-icons/fa";
+import Image from "next/image";
 
 export const metadata: Metadata = {
-    title: "About - AI-Powered Diagram Generator | Next AI Draw.io",
-    description: "Learn about Next AI Draw.io, a free AI-powered diagram creation tool. Create AWS architecture diagrams, flowcharts, and UML diagrams using Claude Sonnet and GPT-4. No login required.",
-    keywords: ["about AI diagram generator", "diagram tool features", "how to create diagrams", "AI drawing tool capabilities", "draw.io integration"],
+    title: "About - Next AI Draw.io",
+    description: "AI-Powered Diagram Creation Tool - Chat, Draw, Visualize. Create AWS, GCP, and Azure architecture diagrams with natural language.",
+    keywords: ["AI diagram", "draw.io", "AWS architecture", "GCP diagram", "Azure diagram", "LLM"],
 };
 
 export default function About() {
@@ -13,7 +14,7 @@ export default function About() {
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
             <header className="bg-white border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex items-center justify-between">
                         <Link href="/" className="text-xl font-bold text-gray-900 hover:text-gray-700">
                             Next AI Draw.io
@@ -40,295 +41,149 @@ export default function About() {
             </header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <article>
-                    {/* Hero Section */}
-                    <header className="mb-12">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                            AI-Powered Diagram Generator | Create Professional Diagrams Instantly
-                        </h1>
-                        <p className="text-xl text-gray-600">
-                            Free, open-source diagram creation tool powered by AI. No login required, no installation needed.
+            <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <article className="prose prose-lg max-w-none">
+                    {/* Title */}
+                    <div className="text-center mb-8">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">Next AI Draw.io</h1>
+                        <p className="text-xl text-gray-600 font-medium">
+                            AI-Powered Diagram Creation Tool - Chat, Draw, Visualize
                         </p>
-                    </header>
-
-                    {/* Introduction */}
-                    <section className="mb-12">
-                        <h2 className="text-2xl font-semibold text-gray-900 mb-4">What is Next AI Draw.io?</h2>
-                        <div className="prose prose-lg max-w-none text-gray-700">
-                            <p className="mb-4">
-                                <strong>Next AI Draw.io</strong> is a free, AI-powered diagram creation tool that integrates seamlessly with draw.io.
-                                Generate AWS architecture diagrams, flowcharts, UML diagrams, and technical documentation diagrams using natural language
-                                prompts. No login required, no installation needed—start creating professional diagrams instantly in your browser.
-                            </p>
-                            <p className="mb-4">
-                                Our intelligent diagram generator uses advanced AI models including <strong>Claude Sonnet</strong> and <strong>GPT-4</strong> to
-                                understand your requirements and automatically create properly structured diagrams with appropriate symbols, layouts, and connections.
-                                Simply describe what you need, upload reference images, or ask the AI to modify existing diagrams with our targeted XML editing feature.
-                            </p>
-                            <p>
-                                Whether you're a software architect designing system infrastructure, a developer documenting APIs, a business analyst creating
-                                process flows, or a student working on technical assignments, Next AI Draw.io makes diagram creation fast, accurate, and effortless.
-                            </p>
+                        <div className="flex justify-center gap-4 mt-4 text-sm">
+                            <Link href="/about" className="text-blue-600 font-semibold">English</Link>
+                            <span className="text-gray-400">|</span>
+                            <Link href="/about/cn" className="text-gray-600 hover:text-blue-600">中文</Link>
+                            <span className="text-gray-400">|</span>
+                            <Link href="/about/ja" className="text-gray-600 hover:text-blue-600">日本語</Link>
                         </div>
-                    </section>
+                    </div>
 
-                    {/* Key Features */}
-                    <section className="mb-12">
-                        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Key Features</h2>
+                    <p className="text-gray-700">
+                        A Next.js web application that integrates AI capabilities with draw.io diagrams.
+                        Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
+                    </p>
+
+                    {/* Features */}
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">Features</h2>
+                    <ul className="list-disc pl-6 text-gray-700 space-y-2">
+                        <li><strong>LLM-Powered Diagram Creation</strong>: Leverage Large Language Models to create and manipulate draw.io diagrams directly through natural language commands</li>
+                        <li><strong>Image-Based Diagram Replication</strong>: Upload existing diagrams or images and have the AI replicate and enhance them automatically</li>
+                        <li><strong>Diagram History</strong>: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing</li>
+                        <li><strong>Interactive Chat Interface</strong>: Communicate with AI to refine your diagrams in real-time</li>
+                        <li><strong>AWS Architecture Diagram Support</strong>: Specialized support for generating AWS architecture diagrams</li>
+                        <li><strong>Animated Connectors</strong>: Create dynamic and animated connectors between diagram elements for better visualization</li>
+                    </ul>
+
+                    {/* Examples */}
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">Examples</h2>
+                    <p className="text-gray-700 mb-6">Here are some example prompts and their generated diagrams:</p>
+
+                    <div className="space-y-8">
+                        {/* Animated Transformer */}
+                        <div className="text-center">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Animated Transformer Connectors</h3>
+                            <p className="text-gray-600 mb-4">
+                                <strong>Prompt:</strong> Give me an <strong>animated connector</strong> diagram of transformer&apos;s architecture.
+                            </p>
+                            <Image src="/animated_connectors.svg" alt="Transformer Architecture with Animated Connectors" width={480} height={360} className="mx-auto" />
+                        </div>
+
+                        {/* Cloud Architecture Grid */}
                         <div className="grid md:grid-cols-2 gap-6">
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                    <span className="text-blue-600 mr-2">✓</span>
-                                    AI-Powered Diagram Creation
-                                </h3>
-                                <p className="text-gray-700">
-                                    Generate diagrams from natural language descriptions using Claude Sonnet or GPT-4.
-                                    Describe your diagram in plain English, and watch the AI create it with proper symbols,
-                                    layouts, and connections automatically.
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">GCP Architecture Diagram</h3>
+                                <p className="text-gray-600 text-sm mb-4">
+                                    <strong>Prompt:</strong> Generate a GCP architecture diagram with <strong>GCP icons</strong>. Users connect to a frontend hosted on an instance.
                                 </p>
+                                <Image src="/gcp_demo.svg" alt="GCP Architecture Diagram" width={400} height={300} className="mx-auto" />
                             </div>
-
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                    <span className="text-blue-600 mr-2">✓</span>
-                                    AWS Architecture Diagrams
-                                </h3>
-                                <p className="text-gray-700">
-                                    Create professional cloud infrastructure diagrams with AWS-style icons and layouts.
-                                    Perfect for designing EC2 instances, Lambda functions, S3 buckets, RDS databases, VPCs,
-                                    and complete AWS solution architectures.
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">AWS Architecture Diagram</h3>
+                                <p className="text-gray-600 text-sm mb-4">
+                                    <strong>Prompt:</strong> Generate an AWS architecture diagram with <strong>AWS icons</strong>. Users connect to a frontend hosted on an instance.
                                 </p>
+                                <Image src="/aws_demo.svg" alt="AWS Architecture Diagram" width={400} height={300} className="mx-auto" />
                             </div>
-
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                    <span className="text-blue-600 mr-2">✓</span>
-                                    Image-Based Diagram Replication
-                                </h3>
-                                <p className="text-gray-700">
-                                    Upload existing diagrams or sketches, and the AI will automatically recreate them in draw.io format.
-                                    Modify uploaded images by describing the changes you want—the AI handles the rest.
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Azure Architecture Diagram</h3>
+                                <p className="text-gray-600 text-sm mb-4">
+                                    <strong>Prompt:</strong> Generate an Azure architecture diagram with <strong>Azure icons</strong>. Users connect to a frontend hosted on an instance.
                                 </p>
+                                <Image src="/azure_demo.svg" alt="Azure Architecture Diagram" width={400} height={300} className="mx-auto" />
                             </div>
-
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                    <span className="text-blue-600 mr-2">✓</span>
-                                    Diagram History & Version Control
-                                </h3>
-                                <p className="text-gray-700">
-                                    Access previous versions of your diagrams and restore any version from your session history.
-                                    Never lose work—every AI modification is saved and can be undone with a single click.
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Cat Sketch</h3>
+                                <p className="text-gray-600 text-sm mb-4">
+                                    <strong>Prompt:</strong> Draw a cute cat for me.
                                 </p>
-                            </div>
-
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                    <span className="text-blue-600 mr-2">✓</span>
-                                    Targeted XML Editing
-                                </h3>
-                                <p className="text-gray-700">
-                                    Precise diagram modifications using intelligent XML manipulation. Unlike full diagram regeneration,
-                                    targeted edits preserve your existing layout while making specific changes, ensuring consistent
-                                    and predictable results.
-                                </p>
-                            </div>
-
-                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                    <span className="text-blue-600 mr-2">✓</span>
-                                    Multi-Provider AI Support
-                                </h3>
-                                <p className="text-gray-700">
-                                    Choose between Claude Sonnet, GPT-4, and other leading AI models for optimal results.
-                                    Each model has unique strengths—select the one that best fits your diagram complexity and style.
-                                </p>
+                                <Image src="/cat_demo.svg" alt="Cat Drawing" width={240} height={240} className="mx-auto" />
                             </div>
                         </div>
-                    </section>
-
-                    {/* Use Cases */}
-                    <section className="mb-12">
-                        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Popular Use Cases</h2>
-                        <div className="grid md:grid-cols-3 gap-6">
-                            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-                                <h3 className="text-xl font-semibold text-gray-900 mb-3">AWS Cloud Architecture</h3>
-                                <p className="text-gray-700 mb-4">
-                                    Design scalable cloud infrastructure with EC2 instances, Lambda functions, S3 storage,
-                                    RDS databases, and VPC networking. Perfect for solution architects, cloud engineers,
-                                    and DevOps teams planning AWS deployments.
-                                </p>
-                                <p className="text-sm text-gray-600 italic">
-                                    Example: "Create an AWS diagram with an Application Load Balancer, two EC2 instances
-                                    in different availability zones, an RDS database, and an S3 bucket for static assets."
-                                </p>
-                            </div>
-
-                            <div className="bg-green-50 p-6 rounded-lg border border-green-200">
-                                <h3 className="text-xl font-semibold text-gray-900 mb-3">Flowcharts & Process Diagrams</h3>
-                                <p className="text-gray-700 mb-4">
-                                    Create business process flows, decision trees, workflow diagrams, and algorithm flowcharts
-                                    for documentation, presentations, and process optimization. Ideal for business analysts,
-                                    project managers, and operations teams.
-                                </p>
-                                <p className="text-sm text-gray-600 italic">
-                                    Example: "Draw a flowchart for user authentication: check if user exists, verify password,
-                                    generate JWT token on success, show error message on failure."
-                                </p>
-                            </div>
-
-                            <div className="bg-purple-50 p-6 rounded-lg border border-purple-200">
-                                <h3 className="text-xl font-semibold text-gray-900 mb-3">System Design & UML Diagrams</h3>
-                                <p className="text-gray-700 mb-4">
-                                    Generate system architecture diagrams, class diagrams, sequence diagrams, and
-                                    entity-relationship diagrams for software projects. Essential for software engineers,
-                                    system designers, and technical documentation.
-                                </p>
-                                <p className="text-sm text-gray-600 italic">
-                                    Example: "Create a class diagram for an e-commerce system with User, Product, Order,
-                                    and Payment classes showing their relationships and key methods."
-                                </p>
-                            </div>
-                        </div>
-                    </section>
+                    </div>
 
                     {/* How It Works */}
-                    <section className="mb-12 bg-white p-8 rounded-lg border border-gray-200">
-                        <h2 className="text-2xl font-semibold text-gray-900 mb-6">How to Use Next AI Draw.io</h2>
-                        <div className="space-y-6">
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-4">
-                                    1
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Open the Editor</h3>
-                                    <p className="text-gray-700">
-                                        Navigate to the main page and you'll see the draw.io editor with an AI chat panel on the right.
-                                        No account creation or login required—start immediately.
-                                    </p>
-                                </div>
-                            </div>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">How It Works</h2>
+                    <p className="text-gray-700 mb-4">The application uses the following technologies:</p>
+                    <ul className="list-disc pl-6 text-gray-700 space-y-2">
+                        <li><strong>Next.js</strong>: For the frontend framework and routing</li>
+                        <li><strong>Vercel AI SDK</strong> (<code>ai</code> + <code>@ai-sdk/*</code>): For streaming AI responses and multi-provider support</li>
+                        <li><strong>react-drawio</strong>: For diagram representation and manipulation</li>
+                    </ul>
+                    <p className="text-gray-700 mt-4">
+                        Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
+                    </p>
 
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-4">
-                                    2
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Describe Your Diagram</h3>
-                                    <p className="text-gray-700">
-                                        Type your diagram request in natural language. Be as detailed or as general as you like.
-                                        You can also upload reference images for the AI to analyze and replicate.
-                                    </p>
-                                </div>
-                            </div>
+                    {/* Multi-Provider Support */}
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">Multi-Provider Support</h2>
+                    <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                        <li>AWS Bedrock (default)</li>
+                        <li>OpenAI / OpenAI-compatible APIs (via <code>OPENAI_BASE_URL</code>)</li>
+                        <li>Anthropic</li>
+                        <li>Google AI</li>
+                        <li>Azure OpenAI</li>
+                        <li>Ollama</li>
+                        <li>OpenRouter</li>
+                        <li>DeepSeek</li>
+                    </ul>
+                    <p className="text-gray-700 mt-4">
+                        Note that <code>claude-sonnet-4-5</code> has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
+                    </p>
 
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-4">
-                                    3
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Generates Your Diagram</h3>
-                                    <p className="text-gray-700">
-                                        The AI processes your request and automatically creates your diagram in seconds.
-                                        Watch as it appears in the editor with proper symbols, layouts, and connections.
-                                    </p>
-                                </div>
-                            </div>
+                    {/* Support */}
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">Support &amp; Contact</h2>
+                    <p className="text-gray-700">
+                        If you find this project useful, please consider{" "}
+                        <a href="https://github.com/sponsors/DayuanJiang" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                            sponsoring
+                        </a>{" "}
+                        to help host the live demo site!
+                    </p>
+                    <p className="text-gray-700 mt-2">
+                        For support or inquiries, please open an issue on the{" "}
+                        <a href="https://github.com/DayuanJiang/next-ai-draw-io" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                            GitHub repository
+                        </a>{" "}
+                        or contact: me[at]jiang.jp
+                    </p>
 
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-4">
-                                    4
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Refine and Export</h3>
-                                    <p className="text-gray-700">
-                                        Request modifications using the chat, manually edit in draw.io, or export to PNG, SVG,
-                                        or XML format. Access diagram history to restore previous versions anytime.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Benefits */}
-                    <section className="mb-12">
-                        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Why Choose Next AI Draw.io?</h2>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 text-blue-600 text-2xl mr-3">⚡</div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Save Time</h3>
-                                    <p className="text-gray-700">
-                                        Create complex diagrams in seconds instead of hours. No more dragging, aligning,
-                                        or searching for the right symbols—AI handles it all.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 text-blue-600 text-2xl mr-3">🎯</div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Precision Editing</h3>
-                                    <p className="text-gray-700">
-                                        Targeted XML editing ensures changes are precise and predictable, unlike tools
-                                        that regenerate entire diagrams and lose your layout.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 text-blue-600 text-2xl mr-3">🆓</div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Completely Free</h3>
-                                    <p className="text-gray-700">
-                                        No subscriptions, no usage limits, no hidden costs. Open-source and free forever.
-                                        Use it for personal projects, work, or education.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="flex-shrink-0 text-blue-600 text-2xl mr-3">🔒</div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Privacy First</h3>
-                                    <p className="text-gray-700">
-                                        No account required means your diagrams stay private. Work on sensitive
-                                        architecture designs without worrying about data storage or privacy policies.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* CTA Section */}
-                    <section className="bg-blue-600 text-white p-8 rounded-lg text-center">
-                        <h2 className="text-3xl font-bold mb-4">Ready to Create Your First AI Diagram?</h2>
-                        <p className="text-xl mb-6">
-                            Start generating professional diagrams in seconds. No signup required.
-                        </p>
+                    {/* CTA */}
+                    <div className="mt-12 text-center">
                         <Link
                             href="/"
-                            className="inline-block bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                            className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
                         >
                             Open Editor
                         </Link>
-                    </section>
+                    </div>
                 </article>
             </main>
 
             {/* Footer */}
             <footer className="bg-white border-t border-gray-200 mt-16">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <div className="text-center text-gray-600 text-sm">
-                        <p className="mb-2">
-                            Next AI Draw.io - Free AI-Powered Diagram Generator
-                        </p>
-                        <p>
-                            Perfect for developers, architects, students, and business analysts.
-                            Open source. No login required.
-                        </p>
-                    </div>
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                    <p className="text-center text-gray-600 text-sm">
+                        Next AI Draw.io - Open Source AI-Powered Diagram Generator
+                    </p>
                 </div>
             </footer>
         </div>
