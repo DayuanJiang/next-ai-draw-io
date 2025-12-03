@@ -10,6 +10,7 @@ interface DiagramContextType {
     diagramHistory: { svg: string; xml: string }[];
     loadDiagram: (chart: string) => void;
     handleExport: () => void;
+    handleExportWithoutHistory: () => void;
     resolverRef: React.Ref<((value: string) => void) | null>;
     drawioRef: React.Ref<DrawIoEmbedRef | null>;
     handleDiagramExport: (data: any) => void;
@@ -36,6 +37,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         if (drawioRef.current) {
             // Mark that this export should be saved to history
             expectHistoryExportRef.current = true;
+            drawioRef.current.exportDiagram({
+                format: "xmlsvg",
+            });
+        }
+    };
+
+    const handleExportWithoutHistory = () => {
+        if (drawioRef.current) {
+            // Export without saving to history (for edit_diagram fetching current state)
             drawioRef.current.exportDiagram({
                 format: "xmlsvg",
             });
@@ -124,6 +134,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 diagramHistory,
                 loadDiagram,
                 handleExport,
+                handleExportWithoutHistory,
                 resolverRef,
                 drawioRef,
                 handleDiagramExport,

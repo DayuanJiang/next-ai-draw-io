@@ -27,18 +27,23 @@ export default function ChatPanel({
     const {
         loadDiagram: onDisplayChart,
         handleExport: onExport,
+        handleExportWithoutHistory,
         resolverRef,
         chartXML,
         clearDiagram,
     } = useDiagram();
 
-    const onFetchChart = () => {
+    const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
             new Promise<string>((resolve) => {
                 if (resolverRef && "current" in resolverRef) {
                     resolverRef.current = resolve;
                 }
-                onExport();
+                if (saveToHistory) {
+                    onExport();
+                } else {
+                    handleExportWithoutHistory();
+                }
             }),
             new Promise<string>((_, reject) =>
                 setTimeout(
@@ -87,7 +92,8 @@ export default function ChatPanel({
 
                     let currentXml = "";
                     try {
-                        currentXml = await onFetchChart();
+                        // Fetch without saving to history - edit_diagram shouldn't create history entry
+                        currentXml = await onFetchChart(false);
 
                         const { replaceXMLParts } = await import("@/lib/utils");
                         const editedXml = replaceXMLParts(currentXml, edits);
