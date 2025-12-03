@@ -5,7 +5,7 @@ import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
-import { convertToLegalXml, replaceNodes } from "@/lib/utils";
+import { convertToLegalXml, replaceNodes, validateMxCellStructure } from "@/lib/utils";
 import { Copy, Check, X } from "lucide-react";
 
 import { useDiagram } from "@/contexts/diagram-context";
@@ -58,9 +58,16 @@ export function ChatMessageDisplay({
             const currentXml = xml || "";
             const convertedXml = convertToLegalXml(currentXml);
             if (convertedXml !== previousXML.current) {
-                previousXML.current = convertedXml;
                 const replacedXML = replaceNodes(chartXML, convertedXml);
-                onDisplayChart(replacedXML);
+
+                // Validate before sending to draw.io to prevent "d.setId is not a function" errors
+                const validationError = validateMxCellStructure(replacedXML);
+                if (!validationError) {
+                    previousXML.current = convertedXml; // Only update on success
+                    onDisplayChart(replacedXML);
+                } else {
+                    console.error("[ChatMessageDisplay] XML validation failed:", validationError);
+                }
             }
         },
         [chartXML, onDisplayChart]
