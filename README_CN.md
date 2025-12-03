@@ -93,6 +93,26 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## 快速开始
 
+### 使用Docker运行（推荐）
+
+如果您只想在本地运行，最好的方式是使用Docker。
+
+首先，如果您还没有安装Docker，请先安装：[获取Docker](https://docs.docker.com/get-docker/)
+
+然后运行：
+
+```bash
+docker run -d -p 3000:3000 \
+  -e AI_PROVIDER=openai \
+  -e AI_MODEL=gpt-4o \
+  -e OPENAI_API_KEY=your_api_key \
+  ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
+在浏览器中打开 [http://localhost:3000](http://localhost:3000)。
+
+请根据您首选的AI提供商配置替换环境变量。可用选项请参阅[多提供商支持](#多提供商支持)。
+
 ### 安装
 
 1. 克隆仓库：

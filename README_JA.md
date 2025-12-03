@@ -93,6 +93,26 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## はじめに
 
+### Dockerで実行（推奨）
+
+ローカルで実行したいだけなら、Dockerを使用するのが最も簡単です。
+
+まず、Dockerをインストールしていない場合はインストールしてください：[Dockerを入手](https://docs.docker.com/get-docker/)
+
+次に実行：
+
+```bash
+docker run -d -p 3000:3000 \
+  -e AI_PROVIDER=openai \
+  -e AI_MODEL=gpt-4o \
+  -e OPENAI_API_KEY=your_api_key \
+  ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
+ブラウザで [http://localhost:3000](http://localhost:3000) を開いてください。
+
+環境変数はお好みのAIプロバイダー設定に置き換えてください。利用可能なオプションについては[マルチプロバイダーサポート](#マルチプロバイダーサポート)を参照してください。
+
 ### インストール
 
 1. リポジトリをクローン：

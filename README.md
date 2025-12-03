@@ -93,6 +93,26 @@ Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so
 
 ## Getting Started
 
+### Run with Docker (Recommended)
+
+If you just want to run it locally, the best way is to use Docker.
+
+First, install Docker if you haven't already: [Get Docker](https://docs.docker.com/get-docker/)
+
+Then run:
+
+```bash
+docker run -d -p 3000:3000 \
+  -e AI_PROVIDER=openai \
+  -e AI_MODEL=gpt-4o \
+  -e OPENAI_API_KEY=your_api_key \
+  ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
+
 ### Installation
 
 1. Clone the repository:
