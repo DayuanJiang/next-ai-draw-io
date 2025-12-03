@@ -18,7 +18,7 @@ import { DefaultChatTransport } from "ai";
 import { ChatInput } from "@/components/chat-input";
 import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
-import { replaceNodes, formatXML } from "@/lib/utils";
+import { replaceNodes, formatXML, validateMxCellStructure } from "@/lib/utils";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 
 interface ChatPanelProps {
@@ -73,12 +73,24 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
             }),
             async onToolCall({ toolCall }) {
                 if (toolCall.toolName === "display_diagram") {
-                    // Diagram is handled streamingly in the ChatMessageDisplay component
-                    addToolResult({
-                        tool: "display_diagram",
-                        toolCallId: toolCall.toolCallId,
-                        output: "Successfully displayed the diagram.",
-                    });
+                    const { xml } = toolCall.input as { xml: string };
+
+                    // Validate XML structure before confirming success
+                    const validationError = validateMxCellStructure(xml);
+
+                    if (validationError) {
+                        addToolResult({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: validationError,
+                        });
+                    } else {
+                        addToolResult({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Successfully displayed the diagram.",
+                        });
+                    }
                 } else if (toolCall.toolName === "edit_diagram") {
                     const { edits } = toolCall.input as {
                         edits: Array<{ search: string; replace: string }>;
