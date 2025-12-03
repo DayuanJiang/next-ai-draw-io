@@ -8,7 +8,7 @@ import { SaveDialog } from "@/components/save-dialog";
 import {
     Loader2,
     Send,
-    RotateCcw,
+    Trash2,
     Image as ImageIcon,
     History,
     Download,
@@ -207,7 +207,7 @@ export function ChatInput({
                         onClick={() => setShowClearDialog(true)}
                         tooltipContent="Clear current conversation and diagram"
                     >
-                        <RotateCcw className="mr-2 h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                     </ButtonWithTooltip>
 
                     {/* Warning Modal */}
