@@ -306,6 +306,109 @@ export function replaceXMLParts(
   return result;
 }
 
+/**
+ * Validates draw.io XML structure for common issues
+ * @param xml - The XML string to validate
+ * @returns null if valid, error message string if invalid
+ */
+export function validateMxCellStructure(xml: string): string | null {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, "text/xml");
+
+  // Check for XML parsing errors (includes unescaped special characters)
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) {
+    return `Invalid XML: The XML contains syntax errors (likely unescaped special characters like <, >, & in attribute values). Please escape special characters: use &lt; for <, &gt; for >, &amp; for &, &quot; for ". Regenerate the diagram with properly escaped values.`;
+  }
+
+  // Get all mxCell elements once for all validations
+  const allCells = doc.querySelectorAll('mxCell');
+
+  // Single pass: collect IDs, check for duplicates, nesting, orphans, and invalid parents
+  const cellIds = new Set<string>();
+  const duplicateIds: string[] = [];
+  const nestedCells: string[] = [];
+  const orphanCells: string[] = [];
+  const invalidParents: { id: string; parent: string }[] = [];
+  const edgesToValidate: { id: string; source: string | null; target: string | null }[] = [];
+
+  allCells.forEach(cell => {
+    const id = cell.getAttribute('id');
+    const parent = cell.getAttribute('parent');
+    const isEdge = cell.getAttribute('edge') === '1';
+
+    // Check for duplicate IDs
+    if (id) {
+      if (cellIds.has(id)) {
+        duplicateIds.push(id);
+      } else {
+        cellIds.add(id);
+      }
+    }
+
+    // Check for nested mxCell (parent element is also mxCell)
+    if (cell.parentElement?.tagName === 'mxCell') {
+      nestedCells.push(id || 'unknown');
+    }
+
+    // Check parent attribute (skip root cell id="0")
+    if (id !== '0') {
+      if (!parent) {
+        if (id) orphanCells.push(id);
+      } else {
+        // Store for later validation (after all IDs collected)
+        invalidParents.push({ id: id || 'unknown', parent });
+      }
+    }
+
+    // Collect edges for connection validation
+    if (isEdge) {
+      edgesToValidate.push({
+        id: id || 'unknown',
+        source: cell.getAttribute('source'),
+        target: cell.getAttribute('target')
+      });
+    }
+  });
+
+  // Return errors in priority order
+  if (nestedCells.length > 0) {
+    return `Invalid XML: Found nested mxCell elements (IDs: ${nestedCells.slice(0, 3).join(', ')}). All mxCell elements must be direct children of <root>, never nested inside other mxCell elements. Please regenerate the diagram with correct structure.`;
+  }
+
+  if (duplicateIds.length > 0) {
+    return `Invalid XML: Found duplicate cell IDs (${duplicateIds.slice(0, 3).join(', ')}). Each mxCell must have a unique ID. Please regenerate the diagram with unique IDs for all elements.`;
+  }
+
+  if (orphanCells.length > 0) {
+    return `Invalid XML: Found cells without parent attribute (IDs: ${orphanCells.slice(0, 3).join(', ')}). All mxCell elements (except id="0") must have a parent attribute. Please regenerate the diagram with proper parent references.`;
+  }
+
+  // Validate parent references (now that all IDs are collected)
+  const badParents = invalidParents.filter(p => !cellIds.has(p.parent));
+  if (badParents.length > 0) {
+    const details = badParents.slice(0, 3).map(p => `${p.id} (parent: ${p.parent})`).join(', ');
+    return `Invalid XML: Found cells with invalid parent references (${details}). Parent IDs must reference existing cells. Please regenerate the diagram with valid parent references.`;
+  }
+
+  // Validate edge connections
+  const invalidConnections: string[] = [];
+  edgesToValidate.forEach(edge => {
+    if (edge.source && !cellIds.has(edge.source)) {
+      invalidConnections.push(`${edge.id} (source: ${edge.source})`);
+    }
+    if (edge.target && !cellIds.has(edge.target)) {
+      invalidConnections.push(`${edge.id} (target: ${edge.target})`);
+    }
+  });
+
+  if (invalidConnections.length > 0) {
+    return `Invalid XML: Found edges with invalid source/target references (${invalidConnections.slice(0, 3).join(', ')}). Edge source and target must reference existing cell IDs. Please regenerate the diagram with valid edge connections.`;
+  }
+
+  return null;
+}
+
 export function extractDiagramXML(xml_svg_string: string): string {
   try {
     // 1. Parse the SVG string (using built-in DOMParser in a browser-like environment)
