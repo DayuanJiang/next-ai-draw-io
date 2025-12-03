@@ -41,3 +41,4 @@ yarn-error.log*
 next-env.d.ts
 push-via-ec2.sh
 .claude/settings.local.json
+.playwright-mcp/
