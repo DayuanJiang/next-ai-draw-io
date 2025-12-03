@@ -58,6 +58,12 @@ export default function AboutJA() {
                         </div>
                     </div>
 
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                        <p className="text-amber-800">
+                            本アプリは最高のパフォーマンスを発揮するため、Claude Opus 4.5 で動作するよう設計されています。しかし、予想以上のトラフィックにより、最上位モデルの運用コストが負担となっています。サービスの中断を避け、コストを管理するため、バックエンドを Claude Haiku 4.5 に切り替えました。
+                        </p>
+                    </div>
+
                     <p className="text-gray-700">
                         AI機能とdraw.ioダイアグラムを統合したNext.jsウェブアプリケーションです。自然言語コマンドとAI支援の可視化により、ダイアグラムを作成、修正、強化できます。
                     </p>
@@ -149,7 +155,16 @@ export default function AboutJA() {
                     </p>
 
                     {/* Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">サポート＆お問い合わせ</h2>
+                    <div className="flex items-center gap-4 mt-10 mb-4">
+                        <h2 className="text-2xl font-semibold text-gray-900">サポート＆お問い合わせ</h2>
+                        <iframe
+                            src="https://github.com/sponsors/DayuanJiang/button"
+                            title="Sponsor DayuanJiang"
+                            height="32"
+                            width="114"
+                            style={{ border: 0, borderRadius: 6 }}
+                        />
+                    </div>
                     <p className="text-gray-700">
                         このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために{" "}
                         <a href="https://github.com/sponsors/DayuanJiang" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">

@@ -58,6 +58,12 @@ export default function About() {
                         </div>
                     </div>
 
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                        <p className="text-amber-800">
+                            This app is designed to run on Claude Opus 4.5 for best performance. However, due to higher-than-expected traffic, running the top-tier model has become cost-prohibitive. To avoid service interruptions and manage costs, I have switched the backend to Claude Haiku 4.5.
+                        </p>
+                    </div>
+
                     <p className="text-gray-700">
                         A Next.js web application that integrates AI capabilities with draw.io diagrams.
                         Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
@@ -150,7 +156,16 @@ export default function About() {
                     </p>
 
                     {/* Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">Support &amp; Contact</h2>
+                    <div className="flex items-center gap-4 mt-10 mb-4">
+                        <h2 className="text-2xl font-semibold text-gray-900">Support &amp; Contact</h2>
+                        <iframe
+                            src="https://github.com/sponsors/DayuanJiang/button"
+                            title="Sponsor DayuanJiang"
+                            height="32"
+                            width="114"
+                            style={{ border: 0, borderRadius: 6 }}
+                        />
+                    </div>
                     <p className="text-gray-700">
                         If you find this project useful, please consider{" "}
                         <a href="https://github.com/sponsors/DayuanJiang" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">

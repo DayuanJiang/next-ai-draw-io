@@ -26,7 +26,10 @@ interface ChatPanelProps {
     onToggleVisibility: () => void;
 }
 
-export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelProps) {
+export default function ChatPanel({
+    isVisible,
+    onToggleVisibility,
+}: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
         handleExport: onExport,
@@ -44,8 +47,14 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
                 onExport();
             }),
             new Promise<string>((_, reject) =>
-                setTimeout(() => reject(new Error("Chart export timed out after 10 seconds")), 10000)
-            )
+                setTimeout(
+                    () =>
+                        reject(
+                            new Error("Chart export timed out after 10 seconds")
+                        ),
+                    10000
+                )
+            ),
         ]);
     };
     // Add a step counter to track updates
@@ -96,7 +105,7 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
                         edits: Array<{ search: string; replace: string }>;
                     };
 
-                    let currentXml = '';
+                    let currentXml = "";
                     try {
                         // Fetch current chart XML
                         currentXml = await onFetchChart();
@@ -116,7 +125,10 @@ export default function ChatPanel({ isVisible, onToggleVisibility }: ChatPanelPr
                     } catch (error) {
                         console.error("Edit diagram failed:", error);
 
-                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        const errorMessage =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
 
                         // Provide detailed error with current diagram XML
                         addToolResult({
@@ -148,7 +160,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
     // Debug: Log status changes
     useEffect(() => {
-        console.log('[ChatPanel] Status changed to:', status);
+        console.log("[ChatPanel] Status changed to:", status);
     }, [status]);
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -227,7 +239,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 </ButtonWithTooltip>
                 <div
                     className="text-sm text-gray-500 mt-8"
-                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                    style={{
+                        writingMode: "vertical-rl",
+                        transform: "rotate(180deg)",
+                    }}
                 >
                     Chat
                 </div>
@@ -241,18 +256,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <CardHeader className="p-4 flex flex-row justify-between items-center">
                 <div className="flex items-center gap-3">
                     <CardTitle>Next-AI-Drawio</CardTitle>
-                    <Link href="/about" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                    <Link
+                        href="/about"
+                        className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                    >
                         About
                     </Link>
                 </div>
                 <div className="flex items-center gap-2">
-                    <iframe
-                        src="https://github.com/sponsors/DayuanJiang/button"
-                        title="Sponsor DayuanJiang"
-                        height="32"
-                        width="114"
-                        style={{ border: 0, borderRadius: 6 }}
-                    />
                     <a
                         href="https://github.com/DayuanJiang/next-ai-draw-io"
                         target="_blank"
