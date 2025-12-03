@@ -131,9 +131,9 @@ export function ChatMessageDisplay({
         return (
             <div
                 key={callId}
-                className="p-4 my-2 text-gray-500 border border-gray-300 rounded"
+                className="p-4 my-2 text-gray-500 border border-gray-300 rounded overflow-hidden"
             >
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 min-w-0">
                     <div className="flex items-center justify-between">
                         <div className="text-xs">Tool: {toolName}</div>
                         {input && Object.keys(input).length > 0 && (
@@ -146,11 +146,11 @@ export function ChatMessageDisplay({
                         )}
                     </div>
                     {input && isExpanded && (
-                        <div className="mt-1 font-mono text-xs overflow-hidden">
+                        <pre className="mt-1 font-mono text-xs overflow-x-auto whitespace-pre-wrap break-all max-h-48">
                             {typeof input === "object" &&
                                 Object.keys(input).length > 0 &&
                                 `Input: ${JSON.stringify(input, null, 2)}`}
-                        </div>
+                        </pre>
                     )}
                     <div className="mt-2 text-sm">
                         {state === "input-streaming" ? (
