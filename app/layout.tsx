@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { DiagramProvider } from "@/contexts/diagram-context";
 
 import "./globals.css";
@@ -96,6 +97,9 @@ export default function RootLayout({
 
                 <Analytics />
             </body>
+            {process.env.NEXT_PUBLIC_GA_ID && (
+                <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+            )}
         </html>
     );
 }
