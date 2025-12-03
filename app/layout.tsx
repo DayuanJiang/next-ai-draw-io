@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { DiagramProvider } from "@/contexts/diagram-context";
 
 import "./globals.css";
 
-const geistSans = Geist({
-    variable: "--font-geist-sans",
+const plusJakarta = Plus_Jakarta_Sans({
+    variable: "--font-sans",
     subsets: ["latin"],
+    weight: ["400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-    variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+    variable: "--font-mono",
     subsets: ["latin"],
+    weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -91,7 +93,7 @@ export default function RootLayout({
                 />
             </head>
             <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+                className={`${plusJakarta.variable} ${jetbrainsMono.variable} antialiased`}
             >
                 <DiagramProvider>{children}</DiagramProvider>
 

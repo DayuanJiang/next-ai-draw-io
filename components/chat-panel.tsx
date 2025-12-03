@@ -5,14 +5,8 @@ import { useRef, useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
-import {
-    Card,
-    CardContent,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { ChatInput } from "@/components/chat-input";
@@ -57,24 +51,11 @@ export default function ChatPanel({
             ),
         ]);
     };
-    // Add a step counter to track updates
 
-    // Add state for file attachments
     const [files, setFiles] = useState<File[]>([]);
-    // Add state for showing the history dialog
     const [showHistory, setShowHistory] = useState(false);
-
-    // Convert File[] to FileList for experimental_attachments
-    const createFileList = (files: File[]): FileList => {
-        const dt = new DataTransfer();
-        files.forEach((file) => dt.items.add(file));
-        return dt.files;
-    };
-
-    // Add state for input management
     const [input, setInput] = useState("");
 
-    // Remove the currentXmlRef and related useEffect
     const { messages, sendMessage, addToolResult, status, error, setMessages } =
         useChat({
             transport: new DefaultChatTransport({
@@ -84,7 +65,6 @@ export default function ChatPanel({
                 if (toolCall.toolName === "display_diagram") {
                     const { xml } = toolCall.input as { xml: string };
 
-                    // Validate XML structure before confirming success
                     const validationError = validateMxCellStructure(xml);
 
                     if (validationError) {
@@ -107,14 +87,11 @@ export default function ChatPanel({
 
                     let currentXml = "";
                     try {
-                        // Fetch current chart XML
                         currentXml = await onFetchChart();
 
-                        // Apply edits using the utility function
                         const { replaceXMLParts } = await import("@/lib/utils");
                         const editedXml = replaceXMLParts(currentXml, edits);
 
-                        // Load the edited diagram
                         onDisplayChart(editedXml);
 
                         addToolResult({
@@ -130,7 +107,6 @@ export default function ChatPanel({
                                 ? error.message
                                 : String(error);
 
-                        // Provide detailed error with current diagram XML
                         addToolResult({
                             tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
@@ -150,15 +126,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 console.error("Chat error:", error);
             },
         });
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    // Scroll to bottom when messages change
+
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
     }, [messages]);
 
-    // Debug: Log status changes
     useEffect(() => {
         console.log("[ChatPanel] Status changed to:", status);
     }, [status]);
@@ -168,16 +144,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         const isProcessing = status === "streaming" || status === "submitted";
         if (input.trim() && !isProcessing) {
             try {
-                // Fetch chart data before sending message
                 let chartXml = await onFetchChart();
-
-                // Format the XML to ensure consistency
                 chartXml = formatXML(chartXml);
 
-                // Create message parts
                 const parts: any[] = [{ type: "text", text: input }];
 
-                // Add file parts if files exist
                 if (files.length > 0) {
                     for (const file of files) {
                         const reader = new FileReader();
@@ -204,7 +175,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }
                 );
 
-                // Clear input and files after submission
                 setInput("");
                 setFiles([]);
             } catch (error) {
@@ -213,85 +183,102 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     };
 
-    // Handle input change
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
     ) => {
         setInput(e.target.value);
     };
 
-    // Helper function to handle file changes
     const handleFileChange = (newFiles: File[]) => {
         setFiles(newFiles);
     };
 
-    // Collapsed view when chat is hidden
+    // Collapsed view
     if (!isVisible) {
         return (
-            <Card className="h-full flex flex-col rounded-none py-0 gap-0 items-center justify-start pt-4">
+            <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
                 <ButtonWithTooltip
                     tooltipContent="Show chat panel (Ctrl+B)"
                     variant="ghost"
                     size="icon"
                     onClick={onToggleVisibility}
+                    className="hover:bg-accent transition-colors"
                 >
-                    <PanelRightOpen className="h-5 w-5" />
+                    <PanelRightOpen className="h-5 w-5 text-muted-foreground" />
                 </ButtonWithTooltip>
                 <div
-                    className="text-sm text-gray-500 mt-8"
+                    className="text-sm font-medium text-muted-foreground mt-8 tracking-wide"
                     style={{
                         writingMode: "vertical-rl",
                         transform: "rotate(180deg)",
                     }}
                 >
-                    Chat
+                    AI Chat
                 </div>
-            </Card>
+            </div>
         );
     }
 
-    // Full view when chat is visible
+    // Full view
     return (
-        <Card className="h-full flex flex-col rounded-none py-0 gap-0">
-            <CardHeader className="p-4 flex flex-row justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <CardTitle>Next-AI-Drawio</CardTitle>
-                    <Link
-                        href="/about"
-                        className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                    >
-                        About
-                    </Link>
+        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30">
+            {/* Header */}
+            <header className="px-5 py-4 border-b border-border/50">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <Image
+                                src="/favicon.ico"
+                                alt="Next AI Drawio"
+                                width={28}
+                                height={28}
+                                className="rounded"
+                            />
+                            <h1 className="text-base font-semibold tracking-tight whitespace-nowrap">
+                                Next AI Drawio
+                            </h1>
+                        </div>
+                        <Link
+                            href="/about"
+                            className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
+                        >
+                            About
+                        </Link>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <a
+                            href="https://github.com/DayuanJiang/next-ai-draw-io"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        >
+                            <FaGithub className="w-5 h-5" />
+                        </a>
+                        <ButtonWithTooltip
+                            tooltipContent="Hide chat panel (Ctrl+B)"
+                            variant="ghost"
+                            size="icon"
+                            onClick={onToggleVisibility}
+                            className="hover:bg-accent"
+                        >
+                            <PanelRightClose className="h-5 w-5 text-muted-foreground" />
+                        </ButtonWithTooltip>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <a
-                        href="https://github.com/DayuanJiang/next-ai-draw-io"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-gray-600 hover:text-gray-900 transition-colors"
-                    >
-                        <FaGithub className="w-6 h-6" />
-                    </a>
-                    <ButtonWithTooltip
-                        tooltipContent="Hide chat panel (Ctrl+B)"
-                        variant="ghost"
-                        size="icon"
-                        onClick={onToggleVisibility}
-                    >
-                        <PanelRightClose className="h-5 w-5" />
-                    </ButtonWithTooltip>
-                </div>
-            </CardHeader>
-            <CardContent className="flex-grow overflow-hidden px-2">
+            </header>
+
+            {/* Messages */}
+            <main className="flex-1 overflow-hidden">
                 <ChatMessageDisplay
                     messages={messages}
                     error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
                 />
-            </CardContent>
+            </main>
 
-            <CardFooter className="p-2">
+            {/* Input */}
+            <footer className="p-4 border-t border-border/50 bg-card/50">
                 <ChatInput
                     input={input}
                     status={status}
@@ -306,7 +293,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
                 />
-            </CardFooter>
-        </Card>
+            </footer>
+        </div>
     );
 }
