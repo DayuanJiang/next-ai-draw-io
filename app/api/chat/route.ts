@@ -331,15 +331,20 @@ IMPORTANT: Keep edits concise:
         return 'unknown error';
       }
 
-      if (typeof error === 'string') {
-        return error;
+      const errorString = typeof error === 'string'
+        ? error
+        : error instanceof Error
+          ? error.message
+          : JSON.stringify(error);
+
+      // Check for image not supported error (e.g., DeepSeek models)
+      if (errorString.includes('image_url') ||
+          errorString.includes('unknown variant') ||
+          (errorString.includes('image') && errorString.includes('not supported'))) {
+        return 'This model does not support image inputs. Please remove the image and try again, or switch to a vision-capable model.';
       }
 
-      if (error instanceof Error) {
-        return error.message;
-      }
-
-      return JSON.stringify(error);
+      return errorString;
     }
 
     return result.toUIMessageStreamResponse({
