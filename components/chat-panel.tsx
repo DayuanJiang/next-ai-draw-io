@@ -61,6 +61,9 @@ export default function ChatPanel({
     const [showHistory, setShowHistory] = useState(false);
     const [input, setInput] = useState("");
 
+    // Generate a unique session ID for Langfuse tracing
+    const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+
     const { messages, sendMessage, addToolResult, status, error, setMessages } =
         useChat({
             transport: new DefaultChatTransport({
@@ -177,6 +180,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     {
                         body: {
                             xml: chartXml,
+                            sessionId,
                         },
                     }
                 );
@@ -293,6 +297,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onClearChat={() => {
                         setMessages([]);
                         clearDiagram();
+                        setSessionId(`session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
                     }}
                     files={files}
                     onFileChange={handleFileChange}

@@ -30,7 +30,16 @@ function createCachedStreamResponse(xml: string): Response {
 
 export async function POST(req: Request) {
   try {
-    const { messages, xml } = await req.json();
+    const { messages, xml, sessionId } = await req.json();
+
+    // Get user IP for Langfuse tracking
+    const forwardedFor = req.headers.get('x-forwarded-for');
+    const userId = forwardedFor?.split(',')[0]?.trim() || 'anonymous';
+
+    // Validate sessionId for Langfuse (must be string, max 200 chars)
+    const validSessionId = sessionId && typeof sessionId === 'string' && sessionId.length <= 200
+      ? sessionId
+      : undefined;
 
     // === CACHE CHECK START ===
     const isFirstMessage = messages.length === 1;
@@ -257,6 +266,16 @@ ${lastMessageText}
       messages: [systemMessageWithCache, ...enhancedMessages],
       ...(providerOptions && { providerOptions }),
       ...(headers && { headers }),
+      // Only enable telemetry if Langfuse is configured
+      ...(process.env.LANGFUSE_PUBLIC_KEY && {
+        experimental_telemetry: {
+          isEnabled: true,
+          metadata: {
+            sessionId: validSessionId,
+            userId: userId,
+          },
+        },
+      }),
       onFinish: ({ usage, providerMetadata }) => {
         console.log('[Cache] Usage:', JSON.stringify({
           inputTokens: usage?.inputTokens,
