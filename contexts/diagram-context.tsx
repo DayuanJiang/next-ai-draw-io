@@ -26,9 +26,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     >([]);
     const drawioRef = useRef<DrawIoEmbedRef | null>(null);
     const resolverRef = useRef<((value: string) => void) | null>(null);
+    // Track if we're expecting an export for history (user-initiated)
+    const expectHistoryExportRef = useRef<boolean>(false);
 
     const handleExport = () => {
         if (drawioRef.current) {
+            // Mark that this export should be saved to history
+            expectHistoryExportRef.current = true;
             drawioRef.current.exportDiagram({
                 format: "xmlsvg",
             });
@@ -47,13 +51,19 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         const extractedXML = extractDiagramXML(data.data);
         setChartXML(extractedXML);
         setLatestSvg(data.data);
-        setDiagramHistory((prev) => [
-            ...prev,
-            {
-                svg: data.data,
-                xml: extractedXML,
-            },
-        ]);
+
+        // Only add to history if this was a user-initiated export
+        if (expectHistoryExportRef.current) {
+            setDiagramHistory((prev) => [
+                ...prev,
+                {
+                    svg: data.data,
+                    xml: extractedXML,
+                },
+            ]);
+            expectHistoryExportRef.current = false;
+        }
+
         if (resolverRef.current) {
             resolverRef.current(extractedXML);
             resolverRef.current = null;
