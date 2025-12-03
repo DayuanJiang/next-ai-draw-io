@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -22,6 +23,19 @@ export function HistoryDialog({
     onToggleHistory,
 }: HistoryDialogProps) {
     const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
+    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+    const handleClose = () => {
+        setSelectedIndex(null);
+        onToggleHistory(false);
+    };
+
+    const handleConfirmRestore = () => {
+        if (selectedIndex !== null) {
+            onDisplayChart(diagramHistory[selectedIndex].xml);
+            handleClose();
+        }
+    };
 
     return (
         <Dialog open={showHistory} onOpenChange={onToggleHistory}>
@@ -45,11 +59,12 @@ export function HistoryDialog({
                         {diagramHistory.map((item, index) => (
                             <div
                                 key={index}
-                                className="border rounded-md p-2 cursor-pointer hover:border-primary transition-colors"
-                                onClick={() => {
-                                    onDisplayChart(item.xml);
-                                    onToggleHistory(false);
-                                }}
+                                className={`border rounded-md p-2 cursor-pointer hover:border-primary transition-colors ${
+                                    selectedIndex === index
+                                        ? "border-primary ring-2 ring-primary"
+                                        : ""
+                                }`}
+                                onClick={() => setSelectedIndex(index)}
                             >
                                 <div className="aspect-video bg-white rounded overflow-hidden flex items-center justify-center">
                                     <Image
@@ -69,12 +84,29 @@ export function HistoryDialog({
                 )}
 
                 <DialogFooter>
-                    <Button
-                        variant="outline"
-                        onClick={() => onToggleHistory(false)}
-                    >
-                        Close
-                    </Button>
+                    {selectedIndex !== null ? (
+                        <>
+                            <div className="flex-1 text-sm text-muted-foreground">
+                                Restore to Version {selectedIndex + 1}?
+                            </div>
+                            <Button
+                                variant="outline"
+                                onClick={() => setSelectedIndex(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button onClick={handleConfirmRestore}>
+                                Confirm
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            onClick={handleClose}
+                        >
+                            Close
+                        </Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
