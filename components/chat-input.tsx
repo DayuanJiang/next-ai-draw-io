@@ -4,12 +4,14 @@ import React, { useCallback, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResetWarningModal } from "@/components/reset-warning-modal";
+import { SaveDialog } from "@/components/save-dialog";
 import {
     Loader2,
     Send,
     RotateCcw,
     Image as ImageIcon,
     History,
+    Download,
 } from "lucide-react";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 import { FilePreviewList } from "./file-preview-list";
@@ -39,11 +41,12 @@ export function ChatInput({
     showHistory = false,
     onToggleHistory = () => {},
 }: ChatInputProps) {
-    const { diagramHistory } = useDiagram();
+    const { diagramHistory, saveDiagramToFile } = useDiagram();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [showClearDialog, setShowClearDialog] = useState(false);
+    const [showSaveDialog, setShowSaveDialog] = useState(false);
 
     // Debug: Log status changes
     const isDisabled = status === "streaming" || status === "submitted";
@@ -166,6 +169,7 @@ export function ChatInput({
         setShowClearDialog(false);
     };
 
+
     return (
         <form
             onSubmit={onSubmit}
@@ -234,6 +238,25 @@ export function ChatInput({
                     >
                         <History className="h-4 w-4" />
                     </ButtonWithTooltip>
+
+                    {/* Save Diagram Button */}
+                    <ButtonWithTooltip
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowSaveDialog(true)}
+                        disabled={isDisabled}
+                        tooltipContent="Save diagram to local file"
+                    >
+                        <Download className="h-4 w-4" />
+                    </ButtonWithTooltip>
+
+                    <SaveDialog
+                        open={showSaveDialog}
+                        onOpenChange={setShowSaveDialog}
+                        onSave={saveDiagramToFile}
+                        defaultFilename={`diagram-${new Date().toISOString().slice(0, 10)}`}
+                    />
 
                     <Button
                         type="button"

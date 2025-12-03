@@ -14,6 +14,7 @@ interface DiagramContextType {
     drawioRef: React.Ref<DrawIoEmbedRef | null>;
     handleDiagramExport: (data: any) => void;
     clearDiagram: () => void;
+    saveDiagramToFile: (filename: string) => void;
 }
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined);
@@ -28,6 +29,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const resolverRef = useRef<((value: string) => void) | null>(null);
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false);
+    // Track if we're expecting an export for file save
+    const saveResolverRef = useRef<((xml: string) => void) | null>(null);
 
     const handleExport = () => {
         if (drawioRef.current) {
@@ -68,6 +71,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             resolverRef.current(extractedXML);
             resolverRef.current = null;
         }
+
+        // Handle save to file if requested
+        if (saveResolverRef.current) {
+            saveResolverRef.current(extractedXML);
+            saveResolverRef.current = null;
+        }
     };
 
     const clearDiagram = () => {
@@ -76,6 +85,35 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setChartXML(emptyDiagram);
         setLatestSvg("");
         setDiagramHistory([]);
+    };
+
+    const saveDiagramToFile = (filename: string) => {
+        if (!drawioRef.current) {
+            console.warn("Draw.io editor not ready");
+            return;
+        }
+
+        // Export diagram and save when export completes
+        drawioRef.current.exportDiagram({ format: "xmlsvg" });
+        saveResolverRef.current = (xml: string) => {
+            // Wrap in proper .drawio format
+            let fileContent = xml;
+            if (!xml.includes("<mxfile")) {
+                fileContent = `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`;
+            }
+
+            const blob = new Blob([fileContent], { type: "application/xml" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            // Add .drawio extension if not present
+            a.download = filename.endsWith(".drawio") ? filename : `${filename}.drawio`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            // Delay URL revocation to ensure download completes
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+        };
     };
 
     return (
@@ -90,6 +128,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 drawioRef,
                 handleDiagramExport,
                 clearDiagram,
+                saveDiagramToFile,
             }}
         >
             {children}
