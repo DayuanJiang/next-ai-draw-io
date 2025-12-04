@@ -1,7 +1,6 @@
 import { streamText, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { getAIModel } from '@/lib/ai-providers';
 import { findCachedResponse } from '@/lib/cached-responses';
-import { setTraceInput, setTraceOutput, getTelemetryConfig, wrapWithObserve } from '@/lib/langfuse';
 import { getSystemPrompt } from '@/lib/system-prompts';
 import { z } from "zod";
 
@@ -32,27 +31,7 @@ function createCachedStreamResponse(xml: string): Response {
 
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
-  const { messages, xml, sessionId } = await req.json();
-
-  // Get user IP for Langfuse tracking
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  const userId = forwardedFor?.split(',')[0]?.trim() || 'anonymous';
-
-  // Validate sessionId for Langfuse (must be string, max 200 chars)
-  const validSessionId = sessionId && typeof sessionId === 'string' && sessionId.length <= 200
-    ? sessionId
-    : undefined;
-
-  // Extract user input text for Langfuse trace
-  const currentMessage = messages[messages.length - 1];
-  const userInputText = currentMessage?.parts?.find((p: any) => p.type === 'text')?.text || '';
-
-  // Update Langfuse trace with input, session, and user
-  setTraceInput({
-    input: userInputText,
-    sessionId: validSessionId,
-    userId: userId,
-  });
+  const { messages, xml } = await req.json();
 
   // === CACHE CHECK START ===
   const isFirstMessage = messages.length === 1;
@@ -175,19 +154,9 @@ ${lastMessageText}
     messages: allMessages,
     ...(providerOptions && { providerOptions }),
     ...(headers && { headers }),
-    // Langfuse telemetry config (returns undefined if not configured)
-    ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
-      experimental_telemetry: getTelemetryConfig({ sessionId: validSessionId, userId }),
-    }),
-    onFinish: ({ text, usage, providerMetadata }) => {
+    onFinish: ({ usage, providerMetadata }) => {
       console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
       console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
-      // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
-      // AI SDK uses inputTokens/outputTokens, Langfuse expects promptTokens/completionTokens
-      setTraceOutput(text, {
-        promptTokens: usage?.inputTokens,
-        completionTokens: usage?.outputTokens,
-      });
     },
     tools: {
       // Client-side tool that will be executed on the client
@@ -278,19 +247,11 @@ IMPORTANT: Keep edits concise:
   });
 }
 
-// Wrap handler with error handling
-async function safeHandler(req: Request): Promise<Response> {
+export async function POST(req: Request) {
   try {
     return await handleChatRequest(req);
   } catch (error) {
     console.error('Error in chat route:', error);
     return Response.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// Wrap with Langfuse observe (if configured)
-const observedHandler = wrapWithObserve(safeHandler);
-
-export async function POST(req: Request) {
-  return observedHandler(req);
 }

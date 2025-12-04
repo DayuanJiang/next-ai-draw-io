@@ -62,9 +62,6 @@ export default function ChatPanel({
     const [showHistory, setShowHistory] = useState(false);
     const [input, setInput] = useState("");
 
-    // Generate a unique session ID for Langfuse tracing
-    const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-
     // Store XML snapshots for each user message (keyed by message index)
     const xmlSnapshotsRef = useRef<Map<number, string>>(new Map());
 
@@ -208,7 +205,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     {
                         body: {
                             xml: chartXml,
-                            sessionId,
                         },
                     }
                 );
@@ -283,7 +279,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             {
                 body: {
                     xml: savedXml,
-                    sessionId,
                 },
             }
         );
@@ -337,7 +332,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             {
                 body: {
                     xml: savedXml,
-                    sessionId,
                 },
             }
         );
@@ -424,7 +418,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
-                    sessionId={sessionId}
                     onRegenerate={handleRegenerate}
                     onEditMessage={handleEditMessage}
                 />
@@ -440,14 +433,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onClearChat={() => {
                         setMessages([]);
                         clearDiagram();
-                        setSessionId(`session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
                         xmlSnapshotsRef.current.clear();
                     }}
                     files={files}
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
-                    sessionId={sessionId}
                 />
             </footer>
         </div>

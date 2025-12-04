@@ -29,7 +29,6 @@ interface ChatInputProps {
     onFileChange?: (files: File[]) => void;
     showHistory?: boolean;
     onToggleHistory?: (show: boolean) => void;
-    sessionId?: string;
 }
 
 export function ChatInput({
@@ -42,7 +41,6 @@ export function ChatInput({
     onFileChange = () => {},
     showHistory = false,
     onToggleHistory = () => {},
-    sessionId,
 }: ChatInputProps) {
     const { diagramHistory, saveDiagramToFile } = useDiagram();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -251,7 +249,7 @@ export function ChatInput({
                         <SaveDialog
                             open={showSaveDialog}
                             onOpenChange={setShowSaveDialog}
-                            onSave={(filename, format) => saveDiagramToFile(filename, format, sessionId)}
+                            onSave={(filename, format) => saveDiagramToFile(filename, format)}
                             defaultFilename={`diagram-${new Date().toISOString().slice(0, 10)}`}
                         />
 
