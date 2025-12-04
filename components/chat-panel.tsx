@@ -99,8 +99,18 @@ export default function ChatPanel({
 
                     let currentXml = "";
                     try {
-                        // Fetch without saving to history - edit_diagram shouldn't create history entry
-                        currentXml = await onFetchChart(false);
+                        console.log("[edit_diagram] Starting...");
+                        // Use chartXML from context directly - more reliable than export
+                        // especially on Vercel where DrawIO iframe may have latency issues
+                        if (chartXML) {
+                            currentXml = chartXML;
+                            console.log("[edit_diagram] Using cached chartXML, length:", currentXml.length);
+                        } else {
+                            // Fallback to export only if no cached XML
+                            console.log("[edit_diagram] No cached XML, fetching from DrawIO...");
+                            currentXml = await onFetchChart(false);
+                            console.log("[edit_diagram] Got XML from export, length:", currentXml.length);
+                        }
 
                         const { replaceXMLParts } = await import("@/lib/utils");
                         const editedXml = replaceXMLParts(currentXml, edits);
@@ -112,8 +122,9 @@ export default function ChatPanel({
                             toolCallId: toolCall.toolCallId,
                             output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
                         });
+                        console.log("[edit_diagram] Success");
                     } catch (error) {
-                        console.error("Edit diagram failed:", error);
+                        console.error("[edit_diagram] Failed:", error);
 
                         const errorMessage =
                             error instanceof Error
@@ -127,7 +138,7 @@ export default function ChatPanel({
 
 Current diagram XML:
 \`\`\`xml
-${currentXml}
+${currentXml || "No XML available"}
 \`\`\`
 
 Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
