@@ -72,7 +72,9 @@ export function getTelemetryConfig(params: {
 
   return {
     isEnabled: true,
-    recordInputs: true,
+    // Disable automatic input recording to avoid uploading large base64 images to Langfuse media
+    // User text input is recorded manually via setTraceInput
+    recordInputs: false,
     recordOutputs: true,
     metadata: {
       sessionId: params.sessionId,
