@@ -143,6 +143,9 @@ Edit `.env.local` and configure your chosen provider:
 -   Set `AI_PROVIDER` to your chosen provider (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek)
 -   Set `AI_MODEL` to the specific model you want to use
 -   Add the required API keys for your provider
+-   `ACCESS_CODES`: Optional access password(s), can be comma-separated for multiple passwords.
+
+> Warning: If you do not set `ACCESS_CODES`, anyone can access your deployed site directly, which may lead to rapid depletion of your token. It is recommended to set this option.
 
 See the [Multi-Provider Support](#multi-provider-support) section above for provider-specific configuration examples.
 

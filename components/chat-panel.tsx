@@ -3,7 +3,7 @@
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Settings } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -14,6 +14,7 @@ import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML, validateMxCellStructure } from "@/lib/utils";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
+import { SettingsDialog, STORAGE_ACCESS_CODE_KEY } from "@/components/settings-dialog";
 
 interface ChatPanelProps {
     isVisible: boolean;
@@ -59,6 +60,7 @@ export default function ChatPanel({
 
     const [files, setFiles] = useState<File[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    const [showSettingsDialog, setShowSettingsDialog] = useState(false);
     const [input, setInput] = useState("");
 
     // Generate a unique session ID for Langfuse tracing
@@ -192,12 +194,16 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }
                 }
 
+                const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || "";
                 sendMessage(
                     { parts },
                     {
                         body: {
                             xml: chartXml,
                             sessionId,
+                        },
+                        headers: {
+                            "x-access-code": accessCode,
                         },
                     }
                 );
@@ -282,6 +288,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                             <FaGithub className="w-5 h-5" />
                         </a>
                         <ButtonWithTooltip
+                            tooltipContent="Settings"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setShowSettingsDialog(true)}
+                            className="hover:bg-accent"
+                        >
+                            <Settings className="h-5 w-5 text-muted-foreground" />
+                        </ButtonWithTooltip>
+                        <ButtonWithTooltip
                             tooltipContent="Hide chat panel (Ctrl+B)"
                             variant="ghost"
                             size="icon"
@@ -321,6 +336,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onToggleHistory={setShowHistory}
                 />
             </footer>
+
+            <SettingsDialog
+                open={showSettingsDialog}
+                onOpenChange={setShowSettingsDialog}
+            />
         </div>
     );
 }
