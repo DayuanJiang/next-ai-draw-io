@@ -2,6 +2,7 @@ import { streamText, convertToModelMessages, createUIMessageStream, createUIMess
 import { getAIModel } from '@/lib/ai-providers';
 import { findCachedResponse } from '@/lib/cached-responses';
 import { setTraceInput, setTraceOutput, getTelemetryConfig, wrapWithObserve } from '@/lib/langfuse';
+import { getSystemPrompt } from '@/lib/system-prompts';
 import { z } from "zod";
 
 export const maxDuration = 300;
@@ -57,241 +58,136 @@ async function handleChatRequest(req: Request): Promise<Response> {
   const isFirstMessage = messages.length === 1;
   const isEmptyDiagram = !xml || xml.trim() === '' || isMinimalDiagram(xml);
 
-    if (isFirstMessage && isEmptyDiagram) {
-      const lastMessage = messages[0];
-      const textPart = lastMessage.parts?.find((p: any) => p.type === 'text');
-      const filePart = lastMessage.parts?.find((p: any) => p.type === 'file');
+  if (isFirstMessage && isEmptyDiagram) {
+    const lastMessage = messages[0];
+    const textPart = lastMessage.parts?.find((p: any) => p.type === 'text');
+    const filePart = lastMessage.parts?.find((p: any) => p.type === 'file');
 
-      const cached = findCachedResponse(textPart?.text || '', !!filePart);
+    const cached = findCachedResponse(textPart?.text || '', !!filePart);
 
-      if (cached) {
-        console.log('[Cache] Returning cached response for:', textPart?.text);
-        return createCachedStreamResponse(cached.xml);
-      }
+    if (cached) {
+      console.log('[Cache] Returning cached response for:', textPart?.text);
+      return createCachedStreamResponse(cached.xml);
     }
-    // === CACHE CHECK END ===
+  }
+  // === CACHE CHECK END ===
 
-    const systemMessage = `
-You are an expert diagram creation assistant specializing in draw.io XML generation.
-Your primary function is chat with user and crafting clear, well-organized visual diagrams through precise XML specifications.
-You can see the image that user uploaded.
+  // Get AI model from environment configuration
+  const { model, providerOptions, headers, modelId } = getAIModel();
 
-You utilize the following tools:
----Tool1---
-tool name: display_diagram
-description: Display a NEW diagram on draw.io. Use this when creating a diagram from scratch or when major structural changes are needed.
-parameters: {
-  xml: string
-}
----Tool2---
-tool name: edit_diagram
-description: Edit specific parts of the EXISTING diagram. Use this when making small targeted changes like adding/removing elements, changing labels, or adjusting properties. This is more efficient than regenerating the entire diagram.
-parameters: {
-  edits: Array<{search: string, replace: string}>
-}
----End of tools---
+  // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
+  const systemMessage = getSystemPrompt(modelId);
 
-IMPORTANT: Choose the right tool:
-- Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
-- Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
+  const lastMessage = messages[messages.length - 1];
 
-Core capabilities:
-- Generate valid, well-formed XML strings for draw.io diagrams
-- Create professional flowcharts, mind maps, entity diagrams, and technical illustrations
-- Convert user descriptions into visually appealing diagrams using basic shapes and connectors
-- Apply proper spacing, alignment and visual hierarchy in diagram layouts
-- Adapt artistic concepts into abstract diagram representations using available shapes
-- Optimize element positioning to prevent overlapping and maintain readability
-- Structure complex systems into clear, organized visual components
+  // Extract text from the last message parts
+  const lastMessageText = lastMessage.parts?.find((part: any) => part.type === 'text')?.text || '';
 
-Layout constraints:
-- CRITICAL: Keep all diagram elements within a single page viewport to avoid page breaks
-- Position all elements with x coordinates between 0-800 and y coordinates between 0-600
-- Maximum width for containers (like AWS cloud boxes): 700 pixels
-- Maximum height for containers: 550 pixels
-- Use compact, efficient layouts that fit the entire diagram in one view
-- Start positioning from reasonable margins (e.g., x=40, y=40) and keep elements grouped closely
-- For large diagrams with many elements, use vertical stacking or grid layouts that stay within bounds
-- Avoid spreading elements too far apart horizontally - users should see the complete diagram without a page break line
+  // Extract file parts (images) from the last message
+  const fileParts = lastMessage.parts?.filter((part: any) => part.type === 'file') || [];
 
-Note that:
-- Use proper tool calls to generate or edit diagrams;
-  - never return raw XML in text responses,
-  - never use display_diagram to generate messages that you want to send user directly. e.g. to generate a "hello" text box when you want to greet user.
-- Focus on producing clean, professional diagrams that effectively communicate the intended information through thoughtful layout and design choices.
-- When artistic drawings are requested, creatively compose them using standard diagram shapes and connectors while maintaining visual clarity.
-- Return XML only via tool calls, never in text responses.
-- If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
-- Note that when you need to generate diagram about aws architecture, use **AWS 2025 icons**.
-
-When using edit_diagram tool:
-- Keep edits minimal - only include the specific line being changed plus 1-2 context lines
-- Example GOOD edit: {"search": "  <mxCell id=\"2\" value=\"Old Text\">", "replace": "  <mxCell id=\"2\" value=\"New Text\">"}
-- Example BAD edit: Including 10+ unchanged lines just to change one attribute
-- For multiple changes, use separate edits: [{"search": "line1", "replace": "new1"}, {"search": "line2", "replace": "new2"}]
-- RETRY POLICY: If edit_diagram fails because the search pattern cannot be found:
-  * You may retry edit_diagram up to 3 times with adjusted search patterns
-  * After 3 failed attempts, you MUST fall back to using display_diagram to regenerate the entire diagram
-  * The error message will indicate how many retries remain
-
-## Draw.io XML Structure Reference
-
-Basic structure:
-\`\`\`xml
-<mxGraphModel>
-  <root>
-    <mxCell id="0"/>
-    <mxCell id="1" parent="0"/>
-    <!-- All other cells go here as siblings -->
-  </root>
-</mxGraphModel>
-\`\`\`
-
-CRITICAL RULES:
-1. Always include the two root cells: <mxCell id="0"/> and <mxCell id="1" parent="0"/>
-2. ALL mxCell elements must be DIRECT children of <root> - NEVER nest mxCell inside another mxCell
-3. Use unique sequential IDs for all cells (start from "2" for user content)
-4. Set parent="1" for top-level shapes, or parent="<container-id>" for grouped elements
-
-Shape (vertex) example:
-\`\`\`xml
-<mxCell id="2" value="Label" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-</mxCell>
-\`\`\`
-
-Connector (edge) example:
-\`\`\`xml
-<mxCell id="3" style="endArrow=classic;html=1;" edge="1" parent="1" source="2" target="4">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
-\`\`\`
-
-Common styles:
-- Shapes: rounded=1 (rounded corners), fillColor=#hex, strokeColor=#hex
-- Edges: endArrow=classic/block/open/none, startArrow=none/classic, curved=1, edgeStyle=orthogonalEdgeStyle
-- Text: fontSize=14, fontStyle=1 (bold), align=center/left/right
-`;
-
-    const lastMessage = messages[messages.length - 1];
-
-    // Extract text from the last message parts
-    const lastMessageText = lastMessage.parts?.find((part: any) => part.type === 'text')?.text || '';
-
-    // Extract file parts (images) from the last message
-    const fileParts = lastMessage.parts?.filter((part: any) => part.type === 'file') || [];
-
-    const formattedTextContent = `
-Current diagram XML:
-"""xml
-${xml || ''}
-"""
-User input:
+  // User input only - XML is now in a separate cached system message
+  const formattedUserInput = `User input:
 """md
 ${lastMessageText}
 """`;
 
-    // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = convertToModelMessages(messages);
+  // Convert UIMessages to ModelMessages and add system message
+  const modelMessages = convertToModelMessages(messages);
 
-    // Log messages with empty content for debugging (helps identify root cause)
-    const emptyMessages = modelMessages.filter((msg: any) =>
-      !msg.content || !Array.isArray(msg.content) || msg.content.length === 0
-    );
-    if (emptyMessages.length > 0) {
-      console.warn('[Chat API] Messages with empty content detected:',
-        JSON.stringify(emptyMessages.map((m: any) => ({ role: m.role, contentLength: m.content?.length })))
-      );
-      console.warn('[Chat API] Original UI messages structure:',
-        JSON.stringify(messages.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          partsCount: m.parts?.length,
-          partTypes: m.parts?.map((p: any) => p.type)
-        })))
-      );
+  // Filter out messages with empty content arrays (Bedrock API rejects these)
+  // This is a safety measure - ideally convertToModelMessages should handle all cases
+  let enhancedMessages = modelMessages.filter((msg: any) =>
+    msg.content && Array.isArray(msg.content) && msg.content.length > 0
+  );
+
+  // Update the last message with user input only (XML moved to separate cached system message)
+  if (enhancedMessages.length >= 1) {
+    const lastModelMessage = enhancedMessages[enhancedMessages.length - 1];
+    if (lastModelMessage.role === 'user') {
+      // Build content array with user input text and file parts
+      const contentParts: any[] = [
+        { type: 'text', text: formattedUserInput }
+      ];
+
+      // Add image parts back
+      for (const filePart of fileParts) {
+        contentParts.push({
+          type: 'image',
+          image: filePart.url,
+          mimeType: filePart.mediaType
+        });
+      }
+
+      enhancedMessages = [
+        ...enhancedMessages.slice(0, -1),
+        { ...lastModelMessage, content: contentParts }
+      ];
     }
+  }
 
-    // Filter out messages with empty content arrays (Bedrock API rejects these)
-    // This is a safety measure - ideally convertToModelMessages should handle all cases
-    let enhancedMessages = modelMessages.filter((msg: any) =>
-      msg.content && Array.isArray(msg.content) && msg.content.length > 0
-    );
-
-    // Update the last message with formatted content if it's a user message
-    if (enhancedMessages.length >= 1) {
-      const lastModelMessage = enhancedMessages[enhancedMessages.length - 1];
-      if (lastModelMessage.role === 'user') {
-        // Build content array with text and file parts
-        const contentParts: any[] = [
-          { type: 'text', text: formattedTextContent }
-        ];
-
-        // Add image parts back
-        for (const filePart of fileParts) {
-          contentParts.push({
-            type: 'image',
-            image: filePart.url,
-            mimeType: filePart.mediaType
-          });
-        }
-
-        enhancedMessages = [
-          ...enhancedMessages.slice(0, -1),
-          { ...lastModelMessage, content: contentParts }
-        ];
+  // Add cache point to the last assistant message in conversation history
+  // This caches the entire conversation prefix for subsequent requests
+  // Strategy: system (cached) + history with last assistant (cached) + new user message
+  if (enhancedMessages.length >= 2) {
+    // Find the last assistant message (should be second-to-last, before current user message)
+    for (let i = enhancedMessages.length - 2; i >= 0; i--) {
+      if (enhancedMessages[i].role === 'assistant') {
+        enhancedMessages[i] = {
+          ...enhancedMessages[i],
+          providerOptions: {
+            bedrock: { cachePoint: { type: 'default' } },
+          },
+        };
+        break; // Only cache the last assistant message
       }
     }
+  }
 
-    // Add cache point to the last assistant message in conversation history
-    // This caches the entire conversation prefix for subsequent requests
-    // Strategy: system (cached) + history with last assistant (cached) + new user message
-    if (enhancedMessages.length >= 2) {
-      // Find the last assistant message (should be second-to-last, before current user message)
-      for (let i = enhancedMessages.length - 2; i >= 0; i--) {
-        if (enhancedMessages[i].role === 'assistant') {
-          enhancedMessages[i] = {
-            ...enhancedMessages[i],
-            providerOptions: {
-              bedrock: { cachePoint: { type: 'default' } },
-            },
-          };
-          break; // Only cache the last assistant message
-        }
-      }
-    }
-
-    // Get AI model from environment configuration
-    const { model, providerOptions, headers } = getAIModel();
-
-    // System message with cache point for Bedrock (requires 1024+ tokens)
-    const systemMessageWithCache = {
+  // System messages with multiple cache breakpoints for optimal caching:
+  // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
+  // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
+  // This allows: if only user message changes, both system caches are reused
+  //              if XML changes, instruction cache is still reused
+  const systemMessages = [
+    // Cache breakpoint 1: Instructions (rarely change)
+    {
       role: 'system' as const,
       content: systemMessage,
       providerOptions: {
         bedrock: { cachePoint: { type: 'default' } },
       },
-    };
-
-    const result = streamText({
-      model,
-      messages: [systemMessageWithCache, ...enhancedMessages],
-      ...(providerOptions && { providerOptions }),
-      ...(headers && { headers }),
-      // Langfuse telemetry config (returns undefined if not configured)
-      ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
-        experimental_telemetry: getTelemetryConfig({ sessionId: validSessionId, userId }),
-      }),
-      onFinish: ({ text, usage, providerMetadata }) => {
-        console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
-        console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
-        // Update Langfuse trace with output
-        setTraceOutput(text);
+    },
+    // Cache breakpoint 2: Current diagram XML context
+    {
+      role: 'system' as const,
+      content: `Current diagram XML:\n"""xml\n${xml || ''}\n"""\nWhen using edit_diagram, COPY search patterns exactly from this XML - attribute order matters!`,
+      providerOptions: {
+        bedrock: { cachePoint: { type: 'default' } },
       },
-      tools: {
-        // Client-side tool that will be executed on the client
-        display_diagram: {
-          description: `Display a diagram on draw.io. Pass the XML content inside <root> tags.
+    },
+  ];
+
+  const allMessages = [...systemMessages, ...enhancedMessages];
+
+  const result = streamText({
+    model,
+    messages: allMessages,
+    ...(providerOptions && { providerOptions }),
+    ...(headers && { headers }),
+    // Langfuse telemetry config (returns undefined if not configured)
+    ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
+      experimental_telemetry: getTelemetryConfig({ sessionId: validSessionId, userId }),
+    }),
+    onFinish: ({ text, usage, providerMetadata }) => {
+      console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
+      console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
+      setTraceOutput(text);
+    },
+    tools: {
+      // Client-side tool that will be executed on the client
+      display_diagram: {
+        description: `Display a diagram on draw.io. Pass the XML content inside <root> tags.
 
 VALIDATION RULES (XML will be rejected if violated):
 1. All mxCell elements must be DIRECT children of <root> - never nested
@@ -326,49 +222,51 @@ Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
 - For animated connectors, add "flowAnimation=1" to edge style.
 `,
-          inputSchema: z.object({
-            xml: z.string().describe("XML string to be displayed on draw.io")
-          })
-        },
-        edit_diagram: {
-          description: `Edit specific parts of the current diagram by replacing exact line matches. Use this tool to make targeted fixes without regenerating the entire XML.
+        inputSchema: z.object({
+          xml: z.string().describe("XML string to be displayed on draw.io")
+        })
+      },
+      edit_diagram: {
+        description: `Edit specific parts of the current diagram by replacing exact line matches. Use this tool to make targeted fixes without regenerating the entire XML.
+CRITICAL: Copy-paste the EXACT search pattern from the "Current diagram XML" in system context. Do NOT reorder attributes or reformat - the attribute order in draw.io XML varies and you MUST match it exactly.
 IMPORTANT: Keep edits concise:
+- COPY the exact mxCell line from the current XML (attribute order matters!)
 - Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
 - Break large changes into multiple smaller edits
 - Each search must contain complete lines (never truncate mid-line)
 - First match only - be specific enough to target the right element`,
-          inputSchema: z.object({
-            edits: z.array(z.object({
-              search: z.string().describe("Exact lines to search for (including whitespace and indentation)"),
-              replace: z.string().describe("Replacement lines")
-            })).describe("Array of search/replace pairs to apply sequentially")
-          })
-        },
+        inputSchema: z.object({
+          edits: z.array(z.object({
+            search: z.string().describe("EXACT lines copied from current XML (preserve attribute order!)"),
+            replace: z.string().describe("Replacement lines")
+          })).describe("Array of search/replace pairs to apply sequentially")
+        })
       },
-      temperature: 0,
-    });
+    },
+    temperature: 0,
+  });
 
-    // Error handler function to provide detailed error messages
-    function errorHandler(error: unknown) {
-      if (error == null) {
-        return 'unknown error';
-      }
-
-      const errorString = typeof error === 'string'
-        ? error
-        : error instanceof Error
-          ? error.message
-          : JSON.stringify(error);
-
-      // Check for image not supported error (e.g., DeepSeek models)
-      if (errorString.includes('image_url') ||
-          errorString.includes('unknown variant') ||
-          (errorString.includes('image') && errorString.includes('not supported'))) {
-        return 'This model does not support image inputs. Please remove the image and try again, or switch to a vision-capable model.';
-      }
-
-      return errorString;
+  // Error handler function to provide detailed error messages
+  function errorHandler(error: unknown) {
+    if (error == null) {
+      return 'unknown error';
     }
+
+    const errorString = typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : JSON.stringify(error);
+
+    // Check for image not supported error (e.g., DeepSeek models)
+    if (errorString.includes('image_url') ||
+      errorString.includes('unknown variant') ||
+      (errorString.includes('image') && errorString.includes('not supported'))) {
+      return 'This model does not support image inputs. Please remove the image and try again, or switch to a vision-capable model.';
+    }
+
+    return errorString;
+  }
 
   return result.toUIMessageStreamResponse({
     onError: errorHandler,

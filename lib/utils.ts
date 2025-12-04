@@ -177,6 +177,37 @@ export function replaceNodes(currentXML: string, nodes: string): string {
 }
 
 /**
+ * Create a character count dictionary from a string
+ * Used for attribute-order agnostic comparison
+ */
+function charCountDict(str: string): Map<string, number> {
+  const dict = new Map<string, number>();
+  for (const char of str) {
+    dict.set(char, (dict.get(char) || 0) + 1);
+  }
+  return dict;
+}
+
+/**
+ * Compare two strings by character frequency (order-agnostic)
+ */
+function sameCharFrequency(a: string, b: string): boolean {
+  const trimmedA = a.trim();
+  const trimmedB = b.trim();
+  if (trimmedA.length !== trimmedB.length) return false;
+
+  const dictA = charCountDict(trimmedA);
+  const dictB = charCountDict(trimmedB);
+
+  if (dictA.size !== dictB.size) return false;
+
+  for (const [char, count] of dictA) {
+    if (dictB.get(char) !== count) return false;
+  }
+  return true;
+}
+
+/**
  * Replace specific parts of XML content using search and replace pairs
  * @param xmlContent - The original XML string
  * @param searchReplacePairs - Array of {search: string, replace: string} objects
@@ -272,6 +303,28 @@ export function replaceXMLParts(
         // Re-format after substring replacement
         result = formatXML(result);
         continue; // Skip the line-based replacement below
+      }
+    }
+
+    // Fourth try: character frequency match (attribute-order agnostic)
+    // This handles cases where the model generates XML with different attribute order
+    if (!matchFound) {
+      for (let i = startLineNum; i <= resultLines.length - searchLines.length; i++) {
+        let matches = true;
+
+        for (let j = 0; j < searchLines.length; j++) {
+          if (!sameCharFrequency(resultLines[i + j], searchLines[j])) {
+            matches = false;
+            break;
+          }
+        }
+
+        if (matches) {
+          matchStartLine = i;
+          matchEndLine = i + searchLines.length;
+          matchFound = true;
+          break;
+        }
       }
     }
 
