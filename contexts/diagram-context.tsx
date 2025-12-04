@@ -133,22 +133,20 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     fileContent = xmlContent;
                     mimeType = "application/xml";
                     extension = ".drawio";
-
-                    // Log XML to Langfuse
-                    logSaveToLangfuse(xmlContent, filename, format, sessionId);
                 } else if (format === "png") {
                     // PNG data comes as base64 data URL
                     fileContent = exportData;
                     mimeType = "image/png";
                     extension = ".png";
-                    logSaveToLangfuse(exportData, filename, format, sessionId);
                 } else {
                     // SVG format
                     fileContent = exportData;
                     mimeType = "image/svg+xml";
                     extension = ".svg";
-                    logSaveToLangfuse(exportData, filename, format, sessionId);
                 }
+
+                // Log save event to Langfuse (flags the trace)
+                logSaveToLangfuse(filename, format, sessionId);
 
                 // Handle download
                 let url: string;
@@ -179,13 +177,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         drawioRef.current.exportDiagram({ format: drawioFormat });
     };
 
-    // Log save event to Langfuse
-    const logSaveToLangfuse = async (content: string, filename: string, format: string, sessionId?: string) => {
+    // Log save event to Langfuse (just flags the trace, doesn't send content)
+    const logSaveToLangfuse = async (filename: string, format: string, sessionId?: string) => {
         try {
             await fetch("/api/log-save", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ xml: content, filename, format, sessionId }),
+                body: JSON.stringify({ filename, format, sessionId }),
             });
         } catch (error) {
             console.warn("Failed to log save to Langfuse:", error);

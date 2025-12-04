@@ -1,5 +1,25 @@
 import { observe, updateActiveTrace } from '@langfuse/tracing';
+import { LangfuseClient } from '@langfuse/client';
 import * as api from '@opentelemetry/api';
+
+// Singleton LangfuseClient instance for direct API calls
+let langfuseClient: LangfuseClient | null = null;
+
+export function getLangfuseClient(): LangfuseClient | null {
+  if (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY) {
+    return null;
+  }
+
+  if (!langfuseClient) {
+    langfuseClient = new LangfuseClient({
+      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+      secretKey: process.env.LANGFUSE_SECRET_KEY,
+      baseUrl: process.env.LANGFUSE_BASEURL,
+    });
+  }
+
+  return langfuseClient;
+}
 
 // Check if Langfuse is configured
 export function isLangfuseEnabled(): boolean {

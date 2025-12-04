@@ -1,26 +1,34 @@
-import { LangfuseClient } from '@langfuse/client';
+import { getLangfuseClient } from '@/lib/langfuse';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
+
+const feedbackSchema = z.object({
+  messageId: z.string().min(1).max(200),
+  feedback: z.enum(['good', 'bad']),
+  sessionId: z.string().min(1).max(200).optional(),
+});
 
 export async function POST(req: Request) {
-  // Check if Langfuse is configured
-  if (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY) {
+  const langfuse = getLangfuseClient();
+  if (!langfuse) {
     return Response.json({ success: true, logged: false });
   }
 
-  const { messageId, feedback, sessionId } = await req.json();
+  // Validate input
+  let data;
+  try {
+    data = feedbackSchema.parse(await req.json());
+  } catch {
+    return Response.json({ success: false, error: 'Invalid input' }, { status: 400 });
+  }
+
+  const { messageId, feedback, sessionId } = data;
 
   // Get user IP for tracking
   const forwardedFor = req.headers.get('x-forwarded-for');
   const userId = forwardedFor?.split(',')[0]?.trim() || 'anonymous';
 
   try {
-    // Create Langfuse client
-    const langfuse = new LangfuseClient({
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-      secretKey: process.env.LANGFUSE_SECRET_KEY,
-      baseUrl: process.env.LANGFUSE_BASEURL,
-    });
-
     // Find the most recent chat trace for this session to attach the score to
     const tracesResponse = await langfuse.api.trace.list({
       sessionId,
@@ -90,6 +98,6 @@ export async function POST(req: Request) {
     return Response.json({ success: true, logged: true });
   } catch (error) {
     console.error('Langfuse feedback error:', error);
-    return Response.json({ success: false, error: String(error) }, { status: 500 });
+    return Response.json({ success: false, error: 'Failed to log feedback' }, { status: 500 });
   }
 }

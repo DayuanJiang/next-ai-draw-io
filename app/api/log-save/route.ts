@@ -1,29 +1,33 @@
-import { LangfuseClient } from '@langfuse/client';
+import { getLangfuseClient } from '@/lib/langfuse';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
+
+const saveSchema = z.object({
+  filename: z.string().min(1).max(255),
+  format: z.enum(['drawio', 'png', 'svg']),
+  sessionId: z.string().min(1).max(200).optional(),
+});
 
 export async function POST(req: Request) {
-  // Check if Langfuse is configured
-  if (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY) {
+  const langfuse = getLangfuseClient();
+  if (!langfuse) {
     return Response.json({ success: true, logged: false });
   }
 
-  const { xml, filename, format, sessionId } = await req.json();
+  // Validate input
+  let data;
+  try {
+    data = saveSchema.parse(await req.json());
+  } catch {
+    return Response.json({ success: false, error: 'Invalid input' }, { status: 400 });
+  }
 
-  // Get user IP for tracking
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  const userId = forwardedFor?.split(',')[0]?.trim() || 'anonymous';
+  const { filename, format, sessionId } = data;
 
   try {
-    // Create Langfuse client
-    const langfuse = new LangfuseClient({
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-      secretKey: process.env.LANGFUSE_SECRET_KEY,
-      baseUrl: process.env.LANGFUSE_BASEURL,
-    });
-
     const timestamp = new Date().toISOString();
 
-    // Find the most recent chat trace for this session to attach the save event to
+    // Find the most recent chat trace for this session to attach the save flag
     const tracesResponse = await langfuse.api.trace.list({
       sessionId,
       limit: 1,
@@ -33,54 +37,29 @@ export async function POST(req: Request) {
     const latestTrace = traces[0];
 
     if (latestTrace) {
-      // Create a span on the existing chat trace for the save event
+      // Add a score to the existing trace to flag that user saved
       await langfuse.api.ingestion.batch({
         batch: [
           {
-            type: 'span-create',
+            type: 'score-create',
             id: randomUUID(),
             timestamp,
             body: {
               id: randomUUID(),
               traceId: latestTrace.id,
-              name: 'diagram-save',
-              input: { filename, format },
-              output: { xmlPreview: xml?.substring(0, 500), contentLength: xml?.length || 0 },
-              metadata: { source: 'save-button' },
-              startTime: timestamp,
-              endTime: timestamp,
-            },
-          },
-        ],
-      });
-    } else {
-      // No trace found - create a standalone trace
-      const traceId = randomUUID();
-
-      await langfuse.api.ingestion.batch({
-        batch: [
-          {
-            type: 'trace-create',
-            id: randomUUID(),
-            timestamp,
-            body: {
-              id: traceId,
-              name: 'diagram-save',
-              sessionId,
-              userId,
-              input: { filename, format },
-              output: { xmlPreview: xml?.substring(0, 500), contentLength: xml?.length || 0 },
-              metadata: { source: 'save-button', note: 'standalone - no chat trace found' },
-              timestamp,
+              name: 'diagram-saved',
+              value: 1,
+              comment: `User saved diagram as ${filename}.${format}`,
             },
           },
         ],
       });
     }
+    // If no trace found, skip logging (user hasn't chatted yet)
 
-    return Response.json({ success: true, logged: true });
+    return Response.json({ success: true, logged: !!latestTrace });
   } catch (error) {
     console.error('Langfuse save error:', error);
-    return Response.json({ success: false, error: String(error) }, { status: 500 });
+    return Response.json({ success: false, error: 'Failed to log save' }, { status: 500 });
   }
 }
