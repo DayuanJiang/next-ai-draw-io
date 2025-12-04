@@ -68,6 +68,12 @@ export default function ChatPanel({
     // Store XML snapshots for each user message (keyed by message index)
     const xmlSnapshotsRef = useRef<Map<number, string>>(new Map());
 
+    // Ref to track latest chartXML for use in callbacks (avoids stale closure)
+    const chartXMLRef = useRef(chartXML);
+    useEffect(() => {
+        chartXMLRef.current = chartXML;
+    }, [chartXML]);
+
     const { messages, sendMessage, addToolResult, status, error, setMessages } =
         useChat({
             transport: new DefaultChatTransport({
@@ -100,10 +106,12 @@ export default function ChatPanel({
                     let currentXml = "";
                     try {
                         console.log("[edit_diagram] Starting...");
-                        // Use chartXML from context directly - more reliable than export
+                        // Use chartXML from ref directly - more reliable than export
                         // especially on Vercel where DrawIO iframe may have latency issues
-                        if (chartXML) {
-                            currentXml = chartXML;
+                        // Using ref to avoid stale closure in callback
+                        const cachedXML = chartXMLRef.current;
+                        if (cachedXML) {
+                            currentXml = cachedXML;
                             console.log("[edit_diagram] Using cached chartXML, length:", currentXml.length);
                         } else {
                             // Fallback to export only if no cached XML
