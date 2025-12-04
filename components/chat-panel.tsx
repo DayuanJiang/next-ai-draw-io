@@ -69,6 +69,29 @@ export default function ChatPanel({
             transport: new DefaultChatTransport({
                 api: "/api/chat",
             }),
+            // When an error occurs, add it as a system message so it can be cleared with setMessages
+            onError: (error) => {
+                // Silence access code error in console since it's handled by UI
+                if (!error.message.includes("Invalid or missing access code")) {
+                    console.error("Chat error:", error);
+                }
+                
+                // Add system message for error so it can be cleared
+                setMessages((currentMessages: any) => {
+                    const errorMessage = {
+                        id: `error-${Date.now()}`,
+                        role: 'system',
+                        content: error.message,
+                        parts: [{ type: 'text', text: error.message }]
+                    };
+                    return [...currentMessages, errorMessage];
+                });
+
+                if (error.message.includes("Invalid or missing access code")) {
+                    // Also open settings dialog to help user fix it
+                    setShowSettingsDialog(true);
+                }
+            },
             async onToolCall({ toolCall }) {
                 if (toolCall.toolName === "display_diagram") {
                     const { xml } = toolCall.input as { xml: string };
@@ -130,9 +153,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         });
                     }
                 }
-            },
-            onError: (error) => {
-                console.error("Chat error:", error);
             },
         });
 
@@ -278,7 +298,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <main className="flex-1 overflow-hidden">
                 <ChatMessageDisplay
                     messages={messages}
-                    error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
                 />
