@@ -43,12 +43,22 @@ export function setTraceInput(params: {
 }
 
 // Update trace with output and end the span
-export function setTraceOutput(output: string) {
+export function setTraceOutput(output: string, usage?: { promptTokens?: number; completionTokens?: number }) {
   if (!isLangfuseEnabled()) return;
 
   updateActiveTrace({ output });
+
   const activeSpan = api.trace.getActiveSpan();
   if (activeSpan) {
+    // Manually set usage attributes since AI SDK Bedrock streaming doesn't provide them
+    if (usage?.promptTokens) {
+      activeSpan.setAttribute('ai.usage.promptTokens', usage.promptTokens);
+      activeSpan.setAttribute('gen_ai.usage.input_tokens', usage.promptTokens);
+    }
+    if (usage?.completionTokens) {
+      activeSpan.setAttribute('ai.usage.completionTokens', usage.completionTokens);
+      activeSpan.setAttribute('gen_ai.usage.output_tokens', usage.completionTokens);
+    }
     activeSpan.end();
   }
 }

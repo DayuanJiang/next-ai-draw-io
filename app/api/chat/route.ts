@@ -182,7 +182,12 @@ ${lastMessageText}
     onFinish: ({ text, usage, providerMetadata }) => {
       console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
       console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
-      setTraceOutput(text);
+      // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
+      // AI SDK uses inputTokens/outputTokens, Langfuse expects promptTokens/completionTokens
+      setTraceOutput(text, {
+        promptTokens: usage?.inputTokens,
+        completionTokens: usage?.outputTokens,
+      });
     },
     tools: {
       // Client-side tool that will be executed on the client
