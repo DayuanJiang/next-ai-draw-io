@@ -176,6 +176,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 let chartXml = await onFetchChart();
                 chartXml = formatXML(chartXml);
 
+                // Update ref directly to avoid race condition with React's async state update
+                // This ensures edit_diagram has the correct XML before AI responds
+                chartXMLRef.current = chartXml;
+
                 const parts: any[] = [{ type: "text", text: input }];
 
                 if (files.length > 0) {
@@ -256,6 +260,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         // Restore the diagram to the saved state
         onDisplayChart(savedXml);
 
+        // Update ref directly to ensure edit_diagram has the correct XML
+        chartXMLRef.current = savedXml;
+
         // Clean up snapshots for messages after the user message (they will be removed)
         for (const key of xmlSnapshotsRef.current.keys()) {
             if (key > userMessageIndex) {
@@ -298,6 +305,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
         // Restore the diagram to the saved state
         onDisplayChart(savedXml);
+
+        // Update ref directly to ensure edit_diagram has the correct XML
+        chartXMLRef.current = savedXml;
 
         // Clean up snapshots for messages after the user message (they will be removed)
         for (const key of xmlSnapshotsRef.current.keys()) {
