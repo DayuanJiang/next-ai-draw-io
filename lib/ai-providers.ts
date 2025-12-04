@@ -36,22 +36,47 @@ const ANTHROPIC_BETA_HEADERS = {
   'anthropic-beta': 'fine-grained-tool-streaming-2025-05-14',
 };
 
+// Map of provider to required environment variable
+const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
+  bedrock: 'AWS_ACCESS_KEY_ID',
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  google: 'GOOGLE_GENERATIVE_AI_API_KEY',
+  azure: 'AZURE_API_KEY',
+  ollama: null, // No credentials needed for local Ollama
+  openrouter: 'OPENROUTER_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+};
+
+/**
+ * Auto-detect provider based on available API keys
+ * Returns the provider if exactly one is configured, otherwise null
+ */
+function detectProvider(): ProviderName | null {
+  const configuredProviders: ProviderName[] = [];
+
+  for (const [provider, envVar] of Object.entries(PROVIDER_ENV_VARS)) {
+    if (envVar === null) {
+      // Skip ollama - it doesn't require credentials
+      continue;
+    }
+    if (process.env[envVar]) {
+      configuredProviders.push(provider as ProviderName);
+    }
+  }
+
+  if (configuredProviders.length === 1) {
+    return configuredProviders[0];
+  }
+
+  return null;
+}
+
 /**
  * Validate that required API keys are present for the selected provider
  */
 function validateProviderCredentials(provider: ProviderName): void {
-  const requiredEnvVars: Record<ProviderName, string | null> = {
-    bedrock: 'AWS_ACCESS_KEY_ID',
-    openai: 'OPENAI_API_KEY',
-    anthropic: 'ANTHROPIC_API_KEY',
-    google: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    azure: 'AZURE_API_KEY',
-    ollama: null, // No credentials needed for local Ollama
-    openrouter: 'OPENROUTER_API_KEY',
-    deepseek: 'DEEPSEEK_API_KEY',
-  };
-
-  const requiredVar = requiredEnvVars[provider];
+  const requiredVar = PROVIDER_ENV_VARS[provider];
   if (requiredVar && !process.env[requiredVar]) {
     throw new Error(
       `${requiredVar} environment variable is required for ${provider} provider. ` +
@@ -80,13 +105,48 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  */
 export function getAIModel(): ModelConfig {
-  const provider = (process.env.AI_PROVIDER || 'bedrock') as ProviderName;
   const modelId = process.env.AI_MODEL;
 
   if (!modelId) {
     throw new Error(
       `AI_MODEL environment variable is required. Example: AI_MODEL=claude-sonnet-4-5`
     );
+  }
+
+  // Determine provider: explicit config > auto-detect > error
+  let provider: ProviderName;
+  if (process.env.AI_PROVIDER) {
+    provider = process.env.AI_PROVIDER as ProviderName;
+  } else {
+    const detected = detectProvider();
+    if (detected) {
+      provider = detected;
+      console.log(`[AI Provider] Auto-detected provider: ${provider}`);
+    } else {
+      // List configured providers for better error message
+      const configured = Object.entries(PROVIDER_ENV_VARS)
+        .filter(([, envVar]) => envVar && process.env[envVar as string])
+        .map(([p]) => p);
+
+      if (configured.length === 0) {
+        throw new Error(
+          `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
+          `- DEEPSEEK_API_KEY for DeepSeek\n` +
+          `- OPENAI_API_KEY for OpenAI\n` +
+          `- ANTHROPIC_API_KEY for Anthropic\n` +
+          `- GOOGLE_GENERATIVE_AI_API_KEY for Google\n` +
+          `- AWS_ACCESS_KEY_ID for Bedrock\n` +
+          `- OPENROUTER_API_KEY for OpenRouter\n` +
+          `- AZURE_API_KEY for Azure\n` +
+          `Or set AI_PROVIDER=ollama for local Ollama.`
+        );
+      } else {
+        throw new Error(
+          `Multiple AI providers configured (${configured.join(', ')}). ` +
+          `Please set AI_PROVIDER to specify which one to use.`
+        );
+      }
+    }
   }
 
   // Validate provider credentials
