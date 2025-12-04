@@ -21,6 +21,7 @@ interface ModelConfig {
   model: any;
   providerOptions?: any;
   headers?: Record<string, string>;
+  modelId: string;
 }
 
 // Bedrock provider options for Anthropic beta features
@@ -91,7 +92,6 @@ export function getAIModel(): ModelConfig {
   // Validate provider credentials
   validateProviderCredentials(provider);
 
-  // Log initialization for debugging
   console.log(`[AI Provider] Initializing ${provider} with model: ${modelId}`);
 
   let model: any;
@@ -191,10 +191,5 @@ export function getAIModel(): ModelConfig {
       );
   }
 
-  // Log if provider options or headers are being applied
-  if (providerOptions || headers) {
-    console.log('[AI Provider] Applying provider-specific options/headers');
-  }
-
-  return { model, providerOptions, headers };
+  return { model, providerOptions, headers, modelId };
 }

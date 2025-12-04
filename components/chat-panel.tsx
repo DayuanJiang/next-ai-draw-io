@@ -144,9 +144,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages]);
 
-    useEffect(() => {
-        console.log("[ChatPanel] Status changed to:", status);
-    }, [status]);
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
