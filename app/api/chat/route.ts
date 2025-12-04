@@ -2,6 +2,8 @@ import { streamText, convertToModelMessages, createUIMessageStream, createUIMess
 import { getAIModel } from '@/lib/ai-providers';
 import { findCachedResponse } from '@/lib/cached-responses';
 import { z } from "zod";
+import { observe, updateActiveTrace, getActiveSpanId } from '@langfuse/tracing';
+import * as api from '@opentelemetry/api';
 
 export const maxDuration = 300;
 
@@ -28,22 +30,36 @@ function createCachedStreamResponse(xml: string): Response {
   return createUIMessageStreamResponse({ stream });
 }
 
-export async function POST(req: Request) {
-  try {
-    const { messages, xml, sessionId } = await req.json();
+// Inner handler function
+async function handleChatRequest(req: Request): Promise<Response> {
+  const { messages, xml, sessionId } = await req.json();
 
-    // Get user IP for Langfuse tracking
-    const forwardedFor = req.headers.get('x-forwarded-for');
-    const userId = forwardedFor?.split(',')[0]?.trim() || 'anonymous';
+  // Get user IP for Langfuse tracking
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  const userId = forwardedFor?.split(',')[0]?.trim() || 'anonymous';
 
-    // Validate sessionId for Langfuse (must be string, max 200 chars)
-    const validSessionId = sessionId && typeof sessionId === 'string' && sessionId.length <= 200
-      ? sessionId
-      : undefined;
+  // Validate sessionId for Langfuse (must be string, max 200 chars)
+  const validSessionId = sessionId && typeof sessionId === 'string' && sessionId.length <= 200
+    ? sessionId
+    : undefined;
 
-    // === CACHE CHECK START ===
-    const isFirstMessage = messages.length === 1;
-    const isEmptyDiagram = !xml || xml.trim() === '' || isMinimalDiagram(xml);
+  // Extract user input text for Langfuse trace
+  const currentMessage = messages[messages.length - 1];
+  const userInputText = currentMessage?.parts?.find((p: any) => p.type === 'text')?.text || '';
+
+  // Update Langfuse trace with input, session, and user (if configured)
+  if (process.env.LANGFUSE_PUBLIC_KEY) {
+    updateActiveTrace({
+      name: 'chat',
+      input: userInputText,
+      sessionId: validSessionId,
+      userId: userId,
+    });
+  }
+
+  // === CACHE CHECK START ===
+  const isFirstMessage = messages.length === 1;
+  const isEmptyDiagram = !xml || xml.trim() === '' || isMinimalDiagram(xml);
 
     if (isFirstMessage && isEmptyDiagram) {
       const lastMessage = messages[0];
@@ -270,19 +286,26 @@ ${lastMessageText}
       ...(process.env.LANGFUSE_PUBLIC_KEY && {
         experimental_telemetry: {
           isEnabled: true,
+          recordInputs: true,
+          recordOutputs: true,
           metadata: {
             sessionId: validSessionId,
             userId: userId,
           },
         },
       }),
-      onFinish: ({ usage, providerMetadata }) => {
-        console.log('[Cache] Usage:', JSON.stringify({
-          inputTokens: usage?.inputTokens,
-          outputTokens: usage?.outputTokens,
-          cachedInputTokens: usage?.cachedInputTokens,
-        }, null, 2));
-        console.log('[Cache] Provider metadata:', JSON.stringify(providerMetadata, null, 2));
+      onFinish: ({ text, usage, providerMetadata }) => {
+        console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
+        console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
+        // Update Langfuse trace with output and end the span
+        if (process.env.LANGFUSE_PUBLIC_KEY) {
+          updateActiveTrace({ output: text });
+          // End the active span to ensure trace is properly closed
+          const activeSpan = api.trace.getActiveSpan();
+          if (activeSpan) {
+            activeSpan.end();
+          }
+        }
       },
       tools: {
         // Client-side tool that will be executed on the client
@@ -366,14 +389,40 @@ IMPORTANT: Keep edits concise:
       return errorString;
     }
 
-    return result.toUIMessageStreamResponse({
-      onError: errorHandler,
-    });
-  } catch (error) {
-    console.error('Error in chat route:', error);
-    return Response.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  return result.toUIMessageStreamResponse({
+    onError: errorHandler,
+  });
+}
+
+// Wrap the POST handler with observe() for Langfuse tracing
+// endOnExit: false keeps the trace open until streaming completes
+const observedHandler = process.env.LANGFUSE_PUBLIC_KEY
+  ? observe(
+      async (req: Request) => {
+        try {
+          return await handleChatRequest(req);
+        } catch (error) {
+          console.error('Error in chat route:', error);
+          return Response.json(
+            { error: 'Internal server error' },
+            { status: 500 }
+          );
+        }
+      },
+      { name: 'chat', endOnExit: false }
+    )
+  : async (req: Request) => {
+      try {
+        return await handleChatRequest(req);
+      } catch (error) {
+        console.error('Error in chat route:', error);
+        return Response.json(
+          { error: 'Internal server error' },
+          { status: 500 }
+        );
+      }
+    };
+
+export async function POST(req: Request) {
+  return observedHandler(req);
 }
