@@ -328,6 +328,44 @@ export function replaceXMLParts(
       }
     }
 
+    // Fifth try: Match by mxCell id attribute
+    // Extract id from search pattern and find the element with that id
+    if (!matchFound) {
+      const idMatch = search.match(/id="([^"]+)"/);
+      if (idMatch) {
+        const searchId = idMatch[1];
+        // Find lines that contain this id
+        for (let i = startLineNum; i < resultLines.length; i++) {
+          if (resultLines[i].includes(`id="${searchId}"`)) {
+            // Found the element with matching id
+            // Now find the extent of this element (it might span multiple lines)
+            let endLine = i + 1;
+            const line = resultLines[i].trim();
+
+            // Check if it's a self-closing tag or has children
+            if (!line.endsWith('/>')) {
+              // Find the closing tag or the end of the mxCell block
+              let depth = 1;
+              while (endLine < resultLines.length && depth > 0) {
+                const currentLine = resultLines[endLine].trim();
+                if (currentLine.startsWith('<') && !currentLine.startsWith('</') && !currentLine.endsWith('/>')) {
+                  depth++;
+                } else if (currentLine.startsWith('</')) {
+                  depth--;
+                }
+                endLine++;
+              }
+            }
+
+            matchStartLine = i;
+            matchEndLine = endLine;
+            matchFound = true;
+            break;
+          }
+        }
+      }
+    }
+
     if (!matchFound) {
       throw new Error(`Search pattern not found in the diagram. The pattern may not exist in the current structure.`);
     }

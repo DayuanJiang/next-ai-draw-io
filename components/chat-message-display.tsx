@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
 import { convertToLegalXml, replaceNodes, validateMxCellStructure } from "@/lib/utils";
-import { Copy, Check, X, ChevronDown, ChevronUp, Cpu, Minus, Plus } from "lucide-react";
+import { Copy, Check, X, ChevronDown, ChevronUp, Cpu, Minus, Plus, ThumbsUp, ThumbsDown, RotateCcw, Pencil } from "lucide-react";
 import { CodeBlock } from "./code-block";
 
 interface EditPair {
@@ -67,6 +67,9 @@ interface ChatMessageDisplayProps {
     error?: Error | null;
     setInput: (input: string) => void;
     setFiles: (files: File[]) => void;
+    sessionId?: string;
+    onRegenerate?: (messageIndex: number) => void;
+    onEditMessage?: (messageIndex: number, newText: string) => void;
 }
 
 export function ChatMessageDisplay({
@@ -74,6 +77,9 @@ export function ChatMessageDisplay({
     error,
     setInput,
     setFiles,
+    sessionId,
+    onRegenerate,
+    onEditMessage,
 }: ChatMessageDisplayProps) {
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram();
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -84,6 +90,9 @@ export function ChatMessageDisplay({
     );
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
     const [copyFailedMessageId, setCopyFailedMessageId] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState<Record<string, "good" | "bad">>({});
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editText, setEditText] = useState<string>("");
 
     const copyMessageToClipboard = async (messageId: string, text: string) => {
         try {
@@ -94,6 +103,34 @@ export function ChatMessageDisplay({
             console.error("Failed to copy message:", err);
             setCopyFailedMessageId(messageId);
             setTimeout(() => setCopyFailedMessageId(null), 2000);
+        }
+    };
+
+    const submitFeedback = async (messageId: string, value: "good" | "bad") => {
+        // Toggle off if already selected
+        if (feedback[messageId] === value) {
+            setFeedback((prev) => {
+                const next = { ...prev };
+                delete next[messageId];
+                return next;
+            });
+            return;
+        }
+
+        setFeedback((prev) => ({ ...prev, [messageId]: value }));
+
+        try {
+            await fetch("/api/log-feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messageId,
+                    feedback: value,
+                    sessionId,
+                }),
+            });
+        } catch (error) {
+            console.warn("Failed to log feedback:", error);
         }
     };
 
@@ -253,65 +290,146 @@ export function ChatMessageDisplay({
                 <div className="py-4 space-y-4">
                     {messages.map((message, messageIndex) => {
                         const userMessageText = message.role === "user" ? getMessageTextContent(message) : "";
+                        const isLastAssistantMessage = message.role === "assistant" && (
+                            messageIndex === messages.length - 1 ||
+                            messages.slice(messageIndex + 1).every(m => m.role !== "assistant")
+                        );
+                        const isLastUserMessage = message.role === "user" && (
+                            messageIndex === messages.length - 1 ||
+                            messages.slice(messageIndex + 1).every(m => m.role !== "user")
+                        );
+                        const isEditing = editingMessageId === message.id;
                         return (
                             <div
                                 key={message.id}
                                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-message-in`}
                                 style={{ animationDelay: `${messageIndex * 50}ms` }}
                             >
-                                {message.role === "user" && userMessageText && (
-                                    <button
-                                        onClick={() => copyMessageToClipboard(message.id, userMessageText)}
-                                        className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors self-center mr-2"
-                                        title={copiedMessageId === message.id ? "Copied!" : copyFailedMessageId === message.id ? "Failed to copy" : "Copy message"}
-                                    >
-                                        {copiedMessageId === message.id ? (
-                                            <Check className="h-3.5 w-3.5 text-green-500" />
-                                        ) : copyFailedMessageId === message.id ? (
-                                            <X className="h-3.5 w-3.5 text-red-500" />
-                                        ) : (
-                                            <Copy className="h-3.5 w-3.5" />
+                                {message.role === "user" && userMessageText && !isEditing && (
+                                    <div className="flex items-center gap-1 self-center mr-2">
+                                        {/* Edit button - only on last user message */}
+                                        {onEditMessage && isLastUserMessage && (
+                                            <button
+                                                onClick={() => {
+                                                    setEditingMessageId(message.id);
+                                                    setEditText(userMessageText);
+                                                }}
+                                                className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
+                                                title="Edit message"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
                                         )}
-                                    </button>
+                                        <button
+                                            onClick={() => copyMessageToClipboard(message.id, userMessageText)}
+                                            className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
+                                            title={copiedMessageId === message.id ? "Copied!" : copyFailedMessageId === message.id ? "Failed to copy" : "Copy message"}
+                                        >
+                                            {copiedMessageId === message.id ? (
+                                                <Check className="h-3.5 w-3.5 text-green-500" />
+                                            ) : copyFailedMessageId === message.id ? (
+                                                <X className="h-3.5 w-3.5 text-red-500" />
+                                            ) : (
+                                                <Copy className="h-3.5 w-3.5" />
+                                            )}
+                                        </button>
+                                    </div>
                                 )}
                                 <div className="max-w-[85%]">
-                                    {/* Text content in bubble */}
-                                    {message.parts?.some((part: any) => part.type === "text" || part.type === "file") && (
-                                        <div
-                                            className={`px-4 py-3 text-sm leading-relaxed ${
-                                                message.role === "user"
-                                                    ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
-                                                    : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
-                                            }`}
-                                        >
-                                            {message.parts?.map((part: any, index: number) => {
-                                                switch (part.type) {
-                                                    case "text":
-                                                        return (
-                                                            <div key={index} className="whitespace-pre-wrap break-words">
-                                                                {part.text}
-                                                            </div>
-                                                        );
-                                                    case "file":
-                                                        return (
-                                                            <div key={index} className="mt-2">
-                                                                <Image
-                                                                    src={part.url}
-                                                                    width={200}
-                                                                    height={200}
-                                                                    alt={`Uploaded diagram or image for AI analysis`}
-                                                                    className="rounded-lg border border-white/20"
-                                                                    style={{
-                                                                        objectFit: "contain",
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        );
-                                                    default:
-                                                        return null;
-                                                }
-                                            })}
+                                    {/* Edit mode for user messages */}
+                                    {isEditing && message.role === "user" ? (
+                                        <div className="flex flex-col gap-2">
+                                            <textarea
+                                                value={editText}
+                                                onChange={(e) => setEditText(e.target.value)}
+                                                className="w-full min-w-[300px] px-4 py-3 text-sm rounded-2xl border border-primary bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                                                rows={Math.min(editText.split('\n').length + 1, 6)}
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Escape") {
+                                                        setEditingMessageId(null);
+                                                        setEditText("");
+                                                    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                                        e.preventDefault();
+                                                        if (editText.trim() && onEditMessage) {
+                                                            onEditMessage(messageIndex, editText.trim());
+                                                            setEditingMessageId(null);
+                                                            setEditText("");
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingMessageId(null);
+                                                        setEditText("");
+                                                    }}
+                                                    className="px-3 py-1.5 text-xs rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (editText.trim() && onEditMessage) {
+                                                            onEditMessage(messageIndex, editText.trim());
+                                                            setEditingMessageId(null);
+                                                            setEditText("");
+                                                        }
+                                                    }}
+                                                    disabled={!editText.trim()}
+                                                    className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                                                >
+                                                    Save & Submit
+                                                </button>
+                                            </div>
                                         </div>
+                                    ) : (
+                                        /* Text content in bubble */
+                                        message.parts?.some((part: any) => part.type === "text" || part.type === "file") && (
+                                            <div
+                                                className={`px-4 py-3 text-sm leading-relaxed ${
+                                                    message.role === "user"
+                                                        ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
+                                                        : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
+                                                } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+                                                onClick={() => {
+                                                    if (message.role === "user" && isLastUserMessage && onEditMessage) {
+                                                        setEditingMessageId(message.id);
+                                                        setEditText(userMessageText);
+                                                    }
+                                                }}
+                                                title={message.role === "user" && isLastUserMessage && onEditMessage ? "Click to edit" : undefined}
+                                            >
+                                                {message.parts?.map((part: any, index: number) => {
+                                                    switch (part.type) {
+                                                        case "text":
+                                                            return (
+                                                                <div key={index} className="whitespace-pre-wrap break-words">
+                                                                    {part.text}
+                                                                </div>
+                                                            );
+                                                        case "file":
+                                                            return (
+                                                                <div key={index} className="mt-2">
+                                                                    <Image
+                                                                        src={part.url}
+                                                                        width={200}
+                                                                        height={200}
+                                                                        alt={`Uploaded diagram or image for AI analysis`}
+                                                                        className="rounded-lg border border-white/20"
+                                                                        style={{
+                                                                            objectFit: "contain",
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        default:
+                                                            return null;
+                                                    }
+                                                })}
+                                            </div>
+                                        )
                                     )}
                                     {/* Tool calls outside bubble */}
                                     {message.parts?.map((part: any) => {
@@ -320,6 +438,63 @@ export function ChatMessageDisplay({
                                         }
                                         return null;
                                     })}
+                                    {/* Action buttons for assistant messages */}
+                                    {message.role === "assistant" && (
+                                        <div className="flex items-center gap-1 mt-2">
+                                            {/* Copy button */}
+                                            <button
+                                                onClick={() => copyMessageToClipboard(message.id, getMessageTextContent(message))}
+                                                className={`p-1.5 rounded-lg transition-colors ${
+                                                    copiedMessageId === message.id
+                                                        ? "text-green-600 bg-green-100"
+                                                        : "text-muted-foreground/60 hover:text-foreground hover:bg-muted"
+                                                }`}
+                                                title={copiedMessageId === message.id ? "Copied!" : "Copy response"}
+                                            >
+                                                {copiedMessageId === message.id ? (
+                                                    <Check className="h-3.5 w-3.5" />
+                                                ) : (
+                                                    <Copy className="h-3.5 w-3.5" />
+                                                )}
+                                            </button>
+                                            {/* Regenerate button - only on last assistant message */}
+                                            {onRegenerate && isLastAssistantMessage && (
+                                                <button
+                                                    onClick={() => onRegenerate(messageIndex)}
+                                                    className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
+                                                    title="Regenerate response"
+                                                >
+                                                    <RotateCcw className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                            {/* Divider */}
+                                            <div className="w-px h-4 bg-border mx-1" />
+                                            {/* Thumbs up */}
+                                            <button
+                                                onClick={() => submitFeedback(message.id, "good")}
+                                                className={`p-1.5 rounded-lg transition-colors ${
+                                                    feedback[message.id] === "good"
+                                                        ? "text-green-600 bg-green-100"
+                                                        : "text-muted-foreground/60 hover:text-green-600 hover:bg-green-50"
+                                                }`}
+                                                title="Good response"
+                                            >
+                                                <ThumbsUp className="h-3.5 w-3.5" />
+                                            </button>
+                                            {/* Thumbs down */}
+                                            <button
+                                                onClick={() => submitFeedback(message.id, "bad")}
+                                                className={`p-1.5 rounded-lg transition-colors ${
+                                                    feedback[message.id] === "bad"
+                                                        ? "text-red-600 bg-red-100"
+                                                        : "text-muted-foreground/60 hover:text-red-600 hover:bg-red-50"
+                                                }`}
+                                                title="Bad response"
+                                            >
+                                                <ThumbsDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

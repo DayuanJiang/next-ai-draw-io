@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { FaGithub } from "react-icons/fa";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import Link from "next/link";
@@ -63,6 +64,9 @@ export default function ChatPanel({
 
     // Generate a unique session ID for Langfuse tracing
     const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+
+    // Store XML snapshots for each user message (keyed by message index)
+    const xmlSnapshotsRef = useRef<Map<number, string>>(new Map());
 
     const { messages, sendMessage, addToolResult, status, error, setMessages } =
         useChat({
@@ -172,6 +176,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }
                 }
 
+                // Save XML snapshot for this message (will be at index = current messages.length)
+                const messageIndex = messages.length;
+                xmlSnapshotsRef.current.set(messageIndex, chartXml);
+
                 sendMessage(
                     { parts },
                     {
@@ -198,6 +206,112 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
     const handleFileChange = (newFiles: File[]) => {
         setFiles(newFiles);
+    };
+
+    const handleRegenerate = async (messageIndex: number) => {
+        const isProcessing = status === "streaming" || status === "submitted";
+        if (isProcessing) return;
+
+        // Find the user message before this assistant message
+        let userMessageIndex = messageIndex - 1;
+        while (userMessageIndex >= 0 && messages[userMessageIndex].role !== "user") {
+            userMessageIndex--;
+        }
+
+        if (userMessageIndex < 0) return;
+
+        const userMessage = messages[userMessageIndex];
+        const userParts = userMessage.parts;
+
+        // Get the text from the user message
+        const textPart = userParts?.find((p: any) => p.type === "text");
+        if (!textPart) return;
+
+        // Get the saved XML snapshot for this user message
+        const savedXml = xmlSnapshotsRef.current.get(userMessageIndex);
+        if (!savedXml) {
+            console.error("No saved XML snapshot for message index:", userMessageIndex);
+            return;
+        }
+
+        // Restore the diagram to the saved state
+        onDisplayChart(savedXml);
+
+        // Clean up snapshots for messages after the user message (they will be removed)
+        for (const key of xmlSnapshotsRef.current.keys()) {
+            if (key > userMessageIndex) {
+                xmlSnapshotsRef.current.delete(key);
+            }
+        }
+
+        // Remove the user message AND assistant message onwards (sendMessage will re-add the user message)
+        // Use flushSync to ensure state update is processed synchronously before sending
+        const newMessages = messages.slice(0, userMessageIndex);
+        flushSync(() => {
+            setMessages(newMessages);
+        });
+
+        // Now send the message after state is guaranteed to be updated
+        sendMessage(
+            { parts: userParts },
+            {
+                body: {
+                    xml: savedXml,
+                    sessionId,
+                },
+            }
+        );
+    };
+
+    const handleEditMessage = async (messageIndex: number, newText: string) => {
+        const isProcessing = status === "streaming" || status === "submitted";
+        if (isProcessing) return;
+
+        const message = messages[messageIndex];
+        if (!message || message.role !== "user") return;
+
+        // Get the saved XML snapshot for this user message
+        const savedXml = xmlSnapshotsRef.current.get(messageIndex);
+        if (!savedXml) {
+            console.error("No saved XML snapshot for message index:", messageIndex);
+            return;
+        }
+
+        // Restore the diagram to the saved state
+        onDisplayChart(savedXml);
+
+        // Clean up snapshots for messages after the user message (they will be removed)
+        for (const key of xmlSnapshotsRef.current.keys()) {
+            if (key > messageIndex) {
+                xmlSnapshotsRef.current.delete(key);
+            }
+        }
+
+        // Create new parts with updated text
+        const newParts = message.parts?.map((part: any) => {
+            if (part.type === "text") {
+                return { ...part, text: newText };
+            }
+            return part;
+        }) || [{ type: "text", text: newText }];
+
+        // Remove the user message AND assistant message onwards (sendMessage will re-add the user message)
+        // Use flushSync to ensure state update is processed synchronously before sending
+        const newMessages = messages.slice(0, messageIndex);
+        flushSync(() => {
+            setMessages(newMessages);
+        });
+
+        // Now send the edited message after state is guaranteed to be updated
+        sendMessage(
+            { parts: newParts },
+            {
+                body: {
+                    xml: savedXml,
+                    sessionId,
+                },
+            }
+        );
     };
 
     // Collapsed view
@@ -281,6 +395,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
+                    sessionId={sessionId}
+                    onRegenerate={handleRegenerate}
+                    onEditMessage={handleEditMessage}
                 />
             </main>
 
@@ -295,11 +412,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         setMessages([]);
                         clearDiagram();
                         setSessionId(`session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+                        xmlSnapshotsRef.current.clear();
                     }}
                     files={files}
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
+                    sessionId={sessionId}
                 />
             </footer>
         </div>
