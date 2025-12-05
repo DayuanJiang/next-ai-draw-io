@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { DrawIoEmbed } from "react-drawio";
 import ChatPanel from "@/components/chat-panel";
 import { useDiagram } from "@/contexts/diagram-context";
-import { Monitor } from "lucide-react";
 import {
     ResizablePanelGroup,
     ResizablePanel,
@@ -74,29 +73,13 @@ export default function Home() {
 
     return (
         <div className="h-screen bg-background relative overflow-hidden">
-            {/* Mobile warning overlay */}
-            {isMobile && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">
-                    <div className="text-center p-8 max-w-sm mx-auto animate-fade-in">
-                        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                            <Monitor className="w-8 h-8 text-primary" />
-                        </div>
-                        <h1 className="text-xl font-semibold text-foreground mb-3">
-                            Desktop Required
-                        </h1>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                            This application works best on desktop or laptop
-                            devices. Please open it on a larger screen for the
-                            full experience.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanelGroup
+                direction={isMobile ? "vertical" : "horizontal"}
+                className="h-full"
+            >
                 {/* Draw.io Canvas */}
-                <ResizablePanel defaultSize={67} minSize={30}>
-                    <div className="h-full relative p-2">
+                <ResizablePanel defaultSize={isMobile ? 50 : 67} minSize={20}>
+                    <div className={`h-full relative ${isMobile ? "p-1" : "p-2"}`}>
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
                             <DrawIoEmbed
                                 key={drawioUi}
@@ -119,15 +102,15 @@ export default function Home() {
                 {/* Chat Panel */}
                 <ResizablePanel
                     ref={chatPanelRef}
-                    defaultSize={33}
-                    minSize={15}
-                    maxSize={50}
-                    collapsible
-                    collapsedSize={3}
+                    defaultSize={isMobile ? 50 : 33}
+                    minSize={isMobile ? 20 : 15}
+                    maxSize={isMobile ? 80 : 50}
+                    collapsible={!isMobile}
+                    collapsedSize={isMobile ? 0 : 3}
                     onCollapse={() => setIsChatVisible(false)}
                     onExpand={() => setIsChatVisible(true)}
                 >
-                    <div className="h-full py-2 pr-2">
+                    <div className={`h-full ${isMobile ? "p-1" : "py-2 pr-2"}`}>
                         <ChatPanel
                             isVisible={isChatVisible}
                             onToggleVisibility={toggleChatPanel}
@@ -137,6 +120,7 @@ export default function Home() {
                                 localStorage.setItem("drawio-theme", newTheme);
                                 setDrawioUi(newTheme);
                             }}
+                            isMobile={isMobile}
                         />
                     </div>
                 </ResizablePanel>
