@@ -61,7 +61,16 @@ export default function ChatPanel({
     const [files, setFiles] = useState<File[]>([]);
     const [showHistory, setShowHistory] = useState(false);
     const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+    const [accessCodeRequired, setAccessCodeRequired] = useState(false);
     const [input, setInput] = useState("");
+
+    // Check if access code is required on mount
+    useEffect(() => {
+        fetch("/api/config")
+            .then((res) => res.json())
+            .then((data) => setAccessCodeRequired(data.accessCodeRequired))
+            .catch(() => setAccessCodeRequired(false));
+    }, []);
 
     // Generate a unique session ID for Langfuse tracing
     const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
@@ -90,7 +99,8 @@ export default function ChatPanel({
                 });
 
                 if (error.message.includes("Invalid or missing access code")) {
-                    // Also open settings dialog to help user fix it
+                    // Show settings button and open dialog to help user fix it
+                    setAccessCodeRequired(true);
                     setShowSettingsDialog(true);
                 }
             },
@@ -287,15 +297,17 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         >
                             <FaGithub className="w-5 h-5" />
                         </a>
-                        <ButtonWithTooltip
-                            tooltipContent="Settings"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setShowSettingsDialog(true)}
-                            className="hover:bg-accent"
-                        >
-                            <Settings className="h-5 w-5 text-muted-foreground" />
-                        </ButtonWithTooltip>
+                        {accessCodeRequired && (
+                            <ButtonWithTooltip
+                                tooltipContent="Settings"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShowSettingsDialog(true)}
+                                className="hover:bg-accent"
+                            >
+                                <Settings className="h-5 w-5 text-muted-foreground" />
+                            </ButtonWithTooltip>
+                        )}
                         <ButtonWithTooltip
                             tooltipContent="Hide chat panel (Ctrl+B)"
                             variant="ghost"
