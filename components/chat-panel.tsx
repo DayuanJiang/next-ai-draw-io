@@ -466,6 +466,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         >
                             About
                         </Link>
+                        <ButtonWithTooltip
+                            tooltipContent="Recent generation failures were caused by our AI provider's infrastructure issue, not the app code. After extensive debugging, I've switched providers and observed 6 hours of stability. If issues persist, please report on GitHub."
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-green-500 hover:text-green-600"
+                        >
+                            <CheckCircle className="h-4 w-4" />
+                        </ButtonWithTooltip>
                     </div>
                     <div className="flex items-center gap-1">
                         <a
