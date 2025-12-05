@@ -406,7 +406,11 @@ export function ChatMessageDisplay({
                                                     switch (part.type) {
                                                         case "text":
                                                             return (
-                                                                <div key={index} className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                                                                <div key={index} className={`prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
+                                                                    message.role === "user"
+                                                                        ? "[&_*]:!text-primary-foreground prose-code:bg-white/20"
+                                                                        : "dark:prose-invert"
+                                                                }`}>
                                                                     <ReactMarkdown>{part.text}</ReactMarkdown>
                                                                 </div>
                                                             );
