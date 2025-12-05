@@ -79,12 +79,12 @@ export default function ChatPanel({
                 }
                 
                 // Add system message for error so it can be cleared
-                setMessages((currentMessages: any) => {
+                setMessages((currentMessages) => {
                     const errorMessage = {
                         id: `error-${Date.now()}`,
-                        role: 'system',
+                        role: 'system' as const,
                         content: error.message,
-                        parts: [{ type: 'text', text: error.message }]
+                        parts: [{ type: 'text' as const, text: error.message }]
                     };
                     return [...currentMessages, errorMessage];
                 });

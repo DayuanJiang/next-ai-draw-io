@@ -280,7 +280,7 @@ export function ChatMessageDisplay({
                                                 message.role === "user"
                                                     ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
                                                     : message.role === "system"
-                                                    ? "bg-red-50 text-red-600 border border-red-200 rounded-2xl rounded-bl-md"
+                                                    ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-2xl rounded-bl-md"
                                                     : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
                                             }`}
                                         >
