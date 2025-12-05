@@ -12,12 +12,78 @@ import {
     Image as ImageIcon,
     History,
     Download,
-    Paperclip,
 } from "lucide-react";
+import { toast } from "sonner";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 import { FilePreviewList } from "./file-preview-list";
 import { useDiagram } from "@/contexts/diagram-context";
 import { HistoryDialog } from "@/components/history-dialog";
+import { ErrorToast } from "@/components/error-toast";
+
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILES = 5;
+
+function formatFileSize(bytes: number): string {
+    const mb = bytes / 1024 / 1024;
+    if (mb < 0.01) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${mb.toFixed(2)}MB`;
+}
+
+function showErrorToast(message: React.ReactNode) {
+    toast.custom(
+        (t) => <ErrorToast message={message} onDismiss={() => toast.dismiss(t)} />,
+        { duration: 5000 }
+    );
+}
+
+interface ValidationResult {
+    validFiles: File[];
+    errors: string[];
+}
+
+function validateFiles(newFiles: File[], existingCount: number): ValidationResult {
+    const errors: string[] = [];
+    const validFiles: File[] = [];
+
+    const availableSlots = MAX_FILES - existingCount;
+
+    if (availableSlots <= 0) {
+        errors.push(`Maximum ${MAX_FILES} files allowed`);
+        return { validFiles, errors };
+    }
+
+    for (const file of newFiles) {
+        if (validFiles.length >= availableSlots) {
+            errors.push(`Only ${availableSlots} more file(s) allowed`);
+            break;
+        }
+        if (file.size > MAX_FILE_SIZE) {
+            errors.push(`"${file.name}" is ${formatFileSize(file.size)} (exceeds 2MB)`);
+        } else {
+            validFiles.push(file);
+        }
+    }
+
+    return { validFiles, errors };
+}
+
+function showValidationErrors(errors: string[]) {
+    if (errors.length === 0) return;
+
+    if (errors.length === 1) {
+        showErrorToast(<span className="text-muted-foreground">{errors[0]}</span>);
+    } else {
+        showErrorToast(
+            <div className="flex flex-col gap-1">
+                <span className="font-medium">{errors.length} files rejected:</span>
+                <ul className="text-muted-foreground text-xs list-disc list-inside">
+                    {errors.slice(0, 3).map((err, i) => <li key={i}>{err}</li>)}
+                    {errors.length > 3 && <li>...and {errors.length - 3} more</li>}
+                </ul>
+            </div>
+        );
+    }
+}
 
 interface ChatInputProps {
     input: string;
@@ -52,11 +118,8 @@ export function ChatInput({
     const [showSaveDialog, setShowSaveDialog] = useState(false);
 
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
-    const isDisabled = (status === "streaming" || status === "submitted") && !error;
-
-    useEffect(() => {
-        console.log('[ChatInput] Status changed to:', status, '| Input disabled:', isDisabled);
-    }, [status, isDisabled]);
+    const isDisabled =
+        (status === "streaming" || status === "submitted") && !error;
 
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
@@ -89,23 +152,20 @@ export function ChatInput({
         );
 
         if (imageItems.length > 0) {
-            const imageFiles = await Promise.all(
-                imageItems.map(async (item) => {
+            const imageFiles = (await Promise.all(
+                imageItems.map(async (item, index) => {
                     const file = item.getAsFile();
                     if (!file) return null;
                     return new File(
                         [file],
-                        `pasted-image-${Date.now()}.${file.type.split("/")[1]}`,
-                        {
-                            type: file.type,
-                        }
+                        `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
+                        { type: file.type }
                     );
                 })
-            );
+            )).filter((f): f is File => f !== null);
 
-            const validFiles = imageFiles.filter(
-                (file): file is File => file !== null
-            );
+            const { validFiles, errors } = validateFiles(imageFiles, files.length);
+            showValidationErrors(errors);
             if (validFiles.length > 0) {
                 onFileChange([...files, ...validFiles]);
             }
@@ -114,7 +174,15 @@ export function ChatInput({
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newFiles = Array.from(e.target.files || []);
-        onFileChange([...files, ...newFiles]);
+        const { validFiles, errors } = validateFiles(newFiles, files.length);
+        showValidationErrors(errors);
+        if (validFiles.length > 0) {
+            onFileChange([...files, ...validFiles]);
+        }
+        // Reset input so same file can be selected again
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
     };
 
     const handleRemoveFile = (fileToRemove: File) => {
@@ -148,13 +216,14 @@ export function ChatInput({
         if (isDisabled) return;
 
         const droppedFiles = e.dataTransfer.files;
-
         const imageFiles = Array.from(droppedFiles).filter((file) =>
             file.type.startsWith("image/")
         );
 
-        if (imageFiles.length > 0) {
-            onFileChange([...files, ...imageFiles]);
+        const { validFiles, errors } = validateFiles(imageFiles, files.length);
+        showValidationErrors(errors);
+        if (validFiles.length > 0) {
+            onFileChange([...files, ...validFiles]);
         }
     };
 
@@ -178,7 +247,10 @@ export function ChatInput({
             {/* File previews */}
             {files.length > 0 && (
                 <div className="mb-3">
-                    <FilePreviewList files={files} onRemoveFile={handleRemoveFile} />
+                    <FilePreviewList
+                        files={files}
+                        onRemoveFile={handleRemoveFile}
+                    />
                 </div>
             )}
 
@@ -252,8 +324,12 @@ export function ChatInput({
                         <SaveDialog
                             open={showSaveDialog}
                             onOpenChange={setShowSaveDialog}
-                            onSave={(filename, format) => saveDiagramToFile(filename, format)}
-                            defaultFilename={`diagram-${new Date().toISOString().slice(0, 10)}`}
+                            onSave={(filename, format) =>
+                                saveDiagramToFile(filename, format)
+                            }
+                            defaultFilename={`diagram-${new Date()
+                                .toISOString()
+                                .slice(0, 10)}`}
                         />
 
                         <ButtonWithTooltip
@@ -285,7 +361,9 @@ export function ChatInput({
                             disabled={isDisabled || !input.trim()}
                             size="sm"
                             className="h-8 px-4 rounded-xl font-medium shadow-sm"
-                            aria-label={isDisabled ? "Sending..." : "Send message"}
+                            aria-label={
+                                isDisabled ? "Sending..." : "Send message"
+                            }
                         >
                             {isDisabled ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -299,7 +377,6 @@ export function ChatInput({
                     </div>
                 </div>
             </div>
-
         </form>
     );
 }

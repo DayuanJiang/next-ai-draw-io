@@ -96,7 +96,6 @@ export default function RootLayout({
                 className={`${plusJakarta.variable} ${jetbrainsMono.variable} antialiased`}
             >
                 <DiagramProvider>{children}</DiagramProvider>
-
                 <Analytics />
             </body>
             {process.env.NEXT_PUBLIC_GA_ID && (
