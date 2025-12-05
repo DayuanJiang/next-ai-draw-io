@@ -74,6 +74,7 @@ export default function Home() {
     return (
         <div className="h-screen bg-background relative overflow-hidden">
             <ResizablePanelGroup
+                key={isMobile ? "mobile" : "desktop"}
                 direction={isMobile ? "vertical" : "horizontal"}
                 className="h-full"
             >
