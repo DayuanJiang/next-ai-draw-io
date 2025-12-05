@@ -1,4 +1,5 @@
-import { bedrock } from '@ai-sdk/amazon-bedrock';
+import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { openai, createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { google, createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -159,13 +160,20 @@ export function getAIModel(): ModelConfig {
   let headers: Record<string, string> | undefined = undefined;
 
   switch (provider) {
-    case 'bedrock':
-      model = bedrock(modelId);
+    case 'bedrock': {
+      // Use credential provider chain for IAM role support (Amplify, Lambda, etc.)
+      // Falls back to env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
+      const bedrockProvider = createAmazonBedrock({
+        region: process.env.AWS_REGION || 'us-west-2',
+        credentialProvider: fromNodeProviderChain(),
+      });
+      model = bedrockProvider(modelId);
       // Add Anthropic beta options if using Claude models via Bedrock
       if (modelId.includes('anthropic.claude')) {
         providerOptions = BEDROCK_ANTHROPIC_BETA;
       }
       break;
+    }
 
     case 'openai':
       if (process.env.OPENAI_BASE_URL) {
