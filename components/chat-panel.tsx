@@ -29,11 +29,15 @@ import {
 interface ChatPanelProps {
     isVisible: boolean;
     onToggleVisibility: () => void;
+    drawioUi: "min" | "sketch";
+    onToggleDrawioUi: () => void;
 }
 
 export default function ChatPanel({
     isVisible,
     onToggleVisibility,
+    drawioUi,
+    onToggleDrawioUi,
 }: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
@@ -531,6 +535,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
+                    drawioUi={drawioUi}
+                    onToggleDrawioUi={onToggleDrawioUi}
                 />
             </footer>
 
