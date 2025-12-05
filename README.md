@@ -81,13 +81,19 @@ Diagrams are represented as XML that can be rendered in draw.io. The AI processe
 ## Multi-Provider Support
 
 -   AWS Bedrock (default)
--   OpenAI / OpenAI-compatible APIs (via `OPENAI_BASE_URL`)
+-   OpenAI
 -   Anthropic
 -   Google AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
 -   DeepSeek
+
+All providers except AWS Bedrock and OpenRouter support custom endpoints.
+
+📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
+
+**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-4o, Gemini 2.0, and DeepSeek V3/R1.
 
 Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
 
@@ -144,7 +150,7 @@ Edit `.env.local` and configure your chosen provider:
 -   Set `AI_MODEL` to the specific model you want to use
 -   Add the required API keys for your provider
 
-See the [Multi-Provider Support](#multi-provider-support) section above for provider-specific configuration examples.
+See the [Provider Configuration Guide](./docs/ai-providers.md) for detailed setup instructions for each provider.
 
 4. Run the development server:
 

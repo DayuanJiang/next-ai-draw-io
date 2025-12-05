@@ -81,13 +81,19 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 ## 多提供商支持
 
 -   AWS Bedrock（默认）
--   OpenAI / OpenAI兼容API（通过 `OPENAI_BASE_URL`）
+-   OpenAI
 -   Anthropic
 -   Google AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
 -   DeepSeek
+
+除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
+
+📖 **[详细的提供商配置指南](./docs/ai-providers.md)** - 查看各提供商的设置说明。
+
+**模型要求**：此任务需要强大的模型能力，因为它涉及生成具有严格格式约束的长文本（draw.io XML）。推荐使用Claude Sonnet 4.5、GPT-4o、Gemini 2.0和DeepSeek V3/R1。
 
 注意：`claude-sonnet-4-5` 已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。
 
@@ -144,7 +150,7 @@ cp env.example .env.local
 -   将 `AI_MODEL` 设置为您要使用的特定模型
 -   添加您的提供商所需的API密钥
 
-请参阅上面的[多提供商支持](#多提供商支持)部分了解特定提供商的配置示例。
+详细设置说明请参阅[提供商配置指南](./docs/ai-providers.md)。
 
 4. 运行开发服务器：
 
