@@ -29,6 +29,7 @@ interface ChatInputProps {
     onFileChange?: (files: File[]) => void;
     showHistory?: boolean;
     onToggleHistory?: (show: boolean) => void;
+    error?: Error | null;
 }
 
 export function ChatInput({
@@ -41,6 +42,7 @@ export function ChatInput({
     onFileChange = () => {},
     showHistory = false,
     onToggleHistory = () => {},
+    error = null,
 }: ChatInputProps) {
     const { diagramHistory, saveDiagramToFile } = useDiagram();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,7 +51,8 @@ export function ChatInput({
     const [showClearDialog, setShowClearDialog] = useState(false);
     const [showSaveDialog, setShowSaveDialog] = useState(false);
 
-    const isDisabled = status === "streaming" || status === "submitted";
+    // Allow retry when there's an error (even if status is still "streaming" or "submitted")
+    const isDisabled = (status === "streaming" || status === "submitted") && !error;
 
     useEffect(() => {
         console.log('[ChatInput] Status changed to:', status, '| Input disabled:', isDisabled);

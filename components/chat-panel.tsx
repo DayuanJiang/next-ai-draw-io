@@ -164,7 +164,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     const lastMessagePartsRef = useRef(0);
 
     useEffect(() => {
-        // Clear streaming error and reset refs when status changes to ready
+        // Clear streaming error when status changes to ready
         if (status === "ready") {
             setStreamingError(null);
             lastMessageCountRef.current = 0;
@@ -498,6 +498,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
+                    error={error || streamingError}
                 />
             </footer>
         </div>
