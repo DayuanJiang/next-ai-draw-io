@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
@@ -281,11 +282,11 @@ export function ChatMessageDisplay({
     };
 
     return (
-        <ScrollArea className="h-full px-4 scrollbar-thin">
+        <ScrollArea className="h-full w-full scrollbar-thin">
             {messages.length === 0 ? (
                 <ExamplePanel setInput={setInput} setFiles={setFiles} />
             ) : (
-                <div className="py-4 space-y-4">
+                <div className="py-4 px-4 space-y-4">
                     {messages.map((message, messageIndex) => {
                         const userMessageText = message.role === "user" ? getMessageTextContent(message) : "";
                         const isLastAssistantMessage = message.role === "assistant" && (
@@ -300,7 +301,7 @@ export function ChatMessageDisplay({
                         return (
                             <div
                                 key={message.id}
-                                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-message-in`}
+                                className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"} animate-message-in`}
                                 style={{ animationDelay: `${messageIndex * 50}ms` }}
                             >
                                 {message.role === "user" && userMessageText && !isEditing && (
@@ -333,7 +334,7 @@ export function ChatMessageDisplay({
                                         </button>
                                     </div>
                                 )}
-                                <div className="max-w-[85%]">
+                                <div className="max-w-[85%] min-w-0">
                                     {/* Edit mode for user messages */}
                                     {isEditing && message.role === "user" ? (
                                         <div className="flex flex-col gap-2">
@@ -405,8 +406,8 @@ export function ChatMessageDisplay({
                                                     switch (part.type) {
                                                         case "text":
                                                             return (
-                                                                <div key={index} className="whitespace-pre-wrap break-words">
-                                                                    {part.text}
+                                                                <div key={index} className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                                                                    <ReactMarkdown>{part.text}</ReactMarkdown>
                                                                 </div>
                                                             );
                                                         case "file":

@@ -45,6 +45,8 @@
         "react-dom": "^19.0.0",
         "react-drawio": "^1.0.3",
         "react-icons": "^5.5.0",
+        "react-markdown": "^10.1.0",
+        "react-resizable-panels": "^3.0.6",
         "remark-gfm": "^4.0.1",
         "sonner": "^2.0.7",
         "tailwind-merge": "^3.0.2",
@@ -53,6 +55,7 @@
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4",
+        "@tailwindcss/typography": "^0.5.19",
         "@types/node": "^20",
         "@types/pako": "^2.0.3",
         "@types/react": "^19",

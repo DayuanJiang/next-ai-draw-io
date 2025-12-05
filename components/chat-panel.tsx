@@ -4,7 +4,12 @@ import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { FaGithub } from "react-icons/fa";
-import { PanelRightClose, PanelRightOpen, Settings } from "lucide-react";
+import {
+    PanelRightClose,
+    PanelRightOpen,
+    Settings,
+    CheckCircle,
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -16,7 +21,10 @@ import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML, validateMxCellStructure } from "@/lib/utils";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 import { Toaster } from "sonner";
-import { SettingsDialog, STORAGE_ACCESS_CODE_KEY } from "@/components/settings-dialog";
+import {
+    SettingsDialog,
+    STORAGE_ACCESS_CODE_KEY,
+} from "@/components/settings-dialog";
 
 interface ChatPanelProps {
     isVisible: boolean;
@@ -75,7 +83,9 @@ export default function ChatPanel({
     }, []);
 
     // Generate a unique session ID for Langfuse tracing
-    const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+    const [sessionId, setSessionId] = useState(
+        () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    );
 
     // Store XML snapshots for each user message (keyed by message index)
     const xmlSnapshotsRef = useRef<Map<number, string>>(new Map());
@@ -86,87 +96,83 @@ export default function ChatPanel({
         chartXMLRef.current = chartXML;
     }, [chartXML]);
 
-    const {
-        messages,
-        sendMessage,
-        addToolResult,
-        status,
-        error,
-        setMessages,
-    } = useChat({
-        transport: new DefaultChatTransport({
-            api: "/api/chat",
-        }),
-        async onToolCall({ toolCall }) {
-            if (toolCall.toolName === "display_diagram") {
-                const { xml } = toolCall.input as { xml: string };
+    const { messages, sendMessage, addToolResult, status, error, setMessages } =
+        useChat({
+            transport: new DefaultChatTransport({
+                api: "/api/chat",
+            }),
+            async onToolCall({ toolCall }) {
+                if (toolCall.toolName === "display_diagram") {
+                    const { xml } = toolCall.input as { xml: string };
 
-                const validationError = validateMxCellStructure(xml);
+                    const validationError = validateMxCellStructure(xml);
 
-                if (validationError) {
-                    addToolResult({
-                        tool: "display_diagram",
-                        toolCallId: toolCall.toolCallId,
-                        output: validationError,
-                    });
-                } else {
-                    addToolResult({
-                        tool: "display_diagram",
-                        toolCallId: toolCall.toolCallId,
-                        output: "Successfully displayed the diagram.",
-                    });
-                }
-            } else if (toolCall.toolName === "edit_diagram") {
-                const { edits } = toolCall.input as {
-                    edits: Array<{ search: string; replace: string }>;
-                };
-
-                let currentXml = "";
-                try {
-                    console.log("[edit_diagram] Starting...");
-                    // Use chartXML from ref directly - more reliable than export
-                    // especially on Vercel where DrawIO iframe may have latency issues
-                    // Using ref to avoid stale closure in callback
-                    const cachedXML = chartXMLRef.current;
-                    if (cachedXML) {
-                        currentXml = cachedXML;
-                        console.log(
-                            "[edit_diagram] Using cached chartXML, length:",
-                            currentXml.length
-                        );
+                    if (validationError) {
+                        addToolResult({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: validationError,
+                        });
                     } else {
-                        // Fallback to export only if no cached XML
-                        console.log(
-                            "[edit_diagram] No cached XML, fetching from DrawIO..."
-                        );
-                        currentXml = await onFetchChart(false);
-                        console.log(
-                            "[edit_diagram] Got XML from export, length:",
-                            currentXml.length
-                        );
+                        addToolResult({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Successfully displayed the diagram.",
+                        });
                     }
+                } else if (toolCall.toolName === "edit_diagram") {
+                    const { edits } = toolCall.input as {
+                        edits: Array<{ search: string; replace: string }>;
+                    };
 
-                    const { replaceXMLParts } = await import("@/lib/utils");
-                    const editedXml = replaceXMLParts(currentXml, edits);
+                    let currentXml = "";
+                    try {
+                        console.log("[edit_diagram] Starting...");
+                        // Use chartXML from ref directly - more reliable than export
+                        // especially on Vercel where DrawIO iframe may have latency issues
+                        // Using ref to avoid stale closure in callback
+                        const cachedXML = chartXMLRef.current;
+                        if (cachedXML) {
+                            currentXml = cachedXML;
+                            console.log(
+                                "[edit_diagram] Using cached chartXML, length:",
+                                currentXml.length
+                            );
+                        } else {
+                            // Fallback to export only if no cached XML
+                            console.log(
+                                "[edit_diagram] No cached XML, fetching from DrawIO..."
+                            );
+                            currentXml = await onFetchChart(false);
+                            console.log(
+                                "[edit_diagram] Got XML from export, length:",
+                                currentXml.length
+                            );
+                        }
 
-                    onDisplayChart(editedXml);
+                        const { replaceXMLParts } = await import("@/lib/utils");
+                        const editedXml = replaceXMLParts(currentXml, edits);
 
-                    addToolResult({
-                        tool: "edit_diagram",
-                        toolCallId: toolCall.toolCallId,
-                        output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
-                    });
-                    console.log("[edit_diagram] Success");
-                } catch (error) {
-                    console.error("[edit_diagram] Failed:", error);
+                        onDisplayChart(editedXml);
 
-                    const errorMessage =
-                        error instanceof Error ? error.message : String(error);
+                        addToolResult({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                        });
+                        console.log("[edit_diagram] Success");
+                    } catch (error) {
+                        console.error("[edit_diagram] Failed:", error);
 
-                    addToolResult({
-                        tool: "edit_diagram",
-                        toolCallId: toolCall.toolCallId,
-                        output: `Edit failed: ${errorMessage}
+                        const errorMessage =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
+
+                        addToolResult({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: `Edit failed: ${errorMessage}
 
 Current diagram XML:
 \`\`\`xml
@@ -174,34 +180,34 @@ ${currentXml || "No XML available"}
 \`\`\`
 
 Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
-                    });
+                        });
+                    }
                 }
-            }
-        },
-        onError: (error) => {
-            // Silence access code error in console since it's handled by UI
-            if (!error.message.includes("Invalid or missing access code")) {
-                console.error("Chat error:", error);
-            }
+            },
+            onError: (error) => {
+                // Silence access code error in console since it's handled by UI
+                if (!error.message.includes("Invalid or missing access code")) {
+                    console.error("Chat error:", error);
+                }
 
-            // Add system message for error so it can be cleared
-            setMessages((currentMessages) => {
-                const errorMessage = {
-                    id: `error-${Date.now()}`,
-                    role: 'system' as const,
-                    content: error.message,
-                    parts: [{ type: 'text' as const, text: error.message }]
-                };
-                return [...currentMessages, errorMessage];
-            });
+                // Add system message for error so it can be cleared
+                setMessages((currentMessages) => {
+                    const errorMessage = {
+                        id: `error-${Date.now()}`,
+                        role: "system" as const,
+                        content: error.message,
+                        parts: [{ type: "text" as const, text: error.message }],
+                    };
+                    return [...currentMessages, errorMessage];
+                });
 
-            if (error.message.includes("Invalid or missing access code")) {
-                // Show settings button and open dialog to help user fix it
-                setAccessCodeRequired(true);
-                setShowSettingsDialog(true);
-            }
-        },
-    });
+                if (error.message.includes("Invalid or missing access code")) {
+                    // Show settings button and open dialog to help user fix it
+                    setAccessCodeRequired(true);
+                    setShowSettingsDialog(true);
+                }
+            },
+        });
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -246,7 +252,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 const messageIndex = messages.length;
                 xmlSnapshotsRef.current.set(messageIndex, chartXml);
 
-                const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || "";
+                const accessCode =
+                    localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || "";
                 sendMessage(
                     { parts },
                     {
@@ -428,7 +435,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     // Full view
     return (
         <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30 relative">
-            <Toaster position="bottom-center" richColors style={{ position: "absolute" }} />
+            <Toaster
+                position="bottom-center"
+                richColors
+                style={{ position: "absolute" }}
+            />
             {/* Header */}
             <header className="px-5 py-4 border-b border-border/50">
                 <div className="flex items-center justify-between">
@@ -486,7 +497,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             </header>
 
             {/* Messages */}
-            <main className="flex-1 overflow-hidden">
+            <main className="flex-1 w-full overflow-hidden">
                 <ChatMessageDisplay
                     messages={messages}
                     setInput={setInput}
@@ -507,7 +518,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onClearChat={() => {
                         setMessages([]);
                         clearDiagram();
-                        setSessionId(`session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+                        setSessionId(
+                            `session-${Date.now()}-${Math.random()
+                                .toString(36)
+                                .slice(2, 9)}`
+                        );
                         xmlSnapshotsRef.current.clear();
                     }}
                     files={files}

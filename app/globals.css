@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @plugin "tailwindcss-animate";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -150,6 +151,12 @@
   body {
     @apply bg-background text-foreground font-sans;
   }
+}
+
+/* Fix for Radix ScrollArea viewport horizontal overflow */
+[data-slot="scroll-area-viewport"] > div {
+  display: block !important;
+  width: 100% !important;
 }
 
 /* Custom scrollbar */
