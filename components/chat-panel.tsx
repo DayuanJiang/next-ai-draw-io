@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useRef, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { FaGithub } from "react-icons/fa";
 import { PanelRightClose, PanelRightOpen, Settings } from "lucide-react";
 import Link from "next/link";
@@ -14,6 +15,7 @@ import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML, validateMxCellStructure } from "@/lib/utils";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
+import { Toaster } from "sonner";
 import { SettingsDialog, STORAGE_ACCESS_CODE_KEY } from "@/components/settings-dialog";
 
 interface ChatPanelProps {
@@ -75,98 +77,131 @@ export default function ChatPanel({
     // Generate a unique session ID for Langfuse tracing
     const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
 
-    const { messages, sendMessage, addToolResult, status, error, setMessages } =
-        useChat({
-            transport: new DefaultChatTransport({
-                api: "/api/chat",
-            }),
-            // When an error occurs, add it as a system message so it can be cleared with setMessages
-            onError: (error) => {
-                // Silence access code error in console since it's handled by UI
-                if (!error.message.includes("Invalid or missing access code")) {
-                    console.error("Chat error:", error);
+    // Store XML snapshots for each user message (keyed by message index)
+    const xmlSnapshotsRef = useRef<Map<number, string>>(new Map());
+
+    // Ref to track latest chartXML for use in callbacks (avoids stale closure)
+    const chartXMLRef = useRef(chartXML);
+    useEffect(() => {
+        chartXMLRef.current = chartXML;
+    }, [chartXML]);
+
+    const {
+        messages,
+        sendMessage,
+        addToolResult,
+        status,
+        error,
+        setMessages,
+    } = useChat({
+        transport: new DefaultChatTransport({
+            api: "/api/chat",
+        }),
+        async onToolCall({ toolCall }) {
+            if (toolCall.toolName === "display_diagram") {
+                const { xml } = toolCall.input as { xml: string };
+
+                const validationError = validateMxCellStructure(xml);
+
+                if (validationError) {
+                    addToolResult({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: validationError,
+                    });
+                } else {
+                    addToolResult({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: "Successfully displayed the diagram.",
+                    });
                 }
-                
-                // Add system message for error so it can be cleared
-                setMessages((currentMessages) => {
-                    const errorMessage = {
-                        id: `error-${Date.now()}`,
-                        role: 'system' as const,
-                        content: error.message,
-                        parts: [{ type: 'text' as const, text: error.message }]
-                    };
-                    return [...currentMessages, errorMessage];
-                });
+            } else if (toolCall.toolName === "edit_diagram") {
+                const { edits } = toolCall.input as {
+                    edits: Array<{ search: string; replace: string }>;
+                };
 
-                if (error.message.includes("Invalid or missing access code")) {
-                    // Show settings button and open dialog to help user fix it
-                    setAccessCodeRequired(true);
-                    setShowSettingsDialog(true);
-                }
-            },
-            async onToolCall({ toolCall }) {
-                if (toolCall.toolName === "display_diagram") {
-                    const { xml } = toolCall.input as { xml: string };
-
-                    const validationError = validateMxCellStructure(xml);
-
-                    if (validationError) {
-                        addToolResult({
-                            tool: "display_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: validationError,
-                        });
+                let currentXml = "";
+                try {
+                    console.log("[edit_diagram] Starting...");
+                    // Use chartXML from ref directly - more reliable than export
+                    // especially on Vercel where DrawIO iframe may have latency issues
+                    // Using ref to avoid stale closure in callback
+                    const cachedXML = chartXMLRef.current;
+                    if (cachedXML) {
+                        currentXml = cachedXML;
+                        console.log(
+                            "[edit_diagram] Using cached chartXML, length:",
+                            currentXml.length
+                        );
                     } else {
-                        addToolResult({
-                            tool: "display_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: "Successfully displayed the diagram.",
-                        });
-                    }
-                } else if (toolCall.toolName === "edit_diagram") {
-                    const { edits } = toolCall.input as {
-                        edits: Array<{ search: string; replace: string }>;
-                    };
-
-                    let currentXml = "";
-                    try {
-                        // Fetch without saving to history - edit_diagram shouldn't create history entry
+                        // Fallback to export only if no cached XML
+                        console.log(
+                            "[edit_diagram] No cached XML, fetching from DrawIO..."
+                        );
                         currentXml = await onFetchChart(false);
+                        console.log(
+                            "[edit_diagram] Got XML from export, length:",
+                            currentXml.length
+                        );
+                    }
 
-                        const { replaceXMLParts } = await import("@/lib/utils");
-                        const editedXml = replaceXMLParts(currentXml, edits);
+                    const { replaceXMLParts } = await import("@/lib/utils");
+                    const editedXml = replaceXMLParts(currentXml, edits);
 
-                        onDisplayChart(editedXml);
+                    onDisplayChart(editedXml);
 
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
-                        });
-                    } catch (error) {
-                        console.error("Edit diagram failed:", error);
+                    addToolResult({
+                        tool: "edit_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                    });
+                    console.log("[edit_diagram] Success");
+                } catch (error) {
+                    console.error("[edit_diagram] Failed:", error);
 
-                        const errorMessage =
-                            error instanceof Error
-                                ? error.message
-                                : String(error);
+                    const errorMessage =
+                        error instanceof Error ? error.message : String(error);
 
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Edit failed: ${errorMessage}
+                    addToolResult({
+                        tool: "edit_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: `Edit failed: ${errorMessage}
 
 Current diagram XML:
 \`\`\`xml
-${currentXml}
+${currentXml || "No XML available"}
 \`\`\`
 
 Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
-                        });
-                    }
+                    });
                 }
-            },
-        });
+            }
+        },
+        onError: (error) => {
+            // Silence access code error in console since it's handled by UI
+            if (!error.message.includes("Invalid or missing access code")) {
+                console.error("Chat error:", error);
+            }
+
+            // Add system message for error so it can be cleared
+            setMessages((currentMessages) => {
+                const errorMessage = {
+                    id: `error-${Date.now()}`,
+                    role: 'system' as const,
+                    content: error.message,
+                    parts: [{ type: 'text' as const, text: error.message }]
+                };
+                return [...currentMessages, errorMessage];
+            });
+
+            if (error.message.includes("Invalid or missing access code")) {
+                // Show settings button and open dialog to help user fix it
+                setAccessCodeRequired(true);
+                setShowSettingsDialog(true);
+            }
+        },
+    });
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -176,7 +211,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages]);
 
-
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const isProcessing = status === "streaming" || status === "submitted";
@@ -184,6 +218,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             try {
                 let chartXml = await onFetchChart();
                 chartXml = formatXML(chartXml);
+
+                // Update ref directly to avoid race condition with React's async state update
+                // This ensures edit_diagram has the correct XML before AI responds
+                chartXMLRef.current = chartXml;
 
                 const parts: any[] = [{ type: "text", text: input }];
 
@@ -203,6 +241,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         });
                     }
                 }
+
+                // Save XML snapshot for this message (will be at index = current messages.length)
+                const messageIndex = messages.length;
+                xmlSnapshotsRef.current.set(messageIndex, chartXml);
 
                 const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || "";
                 sendMessage(
@@ -236,6 +278,127 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         setFiles(newFiles);
     };
 
+    const handleRegenerate = async (messageIndex: number) => {
+        const isProcessing = status === "streaming" || status === "submitted";
+        if (isProcessing) return;
+
+        // Find the user message before this assistant message
+        let userMessageIndex = messageIndex - 1;
+        while (
+            userMessageIndex >= 0 &&
+            messages[userMessageIndex].role !== "user"
+        ) {
+            userMessageIndex--;
+        }
+
+        if (userMessageIndex < 0) return;
+
+        const userMessage = messages[userMessageIndex];
+        const userParts = userMessage.parts;
+
+        // Get the text from the user message
+        const textPart = userParts?.find((p: any) => p.type === "text");
+        if (!textPart) return;
+
+        // Get the saved XML snapshot for this user message
+        const savedXml = xmlSnapshotsRef.current.get(userMessageIndex);
+        if (!savedXml) {
+            console.error(
+                "No saved XML snapshot for message index:",
+                userMessageIndex
+            );
+            return;
+        }
+
+        // Restore the diagram to the saved state
+        onDisplayChart(savedXml);
+
+        // Update ref directly to ensure edit_diagram has the correct XML
+        chartXMLRef.current = savedXml;
+
+        // Clean up snapshots for messages after the user message (they will be removed)
+        for (const key of xmlSnapshotsRef.current.keys()) {
+            if (key > userMessageIndex) {
+                xmlSnapshotsRef.current.delete(key);
+            }
+        }
+
+        // Remove the user message AND assistant message onwards (sendMessage will re-add the user message)
+        // Use flushSync to ensure state update is processed synchronously before sending
+        const newMessages = messages.slice(0, userMessageIndex);
+        flushSync(() => {
+            setMessages(newMessages);
+        });
+
+        // Now send the message after state is guaranteed to be updated
+        sendMessage(
+            { parts: userParts },
+            {
+                body: {
+                    xml: savedXml,
+                    sessionId,
+                },
+            }
+        );
+    };
+
+    const handleEditMessage = async (messageIndex: number, newText: string) => {
+        const isProcessing = status === "streaming" || status === "submitted";
+        if (isProcessing) return;
+
+        const message = messages[messageIndex];
+        if (!message || message.role !== "user") return;
+
+        // Get the saved XML snapshot for this user message
+        const savedXml = xmlSnapshotsRef.current.get(messageIndex);
+        if (!savedXml) {
+            console.error(
+                "No saved XML snapshot for message index:",
+                messageIndex
+            );
+            return;
+        }
+
+        // Restore the diagram to the saved state
+        onDisplayChart(savedXml);
+
+        // Update ref directly to ensure edit_diagram has the correct XML
+        chartXMLRef.current = savedXml;
+
+        // Clean up snapshots for messages after the user message (they will be removed)
+        for (const key of xmlSnapshotsRef.current.keys()) {
+            if (key > messageIndex) {
+                xmlSnapshotsRef.current.delete(key);
+            }
+        }
+
+        // Create new parts with updated text
+        const newParts = message.parts?.map((part: any) => {
+            if (part.type === "text") {
+                return { ...part, text: newText };
+            }
+            return part;
+        }) || [{ type: "text", text: newText }];
+
+        // Remove the user message AND assistant message onwards (sendMessage will re-add the user message)
+        // Use flushSync to ensure state update is processed synchronously before sending
+        const newMessages = messages.slice(0, messageIndex);
+        flushSync(() => {
+            setMessages(newMessages);
+        });
+
+        // Now send the edited message after state is guaranteed to be updated
+        sendMessage(
+            { parts: newParts },
+            {
+                body: {
+                    xml: savedXml,
+                    sessionId,
+                },
+            }
+        );
+    };
+
     // Collapsed view
     if (!isVisible) {
         return (
@@ -264,7 +427,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
     // Full view
     return (
-        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30">
+        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30 relative">
+            <Toaster position="bottom-center" richColors style={{ position: "absolute" }} />
             {/* Header */}
             <header className="px-5 py-4 border-b border-border/50">
                 <div className="flex items-center justify-between">
@@ -327,6 +491,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     messages={messages}
                     setInput={setInput}
                     setFiles={handleFileChange}
+                    sessionId={sessionId}
+                    onRegenerate={handleRegenerate}
+                    onEditMessage={handleEditMessage}
                 />
             </main>
 
@@ -341,11 +508,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         setMessages([]);
                         clearDiagram();
                         setSessionId(`session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+                        xmlSnapshotsRef.current.clear();
                     }}
                     files={files}
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
+                    sessionId={sessionId}
+                    error={error}
                 />
             </footer>
 

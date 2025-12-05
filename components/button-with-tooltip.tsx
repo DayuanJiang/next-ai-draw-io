@@ -27,7 +27,7 @@ export function ButtonWithTooltip({
                 <TooltipTrigger asChild>
                     <Button {...buttonProps}>{children}</Button>
                 </TooltipTrigger>
-                <TooltipContent>{tooltipContent}</TooltipContent>
+                <TooltipContent className="max-w-xs text-wrap">{tooltipContent}</TooltipContent>
             </Tooltip>
         </TooltipProvider>
     );

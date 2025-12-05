@@ -90,7 +90,10 @@ export default function ExamplePanel({
                         icon={<Zap className="w-4 h-4 text-primary" />}
                         title="Animated Diagram"
                         description="Draw a transformer architecture with animated connectors"
-                        onClick={() => setInput("Give me a **animated connector** diagram of transformer's architecture")}
+                        onClick={() => {
+                            setInput("Give me a **animated connector** diagram of transformer's architecture")
+                            setFiles([])
+                        }}
                     />
 
                     <ExampleCard
@@ -111,7 +114,10 @@ export default function ExamplePanel({
                         icon={<Palette className="w-4 h-4 text-primary" />}
                         title="Creative Drawing"
                         description="Draw something fun and creative"
-                        onClick={() => setInput("Draw a cat for me")}
+                        onClick={() => {
+                            setInput("Draw a cat for me")
+                            setFiles([])
+                        }}
                     />
                 </div>
 

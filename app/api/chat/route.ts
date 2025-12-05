@@ -7,6 +7,36 @@ import { z } from "zod";
 
 export const maxDuration = 300;
 
+// File upload limits (must match client-side)
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILES = 5;
+
+// Helper function to validate file parts in messages
+function validateFileParts(messages: any[]): { valid: boolean; error?: string } {
+  const lastMessage = messages[messages.length - 1];
+  const fileParts = lastMessage?.parts?.filter((p: any) => p.type === 'file') || [];
+
+  if (fileParts.length > MAX_FILES) {
+    return { valid: false, error: `Too many files. Maximum ${MAX_FILES} allowed.` };
+  }
+
+  for (const filePart of fileParts) {
+    // Data URLs format: data:image/png;base64,<data>
+    // Base64 increases size by ~33%, so we check the decoded size
+    if (filePart.url && filePart.url.startsWith('data:')) {
+      const base64Data = filePart.url.split(',')[1];
+      if (base64Data) {
+        const sizeInBytes = Math.ceil((base64Data.length * 3) / 4);
+        if (sizeInBytes > MAX_FILE_SIZE) {
+          return { valid: false, error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` };
+        }
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
 // Helper function to check if diagram is minimal/empty
 function isMinimalDiagram(xml: string): boolean {
   const stripped = xml.replace(/\s/g, '');
@@ -65,6 +95,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
     sessionId: validSessionId,
     userId: userId,
   });
+
+  // === FILE VALIDATION START ===
+  const fileValidation = validateFileParts(messages);
+  if (!fileValidation.valid) {
+    return Response.json({ error: fileValidation.error }, { status: 400 });
+  }
+  // === FILE VALIDATION END ===
 
   // === CACHE CHECK START ===
   const isFirstMessage = messages.length === 1;
@@ -194,7 +231,12 @@ ${lastMessageText}
     onFinish: ({ text, usage, providerMetadata }) => {
       console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
       console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
-      setTraceOutput(text);
+      // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
+      // AI SDK uses inputTokens/outputTokens, Langfuse expects promptTokens/completionTokens
+      setTraceOutput(text, {
+        promptTokens: usage?.inputTokens,
+        completionTokens: usage?.outputTokens,
+      });
     },
     tools: {
       // Client-side tool that will be executed on the client
@@ -258,31 +300,7 @@ IMPORTANT: Keep edits concise:
     temperature: 0,
   });
 
-  // Error handler function to provide detailed error messages
-  function errorHandler(error: unknown) {
-    if (error == null) {
-      return 'unknown error';
-    }
-
-    const errorString = typeof error === 'string'
-      ? error
-      : error instanceof Error
-        ? error.message
-        : JSON.stringify(error);
-
-    // Check for image not supported error (e.g., DeepSeek models)
-    if (errorString.includes('image_url') ||
-      errorString.includes('unknown variant') ||
-      (errorString.includes('image') && errorString.includes('not supported'))) {
-      return 'This model does not support image inputs. Please remove the image and try again, or switch to a vision-capable model.';
-    }
-
-    return errorString;
-  }
-
-  return result.toUIMessageStreamResponse({
-    onError: errorHandler,
-  });
+  return result.toUIMessageStreamResponse();
 }
 
 // Wrap handler with error handling

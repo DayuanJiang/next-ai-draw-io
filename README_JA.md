@@ -81,13 +81,19 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 ## マルチプロバイダーサポート
 
 -   AWS Bedrock（デフォルト）
--   OpenAI / OpenAI互換API（`OPENAI_BASE_URL`経由）
+-   OpenAI
 -   Anthropic
 -   Google AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
 -   DeepSeek
+
+AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタムエンドポイントをサポートしています。
+
+📖 **[詳細なプロバイダー設定ガイド](./docs/ai-providers.md)** - 各プロバイダーの設定手順をご覧ください。
+
+**モデル要件**：このタスクは厳密なフォーマット制約（draw.io XML）を持つ長文テキスト生成を伴うため、強力なモデル機能が必要です。Claude Sonnet 4.5、GPT-4o、Gemini 2.0、DeepSeek V3/R1を推奨します。
 
 注：`claude-sonnet-4-5`はAWSロゴ付きのdraw.ioダイアグラムで学習されているため、AWSアーキテクチャダイアグラムを作成したい場合は最適な選択です。
 
@@ -147,7 +153,7 @@ cp env.example .env.local
 
 > 警告：`ACCESS_CODE_LIST`を設定しない場合、誰でもデプロイされたサイトに直接アクセスできるため、トークンが急速に消費される可能性があります。このオプションを設定することをお勧めします。
 
-プロバイダー固有の設定例については、上記の[マルチプロバイダーサポート](#マルチプロバイダーサポート)セクションを参照してください。
+詳細な設定手順については[プロバイダー設定ガイド](./docs/ai-providers.md)を参照してください。
 
 4. 開発サーバーを起動：
 

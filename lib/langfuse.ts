@@ -1,5 +1,25 @@
 import { observe, updateActiveTrace } from '@langfuse/tracing';
+import { LangfuseClient } from '@langfuse/client';
 import * as api from '@opentelemetry/api';
+
+// Singleton LangfuseClient instance for direct API calls
+let langfuseClient: LangfuseClient | null = null;
+
+export function getLangfuseClient(): LangfuseClient | null {
+  if (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY) {
+    return null;
+  }
+
+  if (!langfuseClient) {
+    langfuseClient = new LangfuseClient({
+      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+      secretKey: process.env.LANGFUSE_SECRET_KEY,
+      baseUrl: process.env.LANGFUSE_BASEURL,
+    });
+  }
+
+  return langfuseClient;
+}
 
 // Check if Langfuse is configured
 export function isLangfuseEnabled(): boolean {
@@ -23,12 +43,22 @@ export function setTraceInput(params: {
 }
 
 // Update trace with output and end the span
-export function setTraceOutput(output: string) {
+export function setTraceOutput(output: string, usage?: { promptTokens?: number; completionTokens?: number }) {
   if (!isLangfuseEnabled()) return;
 
   updateActiveTrace({ output });
+
   const activeSpan = api.trace.getActiveSpan();
   if (activeSpan) {
+    // Manually set usage attributes since AI SDK Bedrock streaming doesn't provide them
+    if (usage?.promptTokens) {
+      activeSpan.setAttribute('ai.usage.promptTokens', usage.promptTokens);
+      activeSpan.setAttribute('gen_ai.usage.input_tokens', usage.promptTokens);
+    }
+    if (usage?.completionTokens) {
+      activeSpan.setAttribute('ai.usage.completionTokens', usage.completionTokens);
+      activeSpan.setAttribute('gen_ai.usage.output_tokens', usage.completionTokens);
+    }
     activeSpan.end();
   }
 }
@@ -42,7 +72,9 @@ export function getTelemetryConfig(params: {
 
   return {
     isEnabled: true,
-    recordInputs: true,
+    // Disable automatic input recording to avoid uploading large base64 images to Langfuse media
+    // User text input is recorded manually via setTraceInput
+    recordInputs: false,
     recordOutputs: true,
     metadata: {
       sessionId: params.sessionId,
