@@ -71,7 +71,7 @@ export default function ChatPanel({
         chartXMLRef.current = chartXML;
     }, [chartXML]);
 
-    const { messages, sendMessage, addToolResult, status, error, setMessages } =
+    const { messages, sendMessage, addToolOutput, status, error, setMessages } =
         useChat({
             transport: new DefaultChatTransport({
                 api: "/api/chat",
@@ -83,13 +83,13 @@ export default function ChatPanel({
                     const validationError = validateMxCellStructure(xml);
 
                     if (validationError) {
-                        addToolResult({
+                        addToolOutput({
                             tool: "display_diagram",
                             toolCallId: toolCall.toolCallId,
                             output: validationError,
                         });
                     } else {
-                        addToolResult({
+                        addToolOutput({
                             tool: "display_diagram",
                             toolCallId: toolCall.toolCallId,
                             output: "Successfully displayed the diagram.",
@@ -122,7 +122,7 @@ export default function ChatPanel({
 
                         onDisplayChart(editedXml);
 
-                        addToolResult({
+                        addToolOutput({
                             tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
                             output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
@@ -136,7 +136,7 @@ export default function ChatPanel({
                                 ? error.message
                                 : String(error);
 
-                        addToolResult({
+                        addToolOutput({
                             tool: "edit_diagram",
                             toolCallId: toolCall.toolCallId,
                             output: `Edit failed: ${errorMessage}
