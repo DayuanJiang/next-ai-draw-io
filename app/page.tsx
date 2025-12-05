@@ -15,6 +15,13 @@ export default function Home() {
     const { drawioRef, handleDiagramExport } = useDiagram();
     const [isMobile, setIsMobile] = useState(false);
     const [isChatVisible, setIsChatVisible] = useState(true);
+    const [drawioUi, setDrawioUi] = useState<"min" | "sketch">(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("drawio-theme");
+            if (saved === "min" || saved === "sketch") return saved;
+        }
+        return "min";
+    });
     const chatPanelRef = useRef<ImperativePanelHandle>(null);
 
     useEffect(() => {
@@ -42,14 +49,14 @@ export default function Home() {
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
+            if ((event.ctrlKey || event.metaKey) && event.key === "b") {
                 event.preventDefault();
                 toggleChatPanel();
             }
         };
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
     }, []);
 
     // Show confirmation dialog when user tries to leave the page
@@ -57,11 +64,12 @@ export default function Home() {
     useEffect(() => {
         const handleBeforeUnload = (event: BeforeUnloadEvent) => {
             event.preventDefault();
-            return '';
+            return "";
         };
 
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () =>
+            window.removeEventListener("beforeunload", handleBeforeUnload);
     }, []);
 
     return (
@@ -77,7 +85,9 @@ export default function Home() {
                             Desktop Required
                         </h1>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            This application works best on desktop or laptop devices. Please open it on a larger screen for the full experience.
+                            This application works best on desktop or laptop
+                            devices. Please open it on a larger screen for the
+                            full experience.
                         </p>
                     </div>
                 </div>
@@ -89,9 +99,11 @@ export default function Home() {
                     <div className="h-full relative p-2">
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
                             <DrawIoEmbed
+                                key={drawioUi}
                                 ref={drawioRef}
                                 onExport={handleDiagramExport}
                                 urlParameters={{
+                                    ui: drawioUi,
                                     spin: true,
                                     libraries: false,
                                     saveAndExit: false,
@@ -119,6 +131,12 @@ export default function Home() {
                         <ChatPanel
                             isVisible={isChatVisible}
                             onToggleVisibility={toggleChatPanel}
+                            drawioUi={drawioUi}
+                            onToggleDrawioUi={() => {
+                                const newTheme = drawioUi === "min" ? "sketch" : "min";
+                                localStorage.setItem("drawio-theme", newTheme);
+                                setDrawioUi(newTheme);
+                            }}
                         />
                     </div>
                 </ResizablePanel>
