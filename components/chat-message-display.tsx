@@ -115,7 +115,7 @@ export function ChatMessageDisplay({
                     previousXML.current = convertedXml;
                     onDisplayChart(replacedXML);
                 } else {
-                    console.error("[ChatMessageDisplay] XML validation failed:", validationError);
+                    console.log("[ChatMessageDisplay] XML validation failed:", validationError);
                 }
             }
         },
