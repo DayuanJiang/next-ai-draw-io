@@ -33,7 +33,7 @@ function createCachedStreamResponse(xml: string): Response {
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
   // Check for access code
-  const accessCodes = process.env.ACCESS_CODES?.split(',').map(code => code.trim()).filter(Boolean) || [];
+  const accessCodes = process.env.ACCESS_CODE_LIST?.split(',').map(code => code.trim()).filter(Boolean) || [];
   if (accessCodes.length > 0) {
     const accessCodeHeader = req.headers.get('x-access-code');
     if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
