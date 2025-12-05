@@ -4,7 +4,7 @@ import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { FaGithub } from "react-icons/fa";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -72,75 +72,88 @@ export default function ChatPanel({
         chartXMLRef.current = chartXML;
     }, [chartXML]);
 
-    const { messages, sendMessage, addToolResult, status, error, setMessages, stop } =
-        useChat({
-            transport: new DefaultChatTransport({
-                api: "/api/chat",
-            }),
-            async onToolCall({ toolCall }) {
-                if (toolCall.toolName === "display_diagram") {
-                    const { xml } = toolCall.input as { xml: string };
+    const {
+        messages,
+        sendMessage,
+        addToolResult,
+        status,
+        error,
+        setMessages,
+        stop,
+    } = useChat({
+        transport: new DefaultChatTransport({
+            api: "/api/chat",
+        }),
+        async onToolCall({ toolCall }) {
+            if (toolCall.toolName === "display_diagram") {
+                const { xml } = toolCall.input as { xml: string };
 
-                    const validationError = validateMxCellStructure(xml);
+                const validationError = validateMxCellStructure(xml);
 
-                    if (validationError) {
-                        addToolResult({
-                            tool: "display_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: validationError,
-                        });
+                if (validationError) {
+                    addToolResult({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: validationError,
+                    });
+                } else {
+                    addToolResult({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: "Successfully displayed the diagram.",
+                    });
+                }
+            } else if (toolCall.toolName === "edit_diagram") {
+                const { edits } = toolCall.input as {
+                    edits: Array<{ search: string; replace: string }>;
+                };
+
+                let currentXml = "";
+                try {
+                    console.log("[edit_diagram] Starting...");
+                    // Use chartXML from ref directly - more reliable than export
+                    // especially on Vercel where DrawIO iframe may have latency issues
+                    // Using ref to avoid stale closure in callback
+                    const cachedXML = chartXMLRef.current;
+                    if (cachedXML) {
+                        currentXml = cachedXML;
+                        console.log(
+                            "[edit_diagram] Using cached chartXML, length:",
+                            currentXml.length
+                        );
                     } else {
-                        addToolResult({
-                            tool: "display_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: "Successfully displayed the diagram.",
-                        });
+                        // Fallback to export only if no cached XML
+                        console.log(
+                            "[edit_diagram] No cached XML, fetching from DrawIO..."
+                        );
+                        currentXml = await onFetchChart(false);
+                        console.log(
+                            "[edit_diagram] Got XML from export, length:",
+                            currentXml.length
+                        );
                     }
-                } else if (toolCall.toolName === "edit_diagram") {
-                    const { edits } = toolCall.input as {
-                        edits: Array<{ search: string; replace: string }>;
-                    };
 
-                    let currentXml = "";
-                    try {
-                        console.log("[edit_diagram] Starting...");
-                        // Use chartXML from ref directly - more reliable than export
-                        // especially on Vercel where DrawIO iframe may have latency issues
-                        // Using ref to avoid stale closure in callback
-                        const cachedXML = chartXMLRef.current;
-                        if (cachedXML) {
-                            currentXml = cachedXML;
-                            console.log("[edit_diagram] Using cached chartXML, length:", currentXml.length);
-                        } else {
-                            // Fallback to export only if no cached XML
-                            console.log("[edit_diagram] No cached XML, fetching from DrawIO...");
-                            currentXml = await onFetchChart(false);
-                            console.log("[edit_diagram] Got XML from export, length:", currentXml.length);
-                        }
+                    const { replaceXMLParts } = await import("@/lib/utils");
+                    const editedXml = replaceXMLParts(currentXml, edits);
 
-                        const { replaceXMLParts } = await import("@/lib/utils");
-                        const editedXml = replaceXMLParts(currentXml, edits);
+                    onDisplayChart(editedXml);
 
-                        onDisplayChart(editedXml);
+                    addToolResult({
+                        tool: "edit_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                    });
+                    console.log("[edit_diagram] Success");
+                } catch (error) {
+                    console.error("[edit_diagram] Failed:", error);
 
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
-                        });
-                        console.log("[edit_diagram] Success");
-                    } catch (error) {
-                        console.error("[edit_diagram] Failed:", error);
+                    const errorMessage =
+                        error instanceof Error ? error.message : String(error);
 
-                        const errorMessage =
-                            error instanceof Error
-                                ? error.message
-                                : String(error);
-
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Edit failed: ${errorMessage}
+                    addToolResult({
+                        tool: "edit_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: `Edit failed: ${errorMessage}
 
 Current diagram XML:
 \`\`\`xml
@@ -148,15 +161,15 @@ ${currentXml || "No XML available"}
 \`\`\`
 
 Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
-                        });
-                    }
+                    });
                 }
-            },
-            onError: (error) => {
-                console.error("Chat error:", error);
-                setStreamingError(error);
-            },
-        });
+            }
+        },
+        onError: (error) => {
+            console.error("Chat error:", error);
+            setStreamingError(error);
+        },
+    });
 
     // Streaming timeout detection - detects when stream stalls mid-response (e.g., Bedrock 503)
     // This catches cases where onError doesn't fire because headers were already sent
@@ -201,9 +214,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 messages.length === capturedMessageCount &&
                 newPartsCount === capturedPartsCount
             ) {
-                console.error("[Streaming Timeout] No activity for 15s - forcing error state");
+                console.error(
+                    "[Streaming Timeout] No activity for 15s - forcing error state"
+                );
                 setStreamingError(
-                    new Error("Connection lost. The AI service may be temporarily unavailable. Please try again.")
+                    new Error(
+                        "Connection lost. The AI service may be temporarily unavailable. Please try again."
+                    )
                 );
                 stop(); // Allow user to retry by transitioning status to "ready"
             }
@@ -220,11 +237,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages]);
 
-
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         // Allow retry if there's a streaming error (workaround for stop() not transitioning status)
-        const isProcessing = (status === "streaming" || status === "submitted") && !streamingError;
+        const isProcessing =
+            (status === "streaming" || status === "submitted") &&
+            !streamingError;
         if (input.trim() && !isProcessing) {
             // Clear any previous streaming error before starting new request
             setStreamingError(null);
@@ -292,7 +310,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
         // Find the user message before this assistant message
         let userMessageIndex = messageIndex - 1;
-        while (userMessageIndex >= 0 && messages[userMessageIndex].role !== "user") {
+        while (
+            userMessageIndex >= 0 &&
+            messages[userMessageIndex].role !== "user"
+        ) {
             userMessageIndex--;
         }
 
@@ -308,7 +329,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         // Get the saved XML snapshot for this user message
         const savedXml = xmlSnapshotsRef.current.get(userMessageIndex);
         if (!savedXml) {
-            console.error("No saved XML snapshot for message index:", userMessageIndex);
+            console.error(
+                "No saved XML snapshot for message index:",
+                userMessageIndex
+            );
             return;
         }
 
@@ -353,7 +377,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         // Get the saved XML snapshot for this user message
         const savedXml = xmlSnapshotsRef.current.get(messageIndex);
         if (!savedXml) {
-            console.error("No saved XML snapshot for message index:", messageIndex);
+            console.error(
+                "No saved XML snapshot for message index:",
+                messageIndex
+            );
             return;
         }
 
@@ -447,6 +474,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         >
                             About
                         </Link>
+                        <ButtonWithTooltip
+                            tooltipContent="We're experiencing issues with diagram generation. Debugging is in progress."
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                        >
+                            <AlertTriangle className="h-4 w-4" />
+                        </ButtonWithTooltip>
                     </div>
                     <div className="flex items-center gap-1">
                         <a
