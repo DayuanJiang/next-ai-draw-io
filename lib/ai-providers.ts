@@ -38,7 +38,7 @@ const ANTHROPIC_BETA_HEADERS = {
 
 // Map of provider to required environment variable
 const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
-  bedrock: 'AWS_ACCESS_KEY_ID',
+  bedrock: null, // AWS SDK auto-uses IAM role on AWS, or env vars locally
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   google: 'GOOGLE_GENERATIVE_AI_API_KEY',
