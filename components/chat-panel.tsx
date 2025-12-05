@@ -4,7 +4,7 @@ import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { FaGithub } from "react-icons/fa";
-import { PanelRightClose, PanelRightOpen, CheckCircle } from "lucide-react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -62,7 +62,6 @@ export default function ChatPanel({
     const [files, setFiles] = useState<File[]>([]);
     const [showHistory, setShowHistory] = useState(false);
     const [input, setInput] = useState("");
-    const [streamingError, setStreamingError] = useState<Error | null>(null);
 
     // Store XML snapshots for each user message (keyed by message index)
     const xmlSnapshotsRef = useRef<Map<number, string>>(new Map());
@@ -80,7 +79,6 @@ export default function ChatPanel({
         status,
         error,
         setMessages,
-        stop,
     } = useChat({
         transport: new DefaultChatTransport({
             api: "/api/chat",
@@ -168,67 +166,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         },
         onError: (error) => {
             console.error("Chat error:", error);
-            setStreamingError(error);
         },
     });
-
-    // Streaming timeout detection - detects when stream stalls mid-response (e.g., Bedrock 503)
-    // This catches cases where onError doesn't fire because headers were already sent
-    const lastMessageCountRef = useRef(0);
-    const lastMessagePartsRef = useRef(0);
-
-    useEffect(() => {
-        // Clear streaming error when status changes to ready
-        if (status === "ready") {
-            setStreamingError(null);
-            lastMessageCountRef.current = 0;
-            lastMessagePartsRef.current = 0;
-            return;
-        }
-
-        if (status !== "streaming") return;
-
-        const STALL_TIMEOUT_MS = 15000; // 15 seconds without any update
-
-        // Capture current state BEFORE setting timeout
-        // This way we compare against values at the time timeout was set
-        const currentPartsCount = messages.reduce(
-            (acc, msg) => acc + (msg.parts?.length || 0),
-            0
-        );
-        const capturedMessageCount = messages.length;
-        const capturedPartsCount = currentPartsCount;
-
-        // Update refs immediately so next effect run has fresh values
-        lastMessageCountRef.current = messages.length;
-        lastMessagePartsRef.current = currentPartsCount;
-
-        const timeoutId = setTimeout(() => {
-            // Re-count parts at timeout time
-            const newPartsCount = messages.reduce(
-                (acc, msg) => acc + (msg.parts?.length || 0),
-                0
-            );
-
-            // If no change since timeout was set, stream has stalled
-            if (
-                messages.length === capturedMessageCount &&
-                newPartsCount === capturedPartsCount
-            ) {
-                console.error(
-                    "[Streaming Timeout] No activity for 15s - forcing error state"
-                );
-                setStreamingError(
-                    new Error(
-                        "Connection lost. The AI service may be temporarily unavailable. Please try again."
-                    )
-                );
-                stop(); // Allow user to retry by transitioning status to "ready"
-            }
-        }, STALL_TIMEOUT_MS);
-
-        return () => clearTimeout(timeoutId);
-    }, [status, messages, stop]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -240,13 +179,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        // Allow retry if there's a streaming error (workaround for stop() not transitioning status)
-        const isProcessing =
-            (status === "streaming" || status === "submitted") &&
-            !streamingError;
+        const isProcessing = status === "streaming" || status === "submitted";
         if (input.trim() && !isProcessing) {
-            // Clear any previous streaming error before starting new request
-            setStreamingError(null);
             try {
                 let chartXml = await onFetchChart();
                 chartXml = formatXML(chartXml);
@@ -476,14 +410,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         >
                             About
                         </Link>
-                        <ButtonWithTooltip
-                            tooltipContent="Recent generation failures were caused by our AI provider's infrastructure issue, not the app code. After extensive debugging, I've switched providers and observed 30+ minutes of stability. If issues persist, please report on GitHub."
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-green-500 hover:text-green-600"
-                        >
-                            <CheckCircle className="h-4 w-4" />
-                        </ButtonWithTooltip>
                     </div>
                     <div className="flex items-center gap-1">
                         <a
@@ -511,7 +437,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <main className="flex-1 overflow-hidden">
                 <ChatMessageDisplay
                     messages={messages}
-                    error={error || streamingError}
+                    error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
                     onRegenerate={handleRegenerate}
@@ -535,7 +461,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onFileChange={handleFileChange}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
-                    error={error || streamingError}
+                    error={error}
                 />
             </footer>
         </div>
