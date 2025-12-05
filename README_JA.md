@@ -149,6 +149,9 @@ cp env.example .env.local
 -   `AI_PROVIDER`を選択したプロバイダーに設定（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek）
 -   `AI_MODEL`を使用する特定のモデルに設定
 -   プロバイダーに必要なAPIキーを追加
+-   `ACCESS_CODE_LIST` アクセスパスワード（オプション）。カンマ区切りで複数のパスワードを指定できます。
+
+> 警告：`ACCESS_CODE_LIST`を設定しない場合、誰でもデプロイされたサイトに直接アクセスできるため、トークンが急速に消費される可能性があります。このオプションを設定することをお勧めします。
 
 詳細な設定手順については[プロバイダー設定ガイド](./docs/ai-providers.md)を参照してください。
 

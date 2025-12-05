@@ -4,7 +4,7 @@ import type React from "react";
 import { useRef, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { FaGithub } from "react-icons/fa";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Settings } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -16,6 +16,7 @@ import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML, validateMxCellStructure } from "@/lib/utils";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
 import { Toaster } from "sonner";
+import { SettingsDialog, STORAGE_ACCESS_CODE_KEY } from "@/components/settings-dialog";
 
 interface ChatPanelProps {
     isVisible: boolean;
@@ -61,7 +62,17 @@ export default function ChatPanel({
 
     const [files, setFiles] = useState<File[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+    const [accessCodeRequired, setAccessCodeRequired] = useState(false);
     const [input, setInput] = useState("");
+
+    // Check if access code is required on mount
+    useEffect(() => {
+        fetch("/api/config")
+            .then((res) => res.json())
+            .then((data) => setAccessCodeRequired(data.accessCodeRequired))
+            .catch(() => setAccessCodeRequired(false));
+    }, []);
 
     // Generate a unique session ID for Langfuse tracing
     const [sessionId, setSessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
@@ -168,7 +179,27 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             }
         },
         onError: (error) => {
-            console.error("Chat error:", error);
+            // Silence access code error in console since it's handled by UI
+            if (!error.message.includes("Invalid or missing access code")) {
+                console.error("Chat error:", error);
+            }
+
+            // Add system message for error so it can be cleared
+            setMessages((currentMessages) => {
+                const errorMessage = {
+                    id: `error-${Date.now()}`,
+                    role: 'system' as const,
+                    content: error.message,
+                    parts: [{ type: 'text' as const, text: error.message }]
+                };
+                return [...currentMessages, errorMessage];
+            });
+
+            if (error.message.includes("Invalid or missing access code")) {
+                // Show settings button and open dialog to help user fix it
+                setAccessCodeRequired(true);
+                setShowSettingsDialog(true);
+            }
         },
     });
 
@@ -215,12 +246,16 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 const messageIndex = messages.length;
                 xmlSnapshotsRef.current.set(messageIndex, chartXml);
 
+                const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || "";
                 sendMessage(
                     { parts },
                     {
                         body: {
                             xml: chartXml,
                             sessionId,
+                        },
+                        headers: {
+                            "x-access-code": accessCode,
                         },
                     }
                 );
@@ -426,6 +461,17 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         >
                             <FaGithub className="w-5 h-5" />
                         </a>
+                        {accessCodeRequired && (
+                            <ButtonWithTooltip
+                                tooltipContent="Settings"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShowSettingsDialog(true)}
+                                className="hover:bg-accent"
+                            >
+                                <Settings className="h-5 w-5 text-muted-foreground" />
+                            </ButtonWithTooltip>
+                        )}
                         <ButtonWithTooltip
                             tooltipContent="Hide chat panel (Ctrl+B)"
                             variant="ghost"
@@ -443,7 +489,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <main className="flex-1 overflow-hidden">
                 <ChatMessageDisplay
                     messages={messages}
-                    error={error}
                     setInput={setInput}
                     setFiles={handleFileChange}
                     sessionId={sessionId}
@@ -473,6 +518,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     error={error}
                 />
             </footer>
+
+            <SettingsDialog
+                open={showSettingsDialog}
+                onOpenChange={setShowSettingsDialog}
+            />
         </div>
     );
 }

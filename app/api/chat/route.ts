@@ -62,6 +62,18 @@ function createCachedStreamResponse(xml: string): Response {
 
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
+  // Check for access code
+  const accessCodes = process.env.ACCESS_CODE_LIST?.split(',').map(code => code.trim()).filter(Boolean) || [];
+  if (accessCodes.length > 0) {
+    const accessCodeHeader = req.headers.get('x-access-code');
+    if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
+      return Response.json(
+        { error: 'Invalid or missing access code. Please configure it in Settings.' },
+        { status: 401 }
+      );
+    }
+  }
+
   const { messages, xml, sessionId } = await req.json();
 
   // Get user IP for Langfuse tracking

@@ -64,7 +64,6 @@ const getMessageTextContent = (message: UIMessage): string => {
 
 interface ChatMessageDisplayProps {
     messages: UIMessage[];
-    error?: Error | null;
     setInput: (input: string) => void;
     setFiles: (files: File[]) => void;
     sessionId?: string;
@@ -74,7 +73,6 @@ interface ChatMessageDisplayProps {
 
 export function ChatMessageDisplay({
     messages,
-    error,
     setInput,
     setFiles,
     sessionId,
@@ -391,6 +389,8 @@ export function ChatMessageDisplay({
                                                 className={`px-4 py-3 text-sm leading-relaxed ${
                                                     message.role === "user"
                                                         ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
+                                                        : message.role === "system"
+                                                        ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-2xl rounded-bl-md"
                                                         : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
                                                 } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
                                                 onClick={() => {
@@ -499,11 +499,6 @@ export function ChatMessageDisplay({
                             </div>
                         );
                     })}
-                </div>
-            )}
-            {error && (
-                <div className="mx-4 mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm">
-                    <span className="font-medium">Error:</span> {error.message}
                 </div>
             )}
             <div ref={messagesEndRef} />

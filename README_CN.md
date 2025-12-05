@@ -149,6 +149,9 @@ cp env.example .env.local
 -   将 `AI_PROVIDER` 设置为您选择的提供商（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek）
 -   将 `AI_MODEL` 设置为您要使用的特定模型
 -   添加您的提供商所需的API密钥
+-   `ACCESS_CODE_LIST` 访问密码，可选，可以使用逗号隔开多个密码。
+
+> 警告：如果不填写 `ACCESS_CODE_LIST`，则任何人都可以直接使用你部署后的网站，可能会导致你的 token 被急速消耗完毕，建议填写此选项。
 
 详细设置说明请参阅[提供商配置指南](./docs/ai-providers.md)。
 
