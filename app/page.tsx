@@ -32,6 +32,18 @@ export default function Home() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // Show confirmation dialog when user tries to leave the page
+    // This helps prevent accidental navigation from browser back gestures
+    useEffect(() => {
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            return '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
+
     return (
         <div className="flex h-screen bg-background relative overflow-hidden">
             {/* Mobile warning overlay */}
