@@ -15,6 +15,7 @@ import { ChatMessageDisplay } from "./chat-message-display";
 import { useDiagram } from "@/contexts/diagram-context";
 import { replaceNodes, formatXML, validateMxCellStructure } from "@/lib/utils";
 import { ButtonWithTooltip } from "@/components/button-with-tooltip";
+import { Toaster } from "sonner";
 
 interface ChatPanelProps {
     isVisible: boolean;
@@ -451,7 +452,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
     // Full view
     return (
-        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30">
+        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30 relative">
+            <Toaster position="bottom-center" richColors style={{ position: "absolute" }} />
             {/* Header */}
             <header className="px-5 py-4 border-b border-border/50">
                 <div className="flex items-center justify-between">

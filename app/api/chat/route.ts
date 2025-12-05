@@ -6,6 +6,36 @@ import { z } from "zod";
 
 export const maxDuration = 300;
 
+// File upload limits (must match client-side)
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILES = 5;
+
+// Helper function to validate file parts in messages
+function validateFileParts(messages: any[]): { valid: boolean; error?: string } {
+  const lastMessage = messages[messages.length - 1];
+  const fileParts = lastMessage?.parts?.filter((p: any) => p.type === 'file') || [];
+
+  if (fileParts.length > MAX_FILES) {
+    return { valid: false, error: `Too many files. Maximum ${MAX_FILES} allowed.` };
+  }
+
+  for (const filePart of fileParts) {
+    // Data URLs format: data:image/png;base64,<data>
+    // Base64 increases size by ~33%, so we check the decoded size
+    if (filePart.url && filePart.url.startsWith('data:')) {
+      const base64Data = filePart.url.split(',')[1];
+      if (base64Data) {
+        const sizeInBytes = Math.ceil((base64Data.length * 3) / 4);
+        if (sizeInBytes > MAX_FILE_SIZE) {
+          return { valid: false, error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` };
+        }
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
 // Helper function to check if diagram is minimal/empty
 function isMinimalDiagram(xml: string): boolean {
   const stripped = xml.replace(/\s/g, '');
@@ -32,6 +62,13 @@ function createCachedStreamResponse(xml: string): Response {
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
   const { messages, xml } = await req.json();
+
+  // === FILE VALIDATION START ===
+  const fileValidation = validateFileParts(messages);
+  if (!fileValidation.valid) {
+    return Response.json({ error: fileValidation.error }, { status: 400 });
+  }
+  // === FILE VALIDATION END ===
 
   // === CACHE CHECK START ===
   const isFirstMessage = messages.length === 1;
