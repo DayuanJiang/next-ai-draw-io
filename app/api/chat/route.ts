@@ -154,9 +154,28 @@ ${lastMessageText}
     messages: allMessages,
     ...(providerOptions && { providerOptions }),
     ...(headers && { headers }),
-    onFinish: ({ usage, providerMetadata }) => {
-      console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
-      console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
+    onFinish: ({ usage, providerMetadata, finishReason, text, toolCalls }) => {
+      // Detect potential mid-stream failures (e.g., Bedrock 503 ServiceUnavailableException)
+      // When this happens, usage is empty and providerMetadata is undefined
+      const hasUsage = usage && Object.keys(usage).length > 0;
+      if (!hasUsage) {
+        console.error('[Stream Error] Empty usage detected - possible Bedrock 503 or mid-stream failure');
+        console.error('[Stream Error] finishReason:', finishReason);
+        console.error('[Stream Error] text received:', text?.substring(0, 200) || '(none)');
+        console.error('[Stream Error] toolCalls:', toolCalls?.length || 0);
+        // Log the user's last message for debugging
+        const lastUserMsg = enhancedMessages.filter(m => m.role === 'user').pop();
+        if (lastUserMsg) {
+          const content = lastUserMsg.content;
+          const preview = Array.isArray(content)
+            ? (content.find((c) => c.type === 'text') as { type: 'text'; text: string } | undefined)?.text?.substring(0, 100)
+            : String(content).substring(0, 100);
+          console.error('[Stream Error] Last user message preview:', preview);
+        }
+      } else {
+        console.log('[Cache] Full providerMetadata:', JSON.stringify(providerMetadata, null, 2));
+        console.log('[Cache] Usage:', JSON.stringify(usage, null, 2));
+      }
     },
     tools: {
       // Client-side tool that will be executed on the client
@@ -231,6 +250,23 @@ IMPORTANT: Keep edits concise:
       : error instanceof Error
         ? error.message
         : JSON.stringify(error);
+
+    // Check for Bedrock service errors (503, throttling, etc.)
+    if (errorString.includes('ServiceUnavailable') ||
+      errorString.includes('503') ||
+      errorString.includes('temporarily unavailable')) {
+      console.error('[Bedrock Error] ServiceUnavailableException:', errorString);
+      return 'The AI service is temporarily unavailable. Please try again in a few seconds.';
+    }
+
+    // Check for throttling errors
+    if (errorString.includes('ThrottlingException') ||
+      errorString.includes('rate limit') ||
+      errorString.includes('too many requests') ||
+      errorString.includes('429')) {
+      console.error('[Bedrock Error] ThrottlingException:', errorString);
+      return 'Too many requests. Please wait a moment and try again.';
+    }
 
     // Check for image not supported error (e.g., DeepSeek models)
     if (errorString.includes('image_url') ||
