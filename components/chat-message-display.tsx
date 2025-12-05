@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ExamplePanel from "./chat-example-panel";
 import { UIMessage } from "ai";
 import { convertToLegalXml, replaceNodes, validateMxCellStructure } from "@/lib/utils";
-import { Copy, Check, X, ChevronDown, ChevronUp, Cpu, Minus, Plus, RotateCcw, Pencil } from "lucide-react";
+import { Copy, Check, X, ChevronDown, ChevronUp, Cpu, Minus, Plus, ThumbsUp, ThumbsDown, RotateCcw, Pencil } from "lucide-react";
 import { CodeBlock } from "./code-block";
 
 interface EditPair {
@@ -67,6 +67,7 @@ interface ChatMessageDisplayProps {
     error?: Error | null;
     setInput: (input: string) => void;
     setFiles: (files: File[]) => void;
+    sessionId?: string;
     onRegenerate?: (messageIndex: number) => void;
     onEditMessage?: (messageIndex: number, newText: string) => void;
 }
@@ -76,6 +77,7 @@ export function ChatMessageDisplay({
     error,
     setInput,
     setFiles,
+    sessionId,
     onRegenerate,
     onEditMessage,
 }: ChatMessageDisplayProps) {
@@ -88,6 +90,7 @@ export function ChatMessageDisplay({
     );
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
     const [copyFailedMessageId, setCopyFailedMessageId] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState<Record<string, "good" | "bad">>({});
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editText, setEditText] = useState<string>("");
 
@@ -100,6 +103,34 @@ export function ChatMessageDisplay({
             console.error("Failed to copy message:", err);
             setCopyFailedMessageId(messageId);
             setTimeout(() => setCopyFailedMessageId(null), 2000);
+        }
+    };
+
+    const submitFeedback = async (messageId: string, value: "good" | "bad") => {
+        // Toggle off if already selected
+        if (feedback[messageId] === value) {
+            setFeedback((prev) => {
+                const next = { ...prev };
+                delete next[messageId];
+                return next;
+            });
+            return;
+        }
+
+        setFeedback((prev) => ({ ...prev, [messageId]: value }));
+
+        try {
+            await fetch("/api/log-feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messageId,
+                    feedback: value,
+                    sessionId,
+                }),
+            });
+        } catch (error) {
+            console.warn("Failed to log feedback:", error);
         }
     };
 
@@ -436,6 +467,32 @@ export function ChatMessageDisplay({
                                                     <RotateCcw className="h-3.5 w-3.5" />
                                                 </button>
                                             )}
+                                            {/* Divider */}
+                                            <div className="w-px h-4 bg-border mx-1" />
+                                            {/* Thumbs up */}
+                                            <button
+                                                onClick={() => submitFeedback(message.id, "good")}
+                                                className={`p-1.5 rounded-lg transition-colors ${
+                                                    feedback[message.id] === "good"
+                                                        ? "text-green-600 bg-green-100"
+                                                        : "text-muted-foreground/60 hover:text-green-600 hover:bg-green-50"
+                                                }`}
+                                                title="Good response"
+                                            >
+                                                <ThumbsUp className="h-3.5 w-3.5" />
+                                            </button>
+                                            {/* Thumbs down */}
+                                            <button
+                                                onClick={() => submitFeedback(message.id, "bad")}
+                                                className={`p-1.5 rounded-lg transition-colors ${
+                                                    feedback[message.id] === "bad"
+                                                        ? "text-red-600 bg-red-100"
+                                                        : "text-muted-foreground/60 hover:text-red-600 hover:bg-red-50"
+                                                }`}
+                                                title="Bad response"
+                                            >
+                                                <ThumbsDown className="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     )}
                                 </div>
