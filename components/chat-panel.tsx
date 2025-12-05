@@ -31,6 +31,7 @@ interface ChatPanelProps {
     onToggleVisibility: () => void;
     drawioUi: "min" | "sketch";
     onToggleDrawioUi: () => void;
+    isMobile?: boolean;
 }
 
 export default function ChatPanel({
@@ -38,6 +39,7 @@ export default function ChatPanel({
     onToggleVisibility,
     drawioUi,
     onToggleDrawioUi,
+    isMobile = false,
 }: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
@@ -410,8 +412,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         );
     };
 
-    // Collapsed view
-    if (!isVisible) {
+    // Collapsed view (desktop only)
+    if (!isVisible && !isMobile) {
         return (
             <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
                 <ButtonWithTooltip
@@ -445,35 +447,39 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 style={{ position: "absolute" }}
             />
             {/* Header */}
-            <header className="px-5 py-4 border-b border-border/50">
+            <header className={`${isMobile ? "px-3 py-2" : "px-5 py-4"} border-b border-border/50`}>
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2">
                             <Image
                                 src="/favicon.ico"
                                 alt="Next AI Drawio"
-                                width={28}
-                                height={28}
+                                width={isMobile ? 24 : 28}
+                                height={isMobile ? 24 : 28}
                                 className="rounded"
                             />
-                            <h1 className="text-base font-semibold tracking-tight whitespace-nowrap">
+                            <h1 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}>
                                 Next AI Drawio
                             </h1>
                         </div>
-                        <Link
-                            href="/about"
-                            className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
-                        >
-                            About
-                        </Link>
-                        <ButtonWithTooltip
-                            tooltipContent="Recent generation failures were caused by our AI provider's infrastructure issue, not the app code. After extensive debugging, I've switched providers and observed 6 hours of stability. If issues persist, please report on GitHub."
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-green-500 hover:text-green-600"
-                        >
-                            <CheckCircle className="h-4 w-4" />
-                        </ButtonWithTooltip>
+                        {!isMobile && (
+                            <Link
+                                href="/about"
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
+                            >
+                                About
+                            </Link>
+                        )}
+                        {!isMobile && (
+                            <ButtonWithTooltip
+                                tooltipContent="Recent generation failures were caused by our AI provider's infrastructure issue, not the app code. After extensive debugging, I've switched providers and observed 6 hours of stability. If issues persist, please report on GitHub."
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-green-500 hover:text-green-600"
+                            >
+                                <CheckCircle className="h-4 w-4" />
+                            </ButtonWithTooltip>
+                        )}
                     </div>
                     <div className="flex items-center gap-1">
                         <a
@@ -482,7 +488,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                             rel="noopener noreferrer"
                             className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                         >
-                            <FaGithub className="w-5 h-5" />
+                            <FaGithub className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`} />
                         </a>
                         {accessCodeRequired && (
                             <ButtonWithTooltip
@@ -492,18 +498,20 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                                 onClick={() => setShowSettingsDialog(true)}
                                 className="hover:bg-accent"
                             >
-                                <Settings className="h-5 w-5 text-muted-foreground" />
+                                <Settings className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`} />
                             </ButtonWithTooltip>
                         )}
-                        <ButtonWithTooltip
-                            tooltipContent="Hide chat panel (Ctrl+B)"
-                            variant="ghost"
-                            size="icon"
-                            onClick={onToggleVisibility}
-                            className="hover:bg-accent"
-                        >
-                            <PanelRightClose className="h-5 w-5 text-muted-foreground" />
-                        </ButtonWithTooltip>
+                        {!isMobile && (
+                            <ButtonWithTooltip
+                                tooltipContent="Hide chat panel (Ctrl+B)"
+                                variant="ghost"
+                                size="icon"
+                                onClick={onToggleVisibility}
+                                className="hover:bg-accent"
+                            >
+                                <PanelRightClose className="h-5 w-5 text-muted-foreground" />
+                            </ButtonWithTooltip>
+                        )}
                     </div>
                 </div>
             </header>
@@ -521,7 +529,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             </main>
 
             {/* Input */}
-            <footer className="p-4 border-t border-border/50 bg-card/50">
+            <footer className={`${isMobile ? "p-2" : "p-4"} border-t border-border/50 bg-card/50`}>
                 <ChatInput
                     input={input}
                     status={status}
