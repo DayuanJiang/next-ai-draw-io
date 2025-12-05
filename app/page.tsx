@@ -1,14 +1,21 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { DrawIoEmbed } from "react-drawio";
 import ChatPanel from "@/components/chat-panel";
 import { useDiagram } from "@/contexts/diagram-context";
 import { Monitor } from "lucide-react";
+import {
+    ResizablePanelGroup,
+    ResizablePanel,
+    ResizableHandle,
+} from "@/components/ui/resizable";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 
 export default function Home() {
     const { drawioRef, handleDiagramExport } = useDiagram();
     const [isMobile, setIsMobile] = useState(false);
     const [isChatVisible, setIsChatVisible] = useState(true);
+    const chatPanelRef = useRef<ImperativePanelHandle>(null);
 
     useEffect(() => {
         const checkMobile = () => {
@@ -20,11 +27,24 @@ export default function Home() {
         return () => window.removeEventListener("resize", checkMobile);
     }, []);
 
+    const toggleChatPanel = () => {
+        const panel = chatPanelRef.current;
+        if (panel) {
+            if (panel.isCollapsed()) {
+                panel.expand();
+                setIsChatVisible(true);
+            } else {
+                panel.collapse();
+                setIsChatVisible(false);
+            }
+        }
+    };
+
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
                 event.preventDefault();
-                setIsChatVisible((prev) => !prev);
+                toggleChatPanel();
             }
         };
 
@@ -45,7 +65,7 @@ export default function Home() {
     }, []);
 
     return (
-        <div className="flex h-screen bg-background relative overflow-hidden">
+        <div className="h-screen bg-background relative overflow-hidden">
             {/* Mobile warning overlay */}
             {isMobile && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">
@@ -63,35 +83,46 @@ export default function Home() {
                 </div>
             )}
 
-            {/* Draw.io Canvas */}
-            <div
-                className={`${isChatVisible ? 'w-2/3' : 'w-full'} h-full relative transition-all duration-300 ease-out`}
-            >
-                <div className="absolute inset-2 rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
-                    <DrawIoEmbed
-                        ref={drawioRef}
-                        onExport={handleDiagramExport}
-                        urlParameters={{
-                            spin: true,
-                            libraries: false,
-                            saveAndExit: false,
-                            noExitBtn: true,
-                        }}
-                    />
-                </div>
-            </div>
+            <ResizablePanelGroup direction="horizontal" className="h-full">
+                {/* Draw.io Canvas */}
+                <ResizablePanel defaultSize={67} minSize={30}>
+                    <div className="h-full relative p-2">
+                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
+                            <DrawIoEmbed
+                                ref={drawioRef}
+                                onExport={handleDiagramExport}
+                                urlParameters={{
+                                    spin: true,
+                                    libraries: false,
+                                    saveAndExit: false,
+                                    noExitBtn: true,
+                                }}
+                            />
+                        </div>
+                    </div>
+                </ResizablePanel>
 
-            {/* Chat Panel */}
-            <div
-                className={`${isChatVisible ? 'w-1/3' : 'w-12'} h-full transition-all duration-300 ease-out`}
-            >
-                <div className="h-full py-2 pr-2">
-                    <ChatPanel
-                        isVisible={isChatVisible}
-                        onToggleVisibility={() => setIsChatVisible(!isChatVisible)}
-                    />
-                </div>
-            </div>
+                <ResizableHandle withHandle />
+
+                {/* Chat Panel */}
+                <ResizablePanel
+                    ref={chatPanelRef}
+                    defaultSize={33}
+                    minSize={15}
+                    maxSize={50}
+                    collapsible
+                    collapsedSize={3}
+                    onCollapse={() => setIsChatVisible(false)}
+                    onExpand={() => setIsChatVisible(true)}
+                >
+                    <div className="h-full py-2 pr-2">
+                        <ChatPanel
+                            isVisible={isChatVisible}
+                            onToggleVisibility={toggleChatPanel}
+                        />
+                    </div>
+                </ResizablePanel>
+            </ResizablePanelGroup>
         </div>
     );
 }
