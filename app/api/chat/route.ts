@@ -40,7 +40,7 @@ function validateFileParts(messages: any[]): {
     for (const filePart of fileParts) {
         // Data URLs format: data:image/png;base64,<data>
         // Base64 increases size by ~33%, so we check the decoded size
-        if (filePart.url && filePart.url.startsWith("data:")) {
+        if (filePart.url?.startsWith("data:")) {
             const base64Data = filePart.url.split(",")[1]
             if (base64Data) {
                 const sizeInBytes = Math.ceil((base64Data.length * 3) / 4)

@@ -168,7 +168,7 @@ export function replaceNodes(currentXML: string, nodes: string): string {
 
             // Insert after cell0 if possible
             const cell0 = currentRoot.querySelector('mxCell[id="0"]')
-            if (cell0 && cell0.nextSibling) {
+            if (cell0?.nextSibling) {
                 currentRoot.insertBefore(cell1, cell0.nextSibling)
             } else {
                 currentRoot.appendChild(cell1)

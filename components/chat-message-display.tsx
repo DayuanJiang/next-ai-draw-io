@@ -1,6 +1,7 @@
 "use client"
 
 import type { UIMessage } from "ai"
+
 import {
     Check,
     ChevronDown,
@@ -32,12 +33,21 @@ interface EditPair {
     replace: string
 }
 
+// Tool part interface for type safety
+interface ToolPartLike {
+    type: string
+    toolCallId: string
+    state?: string
+    input?: { xml?: string; edits?: EditPair[] } & Record<string, unknown>
+    output?: string
+}
+
 function EditDiffDisplay({ edits }: { edits: EditPair[] }) {
     return (
         <div className="space-y-3">
             {edits.map((edit, index) => (
                 <div
-                    key={index}
+                    key={`${edit.search.slice(0, 50)}-${edit.replace.slice(0, 50)}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
@@ -82,8 +92,8 @@ import { useDiagram } from "@/contexts/diagram-context"
 const getMessageTextContent = (message: UIMessage): string => {
     if (!message.parts) return ""
     return message.parts
-        .filter((part: any) => part.type === "text")
-        .map((part: any) => part.text)
+        .filter((part) => part.type === "text")
+        .map((part) => (part as { text: string }).text)
         .join("\n")
 }
 
@@ -119,6 +129,7 @@ export function ChatMessageDisplay({
     const [editingMessageId, setEditingMessageId] = useState<string | null>(
         null,
     )
+    const editTextareaRef = useRef<HTMLTextAreaElement>(null)
     const [editText, setEditText] = useState<string>("")
 
     const copyMessageToClipboard = async (messageId: string, text: string) => {
@@ -190,11 +201,18 @@ export function ChatMessageDisplay({
     }, [messages])
 
     useEffect(() => {
+        if (editingMessageId && editTextareaRef.current) {
+            editTextareaRef.current.focus()
+        }
+    }, [editingMessageId])
+
+    useEffect(() => {
         messages.forEach((message) => {
             if (message.parts) {
-                message.parts.forEach((part: any) => {
+                message.parts.forEach((part) => {
                     if (part.type?.startsWith("tool-")) {
-                        const { toolCallId, state } = part
+                        const toolPart = part as ToolPartLike
+                        const { toolCallId, state, input } = toolPart
 
                         if (state === "output-available") {
                             setExpandedTools((prev) => ({
@@ -205,18 +223,19 @@ export function ChatMessageDisplay({
 
                         if (
                             part.type === "tool-display_diagram" &&
-                            part.input?.xml
+                            input?.xml
                         ) {
+                            const xml = input.xml as string
                             if (
                                 state === "input-streaming" ||
                                 state === "input-available"
                             ) {
-                                handleDisplayChart(part.input.xml)
+                                handleDisplayChart(xml)
                             } else if (
                                 state === "output-available" &&
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
-                                handleDisplayChart(part.input.xml)
+                                handleDisplayChart(xml)
                                 processedToolCalls.current.add(toolCallId)
                             }
                         }
@@ -226,7 +245,7 @@ export function ChatMessageDisplay({
         })
     }, [messages, handleDisplayChart])
 
-    const renderToolPart = (part: any) => {
+    const renderToolPart = (part: ToolPartLike) => {
         const callId = part.toolCallId
         const { state, input, output } = part
         const isExpanded = expandedTools[callId] ?? true
@@ -280,6 +299,7 @@ export function ChatMessageDisplay({
                         )}
                         {input && Object.keys(input).length > 0 && (
                             <button
+                                type="button"
                                 onClick={toggleExpanded}
                                 className="p-1 rounded hover:bg-muted transition-colors"
                             >
@@ -358,6 +378,7 @@ export function ChatMessageDisplay({
                                             {onEditMessage &&
                                                 isLastUserMessage && (
                                                     <button
+                                                        type="button"
                                                         onClick={() => {
                                                             setEditingMessageId(
                                                                 message.id,
@@ -373,6 +394,7 @@ export function ChatMessageDisplay({
                                                     </button>
                                                 )}
                                             <button
+                                                type="button"
                                                 onClick={() =>
                                                     copyMessageToClipboard(
                                                         message.id,
@@ -407,6 +429,7 @@ export function ChatMessageDisplay({
                                     {isEditing && message.role === "user" ? (
                                         <div className="flex flex-col gap-2">
                                             <textarea
+                                                ref={editTextareaRef}
                                                 value={editText}
                                                 onChange={(e) =>
                                                     setEditText(e.target.value)
@@ -417,7 +440,6 @@ export function ChatMessageDisplay({
                                                         .length + 1,
                                                     6,
                                                 )}
-                                                autoFocus
                                                 onKeyDown={(e) => {
                                                     if (e.key === "Escape") {
                                                         setEditingMessageId(
@@ -447,6 +469,7 @@ export function ChatMessageDisplay({
                                             />
                                             <div className="flex justify-end gap-2">
                                                 <button
+                                                    type="button"
                                                     onClick={() => {
                                                         setEditingMessageId(
                                                             null,
@@ -458,6 +481,7 @@ export function ChatMessageDisplay({
                                                     Cancel
                                                 </button>
                                                 <button
+                                                    type="button"
                                                     onClick={() => {
                                                         if (
                                                             editText.trim() &&
@@ -483,7 +507,7 @@ export function ChatMessageDisplay({
                                     ) : (
                                         /* Text content in bubble */
                                         message.parts?.some(
-                                            (part: any) =>
+                                            (part) =>
                                                 part.type === "text" ||
                                                 part.type === "file",
                                         ) && (
@@ -496,6 +520,20 @@ export function ChatMessageDisplay({
                                                           ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-2xl rounded-bl-md"
                                                           : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
                                                 } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+                                                role={
+                                                    message.role === "user" &&
+                                                    isLastUserMessage &&
+                                                    onEditMessage
+                                                        ? "button"
+                                                        : undefined
+                                                }
+                                                tabIndex={
+                                                    message.role === "user" &&
+                                                    isLastUserMessage &&
+                                                    onEditMessage
+                                                        ? 0
+                                                        : undefined
+                                                }
                                                 onClick={() => {
                                                     if (
                                                         message.role ===
@@ -503,6 +541,24 @@ export function ChatMessageDisplay({
                                                         isLastUserMessage &&
                                                         onEditMessage
                                                     ) {
+                                                        setEditingMessageId(
+                                                            message.id,
+                                                        )
+                                                        setEditText(
+                                                            userMessageText,
+                                                        )
+                                                    }
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (
+                                                        (e.key === "Enter" ||
+                                                            e.key === " ") &&
+                                                        message.role ===
+                                                            "user" &&
+                                                        isLastUserMessage &&
+                                                        onEditMessage
+                                                    ) {
+                                                        e.preventDefault()
                                                         setEditingMessageId(
                                                             message.id,
                                                         )
@@ -520,17 +576,12 @@ export function ChatMessageDisplay({
                                                 }
                                             >
                                                 {message.parts?.map(
-                                                    (
-                                                        part: any,
-                                                        index: number,
-                                                    ) => {
+                                                    (part, index) => {
                                                         switch (part.type) {
                                                             case "text":
                                                                 return (
                                                                     <div
-                                                                        key={
-                                                                            index
-                                                                        }
+                                                                        key={`${message.id}-text-${index}`}
                                                                         className={`prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
                                                                             message.role ===
                                                                             "user"
@@ -548,9 +599,7 @@ export function ChatMessageDisplay({
                                                             case "file":
                                                                 return (
                                                                     <div
-                                                                        key={
-                                                                            index
-                                                                        }
+                                                                        key={`${message.id}-file-${part.url}`}
                                                                         className="mt-2"
                                                                     >
                                                                         <Image
@@ -581,9 +630,11 @@ export function ChatMessageDisplay({
                                         )
                                     )}
                                     {/* Tool calls outside bubble */}
-                                    {message.parts?.map((part: any) => {
+                                    {message.parts?.map((part) => {
                                         if (part.type?.startsWith("tool-")) {
-                                            return renderToolPart(part)
+                                            return renderToolPart(
+                                                part as ToolPartLike,
+                                            )
                                         }
                                         return null
                                     })}
@@ -592,6 +643,7 @@ export function ChatMessageDisplay({
                                         <div className="flex items-center gap-1 mt-2">
                                             {/* Copy button */}
                                             <button
+                                                type="button"
                                                 onClick={() =>
                                                     copyMessageToClipboard(
                                                         message.id,
@@ -624,6 +676,7 @@ export function ChatMessageDisplay({
                                             {onRegenerate &&
                                                 isLastAssistantMessage && (
                                                     <button
+                                                        type="button"
                                                         onClick={() =>
                                                             onRegenerate(
                                                                 messageIndex,
@@ -639,6 +692,7 @@ export function ChatMessageDisplay({
                                             <div className="w-px h-4 bg-border mx-1" />
                                             {/* Thumbs up */}
                                             <button
+                                                type="button"
                                                 onClick={() =>
                                                     submitFeedback(
                                                         message.id,
@@ -657,6 +711,7 @@ export function ChatMessageDisplay({
                                             </button>
                                             {/* Thumbs down */}
                                             <button
+                                                type="button"
                                                 onClick={() =>
                                                     submitFeedback(
                                                         message.id,

@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react"
 import Image from "next/image"
-import React, { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 interface FilePreviewListProps {
     files: File[]
@@ -11,17 +11,55 @@ interface FilePreviewListProps {
 
 export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
+    const [imageUrls, setImageUrls] = useState<Map<File, string>>(new Map())
+    const imageUrlsRef = useRef<Map<File, string>>(new Map())
 
-    // Cleanup object URLs on unmount
+    // Create and cleanup object URLs when files change
     useEffect(() => {
-        const objectUrls = files
-            .filter((file) => file.type.startsWith("image/"))
-            .map((file) => URL.createObjectURL(file))
+        const currentUrls = imageUrlsRef.current
+        const newUrls = new Map<File, string>()
 
-        return () => {
-            objectUrls.forEach(URL.revokeObjectURL)
-        }
+        files.forEach((file) => {
+            if (file.type.startsWith("image/")) {
+                // Reuse existing URL if file is already tracked
+                const existingUrl = currentUrls.get(file)
+                if (existingUrl) {
+                    newUrls.set(file, existingUrl)
+                } else {
+                    newUrls.set(file, URL.createObjectURL(file))
+                }
+            }
+        })
+
+        // Revoke URLs for files that are no longer in the list
+        currentUrls.forEach((url, file) => {
+            if (!newUrls.has(file)) {
+                URL.revokeObjectURL(url)
+            }
+        })
+
+        imageUrlsRef.current = newUrls
+        setImageUrls(newUrls)
     }, [files])
+
+    // Cleanup all URLs on unmount only
+    useEffect(() => {
+        return () => {
+            imageUrlsRef.current.forEach((url) => {
+                URL.revokeObjectURL(url)
+            })
+        }
+    }, [])
+
+    // Clear selected image if its URL was revoked
+    useEffect(() => {
+        if (
+            selectedImage &&
+            !Array.from(imageUrls.values()).includes(selectedImage)
+        ) {
+            setSelectedImage(null)
+        }
+    }, [imageUrls, selectedImage])
 
     if (files.length === 0) return null
 
@@ -29,9 +67,7 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
         <>
             <div className="flex flex-wrap gap-2 mt-2 p-2 bg-muted/50 rounded-md">
                 {files.map((file, index) => {
-                    const imageUrl = file.type.startsWith("image/")
-                        ? URL.createObjectURL(file)
-                        : null
+                    const imageUrl = imageUrls.get(file) || null
                     return (
                         <div key={file.name + index} className="relative group">
                             <div
@@ -40,9 +76,9 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                                     imageUrl && setSelectedImage(imageUrl)
                                 }
                             >
-                                {file.type.startsWith("image/") ? (
+                                {file.type.startsWith("image/") && imageUrl ? (
                                     <Image
-                                        src={imageUrl!}
+                                        src={imageUrl}
                                         alt={file.name}
                                         width={80}
                                         height={80}

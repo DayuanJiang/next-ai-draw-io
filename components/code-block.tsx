@@ -12,7 +12,7 @@ export function CodeBlock({ code, language = "xml" }: CodeBlockProps) {
         <div className="overflow-hidden w-full">
             <Highlight theme={themes.github} code={code} language={language}>
                 {({
-                    className,
+                    className: _className,
                     style,
                     tokens,
                     getLineProps,
