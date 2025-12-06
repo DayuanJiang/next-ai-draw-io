@@ -22,7 +22,7 @@ import {
     STORAGE_ACCESS_CODE_KEY,
 } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
-import { formatXML, replaceNodes, validateMxCellStructure } from "@/lib/utils"
+import { formatXML, validateMxCellStructure } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 interface ChatPanelProps {

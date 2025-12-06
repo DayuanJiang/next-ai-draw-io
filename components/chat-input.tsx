@@ -99,8 +99,8 @@ function showValidationErrors(errors: string[]) {
                     {errors.length} files rejected:
                 </span>
                 <ul className="text-muted-foreground text-xs list-disc list-inside">
-                    {errors.slice(0, 3).map((err, i) => (
-                        <li key={i}>{err}</li>
+                    {errors.slice(0, 3).map((err) => (
+                        <li key={err}>{err}</li>
                     ))}
                     {errors.length > 3 && (
                         <li>...and {errors.length - 3} more</li>
@@ -162,9 +162,15 @@ export function ChatInput({
         }
     }, [])
 
+    // Handle programmatic input changes (e.g., setInput("") after form submission)
     useEffect(() => {
         adjustTextareaHeight()
     }, [input, adjustTextareaHeight])
+
+    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        onChange(e)
+        adjustTextareaHeight()
+    }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -297,7 +303,7 @@ export function ChatInput({
                 <Textarea
                     ref={textareaRef}
                     value={input}
-                    onChange={onChange}
+                    onChange={handleChange}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
                     placeholder="Describe your diagram or paste an image..."
