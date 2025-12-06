@@ -1,22 +1,29 @@
-"use client";
+"use client"
 
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, themes } from "prism-react-renderer"
 
 interface CodeBlockProps {
-    code: string;
-    language?: "xml" | "json";
+    code: string
+    language?: "xml" | "json"
 }
 
 export function CodeBlock({ code, language = "xml" }: CodeBlockProps) {
     return (
         <div className="overflow-hidden w-full">
             <Highlight theme={themes.github} code={code} language={language}>
-                {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                {({
+                    className,
+                    style,
+                    tokens,
+                    getLineProps,
+                    getTokenProps,
+                }) => (
                     <pre
                         className="text-[11px] leading-relaxed overflow-x-auto overflow-y-auto max-h-48 scrollbar-thin break-all"
                         style={{
                             ...style,
-                            fontFamily: "var(--font-mono), ui-monospace, monospace",
+                            fontFamily:
+                                "var(--font-mono), ui-monospace, monospace",
                             backgroundColor: "transparent",
                             margin: 0,
                             padding: 0,
@@ -25,9 +32,16 @@ export function CodeBlock({ code, language = "xml" }: CodeBlockProps) {
                         }}
                     >
                         {tokens.map((line, i) => (
-                            <div key={i} {...getLineProps({ line })} style={{ wordBreak: "break-all" }}>
+                            <div
+                                key={i}
+                                {...getLineProps({ line })}
+                                style={{ wordBreak: "break-all" }}
+                            >
                                 {line.map((token, key) => (
-                                    <span key={key} {...getTokenProps({ token })} />
+                                    <span
+                                        key={key}
+                                        {...getTokenProps({ token })}
+                                    />
                                 ))}
                             </div>
                         ))}
@@ -35,5 +49,5 @@ export function CodeBlock({ code, language = "xml" }: CodeBlockProps) {
                 )}
             </Highlight>
         </div>
-    );
+    )
 }

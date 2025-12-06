@@ -7,7 +7,10 @@
         "dev": "next dev --turbopack --port 6002",
         "build": "next build",
         "start": "next start --port 6001",
-        "lint": "next lint"
+        "lint": "biome lint .",
+        "format": "biome check --write .",
+        "check": "biome ci",
+        "prepare": "husky"
     },
     "dependencies": {
         "@ai-sdk/amazon-bedrock": "^3.0.62",
@@ -53,7 +56,14 @@
         "tailwindcss-animate": "^1.0.7",
         "zod": "^4.1.12"
     },
+    "lint-staged": {
+        "*.{js,ts,jsx,tsx,json,css}": [
+            "biome check --write --no-errors-on-unmatched",
+            "biome check --no-errors-on-unmatched"
+        ]
+    },
     "devDependencies": {
+        "@biomejs/biome": "2.3.8",
         "@tailwindcss/postcss": "^4",
         "@tailwindcss/typography": "^0.5.19",
         "@types/node": "^20",
@@ -62,6 +72,8 @@
         "@types/react-dom": "^19",
         "eslint": "9.39.1",
         "eslint-config-next": "16.0.5",
+        "husky": "^9.1.7",
+        "lint-staged": "^16.2.7",
         "tailwindcss": "^4",
         "typescript": "^5"
     }

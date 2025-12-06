@@ -1,36 +1,40 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/select"
 
-export type ExportFormat = "drawio" | "png" | "svg";
+export type ExportFormat = "drawio" | "png" | "svg"
 
-const FORMAT_OPTIONS: { value: ExportFormat; label: string; extension: string }[] = [
+const FORMAT_OPTIONS: {
+    value: ExportFormat
+    label: string
+    extension: string
+}[] = [
     { value: "drawio", label: "Draw.io XML", extension: ".drawio" },
     { value: "png", label: "PNG Image", extension: ".png" },
     { value: "svg", label: "SVG Image", extension: ".svg" },
-];
+]
 
 interface SaveDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSave: (filename: string, format: ExportFormat) => void;
-    defaultFilename: string;
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    onSave: (filename: string, format: ExportFormat) => void
+    defaultFilename: string
 }
 
 export function SaveDialog({
@@ -39,29 +43,29 @@ export function SaveDialog({
     onSave,
     defaultFilename,
 }: SaveDialogProps) {
-    const [filename, setFilename] = useState(defaultFilename);
-    const [format, setFormat] = useState<ExportFormat>("drawio");
+    const [filename, setFilename] = useState(defaultFilename)
+    const [format, setFormat] = useState<ExportFormat>("drawio")
 
     useEffect(() => {
         if (open) {
-            setFilename(defaultFilename);
+            setFilename(defaultFilename)
         }
-    }, [open, defaultFilename]);
+    }, [open, defaultFilename])
 
     const handleSave = () => {
-        const finalFilename = filename.trim() || defaultFilename;
-        onSave(finalFilename, format);
-        onOpenChange(false);
-    };
+        const finalFilename = filename.trim() || defaultFilename
+        onSave(finalFilename, format)
+        onOpenChange(false)
+    }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter") {
-            e.preventDefault();
-            handleSave();
+            e.preventDefault()
+            handleSave()
         }
-    };
+    }
 
-    const currentFormat = FORMAT_OPTIONS.find((f) => f.value === format);
+    const currentFormat = FORMAT_OPTIONS.find((f) => f.value === format)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,13 +76,19 @@ export function SaveDialog({
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Format</label>
-                        <Select value={format} onValueChange={(v) => setFormat(v as ExportFormat)}>
+                        <Select
+                            value={format}
+                            onValueChange={(v) => setFormat(v as ExportFormat)}
+                        >
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 {FORMAT_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
+                                    <SelectItem
+                                        key={opt.value}
+                                        value={opt.value}
+                                    >
                                         {opt.label}
                                     </SelectItem>
                                 ))}
@@ -104,12 +114,15 @@ export function SaveDialog({
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
                         Cancel
                     </Button>
                     <Button onClick={handleSave}>Save</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    );
+    )
 }

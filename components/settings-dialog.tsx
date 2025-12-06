@@ -1,48 +1,46 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogFooter,
-    DialogDescription,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
 interface SettingsDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
+    open: boolean
+    onOpenChange: (open: boolean) => void
 }
 
-export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code";
+export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
 
-export function SettingsDialog({
-    open,
-    onOpenChange,
-}: SettingsDialogProps) {
-    const [accessCode, setAccessCode] = useState("");
+export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+    const [accessCode, setAccessCode] = useState("")
 
     useEffect(() => {
         if (open) {
-            const storedCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || "";
-            setAccessCode(storedCode);
+            const storedCode =
+                localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
+            setAccessCode(storedCode)
         }
-    }, [open]);
+    }, [open])
 
     const handleSave = () => {
-        localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim());
-        onOpenChange(false);
-    };
+        localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim())
+        onOpenChange(false)
+    }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter") {
-            e.preventDefault();
-            handleSave();
+            e.preventDefault()
+            handleSave()
         }
-    };
+    }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,12 +70,15 @@ export function SettingsDialog({
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
                         Cancel
                     </Button>
                     <Button onClick={handleSave}>Save</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    );
+    )
 }

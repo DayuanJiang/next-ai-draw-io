@@ -119,7 +119,7 @@ Common styles:
 - Shapes: rounded=1 (rounded corners), fillColor=#hex, strokeColor=#hex
 - Edges: endArrow=classic/block/open/none, startArrow=none/classic, curved=1, edgeStyle=orthogonalEdgeStyle
 - Text: fontSize=14, fontStyle=1 (bold), align=center/left/right
-`;
+`
 
 // Extended system prompt (~4000+ tokens) - for models with 4000 token cache minimum
 export const EXTENDED_SYSTEM_PROMPT = `
@@ -519,14 +519,14 @@ The XML will be validated before rendering. Ensure:
 \`\`\`
 
 Remember: Quality diagrams communicate clearly. Choose appropriate shapes, use consistent styling, and maintain proper spacing for professional results.
-`;
+`
 
 // Model patterns that require extended prompt (4000 token cache minimum)
 // These patterns match Opus 4.5 and Haiku 4.5 model IDs
 const EXTENDED_PROMPT_MODEL_PATTERNS = [
-  'claude-opus-4-5',   // Matches any Opus 4.5 variant
-  'claude-haiku-4-5',  // Matches any Haiku 4.5 variant
-];
+    "claude-opus-4-5", // Matches any Opus 4.5 variant
+    "claude-haiku-4-5", // Matches any Haiku 4.5 variant
+]
 
 /**
  * Get the appropriate system prompt based on the model ID
@@ -535,16 +535,25 @@ const EXTENDED_PROMPT_MODEL_PATTERNS = [
  * @returns The system prompt string
  */
 export function getSystemPrompt(modelId?: string): string {
-  const modelName = modelId || "AI";
+    const modelName = modelId || "AI"
 
-  let prompt: string;
-  if (modelId && EXTENDED_PROMPT_MODEL_PATTERNS.some(pattern => modelId.includes(pattern))) {
-    console.log(`[System Prompt] Using EXTENDED prompt for model: ${modelId}`);
-    prompt = EXTENDED_SYSTEM_PROMPT;
-  } else {
-    console.log(`[System Prompt] Using DEFAULT prompt for model: ${modelId || 'unknown'}`);
-    prompt = DEFAULT_SYSTEM_PROMPT;
-  }
+    let prompt: string
+    if (
+        modelId &&
+        EXTENDED_PROMPT_MODEL_PATTERNS.some((pattern) =>
+            modelId.includes(pattern),
+        )
+    ) {
+        console.log(
+            `[System Prompt] Using EXTENDED prompt for model: ${modelId}`,
+        )
+        prompt = EXTENDED_SYSTEM_PROMPT
+    } else {
+        console.log(
+            `[System Prompt] Using DEFAULT prompt for model: ${modelId || "unknown"}`,
+        )
+        prompt = DEFAULT_SYSTEM_PROMPT
+    }
 
-  return prompt.replace("{{MODEL_NAME}}", modelName);
+    return prompt.replace("{{MODEL_NAME}}", modelName)
 }

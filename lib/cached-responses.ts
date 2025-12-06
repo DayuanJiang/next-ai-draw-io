@@ -1,14 +1,15 @@
 export interface CachedResponse {
-  promptText: string;
-  hasImage: boolean;
-  xml: string;
+    promptText: string
+    hasImage: boolean
+    xml: string
 }
 
 export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
-  {
-    promptText: "Give me a **animated connector** diagram of transformer's architecture",
-    hasImage: false,
-    xml: `<root>
+    {
+        promptText:
+            "Give me a **animated connector** diagram of transformer's architecture",
+        hasImage: false,
+        xml: `<root>
   <mxCell id="0"/>
   <mxCell id="1" parent="0"/>
 
@@ -255,11 +256,11 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     <mxGeometry x="660" y="530" width="100" height="30" as="geometry"/>
   </mxCell>
 </root>`,
-  },
-  {
-    promptText: "Replicate this in aws style",
-    hasImage: true,
-    xml: `<root>
+    },
+    {
+        promptText: "Replicate this in aws style",
+        hasImage: true,
+        xml: `<root>
   <mxCell id="0"/>
   <mxCell id="1" parent="0"/>
 
@@ -325,11 +326,11 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     </mxGeometry>
   </mxCell>
 </root>`,
-  },
-  {
-    promptText: "Replicate this flowchart.",
-    hasImage: true,
-    xml: `<root>
+    },
+    {
+        promptText: "Replicate this flowchart.",
+        hasImage: true,
+        xml: `<root>
   <mxCell id="0"/>
   <mxCell id="1" parent="0"/>
 
@@ -392,11 +393,11 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     <mxGeometry x="130" y="650" width="200" height="60" as="geometry"/>
   </mxCell>
 </root>`,
-  },
-  {
-    promptText: "Draw a cat for me",
-    hasImage: false,
-    xml: `<root>
+    },
+    {
+        promptText: "Draw a cat for me",
+        hasImage: false,
+        xml: `<root>
   <mxCell id="0"/>
   <mxCell id="1" parent="0"/>
 
@@ -544,14 +545,17 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
   </mxCell>
 
 </root>`,
-  },
-];
+    },
+]
 
 export function findCachedResponse(
-  promptText: string,
-  hasImage: boolean
+    promptText: string,
+    hasImage: boolean,
 ): CachedResponse | undefined {
-  return CACHED_EXAMPLE_RESPONSES.find(
-    (c) => c.promptText === promptText && c.hasImage === hasImage && c.xml !== ''
-  );
+    return CACHED_EXAMPLE_RESPONSES.find(
+        (c) =>
+            c.promptText === promptText &&
+            c.hasImage === hasImage &&
+            c.xml !== "",
+    )
 }

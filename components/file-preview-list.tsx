@@ -1,40 +1,44 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState } from "react";
-import Image from "next/image";
-import { X } from "lucide-react";
+import { X } from "lucide-react"
+import Image from "next/image"
+import React, { useEffect, useState } from "react"
 
 interface FilePreviewListProps {
-    files: File[];
-    onRemoveFile: (fileToRemove: File) => void;
+    files: File[]
+    onRemoveFile: (fileToRemove: File) => void
 }
 
 export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
     // Cleanup object URLs on unmount
     useEffect(() => {
         const objectUrls = files
             .filter((file) => file.type.startsWith("image/"))
-            .map((file) => URL.createObjectURL(file));
+            .map((file) => URL.createObjectURL(file))
 
         return () => {
-            objectUrls.forEach(URL.revokeObjectURL);
-        };
-    }, [files]);
+            objectUrls.forEach(URL.revokeObjectURL)
+        }
+    }, [files])
 
-    if (files.length === 0) return null;
+    if (files.length === 0) return null
 
     return (
         <>
             <div className="flex flex-wrap gap-2 mt-2 p-2 bg-muted/50 rounded-md">
                 {files.map((file, index) => {
-                    const imageUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+                    const imageUrl = file.type.startsWith("image/")
+                        ? URL.createObjectURL(file)
+                        : null
                     return (
                         <div key={file.name + index} className="relative group">
                             <div
                                 className="w-20 h-20 border rounded-md overflow-hidden bg-muted cursor-pointer"
-                                onClick={() => imageUrl && setSelectedImage(imageUrl)}
+                                onClick={() =>
+                                    imageUrl && setSelectedImage(imageUrl)
+                                }
                             >
                                 {file.type.startsWith("image/") ? (
                                     <Image
@@ -59,7 +63,7 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                                 <X className="h-3 w-3" />
                             </button>
                         </div>
-                    );
+                    )
                 })}
             </div>
 
@@ -89,5 +93,5 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                 </div>
             )}
         </>
-    );
+    )
 }
