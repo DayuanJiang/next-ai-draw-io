@@ -282,31 +282,13 @@ Notes:
       },
       edit_diagram: {
         description: `Edit specific parts of the current diagram by replacing exact line matches. Use this tool to make targeted fixes without regenerating the entire XML.
-
-WHEN TO USE:
-- Changing text labels or values
-- Modifying colors, styles, or visual properties
-- Adding or removing individual elements (1-3 elements)
-- Repositioning specific elements
-- Any small, targeted modification
-
-WHEN TO USE display_diagram INSTEAD:
-- Creating a new diagram from scratch
-- Major restructuring (reorganizing layout, changing diagram type)
-- Adding many new elements (more than 3)
-- After 3 failed edit_diagram attempts
-
-CRITICAL RULES:
-1. Copy-paste the EXACT search pattern from the "Current diagram XML" in system context
-2. Do NOT reorder attributes - attribute order in draw.io XML varies, you MUST match exactly
-3. Always include the element's id attribute for unique targeting
-4. Include complete lines (never truncate mid-line)
-5. For multiple changes, use separate edits in the array
-
-ERROR RECOVERY:
-- If pattern not found, check attribute order matches current XML exactly
-- Retry up to 3 times with adjusted patterns
-- After 3 failures, use display_diagram instead`,
+CRITICAL: Copy-paste the EXACT search pattern from the "Current diagram XML" in system context. Do NOT reorder attributes or reformat - the attribute order in draw.io XML varies and you MUST match it exactly.
+IMPORTANT: Keep edits concise:
+- COPY the exact mxCell line from the current XML (attribute order matters!)
+- Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
+- Break large changes into multiple smaller edits
+- Each search must contain complete lines (never truncate mid-line)
+- First match only - be specific enough to target the right element`,
         inputSchema: z.object({
           edits: z.array(z.object({
             search: z.string().describe("EXACT lines copied from current XML (preserve attribute order!)"),
