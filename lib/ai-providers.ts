@@ -17,6 +17,7 @@ export type ProviderName =
     | "ollama"
     | "openrouter"
     | "deepseek"
+    | "siliconflow"
 
 interface ModelConfig {
     model: any
@@ -47,6 +48,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     ollama: null, // No credentials needed for local Ollama
     openrouter: "OPENROUTER_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
+    siliconflow: "SILICONFLOW_API_KEY",
 }
 
 /**
@@ -90,7 +92,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -104,6 +106,8 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - OPENROUTER_API_KEY: OpenRouter API key
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
+ * - SILICONFLOW_API_KEY: SiliconFlow API key
+ * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.com/v1)
  */
 export function getAIModel(): ModelConfig {
     const modelId = process.env.AI_MODEL
@@ -139,6 +143,7 @@ export function getAIModel(): ModelConfig {
                         `- AWS_ACCESS_KEY_ID for Bedrock\n` +
                         `- OPENROUTER_API_KEY for OpenRouter\n` +
                         `- AZURE_API_KEY for Azure\n` +
+                        `- SILICONFLOW_API_KEY for SiliconFlow\n` +
                         `Or set AI_PROVIDER=ollama for local Ollama.`,
                 )
             } else {
@@ -259,9 +264,20 @@ export function getAIModel(): ModelConfig {
             }
             break
 
+        case "siliconflow": {
+            const siliconflowProvider = createOpenAI({
+                apiKey: process.env.SILICONFLOW_API_KEY,
+                baseURL:
+                    process.env.SILICONFLOW_BASE_URL ||
+                    "https://api.siliconflow.com/v1",
+            })
+            model = siliconflowProvider.chat(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow`,
             )
     }
 

@@ -88,6 +88,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   Ollama
 -   OpenRouter
 -   DeepSeek
+-   SiliconFlow
 
 除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
 
@@ -146,7 +147,7 @@ cp env.example .env.local
 
 编辑 `.env.local` 并配置您选择的提供商：
 
--   将 `AI_PROVIDER` 设置为您选择的提供商（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek）
+-   将 `AI_PROVIDER` 设置为您选择的提供商（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow）
 -   将 `AI_MODEL` 设置为您要使用的特定模型
 -   添加您的提供商所需的API密钥
 -   `TEMPERATURE`：可选的温度设置（例如 `0` 表示确定性输出）。对于不支持此参数的模型（如推理模型），请不要设置。
