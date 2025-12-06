@@ -1,17 +1,17 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from "next"
 
 export default function sitemap(): MetadataRoute.Sitemap {
     return [
         {
-            url: 'https://next-ai-drawio.jiang.jp',
+            url: "https://next-ai-drawio.jiang.jp",
             lastModified: new Date(),
-            changeFrequency: 'weekly',
+            changeFrequency: "weekly",
             priority: 1,
         },
         {
-            url: 'https://next-ai-drawio.jiang.jp/about',
+            url: "https://next-ai-drawio.jiang.jp/about",
             lastModified: new Date(),
-            changeFrequency: 'monthly',
+            changeFrequency: "monthly",
             priority: 0.8,
         },
     ]

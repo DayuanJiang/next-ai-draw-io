@@ -1,19 +1,19 @@
-import React from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import type { VariantProps } from "class-variance-authority"
+import type React from "react"
+import { Button, type buttonVariants } from "@/components/ui/button"
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { type VariantProps } from "class-variance-authority";
+} from "@/components/ui/tooltip"
 
 interface ButtonWithTooltipProps
     extends React.ComponentProps<"button">,
         VariantProps<typeof buttonVariants> {
-    tooltipContent: string;
-    children: React.ReactNode;
-    asChild?: boolean;
+    tooltipContent: string
+    children: React.ReactNode
+    asChild?: boolean
 }
 
 export function ButtonWithTooltip({
@@ -27,8 +27,10 @@ export function ButtonWithTooltip({
                 <TooltipTrigger asChild>
                     <Button {...buttonProps}>{children}</Button>
                 </TooltipTrigger>
-                <TooltipContent className="max-w-xs text-wrap">{tooltipContent}</TooltipContent>
+                <TooltipContent className="max-w-xs text-wrap">
+                    {tooltipContent}
+                </TooltipContent>
             </Tooltip>
         </TooltipProvider>
-    );
+    )
 }

@@ -1,10 +1,24 @@
-"use client";
+"use client"
 
-import React, { useCallback, useRef, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ResetWarningModal } from "@/components/reset-warning-modal";
-import { SaveDialog } from "@/components/save-dialog";
+import {
+    Download,
+    History,
+    Image as ImageIcon,
+    LayoutGrid,
+    Loader2,
+    PenTool,
+    Send,
+    Trash2,
+} from "lucide-react"
+import type React from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { ButtonWithTooltip } from "@/components/button-with-tooltip"
+import { ErrorToast } from "@/components/error-toast"
+import { HistoryDialog } from "@/components/history-dialog"
+import { ResetWarningModal } from "@/components/reset-warning-modal"
+import { SaveDialog } from "@/components/save-dialog"
+import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
@@ -12,103 +26,105 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
-import {
-    Loader2,
-    Send,
-    Trash2,
-    Image as ImageIcon,
-    History,
-    Download,
-    PenTool,
-    LayoutGrid,
-} from "lucide-react";
-import { toast } from "sonner";
-import { ButtonWithTooltip } from "@/components/button-with-tooltip";
-import { FilePreviewList } from "./file-preview-list";
-import { useDiagram } from "@/contexts/diagram-context";
-import { HistoryDialog } from "@/components/history-dialog";
-import { ErrorToast } from "@/components/error-toast";
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { useDiagram } from "@/contexts/diagram-context"
+import { FilePreviewList } from "./file-preview-list"
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-const MAX_FILES = 5;
+const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+const MAX_FILES = 5
 
 function formatFileSize(bytes: number): string {
-    const mb = bytes / 1024 / 1024;
-    if (mb < 0.01) return `${(bytes / 1024).toFixed(0)}KB`;
-    return `${mb.toFixed(2)}MB`;
+    const mb = bytes / 1024 / 1024
+    if (mb < 0.01) return `${(bytes / 1024).toFixed(0)}KB`
+    return `${mb.toFixed(2)}MB`
 }
 
 function showErrorToast(message: React.ReactNode) {
     toast.custom(
-        (t) => <ErrorToast message={message} onDismiss={() => toast.dismiss(t)} />,
-        { duration: 5000 }
-    );
+        (t) => (
+            <ErrorToast message={message} onDismiss={() => toast.dismiss(t)} />
+        ),
+        { duration: 5000 },
+    )
 }
 
 interface ValidationResult {
-    validFiles: File[];
-    errors: string[];
+    validFiles: File[]
+    errors: string[]
 }
 
-function validateFiles(newFiles: File[], existingCount: number): ValidationResult {
-    const errors: string[] = [];
-    const validFiles: File[] = [];
+function validateFiles(
+    newFiles: File[],
+    existingCount: number,
+): ValidationResult {
+    const errors: string[] = []
+    const validFiles: File[] = []
 
-    const availableSlots = MAX_FILES - existingCount;
+    const availableSlots = MAX_FILES - existingCount
 
     if (availableSlots <= 0) {
-        errors.push(`Maximum ${MAX_FILES} files allowed`);
-        return { validFiles, errors };
+        errors.push(`Maximum ${MAX_FILES} files allowed`)
+        return { validFiles, errors }
     }
 
     for (const file of newFiles) {
         if (validFiles.length >= availableSlots) {
-            errors.push(`Only ${availableSlots} more file(s) allowed`);
-            break;
+            errors.push(`Only ${availableSlots} more file(s) allowed`)
+            break
         }
         if (file.size > MAX_FILE_SIZE) {
-            errors.push(`"${file.name}" is ${formatFileSize(file.size)} (exceeds 2MB)`);
+            errors.push(
+                `"${file.name}" is ${formatFileSize(file.size)} (exceeds 2MB)`,
+            )
         } else {
-            validFiles.push(file);
+            validFiles.push(file)
         }
     }
 
-    return { validFiles, errors };
+    return { validFiles, errors }
 }
 
 function showValidationErrors(errors: string[]) {
-    if (errors.length === 0) return;
+    if (errors.length === 0) return
 
     if (errors.length === 1) {
-        showErrorToast(<span className="text-muted-foreground">{errors[0]}</span>);
+        showErrorToast(
+            <span className="text-muted-foreground">{errors[0]}</span>,
+        )
     } else {
         showErrorToast(
             <div className="flex flex-col gap-1">
-                <span className="font-medium">{errors.length} files rejected:</span>
+                <span className="font-medium">
+                    {errors.length} files rejected:
+                </span>
                 <ul className="text-muted-foreground text-xs list-disc list-inside">
-                    {errors.slice(0, 3).map((err, i) => <li key={i}>{err}</li>)}
-                    {errors.length > 3 && <li>...and {errors.length - 3} more</li>}
+                    {errors.slice(0, 3).map((err, i) => (
+                        <li key={i}>{err}</li>
+                    ))}
+                    {errors.length > 3 && (
+                        <li>...and {errors.length - 3} more</li>
+                    )}
                 </ul>
-            </div>
-        );
+            </div>,
+        )
     }
 }
 
 interface ChatInputProps {
-    input: string;
-    status: "submitted" | "streaming" | "ready" | "error";
-    onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
-    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-    onClearChat: () => void;
-    files?: File[];
-    onFileChange?: (files: File[]) => void;
-    showHistory?: boolean;
-    onToggleHistory?: (show: boolean) => void;
-    sessionId?: string;
-    error?: Error | null;
-    drawioUi?: "min" | "sketch";
-    onToggleDrawioUi?: () => void;
+    input: string
+    status: "submitted" | "streaming" | "ready" | "error"
+    onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+    onClearChat: () => void
+    files?: File[]
+    onFileChange?: (files: File[]) => void
+    showHistory?: boolean
+    onToggleHistory?: (show: boolean) => void
+    sessionId?: string
+    error?: Error | null
+    drawioUi?: "min" | "sketch"
+    onToggleDrawioUi?: () => void
 }
 
 export function ChatInput({
@@ -126,128 +142,133 @@ export function ChatInput({
     drawioUi = "min",
     onToggleDrawioUi = () => {},
 }: ChatInputProps) {
-    const { diagramHistory, saveDiagramToFile } = useDiagram();
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const [showClearDialog, setShowClearDialog] = useState(false);
-    const [showSaveDialog, setShowSaveDialog] = useState(false);
-    const [showThemeWarning, setShowThemeWarning] = useState(false);
+    const { diagramHistory, saveDiagramToFile } = useDiagram()
+    const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [isDragging, setIsDragging] = useState(false)
+    const [showClearDialog, setShowClearDialog] = useState(false)
+    const [showSaveDialog, setShowSaveDialog] = useState(false)
+    const [showThemeWarning, setShowThemeWarning] = useState(false)
 
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
-        (status === "streaming" || status === "submitted") && !error;
+        (status === "streaming" || status === "submitted") && !error
 
     const adjustTextareaHeight = useCallback(() => {
-        const textarea = textareaRef.current;
+        const textarea = textareaRef.current
         if (textarea) {
-            textarea.style.height = "auto";
-            textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+            textarea.style.height = "auto"
+            textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
         }
-    }, []);
+    }, [])
 
     useEffect(() => {
-        adjustTextareaHeight();
-    }, [input, adjustTextareaHeight]);
+        adjustTextareaHeight()
+    }, [input, adjustTextareaHeight])
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-            e.preventDefault();
-            const form = e.currentTarget.closest("form");
+            e.preventDefault()
+            const form = e.currentTarget.closest("form")
             if (form && input.trim() && !isDisabled) {
-                form.requestSubmit();
+                form.requestSubmit()
             }
         }
-    };
+    }
 
     const handlePaste = async (e: React.ClipboardEvent) => {
-        if (isDisabled) return;
+        if (isDisabled) return
 
-        const items = e.clipboardData.items;
+        const items = e.clipboardData.items
         const imageItems = Array.from(items).filter((item) =>
-            item.type.startsWith("image/")
-        );
+            item.type.startsWith("image/"),
+        )
 
         if (imageItems.length > 0) {
-            const imageFiles = (await Promise.all(
-                imageItems.map(async (item, index) => {
-                    const file = item.getAsFile();
-                    if (!file) return null;
-                    return new File(
-                        [file],
-                        `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
-                        { type: file.type }
-                    );
-                })
-            )).filter((f): f is File => f !== null);
+            const imageFiles = (
+                await Promise.all(
+                    imageItems.map(async (item, index) => {
+                        const file = item.getAsFile()
+                        if (!file) return null
+                        return new File(
+                            [file],
+                            `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
+                            { type: file.type },
+                        )
+                    }),
+                )
+            ).filter((f): f is File => f !== null)
 
-            const { validFiles, errors } = validateFiles(imageFiles, files.length);
-            showValidationErrors(errors);
+            const { validFiles, errors } = validateFiles(
+                imageFiles,
+                files.length,
+            )
+            showValidationErrors(errors)
             if (validFiles.length > 0) {
-                onFileChange([...files, ...validFiles]);
+                onFileChange([...files, ...validFiles])
             }
         }
-    };
+    }
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newFiles = Array.from(e.target.files || []);
-        const { validFiles, errors } = validateFiles(newFiles, files.length);
-        showValidationErrors(errors);
+        const newFiles = Array.from(e.target.files || [])
+        const { validFiles, errors } = validateFiles(newFiles, files.length)
+        showValidationErrors(errors)
         if (validFiles.length > 0) {
-            onFileChange([...files, ...validFiles]);
+            onFileChange([...files, ...validFiles])
         }
         // Reset input so same file can be selected again
         if (fileInputRef.current) {
-            fileInputRef.current.value = "";
+            fileInputRef.current.value = ""
         }
-    };
+    }
 
     const handleRemoveFile = (fileToRemove: File) => {
-        onFileChange(files.filter((file) => file !== fileToRemove));
+        onFileChange(files.filter((file) => file !== fileToRemove))
         if (fileInputRef.current) {
-            fileInputRef.current.value = "";
+            fileInputRef.current.value = ""
         }
-    };
+    }
 
     const triggerFileInput = () => {
-        fileInputRef.current?.click();
-    };
+        fileInputRef.current?.click()
+    }
 
     const handleDragOver = (e: React.DragEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(true);
-    };
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(true)
+    }
 
     const handleDragLeave = (e: React.DragEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-    };
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
+    }
 
     const handleDrop = (e: React.DragEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
 
-        if (isDisabled) return;
+        if (isDisabled) return
 
-        const droppedFiles = e.dataTransfer.files;
+        const droppedFiles = e.dataTransfer.files
         const imageFiles = Array.from(droppedFiles).filter((file) =>
-            file.type.startsWith("image/")
-        );
+            file.type.startsWith("image/"),
+        )
 
-        const { validFiles, errors } = validateFiles(imageFiles, files.length);
-        showValidationErrors(errors);
+        const { validFiles, errors } = validateFiles(imageFiles, files.length)
+        showValidationErrors(errors)
         if (validFiles.length > 0) {
-            onFileChange([...files, ...validFiles]);
+            onFileChange([...files, ...validFiles])
         }
-    };
+    }
 
     const handleClear = () => {
-        onClearChat();
-        setShowClearDialog(false);
-    };
+        onClearChat()
+        setShowClearDialog(false)
+    }
 
     return (
         <form
@@ -316,7 +337,11 @@ export function ChatInput({
                             variant="ghost"
                             size="sm"
                             onClick={() => setShowThemeWarning(true)}
-                            tooltipContent={drawioUi === "min" ? "Switch to Sketch theme" : "Switch to Minimal theme"}
+                            tooltipContent={
+                                drawioUi === "min"
+                                    ? "Switch to Sketch theme"
+                                    : "Switch to Minimal theme"
+                            }
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                         >
                             {drawioUi === "min" ? (
@@ -326,27 +351,33 @@ export function ChatInput({
                             )}
                         </ButtonWithTooltip>
 
-                        <Dialog open={showThemeWarning} onOpenChange={setShowThemeWarning}>
+                        <Dialog
+                            open={showThemeWarning}
+                            onOpenChange={setShowThemeWarning}
+                        >
                             <DialogContent>
                                 <DialogHeader>
                                     <DialogTitle>Switch Theme?</DialogTitle>
                                     <DialogDescription>
-                                        Switching themes will reload the diagram editor and clear any unsaved changes.
+                                        Switching themes will reload the diagram
+                                        editor and clear any unsaved changes.
                                     </DialogDescription>
                                 </DialogHeader>
                                 <DialogFooter>
                                     <Button
                                         variant="outline"
-                                        onClick={() => setShowThemeWarning(false)}
+                                        onClick={() =>
+                                            setShowThemeWarning(false)
+                                        }
                                     >
                                         Cancel
                                     </Button>
                                     <Button
                                         variant="destructive"
                                         onClick={() => {
-                                            onClearChat();
-                                            onToggleDrawioUi();
-                                            setShowThemeWarning(false);
+                                            onClearChat()
+                                            onToggleDrawioUi()
+                                            setShowThemeWarning(false)
                                         }}
                                     >
                                         Switch Theme
@@ -439,5 +470,5 @@ export function ChatInput({
                 </div>
             </div>
         </form>
-    );
+    )
 }

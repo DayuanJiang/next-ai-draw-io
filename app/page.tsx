@@ -1,75 +1,75 @@
-"use client";
-import React, { useState, useEffect, useRef } from "react";
-import { DrawIoEmbed } from "react-drawio";
-import ChatPanel from "@/components/chat-panel";
-import { useDiagram } from "@/contexts/diagram-context";
+"use client"
+import React, { useEffect, useRef, useState } from "react"
+import { DrawIoEmbed } from "react-drawio"
+import type { ImperativePanelHandle } from "react-resizable-panels"
+import ChatPanel from "@/components/chat-panel"
 import {
-    ResizablePanelGroup,
-    ResizablePanel,
     ResizableHandle,
-} from "@/components/ui/resizable";
-import type { ImperativePanelHandle } from "react-resizable-panels";
+    ResizablePanel,
+    ResizablePanelGroup,
+} from "@/components/ui/resizable"
+import { useDiagram } from "@/contexts/diagram-context"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport } = useDiagram();
-    const [isMobile, setIsMobile] = useState(false);
-    const [isChatVisible, setIsChatVisible] = useState(true);
+    const { drawioRef, handleDiagramExport } = useDiagram()
+    const [isMobile, setIsMobile] = useState(false)
+    const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">(() => {
         if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("drawio-theme");
-            if (saved === "min" || saved === "sketch") return saved;
+            const saved = localStorage.getItem("drawio-theme")
+            if (saved === "min" || saved === "sketch") return saved
         }
-        return "min";
-    });
-    const chatPanelRef = useRef<ImperativePanelHandle>(null);
+        return "min"
+    })
+    const chatPanelRef = useRef<ImperativePanelHandle>(null)
 
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
+            setIsMobile(window.innerWidth < 768)
+        }
 
-        checkMobile();
-        window.addEventListener("resize", checkMobile);
-        return () => window.removeEventListener("resize", checkMobile);
-    }, []);
+        checkMobile()
+        window.addEventListener("resize", checkMobile)
+        return () => window.removeEventListener("resize", checkMobile)
+    }, [])
 
     const toggleChatPanel = () => {
-        const panel = chatPanelRef.current;
+        const panel = chatPanelRef.current
         if (panel) {
             if (panel.isCollapsed()) {
-                panel.expand();
-                setIsChatVisible(true);
+                panel.expand()
+                setIsChatVisible(true)
             } else {
-                panel.collapse();
-                setIsChatVisible(false);
+                panel.collapse()
+                setIsChatVisible(false)
             }
         }
-    };
+    }
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "b") {
-                event.preventDefault();
-                toggleChatPanel();
+                event.preventDefault()
+                toggleChatPanel()
             }
-        };
+        }
 
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, []);
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [])
 
     // Show confirmation dialog when user tries to leave the page
     // This helps prevent accidental navigation from browser back gestures
     useEffect(() => {
         const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-            event.preventDefault();
-            return "";
-        };
+            event.preventDefault()
+            return ""
+        }
 
-        window.addEventListener("beforeunload", handleBeforeUnload);
+        window.addEventListener("beforeunload", handleBeforeUnload)
         return () =>
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-    }, []);
+            window.removeEventListener("beforeunload", handleBeforeUnload)
+    }, [])
 
     return (
         <div className="h-screen bg-background relative overflow-hidden">
@@ -80,7 +80,11 @@ export default function Home() {
             >
                 {/* Draw.io Canvas */}
                 <ResizablePanel defaultSize={isMobile ? 50 : 67} minSize={20}>
-                    <div className={`h-full relative ${isMobile ? "p-1" : "p-2"}`}>
+                    <div
+                        className={`h-full relative ${
+                            isMobile ? "p-1" : "p-2"
+                        }`}
+                    >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
                             <DrawIoEmbed
                                 key={drawioUi}
@@ -117,9 +121,10 @@ export default function Home() {
                             onToggleVisibility={toggleChatPanel}
                             drawioUi={drawioUi}
                             onToggleDrawioUi={() => {
-                                const newTheme = drawioUi === "min" ? "sketch" : "min";
-                                localStorage.setItem("drawio-theme", newTheme);
-                                setDrawioUi(newTheme);
+                                const newTheme =
+                                    drawioUi === "min" ? "sketch" : "min"
+                                localStorage.setItem("drawio-theme", newTheme)
+                                setDrawioUi(newTheme)
                             }}
                             isMobile={isMobile}
                         />
@@ -127,5 +132,5 @@ export default function Home() {
                 </ResizablePanel>
             </ResizablePanelGroup>
         </div>
-    );
+    )
 }

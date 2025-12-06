@@ -1,13 +1,21 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { FaGithub } from "react-icons/fa";
-import Image from "next/image";
+import type { Metadata } from "next"
+import Image from "next/image"
+import Link from "next/link"
+import { FaGithub } from "react-icons/fa"
 
 export const metadata: Metadata = {
     title: "概要 - Next AI Draw.io",
-    description: "AI搭載のダイアグラム作成ツール - チャット、描画、可視化。自然言語でAWS、GCP、Azureアーキテクチャ図を作成。",
-    keywords: ["AIダイアグラム", "draw.io", "AWSアーキテクチャ", "GCPダイアグラム", "Azureダイアグラム", "LLM"],
-};
+    description:
+        "AI搭載のダイアグラム作成ツール - チャット、描画、可視化。自然言語でAWS、GCP、Azureアーキテクチャ図を作成。",
+    keywords: [
+        "AIダイアグラム",
+        "draw.io",
+        "AWSアーキテクチャ",
+        "GCPダイアグラム",
+        "Azureダイアグラム",
+        "LLM",
+    ],
+}
 
 export default function AboutJA() {
     return (
@@ -16,14 +24,23 @@ export default function AboutJA() {
             <header className="bg-white border-b border-gray-200">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex items-center justify-between">
-                        <Link href="/" className="text-xl font-bold text-gray-900 hover:text-gray-700">
+                        <Link
+                            href="/"
+                            className="text-xl font-bold text-gray-900 hover:text-gray-700"
+                        >
                             Next AI Draw.io
                         </Link>
                         <nav className="flex items-center gap-6 text-sm">
-                            <Link href="/" className="text-gray-600 hover:text-gray-900 transition-colors">
+                            <Link
+                                href="/"
+                                className="text-gray-600 hover:text-gray-900 transition-colors"
+                            >
                                 エディタ
                             </Link>
-                            <Link href="/about/ja" className="text-blue-600 font-semibold">
+                            <Link
+                                href="/about/ja"
+                                className="text-blue-600 font-semibold"
+                            >
                                 概要
                             </Link>
                             <a
@@ -45,22 +62,43 @@ export default function AboutJA() {
                 <article className="prose prose-lg max-w-none">
                     {/* Title */}
                     <div className="text-center mb-8">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2">Next AI Draw.io</h1>
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                            Next AI Draw.io
+                        </h1>
                         <p className="text-xl text-gray-600 font-medium">
-                            AI搭載のダイアグラム作成ツール - チャット、描画、可視化
+                            AI搭載のダイアグラム作成ツール -
+                            チャット、描画、可視化
                         </p>
                         <div className="flex justify-center gap-4 mt-4 text-sm">
-                            <Link href="/about" className="text-gray-600 hover:text-blue-600">English</Link>
+                            <Link
+                                href="/about"
+                                className="text-gray-600 hover:text-blue-600"
+                            >
+                                English
+                            </Link>
                             <span className="text-gray-400">|</span>
-                            <Link href="/about/cn" className="text-gray-600 hover:text-blue-600">中文</Link>
+                            <Link
+                                href="/about/cn"
+                                className="text-gray-600 hover:text-blue-600"
+                            >
+                                中文
+                            </Link>
                             <span className="text-gray-400">|</span>
-                            <Link href="/about/ja" className="text-blue-600 font-semibold">日本語</Link>
+                            <Link
+                                href="/about/ja"
+                                className="text-blue-600 font-semibold"
+                            >
+                                日本語
+                            </Link>
                         </div>
                     </div>
 
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
                         <p className="text-amber-800">
-                            本アプリは最高のパフォーマンスを発揮するため、Claude Opus 4.5 で動作するよう設計されています。しかし、予想以上のトラフィックにより、最上位モデルの運用コストが負担となっています。サービスの中断を避け、コストを管理するため、バックエンドを Claude Haiku 4.5 に切り替えました。
+                            本アプリは最高のパフォーマンスを発揮するため、Claude
+                            Opus 4.5
+                            で動作するよう設計されています。しかし、予想以上のトラフィックにより、最上位モデルの運用コストが負担となっています。サービスの中断を避け、コストを管理するため、バックエンドを
+                            Claude Haiku 4.5 に切り替えました。
                         </p>
                     </div>
 
@@ -69,80 +107,176 @@ export default function AboutJA() {
                     </p>
 
                     {/* Features */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">機能</h2>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        機能
+                    </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-2">
-                        <li><strong>LLM搭載のダイアグラム作成</strong>：大規模言語モデルを活用して、自然言語コマンドで直接draw.ioダイアグラムを作成・操作</li>
-                        <li><strong>画像ベースのダイアグラム複製</strong>：既存のダイアグラムや画像をアップロードし、AIが自動的に複製・強化</li>
-                        <li><strong>ダイアグラム履歴</strong>：すべての変更を追跡する包括的なバージョン管理。AI編集前のダイアグラムの以前のバージョンを表示・復元可能</li>
-                        <li><strong>インタラクティブなチャットインターフェース</strong>：AIとリアルタイムでコミュニケーションしてダイアグラムを改善</li>
-                        <li><strong>AWSアーキテクチャダイアグラムサポート</strong>：AWSアーキテクチャダイアグラムの生成を専門的にサポート</li>
-                        <li><strong>アニメーションコネクタ</strong>：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成</li>
+                        <li>
+                            <strong>LLM搭載のダイアグラム作成</strong>
+                            ：大規模言語モデルを活用して、自然言語コマンドで直接draw.ioダイアグラムを作成・操作
+                        </li>
+                        <li>
+                            <strong>画像ベースのダイアグラム複製</strong>
+                            ：既存のダイアグラムや画像をアップロードし、AIが自動的に複製・強化
+                        </li>
+                        <li>
+                            <strong>ダイアグラム履歴</strong>
+                            ：すべての変更を追跡する包括的なバージョン管理。AI編集前のダイアグラムの以前のバージョンを表示・復元可能
+                        </li>
+                        <li>
+                            <strong>
+                                インタラクティブなチャットインターフェース
+                            </strong>
+                            ：AIとリアルタイムでコミュニケーションしてダイアグラムを改善
+                        </li>
+                        <li>
+                            <strong>
+                                AWSアーキテクチャダイアグラムサポート
+                            </strong>
+                            ：AWSアーキテクチャダイアグラムの生成を専門的にサポート
+                        </li>
+                        <li>
+                            <strong>アニメーションコネクタ</strong>
+                            ：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
+                        </li>
                     </ul>
 
                     {/* Examples */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">例</h2>
-                    <p className="text-gray-700 mb-6">以下はいくつかのプロンプト例と生成されたダイアグラムです：</p>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        例
+                    </h2>
+                    <p className="text-gray-700 mb-6">
+                        以下はいくつかのプロンプト例と生成されたダイアグラムです：
+                    </p>
 
                     <div className="space-y-8">
                         {/* Animated Transformer */}
                         <div className="text-center">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">アニメーションTransformerコネクタ</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                アニメーションTransformerコネクタ
+                            </h3>
                             <p className="text-gray-600 mb-4">
-                                <strong>プロンプト：</strong> <strong>アニメーションコネクタ</strong>付きのTransformerアーキテクチャ図を作成してください。
+                                <strong>プロンプト：</strong>{" "}
+                                <strong>アニメーションコネクタ</strong>
+                                付きのTransformerアーキテクチャ図を作成してください。
                             </p>
-                            <Image src="/animated_connectors.svg" alt="アニメーションコネクタ付きTransformerアーキテクチャ" width={480} height={360} className="mx-auto" />
+                            <Image
+                                src="/animated_connectors.svg"
+                                alt="アニメーションコネクタ付きTransformerアーキテクチャ"
+                                width={480}
+                                height={360}
+                                className="mx-auto"
+                            />
                         </div>
 
                         {/* Cloud Architecture Grid */}
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">GCPアーキテクチャ図</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    GCPアーキテクチャ図
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong> <strong>GCPアイコン</strong>を使用してGCPアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
+                                    <strong>プロンプト：</strong>{" "}
+                                    <strong>GCPアイコン</strong>
+                                    を使用してGCPアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
                                 </p>
-                                <Image src="/gcp_demo.svg" alt="GCPアーキテクチャ図" width={400} height={300} className="mx-auto" />
+                                <Image
+                                    src="/gcp_demo.svg"
+                                    alt="GCPアーキテクチャ図"
+                                    width={400}
+                                    height={300}
+                                    className="mx-auto"
+                                />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">AWSアーキテクチャ図</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    AWSアーキテクチャ図
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong> <strong>AWSアイコン</strong>を使用してAWSアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
+                                    <strong>プロンプト：</strong>{" "}
+                                    <strong>AWSアイコン</strong>
+                                    を使用してAWSアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
                                 </p>
-                                <Image src="/aws_demo.svg" alt="AWSアーキテクチャ図" width={400} height={300} className="mx-auto" />
+                                <Image
+                                    src="/aws_demo.svg"
+                                    alt="AWSアーキテクチャ図"
+                                    width={400}
+                                    height={300}
+                                    className="mx-auto"
+                                />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Azureアーキテクチャ図</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    Azureアーキテクチャ図
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong> <strong>Azureアイコン</strong>を使用してAzureアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
+                                    <strong>プロンプト：</strong>{" "}
+                                    <strong>Azureアイコン</strong>
+                                    を使用してAzureアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
                                 </p>
-                                <Image src="/azure_demo.svg" alt="Azureアーキテクチャ図" width={400} height={300} className="mx-auto" />
+                                <Image
+                                    src="/azure_demo.svg"
+                                    alt="Azureアーキテクチャ図"
+                                    width={400}
+                                    height={300}
+                                    className="mx-auto"
+                                />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">猫のスケッチ</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    猫のスケッチ
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong> かわいい猫を描いてください。
+                                    <strong>プロンプト：</strong>{" "}
+                                    かわいい猫を描いてください。
                                 </p>
-                                <Image src="/cat_demo.svg" alt="猫の絵" width={240} height={240} className="mx-auto" />
+                                <Image
+                                    src="/cat_demo.svg"
+                                    alt="猫の絵"
+                                    width={240}
+                                    height={240}
+                                    className="mx-auto"
+                                />
                             </div>
                         </div>
                     </div>
 
                     {/* How It Works */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">仕組み</h2>
-                    <p className="text-gray-700 mb-4">本アプリケーションは以下の技術を使用しています：</p>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        仕組み
+                    </h2>
+                    <p className="text-gray-700 mb-4">
+                        本アプリケーションは以下の技術を使用しています：
+                    </p>
                     <ul className="list-disc pl-6 text-gray-700 space-y-2">
-                        <li><strong>Next.js</strong>：フロントエンドフレームワークとルーティング</li>
-                        <li><strong>Vercel AI SDK</strong>（<code>ai</code> + <code>@ai-sdk/*</code>）：ストリーミングAIレスポンスとマルチプロバイダーサポート</li>
-                        <li><strong>react-drawio</strong>：ダイアグラムの表現と操作</li>
+                        <li>
+                            <strong>Next.js</strong>
+                            ：フロントエンドフレームワークとルーティング
+                        </li>
+                        <li>
+                            <strong>Vercel AI SDK</strong>（<code>ai</code> +{" "}
+                            <code>@ai-sdk/*</code>
+                            ）：ストリーミングAIレスポンスとマルチプロバイダーサポート
+                        </li>
+                        <li>
+                            <strong>react-drawio</strong>
+                            ：ダイアグラムの表現と操作
+                        </li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         ダイアグラムはdraw.ioでレンダリングできるXMLとして表現されます。AIがコマンドを処理し、それに応じてこのXMLを生成または変更します。
                     </p>
 
                     {/* Multi-Provider Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">マルチプロバイダーサポート</h2>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        マルチプロバイダーサポート
+                    </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>AWS Bedrock（デフォルト）</li>
-                        <li>OpenAI / OpenAI互換API（<code>OPENAI_BASE_URL</code>経由）</li>
+                        <li>
+                            OpenAI / OpenAI互換API（<code>OPENAI_BASE_URL</code>
+                            経由）
+                        </li>
                         <li>Anthropic</li>
                         <li>Google AI</li>
                         <li>Azure OpenAI</li>
@@ -151,12 +285,15 @@ export default function AboutJA() {
                         <li>DeepSeek</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
-                        注：<code>claude-sonnet-4-5</code>はAWSロゴ付きのdraw.ioダイアグラムで学習されているため、AWSアーキテクチャダイアグラムを作成したい場合は最適な選択です。
+                        注：<code>claude-sonnet-4-5</code>
+                        はAWSロゴ付きのdraw.ioダイアグラムで学習されているため、AWSアーキテクチャダイアグラムを作成したい場合は最適な選択です。
                     </p>
 
                     {/* Support */}
                     <div className="flex items-center gap-4 mt-10 mb-4">
-                        <h2 className="text-2xl font-semibold text-gray-900">サポート＆お問い合わせ</h2>
+                        <h2 className="text-2xl font-semibold text-gray-900">
+                            サポート＆お問い合わせ
+                        </h2>
                         <iframe
                             src="https://github.com/sponsors/DayuanJiang/button"
                             title="Sponsor DayuanJiang"
@@ -167,14 +304,24 @@ export default function AboutJA() {
                     </div>
                     <p className="text-gray-700">
                         このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために{" "}
-                        <a href="https://github.com/sponsors/DayuanJiang" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        <a
+                            href="https://github.com/sponsors/DayuanJiang"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
                             スポンサー
                         </a>{" "}
                         をご検討ください！
                     </p>
                     <p className="text-gray-700 mt-2">
                         サポートやお問い合わせについては、{" "}
-                        <a href="https://github.com/DayuanJiang/next-ai-draw-io" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        <a
+                            href="https://github.com/DayuanJiang/next-ai-draw-io"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
                             GitHubリポジトリ
                         </a>{" "}
                         でissueを開くか、ご連絡ください：me[at]jiang.jp
@@ -196,10 +343,11 @@ export default function AboutJA() {
             <footer className="bg-white border-t border-gray-200 mt-16">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <p className="text-center text-gray-600 text-sm">
-                        Next AI Draw.io - オープンソースAI搭載ダイアグラムジェネレーター
+                        Next AI Draw.io -
+                        オープンソースAI搭載ダイアグラムジェネレーター
                     </p>
                 </div>
             </footer>
         </div>
-    );
+    )
 }

@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { FaGithub } from "react-icons/fa";
-import Image from "next/image";
+import type { Metadata } from "next"
+import Image from "next/image"
+import Link from "next/link"
+import { FaGithub } from "react-icons/fa"
 
 export const metadata: Metadata = {
     title: "关于 - Next AI Draw.io",
-    description: "AI驱动的图表创建工具 - 对话、绘制、可视化。使用自然语言创建AWS、GCP和Azure架构图。",
+    description:
+        "AI驱动的图表创建工具 - 对话、绘制、可视化。使用自然语言创建AWS、GCP和Azure架构图。",
     keywords: ["AI图表", "draw.io", "AWS架构", "GCP图表", "Azure图表", "LLM"],
-};
+}
 
 export default function AboutCN() {
     return (
@@ -16,14 +17,23 @@ export default function AboutCN() {
             <header className="bg-white border-b border-gray-200">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex items-center justify-between">
-                        <Link href="/" className="text-xl font-bold text-gray-900 hover:text-gray-700">
+                        <Link
+                            href="/"
+                            className="text-xl font-bold text-gray-900 hover:text-gray-700"
+                        >
                             Next AI Draw.io
                         </Link>
                         <nav className="flex items-center gap-6 text-sm">
-                            <Link href="/" className="text-gray-600 hover:text-gray-900 transition-colors">
+                            <Link
+                                href="/"
+                                className="text-gray-600 hover:text-gray-900 transition-colors"
+                            >
                                 编辑器
                             </Link>
-                            <Link href="/about/cn" className="text-blue-600 font-semibold">
+                            <Link
+                                href="/about/cn"
+                                className="text-blue-600 font-semibold"
+                            >
                                 关于
                             </Link>
                             <a
@@ -45,22 +55,41 @@ export default function AboutCN() {
                 <article className="prose prose-lg max-w-none">
                     {/* Title */}
                     <div className="text-center mb-8">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2">Next AI Draw.io</h1>
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                            Next AI Draw.io
+                        </h1>
                         <p className="text-xl text-gray-600 font-medium">
                             AI驱动的图表创建工具 - 对话、绘制、可视化
                         </p>
                         <div className="flex justify-center gap-4 mt-4 text-sm">
-                            <Link href="/about" className="text-gray-600 hover:text-blue-600">English</Link>
+                            <Link
+                                href="/about"
+                                className="text-gray-600 hover:text-blue-600"
+                            >
+                                English
+                            </Link>
                             <span className="text-gray-400">|</span>
-                            <Link href="/about/cn" className="text-blue-600 font-semibold">中文</Link>
+                            <Link
+                                href="/about/cn"
+                                className="text-blue-600 font-semibold"
+                            >
+                                中文
+                            </Link>
                             <span className="text-gray-400">|</span>
-                            <Link href="/about/ja" className="text-gray-600 hover:text-blue-600">日本語</Link>
+                            <Link
+                                href="/about/ja"
+                                className="text-gray-600 hover:text-blue-600"
+                            >
+                                日本語
+                            </Link>
                         </div>
                     </div>
 
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
                         <p className="text-amber-800">
-                            本应用设计运行于 Claude Opus 4.5 以获得最佳性能。但由于流量超出预期，运行顶级模型的成本变得难以承受。为避免服务中断并控制成本，我已将后端切换至 Claude Haiku 4.5。
+                            本应用设计运行于 Claude Opus 4.5
+                            以获得最佳性能。但由于流量超出预期，运行顶级模型的成本变得难以承受。为避免服务中断并控制成本，我已将后端切换至
+                            Claude Haiku 4.5。
                         </p>
                     </div>
 
@@ -69,80 +98,167 @@ export default function AboutCN() {
                     </p>
 
                     {/* Features */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">功能特性</h2>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        功能特性
+                    </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-2">
-                        <li><strong>LLM驱动的图表创建</strong>：利用大语言模型通过自然语言命令直接创建和操作draw.io图表</li>
-                        <li><strong>基于图像的图表复制</strong>：上传现有图表或图像，让AI自动复制和增强</li>
-                        <li><strong>图表历史记录</strong>：全面的版本控制，跟踪所有更改，允许您查看和恢复AI编辑前的图表版本</li>
-                        <li><strong>交互式聊天界面</strong>：与AI实时对话来完善您的图表</li>
-                        <li><strong>AWS架构图支持</strong>：专门支持生成AWS架构图</li>
-                        <li><strong>动画连接器</strong>：在图表元素之间创建动态动画连接器，实现更好的可视化效果</li>
+                        <li>
+                            <strong>LLM驱动的图表创建</strong>
+                            ：利用大语言模型通过自然语言命令直接创建和操作draw.io图表
+                        </li>
+                        <li>
+                            <strong>基于图像的图表复制</strong>
+                            ：上传现有图表或图像，让AI自动复制和增强
+                        </li>
+                        <li>
+                            <strong>图表历史记录</strong>
+                            ：全面的版本控制，跟踪所有更改，允许您查看和恢复AI编辑前的图表版本
+                        </li>
+                        <li>
+                            <strong>交互式聊天界面</strong>
+                            ：与AI实时对话来完善您的图表
+                        </li>
+                        <li>
+                            <strong>AWS架构图支持</strong>
+                            ：专门支持生成AWS架构图
+                        </li>
+                        <li>
+                            <strong>动画连接器</strong>
+                            ：在图表元素之间创建动态动画连接器，实现更好的可视化效果
+                        </li>
                     </ul>
 
                     {/* Examples */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">示例</h2>
-                    <p className="text-gray-700 mb-6">以下是一些示例提示词及其生成的图表：</p>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        示例
+                    </h2>
+                    <p className="text-gray-700 mb-6">
+                        以下是一些示例提示词及其生成的图表：
+                    </p>
 
                     <div className="space-y-8">
                         {/* Animated Transformer */}
                         <div className="text-center">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">动画Transformer连接器</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                动画Transformer连接器
+                            </h3>
                             <p className="text-gray-600 mb-4">
-                                <strong>提示词：</strong> 给我一个带有<strong>动画连接器</strong>的Transformer架构图。
+                                <strong>提示词：</strong> 给我一个带有
+                                <strong>动画连接器</strong>的Transformer架构图。
                             </p>
-                            <Image src="/animated_connectors.svg" alt="带动画连接器的Transformer架构" width={480} height={360} className="mx-auto" />
+                            <Image
+                                src="/animated_connectors.svg"
+                                alt="带动画连接器的Transformer架构"
+                                width={480}
+                                height={360}
+                                className="mx-auto"
+                            />
                         </div>
 
                         {/* Cloud Architecture Grid */}
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">GCP架构图</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    GCP架构图
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 使用<strong>GCP图标</strong>生成一个GCP架构图。用户连接到托管在实例上的前端。
+                                    <strong>提示词：</strong> 使用
+                                    <strong>GCP图标</strong>
+                                    生成一个GCP架构图。用户连接到托管在实例上的前端。
                                 </p>
-                                <Image src="/gcp_demo.svg" alt="GCP架构图" width={400} height={300} className="mx-auto" />
+                                <Image
+                                    src="/gcp_demo.svg"
+                                    alt="GCP架构图"
+                                    width={400}
+                                    height={300}
+                                    className="mx-auto"
+                                />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">AWS架构图</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    AWS架构图
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 使用<strong>AWS图标</strong>生成一个AWS架构图。用户连接到托管在实例上的前端。
+                                    <strong>提示词：</strong> 使用
+                                    <strong>AWS图标</strong>
+                                    生成一个AWS架构图。用户连接到托管在实例上的前端。
                                 </p>
-                                <Image src="/aws_demo.svg" alt="AWS架构图" width={400} height={300} className="mx-auto" />
+                                <Image
+                                    src="/aws_demo.svg"
+                                    alt="AWS架构图"
+                                    width={400}
+                                    height={300}
+                                    className="mx-auto"
+                                />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Azure架构图</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    Azure架构图
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 使用<strong>Azure图标</strong>生成一个Azure架构图。用户连接到托管在实例上的前端。
+                                    <strong>提示词：</strong> 使用
+                                    <strong>Azure图标</strong>
+                                    生成一个Azure架构图。用户连接到托管在实例上的前端。
                                 </p>
-                                <Image src="/azure_demo.svg" alt="Azure架构图" width={400} height={300} className="mx-auto" />
+                                <Image
+                                    src="/azure_demo.svg"
+                                    alt="Azure架构图"
+                                    width={400}
+                                    height={300}
+                                    className="mx-auto"
+                                />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">猫咪素描</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    猫咪素描
+                                </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 给我画一只可爱的猫。
+                                    <strong>提示词：</strong>{" "}
+                                    给我画一只可爱的猫。
                                 </p>
-                                <Image src="/cat_demo.svg" alt="猫咪绘图" width={240} height={240} className="mx-auto" />
+                                <Image
+                                    src="/cat_demo.svg"
+                                    alt="猫咪绘图"
+                                    width={240}
+                                    height={240}
+                                    className="mx-auto"
+                                />
                             </div>
                         </div>
                     </div>
 
                     {/* How It Works */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">工作原理</h2>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        工作原理
+                    </h2>
                     <p className="text-gray-700 mb-4">本应用使用以下技术：</p>
                     <ul className="list-disc pl-6 text-gray-700 space-y-2">
-                        <li><strong>Next.js</strong>：用于前端框架和路由</li>
-                        <li><strong>Vercel AI SDK</strong>（<code>ai</code> + <code>@ai-sdk/*</code>）：用于流式AI响应和多提供商支持</li>
-                        <li><strong>react-drawio</strong>：用于图表表示和操作</li>
+                        <li>
+                            <strong>Next.js</strong>：用于前端框架和路由
+                        </li>
+                        <li>
+                            <strong>Vercel AI SDK</strong>（<code>ai</code> +{" "}
+                            <code>@ai-sdk/*</code>
+                            ）：用于流式AI响应和多提供商支持
+                        </li>
+                        <li>
+                            <strong>react-drawio</strong>：用于图表表示和操作
+                        </li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         图表以XML格式表示，可在draw.io中渲染。AI处理您的命令并相应地生成或修改此XML。
                     </p>
 
                     {/* Multi-Provider Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">多提供商支持</h2>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        多提供商支持
+                    </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>AWS Bedrock（默认）</li>
-                        <li>OpenAI / OpenAI兼容API（通过 <code>OPENAI_BASE_URL</code>）</li>
+                        <li>
+                            OpenAI / OpenAI兼容API（通过{" "}
+                            <code>OPENAI_BASE_URL</code>）
+                        </li>
                         <li>Anthropic</li>
                         <li>Google AI</li>
                         <li>Azure OpenAI</li>
@@ -151,12 +267,15 @@ export default function AboutCN() {
                         <li>DeepSeek</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
-                        注意：<code>claude-sonnet-4-5</code> 已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。
+                        注意：<code>claude-sonnet-4-5</code>{" "}
+                        已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。
                     </p>
 
                     {/* Support */}
                     <div className="flex items-center gap-4 mt-10 mb-4">
-                        <h2 className="text-2xl font-semibold text-gray-900">支持与联系</h2>
+                        <h2 className="text-2xl font-semibold text-gray-900">
+                            支持与联系
+                        </h2>
                         <iframe
                             src="https://github.com/sponsors/DayuanJiang/button"
                             title="Sponsor DayuanJiang"
@@ -167,14 +286,24 @@ export default function AboutCN() {
                     </div>
                     <p className="text-gray-700">
                         如果您觉得这个项目有用，请考虑{" "}
-                        <a href="https://github.com/sponsors/DayuanJiang" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        <a
+                            href="https://github.com/sponsors/DayuanJiang"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
                             赞助
                         </a>{" "}
                         来帮助托管在线演示站点！
                     </p>
                     <p className="text-gray-700 mt-2">
                         如需支持或咨询，请在{" "}
-                        <a href="https://github.com/DayuanJiang/next-ai-draw-io" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        <a
+                            href="https://github.com/DayuanJiang/next-ai-draw-io"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
                             GitHub仓库
                         </a>{" "}
                         上提交issue或联系：me[at]jiang.jp
@@ -201,5 +330,5 @@ export default function AboutCN() {
                 </div>
             </footer>
         </div>
-    );
+    )
 }

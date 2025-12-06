@@ -1,12 +1,12 @@
-"use client";
+"use client"
 
-import { Zap, Cloud, GitBranch, Palette } from "lucide-react";
+import { Cloud, GitBranch, Palette, Zap } from "lucide-react"
 
 interface ExampleCardProps {
-    icon: React.ReactNode;
-    title: string;
-    description: string;
-    onClick: () => void;
+    icon: React.ReactNode
+    title: string
+    description: string
+    onClick: () => void
 }
 
 function ExampleCard({ icon, title, description, onClick }: ExampleCardProps) {
@@ -29,43 +29,43 @@ function ExampleCard({ icon, title, description, onClick }: ExampleCardProps) {
                 </div>
             </div>
         </button>
-    );
+    )
 }
 
 export default function ExamplePanel({
     setInput,
     setFiles,
 }: {
-    setInput: (input: string) => void;
-    setFiles: (files: File[]) => void;
+    setInput: (input: string) => void
+    setFiles: (files: File[]) => void
 }) {
     const handleReplicateFlowchart = async () => {
-        setInput("Replicate this flowchart.");
+        setInput("Replicate this flowchart.")
 
         try {
-            const response = await fetch("/example.png");
-            const blob = await response.blob();
-            const file = new File([blob], "example.png", { type: "image/png" });
-            setFiles([file]);
+            const response = await fetch("/example.png")
+            const blob = await response.blob()
+            const file = new File([blob], "example.png", { type: "image/png" })
+            setFiles([file])
         } catch (error) {
-            console.error("Error loading example image:", error);
+            console.error("Error loading example image:", error)
         }
-    };
+    }
 
     const handleReplicateArchitecture = async () => {
-        setInput("Replicate this in aws style");
+        setInput("Replicate this in aws style")
 
         try {
-            const response = await fetch("/architecture.png");
-            const blob = await response.blob();
+            const response = await fetch("/architecture.png")
+            const blob = await response.blob()
             const file = new File([blob], "architecture.png", {
                 type: "image/png",
-            });
-            setFiles([file]);
+            })
+            setFiles([file])
         } catch (error) {
-            console.error("Error loading architecture image:", error);
+            console.error("Error loading architecture image:", error)
         }
-    };
+    }
 
     return (
         <div className="py-6 px-2 animate-fade-in">
@@ -75,7 +75,8 @@ export default function ExamplePanel({
                     Create diagrams with AI
                 </h2>
                 <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                    Describe what you want to create or upload an image to replicate
+                    Describe what you want to create or upload an image to
+                    replicate
                 </p>
             </div>
 
@@ -91,7 +92,9 @@ export default function ExamplePanel({
                         title="Animated Diagram"
                         description="Draw a transformer architecture with animated connectors"
                         onClick={() => {
-                            setInput("Give me a **animated connector** diagram of transformer's architecture")
+                            setInput(
+                                "Give me a **animated connector** diagram of transformer's architecture",
+                            )
                             setFiles([])
                         }}
                     />
@@ -126,5 +129,5 @@ export default function ExamplePanel({
                 </p>
             </div>
         </div>
-    );
+    )
 }

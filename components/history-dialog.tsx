@@ -1,6 +1,8 @@
-"use client";
+"use client"
 
-import { useState } from "react";
+import Image from "next/image"
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
@@ -8,34 +10,32 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import Image from "next/image";
-import { useDiagram } from "@/contexts/diagram-context";
+} from "@/components/ui/dialog"
+import { useDiagram } from "@/contexts/diagram-context"
 
 interface HistoryDialogProps {
-    showHistory: boolean;
-    onToggleHistory: (show: boolean) => void;
+    showHistory: boolean
+    onToggleHistory: (show: boolean) => void
 }
 
 export function HistoryDialog({
     showHistory,
     onToggleHistory,
 }: HistoryDialogProps) {
-    const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram();
-    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+    const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram()
+    const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
     const handleClose = () => {
-        setSelectedIndex(null);
-        onToggleHistory(false);
-    };
+        setSelectedIndex(null)
+        onToggleHistory(false)
+    }
 
     const handleConfirmRestore = () => {
         if (selectedIndex !== null) {
-            onDisplayChart(diagramHistory[selectedIndex].xml);
-            handleClose();
+            onDisplayChart(diagramHistory[selectedIndex].xml)
+            handleClose()
         }
-    };
+    }
 
     return (
         <Dialog open={showHistory} onOpenChange={onToggleHistory}>
@@ -100,15 +100,12 @@ export function HistoryDialog({
                             </Button>
                         </>
                     ) : (
-                        <Button
-                            variant="outline"
-                            onClick={handleClose}
-                        >
+                        <Button variant="outline" onClick={handleClose}>
                             Close
                         </Button>
                     )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    );
+    )
 }
