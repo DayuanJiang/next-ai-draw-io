@@ -57,6 +57,7 @@ export function formatXML(xml: string, indent: string = "  "): string {
  * Efficiently converts a potentially incomplete XML string to a legal XML string by closing any open tags properly.
  * Additionally, if an <mxCell> tag does not have an mxGeometry child (e.g. <mxCell id="3">),
  * it removes that tag from the output.
+ * Also removes orphaned <mxPoint> elements that aren't inside <Array> or don't have proper 'as' attribute.
  * @param xmlString The potentially incomplete XML string
  * @returns A legal XML string with properly closed tags and removed incomplete mxCell elements.
  */
@@ -69,10 +70,34 @@ export function convertToLegalXml(xmlString: string): string {
 
     while ((match = regex.exec(xmlString)) !== null) {
         // match[0] contains the entire matched mxCell block
+        let cellContent = match[0]
+
+        // Remove orphaned <mxPoint> elements that are directly inside <mxGeometry>
+        // without an 'as' attribute (like as="sourcePoint", as="targetPoint")
+        // and not inside <Array as="points">
+        // These cause "Could not add object mxPoint" errors in draw.io
+        // First check if there's an <Array as="points"> - if so, keep all mxPoints inside it
+        const hasArrayPoints = /<Array\s+as="points">/.test(cellContent)
+        if (!hasArrayPoints) {
+            // Remove mxPoint elements without 'as' attribute
+            cellContent = cellContent.replace(
+                /<mxPoint\b[^>]*\/>/g,
+                (pointMatch) => {
+                    // Keep if it has an 'as' attribute
+                    if (/\sas=/.test(pointMatch)) {
+                        return pointMatch
+                    }
+                    // Remove orphaned mxPoint
+                    return ""
+                },
+            )
+        }
+
         // Indent each line of the matched block for readability.
-        const formatted = match[0]
+        const formatted = cellContent
             .split("\n")
             .map((line) => "    " + line.trim())
+            .filter((line) => line.trim()) // Remove empty lines from removed mxPoints
             .join("\n")
         result += formatted + "\n"
     }
@@ -585,6 +610,33 @@ export function validateMxCellStructure(xml: string): string | null {
 
     if (invalidConnections.length > 0) {
         return `Invalid XML: Found edges with invalid source/target references (${invalidConnections.slice(0, 3).join(", ")}). Edge source and target must reference existing cell IDs. Please regenerate the diagram with valid edge connections.`
+    }
+
+    // Check for orphaned mxPoint elements (not inside <Array as="points"> and without 'as' attribute)
+    // These cause "Could not add object mxPoint" errors in draw.io
+    const allMxPoints = doc.querySelectorAll("mxPoint")
+    const orphanedMxPoints: string[] = []
+    allMxPoints.forEach((point) => {
+        const hasAsAttr = point.hasAttribute("as")
+        const parentIsArray =
+            point.parentElement?.tagName === "Array" &&
+            point.parentElement?.getAttribute("as") === "points"
+
+        if (!hasAsAttr && !parentIsArray) {
+            // Find the parent mxCell to report which edge has the problem
+            let parent = point.parentElement
+            while (parent && parent.tagName !== "mxCell") {
+                parent = parent.parentElement
+            }
+            const cellId = parent?.getAttribute("id") || "unknown"
+            if (!orphanedMxPoints.includes(cellId)) {
+                orphanedMxPoints.push(cellId)
+            }
+        }
+    })
+
+    if (orphanedMxPoints.length > 0) {
+        return `Invalid XML: Found orphaned mxPoint elements in cells (${orphanedMxPoints.slice(0, 3).join(", ")}). mxPoint elements must either have an 'as' attribute (e.g., as="sourcePoint") or be inside <Array as="points">. For edge waypoints, use: <Array as="points"><mxPoint x="..." y="..."/></Array>. Please fix the mxPoint structure.`
     }
 
     return null
