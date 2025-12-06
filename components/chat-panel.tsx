@@ -31,6 +31,7 @@ interface ChatPanelProps {
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
     isMobile?: boolean
+    onCloseProtectionChange?: (enabled: boolean) => void
 }
 
 export default function ChatPanel({
@@ -39,6 +40,7 @@ export default function ChatPanel({
     drawioUi,
     onToggleDrawioUi,
     isMobile = false,
+    onCloseProtectionChange,
 }: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
@@ -497,19 +499,17 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                                 className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
                             />
                         </a>
-                        {accessCodeRequired && (
-                            <ButtonWithTooltip
-                                tooltipContent="Settings"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setShowSettingsDialog(true)}
-                                className="hover:bg-accent"
-                            >
-                                <Settings
-                                    className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
-                                />
-                            </ButtonWithTooltip>
-                        )}
+                        <ButtonWithTooltip
+                            tooltipContent="Settings"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setShowSettingsDialog(true)}
+                            className="hover:bg-accent"
+                        >
+                            <Settings
+                                className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
+                            />
+                        </ButtonWithTooltip>
                         {!isMobile && (
                             <ButtonWithTooltip
                                 tooltipContent="Hide chat panel (Ctrl+B)"
@@ -570,6 +570,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <SettingsDialog
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
+                onCloseProtectionChange={onCloseProtectionChange}
             />
         </div>
     )

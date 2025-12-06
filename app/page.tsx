@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
+import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
     ResizableHandle,
     ResizablePanel,
@@ -20,6 +21,13 @@ export default function Home() {
             if (saved === "min" || saved === "sketch") return saved
         }
         return "min"
+    })
+    const [closeProtection, setCloseProtection] = useState(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem(STORAGE_CLOSE_PROTECTION_KEY)
+            return saved !== "false" // Default to true
+        }
+        return true
     })
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
 
@@ -61,6 +69,8 @@ export default function Home() {
     // Show confirmation dialog when user tries to leave the page
     // This helps prevent accidental navigation from browser back gestures
     useEffect(() => {
+        if (!closeProtection) return
+
         const handleBeforeUnload = (event: BeforeUnloadEvent) => {
             event.preventDefault()
             return ""
@@ -69,7 +79,7 @@ export default function Home() {
         window.addEventListener("beforeunload", handleBeforeUnload)
         return () =>
             window.removeEventListener("beforeunload", handleBeforeUnload)
-    }, [])
+    }, [closeProtection])
 
     return (
         <div className="h-screen bg-background relative overflow-hidden">
@@ -127,6 +137,7 @@ export default function Home() {
                                 setDrawioUi(newTheme)
                             }}
                             isMobile={isMobile}
+                            onCloseProtectionChange={setCloseProtection}
                         />
                     </div>
                 </ResizablePanel>
