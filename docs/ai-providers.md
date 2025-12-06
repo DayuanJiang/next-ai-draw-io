@@ -133,6 +133,20 @@ This task requires exceptionally strong model capabilities, as it involves gener
 
 **Note on Ollama**: While Ollama is supported as a provider, it's generally not practical for this use case unless you're running high-capability models like DeepSeek R1 or Qwen3-235B locally.
 
+## Temperature Setting
+
+You can optionally configure the temperature via environment variable:
+
+```bash
+TEMPERATURE=0  # More deterministic output (recommended for diagrams)
+```
+
+**Important**: Leave `TEMPERATURE` unset for models that don't support temperature settings, such as:
+- GPT-5.1 and other reasoning models
+- Some specialized models
+
+When unset, the model uses its default behavior.
+
 ## Recommendations
 
 -   **Best experience**: Use models with vision support (GPT-4o, Claude, Gemini) for image-to-diagram features
