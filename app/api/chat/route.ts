@@ -418,7 +418,6 @@ IMPORTANT: Keep edits concise:
                 }),
             },
         },
-        temperature: 0,
     })
 
     return result.toUIMessageStreamResponse()
