@@ -42,9 +42,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const expectHistoryExportRef = useRef<boolean>(false)
 
     const onDrawioLoad = () => {
-        // Only set ready state once to prevent infinite loops
-        if (hasCalledOnLoadRef.current) return
-        hasCalledOnLoadRef.current = true
+        // Reset the flag to allow multiple loads (for theme switching)
+        hasCalledOnLoadRef.current = false
         console.log("[DiagramContext] DrawIO loaded, setting ready state")
         setIsDrawioReady(true)
     }

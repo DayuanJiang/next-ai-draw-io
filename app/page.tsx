@@ -10,13 +10,58 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useTheme } from "@/contexts/theme-context"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad } = useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        chartXML,
+        loadDiagram,
+    } = useDiagram()
+    const { theme } = useTheme()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
     const [isThemeLoaded, setIsThemeLoaded] = useState(false)
+    const [drawioKey, setDrawioKey] = useState(0)
+
+    // Store the current diagram XML before theme change
+    const savedDiagramRef = useRef<string>("")
+
+    // Update saved diagram when chartXML changes
+    useEffect(() => {
+        if (chartXML) {
+            savedDiagramRef.current = chartXML
+        }
+    }, [chartXML])
+
+    // Restore diagram after DrawIO reloads due to theme change
+    const [shouldRestoreDiagram, setShouldRestoreDiagram] = useState(false)
+
+    useEffect(() => {
+        if (shouldRestoreDiagram && savedDiagramRef.current) {
+            // Wait a bit for DrawIO to be fully ready
+            const timer = setTimeout(() => {
+                console.log("[Home] Restoring diagram after theme change")
+                loadDiagram(savedDiagramRef.current)
+                setShouldRestoreDiagram(false)
+            }, 500)
+            return () => clearTimeout(timer)
+        }
+    }, [shouldRestoreDiagram, loadDiagram])
+
+    // Watch for theme changes and trigger diagram restoration
+    const prevThemeRef = useRef(theme)
+    useEffect(() => {
+        if (prevThemeRef.current !== theme && isThemeLoaded) {
+            console.log("[Home] Theme changed, will restore diagram")
+            setShouldRestoreDiagram(true)
+            setDrawioKey((prev) => prev + 1)
+        }
+        prevThemeRef.current = theme
+    }, [theme, isThemeLoaded])
 
     // Load theme from localStorage after mount to avoid hydration mismatch
     useEffect(() => {
@@ -102,23 +147,30 @@ export default function Home() {
                             isMobile ? "p-1" : "p-2"
                         }`}
                     >
-                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
+                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30">
                             {isThemeLoaded ? (
                                 <DrawIoEmbed
-                                    key={drawioUi}
+                                    key={`${drawioUi}-${drawioKey}`}
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
-                                    onLoad={onDrawioLoad}
+                                    onLoad={() => {
+                                        onDrawioLoad()
+                                        // Trigger restoration after load if needed
+                                        if (shouldRestoreDiagram) {
+                                            setShouldRestoreDiagram(true)
+                                        }
+                                    }}
                                     urlParameters={{
                                         ui: drawioUi,
                                         spin: true,
                                         libraries: false,
                                         saveAndExit: false,
                                         noExitBtn: true,
+                                        dark: theme === "dark",
                                     }}
                                 />
                             ) : (
-                                <div className="h-full w-full flex items-center justify-center">
+                                <div className="h-full w-full flex items-center justify-center bg-background">
                                     <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
                                 </div>
                             )}

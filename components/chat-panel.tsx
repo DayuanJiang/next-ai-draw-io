@@ -25,6 +25,7 @@ import {
     SettingsDialog,
     STORAGE_ACCESS_CODE_KEY,
 } from "@/components/settings-dialog"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 // localStorage keys for persistence
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
@@ -1069,6 +1070,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         )}
                     </div>
                     <div className="flex items-center gap-1">
+                        <ThemeToggle />
                         <a
                             href="https://github.com/DayuanJiang/next-ai-draw-io"
                             target="_blank"

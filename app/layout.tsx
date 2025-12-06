@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/react"
 import type { Metadata, Viewport } from "next"
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
 import { DiagramProvider } from "@/contexts/diagram-context"
+import { ThemeProvider } from "@/contexts/theme-context"
 
 import "./globals.css"
 
@@ -106,7 +107,7 @@ export default function RootLayout({
     }
 
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning>
             <head>
                 <script
                     type="application/ld+json"
@@ -116,7 +117,9 @@ export default function RootLayout({
             <body
                 className={`${plusJakarta.variable} ${jetbrainsMono.variable} antialiased`}
             >
-                <DiagramProvider>{children}</DiagramProvider>
+                <ThemeProvider>
+                    <DiagramProvider>{children}</DiagramProvider>
+                </ThemeProvider>
                 <Analytics />
             </body>
             {process.env.NEXT_PUBLIC_GA_ID && (
