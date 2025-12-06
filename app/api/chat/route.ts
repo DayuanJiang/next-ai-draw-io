@@ -2,6 +2,7 @@ import {
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    stepCountIs,
     streamText,
 } from "ai"
 import { z } from "zod"
@@ -61,6 +62,28 @@ function validateFileParts(messages: any[]): {
 function isMinimalDiagram(xml: string): boolean {
     const stripped = xml.replace(/\s/g, "")
     return !stripped.includes('id="2"')
+}
+
+// Helper function to fix tool call inputs for Bedrock API
+// Bedrock requires toolUse.input to be a JSON object, not a string
+function fixToolCallInputs(messages: any[]): any[] {
+    return messages.map((msg) => {
+        if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+            return msg
+        }
+        const fixedContent = msg.content.map((part: any) => {
+            if (part.type === "tool-call" && typeof part.input === "string") {
+                try {
+                    return { ...part, input: JSON.parse(part.input) }
+                } catch {
+                    // If parsing fails, wrap the string in an object
+                    return { ...part, input: { rawInput: part.input } }
+                }
+            }
+            return part
+        })
+        return { ...msg, content: fixedContent }
+    })
 }
 
 // Helper function to create cached stream response
@@ -189,9 +212,12 @@ ${lastMessageText}
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
 
+    // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
+    const fixedMessages = fixToolCallInputs(modelMessages)
+
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
-    let enhancedMessages = modelMessages.filter(
+    let enhancedMessages = fixedMessages.filter(
         (msg: any) =>
             msg.content && Array.isArray(msg.content) && msg.content.length > 0,
     )
@@ -267,6 +293,7 @@ ${lastMessageText}
 
     const result = streamText({
         model,
+        stopWhen: stepCountIs(5),
         messages: allMessages,
         ...(providerOptions && { providerOptions }),
         ...(headers && { headers }),
@@ -277,6 +304,32 @@ ${lastMessageText}
                 userId,
             }),
         }),
+        // Repair malformed tool calls (model sometimes generates invalid JSON with unescaped quotes)
+        experimental_repairToolCall: async ({ toolCall }) => {
+            // The toolCall.input contains the raw JSON string that failed to parse
+            const rawJson =
+                typeof toolCall.input === "string" ? toolCall.input : null
+
+            if (rawJson) {
+                try {
+                    // Fix unescaped quotes: x="520" should be x=\"520\"
+                    const fixed = rawJson.replace(
+                        /([a-zA-Z])="(\d+)"/g,
+                        '$1=\\"$2\\"',
+                    )
+                    const parsed = JSON.parse(fixed)
+                    return {
+                        type: "tool-call" as const,
+                        toolCallId: toolCall.toolCallId,
+                        toolName: toolCall.toolName,
+                        input: JSON.stringify(parsed),
+                    }
+                } catch {
+                    // Repair failed, return null
+                }
+            }
+            return null
+        },
         onFinish: ({ text, usage, providerMetadata }) => {
             console.log(
                 "[Cache] Full providerMetadata:",
@@ -342,7 +395,9 @@ IMPORTANT: Keep edits concise:
 - Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
 - Break large changes into multiple smaller edits
 - Each search must contain complete lines (never truncate mid-line)
-- First match only - be specific enough to target the right element`,
+- First match only - be specific enough to target the right element
+
+⚠️ JSON ESCAPING: Every " inside string values MUST be escaped as \\". Example: x=\\"100\\" y=\\"200\\" - BOTH quotes need backslashes!`,
                 inputSchema: z.object({
                     edits: z
                         .array(
