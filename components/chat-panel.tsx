@@ -1,7 +1,10 @@
 "use client"
 
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
+import {
+    DefaultChatTransport,
+    lastAssistantMessageIsCompleteWithToolCalls,
+} from "ai"
 import {
     CheckCircle,
     PanelRightClose,
@@ -105,83 +108,109 @@ export default function ChatPanel({
         chartXMLRef.current = chartXML
     }, [chartXML])
 
-    const { messages, sendMessage, addToolResult, status, error, setMessages } =
-        useChat({
-            transport: new DefaultChatTransport({
-                api: "/api/chat",
-            }),
-            async onToolCall({ toolCall }) {
-                if (toolCall.toolName === "display_diagram") {
-                    const { xml } = toolCall.input as { xml: string }
+    // Ref to hold stop function for use in onToolCall (avoids stale closure)
+    const stopRef = useRef<(() => void) | null>(null)
 
-                    const validationError = validateMxCellStructure(xml)
+    const {
+        messages,
+        sendMessage,
+        addToolOutput,
+        stop,
+        status,
+        error,
+        setMessages,
+    } = useChat({
+        transport: new DefaultChatTransport({
+            api: "/api/chat",
+        }),
+        async onToolCall({ toolCall }) {
+            if (toolCall.toolName === "display_diagram") {
+                const { xml } = toolCall.input as { xml: string }
 
-                    if (validationError) {
-                        addToolResult({
-                            tool: "display_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: validationError,
-                        })
+                // Validate the final XML result
+                const validationError = validateMxCellStructure(xml)
+
+                if (validationError) {
+                    console.warn(
+                        "[display_diagram] Validation error:",
+                        validationError,
+                    )
+                    // Return error to model - sendAutomaticallyWhen will trigger retry
+                    const errorMessage = `${validationError}
+
+Please fix the XML issues and call display_diagram again with corrected XML.
+
+Your failed XML:
+\`\`\`xml
+${xml}
+\`\`\``
+                    addToolOutput({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: errorMessage,
+                    })
+                } else {
+                    // Success - diagram will be rendered by chat-message-display
+                    addToolOutput({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: "Successfully displayed the diagram.",
+                    })
+                }
+            } else if (toolCall.toolName === "edit_diagram") {
+                const { edits } = toolCall.input as {
+                    edits: Array<{ search: string; replace: string }>
+                }
+
+                let currentXml = ""
+                try {
+                    console.log("[edit_diagram] Starting...")
+                    // Use chartXML from ref directly - more reliable than export
+                    // especially on Vercel where DrawIO iframe may have latency issues
+                    // Using ref to avoid stale closure in callback
+                    const cachedXML = chartXMLRef.current
+                    if (cachedXML) {
+                        currentXml = cachedXML
+                        console.log(
+                            "[edit_diagram] Using cached chartXML, length:",
+                            currentXml.length,
+                        )
                     } else {
-                        addToolResult({
-                            tool: "display_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: "Successfully displayed the diagram.",
-                        })
+                        // Fallback to export only if no cached XML
+                        console.log(
+                            "[edit_diagram] No cached XML, fetching from DrawIO...",
+                        )
+                        currentXml = await onFetchChart(false)
+                        console.log(
+                            "[edit_diagram] Got XML from export, length:",
+                            currentXml.length,
+                        )
                     }
-                } else if (toolCall.toolName === "edit_diagram") {
-                    const { edits } = toolCall.input as {
-                        edits: Array<{ search: string; replace: string }>
-                    }
 
-                    let currentXml = ""
-                    try {
-                        console.log("[edit_diagram] Starting...")
-                        // Use chartXML from ref directly - more reliable than export
-                        // especially on Vercel where DrawIO iframe may have latency issues
-                        // Using ref to avoid stale closure in callback
-                        const cachedXML = chartXMLRef.current
-                        if (cachedXML) {
-                            currentXml = cachedXML
-                            console.log(
-                                "[edit_diagram] Using cached chartXML, length:",
-                                currentXml.length,
-                            )
-                        } else {
-                            // Fallback to export only if no cached XML
-                            console.log(
-                                "[edit_diagram] No cached XML, fetching from DrawIO...",
-                            )
-                            currentXml = await onFetchChart(false)
-                            console.log(
-                                "[edit_diagram] Got XML from export, length:",
-                                currentXml.length,
-                            )
-                        }
+                    const { replaceXMLParts } = await import("@/lib/utils")
+                    const editedXml = replaceXMLParts(currentXml, edits)
 
-                        const { replaceXMLParts } = await import("@/lib/utils")
-                        const editedXml = replaceXMLParts(currentXml, edits)
+                    onDisplayChart(editedXml)
 
-                        onDisplayChart(editedXml)
+                    addToolOutput({
+                        tool: "edit_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                    })
+                    console.log("[edit_diagram] Success")
+                } catch (error) {
+                    console.error("[edit_diagram] Failed:", error)
 
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
-                        })
-                        console.log("[edit_diagram] Success")
-                    } catch (error) {
-                        console.error("[edit_diagram] Failed:", error)
+                    const errorMessage =
+                        error instanceof Error ? error.message : String(error)
 
-                        const errorMessage =
-                            error instanceof Error
-                                ? error.message
-                                : String(error)
-
-                        addToolResult({
-                            tool: "edit_diagram",
-                            toolCallId: toolCall.toolCallId,
-                            output: `Edit failed: ${errorMessage}
+                    // Use addToolOutput with state: 'output-error' for proper error signaling
+                    addToolOutput({
+                        tool: "edit_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `Edit failed: ${errorMessage}
 
 Current diagram XML:
 \`\`\`xml
@@ -189,34 +218,40 @@ ${currentXml || "No XML available"}
 \`\`\`
 
 Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
-                        })
-                    }
+                    })
                 }
-            },
-            onError: (error) => {
-                // Silence access code error in console since it's handled by UI
-                if (!error.message.includes("Invalid or missing access code")) {
-                    console.error("Chat error:", error)
-                }
+            }
+        },
+        onError: (error) => {
+            // Silence access code error in console since it's handled by UI
+            if (!error.message.includes("Invalid or missing access code")) {
+                console.error("Chat error:", error)
+            }
 
-                // Add system message for error so it can be cleared
-                setMessages((currentMessages) => {
-                    const errorMessage = {
-                        id: `error-${Date.now()}`,
-                        role: "system" as const,
-                        content: error.message,
-                        parts: [{ type: "text" as const, text: error.message }],
-                    }
-                    return [...currentMessages, errorMessage]
-                })
-
-                if (error.message.includes("Invalid or missing access code")) {
-                    // Show settings button and open dialog to help user fix it
-                    setAccessCodeRequired(true)
-                    setShowSettingsDialog(true)
+            // Add system message for error so it can be cleared
+            setMessages((currentMessages) => {
+                const errorMessage = {
+                    id: `error-${Date.now()}`,
+                    role: "system" as const,
+                    content: error.message,
+                    parts: [{ type: "text" as const, text: error.message }],
                 }
-            },
-        })
+                return [...currentMessages, errorMessage]
+            })
+
+            if (error.message.includes("Invalid or missing access code")) {
+                // Show settings button and open dialog to help user fix it
+                setAccessCodeRequired(true)
+                setShowSettingsDialog(true)
+            }
+        },
+        // Auto-resubmit when all tool results are available (including errors)
+        // This enables the model to retry when a tool returns an error
+        sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    })
+
+    // Update stopRef so onToolCall can access it
+    stopRef.current = stop
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
