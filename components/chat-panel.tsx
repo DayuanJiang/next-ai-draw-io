@@ -347,12 +347,16 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         })
 
         // Now send the message after state is guaranteed to be updated
+        const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
             { parts: userParts },
             {
                 body: {
                     xml: savedXml,
                     sessionId,
+                },
+                headers: {
+                    "x-access-code": accessCode,
                 },
             },
         )
@@ -404,12 +408,16 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         })
 
         // Now send the edited message after state is guaranteed to be updated
+        const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
             { parts: newParts },
             {
                 body: {
                     xml: savedXml,
                     sessionId,
+                },
+                headers: {
+                    "x-access-code": accessCode,
                 },
             },
         )
