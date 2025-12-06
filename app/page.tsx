@@ -12,7 +12,7 @@ import {
 import { useDiagram } from "@/contexts/diagram-context"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport } = useDiagram()
+    const { drawioRef, handleDiagramExport, onDrawioLoad } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">(() => {
@@ -25,9 +25,9 @@ export default function Home() {
     const [closeProtection, setCloseProtection] = useState(() => {
         if (typeof window !== "undefined") {
             const saved = localStorage.getItem(STORAGE_CLOSE_PROTECTION_KEY)
-            return saved !== "false" // Default to true
+            return saved === "true" // Default to false (auto-save handles persistence)
         }
-        return true
+        return false
     })
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
 
@@ -100,6 +100,7 @@ export default function Home() {
                                 key={drawioUi}
                                 ref={drawioRef}
                                 onExport={handleDiagramExport}
+                                onLoad={onDrawioLoad}
                                 urlParameters={{
                                     ui: drawioUi,
                                     spin: true,
