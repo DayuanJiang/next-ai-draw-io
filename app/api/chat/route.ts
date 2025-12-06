@@ -418,7 +418,9 @@ IMPORTANT: Keep edits concise:
                 }),
             },
         },
-        temperature: 0,
+        ...(process.env.TEMPERATURE !== undefined && {
+            temperature: parseFloat(process.env.TEMPERATURE),
+        }),
     })
 
     return result.toUIMessageStreamResponse()
