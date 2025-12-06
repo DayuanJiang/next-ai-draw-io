@@ -47,7 +47,7 @@ function EditDiffDisplay({ edits }: { edits: EditPair[] }) {
         <div className="space-y-3">
             {edits.map((edit, index) => (
                 <div
-                    key={`${edit.search.slice(0, 50)}-${edit.replace.slice(0, 50)}-${index}`}
+                    key={`${(edit.search || "").slice(0, 50)}-${(edit.replace || "").slice(0, 50)}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
@@ -177,7 +177,10 @@ export function ChatMessageDisplay({
             const currentXml = xml || ""
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
-                const replacedXML = replaceNodes(chartXML, convertedXml)
+                // If chartXML is empty, use the converted XML directly
+                const replacedXML = chartXML
+                    ? replaceNodes(chartXML, convertedXml)
+                    : convertedXml
 
                 const validationError = validateMxCellStructure(replacedXML)
                 if (!validationError) {

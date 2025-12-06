@@ -467,7 +467,9 @@ export function replaceXMLParts(
                     i,
                     i + searchLines.length,
                 )
-                const normalizedCandidate = normalizeWs(candidateLines.join(" "))
+                const normalizedCandidate = normalizeWs(
+                    candidateLines.join(" "),
+                )
 
                 if (normalizedCandidate === normalizedSearch) {
                     matchStartLine = i

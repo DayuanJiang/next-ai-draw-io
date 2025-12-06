@@ -22,6 +22,8 @@ interface DiagramContextType {
         format: ExportFormat,
         sessionId?: string,
     ) => void
+    isDrawioReady: boolean
+    onDrawioLoad: () => void
 }
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
@@ -32,10 +34,20 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [diagramHistory, setDiagramHistory] = useState<
         { svg: string; xml: string }[]
     >([])
+    const [isDrawioReady, setIsDrawioReady] = useState(false)
+    const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
     const resolverRef = useRef<((value: string) => void) | null>(null)
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false)
+
+    const onDrawioLoad = () => {
+        // Only set ready state once to prevent infinite loops
+        if (hasCalledOnLoadRef.current) return
+        hasCalledOnLoadRef.current = true
+        console.log("[DiagramContext] DrawIO loaded, setting ready state")
+        setIsDrawioReady(true)
+    }
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
         resolver: ((data: string) => void) | null
@@ -62,6 +74,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const loadDiagram = (chart: string) => {
+        // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
+        setChartXML(chart)
+
         if (drawioRef.current) {
             drawioRef.current.load({
                 xml: chart,
@@ -220,6 +235,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 handleDiagramExport,
                 clearDiagram,
                 saveDiagramToFile,
+                isDrawioReady,
+                onDrawioLoad,
             }}
         >
             {children}
