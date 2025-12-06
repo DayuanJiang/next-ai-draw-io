@@ -226,7 +226,6 @@ export function replaceXMLParts(
 ): string {
     // Format the XML first to ensure consistent line breaks
     let result = formatXML(xmlContent)
-    let lastProcessedIndex = 0
 
     for (const { search, replace } of searchReplacePairs) {
         // Also format the search content for consistency
@@ -241,18 +240,10 @@ export function replaceXMLParts(
             searchLines.pop()
         }
 
-        // Find the line number where lastProcessedIndex falls
-        let startLineNum = 0
-        let currentIndex = 0
-        while (
-            currentIndex < lastProcessedIndex &&
-            startLineNum < resultLines.length
-        ) {
-            currentIndex += resultLines[startLineNum].length + 1 // +1 for \n
-            startLineNum++
-        }
+        // Always search from the beginning - pairs may not be in document order
+        const startLineNum = 0
 
-        // Try to find exact match starting from lastProcessedIndex
+        // Try to find match using multiple strategies
         let matchFound = false
         let matchStartLine = -1
         let matchEndLine = -1
@@ -397,6 +388,71 @@ export function replaceXMLParts(
             }
         }
 
+        // Sixth try: Match by value attribute (label text)
+        // Extract value from search pattern and find elements with that value
+        if (!matchFound) {
+            const valueMatch = search.match(/value="([^"]*)"/)
+            if (valueMatch) {
+                const searchValue = valueMatch[0] // Use full match like value="text"
+                for (let i = startLineNum; i < resultLines.length; i++) {
+                    if (resultLines[i].includes(searchValue)) {
+                        // Found element with matching value
+                        let endLine = i + 1
+                        const line = resultLines[i].trim()
+
+                        if (!line.endsWith("/>")) {
+                            let depth = 1
+                            while (endLine < resultLines.length && depth > 0) {
+                                const currentLine = resultLines[endLine].trim()
+                                if (
+                                    currentLine.startsWith("<") &&
+                                    !currentLine.startsWith("</") &&
+                                    !currentLine.endsWith("/>")
+                                ) {
+                                    depth++
+                                } else if (currentLine.startsWith("</")) {
+                                    depth--
+                                }
+                                endLine++
+                            }
+                        }
+
+                        matchStartLine = i
+                        matchEndLine = endLine
+                        matchFound = true
+                        break
+                    }
+                }
+            }
+        }
+
+        // Seventh try: Normalized whitespace match
+        // Collapse all whitespace and compare
+        if (!matchFound) {
+            const normalizeWs = (s: string) => s.replace(/\s+/g, " ").trim()
+            const normalizedSearch = normalizeWs(search)
+
+            for (
+                let i = startLineNum;
+                i <= resultLines.length - searchLines.length;
+                i++
+            ) {
+                // Build a normalized version of the candidate lines
+                const candidateLines = resultLines.slice(
+                    i,
+                    i + searchLines.length,
+                )
+                const normalizedCandidate = normalizeWs(candidateLines.join(" "))
+
+                if (normalizedCandidate === normalizedSearch) {
+                    matchStartLine = i
+                    matchEndLine = i + searchLines.length
+                    matchFound = true
+                    break
+                }
+            }
+        }
+
         if (!matchFound) {
             throw new Error(
                 `Search pattern not found in the diagram. The pattern may not exist in the current structure.`,
@@ -419,12 +475,6 @@ export function replaceXMLParts(
         ]
 
         result = newResultLines.join("\n")
-
-        // Update lastProcessedIndex to the position after the replacement
-        lastProcessedIndex = 0
-        for (let i = 0; i < matchStartLine + replaceLines.length; i++) {
-            lastProcessedIndex += newResultLines[i].length + 1
-        }
     }
 
     return result
