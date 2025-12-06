@@ -135,13 +135,13 @@ This task requires exceptionally strong model capabilities, as it involves gener
 
 ## Temperature Setting
 
-You can optionally configure the AI temperature via environment variable:
+You can optionally configure the temperature via environment variable:
 
 ```bash
-AI_TEMPERATURE=0  # More deterministic output (recommended for diagrams)
+TEMPERATURE=0  # More deterministic output (recommended for diagrams)
 ```
 
-**Important**: Leave `AI_TEMPERATURE` unset for models that don't support temperature settings, such as:
+**Important**: Leave `TEMPERATURE` unset for models that don't support temperature settings, such as:
 - GPT-5.1 and other reasoning models
 - Some specialized models
 
