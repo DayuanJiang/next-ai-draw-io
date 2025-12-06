@@ -15,20 +15,26 @@ export default function Home() {
     const { drawioRef, handleDiagramExport } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
-    const [drawioUi, setDrawioUi] = useState<"min" | "sketch">(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem("drawio-theme")
-            if (saved === "min" || saved === "sketch") return saved
+    const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
+    const [isThemeLoaded, setIsThemeLoaded] = useState(false)
+
+    // Load theme from localStorage after mount to avoid hydration mismatch
+    useEffect(() => {
+        const saved = localStorage.getItem("drawio-theme")
+        if (saved === "min" || saved === "sketch") {
+            setDrawioUi(saved)
         }
-        return "min"
-    })
-    const [closeProtection, setCloseProtection] = useState(() => {
-        if (typeof window !== "undefined") {
-            const saved = localStorage.getItem(STORAGE_CLOSE_PROTECTION_KEY)
-            return saved !== "false" // Default to true
+        setIsThemeLoaded(true)
+    }, [])
+    const [closeProtection, setCloseProtection] = useState(true)
+
+    // Load close protection setting from localStorage after mount
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_CLOSE_PROTECTION_KEY)
+        if (saved === "false") {
+            setCloseProtection(false)
         }
-        return true
-    })
+    }, [])
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
 
     useEffect(() => {
@@ -96,18 +102,24 @@ export default function Home() {
                         }`}
                     >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
-                            <DrawIoEmbed
-                                key={drawioUi}
-                                ref={drawioRef}
-                                onExport={handleDiagramExport}
-                                urlParameters={{
-                                    ui: drawioUi,
-                                    spin: true,
-                                    libraries: false,
-                                    saveAndExit: false,
-                                    noExitBtn: true,
-                                }}
-                            />
+                            {isThemeLoaded ? (
+                                <DrawIoEmbed
+                                    key={drawioUi}
+                                    ref={drawioRef}
+                                    onExport={handleDiagramExport}
+                                    urlParameters={{
+                                        ui: drawioUi,
+                                        spin: true,
+                                        libraries: false,
+                                        saveAndExit: false,
+                                        noExitBtn: true,
+                                    }}
+                                />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center">
+                                    <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </ResizablePanel>
