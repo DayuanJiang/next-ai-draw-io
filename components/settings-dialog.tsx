@@ -30,6 +30,8 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
     const [accessCode, setAccessCode] = useState("")
     const [closeProtection, setCloseProtection] = useState(true)
+    const [isVerifying, setIsVerifying] = useState(false)
+    const [error, setError] = useState("")
 
     useEffect(() => {
         if (open) {
@@ -42,17 +44,44 @@ export function SettingsDialog({
             )
             // Default to true if not set
             setCloseProtection(storedCloseProtection !== "false")
+            setError("")
         }
     }, [open])
 
-    const handleSave = () => {
-        localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim())
-        localStorage.setItem(
-            STORAGE_CLOSE_PROTECTION_KEY,
-            closeProtection.toString(),
-        )
-        onCloseProtectionChange?.(closeProtection)
-        onOpenChange(false)
+    const handleSave = async () => {
+        setError("")
+        setIsVerifying(true)
+
+        try {
+            // Verify access code with server
+            const response = await fetch("/api/verify-access-code", {
+                method: "POST",
+                headers: {
+                    "x-access-code": accessCode.trim(),
+                },
+            })
+
+            const data = await response.json()
+
+            if (!data.valid) {
+                setError(data.message || "Invalid access code")
+                setIsVerifying(false)
+                return
+            }
+
+            // Save settings only if verification passes
+            localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim())
+            localStorage.setItem(
+                STORAGE_CLOSE_PROTECTION_KEY,
+                closeProtection.toString(),
+            )
+            onCloseProtectionChange?.(closeProtection)
+            onOpenChange(false)
+        } catch {
+            setError("Failed to verify access code")
+        } finally {
+            setIsVerifying(false)
+        }
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -87,6 +116,11 @@ export function SettingsDialog({
                         <p className="text-[0.8rem] text-muted-foreground">
                             Required if the server has enabled access control.
                         </p>
+                        {error && (
+                            <p className="text-[0.8rem] text-destructive">
+                                {error}
+                            </p>
+                        )}
                     </div>
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
@@ -111,7 +145,9 @@ export function SettingsDialog({
                     >
                         Cancel
                     </Button>
-                    <Button onClick={handleSave}>Save</Button>
+                    <Button onClick={handleSave} disabled={isVerifying}>
+                        {isVerifying ? "Verifying..." : "Save"}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
