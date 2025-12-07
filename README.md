@@ -116,6 +116,14 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
+Or use an env file (create one from `env.example`):
+
+```bash
+cp env.example .env
+# Edit .env with your configuration
+docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
@@ -133,8 +141,6 @@ cd next-ai-draw-io
 
 ```bash
 npm install
-# or
-yarn install
 ```
 
 3. Configure your AI provider:
