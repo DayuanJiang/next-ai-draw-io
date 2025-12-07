@@ -479,16 +479,94 @@ IMPORTANT: Keep edits concise:
     return result.toUIMessageStreamResponse()
 }
 
+// Helper to categorize errors and return appropriate response
+function handleError(error: unknown): Response {
+    console.error("Error in chat route:", error)
+
+    const isDev = process.env.NODE_ENV === "development"
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    // Check both statusCode and status, as some providers/libs vary
+    const errorStatus = (error as any)?.statusCode || (error as any)?.status
+
+    // Default to 500
+    let status = 500
+    let message = "An unexpected error occurred. Please try again later."
+
+    // Check for specific error types or patterns
+    if (
+        errorStatus === 429 ||
+        errorMessage.includes("429") ||
+        errorMessage.toLowerCase().includes("rate limit")
+    ) {
+        status = 429
+        message =
+            "You have reached the rate limit after 3 retries. Please try again later."
+    } else if (
+        errorStatus === 401 ||
+        errorMessage.includes("401") ||
+        errorMessage.toLowerCase().includes("unauthorized") ||
+        errorMessage.toLowerCase().includes("api key") ||
+        errorMessage.toLowerCase().includes("invalid token") ||
+        errorMessage.includes("无效的令牌")
+    ) {
+        status = 401
+        message =
+            "Authentication failed. Please check your API key or access code."
+    } else if (
+        errorStatus === 503 ||
+        errorMessage.includes("503") ||
+        errorMessage.toLowerCase().includes("overloaded") ||
+        errorMessage.toLowerCase().includes("capacity")
+    ) {
+        status = 503
+        message =
+            "The AI model is currently overloaded. Please try again in a few moments."
+    } else if (
+        errorStatus === 400 ||
+        errorMessage.includes("context length") ||
+        errorMessage.toLowerCase().includes("token limit")
+    ) {
+        status = 400
+        message =
+            "The conversation is too long for the model to process. Please start a new chat."
+    } else if (error instanceof Error) {
+        // Fallback: If it's a known error status that we haven't categorized,
+        // use the status code but keep the generic message if we can't trust the content.
+        // Or if it IS a known status code, use the error message?
+        if (
+            errorStatus &&
+            typeof errorStatus === "number" &&
+            errorStatus >= 400
+        ) {
+            status = errorStatus
+        }
+
+        // For other known errors, use the error message if it's safe/clean enough.
+        // However, if we failed to categorize a 401/429 above, we shouldn't show raw text.
+        // Let's rely on the categorized messages. If we are here, it's an "uncategorized" error.
+        // To be safe, avoiding showing raw "无效的令牌" here if it didn't match catch block.
+        // But wait, if it didn't match the catch block, then "无效的令牌" check failed?
+        message = error.message
+    }
+
+    return Response.json(
+        {
+            error: message,
+            ...(isDev && {
+                details: errorMessage,
+                stack: error instanceof Error ? error.stack : undefined,
+            }),
+        },
+        { status },
+    )
+}
+
 // Wrap handler with error handling
 async function safeHandler(req: Request): Promise<Response> {
     try {
         return await handleChatRequest(req)
     } catch (error) {
-        console.error("Error in chat route:", error)
-        return Response.json(
-            { error: "Internal server error" },
-            { status: 500 },
-        )
+        return handleError(error)
     }
 }
 
