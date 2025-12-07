@@ -185,7 +185,8 @@ export function ChatMessageDisplay({
                 const validationError = validateMxCellStructure(replacedXML)
                 if (!validationError) {
                     previousXML.current = convertedXml
-                    onDisplayChart(replacedXML)
+                    // Skip validation in loadDiagram since we already validated above
+                    onDisplayChart(replacedXML, true)
                 } else {
                     console.log(
                         "[ChatMessageDisplay] XML validation failed:",

@@ -67,17 +67,42 @@ function isMinimalDiagram(xml: string): boolean {
 // Helper function to fix tool call inputs for Bedrock API
 // Bedrock requires toolUse.input to be a JSON object, not a string
 function fixToolCallInputs(messages: any[]): any[] {
-    return messages.map((msg) => {
+    return messages.map((msg, msgIndex) => {
         if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
             return msg
         }
-        const fixedContent = msg.content.map((part: any) => {
-            if (part.type === "tool-call" && typeof part.input === "string") {
-                try {
-                    return { ...part, input: JSON.parse(part.input) }
-                } catch {
-                    // If parsing fails, wrap the string in an object
-                    return { ...part, input: { rawInput: part.input } }
+        const fixedContent = msg.content.map((part: any, partIndex: number) => {
+            if (part.type === "tool-call") {
+                console.log(
+                    `[fixToolCallInputs] msg[${msgIndex}].content[${partIndex}] tool-call:`,
+                    {
+                        toolName: part.toolName,
+                        inputType: typeof part.input,
+                        input: part.input,
+                    },
+                )
+                if (typeof part.input === "string") {
+                    try {
+                        const parsed = JSON.parse(part.input)
+                        console.log(
+                            `[fixToolCallInputs] Parsed string input to JSON:`,
+                            parsed,
+                        )
+                        return { ...part, input: parsed }
+                    } catch {
+                        // If parsing fails, wrap the string in an object
+                        console.log(
+                            `[fixToolCallInputs] Failed to parse, wrapping in object`,
+                        )
+                        return { ...part, input: { rawInput: part.input } }
+                    }
+                }
+                // Input is already an object, but verify it's not null/undefined
+                if (part.input === null || part.input === undefined) {
+                    console.log(
+                        `[fixToolCallInputs] Input is null/undefined, using empty object`,
+                    )
+                    return { ...part, input: {} }
                 }
             }
             return part
@@ -211,6 +236,28 @@ ${lastMessageText}
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
+
+    // Debug: log raw messages to see what's coming in
+    console.log(
+        "[DEBUG] Raw UI messages:",
+        JSON.stringify(
+            messages.map((m: any, i: number) => ({
+                index: i,
+                role: m.role,
+                partsCount: m.parts?.length,
+                parts: m.parts?.map((p: any) => ({
+                    type: p.type,
+                    toolName: p.toolName,
+                    toolCallId: p.toolCallId,
+                    state: p.state,
+                    inputType: p.input ? typeof p.input : undefined,
+                    input: p.input,
+                })),
+            })),
+            null,
+            2,
+        ),
+    )
 
     // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
     const fixedMessages = fixToolCallInputs(modelMessages)

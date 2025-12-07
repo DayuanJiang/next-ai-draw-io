@@ -32,7 +32,7 @@ const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 
 import { useDiagram } from "@/contexts/diagram-context"
-import { formatXML, validateMxCellStructure } from "@/lib/utils"
+import { formatXML } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 interface ChatPanelProps {
@@ -142,8 +142,8 @@ export default function ChatPanel({
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
 
-                // Validate the final XML result
-                const validationError = validateMxCellStructure(xml)
+                // loadDiagram validates and returns error if invalid
+                const validationError = onDisplayChart(xml)
 
                 if (validationError) {
                     console.warn(
@@ -206,7 +206,28 @@ ${xml}
                     const { replaceXMLParts } = await import("@/lib/utils")
                     const editedXml = replaceXMLParts(currentXml, edits)
 
-                    onDisplayChart(editedXml)
+                    // loadDiagram validates and returns error if invalid
+                    const validationError = onDisplayChart(editedXml)
+                    if (validationError) {
+                        console.warn(
+                            "[edit_diagram] Validation error:",
+                            validationError,
+                        )
+                        addToolOutput({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            state: "output-error",
+                            errorText: `Edit produced invalid XML: ${validationError}
+
+Current diagram XML:
+\`\`\`xml
+${currentXml}
+\`\`\`
+
+Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid references).`,
+                        })
+                        return
+                    }
 
                     addToolOutput({
                         tool: "edit_diagram",
@@ -330,7 +351,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     "[ChatPanel] Loading saved diagram XML, length:",
                     savedDiagramXml.length,
                 )
-                onDisplayChart(savedDiagramXml)
+                // Skip validation for trusted saved diagrams
+                onDisplayChart(savedDiagramXml, true)
                 chartXMLRef.current = savedDiagramXml
             }
         } catch (error) {
@@ -525,8 +547,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             return
         }
 
-        // Restore the diagram to the saved state
-        onDisplayChart(savedXml)
+        // Restore the diagram to the saved state (skip validation for trusted snapshots)
+        onDisplayChart(savedXml, true)
 
         // Update ref directly to ensure edit_diagram has the correct XML
         chartXMLRef.current = savedXml
@@ -579,8 +601,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             return
         }
 
-        // Restore the diagram to the saved state
-        onDisplayChart(savedXml)
+        // Restore the diagram to the saved state (skip validation for trusted snapshots)
+        onDisplayChart(savedXml, true)
 
         // Update ref directly to ensure edit_diagram has the correct XML
         chartXMLRef.current = savedXml
