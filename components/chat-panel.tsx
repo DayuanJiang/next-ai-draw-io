@@ -32,6 +32,7 @@ const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 
 import { useDiagram } from "@/contexts/diagram-context"
+import { findCachedResponse } from "@/lib/cached-responses"
 import { formatXML } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
@@ -450,6 +451,42 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         e.preventDefault()
         const isProcessing = status === "streaming" || status === "submitted"
         if (input.trim() && !isProcessing) {
+            // Check if input matches a cached example (only when no messages yet)
+            if (messages.length === 0) {
+                const cached = findCachedResponse(
+                    input.trim(),
+                    files.length > 0,
+                )
+                if (cached) {
+                    // Add user message and fake assistant response to messages
+                    // The chat-message-display useEffect will handle displaying the diagram
+                    const toolCallId = `cached-${Date.now()}`
+                    setMessages([
+                        {
+                            id: `user-${Date.now()}`,
+                            role: "user" as const,
+                            parts: [{ type: "text" as const, text: input }],
+                        },
+                        {
+                            id: `assistant-${Date.now()}`,
+                            role: "assistant" as const,
+                            parts: [
+                                {
+                                    type: "tool-display_diagram" as const,
+                                    toolCallId,
+                                    state: "output-available" as const,
+                                    input: { xml: cached.xml },
+                                    output: "Successfully displayed the diagram.",
+                                },
+                            ],
+                        },
+                    ] as any)
+                    setInput("")
+                    setFiles([])
+                    return
+                }
+            }
+
             try {
                 let chartXml = await onFetchChart()
                 chartXml = formatXML(chartXml)
