@@ -4,13 +4,13 @@ import type React from "react"
 import { createContext, useContext, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
 import type { ExportFormat } from "@/components/save-dialog"
-import { extractDiagramXML } from "../lib/utils"
+import { extractDiagramXML, validateMxCellStructure } from "../lib/utils"
 
 interface DiagramContextType {
     chartXML: string
     latestSvg: string
     diagramHistory: { svg: string; xml: string }[]
-    loadDiagram: (chart: string) => void
+    loadDiagram: (chart: string, skipValidation?: boolean) => string | null
     handleExport: () => void
     handleExportWithoutHistory: () => void
     resolverRef: React.Ref<((value: string) => void) | null>
@@ -73,7 +73,19 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
-    const loadDiagram = (chart: string) => {
+    const loadDiagram = (
+        chart: string,
+        skipValidation?: boolean,
+    ): string | null => {
+        // Validate XML structure before loading (unless skipped for internal use)
+        if (!skipValidation) {
+            const validationError = validateMxCellStructure(chart)
+            if (validationError) {
+                console.warn("[loadDiagram] Validation error:", validationError)
+                return validationError
+            }
+        }
+
         // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
         setChartXML(chart)
 
@@ -82,6 +94,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 xml: chart,
             })
         }
+
+        return null
     }
 
     const handleDiagramExport = (data: any) => {
@@ -121,8 +135,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     const clearDiagram = () => {
         const emptyDiagram = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
-        loadDiagram(emptyDiagram)
-        setChartXML(emptyDiagram)
+        // Skip validation for trusted internal template (loadDiagram also sets chartXML)
+        loadDiagram(emptyDiagram, true)
         setLatestSvg("")
         setDiagramHistory([])
     }

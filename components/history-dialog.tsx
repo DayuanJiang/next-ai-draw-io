@@ -32,7 +32,8 @@ export function HistoryDialog({
 
     const handleConfirmRestore = () => {
         if (selectedIndex !== null) {
-            onDisplayChart(diagramHistory[selectedIndex].xml)
+            // Skip validation for trusted history snapshots
+            onDisplayChart(diagramHistory[selectedIndex].xml, true)
             handleClose()
         }
     }
