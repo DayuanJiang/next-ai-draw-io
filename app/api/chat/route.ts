@@ -195,12 +195,24 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const isFirstMessage = messages.length === 1
     const isEmptyDiagram = !xml || xml.trim() === "" || isMinimalDiagram(xml)
 
+    // DEBUG: Log cache check conditions
+    console.log("[Cache DEBUG] messages.length:", messages.length)
+    console.log("[Cache DEBUG] isFirstMessage:", isFirstMessage)
+    console.log("[Cache DEBUG] xml length:", xml?.length || 0)
+    console.log("[Cache DEBUG] xml preview:", xml?.substring(0, 200))
+    console.log("[Cache DEBUG] isEmptyDiagram:", isEmptyDiagram)
+
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]
         const textPart = lastMessage.parts?.find((p: any) => p.type === "text")
         const filePart = lastMessage.parts?.find((p: any) => p.type === "file")
 
+        console.log("[Cache DEBUG] textPart?.text:", textPart?.text)
+        console.log("[Cache DEBUG] hasFilePart:", !!filePart)
+
         const cached = findCachedResponse(textPart?.text || "", !!filePart)
+
+        console.log("[Cache DEBUG] cached found:", !!cached)
 
         if (cached) {
             console.log(
@@ -208,7 +220,19 @@ async function handleChatRequest(req: Request): Promise<Response> {
                 textPart?.text,
             )
             return createCachedStreamResponse(cached.xml)
+        } else {
+            console.log("[Cache DEBUG] No cache match - checking why...")
+            console.log(
+                "[Cache DEBUG] Exact promptText:",
+                JSON.stringify(textPart?.text),
+            )
         }
+    } else {
+        console.log("[Cache DEBUG] Skipping cache check - conditions not met")
+        if (!isFirstMessage)
+            console.log("[Cache DEBUG] Reason: not first message")
+        if (!isEmptyDiagram)
+            console.log("[Cache DEBUG] Reason: diagram not empty")
     }
     // === CACHE CHECK END ===
 

@@ -676,9 +676,14 @@ export function ChatMessageDisplay({
                                                     <Copy className="h-3.5 w-3.5" />
                                                 )}
                                             </button>
-                                            {/* Regenerate button - only on last assistant message */}
+                                            {/* Regenerate button - only on last assistant message, not for cached examples */}
                                             {onRegenerate &&
-                                                isLastAssistantMessage && (
+                                                isLastAssistantMessage &&
+                                                !message.parts?.some((p: any) =>
+                                                    p.toolCallId?.startsWith(
+                                                        "cached-",
+                                                    ),
+                                                ) && (
                                                     <button
                                                         type="button"
                                                         onClick={() =>
