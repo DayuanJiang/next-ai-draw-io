@@ -2,6 +2,7 @@
 
 import {
     Download,
+    FileText,
     History,
     Image as ImageIcon,
     LayoutGrid,
@@ -9,7 +10,9 @@ import {
     PenTool,
     Send,
     Trash2,
+    X,
 } from "lucide-react"
+import Image from "next/image"
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -150,6 +153,11 @@ export function ChatInput({
     const [showSaveDialog, setShowSaveDialog] = useState(false)
     const [showThemeWarning, setShowThemeWarning] = useState(false)
 
+    const [pdfInputEnabled, setPdfInputEnabled] = useState(false)
+    const [maxFileSize] = useState(5 * 1024 * 1024)
+    const [attachments, setAttachments] = useState<File[]>([])
+    const [previewUrls, setPreviewUrls] = useState<string[]>([])
+
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -217,16 +225,73 @@ export function ChatInput({
     }
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newFiles = Array.from(e.target.files || [])
-        const { validFiles, errors } = validateFiles(newFiles, files.length)
-        showValidationErrors(errors)
-        if (validFiles.length > 0) {
-            onFileChange([...files, ...validFiles])
+        const filesList = Array.from(e.target.files || [])
+        if (filesList.length === 0) return
+
+        const validFiles: File[] = []
+        const newPreviewUrls: string[] = []
+        const errors: string[] = []
+
+        filesList.forEach((file) => {
+            const isImage = file.type.startsWith("image/")
+            const isPDF = file.type === "application/pdf"
+
+            if (!isImage && !isPDF) {
+                errors.push(`${file.name}: Unsupported file type`)
+                return
+            }
+
+            if (isPDF && !pdfInputEnabled) {
+                errors.push(`${file.name}: PDF upload is not enabled`)
+                return
+            }
+
+            if (file.size > maxFileSize) {
+                errors.push(
+                    `${file.name}: File size exceeds ${
+                        maxFileSize / (1024 * 1024)
+                    }MB limit`,
+                )
+                return
+            }
+
+            validFiles.push(file)
+
+            if (isImage) {
+                const url = URL.createObjectURL(file)
+                newPreviewUrls.push(url)
+            } else {
+                newPreviewUrls.push("pdf-placeholder")
+            }
+        })
+
+        if (errors.length > 0) {
+            alert(errors.join("\n"))
         }
-        // Reset input so same file can be selected again
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ""
+
+        const totalAttachments = attachments.length + validFiles.length
+        if (totalAttachments > 5) {
+            alert("Maximum 5 files can be attached at once")
+            return
         }
+
+        setAttachments((prev) => [...prev, ...validFiles])
+        setPreviewUrls((prev) => [...prev, ...newPreviewUrls])
+
+        if (e.target) {
+            e.target.value = ""
+        }
+    }
+
+    const removeAttachment = (index: number) => {
+        setAttachments((prev) => prev.filter((_, i) => i !== index))
+        setPreviewUrls((prev) => {
+            const url = prev[index]
+            if (url && url !== "pdf-placeholder") {
+                URL.revokeObjectURL(url)
+            }
+            return prev.filter((_, i) => i !== index)
+        })
     }
 
     const handleRemoveFile = (fileToRemove: File) => {
@@ -238,6 +303,23 @@ export function ChatInput({
 
     const triggerFileInput = () => {
         fileInputRef.current?.click()
+    }
+
+    const handleFileButtonClick = () => {
+        triggerFileInput()
+    }
+
+    useEffect(() => {
+        fetch("/api/config")
+            .then((res) => res.json())
+            .then((data) => setPdfInputEnabled(Boolean(data.pdfInputEnabled)))
+            .catch(() => setPdfInputEnabled(false))
+    }, [])
+
+    const getAcceptedFileTypes = () => {
+        const imageTypes = "image/png,image/jpeg,image/jpg,image/gif,image/webp"
+        const pdfType = "application/pdf"
+        return pdfInputEnabled ? `${imageTypes},${pdfType}` : imageTypes
     }
 
     const handleDragOver = (e: React.DragEvent<HTMLFormElement>) => {
@@ -288,13 +370,45 @@ export function ChatInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            {/* File previews */}
-            {files.length > 0 && (
-                <div className="mb-3">
-                    <FilePreviewList
-                        files={files}
-                        onRemoveFile={handleRemoveFile}
-                    />
+            {/* File/Attachment previews */}
+            {attachments.length > 0 && (
+                <div className="mb-3 flex gap-2">
+                    {attachments.map((file, index) => (
+                        <div
+                            key={index}
+                            className="relative flex-shrink-0 group"
+                        >
+                            {file.type.startsWith("image/") ? (
+                                <Image
+                                    src={previewUrls[index]}
+                                    alt={`Preview ${index + 1}`}
+                                    width={64}
+                                    height={64}
+                                    className="rounded-lg object-cover border border-gray-200"
+                                />
+                            ) : (
+                                <div className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
+                                    <FileText className="w-6 h-6 text-gray-400" />
+                                    <span className="text-xs text-gray-500 mt-1 truncate max-w-full px-1">
+                                        PDF
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                {(file.size / 1024).toFixed(0)}KB
+                            </div>
+
+                            <button
+                                onClick={() => removeAttachment(index)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                                type="button"
+                                aria-label="Remove attachment"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -430,26 +544,27 @@ export function ChatInput({
                                 .slice(0, 10)}`}
                         />
 
-                        <ButtonWithTooltip
-                            type="button"
+                        <Button
+                            onClick={handleFileButtonClick}
                             variant="ghost"
-                            size="sm"
-                            onClick={triggerFileInput}
-                            disabled={isDisabled}
-                            tooltipContent="Upload image"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            size="icon"
+                            disabled={status === "streaming"}
                         >
-                            <ImageIcon className="h-4 w-4" />
-                        </ButtonWithTooltip>
+                            {pdfInputEnabled ? (
+                                <FileText className="w-5 h-5" />
+                            ) : (
+                                <ImageIcon className="w-5 h-5" />
+                            )}
+                        </Button>
 
                         <input
-                            type="file"
                             ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileChange}
-                            accept="image/*"
+                            type="file"
+                            accept={getAcceptedFileTypes()}
                             multiple
-                            disabled={isDisabled}
+                            onChange={handleFileChange}
+                            className="hidden"
+                            aria-label="Upload files"
                         />
 
                         <div className="w-px h-5 bg-border mx-1" />

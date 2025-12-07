@@ -8,5 +8,8 @@ export async function GET() {
 
     return NextResponse.json({
         accessCodeRequired: accessCodes.length > 0,
+        pdfInputEnabled: process.env.ENABLE_PDF_INPUT === "true",
+        maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "5242880", 10),
+        supportedProviders: ["anthropic", "openai", "google", "vertex"],
     })
 }

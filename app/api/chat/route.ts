@@ -14,8 +14,11 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import {
+    extractTextFromPDF,
+    isProviderSupportingPDFUpload,
+} from "@/lib/pdf-utils"
 import { getSystemPrompt } from "@/lib/system-prompts"
-
 export const maxDuration = 60
 
 // File upload limits (must match client-side)
@@ -210,7 +213,81 @@ ${lastMessageText}
 """`
 
     // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = convertToModelMessages(messages)
+    // Support optional PDF input handling: if ENABLE_PDF_INPUT=true, extract text from PDFs
+    const pdfInputEnabled = process.env.ENABLE_PDF_INPUT === "true"
+
+    const processedMessages = await Promise.all(
+        messages.map(async (message: any) => {
+            if (!message.experimental_attachments?.length) {
+                return message
+            }
+
+            const attachments = await Promise.all(
+                message.experimental_attachments.map(
+                    async (attachment: any) => {
+                        if (
+                            !pdfInputEnabled ||
+                            !attachment.contentType?.includes("pdf")
+                        ) {
+                            return attachment
+                        }
+
+                        const provider = process.env.AI_PROVIDER || "bedrock"
+                        const supportsNativePDF =
+                            isProviderSupportingPDFUpload(provider)
+
+                        if (supportsNativePDF) {
+                            return {
+                                ...attachment,
+                                contentType: "application/pdf",
+                            }
+                        }
+
+                        try {
+                            const base64Data = attachment.url.split(",")[1]
+                            const pdfBuffer = Buffer.from(base64Data, "base64")
+                            const extractedText =
+                                await extractTextFromPDF(pdfBuffer)
+
+                            return {
+                                contentType: "text/plain",
+                                name: `${attachment.name}_extracted.txt`,
+                                url: `data:text/plain;base64,${Buffer.from(
+                                    extractedText,
+                                ).toString("base64")}`,
+                            }
+                        } catch (error) {
+                            console.error("PDF extraction error:", error)
+                            throw new Error(
+                                `Failed to process PDF: ${attachment.name}`,
+                            )
+                        }
+                    },
+                ),
+            )
+
+            return { ...message, experimental_attachments: attachments }
+        }),
+    )
+
+    const modelMessages = convertToModelMessages(processedMessages)
+
+    const provider = process.env.AI_PROVIDER || "bedrock"
+    if (pdfInputEnabled && isProviderSupportingPDFUpload(provider)) {
+        for (const msg of modelMessages) {
+            if (Array.isArray(msg.content)) {
+                msg.content = msg.content.map((part: any) => {
+                    if (
+                        part.type === "file" &&
+                        part.mimeType === "application/pdf"
+                    ) {
+                        return { type: "document", source: part.data }
+                    }
+                    return part
+                })
+            }
+        }
+    }
 
     // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
     const fixedMessages = fixToolCallInputs(modelMessages)
@@ -431,10 +508,27 @@ async function safeHandler(req: Request): Promise<Response> {
     try {
         return await handleChatRequest(req)
     } catch (error) {
-        console.error("Error in chat route:", error)
-        return Response.json(
-            { error: "Internal server error" },
-            { status: 500 },
+        const errorMessage =
+            error instanceof Error ? error.message : String(error)
+        console.error("Chat API Error:", errorMessage)
+
+        if (
+            typeof errorMessage === "string" &&
+            (errorMessage.includes("PDF") ||
+                errorMessage.toLowerCase().includes("pdf"))
+        ) {
+            return new Response(JSON.stringify({ error: errorMessage }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            })
+        }
+
+        return new Response(
+            JSON.stringify({ error: "Internal server error" }),
+            {
+                status: 500,
+                headers: { "Content-Type": "application/json" },
+            },
         )
     }
 }
