@@ -72,6 +72,7 @@
         "@tailwindcss/typography": "^0.5.19",
         "@types/node": "^20",
         "@types/pako": "^2.0.3",
+        "@types/pdf-parse": "^1.1.5",
         "@types/react": "^19",
         "@types/react-dom": "^19",
         "eslint": "9.39.1",
