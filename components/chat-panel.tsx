@@ -764,6 +764,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     setFiles={handleFileChange}
                     sessionId={sessionId}
                     onRegenerate={handleRegenerate}
+                    status={status}
                     onEditMessage={handleEditMessage}
                 />
             </main>

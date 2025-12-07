@@ -27,6 +27,7 @@ import {
 } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
+import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning"
 
 interface EditPair {
     search: string
@@ -104,6 +105,7 @@ interface ChatMessageDisplayProps {
     sessionId?: string
     onRegenerate?: (messageIndex: number) => void
     onEditMessage?: (messageIndex: number, newText: string) => void
+    status?: "streaming" | "submitted" | "idle" | "error" | "ready"
 }
 
 export function ChatMessageDisplay({
@@ -113,6 +115,7 @@ export function ChatMessageDisplay({
     sessionId,
     onRegenerate,
     onEditMessage,
+    status = "idle",
 }: ChatMessageDisplayProps) {
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -429,6 +432,56 @@ export function ChatMessageDisplay({
                                         </div>
                                     )}
                                 <div className="max-w-[85%] min-w-0">
+                                    {/* Reasoning blocks - displayed first for assistant messages */}
+                                    {message.role === "assistant" &&
+                                        message.parts?.map(
+                                            (part, partIndex) => {
+                                                if (part.type === "reasoning") {
+                                                    const reasoningPart =
+                                                        part as {
+                                                            type: "reasoning"
+                                                            text: string
+                                                        }
+                                                    const isLastPart =
+                                                        partIndex ===
+                                                        (message.parts
+                                                            ?.length ?? 0) -
+                                                            1
+                                                    const isLastMessage =
+                                                        message.id ===
+                                                        messages[
+                                                            messages.length - 1
+                                                        ]?.id
+                                                    const isStreamingReasoning =
+                                                        status ===
+                                                            "streaming" &&
+                                                        isLastPart &&
+                                                        isLastMessage
+
+                                                    return (
+                                                        <Reasoning
+                                                            key={`${message.id}-reasoning-${partIndex}`}
+                                                            className="w-full mb-3"
+                                                            isStreaming={
+                                                                isStreamingReasoning
+                                                            }
+                                                        >
+                                                            <ReasoningTrigger
+                                                                isStreaming={
+                                                                    isStreamingReasoning
+                                                                }
+                                                            />
+                                                            <ReasoningContent>
+                                                                {
+                                                                    reasoningPart.text
+                                                                }
+                                                            </ReasoningContent>
+                                                        </Reasoning>
+                                                    )
+                                                }
+                                                return null
+                                            },
+                                        )}
                                     {/* Edit mode for user messages */}
                                     {isEditing && message.role === "user" ? (
                                         <div className="flex flex-col gap-2">

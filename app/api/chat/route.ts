@@ -73,35 +73,17 @@ function fixToolCallInputs(messages: any[]): any[] {
         }
         const fixedContent = msg.content.map((part: any, partIndex: number) => {
             if (part.type === "tool-call") {
-                console.log(
-                    `[fixToolCallInputs] msg[${msgIndex}].content[${partIndex}] tool-call:`,
-                    {
-                        toolName: part.toolName,
-                        inputType: typeof part.input,
-                        input: part.input,
-                    },
-                )
                 if (typeof part.input === "string") {
                     try {
                         const parsed = JSON.parse(part.input)
-                        console.log(
-                            `[fixToolCallInputs] Parsed string input to JSON:`,
-                            parsed,
-                        )
                         return { ...part, input: parsed }
                     } catch {
                         // If parsing fails, wrap the string in an object
-                        console.log(
-                            `[fixToolCallInputs] Failed to parse, wrapping in object`,
-                        )
                         return { ...part, input: { rawInput: part.input } }
                     }
                 }
                 // Input is already an object, but verify it's not null/undefined
                 if (part.input === null || part.input === undefined) {
-                    console.log(
-                        `[fixToolCallInputs] Input is null/undefined, using empty object`,
-                    )
                     return { ...part, input: {} }
                 }
             }
@@ -203,10 +185,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
         const cached = findCachedResponse(textPart?.text || "", !!filePart)
 
         if (cached) {
-            console.log(
-                "[Cache] Returning cached response for:",
-                textPart?.text,
-            )
             return createCachedStreamResponse(cached.xml)
         }
     }
@@ -236,28 +214,6 @@ ${lastMessageText}
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
-
-    // Debug: log raw messages to see what's coming in
-    console.log(
-        "[DEBUG] Raw UI messages:",
-        JSON.stringify(
-            messages.map((m: any, i: number) => ({
-                index: i,
-                role: m.role,
-                partsCount: m.parts?.length,
-                parts: m.parts?.map((p: any) => ({
-                    type: p.type,
-                    toolName: p.toolName,
-                    toolCallId: p.toolCallId,
-                    state: p.state,
-                    inputType: p.input ? typeof p.input : undefined,
-                    input: p.input,
-                })),
-            })),
-            null,
-            2,
-        ),
-    )
 
     // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
     const fixedMessages = fixToolCallInputs(modelMessages)
@@ -338,12 +294,36 @@ ${lastMessageText}
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
+    // Check if reasoning is enabled
+    const enableReasoning = process.env.ENABLE_REASONING === "true"
+
+    // Configure reasoning options if enabled
+    const reasoningConfig = enableReasoning
+        ? {
+              experimental_reasoning: {
+                  ...(process.env.REASONING_BUDGET_TOKENS && {
+                      budgetTokens: parseInt(
+                          process.env.REASONING_BUDGET_TOKENS,
+                          10,
+                      ),
+                  }),
+                  ...(process.env.REASONING_EFFORT && {
+                      effort: process.env.REASONING_EFFORT as
+                          | "low"
+                          | "medium"
+                          | "high",
+                  }),
+              },
+          }
+        : {}
+
     const result = streamText({
         model,
         stopWhen: stepCountIs(5),
         messages: allMessages,
         ...(providerOptions && { providerOptions }),
         ...(headers && { headers }),
+        ...reasoningConfig,
         // Langfuse telemetry config (returns undefined if not configured)
         ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
             experimental_telemetry: getTelemetryConfig({
@@ -377,12 +357,7 @@ ${lastMessageText}
             }
             return null
         },
-        onFinish: ({ text, usage, providerMetadata }) => {
-            console.log(
-                "[Cache] Full providerMetadata:",
-                JSON.stringify(providerMetadata, null, 2),
-            )
-            console.log("[Cache] Usage:", JSON.stringify(usage, null, 2))
+        onFinish: ({ text, usage }) => {
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
             // AI SDK uses inputTokens/outputTokens, Langfuse expects promptTokens/completionTokens
             setTraceOutput(text, {
@@ -470,7 +445,9 @@ IMPORTANT: Keep edits concise:
         }),
     })
 
-    return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse({
+        sendReasoning: enableReasoning,
+    })
 }
 
 // Wrap handler with error handling

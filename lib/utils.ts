@@ -132,17 +132,33 @@ export function replaceNodes(currentXML: string, nodes: string): string {
         const nodesDoc = parser.parseFromString(nodesString, "text/xml")
 
         // Find the root element in the current document
-        let currentRoot = currentDoc.querySelector("mxGraphModel > root")
-        if (!currentRoot) {
-            // If no root element is found, create the proper structure
-            const mxGraphModel =
-                currentDoc.querySelector("mxGraphModel") ||
-                currentDoc.createElement("mxGraphModel")
+        // The documentElement is the root of the parsed XML (usually mxGraphModel)
+        const docElement = currentDoc.documentElement
+        let mxGraphModel: Element | null = null
 
-            if (!currentDoc.contains(mxGraphModel)) {
-                currentDoc.appendChild(mxGraphModel)
+        if (docElement && docElement.nodeName === "mxGraphModel") {
+            // Document element is already mxGraphModel
+            mxGraphModel = docElement
+        } else {
+            // Try to find mxGraphModel in the document
+            mxGraphModel = currentDoc.querySelector("mxGraphModel")
+
+            if (!mxGraphModel) {
+                // Create new mxGraphModel
+                mxGraphModel = currentDoc.createElement("mxGraphModel")
+
+                if (docElement) {
+                    // If there's a document element, replace it
+                    currentDoc.replaceChild(mxGraphModel, docElement)
+                } else {
+                    // No document element, append to document
+                    currentDoc.appendChild(mxGraphModel)
+                }
             }
+        }
 
+        let currentRoot = mxGraphModel.querySelector("root")
+        if (!currentRoot) {
             currentRoot = currentDoc.createElement("root")
             mxGraphModel.appendChild(currentRoot)
         }
@@ -202,6 +218,16 @@ export function replaceNodes(currentXML: string, nodes: string): string {
 
         // Convert the modified DOM back to a string
         const serializer = new XMLSerializer()
+        // Serialize the mxGraphModel element (which is now the documentElement or was created)
+        // Use mxGraphModel directly since we know it exists and is the root we want
+        if (mxGraphModel) {
+            return serializer.serializeToString(mxGraphModel)
+        }
+        // Fallback: serialize documentElement or entire document
+        const finalDocElement = currentDoc.documentElement
+        if (finalDocElement) {
+            return serializer.serializeToString(finalDocElement)
+        }
         return serializer.serializeToString(currentDoc)
     } catch (error) {
         throw new Error(`Error replacing nodes: ${error}`)
