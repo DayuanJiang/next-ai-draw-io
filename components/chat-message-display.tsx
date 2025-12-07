@@ -509,139 +509,209 @@ export function ChatMessageDisplay({
                                             </div>
                                         </div>
                                     ) : (
-                                        /* Text content in bubble */
-                                        message.parts?.some(
-                                            (part) =>
-                                                part.type === "text" ||
-                                                part.type === "file",
-                                        ) && (
-                                            <div
-                                                className={`px-4 py-3 text-sm leading-relaxed ${
-                                                    message.role === "user"
-                                                        ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
-                                                        : message.role ===
-                                                            "system"
-                                                          ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-2xl rounded-bl-md"
-                                                          : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
-                                                } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
-                                                role={
-                                                    message.role === "user" &&
-                                                    isLastUserMessage &&
-                                                    onEditMessage
-                                                        ? "button"
-                                                        : undefined
-                                                }
-                                                tabIndex={
-                                                    message.role === "user" &&
-                                                    isLastUserMessage &&
-                                                    onEditMessage
-                                                        ? 0
-                                                        : undefined
-                                                }
-                                                onClick={() => {
+                                        /* Render parts in order, grouping consecutive text/file parts into bubbles */
+                                        (() => {
+                                            const parts = message.parts || []
+                                            const groups: {
+                                                type: "content" | "tool"
+                                                parts: typeof parts
+                                                startIndex: number
+                                            }[] = []
+
+                                            parts.forEach((part, index) => {
+                                                const isToolPart =
+                                                    part.type?.startsWith(
+                                                        "tool-",
+                                                    )
+                                                const isContentPart =
+                                                    part.type === "text" ||
+                                                    part.type === "file"
+
+                                                if (isToolPart) {
+                                                    groups.push({
+                                                        type: "tool",
+                                                        parts: [part],
+                                                        startIndex: index,
+                                                    })
+                                                } else if (isContentPart) {
+                                                    const lastGroup =
+                                                        groups[
+                                                            groups.length - 1
+                                                        ]
                                                     if (
-                                                        message.role ===
-                                                            "user" &&
-                                                        isLastUserMessage &&
-                                                        onEditMessage
+                                                        lastGroup?.type ===
+                                                        "content"
                                                     ) {
-                                                        setEditingMessageId(
-                                                            message.id,
+                                                        lastGroup.parts.push(
+                                                            part,
                                                         )
-                                                        setEditText(
-                                                            userMessageText,
+                                                    } else {
+                                                        groups.push({
+                                                            type: "content",
+                                                            parts: [part],
+                                                            startIndex: index,
+                                                        })
+                                                    }
+                                                }
+                                            })
+
+                                            return groups.map(
+                                                (group, groupIndex) => {
+                                                    if (group.type === "tool") {
+                                                        return renderToolPart(
+                                                            group
+                                                                .parts[0] as ToolPartLike,
                                                         )
                                                     }
-                                                }}
-                                                onKeyDown={(e) => {
-                                                    if (
-                                                        (e.key === "Enter" ||
-                                                            e.key === " ") &&
-                                                        message.role ===
-                                                            "user" &&
-                                                        isLastUserMessage &&
-                                                        onEditMessage
-                                                    ) {
-                                                        e.preventDefault()
-                                                        setEditingMessageId(
-                                                            message.id,
-                                                        )
-                                                        setEditText(
-                                                            userMessageText,
-                                                        )
-                                                    }
-                                                }}
-                                                title={
-                                                    message.role === "user" &&
-                                                    isLastUserMessage &&
-                                                    onEditMessage
-                                                        ? "Click to edit"
-                                                        : undefined
-                                                }
-                                            >
-                                                {message.parts?.map(
-                                                    (part, index) => {
-                                                        switch (part.type) {
-                                                            case "text":
-                                                                return (
-                                                                    <div
-                                                                        key={`${message.id}-text-${index}`}
-                                                                        className={`prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
-                                                                            message.role ===
-                                                                            "user"
-                                                                                ? "[&_*]:!text-primary-foreground prose-code:bg-white/20"
-                                                                                : "dark:prose-invert"
-                                                                        }`}
-                                                                    >
-                                                                        <ReactMarkdown>
-                                                                            {
-                                                                                part.text
-                                                                            }
-                                                                        </ReactMarkdown>
-                                                                    </div>
-                                                                )
-                                                            case "file":
-                                                                return (
-                                                                    <div
-                                                                        key={`${message.id}-file-${part.url}`}
-                                                                        className="mt-2"
-                                                                    >
-                                                                        <Image
-                                                                            src={
-                                                                                part.url
-                                                                            }
-                                                                            width={
-                                                                                200
-                                                                            }
-                                                                            height={
-                                                                                200
-                                                                            }
-                                                                            alt={`Uploaded diagram or image for AI analysis`}
-                                                                            className="rounded-lg border border-white/20"
-                                                                            style={{
-                                                                                objectFit:
-                                                                                    "contain",
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                )
-                                                            default:
-                                                                return null
-                                                        }
-                                                    },
-                                                )}
-                                            </div>
-                                        )
-                                    )}
-                                    {/* Tool calls outside bubble */}
-                                    {message.parts?.map((part) => {
-                                        if (part.type?.startsWith("tool-")) {
-                                            return renderToolPart(
-                                                part as ToolPartLike,
+
+                                                    // Content bubble
+                                                    return (
+                                                        <div
+                                                            key={`${message.id}-content-${group.startIndex}`}
+                                                            className={`px-4 py-3 text-sm leading-relaxed ${
+                                                                message.role ===
+                                                                "user"
+                                                                    ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
+                                                                    : message.role ===
+                                                                        "system"
+                                                                      ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-2xl rounded-bl-md"
+                                                                      : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
+                                                            } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:opacity-90 transition-opacity" : ""} ${groupIndex > 0 ? "mt-3" : ""}`}
+                                                            role={
+                                                                message.role ===
+                                                                    "user" &&
+                                                                isLastUserMessage &&
+                                                                onEditMessage
+                                                                    ? "button"
+                                                                    : undefined
+                                                            }
+                                                            tabIndex={
+                                                                message.role ===
+                                                                    "user" &&
+                                                                isLastUserMessage &&
+                                                                onEditMessage
+                                                                    ? 0
+                                                                    : undefined
+                                                            }
+                                                            onClick={() => {
+                                                                if (
+                                                                    message.role ===
+                                                                        "user" &&
+                                                                    isLastUserMessage &&
+                                                                    onEditMessage
+                                                                ) {
+                                                                    setEditingMessageId(
+                                                                        message.id,
+                                                                    )
+                                                                    setEditText(
+                                                                        userMessageText,
+                                                                    )
+                                                                }
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (
+                                                                    (e.key ===
+                                                                        "Enter" ||
+                                                                        e.key ===
+                                                                            " ") &&
+                                                                    message.role ===
+                                                                        "user" &&
+                                                                    isLastUserMessage &&
+                                                                    onEditMessage
+                                                                ) {
+                                                                    e.preventDefault()
+                                                                    setEditingMessageId(
+                                                                        message.id,
+                                                                    )
+                                                                    setEditText(
+                                                                        userMessageText,
+                                                                    )
+                                                                }
+                                                            }}
+                                                            title={
+                                                                message.role ===
+                                                                    "user" &&
+                                                                isLastUserMessage &&
+                                                                onEditMessage
+                                                                    ? "Click to edit"
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            {group.parts.map(
+                                                                (
+                                                                    part,
+                                                                    partIndex,
+                                                                ) => {
+                                                                    if (
+                                                                        part.type ===
+                                                                        "text"
+                                                                    ) {
+                                                                        return (
+                                                                            <div
+                                                                                key={`${message.id}-text-${group.startIndex}-${partIndex}`}
+                                                                                className={`prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
+                                                                                    message.role ===
+                                                                                    "user"
+                                                                                        ? "[&_*]:!text-primary-foreground prose-code:bg-white/20"
+                                                                                        : "dark:prose-invert"
+                                                                                }`}
+                                                                            >
+                                                                                <ReactMarkdown>
+                                                                                    {
+                                                                                        (
+                                                                                            part as {
+                                                                                                text: string
+                                                                                            }
+                                                                                        )
+                                                                                            .text
+                                                                                    }
+                                                                                </ReactMarkdown>
+                                                                            </div>
+                                                                        )
+                                                                    }
+                                                                    if (
+                                                                        part.type ===
+                                                                        "file"
+                                                                    ) {
+                                                                        return (
+                                                                            <div
+                                                                                key={`${message.id}-file-${group.startIndex}-${partIndex}`}
+                                                                                className="mt-2"
+                                                                            >
+                                                                                <Image
+                                                                                    src={
+                                                                                        (
+                                                                                            part as {
+                                                                                                url: string
+                                                                                            }
+                                                                                        )
+                                                                                            .url
+                                                                                    }
+                                                                                    width={
+                                                                                        200
+                                                                                    }
+                                                                                    height={
+                                                                                        200
+                                                                                    }
+                                                                                    alt={`Uploaded diagram or image for AI analysis`}
+                                                                                    className="rounded-lg border border-white/20"
+                                                                                    style={{
+                                                                                        objectFit:
+                                                                                            "contain",
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                        )
+                                                                    }
+                                                                    return null
+                                                                },
+                                                            )}
+                                                        </div>
+                                                    )
+                                                },
                                             )
-                                        }
-                                        return null
-                                    })}
+                                        })()
+                                    )}
                                     {/* Action buttons for assistant messages */}
                                     {message.role === "assistant" && (
                                         <div className="flex items-center gap-1 mt-2">

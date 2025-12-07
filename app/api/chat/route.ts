@@ -67,41 +67,23 @@ function isMinimalDiagram(xml: string): boolean {
 // Helper function to fix tool call inputs for Bedrock API
 // Bedrock requires toolUse.input to be a JSON object, not a string
 function fixToolCallInputs(messages: any[]): any[] {
-    return messages.map((msg, msgIndex) => {
+    return messages.map((msg) => {
         if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
             return msg
         }
-        const fixedContent = msg.content.map((part: any, partIndex: number) => {
+        const fixedContent = msg.content.map((part: any) => {
             if (part.type === "tool-call") {
-                console.log(
-                    `[fixToolCallInputs] msg[${msgIndex}].content[${partIndex}] tool-call:`,
-                    {
-                        toolName: part.toolName,
-                        inputType: typeof part.input,
-                        input: part.input,
-                    },
-                )
                 if (typeof part.input === "string") {
                     try {
                         const parsed = JSON.parse(part.input)
-                        console.log(
-                            `[fixToolCallInputs] Parsed string input to JSON:`,
-                            parsed,
-                        )
                         return { ...part, input: parsed }
                     } catch {
                         // If parsing fails, wrap the string in an object
-                        console.log(
-                            `[fixToolCallInputs] Failed to parse, wrapping in object`,
-                        )
                         return { ...part, input: { rawInput: part.input } }
                     }
                 }
                 // Input is already an object, but verify it's not null/undefined
                 if (part.input === null || part.input === undefined) {
-                    console.log(
-                        `[fixToolCallInputs] Input is null/undefined, using empty object`,
-                    )
                     return { ...part, input: {} }
                 }
             }
