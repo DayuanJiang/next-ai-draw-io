@@ -27,6 +27,7 @@ import {
 } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
+import { ThinkingBlock } from "./thinking-block"
 
 interface EditPair {
     search: string
@@ -598,6 +599,15 @@ export function ChatMessageDisplay({
                                                                             }
                                                                         </ReactMarkdown>
                                                                     </div>
+                                                                )
+                                                            case "reasoning":
+                                                                return (
+                                                                    <ThinkingBlock
+                                                                        key={`${message.id}-reasoning-${index}`}
+                                                                        content={
+                                                                            part.text
+                                                                        }
+                                                                    />
                                                                 )
                                                             case "file":
                                                                 return (

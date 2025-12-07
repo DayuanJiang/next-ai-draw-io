@@ -295,6 +295,15 @@ ${lastMessageText}
         model,
         stopWhen: stepCountIs(5),
         messages: allMessages,
+        ...(process.env.ENABLE_REASONING === "true" && {
+            sendReasoning: true,
+            ...(process.env.REASONING_BUDGET_TOKENS && {
+                reasoningBudget: parseInt(process.env.REASONING_BUDGET_TOKENS),
+            }),
+            ...(process.env.REASONING_EFFORT && {
+                reasoningEffort: process.env.REASONING_EFFORT as any,
+            }),
+        }),
         ...(providerOptions && { providerOptions }),
         ...(headers && { headers }),
         // Langfuse telemetry config (returns undefined if not configured)
