@@ -63,6 +63,19 @@ Optional custom endpoint:
 DEEPSEEK_BASE_URL=https://your-custom-endpoint
 ```
 
+### SiliconFlow (OpenAI-compatible)
+
+```bash
+SILICONFLOW_API_KEY=your_api_key
+AI_MODEL=deepseek-ai/DeepSeek-V3  # example; use any SiliconFlow model id
+```
+
+Optional custom endpoint (defaults to the recommended domain):
+
+```bash
+SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflow.cn/v1
+```
+
 ### Azure OpenAI
 
 ```bash
@@ -120,7 +133,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, azure, bedrock, openrouter, ollama
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, azure, bedrock, openrouter, ollama
 ```
 
 ## Model Capability Requirements

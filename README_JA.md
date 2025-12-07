@@ -88,6 +88,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   Ollama
 -   OpenRouter
 -   DeepSeek
+-   SiliconFlow
 
 AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタムエンドポイントをサポートしています。
 
@@ -146,7 +147,7 @@ cp env.example .env.local
 
 `.env.local`を編集して選択したプロバイダーを設定：
 
--   `AI_PROVIDER`を選択したプロバイダーに設定（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek）
+-   `AI_PROVIDER`を選択したプロバイダーに設定（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow）
 -   `AI_MODEL`を使用する特定のモデルに設定
 -   プロバイダーに必要なAPIキーを追加
 -   `TEMPERATURE`：オプションの温度設定（例：`0`で決定論的な出力）。温度をサポートしないモデル（推論モデルなど）では設定しないでください。
