@@ -178,11 +178,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const isEmptyDiagram = !xml || xml.trim() === "" || isMinimalDiagram(xml)
 
     // DEBUG: Log cache check conditions
-    // console.log("[Cache DEBUG] messages.length:", messages.length)
-    // console.log("[Cache DEBUG] isFirstMessage:", isFirstMessage)
-    // console.log("[Cache DEBUG] xml length:", xml?.length || 0)
-    // console.log("[Cache DEBUG] xml preview:", xml?.substring(0, 200))
-    // console.log("[Cache DEBUG] isEmptyDiagram:", isEmptyDiagram)
+    console.log("[Cache DEBUG] messages.length:", messages.length)
+    console.log("[Cache DEBUG] isFirstMessage:", isFirstMessage)
+    console.log("[Cache DEBUG] xml length:", xml?.length || 0)
+    console.log("[Cache DEBUG] xml preview:", xml?.substring(0, 200))
+    console.log("[Cache DEBUG] isEmptyDiagram:", isEmptyDiagram)
 
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]
