@@ -10,7 +10,11 @@
         "lint": "biome lint .",
         "format": "biome check --write .",
         "check": "biome ci",
-        "prepare": "husky"
+        "prepare": "husky",
+        "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+        "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+        "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+        "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
     },
     "dependencies": {
         "@ai-sdk/amazon-bedrock": "^3.0.62",
@@ -25,6 +29,7 @@
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
+        "@opennextjs/cloudflare": "^1.14.4",
         "@openrouter/ai-sdk-provider": "^1.2.3",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
@@ -79,6 +84,7 @@
         "husky": "^9.1.7",
         "lint-staged": "^16.2.7",
         "tailwindcss": "^4",
-        "typescript": "^5"
+        "typescript": "^5",
+        "wrangler": "^4.53.0"
     }
 }
