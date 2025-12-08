@@ -740,6 +740,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         {!isMobile && (
                             <Link
                                 href="/about"
+                                prefetch={false}
                                 className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                             >
                                 About
