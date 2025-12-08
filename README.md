@@ -1,4 +1,4 @@
-# Next AI Draw.io
+# Next AI Draw.io [🚀 Live Demo](https://next-ai-drawio.jiang.jp/)
 
 <div align="center">
 
@@ -6,18 +6,31 @@
 
 English | [中文](./README_CN.md) | [日本語](./README_JA.md)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Next.js](https://img.shields.io/badge/Next.js-15.x-black)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
+[![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
-[🚀 Live Demo](https://next-ai-drawio.jiang.jp/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Next.js](https://img.shields.io/badge/Next.js-16.x-black)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
+[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
 </div>
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+
+## Table of Contents
+  - [Features](#features)
+  - [Examples](#examples)
+  - [Getting Started](#getting-started)
+    - [Run with Docker (Recommended)](#run-with-docker-recommended)
+    - [Installation](#installation)
+  - [Deployment](#deployment)
+  - [Multi-Provider Support](#multi-provider-support)
+  - [How It Works](#how-it-works)
+  - [Project Structure](#project-structure)
+  - [Support \& Contact](#support--contact)
+  - [Star History](#star-history)
 
 ## Features
 
@@ -28,7 +41,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **AWS Architecture Diagram Support**: Specialized support for generating AWS architecture diagrams
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
-## **Examples**
+## Examples
 
 Here are some example prompts and their generated diagrams:
 
@@ -68,35 +81,6 @@ Here are some example prompts and their generated diagrams:
 </table>
 </div>
 
-## How It Works
-
-The application uses the following technologies:
-
--   **Next.js**: For the frontend framework and routing
--   **Vercel AI SDK** (`ai` + `@ai-sdk/*`): For streaming AI responses and multi-provider support
--   **react-drawio**: For diagram representation and manipulation
-
-Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
-
-## Multi-Provider Support
-
--   AWS Bedrock (default)
--   OpenAI
--   Anthropic
--   Google AI
--   Azure OpenAI
--   Ollama
--   OpenRouter
--   DeepSeek
--   SiliconFlow
-
-All providers except AWS Bedrock and OpenRouter support custom endpoints.
-
-📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
-
-**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-4o, Gemini 2.0, and DeepSeek V3/R1.
-
-Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
 
 ## Getting Started
 
@@ -182,6 +166,38 @@ Or you can deploy by this button.
 
 Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
 
+
+## Multi-Provider Support
+
+-   AWS Bedrock (default)
+-   OpenAI
+-   Anthropic
+-   Google AI
+-   Azure OpenAI
+-   Ollama
+-   OpenRouter
+-   DeepSeek
+-   SiliconFlow
+
+All providers except AWS Bedrock and OpenRouter support custom endpoints.
+
+📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
+
+**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-4o, Gemini 2.0, and DeepSeek V3/R1.
+
+Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
+
+
+## How It Works
+
+The application uses the following technologies:
+
+-   **Next.js**: For the frontend framework and routing
+-   **Vercel AI SDK** (`ai` + `@ai-sdk/*`): For streaming AI responses and multi-provider support
+-   **react-drawio**: For diagram representation and manipulation
+
+Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
+
 ## Project Structure
 
 ```
@@ -200,14 +216,6 @@ lib/                  # Utility functions and helpers
   utils.ts            # XML processing and conversion utilities
 public/               # Static assets including example images
 ```
-
-## TODOs
-
--   [x] Allow the LLM to modify the XML instead of generating it from scratch everytime.
--   [x] Improve the smoothness of shape streaming updates.
--   [x] Add multiple AI provider support (OpenAI, Anthropic, Google, Azure, Ollama)
--   [x] Solve the bug that generation will fail for session that longer than 60s.
--   [ ] Add API config on the UI.
 
 ## Support & Contact
 
