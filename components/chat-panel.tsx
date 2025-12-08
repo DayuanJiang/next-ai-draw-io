@@ -6,7 +6,7 @@ import {
     lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai"
 import {
-    CheckCircle,
+    AlertTriangle,
     PanelRightClose,
     PanelRightOpen,
     Settings,
@@ -17,9 +17,10 @@ import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { FaGithub } from "react-icons/fa"
-import { Toaster } from "sonner"
+import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { QuotaLimitToast } from "@/components/quota-limit-toast"
 import {
     SettingsDialog,
     STORAGE_ACCESS_CODE_KEY,
@@ -30,8 +31,15 @@ const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
+const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
+const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
+const STORAGE_TOKEN_DATE_KEY = "next-ai-draw-io-token-date"
+const STORAGE_TPM_COUNT_KEY = "next-ai-draw-io-tpm-count"
+const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
 
 import { useDiagram } from "@/contexts/diagram-context"
+import { findCachedResponse } from "@/lib/cached-responses"
 import { formatXML } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
@@ -93,14 +101,204 @@ export default function ChatPanel({
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [, setAccessCodeRequired] = useState(false)
     const [input, setInput] = useState("")
+    const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
+    const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
+    const [tpmLimit, setTpmLimit] = useState(0)
 
-    // Check if access code is required on mount
+    // Check config on mount
     useEffect(() => {
         fetch("/api/config")
             .then((res) => res.json())
-            .then((data) => setAccessCodeRequired(data.accessCodeRequired))
+            .then((data) => {
+                setAccessCodeRequired(data.accessCodeRequired)
+                setDailyRequestLimit(data.dailyRequestLimit || 0)
+                setDailyTokenLimit(data.dailyTokenLimit || 0)
+                setTpmLimit(data.tpmLimit || 0)
+            })
             .catch(() => setAccessCodeRequired(false))
     }, [])
+
+    // Helper to check daily request limit
+    const checkDailyLimit = useCallback((): {
+        allowed: boolean
+        remaining: number
+        used: number
+    } => {
+        if (dailyRequestLimit <= 0)
+            return { allowed: true, remaining: -1, used: 0 }
+
+        const today = new Date().toDateString()
+        const storedDate = localStorage.getItem(STORAGE_REQUEST_DATE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_REQUEST_COUNT_KEY) || "0",
+            10,
+        )
+
+        if (storedDate !== today) {
+            count = 0
+            localStorage.setItem(STORAGE_REQUEST_DATE_KEY, today)
+            localStorage.setItem(STORAGE_REQUEST_COUNT_KEY, "0")
+        }
+
+        return {
+            allowed: count < dailyRequestLimit,
+            remaining: dailyRequestLimit - count,
+            used: count,
+        }
+    }, [dailyRequestLimit])
+
+    // Helper to increment request count
+    const incrementRequestCount = useCallback((): void => {
+        const count = parseInt(
+            localStorage.getItem(STORAGE_REQUEST_COUNT_KEY) || "0",
+            10,
+        )
+        localStorage.setItem(STORAGE_REQUEST_COUNT_KEY, String(count + 1))
+    }, [])
+
+    // Helper to show quota limit toast (request-based)
+    const showQuotaLimitToast = useCallback(() => {
+        toast.custom(
+            (t) => (
+                <QuotaLimitToast
+                    used={dailyRequestLimit}
+                    limit={dailyRequestLimit}
+                    onDismiss={() => toast.dismiss(t)}
+                />
+            ),
+            { duration: 15000 },
+        )
+    }, [dailyRequestLimit])
+
+    // Helper to check daily token limit (checks if already over limit)
+    const checkTokenLimit = useCallback((): {
+        allowed: boolean
+        remaining: number
+        used: number
+    } => {
+        if (dailyTokenLimit <= 0)
+            return { allowed: true, remaining: -1, used: 0 }
+
+        const today = new Date().toDateString()
+        const storedDate = localStorage.getItem(STORAGE_TOKEN_DATE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_TOKEN_COUNT_KEY) || "0",
+            10,
+        )
+
+        // Guard against NaN (e.g., if "NaN" was stored)
+        if (Number.isNaN(count)) count = 0
+
+        if (storedDate !== today) {
+            count = 0
+            localStorage.setItem(STORAGE_TOKEN_DATE_KEY, today)
+            localStorage.setItem(STORAGE_TOKEN_COUNT_KEY, "0")
+        }
+
+        return {
+            allowed: count < dailyTokenLimit,
+            remaining: dailyTokenLimit - count,
+            used: count,
+        }
+    }, [dailyTokenLimit])
+
+    // Helper to increment token count
+    const incrementTokenCount = useCallback((tokens: number): void => {
+        // Guard against NaN tokens
+        if (!Number.isFinite(tokens) || tokens <= 0) return
+
+        let count = parseInt(
+            localStorage.getItem(STORAGE_TOKEN_COUNT_KEY) || "0",
+            10,
+        )
+        // Guard against NaN count
+        if (Number.isNaN(count)) count = 0
+
+        localStorage.setItem(STORAGE_TOKEN_COUNT_KEY, String(count + tokens))
+    }, [])
+
+    // Helper to show token limit toast
+    const showTokenLimitToast = useCallback(
+        (used: number) => {
+            toast.custom(
+                (t) => (
+                    <QuotaLimitToast
+                        type="token"
+                        used={used}
+                        limit={dailyTokenLimit}
+                        onDismiss={() => toast.dismiss(t)}
+                    />
+                ),
+                { duration: 15000 },
+            )
+        },
+        [dailyTokenLimit],
+    )
+
+    // Helper to check TPM (tokens per minute) limit
+    // Note: This only READS, doesn't write. incrementTPMCount handles writes.
+    const checkTPMLimit = useCallback((): {
+        allowed: boolean
+        remaining: number
+        used: number
+    } => {
+        if (tpmLimit <= 0) return { allowed: true, remaining: -1, used: 0 }
+
+        const currentMinute = Math.floor(Date.now() / 60000).toString()
+        const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_TPM_COUNT_KEY) || "0",
+            10,
+        )
+
+        // Guard against NaN
+        if (Number.isNaN(count)) count = 0
+
+        // If we're in a new minute, treat count as 0 (will be reset on next increment)
+        if (storedMinute !== currentMinute) {
+            count = 0
+        }
+
+        return {
+            allowed: count < tpmLimit,
+            remaining: tpmLimit - count,
+            used: count,
+        }
+    }, [tpmLimit])
+
+    // Helper to increment TPM count
+    const incrementTPMCount = useCallback((tokens: number): void => {
+        // Guard against NaN tokens
+        if (!Number.isFinite(tokens) || tokens <= 0) return
+
+        const currentMinute = Math.floor(Date.now() / 60000).toString()
+        const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_TPM_COUNT_KEY) || "0",
+            10,
+        )
+
+        // Guard against NaN
+        if (Number.isNaN(count)) count = 0
+
+        // Reset if we're in a new minute
+        if (storedMinute !== currentMinute) {
+            count = 0
+            localStorage.setItem(STORAGE_TPM_MINUTE_KEY, currentMinute)
+        }
+
+        localStorage.setItem(STORAGE_TPM_COUNT_KEY, String(count + tokens))
+    }, [])
+
+    // Helper to show TPM limit toast
+    const showTPMLimitToast = useCallback(() => {
+        const limitDisplay =
+            tpmLimit >= 1000 ? `${tpmLimit / 1000}k` : String(tpmLimit)
+        toast.error(
+            `Rate limit reached (${limitDisplay} tokens/min). Please wait 60 seconds before sending another request.`,
+            { duration: 8000 },
+        )
+    }, [tpmLimit])
 
     // Generate a unique session ID for Langfuse tracing (restore from localStorage if available)
     const [sessionId, setSessionId] = useState(() => {
@@ -228,7 +426,7 @@ Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid ref
                         })
                         return
                     }
-
+                    onExport()
                     addToolOutput({
                         tool: "edit_diagram",
                         toolCallId: toolCall.toolCallId,
@@ -264,13 +462,23 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 console.error("Chat error:", error)
             }
 
+            // Translate technical errors into user-friendly messages
+            // The server now handles detailed error messages, so we can display them directly.
+            // But we still handle connection/network errors that happen before reaching the server.
+            let friendlyMessage = error.message
+
+            // Simple check for network errors if message is generic
+            if (friendlyMessage === "Failed to fetch") {
+                friendlyMessage = "Network error. Please check your connection."
+            }
+
             // Add system message for error so it can be cleared
             setMessages((currentMessages) => {
                 const errorMessage = {
                     id: `error-${Date.now()}`,
                     role: "system" as const,
-                    content: error.message,
-                    parts: [{ type: "text" as const, text: error.message }],
+                    content: friendlyMessage,
+                    parts: [{ type: "text" as const, text: friendlyMessage }],
                 }
                 return [...currentMessages, errorMessage]
             })
@@ -279,6 +487,26 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 // Show settings button and open dialog to help user fix it
                 setAccessCodeRequired(true)
                 setShowSettingsDialog(true)
+            }
+        },
+        onFinish: ({ message }) => {
+            // Track actual token usage from server metadata
+            const metadata = message?.metadata as
+                | Record<string, unknown>
+                | undefined
+            if (metadata) {
+                // Use Number.isFinite to guard against NaN (typeof NaN === 'number' is true)
+                const inputTokens = Number.isFinite(metadata.inputTokens)
+                    ? (metadata.inputTokens as number)
+                    : 0
+                const outputTokens = Number.isFinite(metadata.outputTokens)
+                    ? (metadata.outputTokens as number)
+                    : 0
+                const actualTokens = inputTokens + outputTokens
+                if (actualTokens > 0) {
+                    incrementTokenCount(actualTokens)
+                    incrementTPMCount(actualTokens)
+                }
             }
         },
         // Auto-resubmit when all tool results are available (including errors)
@@ -450,6 +678,42 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         e.preventDefault()
         const isProcessing = status === "streaming" || status === "submitted"
         if (input.trim() && !isProcessing) {
+            // Check if input matches a cached example (only when no messages yet)
+            if (messages.length === 0) {
+                const cached = findCachedResponse(
+                    input.trim(),
+                    files.length > 0,
+                )
+                if (cached) {
+                    // Add user message and fake assistant response to messages
+                    // The chat-message-display useEffect will handle displaying the diagram
+                    const toolCallId = `cached-${Date.now()}`
+                    setMessages([
+                        {
+                            id: `user-${Date.now()}`,
+                            role: "user" as const,
+                            parts: [{ type: "text" as const, text: input }],
+                        },
+                        {
+                            id: `assistant-${Date.now()}`,
+                            role: "assistant" as const,
+                            parts: [
+                                {
+                                    type: "tool-display_diagram" as const,
+                                    toolCallId,
+                                    state: "output-available" as const,
+                                    input: { xml: cached.xml },
+                                    output: "Successfully displayed the diagram.",
+                                },
+                            ],
+                        },
+                    ] as any)
+                    setInput("")
+                    setFiles([])
+                    return
+                }
+            }
+
             try {
                 let chartXml = await onFetchChart()
                 chartXml = formatXML(chartXml)
@@ -482,6 +746,27 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 xmlSnapshotsRef.current.set(messageIndex, chartXml)
                 saveXmlSnapshots()
 
+                // Check daily limit
+                const limitCheck = checkDailyLimit()
+                if (!limitCheck.allowed) {
+                    showQuotaLimitToast()
+                    return
+                }
+
+                // Check daily token limit (actual usage tracked after response)
+                const tokenLimitCheck = checkTokenLimit()
+                if (!tokenLimitCheck.allowed) {
+                    showTokenLimitToast(tokenLimitCheck.used)
+                    return
+                }
+
+                // Check TPM (tokens per minute) limit
+                const tpmCheck = checkTPMLimit()
+                if (!tpmCheck.allowed) {
+                    showTPMLimitToast()
+                    return
+                }
+
                 const accessCode =
                     localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
                 sendMessage(
@@ -497,6 +782,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     },
                 )
 
+                incrementRequestCount()
+                // Token count is tracked in onFinish with actual server usage
                 setInput("")
                 setFiles([])
             } catch (error) {
@@ -568,6 +855,27 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             setMessages(newMessages)
         })
 
+        // Check daily limit
+        const limitCheck = checkDailyLimit()
+        if (!limitCheck.allowed) {
+            showQuotaLimitToast()
+            return
+        }
+
+        // Check daily token limit (actual usage tracked after response)
+        const tokenLimitCheck = checkTokenLimit()
+        if (!tokenLimitCheck.allowed) {
+            showTokenLimitToast(tokenLimitCheck.used)
+            return
+        }
+
+        // Check TPM (tokens per minute) limit
+        const tpmCheck = checkTPMLimit()
+        if (!tpmCheck.allowed) {
+            showTPMLimitToast()
+            return
+        }
+
         // Now send the message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
@@ -582,6 +890,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 },
             },
         )
+
+        incrementRequestCount()
+        // Token count is tracked in onFinish with actual server usage
     }
 
     const handleEditMessage = async (messageIndex: number, newText: string) => {
@@ -630,6 +941,27 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             setMessages(newMessages)
         })
 
+        // Check daily limit
+        const limitCheck = checkDailyLimit()
+        if (!limitCheck.allowed) {
+            showQuotaLimitToast()
+            return
+        }
+
+        // Check daily token limit (actual usage tracked after response)
+        const tokenLimitCheck = checkTokenLimit()
+        if (!tokenLimitCheck.allowed) {
+            showTokenLimitToast(tokenLimitCheck.used)
+            return
+        }
+
+        // Check TPM (tokens per minute) limit
+        const tpmCheck = checkTPMLimit()
+        if (!tpmCheck.allowed) {
+            showTPMLimitToast()
+            return
+        }
+
         // Now send the edited message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
@@ -644,6 +976,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 },
             },
         )
+
+        incrementRequestCount()
+        // Token count is tracked in onFinish with actual server usage
     }
 
     // Collapsed view (desktop only)
@@ -678,7 +1013,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <Toaster
                 position="bottom-center"
                 richColors
+                expand
                 style={{ position: "absolute" }}
+                toastOptions={{
+                    style: {
+                        maxWidth: "480px",
+                    },
+                }}
             />
             {/* Header */}
             <header
@@ -703,20 +1044,28 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         {!isMobile && (
                             <Link
                                 href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                             >
                                 About
                             </Link>
                         )}
                         {!isMobile && (
-                            <ButtonWithTooltip
-                                tooltipContent="Recent generation failures were caused by our AI provider's infrastructure issue, not the app code. After extensive debugging, I've switched providers and observed 6 hours of stability. If issues persist, please report on GitHub."
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-green-500 hover:text-green-600"
+                            <Link
+                                href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
                             >
-                                <CheckCircle className="h-4 w-4" />
-                            </ButtonWithTooltip>
+                                <ButtonWithTooltip
+                                    tooltipContent="Due to high usage, I have added usage limits. See About page for details."
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                                >
+                                    <AlertTriangle className="h-4 w-4" />
+                                </ButtonWithTooltip>
+                            </Link>
                         )}
                     </div>
                     <div className="flex items-center gap-1">

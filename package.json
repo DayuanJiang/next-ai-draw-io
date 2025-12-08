@@ -42,6 +42,7 @@
         "base-64": "^1.0.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "js-tiktoken": "^1.0.21",
         "jsdom": "^26.0.0",
         "lucide-react": "^0.483.0",
         "next": "^16.0.7",
@@ -67,6 +68,7 @@
         ]
     },
     "devDependencies": {
+        "@anthropic-ai/tokenizer": "^0.0.4",
         "@biomejs/biome": "2.3.8",
         "@tailwindcss/postcss": "^4",
         "@tailwindcss/typography": "^0.5.19",

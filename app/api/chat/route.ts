@@ -1,7 +1,9 @@
 import {
+    APICallError,
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    LoadAPIKeyError,
     stepCountIs,
     streamText,
 } from "ai"
@@ -16,7 +18,7 @@ import {
 } from "@/lib/langfuse"
 import { getSystemPrompt } from "@/lib/system-prompts"
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 // File upload limits (must match client-side)
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -67,11 +69,11 @@ function isMinimalDiagram(xml: string): boolean {
 // Helper function to fix tool call inputs for Bedrock API
 // Bedrock requires toolUse.input to be a JSON object, not a string
 function fixToolCallInputs(messages: any[]): any[] {
-    return messages.map((msg, msgIndex) => {
+    return messages.map((msg) => {
         if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
             return msg
         }
-        const fixedContent = msg.content.map((part: any, partIndex: number) => {
+        const fixedContent = msg.content.map((part: any) => {
             if (part.type === "tool-call") {
                 if (typeof part.input === "string") {
                     try {
@@ -176,6 +178,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // === CACHE CHECK START ===
     const isFirstMessage = messages.length === 1
     const isEmptyDiagram = !xml || xml.trim() === "" || isMinimalDiagram(xml)
+
+    // DEBUG: Log cache check conditions
+    console.log("[Cache DEBUG] messages.length:", messages.length)
+    console.log("[Cache DEBUG] isFirstMessage:", isFirstMessage)
+    console.log("[Cache DEBUG] xml length:", xml?.length || 0)
+    console.log("[Cache DEBUG] xml preview:", xml?.substring(0, 200))
+    console.log("[Cache DEBUG] isEmptyDiagram:", isEmptyDiagram)
 
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]
@@ -359,7 +368,6 @@ ${lastMessageText}
         },
         onFinish: ({ text, usage }) => {
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
-            // AI SDK uses inputTokens/outputTokens, Langfuse expects promptTokens/completionTokens
             setTraceOutput(text, {
                 promptTokens: usage?.inputTokens,
                 completionTokens: usage?.outputTokens,
@@ -448,6 +456,89 @@ IMPORTANT: Keep edits concise:
     return result.toUIMessageStreamResponse({
         sendReasoning: enableReasoning,
     })
+        messageMetadata: ({ part }) => {
+            if (part.type === "finish") {
+                const usage = (part as any).totalUsage
+                if (!usage) {
+                    console.warn(
+                        "[messageMetadata] No usage data in finish part",
+                    )
+                    return undefined
+                }
+                // Total input = non-cached + cached (these are separate counts)
+                // Note: cacheWriteInputTokens is not available on finish part
+                const totalInputTokens =
+                    (usage.inputTokens ?? 0) + (usage.cachedInputTokens ?? 0)
+                return {
+                    inputTokens: totalInputTokens,
+                    outputTokens: usage.outputTokens ?? 0,
+                }
+            }
+            return undefined
+        },
+    })
+}
+
+// Helper to categorize errors and return appropriate response
+function handleError(error: unknown): Response {
+    console.error("Error in chat route:", error)
+
+    const isDev = process.env.NODE_ENV === "development"
+
+    // Check for specific AI SDK error types
+    if (APICallError.isInstance(error)) {
+        return Response.json(
+            {
+                error: error.message,
+                ...(isDev && {
+                    details: error.responseBody,
+                    stack: error.stack,
+                }),
+            },
+            { status: error.statusCode || 500 },
+        )
+    }
+
+    if (LoadAPIKeyError.isInstance(error)) {
+        return Response.json(
+            {
+                error: "Authentication failed. Please check your API key.",
+                ...(isDev && {
+                    stack: error.stack,
+                }),
+            },
+            { status: 401 },
+        )
+    }
+
+    // Fallback for other errors with safety filter
+    const message =
+        error instanceof Error ? error.message : "An unexpected error occurred"
+    const status = (error as any)?.statusCode || (error as any)?.status || 500
+
+    // Prevent leaking API keys, tokens, or other sensitive data
+    const lowerMessage = message.toLowerCase()
+    const safeMessage =
+        lowerMessage.includes("key") ||
+        lowerMessage.includes("token") ||
+        lowerMessage.includes("sig") ||
+        lowerMessage.includes("signature") ||
+        lowerMessage.includes("secret") ||
+        lowerMessage.includes("password") ||
+        lowerMessage.includes("credential")
+            ? "Authentication failed. Please check your credentials."
+            : message
+
+    return Response.json(
+        {
+            error: safeMessage,
+            ...(isDev && {
+                details: message,
+                stack: error instanceof Error ? error.stack : undefined,
+            }),
+        },
+        { status },
+    )
 }
 
 // Wrap handler with error handling
@@ -455,11 +546,7 @@ async function safeHandler(req: Request): Promise<Response> {
     try {
         return await handleChatRequest(req)
     } catch (error) {
-        console.error("Error in chat route:", error)
-        return Response.json(
-            { error: "Internal server error" },
-            { status: 500 },
-        )
+        return handleError(error)
     }
 }
 

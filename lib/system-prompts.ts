@@ -1,9 +1,12 @@
 /**
  * System prompts for different AI models
  * Extended prompt is used for models with higher cache token minimums (Opus 4.5, Haiku 4.5)
+ *
+ * Token counting utilities are in a separate file (token-counter.ts) to avoid
+ * WebAssembly issues with Next.js server-side rendering.
  */
 
-// Default system prompt (~2700 tokens) - works with all models
+// Default system prompt (~1900 tokens) - works with all models
 export const DEFAULT_SYSTEM_PROMPT = `
 You are an expert diagram creation assistant specializing in draw.io XML generation.
 Your primary function is chat with user and crafting clear, well-organized visual diagrams through precise XML specifications.
@@ -132,8 +135,8 @@ Common styles:
 
 `
 
-// Extended additions (~1800 tokens) - appended for models with 4000 token cache minimum
-// Total EXTENDED_SYSTEM_PROMPT = ~4500 tokens
+// Extended additions (~2600 tokens) - appended for models with 4000 token cache minimum
+// Total EXTENDED_SYSTEM_PROMPT = ~4400 tokens
 const EXTENDED_ADDITIONS = `
 
 ## Extended Tool Reference
