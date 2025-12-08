@@ -35,6 +35,9 @@ const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
 const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
 const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
 const STORAGE_TOKEN_DATE_KEY = "next-ai-draw-io-token-date"
+const STORAGE_TPM_COUNT_KEY = "next-ai-draw-io-tpm-count"
+const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
+const TPM_LIMIT = 50000 // 50k tokens per minute
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -231,6 +234,72 @@ export default function ChatPanel({
         [dailyTokenLimit],
     )
 
+    // Helper to check TPM (tokens per minute) limit
+    const checkTPMLimit = useCallback((): {
+        allowed: boolean
+        remaining: number
+        used: number
+    } => {
+        if (TPM_LIMIT <= 0) return { allowed: true, remaining: -1, used: 0 }
+
+        const currentMinute = Math.floor(Date.now() / 60000).toString()
+        const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_TPM_COUNT_KEY) || "0",
+            10,
+        )
+
+        // Guard against NaN
+        if (Number.isNaN(count)) count = 0
+
+        // Reset if we're in a new minute
+        if (storedMinute !== currentMinute) {
+            count = 0
+            localStorage.setItem(STORAGE_TPM_MINUTE_KEY, currentMinute)
+            localStorage.setItem(STORAGE_TPM_COUNT_KEY, "0")
+        }
+
+        return {
+            allowed: count < TPM_LIMIT,
+            remaining: TPM_LIMIT - count,
+            used: count,
+        }
+    }, [])
+
+    // Helper to increment TPM count
+    const incrementTPMCount = useCallback((tokens: number): void => {
+        // Guard against NaN tokens
+        if (!Number.isFinite(tokens) || tokens <= 0) return
+
+        const currentMinute = Math.floor(Date.now() / 60000).toString()
+        const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_TPM_COUNT_KEY) || "0",
+            10,
+        )
+
+        // Guard against NaN
+        if (Number.isNaN(count)) count = 0
+
+        // Reset if we're in a new minute
+        if (storedMinute !== currentMinute) {
+            count = 0
+            localStorage.setItem(STORAGE_TPM_MINUTE_KEY, currentMinute)
+        }
+
+        localStorage.setItem(STORAGE_TPM_COUNT_KEY, String(count + tokens))
+    }, [])
+
+    // Helper to show TPM limit toast
+    const showTPMLimitToast = useCallback(() => {
+        const limitDisplay =
+            TPM_LIMIT >= 1000 ? `${TPM_LIMIT / 1000}k` : String(TPM_LIMIT)
+        toast.error(
+            `Rate limit reached (${limitDisplay} tokens/min). Please wait a moment before sending another request.`,
+            { duration: 5000 },
+        )
+    }, [])
+
     // Generate a unique session ID for Langfuse tracing (restore from localStorage if available)
     const [sessionId, setSessionId] = useState(() => {
         if (typeof window !== "undefined") {
@@ -426,6 +495,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 const actualTokens = inputTokens + outputTokens
                 if (actualTokens > 0) {
                     incrementTokenCount(actualTokens)
+                    incrementTPMCount(actualTokens)
                 }
             }
         },
@@ -680,6 +750,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     return
                 }
 
+                // Check TPM (tokens per minute) limit
+                const tpmCheck = checkTPMLimit()
+                if (!tpmCheck.allowed) {
+                    showTPMLimitToast()
+                    return
+                }
+
                 const accessCode =
                     localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
                 sendMessage(
@@ -782,6 +859,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             return
         }
 
+        // Check TPM (tokens per minute) limit
+        const tpmCheck = checkTPMLimit()
+        if (!tpmCheck.allowed) {
+            showTPMLimitToast()
+            return
+        }
+
         // Now send the message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
@@ -858,6 +942,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         const tokenLimitCheck = checkTokenLimit()
         if (!tokenLimitCheck.allowed) {
             showTokenLimitToast(tokenLimitCheck.used)
+            return
+        }
+
+        // Check TPM (tokens per minute) limit
+        const tpmCheck = checkTPMLimit()
+        if (!tpmCheck.allowed) {
+            showTPMLimitToast()
             return
         }
 
