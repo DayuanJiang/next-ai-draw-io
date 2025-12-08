@@ -6,7 +6,6 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
@@ -22,6 +21,14 @@ interface SettingsDialogProps {
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
 export const STORAGE_CLOSE_PROTECTION_KEY = "next-ai-draw-io-close-protection"
+const STORAGE_ACCESS_CODE_REQUIRED_KEY = "next-ai-draw-io-access-code-required"
+
+function getStoredAccessCodeRequired(): boolean | null {
+    if (typeof window === "undefined") return null
+    const stored = localStorage.getItem(STORAGE_ACCESS_CODE_REQUIRED_KEY)
+    if (stored === null) return null
+    return stored === "true"
+}
 
 export function SettingsDialog({
     open,
@@ -32,6 +39,32 @@ export function SettingsDialog({
     const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
     const [error, setError] = useState("")
+    const [accessCodeRequired, setAccessCodeRequired] = useState(
+        () => getStoredAccessCodeRequired() ?? false,
+    )
+
+    useEffect(() => {
+        // Only fetch if not cached in localStorage
+        if (getStoredAccessCodeRequired() !== null) return
+
+        fetch("/api/config")
+            .then((res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                return res.json()
+            })
+            .then((data) => {
+                const required = data?.accessCodeRequired === true
+                localStorage.setItem(
+                    STORAGE_ACCESS_CODE_REQUIRED_KEY,
+                    String(required),
+                )
+                setAccessCodeRequired(required)
+            })
+            .catch(() => {
+                // Don't cache on error - allow retry on next mount
+                setAccessCodeRequired(false)
+            })
+    }, [])
 
     useEffect(() => {
         if (open) {
@@ -49,11 +82,12 @@ export function SettingsDialog({
     }, [open])
 
     const handleSave = async () => {
+        if (!accessCodeRequired) return
+
         setError("")
         setIsVerifying(true)
 
         try {
-            // Verify access code with server
             const response = await fetch("/api/verify-access-code", {
                 method: "POST",
                 headers: {
@@ -65,17 +99,10 @@ export function SettingsDialog({
 
             if (!data.valid) {
                 setError(data.message || "Invalid access code")
-                setIsVerifying(false)
                 return
             }
 
-            // Save settings only if verification passes
             localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim())
-            localStorage.setItem(
-                STORAGE_CLOSE_PROTECTION_KEY,
-                closeProtection.toString(),
-            )
-            onCloseProtectionChange?.(closeProtection)
             onOpenChange(false)
         } catch {
             setError("Failed to verify access code")
@@ -97,31 +124,42 @@ export function SettingsDialog({
                 <DialogHeader>
                     <DialogTitle>Settings</DialogTitle>
                     <DialogDescription>
-                        Configure your access settings.
+                        Configure your application settings.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                            Access Code
-                        </label>
-                        <Input
-                            type="password"
-                            value={accessCode}
-                            onChange={(e) => setAccessCode(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Enter access code"
-                            autoComplete="off"
-                        />
-                        <p className="text-[0.8rem] text-muted-foreground">
-                            Required if the server has enabled access control.
-                        </p>
-                        {error && (
-                            <p className="text-[0.8rem] text-destructive">
-                                {error}
+                    {accessCodeRequired && (
+                        <div className="space-y-2">
+                            <Label htmlFor="access-code">Access Code</Label>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="access-code"
+                                    type="password"
+                                    value={accessCode}
+                                    onChange={(e) =>
+                                        setAccessCode(e.target.value)
+                                    }
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="Enter access code"
+                                    autoComplete="off"
+                                />
+                                <Button
+                                    onClick={handleSave}
+                                    disabled={isVerifying || !accessCode.trim()}
+                                >
+                                    {isVerifying ? "..." : "Save"}
+                                </Button>
+                            </div>
+                            <p className="text-[0.8rem] text-muted-foreground">
+                                Required to use this application.
                             </p>
-                        )}
-                    </div>
+                            {error && (
+                                <p className="text-[0.8rem] text-destructive">
+                                    {error}
+                                </p>
+                            )}
+                        </div>
+                    )}
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <Label htmlFor="close-protection">
@@ -134,21 +172,17 @@ export function SettingsDialog({
                         <Switch
                             id="close-protection"
                             checked={closeProtection}
-                            onCheckedChange={setCloseProtection}
+                            onCheckedChange={(checked) => {
+                                setCloseProtection(checked)
+                                localStorage.setItem(
+                                    STORAGE_CLOSE_PROTECTION_KEY,
+                                    checked.toString(),
+                                )
+                                onCloseProtectionChange?.(checked)
+                            }}
                         />
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={isVerifying}>
-                        {isVerifying ? "Verifying..." : "Save"}
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     )
