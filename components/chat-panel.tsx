@@ -266,36 +266,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             }
 
             // Translate technical errors into user-friendly messages
-            // This captures streaming errors that bypass server-side safeHandler
+            // The server now handles detailed error messages, so we can display them directly.
+            // But we still handle connection/network errors that happen before reaching the server.
             let friendlyMessage = error.message
 
-            // Check for specific patterns
-            const lowerMsg = error.message.toLowerCase()
-
-            if (lowerMsg.includes("429") || lowerMsg.includes("rate limit")) {
-                friendlyMessage =
-                    "You have reached the rate limit. Please try again later."
-            } else if (
-                lowerMsg.includes("401") ||
-                lowerMsg.includes("unauthorized") ||
-                lowerMsg.includes("invalid token") ||
-                error.message.includes("无效的令牌")
-            ) {
-                friendlyMessage =
-                    "Authentication failed. Please check your API key or access code."
-            } else if (
-                lowerMsg.includes("503") ||
-                lowerMsg.includes("overloaded") ||
-                lowerMsg.includes("capacity")
-            ) {
-                friendlyMessage =
-                    "The AI model is currently overloaded. Please try again in a few moments."
-            } else if (
-                lowerMsg.includes("context length") ||
-                lowerMsg.includes("token limit")
-            ) {
-                friendlyMessage =
-                    "The conversation is too long for the model to process. Please start a new chat."
+            // Simple check for network errors if message is generic
+            if (friendlyMessage === "Failed to fetch") {
+                friendlyMessage = "Network error. Please check your connection."
             }
 
             // Add system message for error so it can be cleared
