@@ -4,9 +4,15 @@ import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
-import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
+
+// Detect if running in edge/worker runtime (Cloudflare Workers, Vercel Edge, etc.)
+const isEdgeRuntime =
+    typeof process === "undefined" ||
+    !process.versions?.node ||
+    // @ts-expect-error - EdgeRuntime is a global in edge environments
+    typeof EdgeRuntime !== "undefined"
 
 export type ProviderName =
     | "bedrock"
@@ -166,12 +172,37 @@ export function getAIModel(): ModelConfig {
 
     switch (provider) {
         case "bedrock": {
-            // Use credential provider chain for IAM role support (Amplify, Lambda, etc.)
-            // Falls back to env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
-            const bedrockProvider = createAmazonBedrock({
+            // Edge runtime (Cloudflare Workers, etc.) requires explicit credentials
+            // Node.js runtime can use IAM role chain (Amplify, Lambda, etc.)
+            const bedrockConfig: Parameters<typeof createAmazonBedrock>[0] = {
                 region: process.env.AWS_REGION || "us-west-2",
-                credentialProvider: fromNodeProviderChain(),
-            })
+            }
+
+            if (isEdgeRuntime) {
+                // Edge runtime: use explicit credentials from env vars
+                if (
+                    !process.env.AWS_ACCESS_KEY_ID ||
+                    !process.env.AWS_SECRET_ACCESS_KEY
+                ) {
+                    throw new Error(
+                        "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required for Bedrock on edge runtime (Cloudflare Workers)",
+                    )
+                }
+                bedrockConfig.accessKeyId = process.env.AWS_ACCESS_KEY_ID
+                bedrockConfig.secretAccessKey =
+                    process.env.AWS_SECRET_ACCESS_KEY
+                if (process.env.AWS_SESSION_TOKEN) {
+                    bedrockConfig.sessionToken = process.env.AWS_SESSION_TOKEN
+                }
+            } else {
+                // Node.js runtime: use credential provider chain for IAM role support
+                const {
+                    fromNodeProviderChain,
+                } = require("@aws-sdk/credential-providers")
+                bedrockConfig.credentialProvider = fromNodeProviderChain()
+            }
+
+            const bedrockProvider = createAmazonBedrock(bedrockConfig)
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
