@@ -295,8 +295,8 @@ export default function ChatPanel({
         const limitDisplay =
             tpmLimit >= 1000 ? `${tpmLimit / 1000}k` : String(tpmLimit)
         toast.error(
-            `Rate limit reached (${limitDisplay} tokens/min). Please wait a moment before sending another request.`,
-            { duration: 5000 },
+            `Rate limit reached (${limitDisplay} tokens/min). Please wait 60 seconds before sending another request.`,
+            { duration: 8000 },
         )
     }, [tpmLimit])
 
