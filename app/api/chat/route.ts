@@ -1,7 +1,9 @@
 import {
+    APICallError,
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    LoadAPIKeyError,
     stepCountIs,
     streamText,
 } from "ai"
@@ -451,16 +453,74 @@ IMPORTANT: Keep edits concise:
     })
 }
 
+// Helper to categorize errors and return appropriate response
+function handleError(error: unknown): Response {
+    console.error("Error in chat route:", error)
+
+    const isDev = process.env.NODE_ENV === "development"
+
+    // Check for specific AI SDK error types
+    if (APICallError.isInstance(error)) {
+        return Response.json(
+            {
+                error: error.message,
+                ...(isDev && {
+                    details: error.responseBody,
+                    stack: error.stack,
+                }),
+            },
+            { status: error.statusCode || 500 },
+        )
+    }
+
+    if (LoadAPIKeyError.isInstance(error)) {
+        return Response.json(
+            {
+                error: "Authentication failed. Please check your API key.",
+                ...(isDev && {
+                    stack: error.stack,
+                }),
+            },
+            { status: 401 },
+        )
+    }
+
+    // Fallback for other errors with safety filter
+    const message =
+        error instanceof Error ? error.message : "An unexpected error occurred"
+    const status = (error as any)?.statusCode || (error as any)?.status || 500
+
+    // Prevent leaking API keys, tokens, or other sensitive data
+    const lowerMessage = message.toLowerCase()
+    const safeMessage =
+        lowerMessage.includes("key") ||
+        lowerMessage.includes("token") ||
+        lowerMessage.includes("sig") ||
+        lowerMessage.includes("signature") ||
+        lowerMessage.includes("secret") ||
+        lowerMessage.includes("password") ||
+        lowerMessage.includes("credential")
+            ? "Authentication failed. Please check your credentials."
+            : message
+
+    return Response.json(
+        {
+            error: safeMessage,
+            ...(isDev && {
+                details: message,
+                stack: error instanceof Error ? error.stack : undefined,
+            }),
+        },
+        { status },
+    )
+}
+
 // Wrap handler with error handling
 async function safeHandler(req: Request): Promise<Response> {
     try {
         return await handleChatRequest(req)
     } catch (error) {
-        console.error("Error in chat route:", error)
-        return Response.json(
-            { error: "Internal server error" },
-            { status: 500 },
-        )
+        return handleError(error)
     }
 }
 

@@ -462,13 +462,23 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 console.error("Chat error:", error)
             }
 
+            // Translate technical errors into user-friendly messages
+            // The server now handles detailed error messages, so we can display them directly.
+            // But we still handle connection/network errors that happen before reaching the server.
+            let friendlyMessage = error.message
+
+            // Simple check for network errors if message is generic
+            if (friendlyMessage === "Failed to fetch") {
+                friendlyMessage = "Network error. Please check your connection."
+            }
+
             // Add system message for error so it can be cleared
             setMessages((currentMessages) => {
                 const errorMessage = {
                     id: `error-${Date.now()}`,
                     role: "system" as const,
-                    content: error.message,
-                    parts: [{ type: "text" as const, text: error.message }],
+                    content: friendlyMessage,
+                    parts: [{ type: "text" as const, text: friendlyMessage }],
                 }
                 return [...currentMessages, errorMessage]
             })
