@@ -12,6 +12,9 @@ import {
 import { useDiagram } from "@/contexts/diagram-context"
 import { useTheme } from "@/contexts/theme-context"
 
+// Minimum XML length to consider valid (avoid saving empty/partial diagrams)
+const MIN_XML_LENGTH = 300
+
 export default function Home() {
     const {
         drawioRef,
@@ -57,7 +60,11 @@ export default function Home() {
 
     // Update saved diagram when chartXML changes (only update in-memory cache, no auto-save)
     useEffect(() => {
-        if (chartXML && !isRestoringRef.current && chartXML.length > 300) {
+        if (
+            chartXML &&
+            !isRestoringRef.current &&
+            chartXML.length > MIN_XML_LENGTH
+        ) {
             savedDiagramRef.current = chartXML
         }
     }, [chartXML])
@@ -65,14 +72,9 @@ export default function Home() {
     // Function to export current diagram before theme/UI change
     const exportBeforeSwitch = useCallback(() => {
         return new Promise<string>((resolve) => {
-            console.log("[exportBeforeSwitch] Starting export...")
-
             // If DrawIO not ready, use cached XML from localStorage
             const cached = localStorage.getItem("next-ai-draw-io-diagram-xml")
             if (!drawioRef || !("current" in drawioRef) || !drawioRef.current) {
-                console.log(
-                    "[exportBeforeSwitch] DrawIO not ready, using cache",
-                )
                 resolve(cached || savedDiagramRef.current)
                 return
             }
@@ -80,24 +82,13 @@ export default function Home() {
             // Set up resolver - save to localStorage when exporting before theme/UI switch
             if (resolverRef && "current" in resolverRef) {
                 resolverRef.current = (xml: string) => {
-                    console.log(
-                        "[exportBeforeSwitch] Export completed, XML length:",
-                        xml.length,
-                    )
                     // Ensure XML has complete structure before saving
-                    if (xml && xml.length > 300) {
+                    if (xml && xml.length > MIN_XML_LENGTH) {
                         let xmlContent = xml
                         // Add mxfile wrapper if missing
                         if (!xml.includes("<mxfile")) {
-                            console.log(
-                                "[exportBeforeSwitch] Adding <mxfile> wrapper",
-                            )
                             xmlContent = `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
                         }
-                        console.log(
-                            "[exportBeforeSwitch] Saving complete XML to localStorage, length:",
-                            xmlContent.length,
-                        )
                         localStorage.setItem(
                             "next-ai-draw-io-diagram-xml",
                             xmlContent,
@@ -115,7 +106,6 @@ export default function Home() {
 
             // Timeout after 5 seconds (increased from 2 seconds)
             setTimeout(() => {
-                console.log("[exportBeforeSwitch] Export timeout, using cache")
                 const latestCached = localStorage.getItem(
                     "next-ai-draw-io-diagram-xml",
                 )
@@ -138,18 +128,12 @@ export default function Home() {
             isThemeLoaded &&
             !isSwitchingRef.current
         ) {
-            console.log(
-                "[Home] Theme or UI change detected, exporting before reload...",
-            )
             isSwitchingRef.current = true
 
             // Export current diagram first
             exportBeforeSwitch()
                 .then((xml: string) => {
-                    if (xml && xml.length > 300) {
-                        console.log(
-                            "[Home] Got latest XML, will restore diagram",
-                        )
+                    if (xml && xml.length > MIN_XML_LENGTH) {
                         savedDiagramRef.current = xml
                         localStorage.setItem("next-ai-draw-io-diagram-xml", xml)
                     } else {
@@ -159,7 +143,6 @@ export default function Home() {
                     }
 
                     // Now trigger reload by updating drawioTheme and key
-                    console.log("[Home] Triggering DrawIO reload...")
                     isRestoringRef.current = true
                     resetDrawioReady()
                     setDrawioTheme(theme) // Update DrawIO's theme state
@@ -226,21 +209,9 @@ export default function Home() {
             savedDiagramRef.current &&
             drawioKey > 0
         ) {
-            console.log(
-                "[Home] DrawIO ready after theme/UI switch, restoring diagram",
-            )
             const timer = setTimeout(() => {
                 const xmlToRestore = savedDiagramRef.current
-
-                console.log(
-                    "[Home] Attempting to restore XML, length:",
-                    xmlToRestore.length,
-                    "first 300 chars:",
-                    xmlToRestore.substring(0, 300),
-                )
-
                 if (isValidDiagramXML(xmlToRestore)) {
-                    console.log("[Home] XML validation passed, loading diagram")
                     loadDiagram(xmlToRestore)
                 } else {
                     console.warn(
@@ -315,6 +286,20 @@ export default function Home() {
         window.addEventListener("keydown", handleKeyDown)
         return () => window.removeEventListener("keydown", handleKeyDown)
     }, [])
+
+    // Save current diagram before browser closes/refreshes
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            // Save current chartXML to localStorage before closing
+            if (chartXML && chartXML.length > MIN_XML_LENGTH) {
+                localStorage.setItem("next-ai-draw-io-diagram-xml", chartXML)
+            }
+        }
+
+        window.addEventListener("beforeunload", handleBeforeUnload)
+        return () =>
+            window.removeEventListener("beforeunload", handleBeforeUnload)
+    }, [chartXML])
 
     // Show confirmation dialog when user tries to leave the page
     // This helps prevent accidental navigation from browser back gestures

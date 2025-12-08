@@ -46,12 +46,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Only set ready state once to prevent infinite loops
         if (hasCalledOnLoadRef.current) return
         hasCalledOnLoadRef.current = true
-        console.log("[DiagramContext] DrawIO loaded, setting ready state")
+        // console.log("[DiagramContext] DrawIO loaded, setting ready state")
         setIsDrawioReady(true)
     }
 
     const resetDrawioReady = () => {
-        console.log("[DiagramContext] Resetting DrawIO ready state")
+        // console.log("[DiagramContext] Resetting DrawIO ready state")
         hasCalledOnLoadRef.current = false
         setIsDrawioReady(false)
     }
@@ -181,10 +181,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     extension = ".drawio"
 
                     // Save to localStorage when user manually saves
-                    console.log(
-                        "[DiagramContext] Manual save - saving to localStorage, length:",
-                        xmlContent.length,
-                    )
                     localStorage.setItem(
                         "next-ai-draw-io-diagram-xml",
                         xmlContent,
