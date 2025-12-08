@@ -166,7 +166,7 @@ export function getAIModel(): ModelConfig {
 
     switch (provider) {
         case "bedrock": {
-            // Use credential provider chain for IAM role support (Amplify, Lambda, etc.)
+            // Use credential provider chain for IAM role support (Lambda, EC2, etc.)
             // Falls back to env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
             const bedrockProvider = createAmazonBedrock({
                 region: process.env.AWS_REGION || "us-west-2",

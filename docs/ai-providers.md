@@ -98,7 +98,7 @@ AWS_SECRET_ACCESS_KEY=your_secret_access_key
 AI_MODEL=anthropic.claude-sonnet-4-5-20250514-v1:0
 ```
 
-Note: On AWS (Amplify, Lambda, EC2 with IAM role), credentials are automatically obtained from the IAM role.
+Note: On AWS (Lambda, EC2 with IAM role), credentials are automatically obtained from the IAM role.
 
 ### OpenRouter
 
