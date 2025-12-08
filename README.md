@@ -1,4 +1,4 @@
-# Next AI Draw.io [🚀 Live Demo](https://next-ai-drawio.jiang.jp/)
+# Next AI Draw.io
 
 <div align="center">
 
@@ -13,6 +13,8 @@ English | [中文](./README_CN.md) | [日本語](./README_JA.md)
 [![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
+[![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+
 </div>
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
@@ -20,9 +22,12 @@ A Next.js web application that integrates AI capabilities with draw.io diagrams.
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## Table of Contents
-  - [Features](#features)
+- [Next AI Draw.io ](#next-ai-drawio-)
+  - [Table of Contents](#table-of-contents)
   - [Examples](#examples)
+  - [Features](#features)
   - [Getting Started](#getting-started)
+    - [Try it Online](#try-it-online)
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
     - [Installation](#installation)
   - [Deployment](#deployment)
@@ -31,15 +36,6 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [Project Structure](#project-structure)
   - [Support \& Contact](#support--contact)
   - [Star History](#star-history)
-
-## Features
-
--   **LLM-Powered Diagram Creation**: Leverage Large Language Models to create and manipulate draw.io diagrams directly through natural language commands
--   **Image-Based Diagram Replication**: Upload existing diagrams or images and have the AI replicate and enhance them automatically
--   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
--   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
--   **AWS Architecture Diagram Support**: Specialized support for generating AWS architecture diagrams
--   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
 ## Examples
 
@@ -81,8 +77,24 @@ Here are some example prompts and their generated diagrams:
 </table>
 </div>
 
+## Features
+
+-   **LLM-Powered Diagram Creation**: Leverage Large Language Models to create and manipulate draw.io diagrams directly through natural language commands
+-   **Image-Based Diagram Replication**: Upload existing diagrams or images and have the AI replicate and enhance them automatically
+-   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
+-   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
+-   **AWS Architecture Diagram Support**: Specialized support for generating AWS architecture diagrams
+-   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
 ## Getting Started
+
+### Try it Online
+
+No installation needed! Try the app directly on our demo site:
+
+[![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+
+> Note: Due to high traffic, the demo site currently uses Claude Haiku 4.5. For best results, we recommend self-hosting with Claude Opus 4.5.
 
 ### Run with Docker (Recommended)
 
