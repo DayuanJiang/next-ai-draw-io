@@ -5,16 +5,21 @@ import type React from "react"
 import { FaGithub } from "react-icons/fa"
 
 interface QuotaLimitToastProps {
+    type?: "request" | "token"
     used: number
     limit: number
     onDismiss: () => void
 }
 
 export function QuotaLimitToast({
+    type = "request",
     used,
     limit,
     onDismiss,
 }: QuotaLimitToastProps) {
+    const isTokenLimit = type === "token"
+    const formatNumber = (n: number) =>
+        n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString()
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Escape") {
             e.preventDefault()
@@ -48,19 +53,24 @@ export function QuotaLimitToast({
                     />
                 </div>
                 <h3 className="font-semibold text-foreground text-sm">
-                    Daily Quota Reached
+                    {isTokenLimit
+                        ? "Daily Token Limit Reached"
+                        : "Daily Quota Reached"}
                 </h3>
                 <span className="px-2 py-0.5 text-xs font-medium rounded-md bg-muted text-muted-foreground">
-                    {used}/{limit}
+                    {isTokenLimit
+                        ? `${formatNumber(used)}/${formatNumber(limit)} tokens`
+                        : `${used}/${limit}`}
                 </span>
             </div>
 
             {/* Message */}
             <div className="text-sm text-muted-foreground leading-relaxed mb-4 space-y-2">
                 <p>
-                    Oops — you've reached the daily API limit for this demo! As
-                    an indie developer covering all the API costs myself, I have
-                    to set these limits to keep things sustainable.
+                    Oops — you've reached the daily{" "}
+                    {isTokenLimit ? "token" : "API"} limit for this demo! As an
+                    indie developer covering all the API costs myself, I have to
+                    set these limits to keep things sustainable.
                 </p>
                 <p>
                     The good news is that you can self-host the project in

@@ -189,32 +189,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         const textPart = lastMessage.parts?.find((p: any) => p.type === "text")
         const filePart = lastMessage.parts?.find((p: any) => p.type === "file")
 
-        console.log("[Cache DEBUG] textPart?.text:", textPart?.text)
-        console.log("[Cache DEBUG] hasFilePart:", !!filePart)
-
         const cached = findCachedResponse(textPart?.text || "", !!filePart)
 
-        console.log("[Cache DEBUG] cached found:", !!cached)
-
         if (cached) {
-            console.log(
-                "[Cache] Returning cached response for:",
-                textPart?.text,
-            )
             return createCachedStreamResponse(cached.xml)
-        } else {
-            console.log("[Cache DEBUG] No cache match - checking why...")
-            console.log(
-                "[Cache DEBUG] Exact promptText:",
-                JSON.stringify(textPart?.text),
-            )
         }
-    } else {
-        console.log("[Cache DEBUG] Skipping cache check - conditions not met")
-        if (!isFirstMessage)
-            console.log("[Cache DEBUG] Reason: not first message")
-        if (!isEmptyDiagram)
-            console.log("[Cache DEBUG] Reason: diagram not empty")
     }
     // === CACHE CHECK END ===
 
@@ -242,28 +221,6 @@ ${lastMessageText}
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
-
-    // Debug: log raw messages to see what's coming in
-    console.log(
-        "[DEBUG] Raw UI messages:",
-        JSON.stringify(
-            messages.map((m: any, i: number) => ({
-                index: i,
-                role: m.role,
-                partsCount: m.parts?.length,
-                parts: m.parts?.map((p: any) => ({
-                    type: p.type,
-                    toolName: p.toolName,
-                    toolCallId: p.toolCallId,
-                    state: p.state,
-                    inputType: p.input ? typeof p.input : undefined,
-                    input: p.input,
-                })),
-            })),
-            null,
-            2,
-        ),
-    )
 
     // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
     const fixedMessages = fixToolCallInputs(modelMessages)
@@ -383,14 +340,8 @@ ${lastMessageText}
             }
             return null
         },
-        onFinish: ({ text, usage, providerMetadata }) => {
-            console.log(
-                "[Cache] Full providerMetadata:",
-                JSON.stringify(providerMetadata, null, 2),
-            )
-            console.log("[Cache] Usage:", JSON.stringify(usage, null, 2))
+        onFinish: ({ text, usage }) => {
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
-            // AI SDK uses inputTokens/outputTokens, Langfuse expects promptTokens/completionTokens
             setTraceOutput(text, {
                 promptTokens: usage?.inputTokens,
                 completionTokens: usage?.outputTokens,
@@ -476,7 +427,28 @@ IMPORTANT: Keep edits concise:
         }),
     })
 
-    return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse({
+        messageMetadata: ({ part }) => {
+            if (part.type === "finish") {
+                const usage = (part as any).totalUsage
+                if (!usage) {
+                    console.warn(
+                        "[messageMetadata] No usage data in finish part",
+                    )
+                    return undefined
+                }
+                // Total input = non-cached + cached (these are separate counts)
+                // Note: cacheWriteInputTokens is not available on finish part
+                const totalInputTokens =
+                    (usage.inputTokens ?? 0) + (usage.cachedInputTokens ?? 0)
+                return {
+                    inputTokens: totalInputTokens,
+                    outputTokens: usage.outputTokens ?? 0,
+                }
+            }
+            return undefined
+        },
+    })
 }
 
 // Wrap handler with error handling
