@@ -236,6 +236,7 @@ export default function ChatPanel({
     )
 
     // Helper to check TPM (tokens per minute) limit
+    // Note: This only READS, doesn't write. incrementTPMCount handles writes.
     const checkTPMLimit = useCallback((): {
         allowed: boolean
         remaining: number
@@ -253,11 +254,9 @@ export default function ChatPanel({
         // Guard against NaN
         if (Number.isNaN(count)) count = 0
 
-        // Reset if we're in a new minute
+        // If we're in a new minute, treat count as 0 (will be reset on next increment)
         if (storedMinute !== currentMinute) {
             count = 0
-            localStorage.setItem(STORAGE_TPM_MINUTE_KEY, currentMinute)
-            localStorage.setItem(STORAGE_TPM_COUNT_KEY, "0")
         }
 
         return {
