@@ -37,7 +37,6 @@ const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
 const STORAGE_TOKEN_DATE_KEY = "next-ai-draw-io-token-date"
 const STORAGE_TPM_COUNT_KEY = "next-ai-draw-io-tpm-count"
 const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
-const TPM_LIMIT = 50000 // 50k tokens per minute
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -104,6 +103,7 @@ export default function ChatPanel({
     const [input, setInput] = useState("")
     const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
+    const [tpmLimit, setTpmLimit] = useState(0)
 
     // Check config on mount
     useEffect(() => {
@@ -113,6 +113,7 @@ export default function ChatPanel({
                 setAccessCodeRequired(data.accessCodeRequired)
                 setDailyRequestLimit(data.dailyRequestLimit || 0)
                 setDailyTokenLimit(data.dailyTokenLimit || 0)
+                setTpmLimit(data.tpmLimit || 0)
             })
             .catch(() => setAccessCodeRequired(false))
     }, [])
@@ -240,7 +241,7 @@ export default function ChatPanel({
         remaining: number
         used: number
     } => {
-        if (TPM_LIMIT <= 0) return { allowed: true, remaining: -1, used: 0 }
+        if (tpmLimit <= 0) return { allowed: true, remaining: -1, used: 0 }
 
         const currentMinute = Math.floor(Date.now() / 60000).toString()
         const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
@@ -260,11 +261,11 @@ export default function ChatPanel({
         }
 
         return {
-            allowed: count < TPM_LIMIT,
-            remaining: TPM_LIMIT - count,
+            allowed: count < tpmLimit,
+            remaining: tpmLimit - count,
             used: count,
         }
-    }, [])
+    }, [tpmLimit])
 
     // Helper to increment TPM count
     const incrementTPMCount = useCallback((tokens: number): void => {
@@ -293,12 +294,12 @@ export default function ChatPanel({
     // Helper to show TPM limit toast
     const showTPMLimitToast = useCallback(() => {
         const limitDisplay =
-            TPM_LIMIT >= 1000 ? `${TPM_LIMIT / 1000}k` : String(TPM_LIMIT)
+            tpmLimit >= 1000 ? `${tpmLimit / 1000}k` : String(tpmLimit)
         toast.error(
             `Rate limit reached (${limitDisplay} tokens/min). Please wait a moment before sending another request.`,
             { duration: 5000 },
         )
-    }, [])
+    }, [tpmLimit])
 
     // Generate a unique session ID for Langfuse tracing (restore from localStorage if available)
     const [sessionId, setSessionId] = useState(() => {
