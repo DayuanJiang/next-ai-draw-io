@@ -17,9 +17,10 @@ import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { FaGithub } from "react-icons/fa"
-import { Toaster } from "sonner"
+import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { QuotaLimitToast } from "@/components/quota-limit-toast"
 import {
     SettingsDialog,
     STORAGE_ACCESS_CODE_KEY,
@@ -30,6 +31,8 @@ const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
+const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -94,14 +97,70 @@ export default function ChatPanel({
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [, setAccessCodeRequired] = useState(false)
     const [input, setInput] = useState("")
+    const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
 
-    // Check if access code is required on mount
+    // Check config on mount
     useEffect(() => {
         fetch("/api/config")
             .then((res) => res.json())
-            .then((data) => setAccessCodeRequired(data.accessCodeRequired))
+            .then((data) => {
+                setAccessCodeRequired(data.accessCodeRequired)
+                setDailyRequestLimit(data.dailyRequestLimit || 0)
+            })
             .catch(() => setAccessCodeRequired(false))
     }, [])
+
+    // Helper to check daily request limit
+    const checkDailyLimit = useCallback((): {
+        allowed: boolean
+        remaining: number
+        used: number
+    } => {
+        if (dailyRequestLimit <= 0)
+            return { allowed: true, remaining: -1, used: 0 }
+
+        const today = new Date().toDateString()
+        const storedDate = localStorage.getItem(STORAGE_REQUEST_DATE_KEY)
+        let count = parseInt(
+            localStorage.getItem(STORAGE_REQUEST_COUNT_KEY) || "0",
+            10,
+        )
+
+        if (storedDate !== today) {
+            count = 0
+            localStorage.setItem(STORAGE_REQUEST_DATE_KEY, today)
+            localStorage.setItem(STORAGE_REQUEST_COUNT_KEY, "0")
+        }
+
+        return {
+            allowed: count < dailyRequestLimit,
+            remaining: dailyRequestLimit - count,
+            used: count,
+        }
+    }, [dailyRequestLimit])
+
+    // Helper to increment request count
+    const incrementRequestCount = useCallback((): void => {
+        const count = parseInt(
+            localStorage.getItem(STORAGE_REQUEST_COUNT_KEY) || "0",
+            10,
+        )
+        localStorage.setItem(STORAGE_REQUEST_COUNT_KEY, String(count + 1))
+    }, [])
+
+    // Helper to show quota limit toast
+    const showQuotaLimitToast = useCallback(() => {
+        toast.custom(
+            (t) => (
+                <QuotaLimitToast
+                    used={dailyRequestLimit}
+                    limit={dailyRequestLimit}
+                    onDismiss={() => toast.dismiss(t)}
+                />
+            ),
+            { duration: 15000 },
+        )
+    }, [dailyRequestLimit])
 
     // Generate a unique session ID for Langfuse tracing (restore from localStorage if available)
     const [sessionId, setSessionId] = useState(() => {
@@ -519,6 +578,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 xmlSnapshotsRef.current.set(messageIndex, chartXml)
                 saveXmlSnapshots()
 
+                // Check daily limit
+                const limitCheck = checkDailyLimit()
+                if (!limitCheck.allowed) {
+                    showQuotaLimitToast()
+                    return
+                }
+
                 const accessCode =
                     localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
                 sendMessage(
@@ -534,6 +600,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     },
                 )
 
+                incrementRequestCount()
                 setInput("")
                 setFiles([])
             } catch (error) {
@@ -605,6 +672,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             setMessages(newMessages)
         })
 
+        // Check daily limit
+        const limitCheck = checkDailyLimit()
+        if (!limitCheck.allowed) {
+            showQuotaLimitToast()
+            return
+        }
+
         // Now send the message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
@@ -619,6 +693,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 },
             },
         )
+
+        incrementRequestCount()
     }
 
     const handleEditMessage = async (messageIndex: number, newText: string) => {
@@ -667,6 +743,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             setMessages(newMessages)
         })
 
+        // Check daily limit
+        const limitCheck = checkDailyLimit()
+        if (!limitCheck.allowed) {
+            showQuotaLimitToast()
+            return
+        }
+
         // Now send the edited message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
         sendMessage(
@@ -681,6 +764,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 },
             },
         )
+
+        incrementRequestCount()
     }
 
     // Collapsed view (desktop only)
@@ -715,7 +800,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             <Toaster
                 position="bottom-center"
                 richColors
+                expand
                 style={{ position: "absolute" }}
+                toastOptions={{
+                    style: {
+                        maxWidth: "480px",
+                    },
+                }}
             />
             {/* Header */}
             <header

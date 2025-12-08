@@ -8,5 +8,6 @@ export async function GET() {
 
     return NextResponse.json({
         accessCodeRequired: accessCodes.length > 0,
+        dailyRequestLimit: parseInt(process.env.DAILY_REQUEST_LIMIT || "0", 10),
     })
 }
