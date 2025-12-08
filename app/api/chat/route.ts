@@ -455,7 +455,6 @@ IMPORTANT: Keep edits concise:
 
     return result.toUIMessageStreamResponse({
         sendReasoning: enableReasoning,
-    })
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage

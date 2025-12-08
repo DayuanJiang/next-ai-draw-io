@@ -19,6 +19,11 @@ import {
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
+import {
+    Reasoning,
+    ReasoningContent,
+    ReasoningTrigger,
+} from "@/components/ai-elements/reasoning"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     convertToLegalXml,
@@ -27,7 +32,6 @@ import {
 } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
-import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning"
 
 interface EditPair {
     search: string
@@ -463,16 +467,12 @@ export function ChatMessageDisplay({
                                                     return (
                                                         <Reasoning
                                                             key={`${message.id}-reasoning-${partIndex}`}
-                                                            className="w-full mb-3"
+                                                            className="w-full"
                                                             isStreaming={
                                                                 isStreamingReasoning
                                                             }
                                                         >
-                                                            <ReasoningTrigger
-                                                                isStreaming={
-                                                                    isStreamingReasoning
-                                                                }
-                                                            />
+                                                            <ReasoningTrigger />
                                                             <ReasoningContent>
                                                                 {
                                                                     reasoningPart.text

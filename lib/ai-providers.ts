@@ -38,6 +38,135 @@ const ANTHROPIC_BETA_HEADERS = {
     "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
 }
 
+/**
+ * Build provider-specific options from environment variables
+ * Supports various AI SDK providers with their unique configuration options
+ *
+ * Environment variables:
+ * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (low, medium, high)
+ * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens
+ * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
+ * - GOOGLE_CANDIDATE_COUNT: Google number of candidates to generate
+ * - GOOGLE_TOP_K: Google top K value for sampling
+ * - GOOGLE_TOP_P: Google nucleus sampling parameter
+ * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low, medium, high)
+ * - DEEPSEEK_REASONING_EFFORT: DeepSeek reasoning effort (low, medium, high)
+ * - DEEPSEEK_REASONING_BUDGET_TOKENS: DeepSeek reasoning budget in tokens
+ */
+function buildProviderOptions(
+    provider: ProviderName,
+): Record<string, any> | undefined {
+    const options: Record<string, any> = {}
+
+    switch (provider) {
+        case "openai": {
+            const reasoningEffort = process.env.OPENAI_REASONING_EFFORT
+            if (reasoningEffort) {
+                options.openai = {
+                    reasoningEffort: reasoningEffort as
+                        | "low"
+                        | "medium"
+                        | "high",
+                }
+            }
+            break
+        }
+
+        case "anthropic": {
+            const thinkingBudget = process.env.ANTHROPIC_THINKING_BUDGET_TOKENS
+            const thinkingType =
+                process.env.ANTHROPIC_THINKING_TYPE || "enabled"
+
+            if (thinkingBudget) {
+                options.anthropic = {
+                    thinking: {
+                        type: thinkingType,
+                        budgetTokens: parseInt(thinkingBudget, 10),
+                    },
+                }
+            }
+            break
+        }
+
+        case "google": {
+            const options_obj: Record<string, any> = {}
+
+            if (process.env.GOOGLE_CANDIDATE_COUNT) {
+                options_obj.candidateCount = parseInt(
+                    process.env.GOOGLE_CANDIDATE_COUNT,
+                    10,
+                )
+            }
+            if (process.env.GOOGLE_TOP_K) {
+                options_obj.topK = parseInt(process.env.GOOGLE_TOP_K, 10)
+            }
+            if (process.env.GOOGLE_TOP_P) {
+                options_obj.topP = parseFloat(process.env.GOOGLE_TOP_P)
+            }
+
+            if (Object.keys(options_obj).length > 0) {
+                options.google = options_obj
+            }
+            break
+        }
+
+        case "azure": {
+            const reasoningEffort = process.env.AZURE_REASONING_EFFORT
+            if (reasoningEffort) {
+                options.azure = {
+                    reasoningEffort: reasoningEffort as
+                        | "low"
+                        | "medium"
+                        | "high",
+                }
+            }
+            break
+        }
+
+        case "deepseek": {
+            const options_obj: Record<string, any> = {}
+            const reasoningEffort = process.env.DEEPSEEK_REASONING_EFFORT
+            const reasoningBudget = process.env.DEEPSEEK_REASONING_BUDGET_TOKENS
+
+            if (reasoningEffort || reasoningBudget) {
+                options_obj.reasoning = {}
+                if (reasoningEffort) {
+                    ;(options_obj.reasoning as any).effort = reasoningEffort
+                }
+                if (reasoningBudget) {
+                    ;(options_obj.reasoning as any).budgetTokens = parseInt(
+                        reasoningBudget,
+                        10,
+                    )
+                }
+            }
+
+            if (Object.keys(options_obj).length > 0) {
+                options.deepseek = options_obj
+            }
+            break
+        }
+
+        case "bedrock": {
+            // Bedrock-specific options handled separately
+            break
+        }
+
+        case "ollama":
+        case "openrouter":
+        case "siliconflow": {
+            // These providers have limited provider-specific options in the AI SDK
+            // Add support here as new options become available
+            break
+        }
+
+        default:
+            break
+    }
+
+    return Object.keys(options).length > 0 ? options : undefined
+}
+
 // Map of provider to required environment variable
 const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     bedrock: null, // AWS SDK auto-uses IAM role on AWS, or env vars locally
@@ -164,6 +293,9 @@ export function getAIModel(): ModelConfig {
     let providerOptions: any
     let headers: Record<string, string> | undefined
 
+    // Build provider-specific options from environment variables
+    const customProviderOptions = buildProviderOptions(provider)
+
     switch (provider) {
         case "bedrock": {
             // Use credential provider chain for IAM role support (Lambda, EC2, etc.)
@@ -176,6 +308,8 @@ export function getAIModel(): ModelConfig {
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
                 providerOptions = BEDROCK_ANTHROPIC_BETA
+            } else if (customProviderOptions) {
+                providerOptions = customProviderOptions
             }
             break
         }
@@ -190,6 +324,9 @@ export function getAIModel(): ModelConfig {
             } else {
                 model = openai(modelId)
             }
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
+            }
             break
 
         case "anthropic": {
@@ -203,6 +340,9 @@ export function getAIModel(): ModelConfig {
             model = customProvider(modelId)
             // Add beta headers for fine-grained tool streaming
             headers = ANTHROPIC_BETA_HEADERS
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
+            }
             break
         }
 
@@ -216,6 +356,9 @@ export function getAIModel(): ModelConfig {
             } else {
                 model = google(modelId)
             }
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
+            }
             break
 
         case "azure":
@@ -227,6 +370,9 @@ export function getAIModel(): ModelConfig {
                 model = customAzure(modelId)
             } else {
                 model = azure(modelId)
+            }
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
             }
             break
 
@@ -249,6 +395,9 @@ export function getAIModel(): ModelConfig {
                 }),
             })
             model = openrouter(modelId)
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
+            }
             break
         }
 
@@ -262,6 +411,9 @@ export function getAIModel(): ModelConfig {
             } else {
                 model = deepseek(modelId)
             }
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
+            }
             break
 
         case "siliconflow": {
@@ -272,6 +424,9 @@ export function getAIModel(): ModelConfig {
                     "https://api.siliconflow.com/v1",
             })
             model = siliconflowProvider.chat(modelId)
+            if (customProviderOptions) {
+                providerOptions = customProviderOptions
+            }
             break
         }
 
