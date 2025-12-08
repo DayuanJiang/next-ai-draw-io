@@ -229,7 +229,7 @@ Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid ref
                         })
                         return
                     }
-
+                    onExport()
                     addToolOutput({
                         tool: "edit_diagram",
                         toolCallId: toolCall.toolCallId,
