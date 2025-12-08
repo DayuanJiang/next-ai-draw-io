@@ -32,59 +32,35 @@ export default function Home() {
     const [drawioKey, setDrawioKey] = useState(0)
 
     // Use a separate state for DrawIO's theme to prevent premature updates
-    const [drawioTheme, setDrawioTheme] = useState<"light" | "dark">("light")
-    const hasInitializedThemeRef = useRef(false)
+    // Initialize with correct theme immediately to avoid white flash
+    const [drawioTheme, setDrawioTheme] = useState<"light" | "dark">(() => {
+        // Check if we're in the browser
+        if (typeof window === "undefined") return "light"
+
+        // Check localStorage first
+        const savedTheme = localStorage.getItem("theme-preference")
+        if (savedTheme === "dark" || savedTheme === "light") {
+            return savedTheme
+        }
+
+        // Check system preference
+        const prefersDark = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+        ).matches
+        return prefersDark ? "dark" : "light"
+    })
 
     // Store the current diagram XML before theme/UI change
     const savedDiagramRef = useRef<string>("")
     const isRestoringRef = useRef(false)
     const isSwitchingRef = useRef(false)
 
-    // Update saved diagram when chartXML changes (auto-save to cache)
+    // Update saved diagram when chartXML changes (only update in-memory cache, no auto-save)
     useEffect(() => {
         if (chartXML && !isRestoringRef.current && chartXML.length > 300) {
             savedDiagramRef.current = chartXML
-            // Auto-save to localStorage as cache
-            console.log(
-                "[Home] Auto-saving diagram to localStorage, length:",
-                chartXML.length,
-                "first 200 chars:",
-                chartXML.substring(0, 200),
-            )
-            localStorage.setItem("next-ai-draw-io-diagram-xml", chartXML)
         }
     }, [chartXML])
-
-    // Periodic auto-export every 30 seconds to ensure latest changes are saved
-    useEffect(() => {
-        if (!isDrawioReady || !drawioRef || !("current" in drawioRef)) {
-            return
-        }
-
-        const intervalId = setInterval(() => {
-            // Skip if currently switching or restoring
-            if (isRestoringRef.current || isSwitchingRef.current) {
-                return
-            }
-
-            console.log("[Home] Periodic auto-export triggered")
-            if (resolverRef && "current" in resolverRef) {
-                resolverRef.current = (xml: string) => {
-                    if (xml && xml.length > 300) {
-                        console.log(
-                            "[Home] Periodic export saved, XML length:",
-                            xml.length,
-                        )
-                        savedDiagramRef.current = xml
-                        localStorage.setItem("next-ai-draw-io-diagram-xml", xml)
-                    }
-                }
-            }
-            handleExportWithoutHistory()
-        }, 30000) // Every 30 seconds
-
-        return () => clearInterval(intervalId)
-    }, [isDrawioReady, drawioRef, resolverRef, handleExportWithoutHistory])
 
     // Function to export current diagram before theme/UI change
     const exportBeforeSwitch = useCallback(() => {
@@ -101,14 +77,36 @@ export default function Home() {
                 return
             }
 
-            // Set up resolver
+            // Set up resolver - save to localStorage when exporting before theme/UI switch
             if (resolverRef && "current" in resolverRef) {
                 resolverRef.current = (xml: string) => {
                     console.log(
                         "[exportBeforeSwitch] Export completed, XML length:",
                         xml.length,
                     )
-                    resolve(xml)
+                    // Ensure XML has complete structure before saving
+                    if (xml && xml.length > 300) {
+                        let xmlContent = xml
+                        // Add mxfile wrapper if missing
+                        if (!xml.includes("<mxfile")) {
+                            console.log(
+                                "[exportBeforeSwitch] Adding <mxfile> wrapper",
+                            )
+                            xmlContent = `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
+                        }
+                        console.log(
+                            "[exportBeforeSwitch] Saving complete XML to localStorage, length:",
+                            xmlContent.length,
+                        )
+                        localStorage.setItem(
+                            "next-ai-draw-io-diagram-xml",
+                            xmlContent,
+                        )
+                        savedDiagramRef.current = xmlContent
+                        resolve(xmlContent)
+                    } else {
+                        resolve(xml)
+                    }
                 }
             }
 
@@ -127,11 +125,12 @@ export default function Home() {
     }, [drawioRef, resolverRef, handleExportWithoutHistory])
 
     // Watch for theme or UI changes and trigger reload with restoration
-    const prevThemeRef = useRef(theme)
     const prevDrawioUiRef = useRef(drawioUi)
 
     useEffect(() => {
-        const themeChanged = prevThemeRef.current !== theme
+        // Only reload if theme is out of sync with drawioTheme (user changed theme)
+        // Don't reload on initial theme load from ThemeProvider
+        const themeChanged = theme !== drawioTheme
         const uiChanged = prevDrawioUiRef.current !== drawioUi
 
         if (
@@ -170,9 +169,15 @@ export default function Home() {
                     isSwitchingRef.current = false
                 })
         }
-        prevThemeRef.current = theme
         prevDrawioUiRef.current = drawioUi
-    }, [theme, drawioUi, isThemeLoaded, resetDrawioReady, exportBeforeSwitch])
+    }, [
+        theme,
+        drawioTheme,
+        drawioUi,
+        isThemeLoaded,
+        resetDrawioReady,
+        exportBeforeSwitch,
+    ])
 
     // Validate XML before loading
     const isValidDiagramXML = useCallback((xml: string): boolean => {
@@ -256,19 +261,14 @@ export default function Home() {
         }
     }, [isDrawioReady, loadDiagram, drawioKey, isValidDiagramXML])
 
-    // Load DrawIO theme from localStorage after mount to avoid hydration mismatch
+    // Load DrawIO UI preference from localStorage after mount
     useEffect(() => {
         const saved = localStorage.getItem("drawio-theme")
         if (saved === "min" || saved === "sketch") {
             setDrawioUi(saved)
         }
-        // Initialize drawioTheme with current theme only once
-        if (!hasInitializedThemeRef.current) {
-            setDrawioTheme(theme)
-            hasInitializedThemeRef.current = true
-        }
         setIsThemeLoaded(true)
-    }, [theme])
+    }, [])
     const [closeProtection, setCloseProtection] = useState(false)
 
     // Load close protection setting from localStorage after mount
@@ -315,33 +315,6 @@ export default function Home() {
         window.addEventListener("keydown", handleKeyDown)
         return () => window.removeEventListener("keydown", handleKeyDown)
     }, [])
-
-    // Export diagram before page unload/hide
-    useEffect(() => {
-        const handlePageHide = () => {
-            // Try to export current diagram before page closes
-            if (drawioRef && "current" in drawioRef && drawioRef.current) {
-                console.log("[Home] Page hiding, attempting final export...")
-                try {
-                    // Attempt synchronous export using current cached XML
-                    const cached = localStorage.getItem(
-                        "next-ai-draw-io-diagram-xml",
-                    )
-                    if (cached) {
-                        console.log("[Home] Final export: using cached XML")
-                    }
-                } catch (error) {
-                    console.error(
-                        "[Home] Failed to export on page hide:",
-                        error,
-                    )
-                }
-            }
-        }
-
-        window.addEventListener("pagehide", handlePageHide)
-        return () => window.removeEventListener("pagehide", handlePageHide)
-    }, [drawioRef])
 
     // Show confirmation dialog when user tries to leave the page
     // This helps prevent accidental navigation from browser back gestures

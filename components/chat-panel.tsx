@@ -625,20 +625,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
     }, [sessionId])
 
-    // Save current diagram XML to localStorage whenever it changes
-    // Only save after initial restore is complete and if it's not an empty diagram
-    useEffect(() => {
-        if (!canSaveDiagram) return
-        // Don't save empty diagrams (check for minimal content)
-        if (chartXML && chartXML.length > 300) {
-            console.log(
-                "[ChatPanel] Saving diagram to localStorage, length:",
-                chartXML.length,
-            )
-            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
-        }
-    }, [chartXML, canSaveDiagram])
-
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
@@ -646,6 +632,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     }, [messages])
 
     // Save state right before page unload (refresh/close)
+    // Note: Diagram XML is NOT auto-saved here - only manual save and theme/UI switch save
     useEffect(() => {
         const handleBeforeUnload = () => {
             try {
@@ -659,10 +646,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         Array.from(xmlSnapshotsRef.current.entries()),
                     ),
                 )
-                const xml = chartXMLRef.current
-                if (xml && xml.length > 300) {
-                    localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, xml)
-                }
                 localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
             } catch (error) {
                 console.error("Failed to persist state before unload:", error)

@@ -179,6 +179,16 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     fileContent = xmlContent
                     mimeType = "application/xml"
                     extension = ".drawio"
+
+                    // Save to localStorage when user manually saves
+                    console.log(
+                        "[DiagramContext] Manual save - saving to localStorage, length:",
+                        xmlContent.length,
+                    )
+                    localStorage.setItem(
+                        "next-ai-draw-io-diagram-xml",
+                        xmlContent,
+                    )
                 } else if (format === "png") {
                     // PNG data comes as base64 data URL
                     fileContent = exportData
