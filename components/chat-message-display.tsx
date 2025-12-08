@@ -177,10 +177,12 @@ export function ChatMessageDisplay({
             const currentXml = xml || ""
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
-                // If chartXML is empty, use the converted XML directly
-                const replacedXML = chartXML
-                    ? replaceNodes(chartXML, convertedXml)
-                    : convertedXml
+                // If chartXML is empty, create a default mxfile structure to use with replaceNodes
+                // This ensures the XML is properly wrapped in mxfile/diagram/mxGraphModel format
+                const baseXML =
+                    chartXML ||
+                    `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+                const replacedXML = replaceNodes(baseXML, convertedXml)
 
                 const validationError = validateMxCellStructure(replacedXML)
                 if (!validationError) {
