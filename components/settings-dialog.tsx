@@ -1,5 +1,6 @@
 "use client"
 
+import { Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,11 +13,14 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { useTheme } from "@/contexts/theme-context"
 
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     onCloseProtectionChange?: (enabled: boolean) => void
+    drawioUi: "min" | "sketch"
+    onToggleDrawioUi: () => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -34,7 +38,10 @@ export function SettingsDialog({
     open,
     onOpenChange,
     onCloseProtectionChange,
+    drawioUi,
+    onToggleDrawioUi,
 }: SettingsDialogProps) {
+    const { theme, toggleTheme } = useTheme()
     const [accessCode, setAccessCode] = useState("")
     const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
@@ -160,6 +167,47 @@ export function SettingsDialog({
                             )}
                         </div>
                     )}
+
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="theme-toggle">Theme</Label>
+                            <p className="text-[0.8rem] text-muted-foreground">
+                                Dark/Light mode for interface and DrawIO canvas.
+                            </p>
+                        </div>
+                        <Button
+                            id="theme-toggle"
+                            variant="outline"
+                            size="icon"
+                            onClick={toggleTheme}
+                        >
+                            {theme === "light" ? (
+                                <Moon className="h-4 w-4" />
+                            ) : (
+                                <Sun className="h-4 w-4" />
+                            )}
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="drawio-ui">DrawIO Style</Label>
+                            <p className="text-[0.8rem] text-muted-foreground">
+                                Canvas style:{" "}
+                                {drawioUi === "min" ? "Minimal" : "Sketch"}
+                            </p>
+                        </div>
+                        <Button
+                            id="drawio-ui"
+                            variant="outline"
+                            size="sm"
+                            onClick={onToggleDrawioUi}
+                        >
+                            Switch to{" "}
+                            {drawioUi === "min" ? "Sketch" : "Minimal"}
+                        </Button>
+                    </div>
+
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <Label htmlFor="close-protection">

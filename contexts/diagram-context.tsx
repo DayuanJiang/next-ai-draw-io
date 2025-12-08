@@ -24,6 +24,7 @@ interface DiagramContextType {
     ) => void
     isDrawioReady: boolean
     onDrawioLoad: () => void
+    resetDrawioReady: () => void
 }
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
@@ -42,11 +43,19 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const expectHistoryExportRef = useRef<boolean>(false)
 
     const onDrawioLoad = () => {
-        // Reset the flag to allow multiple loads (for theme switching)
-        hasCalledOnLoadRef.current = false
+        // Only set ready state once to prevent infinite loops
+        if (hasCalledOnLoadRef.current) return
+        hasCalledOnLoadRef.current = true
         console.log("[DiagramContext] DrawIO loaded, setting ready state")
         setIsDrawioReady(true)
     }
+
+    const resetDrawioReady = () => {
+        console.log("[DiagramContext] Resetting DrawIO ready state")
+        hasCalledOnLoadRef.current = false
+        setIsDrawioReady(false)
+    }
+
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
         resolver: ((data: string) => void) | null
@@ -250,6 +259,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 saveDiagramToFile,
                 isDrawioReady,
                 onDrawioLoad,
+                resetDrawioReady,
             }}
         >
             {children}

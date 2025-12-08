@@ -4,9 +4,7 @@ import {
     Download,
     History,
     Image as ImageIcon,
-    LayoutGrid,
     Loader2,
-    PenTool,
     Send,
     Trash2,
 } from "lucide-react"
@@ -19,14 +17,6 @@ import { HistoryDialog } from "@/components/history-dialog"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SaveDialog } from "@/components/save-dialog"
 import { Button } from "@/components/ui/button"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { useDiagram } from "@/contexts/diagram-context"
 import { FilePreviewList } from "./file-preview-list"
@@ -123,8 +113,6 @@ interface ChatInputProps {
     onToggleHistory?: (show: boolean) => void
     sessionId?: string
     error?: Error | null
-    drawioUi?: "min" | "sketch"
-    onToggleDrawioUi?: () => void
 }
 
 export function ChatInput({
@@ -139,8 +127,6 @@ export function ChatInput({
     onToggleHistory = () => {},
     sessionId,
     error = null,
-    drawioUi = "min",
-    onToggleDrawioUi = () => {},
 }: ChatInputProps) {
     const { diagramHistory, saveDiagramToFile } = useDiagram()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -148,7 +134,6 @@ export function ChatInput({
     const [isDragging, setIsDragging] = useState(false)
     const [showClearDialog, setShowClearDialog] = useState(false)
     const [showSaveDialog, setShowSaveDialog] = useState(false)
-    const [showThemeWarning, setShowThemeWarning] = useState(false)
 
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
@@ -337,60 +322,6 @@ export function ChatInput({
                             showHistory={showHistory}
                             onToggleHistory={onToggleHistory}
                         />
-
-                        <ButtonWithTooltip
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowThemeWarning(true)}
-                            tooltipContent={
-                                drawioUi === "min"
-                                    ? "Switch to Sketch theme"
-                                    : "Switch to Minimal theme"
-                            }
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                        >
-                            {drawioUi === "min" ? (
-                                <PenTool className="h-4 w-4" />
-                            ) : (
-                                <LayoutGrid className="h-4 w-4" />
-                            )}
-                        </ButtonWithTooltip>
-
-                        <Dialog
-                            open={showThemeWarning}
-                            onOpenChange={setShowThemeWarning}
-                        >
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Switch Theme?</DialogTitle>
-                                    <DialogDescription>
-                                        Switching themes will reload the diagram
-                                        editor and clear any unsaved changes.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() =>
-                                            setShowThemeWarning(false)
-                                        }
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        variant="destructive"
-                                        onClick={() => {
-                                            onClearChat()
-                                            onToggleDrawioUi()
-                                            setShowThemeWarning(false)
-                                        }}
-                                    >
-                                        Switch Theme
-                                    </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
                     </div>
 
                     {/* Right actions */}
