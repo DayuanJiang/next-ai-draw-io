@@ -6,7 +6,7 @@ import {
     lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai"
 import {
-    CheckCircle,
+    AlertTriangle,
     PanelRightClose,
     PanelRightOpen,
     Settings,
@@ -1034,21 +1034,28 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         {!isMobile && (
                             <Link
                                 href="/about"
-                                prefetch={false}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                             >
                                 About
                             </Link>
                         )}
                         {!isMobile && (
-                            <ButtonWithTooltip
-                                tooltipContent="Recent generation failures were caused by our AI provider's infrastructure issue, not the app code. After extensive debugging, I've switched providers and observed 6 hours of stability. If issues persist, please report on GitHub."
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-green-500 hover:text-green-600"
+                            <Link
+                                href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
                             >
-                                <CheckCircle className="h-4 w-4" />
-                            </ButtonWithTooltip>
+                                <ButtonWithTooltip
+                                    tooltipContent="Due to high usage, I have added usage limits. See About page for details."
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                                >
+                                    <AlertTriangle className="h-4 w-4" />
+                                </ButtonWithTooltip>
+                            </Link>
                         )}
                     </div>
                     <div className="flex items-center gap-1">

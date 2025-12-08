@@ -1,6 +1,7 @@
 "use client"
 
 import { Coffee, X } from "lucide-react"
+import Link from "next/link"
 import type React from "react"
 import { FaGithub } from "react-icons/fa"
 
@@ -70,7 +71,15 @@ export function QuotaLimitToast({
                     Oops — you've reached the daily{" "}
                     {isTokenLimit ? "token" : "API"} limit for this demo! As an
                     indie developer covering all the API costs myself, I have to
-                    set these limits to keep things sustainable.
+                    set these limits to keep things sustainable.{" "}
+                    <Link
+                        href="/about"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-amber-600 font-medium hover:text-amber-700 hover:underline"
+                    >
+                        Learn more →
+                    </Link>
                 </p>
                 <p>
                     The good news is that you can self-host the project in

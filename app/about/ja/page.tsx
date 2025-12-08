@@ -93,13 +93,95 @@ export default function AboutJA() {
                         </div>
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-                        <p className="text-amber-800">
-                            本アプリは最高のパフォーマンスを発揮するため、Claude
-                            Opus 4.5
-                            で動作するよう設計されています。しかし、予想以上のトラフィックにより、最上位モデルの運用コストが負担となっています。サービスの中断を避け、コストを管理するため、バックエンドを
-                            Claude Haiku 4.5 に切り替えました。
-                        </p>
+                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-[1px] shadow-lg">
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 opacity-20" />
+                        <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
+                            {/* Header */}
+                            <div className="mb-4">
+                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
+                                    利用制限とスケーリングについて{" "}
+                                    <span className="text-sm text-amber-600 font-medium italic font-normal">
+                                        （別名：お財布が悲鳴を上げています）
+                                    </span>
+                                </h3>
+                            </div>
+
+                            {/* Story */}
+                            <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
+                                <p>
+                                    予想以上の反響をいただき、ありがとうございます！皆様にダイアグラム作成を楽しんでいただいているのは嬉しい限りですが、その熱量により
+                                    AI API のレート制限 (TPS/TPM)
+                                    に頻繁に引っかかってしまっています。制限に達するとシステムが一時停止し、エラーが発生してしまいます。
+                                </p>
+                                <p>
+                                    私は現在、
+                                    <span className="font-semibold text-amber-700">
+                                        個人開発者
+                                    </span>
+                                    として API
+                                    費用を全額自腹で負担しています。サービスを継続し、かつ私自身が借金を背負わないようにするため（笑）、一時的に以下の利用制限を設けさせていただきました。
+                                </p>
+                            </div>
+
+                            {/* Limits Cards */}
+                            <div className="grid grid-cols-2 gap-3 mb-5">
+                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
+                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
+                                        トークン使用量
+                                    </div>
+                                    <div className="text-lg font-bold text-gray-900">
+                                        5万
+                                        <span className="text-sm font-normal text-gray-600">
+                                            /分
+                                        </span>
+                                    </div>
+                                    <div className="text-lg font-bold text-gray-900">
+                                        50万
+                                        <span className="text-sm font-normal text-gray-600">
+                                            /日
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
+                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
+                                        1日のリクエスト数
+                                    </div>
+                                    <div className="text-2xl font-bold text-gray-900">
+                                        20
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                        回
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 my-5">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+                            </div>
+
+                            {/* Sponsorship CTA */}
+                            <div className="text-center">
+                                <h4 className="text-base font-bold text-gray-900 mb-2">
+                                    スポンサー募集
+                                </h4>
+                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
+                                    これらの制限を取り払い、バックエンドをスケールさせるには皆様の支援が必要です。現在、AI
+                                    API
+                                    プロバイダー様やクラウドプラットフォーム様からのスポンサー支援を積極的に募集しています。
+                                </p>
+                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
+                                    ご支援（クレジット提供や資金援助）をいただける場合、GitHub
+                                    リポジトリおよびデモサイトにて、プラットフォームスポンサーとして貴社を大々的にご紹介させていただきます。
+                                </p>
+                                <a
+                                    href="mailto:me@jiang.jp"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+                                >
+                                    お問い合わせ
+                                </a>
+                            </div>
+                        </div>
                     </div>
 
                     <p className="text-gray-700">
