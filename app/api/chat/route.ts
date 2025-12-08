@@ -1,7 +1,10 @@
 import {
+    APICallError,
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    LoadAPIKeyError,
+    NoSuchModelError,
     stepCountIs,
     streamText,
 } from "ai"
@@ -484,6 +487,34 @@ function handleError(error: unknown): Response {
     console.error("Error in chat route:", error)
 
     const isDev = process.env.NODE_ENV === "development"
+
+    // Check for specific AI SDK error types
+    if (APICallError.isInstance(error)) {
+        return Response.json(
+            {
+                error: error.message,
+                ...(isDev && {
+                    details: error.responseBody,
+                    stack: error.stack,
+                }),
+            },
+            { status: error.statusCode || 500 },
+        )
+    }
+
+    if (LoadAPIKeyError.isInstance(error)) {
+        return Response.json(
+            {
+                error: "Authentication failed. Please check your API key.",
+                ...(isDev && {
+                    stack: error.stack,
+                }),
+            },
+            { status: 401 },
+        )
+    }
+
+    // Fallback for other errors with safety filter
     const message =
         error instanceof Error ? error.message : "An unexpected error occurred"
     const status = (error as any)?.statusCode || (error as any)?.status || 500
