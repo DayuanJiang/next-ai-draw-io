@@ -10,7 +10,18 @@ export const metadata: Metadata = {
     keywords: ["AI图表", "draw.io", "AWS架构", "GCP图表", "Azure图表", "LLM"],
 }
 
+function formatNumber(num: number): string {
+    if (num >= 1000) {
+        return `${num / 1000}k`
+    }
+    return num.toString()
+}
+
 export default function AboutCN() {
+    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
+    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
+    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -122,13 +133,13 @@ export default function AboutCN() {
                                         Token 用量
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        5万
+                                        {formatNumber(tpmLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /分钟
                                         </span>
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        50万
+                                        {formatNumber(dailyTokenLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /天
                                         </span>
@@ -139,7 +150,7 @@ export default function AboutCN() {
                                         每日请求数
                                     </div>
                                     <div className="text-2xl font-bold text-gray-900">
-                                        20
+                                        {dailyRequestLimit}
                                     </div>
                                     <div className="text-sm text-gray-600">
                                         次
