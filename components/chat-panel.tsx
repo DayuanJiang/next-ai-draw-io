@@ -475,6 +475,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 friendlyMessage = "Network error. Please check your connection."
             }
 
+            // Translate image not supported error
+            if (friendlyMessage.includes("image content block")) {
+                friendlyMessage = "This model doesn't support image input."
+            }
+
             // Add system message for error so it can be cleared
             setMessages((currentMessages) => {
                 const errorMessage = {
