@@ -283,3 +283,17 @@ export function getAIModel(): ModelConfig {
 
     return { model, providerOptions, headers, modelId }
 }
+
+/**
+ * Check if a model supports prompt caching.
+ * Currently only Claude models on Bedrock support prompt caching.
+ */
+export function supportsPromptCaching(modelId: string): boolean {
+    // Bedrock prompt caching is supported for Claude models
+    return (
+        modelId.includes("claude") ||
+        modelId.includes("anthropic") ||
+        modelId.startsWith("us.anthropic") ||
+        modelId.startsWith("eu.anthropic")
+    )
+}

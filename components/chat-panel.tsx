@@ -40,7 +40,7 @@ const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
-import { formatXML } from "@/lib/utils"
+import { formatXML, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 interface ChatPanelProps {
@@ -340,8 +340,11 @@ export default function ChatPanel({
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
 
+                // Wrap raw XML with full mxfile structure for draw.io
+                const fullXml = wrapWithMxFile(xml)
+
                 // loadDiagram validates and returns error if invalid
-                const validationError = onDisplayChart(xml)
+                const validationError = onDisplayChart(fullXml)
 
                 if (validationError) {
                     console.warn(
@@ -1058,7 +1061,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                                 rel="noopener noreferrer"
                             >
                                 <ButtonWithTooltip
-                                    tooltipContent="Due to high usage, I have added usage limits. See About page for details."
+                                    tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-amber-500 hover:text-amber-600"

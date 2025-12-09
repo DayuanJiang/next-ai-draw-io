@@ -107,6 +107,32 @@ export function convertToLegalXml(xmlString: string): string {
 }
 
 /**
+ * Wrap XML content with the full mxfile structure required by draw.io.
+ * Handles cases where XML is just <root>, <mxGraphModel>, or already has <mxfile>.
+ * @param xml - The XML string (may be partial or complete)
+ * @returns Full mxfile-wrapped XML string
+ */
+export function wrapWithMxFile(xml: string): string {
+    if (!xml) {
+        return `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+    }
+
+    // Already has full structure
+    if (xml.includes("<mxfile")) {
+        return xml
+    }
+
+    // Has mxGraphModel but not mxfile
+    if (xml.includes("<mxGraphModel")) {
+        return `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
+    }
+
+    // Just <root> content - extract inner content and wrap fully
+    const rootContent = xml.replace(/<\/?root>/g, "").trim()
+    return `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${rootContent}</root></mxGraphModel></diagram></mxfile>`
+}
+
+/**
  * Replace nodes in a Draw.io XML diagram
  * @param currentXML - The original Draw.io XML string
  * @param nodes - The XML string containing new nodes to replace in the diagram

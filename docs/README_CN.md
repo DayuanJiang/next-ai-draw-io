@@ -13,6 +13,8 @@
 
 [🚀 在线演示](https://next-ai-drawio.jiang.jp/)
 
+> 注意：由于访问量较大，演示站点目前使用 minimax-m2 模型。如需获得最佳效果，建议使用 Claude Sonnet 4.5 或 Claude Opus 4.5 自行部署。
+
 </div>
 
 一个集成了AI功能的Next.js网页应用，与draw.io图表无缝结合。通过自然语言命令和AI辅助可视化来创建、修改和增强图表。
