@@ -40,7 +40,7 @@ const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
-import { formatXML } from "@/lib/utils"
+import { formatXML, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 interface ChatPanelProps {
@@ -340,8 +340,11 @@ export default function ChatPanel({
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
 
+                // Wrap raw XML with full mxfile structure for draw.io
+                const fullXml = wrapWithMxFile(xml)
+
                 // loadDiagram validates and returns error if invalid
-                const validationError = onDisplayChart(xml)
+                const validationError = onDisplayChart(fullXml)
 
                 if (validationError) {
                     console.warn(
