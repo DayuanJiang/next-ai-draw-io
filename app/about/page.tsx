@@ -17,7 +17,18 @@ export const metadata: Metadata = {
     ],
 }
 
+function formatNumber(num: number): string {
+    if (num >= 1000) {
+        return `${num / 1000}k`
+    }
+    return num.toString()
+}
+
 export default function About() {
+    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
+    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
+    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -99,7 +110,7 @@ export default function About() {
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    Usage Limits & Scaling{" "}
+                                    Model Change & Usage Limits{" "}
                                     <span className="text-sm text-amber-600 font-medium italic font-normal">
                                         (Or: Why My Wallet is Crying)
                                     </span>
@@ -117,6 +128,14 @@ export default function About() {
                                     pauses, leading to failed requests.
                                 </p>
                                 <p>
+                                    Due to the high usage, I have changed the
+                                    model from Claude to{" "}
+                                    <span className="font-semibold text-amber-700">
+                                        minimax-m2
+                                    </span>
+                                    , which is more cost-effective.
+                                </p>
+                                <p>
                                     As an{" "}
                                     <span className="font-semibold text-amber-700">
                                         indie developer
@@ -124,7 +143,7 @@ export default function About() {
                                     , I am currently footing the entire API
                                     bill. To keep the lights on and ensure the
                                     service remains available to everyone
-                                    without sending me into debt, I have
+                                    without sending me into debt, I have also
                                     implemented the following temporary caps:
                                 </p>
                             </div>
@@ -136,13 +155,13 @@ export default function About() {
                                         Token Usage
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        50k
+                                        {formatNumber(tpmLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /min
                                         </span>
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        500k
+                                        {formatNumber(dailyTokenLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /day
                                         </span>
@@ -153,7 +172,7 @@ export default function About() {
                                         Daily Requests
                                     </div>
                                     <div className="text-2xl font-bold text-gray-900">
-                                        20
+                                        {dailyRequestLimit}
                                     </div>
                                     <div className="text-sm text-gray-600">
                                         requests
@@ -163,6 +182,28 @@ export default function About() {
 
                             {/* Divider */}
                             <div className="flex items-center gap-3 my-5">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+                            </div>
+
+                            {/* Bring Your Own Key */}
+                            <div className="text-center mb-5">
+                                <h4 className="text-base font-bold text-gray-900 mb-2">
+                                    Bring Your Own API Key
+                                </h4>
+                                <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
+                                    You can use your own API key to bypass these
+                                    limits. Click the Settings icon in the chat
+                                    panel to configure your provider and API
+                                    key.
+                                </p>
+                                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                    Your key is stored locally in your browser
+                                    and is never stored on the server.
+                                </p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 mb-5">
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 
