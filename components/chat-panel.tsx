@@ -34,7 +34,7 @@ import {
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
-const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
 const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
 const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
@@ -582,13 +582,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     const hasDiagramRestoredRef = useRef(false)
     const [canSaveDiagram, setCanSaveDiagram] = useState(false)
     useEffect(() => {
-        console.log(
-            "[ChatPanel] isDrawioReady:",
-            isDrawioReady,
-            "hasDiagramRestored:",
-            hasDiagramRestoredRef.current,
-        )
-        if (!isDrawioReady || hasDiagramRestoredRef.current) return
+        // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
+        if (!isDrawioReady) {
+            hasDiagramRestoredRef.current = false
+            setCanSaveDiagram(false)
+            return
+        }
+        if (hasDiagramRestoredRef.current) return
         hasDiagramRestoredRef.current = true
 
         try {
@@ -629,6 +629,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages])
 
+    // Save diagram XML to localStorage whenever it changes
+    useEffect(() => {
+        if (!canSaveDiagram) return
+        if (chartXML && chartXML.length > 300) {
+            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
+        }
+    }, [chartXML, canSaveDiagram])
+
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
         try {
@@ -657,7 +665,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     }, [messages])
 
     // Save state right before page unload (refresh/close)
-    // Note: Diagram XML is NOT auto-saved here - only manual save and theme/UI switch save
     useEffect(() => {
         const handleBeforeUnload = () => {
             try {
@@ -671,6 +678,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         Array.from(xmlSnapshotsRef.current.entries()),
                     ),
                 )
+                const xml = chartXMLRef.current
+                if (xml && xml.length > 300) {
+                    localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, xml)
+                }
                 localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
             } catch (error) {
                 console.error("Failed to persist state before unload:", error)
