@@ -17,7 +17,18 @@ export const metadata: Metadata = {
     ],
 }
 
+function formatNumber(num: number): string {
+    if (num >= 1000) {
+        return `${num / 1000}k`
+    }
+    return num.toString()
+}
+
 export default function About() {
+    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
+    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
+    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -136,13 +147,13 @@ export default function About() {
                                         Token Usage
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        50k
+                                        {formatNumber(tpmLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /min
                                         </span>
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        500k
+                                        {formatNumber(dailyTokenLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /day
                                         </span>
@@ -153,7 +164,7 @@ export default function About() {
                                         Daily Requests
                                     </div>
                                     <div className="text-2xl font-bold text-gray-900">
-                                        20
+                                        {dailyRequestLimit}
                                     </div>
                                     <div className="text-sm text-gray-600">
                                         requests
