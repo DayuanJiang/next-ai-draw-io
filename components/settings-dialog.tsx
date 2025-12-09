@@ -20,7 +20,6 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useTheme } from "@/contexts/theme-context"
 
 interface SettingsDialogProps {
     open: boolean
@@ -28,6 +27,8 @@ interface SettingsDialogProps {
     onCloseProtectionChange?: (enabled: boolean) => void
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
+    darkMode: boolean
+    onToggleDarkMode: () => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -51,8 +52,9 @@ export function SettingsDialog({
     onCloseProtectionChange,
     drawioUi,
     onToggleDrawioUi,
+    darkMode,
+    onToggleDarkMode,
 }: SettingsDialogProps) {
-    const { theme, toggleTheme } = useTheme()
     const [accessCode, setAccessCode] = useState("")
     const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
@@ -376,12 +378,12 @@ export function SettingsDialog({
                             id="theme-toggle"
                             variant="outline"
                             size="icon"
-                            onClick={toggleTheme}
+                            onClick={onToggleDarkMode}
                         >
-                            {theme === "light" ? (
-                                <Moon className="h-4 w-4" />
-                            ) : (
+                            {darkMode ? (
                                 <Sun className="h-4 w-4" />
+                            ) : (
+                                <Moon className="h-4 w-4" />
                             )}
                         </Button>
                     </div>

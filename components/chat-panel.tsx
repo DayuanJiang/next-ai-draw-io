@@ -52,6 +52,8 @@ interface ChatPanelProps {
     onToggleVisibility: () => void
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
+    darkMode: boolean
+    onToggleDarkMode: () => void
     isMobile?: boolean
     onCloseProtectionChange?: (enabled: boolean) => void
 }
@@ -61,6 +63,8 @@ export default function ChatPanel({
     onToggleVisibility,
     drawioUi,
     onToggleDrawioUi,
+    darkMode,
+    onToggleDarkMode,
     isMobile = false,
     onCloseProtectionChange,
 }: ChatPanelProps) {
@@ -1207,6 +1211,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 onCloseProtectionChange={onCloseProtectionChange}
                 drawioUi={drawioUi}
                 onToggleDrawioUi={onToggleDrawioUi}
+                darkMode={darkMode}
+                onToggleDarkMode={onToggleDarkMode}
             />
         </div>
     )

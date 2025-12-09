@@ -10,7 +10,6 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
-import { useTheme } from "@/contexts/theme-context"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
@@ -18,17 +17,12 @@ const drawioBaseUrl =
 export default function Home() {
     const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
         useDiagram()
-    const { theme } = useTheme()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
-    const [isThemeLoaded, setIsThemeLoaded] = useState(false)
-    const [drawioKey, setDrawioKey] = useState(0)
+    const [darkMode, setDarkMode] = useState(false)
+    const [isLoaded, setIsLoaded] = useState(false)
     const [closeProtection, setCloseProtection] = useState(false)
-
-    // Use a separate state for DrawIO's theme to prevent premature updates
-    // Initialize with fixed default to avoid SSR hydration mismatch
-    const [drawioTheme, setDrawioTheme] = useState<"light" | "dark">("light")
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
 
@@ -39,12 +33,10 @@ export default function Home() {
             setDrawioUi(savedUi)
         }
 
-        // Sync drawioTheme with stored preference or system preference
-        const savedTheme = localStorage.getItem("theme-preference")
-        if (savedTheme === "dark" || savedTheme === "light") {
-            setDrawioTheme(savedTheme)
-        } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-            setDrawioTheme("dark")
+        const savedDarkMode = localStorage.getItem("dark-mode")
+        if (savedDarkMode === "true") {
+            setDarkMode(true)
+            document.documentElement.classList.add("dark")
         }
 
         const savedCloseProtection = localStorage.getItem(
@@ -54,28 +46,17 @@ export default function Home() {
             setCloseProtection(true)
         }
 
-        setIsThemeLoaded(true)
+        setIsLoaded(true)
     }, [])
 
-    // When theme changes, reload DrawIO
-    // chat-panel.tsx handles saving/restoring diagram via localStorage
-    useEffect(() => {
-        if (theme !== drawioTheme && isThemeLoaded) {
-            resetDrawioReady() // Reset so onDrawioLoad fires again
-            setDrawioTheme(theme)
-            setDrawioKey((k) => k + 1)
-        }
-    }, [theme, drawioTheme, isThemeLoaded, resetDrawioReady])
-
-    // When UI style changes, reload DrawIO
-    const prevDrawioUiRef = useRef(drawioUi)
-    useEffect(() => {
-        if (prevDrawioUiRef.current !== drawioUi && isThemeLoaded) {
-            resetDrawioReady() // Reset so onDrawioLoad fires again
-            setDrawioKey((k) => k + 1)
-        }
-        prevDrawioUiRef.current = drawioUi
-    }, [drawioUi, isThemeLoaded, resetDrawioReady])
+    const toggleDarkMode = () => {
+        const newValue = !darkMode
+        setDarkMode(newValue)
+        localStorage.setItem("dark-mode", String(newValue))
+        document.documentElement.classList.toggle("dark", newValue)
+        // Reset so onDrawioLoad fires again after remount
+        resetDrawioReady()
+    }
 
     // Check mobile
     useEffect(() => {
@@ -143,9 +124,9 @@ export default function Home() {
                         }`}
                     >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30">
-                            {isThemeLoaded ? (
+                            {isLoaded ? (
                                 <DrawIoEmbed
-                                    key={drawioKey}
+                                    key={`${drawioUi}-${darkMode}`}
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
@@ -156,7 +137,7 @@ export default function Home() {
                                         libraries: false,
                                         saveAndExit: false,
                                         noExitBtn: true,
-                                        dark: drawioTheme === "dark",
+                                        dark: darkMode,
                                     }}
                                 />
                             ) : (
@@ -191,7 +172,10 @@ export default function Home() {
                                     drawioUi === "min" ? "sketch" : "min"
                                 localStorage.setItem("drawio-theme", newUi)
                                 setDrawioUi(newUi)
+                                resetDrawioReady()
                             }}
+                            darkMode={darkMode}
+                            onToggleDarkMode={toggleDarkMode}
                             isMobile={isMobile}
                             onCloseProtectionChange={setCloseProtection}
                         />
