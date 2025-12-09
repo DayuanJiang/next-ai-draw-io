@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
+import { STORAGE_DIAGRAM_XML_KEY } from "@/components/chat-panel"
 import type { ExportFormat } from "@/components/save-dialog"
 import { extractDiagramXML, validateMxCellStructure } from "../lib/utils"
 
@@ -181,10 +182,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     extension = ".drawio"
 
                     // Save to localStorage when user manually saves
-                    localStorage.setItem(
-                        "next-ai-draw-io-diagram-xml",
-                        xmlContent,
-                    )
+                    localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, xmlContent)
                 } else if (format === "png") {
                     // PNG data comes as base64 data URL
                     fileContent = exportData

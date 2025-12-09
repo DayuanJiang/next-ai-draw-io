@@ -33,10 +33,19 @@ export default function Home() {
             setDrawioUi(savedUi)
         }
 
-        const savedDarkMode = localStorage.getItem("dark-mode")
-        if (savedDarkMode === "true") {
-            setDarkMode(true)
-            document.documentElement.classList.add("dark")
+        const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
+        if (savedDarkMode !== null) {
+            // Use saved preference
+            const isDark = savedDarkMode === "true"
+            setDarkMode(isDark)
+            document.documentElement.classList.toggle("dark", isDark)
+        } else {
+            // First visit: match browser preference
+            const prefersDark = window.matchMedia(
+                "(prefers-color-scheme: dark)",
+            ).matches
+            setDarkMode(prefersDark)
+            document.documentElement.classList.toggle("dark", prefersDark)
         }
 
         const savedCloseProtection = localStorage.getItem(
@@ -52,7 +61,7 @@ export default function Home() {
     const toggleDarkMode = () => {
         const newValue = !darkMode
         setDarkMode(newValue)
-        localStorage.setItem("dark-mode", String(newValue))
+        localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
         // Reset so onDrawioLoad fires again after remount
         resetDrawioReady()
