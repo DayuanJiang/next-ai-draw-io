@@ -94,7 +94,9 @@ No installation needed! Try the app directly on our demo site:
 
 [![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> Note: Due to high traffic, the demo site currently uses Claude Haiku 4.5. For best results, we recommend self-hosting with Claude Opus 4.5.
+> Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
+
+> **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
 
 ### Run with Docker (Recommended)
 
@@ -123,6 +125,8 @@ docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:l
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
+
+> **Offline Deployment:** If `embed.diagrams.net` is blocked, see [Offline Deployment](./docs/offline-deployment.md) for configuration options.
 
 ### Installation
 

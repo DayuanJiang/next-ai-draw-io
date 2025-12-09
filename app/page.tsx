@@ -15,6 +15,9 @@ import { useTheme } from "@/contexts/theme-context"
 // Minimum XML length to consider valid (avoid saving empty/partial diagrams)
 const MIN_XML_LENGTH = 300
 
+const drawioBaseUrl =
+    process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
+
 export default function Home() {
     const {
         drawioRef,
@@ -342,6 +345,7 @@ export default function Home() {
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
+                                    baseUrl={drawioBaseUrl}
                                     urlParameters={{
                                         ui: drawioUi,
                                         spin: true,

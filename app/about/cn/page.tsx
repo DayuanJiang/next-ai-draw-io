@@ -10,7 +10,18 @@ export const metadata: Metadata = {
     keywords: ["AI图表", "draw.io", "AWS架构", "GCP图表", "Azure图表", "LLM"],
 }
 
+function formatNumber(num: number): string {
+    if (num >= 1000) {
+        return `${num / 1000}k`
+    }
+    return num.toString()
+}
+
 export default function AboutCN() {
+    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
+    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
+    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -91,7 +102,7 @@ export default function AboutCN() {
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    关于扩容与限制{" "}
+                                    模型变更与用量限制{" "}
                                     <span className="text-sm text-amber-600 font-medium italic font-normal">
                                         (或者说：我的钱包顶不住了)
                                     </span>
@@ -106,12 +117,19 @@ export default function AboutCN() {
                                     (TPS/TPM)。一旦超限，系统就会暂停，导致请求失败。
                                 </p>
                                 <p>
+                                    由于使用量过高，我已将模型从 Claude 更换为{" "}
+                                    <span className="font-semibold text-amber-700">
+                                        minimax-m2
+                                    </span>
+                                    ，以降低成本。
+                                </p>
+                                <p>
                                     作为一个
                                     <span className="font-semibold text-amber-700">
                                         独立开发者
                                     </span>
                                     ，目前的 API
-                                    费用全是我自己在掏腰包（纯属为爱发电）。为了保证服务能细水长流，同时也为了避免我个人陷入财务危机，我不得不设置以下临时用量限制：
+                                    费用全是我自己在掏腰包（纯属为爱发电）。为了保证服务能细水长流，同时也为了避免我个人陷入财务危机，我还设置了以下临时用量限制：
                                 </p>
                             </div>
 
@@ -122,13 +140,13 @@ export default function AboutCN() {
                                         Token 用量
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        5万
+                                        {formatNumber(tpmLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /分钟
                                         </span>
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        50万
+                                        {formatNumber(dailyTokenLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /天
                                         </span>
@@ -139,7 +157,7 @@ export default function AboutCN() {
                                         每日请求数
                                     </div>
                                     <div className="text-2xl font-bold text-gray-900">
-                                        20
+                                        {dailyRequestLimit}
                                     </div>
                                     <div className="text-sm text-gray-600">
                                         次
@@ -149,6 +167,27 @@ export default function AboutCN() {
 
                             {/* Divider */}
                             <div className="flex items-center gap-3 my-5">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+                            </div>
+
+                            {/* Bring Your Own Key */}
+                            <div className="text-center mb-5">
+                                <h4 className="text-base font-bold text-gray-900 mb-2">
+                                    使用自己的 API Key
+                                </h4>
+                                <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
+                                    您可以使用自己的 API Key
+                                    来绕过这些限制。点击聊天面板中的设置图标即可配置您的
+                                    Provider 和 API Key。
+                                </p>
+                                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                    您的 Key
+                                    仅保存在浏览器本地，不会被存储在服务器上。
+                                </p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 mb-5">
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 

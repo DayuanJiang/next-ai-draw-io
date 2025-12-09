@@ -8,7 +8,7 @@ import {
     streamText,
 } from "ai"
 import { z } from "zod"
-import { getAIModel } from "@/lib/ai-providers"
+import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
     getTelemetryConfig,
@@ -199,8 +199,23 @@ async function handleChatRequest(req: Request): Promise<Response> {
     }
     // === CACHE CHECK END ===
 
-    // Get AI model from environment configuration
-    const { model, providerOptions, headers, modelId } = getAIModel()
+    // Read client AI provider overrides from headers
+    const clientOverrides = {
+        provider: req.headers.get("x-ai-provider"),
+        baseUrl: req.headers.get("x-ai-base-url"),
+        apiKey: req.headers.get("x-ai-api-key"),
+        modelId: req.headers.get("x-ai-model"),
+    }
+
+    // Get AI model with optional client overrides
+    const { model, providerOptions, headers, modelId } =
+        getAIModel(clientOverrides)
+
+    // Check if model supports prompt caching
+    const shouldCache = supportsPromptCaching(modelId)
+    console.log(
+        `[Prompt Caching] ${shouldCache ? "ENABLED" : "DISABLED"} for model: ${modelId}`,
+    )
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId)
@@ -262,7 +277,7 @@ ${lastMessageText}
     // Add cache point to the last assistant message in conversation history
     // This caches the entire conversation prefix for subsequent requests
     // Strategy: system (cached) + history with last assistant (cached) + new user message
-    if (enhancedMessages.length >= 2) {
+    if (shouldCache && enhancedMessages.length >= 2) {
         // Find the last assistant message (should be second-to-last, before current user message)
         for (let i = enhancedMessages.length - 2; i >= 0; i--) {
             if (enhancedMessages[i].role === "assistant") {
@@ -287,17 +302,21 @@ ${lastMessageText}
         {
             role: "system" as const,
             content: systemMessage,
-            providerOptions: {
-                bedrock: { cachePoint: { type: "default" } },
-            },
+            ...(shouldCache && {
+                providerOptions: {
+                    bedrock: { cachePoint: { type: "default" } },
+                },
+            }),
         },
         // Cache breakpoint 2: Current diagram XML context
         {
             role: "system" as const,
             content: `Current diagram XML:\n"""xml\n${xml || ""}\n"""\nWhen using edit_diagram, COPY search patterns exactly from this XML - attribute order matters!`,
-            providerOptions: {
-                bedrock: { cachePoint: { type: "default" } },
-            },
+            ...(shouldCache && {
+                providerOptions: {
+                    bedrock: { cachePoint: { type: "default" } },
+                },
+            }),
         },
     ]
 
