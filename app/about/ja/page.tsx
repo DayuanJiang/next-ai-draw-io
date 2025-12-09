@@ -110,7 +110,7 @@ export default function AboutJA() {
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    利用制限とスケーリングについて{" "}
+                                    モデル変更と利用制限について{" "}
                                     <span className="text-sm text-amber-600 font-medium italic font-normal">
                                         （別名：お財布が悲鳴を上げています）
                                     </span>
@@ -125,12 +125,20 @@ export default function AboutJA() {
                                     に頻繁に引っかかってしまっています。制限に達するとシステムが一時停止し、エラーが発生してしまいます。
                                 </p>
                                 <p>
+                                    利用量の増加に伴い、コスト削減のためモデルを
+                                    Claude から{" "}
+                                    <span className="font-semibold text-amber-700">
+                                        minimax-m2
+                                    </span>{" "}
+                                    に変更しました。
+                                </p>
+                                <p>
                                     私は現在、
                                     <span className="font-semibold text-amber-700">
                                         個人開発者
                                     </span>
                                     として API
-                                    費用を全額自腹で負担しています。サービスを継続し、かつ私自身が借金を背負わないようにするため（笑）、一時的に以下の利用制限を設けさせていただきました。
+                                    費用を全額自腹で負担しています。サービスを継続し、かつ私自身が借金を背負わないようにするため（笑）、一時的に以下の利用制限も設けさせていただきました。
                                 </p>
                             </div>
 

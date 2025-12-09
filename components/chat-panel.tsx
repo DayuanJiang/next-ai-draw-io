@@ -1061,7 +1061,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                                 rel="noopener noreferrer"
                             >
                                 <ButtonWithTooltip
-                                    tooltipContent="Due to high usage, I have added usage limits. See About page for details."
+                                    tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-amber-500 hover:text-amber-600"

@@ -102,7 +102,7 @@ export default function AboutCN() {
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    关于扩容与限制{" "}
+                                    模型变更与用量限制{" "}
                                     <span className="text-sm text-amber-600 font-medium italic font-normal">
                                         (或者说：我的钱包顶不住了)
                                     </span>
@@ -117,12 +117,19 @@ export default function AboutCN() {
                                     (TPS/TPM)。一旦超限，系统就会暂停，导致请求失败。
                                 </p>
                                 <p>
+                                    由于使用量过高，我已将模型从 Claude 更换为{" "}
+                                    <span className="font-semibold text-amber-700">
+                                        minimax-m2
+                                    </span>
+                                    ，以降低成本。
+                                </p>
+                                <p>
                                     作为一个
                                     <span className="font-semibold text-amber-700">
                                         独立开发者
                                     </span>
                                     ，目前的 API
-                                    费用全是我自己在掏腰包（纯属为爱发电）。为了保证服务能细水长流，同时也为了避免我个人陷入财务危机，我不得不设置以下临时用量限制：
+                                    费用全是我自己在掏腰包（纯属为爱发电）。为了保证服务能细水长流，同时也为了避免我个人陷入财务危机，我还设置了以下临时用量限制：
                                 </p>
                             </div>
 

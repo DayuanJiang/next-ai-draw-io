@@ -110,7 +110,7 @@ export default function About() {
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    Usage Limits & Scaling{" "}
+                                    Model Change & Usage Limits{" "}
                                     <span className="text-sm text-amber-600 font-medium italic font-normal">
                                         (Or: Why My Wallet is Crying)
                                     </span>
@@ -128,6 +128,14 @@ export default function About() {
                                     pauses, leading to failed requests.
                                 </p>
                                 <p>
+                                    Due to the high usage, I have changed the
+                                    model from Claude to{" "}
+                                    <span className="font-semibold text-amber-700">
+                                        minimax-m2
+                                    </span>
+                                    , which is more cost-effective.
+                                </p>
+                                <p>
                                     As an{" "}
                                     <span className="font-semibold text-amber-700">
                                         indie developer
@@ -135,7 +143,7 @@ export default function About() {
                                     , I am currently footing the entire API
                                     bill. To keep the lights on and ensure the
                                     service remains available to everyone
-                                    without sending me into debt, I have
+                                    without sending me into debt, I have also
                                     implemented the following temporary caps:
                                 </p>
                             </div>

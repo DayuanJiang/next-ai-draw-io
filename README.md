@@ -94,7 +94,7 @@ No installation needed! Try the app directly on our demo site:
 
 [![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> Note: Due to high traffic, the demo site currently uses Claude Haiku 4.5. For best results, we recommend self-hosting with Claude Opus 4.5.
+> Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
 
 ### Run with Docker (Recommended)
 
