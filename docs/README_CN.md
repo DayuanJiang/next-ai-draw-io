@@ -4,24 +4,78 @@
 
 **AI驱动的图表创建工具 - 对话、绘制、可视化**
 
-[English](./README.md) | 中文 | [日本語](./README_JA.md)
+[English](../README.md) | 中文 | [日本語](./README_JA.md)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Next.js](https://img.shields.io/badge/Next.js-15.x-black)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Next.js](https://img.shields.io/badge/Next.js-16.x-black)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[🚀 在线演示](https://next-ai-drawio.jiang.jp/)
-
-> 注意：由于访问量较大，演示站点目前使用 minimax-m2 模型。如需获得最佳效果，建议使用 Claude Sonnet 4.5 或 Claude Opus 4.5 自行部署。
-
-> **使用自己的 API Key**：您可以使用自己的 API Key 来绕过演示站点的用量限制。点击聊天面板中的设置图标即可配置您的 Provider 和 API Key。您的 Key 仅保存在浏览器本地，不会被存储在服务器上。
+[![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
 </div>
 
 一个集成了AI功能的Next.js网页应用，与draw.io图表无缝结合。通过自然语言命令和AI辅助可视化来创建、修改和增强图表。
 
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+
+## 目录
+- [Next AI Draw.io](#next-ai-drawio)
+  - [目录](#目录)
+  - [示例](#示例)
+  - [功能特性](#功能特性)
+  - [快速开始](#快速开始)
+    - [在线试用](#在线试用)
+    - [使用Docker运行（推荐）](#使用docker运行推荐)
+    - [安装](#安装)
+  - [部署](#部署)
+  - [多提供商支持](#多提供商支持)
+  - [工作原理](#工作原理)
+  - [项目结构](#项目结构)
+  - [支持与联系](#支持与联系)
+  - [Star历史](#star历史)
+
+## 示例
+
+以下是一些示例提示词及其生成的图表：
+
+<div align="center">
+<table width="100%">
+  <tr>
+    <td colspan="2" valign="top" align="center">
+      <strong>动画Transformer连接器</strong><br />
+      <p><strong>提示词：</strong> 给我一个带有**动画连接器**的Transformer架构图。</p>
+      <img src="../public/animated_connectors.svg" alt="带动画连接器的Transformer架构" width="480" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>GCP架构图</strong><br />
+      <p><strong>提示词：</strong> 使用**GCP图标**生成一个GCP架构图。在这个图中，用户连接到托管在实例上的前端。</p>
+      <img src="../public/gcp_demo.svg" alt="GCP架构图" width="480" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>AWS架构图</strong><br />
+      <p><strong>提示词：</strong> 使用**AWS图标**生成一个AWS架构图。在这个图中，用户连接到托管在实例上的前端。</p>
+      <img src="../public/aws_demo.svg" alt="AWS架构图" width="480" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Azure架构图</strong><br />
+      <p><strong>提示词：</strong> 使用**Azure图标**生成一个Azure架构图。在这个图中，用户连接到托管在实例上的前端。</p>
+      <img src="../public/azure_demo.svg" alt="Azure架构图" width="480" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>猫咪素描</strong><br />
+      <p><strong>提示词：</strong> 给我画一只可爱的猫。</p>
+      <img src="../public/cat_demo.svg" alt="猫咪绘图" width="240" />
+    </td>
+  </tr>
+</table>
+</div>
 
 ## 功能特性
 
@@ -32,77 +86,17 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **AWS架构图支持**：专门支持生成AWS架构图
 -   **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
 
-## **示例**
-
-以下是一些示例提示词及其生成的图表：
-
-<div align="center">
-<table width="100%">
-  <tr>
-    <td colspan="2" valign="top" align="center">
-      <strong>动画Transformer连接器</strong><br />
-      <p><strong>提示词：</strong> 给我一个带有**动画连接器**的Transformer架构图。</p>
-      <img src="./public/animated_connectors.svg" alt="带动画连接器的Transformer架构" width="480" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>GCP架构图</strong><br />
-      <p><strong>提示词：</strong> 使用**GCP图标**生成一个GCP架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="./public/gcp_demo.svg" alt="GCP架构图" width="480" />
-    </td>
-    <td width="50%" valign="top">
-      <strong>AWS架构图</strong><br />
-      <p><strong>提示词：</strong> 使用**AWS图标**生成一个AWS架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="./public/aws_demo.svg" alt="AWS架构图" width="480" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>Azure架构图</strong><br />
-      <p><strong>提示词：</strong> 使用**Azure图标**生成一个Azure架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="./public/azure_demo.svg" alt="Azure架构图" width="480" />
-    </td>
-    <td width="50%" valign="top">
-      <strong>猫咪素描</strong><br />
-      <p><strong>提示词：</strong> 给我画一只可爱的猫。</p>
-      <img src="./public/cat_demo.svg" alt="猫咪绘图" width="240" />
-    </td>
-  </tr>
-</table>
-</div>
-
-## 工作原理
-
-本应用使用以下技术：
-
--   **Next.js**：用于前端框架和路由
--   **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：用于流式AI响应和多提供商支持
--   **react-drawio**：用于图表表示和操作
-
-图表以XML格式表示，可在draw.io中渲染。AI处理您的命令并相应地生成或修改此XML。
-
-## 多提供商支持
-
--   AWS Bedrock（默认）
--   OpenAI
--   Anthropic
--   Google AI
--   Azure OpenAI
--   Ollama
--   OpenRouter
--   DeepSeek
--   SiliconFlow
-
-除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
-
-📖 **[详细的提供商配置指南](./docs/ai-providers.md)** - 查看各提供商的设置说明。
-
-**模型要求**：此任务需要强大的模型能力，因为它涉及生成具有严格格式约束的长文本（draw.io XML）。推荐使用Claude Sonnet 4.5、GPT-4o、Gemini 2.0和DeepSeek V3/R1。
-
-注意：`claude-sonnet-4-5` 已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。
-
 ## 快速开始
+
+### 在线试用
+
+无需安装！直接在我们的演示站点试用：
+
+[![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+
+> 注意：由于访问量较大，演示站点目前使用 minimax-m2 模型。如需获得最佳效果，建议使用 Claude Sonnet 4.5 或 Claude Opus 4.5 自行部署。
+
+> **使用自己的 API Key**：您可以使用自己的 API Key 来绕过演示站点的用量限制。点击聊天面板中的设置图标即可配置您的 Provider 和 API Key。您的 Key 仅保存在浏览器本地，不会被存储在服务器上。
 
 ### 使用Docker运行（推荐）
 
@@ -120,9 +114,19 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
+或者使用 env 文件（从 `env.example` 创建）：
+
+```bash
+cp env.example .env
+# 编辑 .env 填写您的配置
+docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
 在浏览器中打开 [http://localhost:3000](http://localhost:3000)。
 
 请根据您首选的AI提供商配置替换环境变量。可用选项请参阅[多提供商支持](#多提供商支持)。
+
+> **离线部署：** 如果 `embed.diagrams.net` 被屏蔽，请参阅 [离线部署指南](./offline-deployment.md) 了解配置选项。
 
 ### 安装
 
@@ -137,8 +141,6 @@ cd next-ai-draw-io
 
 ```bash
 npm install
-# 或
-yarn install
 ```
 
 3. 配置您的AI提供商：
@@ -159,7 +161,7 @@ cp env.example .env.local
 
 > 警告：如果不填写 `ACCESS_CODE_LIST`，则任何人都可以直接使用你部署后的网站，可能会导致你的 token 被急速消耗完毕，建议填写此选项。
 
-详细设置说明请参阅[提供商配置指南](./docs/ai-providers.md)。
+详细设置说明请参阅[提供商配置指南](./ai-providers.md)。
 
 4. 运行开发服务器：
 
@@ -180,6 +182,38 @@ npm run dev
 
 请确保在Vercel控制台中**设置环境变量**，就像您在本地 `.env.local` 文件中所做的那样。
 
+
+## 多提供商支持
+
+-   AWS Bedrock（默认）
+-   OpenAI
+-   Anthropic
+-   Google AI
+-   Azure OpenAI
+-   Ollama
+-   OpenRouter
+-   DeepSeek
+-   SiliconFlow
+
+除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
+
+📖 **[详细的提供商配置指南](./ai-providers.md)** - 查看各提供商的设置说明。
+
+**模型要求**：此任务需要强大的模型能力，因为它涉及生成具有严格格式约束的长文本（draw.io XML）。推荐使用Claude Sonnet 4.5、GPT-4o、Gemini 2.0和DeepSeek V3/R1。
+
+注意：`claude-sonnet-4-5` 已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。
+
+
+## 工作原理
+
+本应用使用以下技术：
+
+-   **Next.js**：用于前端框架和路由
+-   **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：用于流式AI响应和多提供商支持
+-   **react-drawio**：用于图表表示和操作
+
+图表以XML格式表示，可在draw.io中渲染。AI处理您的命令并相应地生成或修改此XML。
+
 ## 项目结构
 
 ```
@@ -198,14 +232,6 @@ lib/                  # 工具函数和辅助程序
   utils.ts            # XML处理和转换工具
 public/               # 静态资源包括示例图片
 ```
-
-## 待办事项
-
--   [x] 允许LLM修改XML而不是每次从头生成
--   [x] 提高形状流式更新的流畅度
--   [x] 添加多AI提供商支持（OpenAI, Anthropic, Google, Azure, Ollama）
--   [x] 解决超过60秒的会话生成失败的bug
--   [ ] 在UI上添加API配置
 
 ## 支持与联系
 
