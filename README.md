@@ -199,9 +199,9 @@ All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
 📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
 
-**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-4o, Gemini 2.0, and DeepSeek V3/R1.
+**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-5.1, Gemini 3 Pro, and DeepSeek V3.2/R1.
 
-Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
+Note that `claude` series has trained on draw.io diagrams with cloud architecture logos like AWS, Azue, GCP. So if you want to create cloud architecture diagrams, this is the best choice.
 
 
 ## How It Works
