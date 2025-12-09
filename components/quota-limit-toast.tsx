@@ -82,9 +82,9 @@ export function QuotaLimitToast({
                     </Link>
                 </p>
                 <p>
-                    The good news is that you can self-host the project in
-                    seconds on Vercel (it's fully open-source), or if you love
-                    it, consider sponsoring to help keep the lights on!
+                    <strong>Tip:</strong> You can use your own API key (click
+                    the Settings icon) or self-host the project to bypass these
+                    limits.
                 </p>
                 <p>Your limit resets tomorrow. Thanks for understanding!</p>
             </div>

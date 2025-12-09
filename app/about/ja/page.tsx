@@ -17,7 +17,18 @@ export const metadata: Metadata = {
     ],
 }
 
+function formatNumber(num: number): string {
+    if (num >= 1000) {
+        return `${num / 1000}k`
+    }
+    return num.toString()
+}
+
 export default function AboutJA() {
+    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
+    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
+    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -99,7 +110,7 @@ export default function AboutJA() {
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    利用制限とスケーリングについて{" "}
+                                    モデル変更と利用制限について{" "}
                                     <span className="text-sm text-amber-600 font-medium italic font-normal">
                                         （別名：お財布が悲鳴を上げています）
                                     </span>
@@ -114,12 +125,20 @@ export default function AboutJA() {
                                     に頻繁に引っかかってしまっています。制限に達するとシステムが一時停止し、エラーが発生してしまいます。
                                 </p>
                                 <p>
+                                    利用量の増加に伴い、コスト削減のためモデルを
+                                    Claude から{" "}
+                                    <span className="font-semibold text-amber-700">
+                                        minimax-m2
+                                    </span>{" "}
+                                    に変更しました。
+                                </p>
+                                <p>
                                     私は現在、
                                     <span className="font-semibold text-amber-700">
                                         個人開発者
                                     </span>
                                     として API
-                                    費用を全額自腹で負担しています。サービスを継続し、かつ私自身が借金を背負わないようにするため（笑）、一時的に以下の利用制限を設けさせていただきました。
+                                    費用を全額自腹で負担しています。サービスを継続し、かつ私自身が借金を背負わないようにするため（笑）、一時的に以下の利用制限も設けさせていただきました。
                                 </p>
                             </div>
 
@@ -130,13 +149,13 @@ export default function AboutJA() {
                                         トークン使用量
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        5万
+                                        {formatNumber(tpmLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /分
                                         </span>
                                     </div>
                                     <div className="text-lg font-bold text-gray-900">
-                                        50万
+                                        {formatNumber(dailyTokenLimit)}
                                         <span className="text-sm font-normal text-gray-600">
                                             /日
                                         </span>
@@ -147,7 +166,7 @@ export default function AboutJA() {
                                         1日のリクエスト数
                                     </div>
                                     <div className="text-2xl font-bold text-gray-900">
-                                        20
+                                        {dailyRequestLimit}
                                     </div>
                                     <div className="text-sm text-gray-600">
                                         回
@@ -157,6 +176,24 @@ export default function AboutJA() {
 
                             {/* Divider */}
                             <div className="flex items-center gap-3 my-5">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+                            </div>
+
+                            {/* Bring Your Own Key */}
+                            <div className="text-center mb-5">
+                                <h4 className="text-base font-bold text-gray-900 mb-2">
+                                    自分のAPIキーを使用
+                                </h4>
+                                <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
+                                    自分のAPIキーを使用することで、これらの制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。
+                                </p>
+                                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                    キーはブラウザのローカルに保存され、サーバーには保存されません。
+                                </p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 mb-5">
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 

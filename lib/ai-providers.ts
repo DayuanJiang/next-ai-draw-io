@@ -26,6 +26,24 @@ interface ModelConfig {
     modelId: string
 }
 
+export interface ClientOverrides {
+    provider?: string | null
+    baseUrl?: string | null
+    apiKey?: string | null
+    modelId?: string | null
+}
+
+// Providers that can be used with client-provided API keys
+const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
+    "openai",
+    "anthropic",
+    "google",
+    "azure",
+    "openrouter",
+    "deepseek",
+    "siliconflow",
+]
+
 // Bedrock provider options for Anthropic beta features
 const BEDROCK_ANTHROPIC_BETA = {
     bedrock: {
@@ -261,18 +279,39 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - SILICONFLOW_API_KEY: SiliconFlow API key
  * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.com/v1)
  */
-export function getAIModel(): ModelConfig {
-    const modelId = process.env.AI_MODEL
+export function getAIModel(overrides?: ClientOverrides): ModelConfig {
+    // Check if client is providing their own provider override
+    const isClientOverride = !!(overrides?.provider && overrides?.apiKey)
+
+    // Use client override if provided, otherwise fall back to env vars
+    const modelId = overrides?.modelId || process.env.AI_MODEL
 
     if (!modelId) {
+        if (isClientOverride) {
+            throw new Error(
+                `Model ID is required when using custom AI provider. Please specify a model in Settings.`,
+            )
+        }
         throw new Error(
             `AI_MODEL environment variable is required. Example: AI_MODEL=claude-sonnet-4-5`,
         )
     }
 
-    // Determine provider: explicit config > auto-detect > error
+    // Determine provider: client override > explicit config > auto-detect > error
     let provider: ProviderName
-    if (process.env.AI_PROVIDER) {
+    if (overrides?.provider) {
+        // Validate client-provided provider
+        if (
+            !ALLOWED_CLIENT_PROVIDERS.includes(
+                overrides.provider as ProviderName,
+            )
+        ) {
+            throw new Error(
+                `Invalid provider: ${overrides.provider}. Allowed providers: ${ALLOWED_CLIENT_PROVIDERS.join(", ")}`,
+            )
+        }
+        provider = overrides.provider as ProviderName
+    } else if (process.env.AI_PROVIDER) {
         provider = process.env.AI_PROVIDER as ProviderName
     } else {
         const detected = detectProvider()
@@ -307,8 +346,10 @@ export function getAIModel(): ModelConfig {
         }
     }
 
-    // Validate provider credentials
-    validateProviderCredentials(provider)
+    // Only validate server credentials if client isn't providing their own API key
+    if (!isClientOverride) {
+        validateProviderCredentials(provider)
+    }
 
     console.log(`[AI Provider] Initializing ${provider} with model: ${modelId}`)
 
@@ -337,11 +378,13 @@ export function getAIModel(): ModelConfig {
             break
         }
 
-        case "openai":
-            if (process.env.OPENAI_BASE_URL) {
+        case "openai": {
+            const apiKey = overrides?.apiKey || process.env.OPENAI_API_KEY
+            const baseURL = overrides?.baseUrl || process.env.OPENAI_BASE_URL
+            if (baseURL || overrides?.apiKey) {
                 const customOpenAI = createOpenAI({
-                    apiKey: process.env.OPENAI_API_KEY,
-                    baseURL: process.env.OPENAI_BASE_URL,
+                    apiKey,
+                    ...(baseURL && { baseURL }),
                 })
                 model = customOpenAI.chat(modelId)
             } else {
@@ -351,13 +394,17 @@ export function getAIModel(): ModelConfig {
                 providerOptions = customProviderOptions
             }
             break
+        }
 
         case "anthropic": {
+            const apiKey = overrides?.apiKey || process.env.ANTHROPIC_API_KEY
+            const baseURL =
+                overrides?.baseUrl ||
+                process.env.ANTHROPIC_BASE_URL ||
+                "https://api.anthropic.com/v1"
             const customProvider = createAnthropic({
-                apiKey: process.env.ANTHROPIC_API_KEY,
-                baseURL:
-                    process.env.ANTHROPIC_BASE_URL ||
-                    "https://api.anthropic.com/v1",
+                apiKey,
+                baseURL,
                 headers: ANTHROPIC_BETA_HEADERS,
             })
             model = customProvider(modelId)
@@ -369,11 +416,14 @@ export function getAIModel(): ModelConfig {
             break
         }
 
-        case "google":
-            if (process.env.GOOGLE_BASE_URL) {
+        case "google": {
+            const apiKey =
+                overrides?.apiKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+            const baseURL = overrides?.baseUrl || process.env.GOOGLE_BASE_URL
+            if (baseURL || overrides?.apiKey) {
                 const customGoogle = createGoogleGenerativeAI({
-                    apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-                    baseURL: process.env.GOOGLE_BASE_URL,
+                    apiKey,
+                    ...(baseURL && { baseURL }),
                 })
                 model = customGoogle(modelId)
             } else {
@@ -383,12 +433,15 @@ export function getAIModel(): ModelConfig {
                 providerOptions = customProviderOptions
             }
             break
+        }
 
-        case "azure":
-            if (process.env.AZURE_BASE_URL) {
+        case "azure": {
+            const apiKey = overrides?.apiKey || process.env.AZURE_API_KEY
+            const baseURL = overrides?.baseUrl || process.env.AZURE_BASE_URL
+            if (baseURL || overrides?.apiKey) {
                 const customAzure = createAzure({
-                    apiKey: process.env.AZURE_API_KEY,
-                    baseURL: process.env.AZURE_BASE_URL,
+                    apiKey,
+                    ...(baseURL && { baseURL }),
                 })
                 model = customAzure(modelId)
             } else {
@@ -398,6 +451,7 @@ export function getAIModel(): ModelConfig {
                 providerOptions = customProviderOptions
             }
             break
+        }
 
         case "ollama":
             if (process.env.OLLAMA_BASE_URL) {
@@ -411,11 +465,12 @@ export function getAIModel(): ModelConfig {
             break
 
         case "openrouter": {
+            const apiKey = overrides?.apiKey || process.env.OPENROUTER_API_KEY
+            const baseURL =
+                overrides?.baseUrl || process.env.OPENROUTER_BASE_URL
             const openrouter = createOpenRouter({
-                apiKey: process.env.OPENROUTER_API_KEY,
-                ...(process.env.OPENROUTER_BASE_URL && {
-                    baseURL: process.env.OPENROUTER_BASE_URL,
-                }),
+                apiKey,
+                ...(baseURL && { baseURL }),
             })
             model = openrouter(modelId)
             if (customProviderOptions) {
@@ -424,11 +479,13 @@ export function getAIModel(): ModelConfig {
             break
         }
 
-        case "deepseek":
-            if (process.env.DEEPSEEK_BASE_URL) {
+        case "deepseek": {
+            const apiKey = overrides?.apiKey || process.env.DEEPSEEK_API_KEY
+            const baseURL = overrides?.baseUrl || process.env.DEEPSEEK_BASE_URL
+            if (baseURL || overrides?.apiKey) {
                 const customDeepSeek = createDeepSeek({
-                    apiKey: process.env.DEEPSEEK_API_KEY,
-                    baseURL: process.env.DEEPSEEK_BASE_URL,
+                    apiKey,
+                    ...(baseURL && { baseURL }),
                 })
                 model = customDeepSeek(modelId)
             } else {
@@ -438,13 +495,17 @@ export function getAIModel(): ModelConfig {
                 providerOptions = customProviderOptions
             }
             break
+        }
 
         case "siliconflow": {
+            const apiKey = overrides?.apiKey || process.env.SILICONFLOW_API_KEY
+            const baseURL =
+                overrides?.baseUrl ||
+                process.env.SILICONFLOW_BASE_URL ||
+                "https://api.siliconflow.com/v1"
             const siliconflowProvider = createOpenAI({
-                apiKey: process.env.SILICONFLOW_API_KEY,
-                baseURL:
-                    process.env.SILICONFLOW_BASE_URL ||
-                    "https://api.siliconflow.com/v1",
+                apiKey,
+                baseURL,
             })
             model = siliconflowProvider.chat(modelId)
             if (customProviderOptions) {
@@ -460,4 +521,18 @@ export function getAIModel(): ModelConfig {
     }
 
     return { model, providerOptions, headers, modelId }
+}
+
+/**
+ * Check if a model supports prompt caching.
+ * Currently only Claude models on Bedrock support prompt caching.
+ */
+export function supportsPromptCaching(modelId: string): boolean {
+    // Bedrock prompt caching is supported for Claude models
+    return (
+        modelId.includes("claude") ||
+        modelId.includes("anthropic") ||
+        modelId.startsWith("us.anthropic") ||
+        modelId.startsWith("eu.anthropic")
+    )
 }
