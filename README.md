@@ -126,6 +126,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
 
+> **Corporate Networks:** If `embed.diagrams.net` is blocked, see [Self-Hosted Draw.io](./docs/self-hosted-drawio.md) for configuration options.
+
 ### Installation
 
 1. Clone the repository:

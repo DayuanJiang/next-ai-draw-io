@@ -11,6 +11,9 @@ import {
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
 
+const drawioBaseUrl =
+    process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
+
 export default function Home() {
     const { drawioRef, handleDiagramExport, onDrawioLoad } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
@@ -109,6 +112,7 @@ export default function Home() {
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
+                                    baseUrl={drawioBaseUrl}
                                     urlParameters={{
                                         ui: drawioUi,
                                         spin: true,
