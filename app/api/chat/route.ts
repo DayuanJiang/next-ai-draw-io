@@ -303,36 +303,15 @@ ${lastMessageText}
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
-    // Check if reasoning is enabled
-    const enableReasoning = process.env.ENABLE_REASONING === "true"
-
-    // Configure reasoning options if enabled
-    const reasoningConfig = enableReasoning
-        ? {
-              experimental_reasoning: {
-                  ...(process.env.REASONING_BUDGET_TOKENS && {
-                      budgetTokens: parseInt(
-                          process.env.REASONING_BUDGET_TOKENS,
-                          10,
-                      ),
-                  }),
-                  ...(process.env.REASONING_EFFORT && {
-                      effort: process.env.REASONING_EFFORT as
-                          | "low"
-                          | "medium"
-                          | "high",
-                  }),
-              },
-          }
-        : {}
+    // Check if reasoning is enabled - only used for sendReasoning flag
+    // const enableReasoning = process.env.ENABLE_REASONING === "true"
 
     const result = streamText({
         model,
         stopWhen: stepCountIs(5),
         messages: allMessages,
-        ...(providerOptions && { providerOptions }),
+        ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
         ...(headers && { headers }),
-        ...reasoningConfig,
         // Langfuse telemetry config (returns undefined if not configured)
         ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
             experimental_telemetry: getTelemetryConfig({
@@ -454,7 +433,7 @@ IMPORTANT: Keep edits concise:
     })
 
     return result.toUIMessageStreamResponse({
-        sendReasoning: enableReasoning,
+        sendReasoning: process.env.ENABLE_REASONING === "true",
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage

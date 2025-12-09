@@ -44,11 +44,10 @@ const ANTHROPIC_BETA_HEADERS = {
  *
  * Environment variables:
  * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (low, medium, high)
+ * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (none, brief, detailed)
  * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
- * - GOOGLE_CANDIDATE_COUNT: Google number of candidates to generate
- * - GOOGLE_TOP_K: Google top K value for sampling
- * - GOOGLE_TOP_P: Google nucleus sampling parameter
+ * - GOOGLE_REASONING_EFFORT: Google reasoning effort (low, medium, high)
  * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low, medium, high)
  * - DEEPSEEK_REASONING_EFFORT: DeepSeek reasoning effort (low, medium, high)
  * - DEEPSEEK_REASONING_BUDGET_TOKENS: DeepSeek reasoning budget in tokens
@@ -61,12 +60,21 @@ function buildProviderOptions(
     switch (provider) {
         case "openai": {
             const reasoningEffort = process.env.OPENAI_REASONING_EFFORT
-            if (reasoningEffort) {
-                options.openai = {
-                    reasoningEffort: reasoningEffort as
+            const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY
+
+            if (reasoningEffort || reasoningSummary) {
+                options.openai = {}
+                if (reasoningEffort) {
+                    options.openai.reasoningEffort = reasoningEffort as
                         | "low"
                         | "medium"
-                        | "high",
+                        | "high"
+                }
+                if (reasoningSummary) {
+                    options.openai.reasoningSummary = reasoningSummary as
+                        | "none"
+                        | "brief"
+                        | "detailed"
                 }
             }
             break
@@ -89,8 +97,19 @@ function buildProviderOptions(
         }
 
         case "google": {
-            const options_obj: Record<string, any> = {}
+            const reasoningEffort = process.env.GOOGLE_REASONING_EFFORT
 
+            if (reasoningEffort) {
+                options.google = {
+                    reasoningEffort: reasoningEffort as
+                        | "low"
+                        | "medium"
+                        | "high",
+                }
+            }
+
+            // Keep existing Google options
+            const options_obj: Record<string, any> = {}
             if (process.env.GOOGLE_CANDIDATE_COUNT) {
                 options_obj.candidateCount = parseInt(
                     process.env.GOOGLE_CANDIDATE_COUNT,
@@ -105,19 +124,28 @@ function buildProviderOptions(
             }
 
             if (Object.keys(options_obj).length > 0) {
-                options.google = options_obj
+                options.google = { ...options.google, ...options_obj }
             }
             break
         }
 
         case "azure": {
             const reasoningEffort = process.env.AZURE_REASONING_EFFORT
-            if (reasoningEffort) {
-                options.azure = {
-                    reasoningEffort: reasoningEffort as
+            const reasoningSummary = process.env.AZURE_REASONING_SUMMARY
+
+            if (reasoningEffort || reasoningSummary) {
+                options.azure = {}
+                if (reasoningEffort) {
+                    options.azure.reasoningEffort = reasoningEffort as
                         | "low"
                         | "medium"
-                        | "high",
+                        | "high"
+                }
+                if (reasoningSummary) {
+                    options.azure.reasoningSummary = reasoningSummary as
+                        | "none"
+                        | "brief"
+                        | "detailed"
                 }
             }
             break
@@ -147,16 +175,11 @@ function buildProviderOptions(
             break
         }
 
-        case "bedrock": {
-            // Bedrock-specific options handled separately
-            break
-        }
-
+        case "bedrock":
         case "ollama":
         case "openrouter":
         case "siliconflow": {
-            // These providers have limited provider-specific options in the AI SDK
-            // Add support here as new options become available
+            // These providers don't have reasoning configs in AI SDK yet
             break
         }
 
