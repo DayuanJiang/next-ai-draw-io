@@ -185,6 +185,28 @@ export default function About() {
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 
+                            {/* Bring Your Own Key */}
+                            <div className="text-center mb-5">
+                                <h4 className="text-base font-bold text-gray-900 mb-2">
+                                    Bring Your Own API Key
+                                </h4>
+                                <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
+                                    You can use your own API key to bypass these
+                                    limits. Click the Settings icon in the chat
+                                    panel to configure your provider and API
+                                    key.
+                                </p>
+                                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                    Your key is stored locally in your browser
+                                    and is never stored on the server.
+                                </p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+                            </div>
+
                             {/* Sponsorship CTA */}
                             <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">

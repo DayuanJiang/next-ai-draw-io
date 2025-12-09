@@ -199,8 +199,17 @@ async function handleChatRequest(req: Request): Promise<Response> {
     }
     // === CACHE CHECK END ===
 
-    // Get AI model from environment configuration
-    const { model, providerOptions, headers, modelId } = getAIModel()
+    // Read client AI provider overrides from headers
+    const clientOverrides = {
+        provider: req.headers.get("x-ai-provider"),
+        baseUrl: req.headers.get("x-ai-base-url"),
+        apiKey: req.headers.get("x-ai-api-key"),
+        modelId: req.headers.get("x-ai-model"),
+    }
+
+    // Get AI model with optional client overrides
+    const { model, providerOptions, headers, modelId } =
+        getAIModel(clientOverrides)
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)

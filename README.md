@@ -96,6 +96,8 @@ No installation needed! Try the app directly on our demo site:
 
 > Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
 
+> **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
+
 ### Run with Docker (Recommended)
 
 If you just want to run it locally, the best way is to use Docker.

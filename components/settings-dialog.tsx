@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 
 interface SettingsDialogProps {
@@ -22,6 +29,10 @@ interface SettingsDialogProps {
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
 export const STORAGE_CLOSE_PROTECTION_KEY = "next-ai-draw-io-close-protection"
 const STORAGE_ACCESS_CODE_REQUIRED_KEY = "next-ai-draw-io-access-code-required"
+export const STORAGE_AI_PROVIDER_KEY = "next-ai-draw-io-ai-provider"
+export const STORAGE_AI_BASE_URL_KEY = "next-ai-draw-io-ai-base-url"
+export const STORAGE_AI_API_KEY_KEY = "next-ai-draw-io-ai-api-key"
+export const STORAGE_AI_MODEL_KEY = "next-ai-draw-io-ai-model"
 
 function getStoredAccessCodeRequired(): boolean | null {
     if (typeof window === "undefined") return null
@@ -42,6 +53,10 @@ export function SettingsDialog({
     const [accessCodeRequired, setAccessCodeRequired] = useState(
         () => getStoredAccessCodeRequired() ?? false,
     )
+    const [provider, setProvider] = useState("")
+    const [baseUrl, setBaseUrl] = useState("")
+    const [apiKey, setApiKey] = useState("")
+    const [modelId, setModelId] = useState("")
 
     useEffect(() => {
         // Only fetch if not cached in localStorage
@@ -77,6 +92,13 @@ export function SettingsDialog({
             )
             // Default to true if not set
             setCloseProtection(storedCloseProtection !== "false")
+
+            // Load AI provider settings
+            setProvider(localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || "")
+            setBaseUrl(localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || "")
+            setApiKey(localStorage.getItem(STORAGE_AI_API_KEY_KEY) || "")
+            setModelId(localStorage.getItem(STORAGE_AI_MODEL_KEY) || "")
+
             setError("")
         }
     }, [open])
@@ -160,6 +182,181 @@ export function SettingsDialog({
                             )}
                         </div>
                     )}
+                    <div className="space-y-2">
+                        <Label>AI Provider Settings</Label>
+                        <p className="text-[0.8rem] text-muted-foreground">
+                            Use your own API key to bypass usage limits. Your
+                            key is stored locally in your browser and is never
+                            stored on the server.
+                        </p>
+                        <div className="space-y-3 pt-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="ai-provider">Provider</Label>
+                                <Select
+                                    value={provider || "default"}
+                                    onValueChange={(value) => {
+                                        const actualValue =
+                                            value === "default" ? "" : value
+                                        setProvider(actualValue)
+                                        localStorage.setItem(
+                                            STORAGE_AI_PROVIDER_KEY,
+                                            actualValue,
+                                        )
+                                    }}
+                                >
+                                    <SelectTrigger id="ai-provider">
+                                        <SelectValue placeholder="Use Server Default" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="default">
+                                            Use Server Default
+                                        </SelectItem>
+                                        <SelectItem value="openai">
+                                            OpenAI
+                                        </SelectItem>
+                                        <SelectItem value="anthropic">
+                                            Anthropic
+                                        </SelectItem>
+                                        <SelectItem value="google">
+                                            Google
+                                        </SelectItem>
+                                        <SelectItem value="azure">
+                                            Azure OpenAI
+                                        </SelectItem>
+                                        <SelectItem value="openrouter">
+                                            OpenRouter
+                                        </SelectItem>
+                                        <SelectItem value="deepseek">
+                                            DeepSeek
+                                        </SelectItem>
+                                        <SelectItem value="siliconflow">
+                                            SiliconFlow
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {provider && provider !== "default" && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ai-model">
+                                            Model ID
+                                        </Label>
+                                        <Input
+                                            id="ai-model"
+                                            value={modelId}
+                                            onChange={(e) => {
+                                                setModelId(e.target.value)
+                                                localStorage.setItem(
+                                                    STORAGE_AI_MODEL_KEY,
+                                                    e.target.value,
+                                                )
+                                            }}
+                                            placeholder={
+                                                provider === "openai"
+                                                    ? "e.g., gpt-4o"
+                                                    : provider === "anthropic"
+                                                      ? "e.g., claude-sonnet-4-5"
+                                                      : provider === "google"
+                                                        ? "e.g., gemini-2.0-flash-exp"
+                                                        : provider ===
+                                                            "deepseek"
+                                                          ? "e.g., deepseek-chat"
+                                                          : "Model ID"
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ai-api-key">
+                                            API Key
+                                        </Label>
+                                        <Input
+                                            id="ai-api-key"
+                                            type="password"
+                                            value={apiKey}
+                                            onChange={(e) => {
+                                                setApiKey(e.target.value)
+                                                localStorage.setItem(
+                                                    STORAGE_AI_API_KEY_KEY,
+                                                    e.target.value,
+                                                )
+                                            }}
+                                            placeholder="Your API key"
+                                            autoComplete="off"
+                                        />
+                                        <p className="text-[0.8rem] text-muted-foreground">
+                                            Overrides{" "}
+                                            {provider === "openai"
+                                                ? "OPENAI_API_KEY"
+                                                : provider === "anthropic"
+                                                  ? "ANTHROPIC_API_KEY"
+                                                  : provider === "google"
+                                                    ? "GOOGLE_GENERATIVE_AI_API_KEY"
+                                                    : provider === "azure"
+                                                      ? "AZURE_API_KEY"
+                                                      : provider ===
+                                                          "openrouter"
+                                                        ? "OPENROUTER_API_KEY"
+                                                        : provider ===
+                                                            "deepseek"
+                                                          ? "DEEPSEEK_API_KEY"
+                                                          : provider ===
+                                                              "siliconflow"
+                                                            ? "SILICONFLOW_API_KEY"
+                                                            : "server API key"}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ai-base-url">
+                                            Base URL (optional)
+                                        </Label>
+                                        <Input
+                                            id="ai-base-url"
+                                            value={baseUrl}
+                                            onChange={(e) => {
+                                                setBaseUrl(e.target.value)
+                                                localStorage.setItem(
+                                                    STORAGE_AI_BASE_URL_KEY,
+                                                    e.target.value,
+                                                )
+                                            }}
+                                            placeholder={
+                                                provider === "anthropic"
+                                                    ? "https://api.anthropic.com/v1"
+                                                    : provider === "siliconflow"
+                                                      ? "https://api.siliconflow.com/v1"
+                                                      : "Custom endpoint URL"
+                                            }
+                                        />
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full"
+                                        onClick={() => {
+                                            localStorage.removeItem(
+                                                STORAGE_AI_PROVIDER_KEY,
+                                            )
+                                            localStorage.removeItem(
+                                                STORAGE_AI_BASE_URL_KEY,
+                                            )
+                                            localStorage.removeItem(
+                                                STORAGE_AI_API_KEY_KEY,
+                                            )
+                                            localStorage.removeItem(
+                                                STORAGE_AI_MODEL_KEY,
+                                            )
+                                            setProvider("")
+                                            setBaseUrl("")
+                                            setApiKey("")
+                                            setModelId("")
+                                        }}
+                                    >
+                                        Clear Settings
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </div>
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <Label htmlFor="close-protection">
