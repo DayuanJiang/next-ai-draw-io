@@ -179,6 +179,24 @@ export default function AboutJA() {
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 
+                            {/* Bring Your Own Key */}
+                            <div className="text-center mb-5">
+                                <h4 className="text-base font-bold text-gray-900 mb-2">
+                                    自分のAPIキーを使用
+                                </h4>
+                                <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
+                                    自分のAPIキーを使用することで、これらの制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。
+                                </p>
+                                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                    キーはブラウザのローカルに保存され、サーバーには保存されません。
+                                </p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+                            </div>
+
                             {/* Sponsorship CTA */}
                             <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">

@@ -24,6 +24,10 @@ import { QuotaLimitToast } from "@/components/quota-limit-toast"
 import {
     SettingsDialog,
     STORAGE_ACCESS_CODE_KEY,
+    STORAGE_AI_API_KEY_KEY,
+    STORAGE_AI_BASE_URL_KEY,
+    STORAGE_AI_MODEL_KEY,
+    STORAGE_AI_PROVIDER_KEY,
 } from "@/components/settings-dialog"
 
 // localStorage keys for persistence
@@ -119,11 +123,20 @@ export default function ChatPanel({
     }, [])
 
     // Helper to check daily request limit
+    // Check if user has their own API key configured (bypass limits)
+    const hasOwnApiKey = useCallback((): boolean => {
+        const provider = localStorage.getItem(STORAGE_AI_PROVIDER_KEY)
+        const apiKey = localStorage.getItem(STORAGE_AI_API_KEY_KEY)
+        return !!(provider && apiKey)
+    }, [])
+
     const checkDailyLimit = useCallback((): {
         allowed: boolean
         remaining: number
         used: number
     } => {
+        // Skip limit if user has their own API key
+        if (hasOwnApiKey()) return { allowed: true, remaining: -1, used: 0 }
         if (dailyRequestLimit <= 0)
             return { allowed: true, remaining: -1, used: 0 }
 
@@ -145,7 +158,7 @@ export default function ChatPanel({
             remaining: dailyRequestLimit - count,
             used: count,
         }
-    }, [dailyRequestLimit])
+    }, [dailyRequestLimit, hasOwnApiKey])
 
     // Helper to increment request count
     const incrementRequestCount = useCallback((): void => {
@@ -168,7 +181,7 @@ export default function ChatPanel({
             ),
             { duration: 15000 },
         )
-    }, [dailyRequestLimit])
+    }, [dailyRequestLimit, hasOwnApiKey])
 
     // Helper to check daily token limit (checks if already over limit)
     const checkTokenLimit = useCallback((): {
@@ -176,6 +189,8 @@ export default function ChatPanel({
         remaining: number
         used: number
     } => {
+        // Skip limit if user has their own API key
+        if (hasOwnApiKey()) return { allowed: true, remaining: -1, used: 0 }
         if (dailyTokenLimit <= 0)
             return { allowed: true, remaining: -1, used: 0 }
 
@@ -200,7 +215,7 @@ export default function ChatPanel({
             remaining: dailyTokenLimit - count,
             used: count,
         }
-    }, [dailyTokenLimit])
+    }, [dailyTokenLimit, hasOwnApiKey])
 
     // Helper to increment token count
     const incrementTokenCount = useCallback((tokens: number): void => {
@@ -242,6 +257,8 @@ export default function ChatPanel({
         remaining: number
         used: number
     } => {
+        // Skip limit if user has their own API key
+        if (hasOwnApiKey()) return { allowed: true, remaining: -1, used: 0 }
         if (tpmLimit <= 0) return { allowed: true, remaining: -1, used: 0 }
 
         const currentMinute = Math.floor(Date.now() / 60000).toString()
@@ -264,7 +281,7 @@ export default function ChatPanel({
             remaining: tpmLimit - count,
             used: count,
         }
-    }, [tpmLimit])
+    }, [tpmLimit, hasOwnApiKey])
 
     // Helper to increment TPM count
     const incrementTPMCount = useCallback((tokens: number): void => {
@@ -777,6 +794,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
                 const accessCode =
                     localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
+                const aiProvider =
+                    localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || ""
+                const aiBaseUrl =
+                    localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || ""
+                const aiApiKey =
+                    localStorage.getItem(STORAGE_AI_API_KEY_KEY) || ""
+                const aiModel = localStorage.getItem(STORAGE_AI_MODEL_KEY) || ""
+
                 sendMessage(
                     { parts },
                     {
@@ -786,6 +811,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         },
                         headers: {
                             "x-access-code": accessCode,
+                            ...(aiProvider && { "x-ai-provider": aiProvider }),
+                            ...(aiBaseUrl && { "x-ai-base-url": aiBaseUrl }),
+                            ...(aiApiKey && { "x-ai-api-key": aiApiKey }),
+                            ...(aiModel && { "x-ai-model": aiModel }),
                         },
                     },
                 )
@@ -886,6 +915,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
         // Now send the message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
+        const aiProvider = localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || ""
+        const aiBaseUrl = localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || ""
+        const aiApiKey = localStorage.getItem(STORAGE_AI_API_KEY_KEY) || ""
+        const aiModel = localStorage.getItem(STORAGE_AI_MODEL_KEY) || ""
+
         sendMessage(
             { parts: userParts },
             {
@@ -895,6 +929,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 },
                 headers: {
                     "x-access-code": accessCode,
+                    ...(aiProvider && { "x-ai-provider": aiProvider }),
+                    ...(aiBaseUrl && { "x-ai-base-url": aiBaseUrl }),
+                    ...(aiApiKey && { "x-ai-api-key": aiApiKey }),
+                    ...(aiModel && { "x-ai-model": aiModel }),
                 },
             },
         )
@@ -972,6 +1010,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
         // Now send the edited message after state is guaranteed to be updated
         const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
+        const aiProvider = localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || ""
+        const aiBaseUrl = localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || ""
+        const aiApiKey = localStorage.getItem(STORAGE_AI_API_KEY_KEY) || ""
+        const aiModel = localStorage.getItem(STORAGE_AI_MODEL_KEY) || ""
+
         sendMessage(
             { parts: newParts },
             {
@@ -981,6 +1024,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 },
                 headers: {
                     "x-access-code": accessCode,
+                    ...(aiProvider && { "x-ai-provider": aiProvider }),
+                    ...(aiBaseUrl && { "x-ai-base-url": aiBaseUrl }),
+                    ...(aiApiKey && { "x-ai-api-key": aiApiKey }),
+                    ...(aiModel && { "x-ai-model": aiModel }),
                 },
             },
         )
