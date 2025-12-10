@@ -394,6 +394,13 @@ ${lastMessageText}
             return null
         },
         onFinish: ({ text, usage }) => {
+            // Log token usage
+            if (usage) {
+                const cachedTokens = (usage as any).cachedInputTokens ?? 0
+                console.log(
+                    `[Token Usage] input: ${usage.inputTokens ?? 0}, cached: ${cachedTokens}, output: ${usage.outputTokens ?? 0}, total: ${(usage.inputTokens ?? 0) + cachedTokens + (usage.outputTokens ?? 0)}`,
+                )
+            }
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
             setTraceOutput(text, {
                 promptTokens: usage?.inputTokens,

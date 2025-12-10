@@ -1,28 +1,52 @@
 "use client"
 
-import { Cloud, GitBranch, Palette, Zap } from "lucide-react"
+import { Cloud, FileText, GitBranch, Palette, Zap } from "lucide-react"
 
 interface ExampleCardProps {
     icon: React.ReactNode
     title: string
     description: string
     onClick: () => void
+    isNew?: boolean
 }
 
-function ExampleCard({ icon, title, description, onClick }: ExampleCardProps) {
+function ExampleCard({
+    icon,
+    title,
+    description,
+    onClick,
+    isNew,
+}: ExampleCardProps) {
     return (
         <button
             onClick={onClick}
-            className="group w-full text-left p-4 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm"
+            className={`group w-full text-left p-4 rounded-xl border bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm ${
+                isNew
+                    ? "border-primary/40 ring-1 ring-primary/20"
+                    : "border-border/60"
+            }`}
         >
             <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/15 transition-colors">
+                <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        isNew
+                            ? "bg-primary/20 group-hover:bg-primary/25"
+                            : "bg-primary/10 group-hover:bg-primary/15"
+                    }`}
+                >
                     {icon}
                 </div>
                 <div className="min-w-0">
-                    <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                        {title}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                            {title}
+                        </h3>
+                        {isNew && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded">
+                                NEW
+                            </span>
+                        )}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         {description}
                     </p>
@@ -67,6 +91,21 @@ export default function ExamplePanel({
         }
     }
 
+    const handlePdfExample = async () => {
+        setInput("Summarize this paper as a diagram")
+
+        try {
+            const response = await fetch("/chain-of-thought.txt")
+            const blob = await response.blob()
+            const file = new File([blob], "chain-of-thought.txt", {
+                type: "text/plain",
+            })
+            setFiles([file])
+        } catch (error) {
+            console.error("Error loading text file:", error)
+        }
+    }
+
     return (
         <div className="py-6 px-2 animate-fade-in">
             {/* Welcome section */}
@@ -87,6 +126,14 @@ export default function ExamplePanel({
                 </p>
 
                 <div className="grid gap-2">
+                    <ExampleCard
+                        icon={<FileText className="w-4 h-4 text-primary" />}
+                        title="Paper to Diagram"
+                        description="Upload .pdf, .txt, .md, .json, .csv, .py, .js, .ts and more"
+                        onClick={handlePdfExample}
+                        isNew
+                    />
+
                     <ExampleCard
                         icon={<Zap className="w-4 h-4 text-primary" />}
                         title="Animated Diagram"

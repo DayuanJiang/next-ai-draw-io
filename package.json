@@ -58,6 +58,7 @@
         "sonner": "^2.0.7",
         "tailwind-merge": "^3.0.2",
         "tailwindcss-animate": "^1.0.7",
+        "unpdf": "^1.4.0",
         "zod": "^4.1.12"
     },
     "lint-staged": {

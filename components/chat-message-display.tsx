@@ -8,6 +8,8 @@ import {
     ChevronUp,
     Copy,
     Cpu,
+    FileCode,
+    FileText,
     Minus,
     Pencil,
     Plus,
@@ -89,12 +91,73 @@ function EditDiffDisplay({ edits }: { edits: EditPair[] }) {
 
 import { useDiagram } from "@/contexts/diagram-context"
 
+// Helper to split text content into regular text and file sections (PDF or text files)
+interface TextSection {
+    type: "text" | "file"
+    content: string
+    filename?: string
+    charCount?: number
+    fileType?: "pdf" | "text"
+}
+
+function splitTextIntoFileSections(text: string): TextSection[] {
+    const sections: TextSection[] = []
+    // Match [PDF: filename] or [File: filename] patterns
+    const filePattern =
+        /\[(PDF|File):\s*([^\]]+)\]\n([\s\S]*?)(?=\n\n\[(PDF|File):|$)/g
+    let lastIndex = 0
+    let match
+
+    while ((match = filePattern.exec(text)) !== null) {
+        // Add text before this file section
+        const beforeText = text.slice(lastIndex, match.index).trim()
+        if (beforeText) {
+            sections.push({ type: "text", content: beforeText })
+        }
+
+        // Add file section
+        const fileType = match[1].toLowerCase() === "pdf" ? "pdf" : "text"
+        const filename = match[2].trim()
+        const fileContent = match[3].trim()
+        sections.push({
+            type: "file",
+            content: fileContent,
+            filename,
+            charCount: fileContent.length,
+            fileType,
+        })
+
+        lastIndex = match.index + match[0].length
+    }
+
+    // Add remaining text after last file section
+    const remainingText = text.slice(lastIndex).trim()
+    if (remainingText) {
+        sections.push({ type: "text", content: remainingText })
+    }
+
+    // If no file sections found, return original text
+    if (sections.length === 0) {
+        sections.push({ type: "text", content: text })
+    }
+
+    return sections
+}
+
 const getMessageTextContent = (message: UIMessage): string => {
     if (!message.parts) return ""
     return message.parts
         .filter((part) => part.type === "text")
         .map((part) => (part as { text: string }).text)
         .join("\n")
+}
+
+// Get only the user's original text, excluding appended file content
+const getUserOriginalText = (message: UIMessage): string => {
+    const fullText = getMessageTextContent(message)
+    // Strip out [PDF: ...] and [File: ...] sections that were appended
+    const filePattern = /\n\n\[(PDF|File):\s*[^\]]+\]\n[\s\S]*$/
+    return fullText.replace(filePattern, "").trim()
 }
 
 interface ChatMessageDisplayProps {
@@ -131,6 +194,10 @@ export function ChatMessageDisplay({
     )
     const editTextareaRef = useRef<HTMLTextAreaElement>(null)
     const [editText, setEditText] = useState<string>("")
+    // Track which PDF sections are expanded (key: messageId-sectionIndex)
+    const [expandedPdfSections, setExpandedPdfSections] = useState<
+        Record<string, boolean>
+    >({})
 
     const copyMessageToClipboard = async (messageId: string, text: string) => {
         try {
@@ -391,7 +458,9 @@ export function ChatMessageDisplay({
                                                                 message.id,
                                                             )
                                                             setEditText(
-                                                                userMessageText,
+                                                                getUserOriginalText(
+                                                                    message,
+                                                                ),
                                                             )
                                                         }}
                                                         className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
@@ -607,7 +676,9 @@ export function ChatMessageDisplay({
                                                                         message.id,
                                                                     )
                                                                     setEditText(
-                                                                        userMessageText,
+                                                                        getUserOriginalText(
+                                                                            message,
+                                                                        ),
                                                                     )
                                                                 }
                                                             }}
@@ -627,7 +698,9 @@ export function ChatMessageDisplay({
                                                                         message.id,
                                                                     )
                                                                     setEditText(
-                                                                        userMessageText,
+                                                                        getUserOriginalText(
+                                                                            message,
+                                                                        ),
                                                                     )
                                                                 }
                                                             }}
@@ -649,26 +722,126 @@ export function ChatMessageDisplay({
                                                                         part.type ===
                                                                         "text"
                                                                     ) {
+                                                                        const textContent =
+                                                                            (
+                                                                                part as {
+                                                                                    text: string
+                                                                                }
+                                                                            )
+                                                                                .text
+                                                                        const sections =
+                                                                            splitTextIntoFileSections(
+                                                                                textContent,
+                                                                            )
                                                                         return (
                                                                             <div
                                                                                 key={`${message.id}-text-${group.startIndex}-${partIndex}`}
-                                                                                className={`prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
-                                                                                    message.role ===
-                                                                                    "user"
-                                                                                        ? "[&_*]:!text-primary-foreground prose-code:bg-white/20"
-                                                                                        : "dark:prose-invert"
-                                                                                }`}
+                                                                                className="space-y-2"
                                                                             >
-                                                                                <ReactMarkdown>
-                                                                                    {
-                                                                                        (
-                                                                                            part as {
-                                                                                                text: string
-                                                                                            }
+                                                                                {sections.map(
+                                                                                    (
+                                                                                        section,
+                                                                                        sectionIndex,
+                                                                                    ) => {
+                                                                                        if (
+                                                                                            section.type ===
+                                                                                            "file"
+                                                                                        ) {
+                                                                                            const pdfKey = `${message.id}-file-${partIndex}-${sectionIndex}`
+                                                                                            const isExpanded =
+                                                                                                expandedPdfSections[
+                                                                                                    pdfKey
+                                                                                                ] ??
+                                                                                                false
+                                                                                            const charDisplay =
+                                                                                                section.charCount &&
+                                                                                                section.charCount >=
+                                                                                                    1000
+                                                                                                    ? `${(section.charCount / 1000).toFixed(1)}k`
+                                                                                                    : section.charCount
+                                                                                            return (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        pdfKey
+                                                                                                    }
+                                                                                                    className="rounded-lg border border-border/60 bg-muted/30 overflow-hidden"
+                                                                                                >
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={(
+                                                                                                            e,
+                                                                                                        ) => {
+                                                                                                            e.stopPropagation()
+                                                                                                            setExpandedPdfSections(
+                                                                                                                (
+                                                                                                                    prev,
+                                                                                                                ) => ({
+                                                                                                                    ...prev,
+                                                                                                                    [pdfKey]:
+                                                                                                                        !isExpanded,
+                                                                                                                }),
+                                                                                                            )
+                                                                                                        }}
+                                                                                                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
+                                                                                                    >
+                                                                                                        <div className="flex items-center gap-2">
+                                                                                                            {section.fileType ===
+                                                                                                            "pdf" ? (
+                                                                                                                <FileText className="h-4 w-4 text-red-500" />
+                                                                                                            ) : (
+                                                                                                                <FileCode className="h-4 w-4 text-blue-500" />
+                                                                                                            )}
+                                                                                                            <span className="text-xs font-medium">
+                                                                                                                {
+                                                                                                                    section.filename
+                                                                                                                }
+                                                                                                            </span>
+                                                                                                            <span className="text-[10px] text-muted-foreground">
+                                                                                                                (
+                                                                                                                {
+                                                                                                                    charDisplay
+                                                                                                                }{" "}
+                                                                                                                chars)
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                        {isExpanded ? (
+                                                                                                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                                                                                        ) : (
+                                                                                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                                                                        )}
+                                                                                                    </button>
+                                                                                                    {isExpanded && (
+                                                                                                        <div className="px-3 py-2 border-t border-border/40 max-h-48 overflow-y-auto bg-muted/30">
+                                                                                                            <pre className="text-xs whitespace-pre-wrap text-foreground/80">
+                                                                                                                {
+                                                                                                                    section.content
+                                                                                                                }
+                                                                                                            </pre>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            )
+                                                                                        }
+                                                                                        // Regular text section
+                                                                                        return (
+                                                                                            <div
+                                                                                                key={`${message.id}-textsection-${partIndex}-${sectionIndex}`}
+                                                                                                className={`prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
+                                                                                                    message.role ===
+                                                                                                    "user"
+                                                                                                        ? "[&_*]:!text-primary-foreground prose-code:bg-white/20"
+                                                                                                        : "dark:prose-invert"
+                                                                                                }`}
+                                                                                            >
+                                                                                                <ReactMarkdown>
+                                                                                                    {
+                                                                                                        section.content
+                                                                                                    }
+                                                                                                </ReactMarkdown>
+                                                                                            </div>
                                                                                         )
-                                                                                            .text
-                                                                                    }
-                                                                                </ReactMarkdown>
+                                                                                    },
+                                                                                )}
                                                                             </div>
                                                                         )
                                                                     }

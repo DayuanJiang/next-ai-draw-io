@@ -121,12 +121,17 @@ export default function Home() {
     return (
         <div className="h-screen bg-background relative overflow-hidden">
             <ResizablePanelGroup
+                id="main-panel-group"
                 key={isMobile ? "mobile" : "desktop"}
                 direction={isMobile ? "vertical" : "horizontal"}
                 className="h-full"
             >
                 {/* Draw.io Canvas */}
-                <ResizablePanel defaultSize={isMobile ? 50 : 67} minSize={20}>
+                <ResizablePanel
+                    id="drawio-panel"
+                    defaultSize={isMobile ? 50 : 67}
+                    minSize={20}
+                >
                     <div
                         className={`h-full relative ${
                             isMobile ? "p-1" : "p-2"
@@ -162,6 +167,7 @@ export default function Home() {
 
                 {/* Chat Panel */}
                 <ResizablePanel
+                    id="chat-panel"
                     ref={chatPanelRef}
                     defaultSize={isMobile ? 50 : 33}
                     minSize={isMobile ? 20 : 15}
