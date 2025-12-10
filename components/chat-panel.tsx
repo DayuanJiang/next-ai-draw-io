@@ -764,6 +764,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }
                 }
 
+                // Get previous XML from the last snapshot (before this message)
+                const snapshotKeys = Array.from(
+                    xmlSnapshotsRef.current.keys(),
+                ).sort((a, b) => b - a)
+                const previousXml =
+                    snapshotKeys.length > 0
+                        ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+                        : ""
+
                 // Save XML snapshot for this message (will be at index = current messages.length)
                 const messageIndex = messages.length
                 xmlSnapshotsRef.current.set(messageIndex, chartXml)
@@ -805,6 +814,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     {
                         body: {
                             xml: chartXml,
+                            previousXml,
                             sessionId,
                         },
                         headers: {
@@ -869,6 +879,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             return
         }
 
+        // Get previous XML (snapshot before the one being regenerated)
+        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
+            .filter((k) => k < userMessageIndex)
+            .sort((a, b) => b - a)
+        const previousXml =
+            snapshotKeys.length > 0
+                ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+                : ""
+
         // Restore the diagram to the saved state (skip validation for trusted snapshots)
         onDisplayChart(savedXml, true)
 
@@ -923,6 +942,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             {
                 body: {
                     xml: savedXml,
+                    previousXml,
                     sessionId,
                 },
                 headers: {
@@ -955,6 +975,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             )
             return
         }
+
+        // Get previous XML (snapshot before the one being edited)
+        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
+            .filter((k) => k < messageIndex)
+            .sort((a, b) => b - a)
+        const previousXml =
+            snapshotKeys.length > 0
+                ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+                : ""
 
         // Restore the diagram to the saved state (skip validation for trusted snapshots)
         onDisplayChart(savedXml, true)
@@ -1018,6 +1047,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             {
                 body: {
                     xml: savedXml,
+                    previousXml,
                     sessionId,
                 },
                 headers: {

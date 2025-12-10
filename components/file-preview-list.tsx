@@ -48,6 +48,8 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
             imageUrlsRef.current.forEach((url) => {
                 URL.revokeObjectURL(url)
             })
+            // Clear the ref so StrictMode remount creates fresh URLs
+            imageUrlsRef.current = new Map()
         }
     }, [])
 
@@ -83,6 +85,7 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                                         width={80}
                                         height={80}
                                         className="object-cover w-full h-full"
+                                        unoptimized
                                     />
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-xs text-center p-1">
@@ -124,6 +127,7 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                             height={900}
                             className="object-contain max-w-full max-h-[90vh] w-auto h-auto"
                             onClick={(e) => e.stopPropagation()}
+                            unoptimized
                         />
                     </div>
                 </div>
