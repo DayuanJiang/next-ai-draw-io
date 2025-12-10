@@ -1,75 +1,39 @@
 # Offline Deployment
 
-In some corporate environments, `embed.diagrams.net` is blocked by network policies. This guide explains how to deploy Next AI Draw.io in offline/air-gapped environments using a self-hosted draw.io instance.
+Deploy Next AI Draw.io offline by self-hosting draw.io to replace `embed.diagrams.net`.
 
-## Overview
+**Note:** `NEXT_PUBLIC_DRAWIO_BASE_URL` is a **build-time** variable. Changing it requires rebuilding the Docker image.
 
-By default, Next AI Draw.io uses `embed.diagrams.net` for the diagram editor. For offline deployment, you need to:
+## Docker Compose Setup
 
-1. Run a local draw.io instance
-2. Build Next AI Draw.io with a custom `NEXT_PUBLIC_DRAWIO_BASE_URL`
-
-**Important:** This is a **build-time** configuration. You need to rebuild the Docker image to change the draw.io URL.
-
-## Quick Start
-
-### 1. Run Local Draw.io
-
-```bash
-docker run -d -p 8080:8080 jgraph/drawio:latest
-```
-
-### 2. Build Next AI Draw.io
-
-```bash
-docker build --build-arg NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080 -t next-ai-draw-io .
-```
-
-### 3. Run the Application
-
-```bash
-docker run -d -p 3000:3000 --env-file .env next-ai-draw-io
-```
-
-## Docker Compose
-
-For a complete offline setup with both services:
+1. Clone the repository and define API keys in `.env`.
+2. Create `docker-compose.yml`:
 
 ```yaml
 services:
   drawio:
     image: jgraph/drawio:latest
-    ports:
-      - "8080:8080"
-
+    ports: ["8080:8080"]
   next-ai-draw-io:
     build:
       context: .
       args:
-        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://drawio:8080
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
+        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
+    ports: ["3000:3000"]
+    env_file: .env
+    depends_on: [drawio]
 ```
 
-## Local Development
+3. Run `docker compose up -d` and open `http://localhost:3000`.
 
-For local development, add to your `.env.local`:
+## Configuration & Critical Warning
 
-```bash
-NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
-```
+**The `NEXT_PUBLIC_DRAWIO_BASE_URL` must be accessible from the user's browser.**
 
-Then rebuild the application:
+| Scenario | URL Value |
+|----------|-----------|
+| Localhost | `http://localhost:8080` |
+| Remote/Server | `http://YOUR_SERVER_IP:8080` or `https://drawio.your-domain.com` |
 
-```bash
-npm run build
-npm run start
-```
+**Do NOT use** internal Docker aliases like `http://drawio:8080`; the browser cannot resolve them.
 
-## Notes
-
-- The default draw.io URL is `https://embed.diagrams.net`
-- Changes to `NEXT_PUBLIC_DRAWIO_BASE_URL` require rebuilding (it's baked into the Next.js bundle at build time)
-- You still need network access to your AI provider (OpenAI, Anthropic, etc.) unless using a local model like Ollama

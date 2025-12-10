@@ -34,7 +34,7 @@ import {
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
-const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
 const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
 const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
@@ -44,6 +44,13 @@ const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
+import {
+    extractPdfText,
+    extractTextFileContent,
+    isPdfFile,
+    isTextFile,
+    MAX_EXTRACTED_CHARS,
+} from "@/lib/pdf-utils"
 import { formatXML, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
@@ -52,6 +59,8 @@ interface ChatPanelProps {
     onToggleVisibility: () => void
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
+    darkMode: boolean
+    onToggleDarkMode: () => void
     isMobile?: boolean
     onCloseProtectionChange?: (enabled: boolean) => void
 }
@@ -61,6 +70,8 @@ export default function ChatPanel({
     onToggleVisibility,
     drawioUi,
     onToggleDrawioUi,
+    darkMode,
+    onToggleDarkMode,
     isMobile = false,
     onCloseProtectionChange,
 }: ChatPanelProps) {
@@ -101,6 +112,10 @@ export default function ChatPanel({
     }
 
     const [files, setFiles] = useState<File[]>([])
+    // Store extracted PDF text with extraction status
+    const [pdfData, setPdfData] = useState<
+        Map<File, { text: string; charCount: number; isExtracting: boolean }>
+    >(new Map())
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [, setAccessCodeRequired] = useState(false)
@@ -582,13 +597,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     const hasDiagramRestoredRef = useRef(false)
     const [canSaveDiagram, setCanSaveDiagram] = useState(false)
     useEffect(() => {
-        console.log(
-            "[ChatPanel] isDrawioReady:",
-            isDrawioReady,
-            "hasDiagramRestored:",
-            hasDiagramRestoredRef.current,
-        )
-        if (!isDrawioReady || hasDiagramRestoredRef.current) return
+        // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
+        if (!isDrawioReady) {
+            hasDiagramRestoredRef.current = false
+            setCanSaveDiagram(false)
+            return
+        }
+        if (hasDiagramRestoredRef.current) return
         hasDiagramRestoredRef.current = true
 
         try {
@@ -629,6 +644,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages])
 
+    // Save diagram XML to localStorage whenever it changes
+    useEffect(() => {
+        if (!canSaveDiagram) return
+        if (chartXML && chartXML.length > 300) {
+            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
+        }
+    }, [chartXML, canSaveDiagram])
+
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
         try {
@@ -649,20 +672,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     useEffect(() => {
         localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
     }, [sessionId])
-
-    // Save current diagram XML to localStorage whenever it changes
-    // Only save after initial restore is complete and if it's not an empty diagram
-    useEffect(() => {
-        if (!canSaveDiagram) return
-        // Don't save empty diagrams (check for minimal content)
-        if (chartXML && chartXML.length > 300) {
-            console.log(
-                "[ChatPanel] Saving diagram to localStorage, length:",
-                chartXML.length,
-            )
-            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
-        }
-    }, [chartXML, canSaveDiagram])
 
     useEffect(() => {
         if (messagesEndRef.current) {
@@ -713,11 +722,28 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     // Add user message and fake assistant response to messages
                     // The chat-message-display useEffect will handle displaying the diagram
                     const toolCallId = `cached-${Date.now()}`
+
+                    // Build user message text including any file content
+                    let userText = input
+                    for (const file of files) {
+                        if (isPdfFile(file)) {
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
+                            }
+                        } else if (isTextFile(file)) {
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[File: ${file.name}]\n${extracted.text}`
+                            }
+                        }
+                    }
+
                     setMessages([
                         {
                             id: `user-${Date.now()}`,
                             role: "user" as const,
-                            parts: [{ type: "text" as const, text: input }],
+                            parts: [{ type: "text" as const, text: userText }],
                         },
                         {
                             id: `assistant-${Date.now()}`,
@@ -747,24 +773,56 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 // This ensures edit_diagram has the correct XML before AI responds
                 chartXMLRef.current = chartXml
 
-                const parts: any[] = [{ type: "text", text: input }]
+                // Build user text by concatenating input with pre-extracted text
+                // (Backend only reads first text part, so we must combine them)
+                let userText = input
+                const parts: any[] = []
 
                 if (files.length > 0) {
                     for (const file of files) {
-                        const reader = new FileReader()
-                        const dataUrl = await new Promise<string>((resolve) => {
-                            reader.onload = () =>
-                                resolve(reader.result as string)
-                            reader.readAsDataURL(file)
-                        })
+                        if (isPdfFile(file)) {
+                            // Use pre-extracted PDF text from pdfData
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
+                            }
+                        } else if (isTextFile(file)) {
+                            // Use pre-extracted text file content from pdfData
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[File: ${file.name}]\n${extracted.text}`
+                            }
+                        } else {
+                            // Handle as image
+                            const reader = new FileReader()
+                            const dataUrl = await new Promise<string>(
+                                (resolve) => {
+                                    reader.onload = () =>
+                                        resolve(reader.result as string)
+                                    reader.readAsDataURL(file)
+                                },
+                            )
 
-                        parts.push({
-                            type: "file",
-                            url: dataUrl,
-                            mediaType: file.type,
-                        })
+                            parts.push({
+                                type: "file",
+                                url: dataUrl,
+                                mediaType: file.type,
+                            })
+                        }
                     }
                 }
+
+                // Add the combined text as the first part
+                parts.unshift({ type: "text", text: userText })
+
+                // Get previous XML from the last snapshot (before this message)
+                const snapshotKeys = Array.from(
+                    xmlSnapshotsRef.current.keys(),
+                ).sort((a, b) => b - a)
+                const previousXml =
+                    snapshotKeys.length > 0
+                        ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+                        : ""
 
                 // Save XML snapshot for this message (will be at index = current messages.length)
                 const messageIndex = messages.length
@@ -807,6 +865,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     {
                         body: {
                             xml: chartXml,
+                            previousXml,
                             sessionId,
                         },
                         headers: {
@@ -835,8 +894,81 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         setInput(e.target.value)
     }
 
-    const handleFileChange = (newFiles: File[]) => {
+    const handleFileChange = async (newFiles: File[]) => {
         setFiles(newFiles)
+
+        // Extract text immediately for new PDF/text files
+        for (const file of newFiles) {
+            const needsExtraction =
+                (isPdfFile(file) || isTextFile(file)) && !pdfData.has(file)
+            if (needsExtraction) {
+                // Mark as extracting
+                setPdfData((prev) => {
+                    const next = new Map(prev)
+                    next.set(file, {
+                        text: "",
+                        charCount: 0,
+                        isExtracting: true,
+                    })
+                    return next
+                })
+
+                // Extract text asynchronously
+                try {
+                    let text: string
+                    if (isPdfFile(file)) {
+                        text = await extractPdfText(file)
+                    } else {
+                        text = await extractTextFileContent(file)
+                    }
+
+                    // Check character limit
+                    if (text.length > MAX_EXTRACTED_CHARS) {
+                        const limitK = MAX_EXTRACTED_CHARS / 1000
+                        toast.error(
+                            `${file.name}: Content exceeds ${limitK}k character limit (${(text.length / 1000).toFixed(1)}k chars)`,
+                        )
+                        setPdfData((prev) => {
+                            const next = new Map(prev)
+                            next.delete(file)
+                            return next
+                        })
+                        // Remove the file from the list
+                        setFiles((prev) => prev.filter((f) => f !== file))
+                        continue
+                    }
+
+                    setPdfData((prev) => {
+                        const next = new Map(prev)
+                        next.set(file, {
+                            text,
+                            charCount: text.length,
+                            isExtracting: false,
+                        })
+                        return next
+                    })
+                } catch (error) {
+                    console.error("Failed to extract text:", error)
+                    toast.error(`Failed to read file: ${file.name}`)
+                    setPdfData((prev) => {
+                        const next = new Map(prev)
+                        next.delete(file)
+                        return next
+                    })
+                }
+            }
+        }
+
+        // Clean up pdfData for removed files
+        setPdfData((prev) => {
+            const next = new Map(prev)
+            for (const key of prev.keys()) {
+                if (!newFiles.includes(key)) {
+                    next.delete(key)
+                }
+            }
+            return next
+        })
     }
 
     const handleRegenerate = async (messageIndex: number) => {
@@ -870,6 +1002,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             )
             return
         }
+
+        // Get previous XML (snapshot before the one being regenerated)
+        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
+            .filter((k) => k < userMessageIndex)
+            .sort((a, b) => b - a)
+        const previousXml =
+            snapshotKeys.length > 0
+                ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+                : ""
 
         // Restore the diagram to the saved state (skip validation for trusted snapshots)
         onDisplayChart(savedXml, true)
@@ -925,6 +1066,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             {
                 body: {
                     xml: savedXml,
+                    previousXml,
                     sessionId,
                 },
                 headers: {
@@ -957,6 +1099,15 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             )
             return
         }
+
+        // Get previous XML (snapshot before the one being edited)
+        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
+            .filter((k) => k < messageIndex)
+            .sort((a, b) => b - a)
+        const previousXml =
+            snapshotKeys.length > 0
+                ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+                : ""
 
         // Restore the diagram to the saved state (skip validation for trusted snapshots)
         onDisplayChart(savedXml, true)
@@ -1020,6 +1171,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             {
                 body: {
                     xml: savedXml,
+                    previousXml,
                     sessionId,
                 },
                 headers: {
@@ -1201,12 +1353,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }}
                     files={files}
                     onFileChange={handleFileChange}
+                    pdfData={pdfData}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
-                    drawioUi={drawioUi}
-                    onToggleDrawioUi={onToggleDrawioUi}
                 />
             </footer>
 
@@ -1214,6 +1365,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
                 onCloseProtectionChange={onCloseProtectionChange}
+                drawioUi={drawioUi}
+                onToggleDrawioUi={onToggleDrawioUi}
+                darkMode={darkMode}
+                onToggleDarkMode={onToggleDarkMode}
             />
         </div>
     )
