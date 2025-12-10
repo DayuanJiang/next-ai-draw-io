@@ -72,6 +72,7 @@ const ANTHROPIC_BETA_HEADERS = {
  */
 function buildProviderOptions(
     provider: ProviderName,
+    modelId?: string,
 ): Record<string, any> | undefined {
     const options: Record<string, any> = {}
 
@@ -80,10 +81,34 @@ function buildProviderOptions(
             const reasoningEffort = process.env.OPENAI_REASONING_EFFORT
             const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY
 
-            if (reasoningEffort || reasoningSummary) {
+            // OpenAI reasoning models (o1, o3, gpt-5) need reasoningSummary to return thoughts
+            if (
+                modelId &&
+                (modelId.includes("o1") ||
+                    modelId.includes("o3") ||
+                    modelId.includes("gpt-5"))
+            ) {
+                options.openai = {
+                    // Auto-enable reasoning summary for reasoning models (default: detailed)
+                    reasoningSummary:
+                        (reasoningSummary as "none" | "brief" | "detailed") ||
+                        "detailed",
+                }
+
+                // Optionally configure reasoning effort
+                if (reasoningEffort) {
+                    options.openai.reasoningEffort = reasoningEffort as
+                        | "minimal"
+                        | "low"
+                        | "medium"
+                        | "high"
+                }
+            } else if (reasoningEffort || reasoningSummary) {
+                // Non-reasoning models: only apply if explicitly configured
                 options.openai = {}
                 if (reasoningEffort) {
                     options.openai.reasoningEffort = reasoningEffort as
+                        | "minimal"
                         | "low"
                         | "medium"
                         | "high"
@@ -116,8 +141,40 @@ function buildProviderOptions(
 
         case "google": {
             const reasoningEffort = process.env.GOOGLE_REASONING_EFFORT
+            const thinkingBudget = process.env.GOOGLE_THINKING_BUDGET
+            const thinkingLevel = process.env.GOOGLE_THINKING_LEVEL
 
-            if (reasoningEffort) {
+            // Google Gemini 2.5/3 models think by default, but need includeThoughts: true
+            // to return the reasoning in the response
+            if (
+                modelId &&
+                (modelId.includes("gemini-2") ||
+                    modelId.includes("gemini-3") ||
+                    modelId.includes("gemini2") ||
+                    modelId.includes("gemini3"))
+            ) {
+                const thinkingConfig: Record<string, any> = {
+                    includeThoughts: true,
+                }
+
+                // Optionally configure thinking budget or level
+                if (
+                    thinkingBudget &&
+                    (modelId.includes("2.5") || modelId.includes("2-5"))
+                ) {
+                    thinkingConfig.thinkingBudget = parseInt(thinkingBudget, 10)
+                } else if (
+                    thinkingLevel &&
+                    (modelId.includes("gemini-3") ||
+                        modelId.includes("gemini3"))
+                ) {
+                    thinkingConfig.thinkingLevel = thinkingLevel as
+                        | "low"
+                        | "high"
+                }
+
+                options.google = { thinkingConfig }
+            } else if (reasoningEffort) {
                 options.google = {
                     reasoningEffort: reasoningEffort as
                         | "low"
@@ -169,9 +226,56 @@ function buildProviderOptions(
             break
         }
 
-        case "bedrock":
+        case "bedrock": {
+            const budgetTokens = process.env.BEDROCK_REASONING_BUDGET_TOKENS
+            const reasoningEffort = process.env.BEDROCK_REASONING_EFFORT
+
+            // Bedrock reasoning ONLY for Claude and Nova models
+            // Other models (MiniMax, etc.) don't support reasoningConfig
+            if (
+                modelId &&
+                (budgetTokens || reasoningEffort) &&
+                (modelId.includes("claude") ||
+                    modelId.includes("anthropic") ||
+                    modelId.includes("nova") ||
+                    modelId.includes("amazon"))
+            ) {
+                const reasoningConfig: Record<string, any> = { type: "enabled" }
+
+                // Claude models: use budgetTokens (1024-64000)
+                if (
+                    budgetTokens &&
+                    (modelId.includes("claude") ||
+                        modelId.includes("anthropic"))
+                ) {
+                    reasoningConfig.budgetTokens = parseInt(budgetTokens, 10)
+                }
+                // Nova models: use maxReasoningEffort (low/medium/high)
+                else if (
+                    reasoningEffort &&
+                    (modelId.includes("nova") || modelId.includes("amazon"))
+                ) {
+                    reasoningConfig.maxReasoningEffort = reasoningEffort as
+                        | "low"
+                        | "medium"
+                        | "high"
+                }
+
+                options.bedrock = { reasoningConfig }
+            }
+            break
+        }
+
+        case "ollama": {
+            const enableThinking = process.env.OLLAMA_ENABLE_THINKING
+            // Ollama supports reasoning with think: true for models like qwen3
+            if (enableThinking === "true") {
+                options.ollama = { think: true }
+            }
+            break
+        }
+
         case "deepseek":
-        case "ollama":
         case "openrouter":
         case "siliconflow": {
             // These providers don't have reasoning configs in AI SDK yet
@@ -335,7 +439,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     let headers: Record<string, string> | undefined
 
     // Build provider-specific options from environment variables
-    const customProviderOptions = buildProviderOptions(provider)
+    const customProviderOptions = buildProviderOptions(provider, modelId)
 
     switch (provider) {
         case "bedrock": {
