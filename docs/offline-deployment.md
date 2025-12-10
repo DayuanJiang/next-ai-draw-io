@@ -13,27 +13,7 @@ By default, Next AI Draw.io uses `embed.diagrams.net` for the diagram editor. Fo
 
 ## Quick Start
 
-### 1. Run Local Draw.io
-
-```bash
-docker run -d -p 8080:8080 jgraph/drawio:latest
-```
-
-### 2. Build Next AI Draw.io
-
-```bash
-docker build --build-arg NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080 -t next-ai-draw-io .
-```
-
-### 3. Run the Application
-
-```bash
-docker run -d -p 3000:3000 --env-file .env next-ai-draw-io
-```
-
-## Docker Compose
-
-For a complete offline setup with both services:
+Create a `docker-compose.yml`:
 
 ```yaml
 services:
@@ -51,25 +31,33 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    depends_on:
+      - drawio
+```
+
+Then run:
+
+```bash
+docker compose up -d
 ```
 
 ## Local Development
 
-For local development, add to your `.env.local`:
+1. Start a local draw.io instance:
+
+```bash
+docker run -d -p 8080:8080 jgraph/drawio:latest
+```
+
+2. Add to your `.env.local`:
 
 ```bash
 NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
 ```
 
-Then rebuild the application:
+3. Rebuild and run:
 
 ```bash
 npm run build
 npm run start
 ```
-
-## Notes
-
-- The default draw.io URL is `https://embed.diagrams.net`
-- Changes to `NEXT_PUBLIC_DRAWIO_BASE_URL` require rebuilding (it's baked into the Next.js bundle at build time)
-- You still need network access to your AI provider (OpenAI, Anthropic, etc.) unless using a local model like Ollama
