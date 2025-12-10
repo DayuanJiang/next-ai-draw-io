@@ -15,32 +15,59 @@ const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad } = useDiagram()
+    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
+        useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
-    const [isThemeLoaded, setIsThemeLoaded] = useState(false)
-
-    // Load theme from localStorage after mount to avoid hydration mismatch
-    useEffect(() => {
-        const saved = localStorage.getItem("drawio-theme")
-        if (saved === "min" || saved === "sketch") {
-            setDrawioUi(saved)
-        }
-        setIsThemeLoaded(true)
-    }, [])
+    const [darkMode, setDarkMode] = useState(false)
+    const [isLoaded, setIsLoaded] = useState(false)
     const [closeProtection, setCloseProtection] = useState(false)
 
-    // Load close protection setting from localStorage after mount
-    useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_CLOSE_PROTECTION_KEY)
-        // Default to false since auto-save handles persistence
-        if (saved === "true") {
-            setCloseProtection(true)
-        }
-    }, [])
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
 
+    // Load preferences from localStorage after mount
+    useEffect(() => {
+        const savedUi = localStorage.getItem("drawio-theme")
+        if (savedUi === "min" || savedUi === "sketch") {
+            setDrawioUi(savedUi)
+        }
+
+        const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
+        if (savedDarkMode !== null) {
+            // Use saved preference
+            const isDark = savedDarkMode === "true"
+            setDarkMode(isDark)
+            document.documentElement.classList.toggle("dark", isDark)
+        } else {
+            // First visit: match browser preference
+            const prefersDark = window.matchMedia(
+                "(prefers-color-scheme: dark)",
+            ).matches
+            setDarkMode(prefersDark)
+            document.documentElement.classList.toggle("dark", prefersDark)
+        }
+
+        const savedCloseProtection = localStorage.getItem(
+            STORAGE_CLOSE_PROTECTION_KEY,
+        )
+        if (savedCloseProtection === "true") {
+            setCloseProtection(true)
+        }
+
+        setIsLoaded(true)
+    }, [])
+
+    const toggleDarkMode = () => {
+        const newValue = !darkMode
+        setDarkMode(newValue)
+        localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
+        document.documentElement.classList.toggle("dark", newValue)
+        // Reset so onDrawioLoad fires again after remount
+        resetDrawioReady()
+    }
+
+    // Check mobile
     useEffect(() => {
         const checkMobile = () => {
             setIsMobile(window.innerWidth < 768)
@@ -64,6 +91,7 @@ export default function Home() {
         }
     }
 
+    // Keyboard shortcut for toggling chat panel
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "b") {
@@ -77,7 +105,6 @@ export default function Home() {
     }, [])
 
     // Show confirmation dialog when user tries to leave the page
-    // This helps prevent accidental navigation from browser back gestures
     useEffect(() => {
         if (!closeProtection) return
 
@@ -105,10 +132,10 @@ export default function Home() {
                             isMobile ? "p-1" : "p-2"
                         }`}
                     >
-                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 bg-white">
-                            {isThemeLoaded ? (
+                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30">
+                            {isLoaded ? (
                                 <DrawIoEmbed
-                                    key={drawioUi}
+                                    key={`${drawioUi}-${darkMode}`}
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
@@ -119,10 +146,11 @@ export default function Home() {
                                         libraries: false,
                                         saveAndExit: false,
                                         noExitBtn: true,
+                                        dark: darkMode,
                                     }}
                                 />
                             ) : (
-                                <div className="h-full w-full flex items-center justify-center">
+                                <div className="h-full w-full flex items-center justify-center bg-background">
                                     <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
                                 </div>
                             )}
@@ -149,11 +177,14 @@ export default function Home() {
                             onToggleVisibility={toggleChatPanel}
                             drawioUi={drawioUi}
                             onToggleDrawioUi={() => {
-                                const newTheme =
+                                const newUi =
                                     drawioUi === "min" ? "sketch" : "min"
-                                localStorage.setItem("drawio-theme", newTheme)
-                                setDrawioUi(newTheme)
+                                localStorage.setItem("drawio-theme", newUi)
+                                setDrawioUi(newUi)
+                                resetDrawioReady()
                             }}
+                            darkMode={darkMode}
+                            onToggleDarkMode={toggleDarkMode}
                             isMobile={isMobile}
                             onCloseProtectionChange={setCloseProtection}
                         />

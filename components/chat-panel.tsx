@@ -34,7 +34,7 @@ import {
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
-const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
 const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
 const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
@@ -52,6 +52,8 @@ interface ChatPanelProps {
     onToggleVisibility: () => void
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
+    darkMode: boolean
+    onToggleDarkMode: () => void
     isMobile?: boolean
     onCloseProtectionChange?: (enabled: boolean) => void
 }
@@ -61,6 +63,8 @@ export default function ChatPanel({
     onToggleVisibility,
     drawioUi,
     onToggleDrawioUi,
+    darkMode,
+    onToggleDarkMode,
     isMobile = false,
     onCloseProtectionChange,
 }: ChatPanelProps) {
@@ -582,13 +586,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     const hasDiagramRestoredRef = useRef(false)
     const [canSaveDiagram, setCanSaveDiagram] = useState(false)
     useEffect(() => {
-        console.log(
-            "[ChatPanel] isDrawioReady:",
-            isDrawioReady,
-            "hasDiagramRestored:",
-            hasDiagramRestoredRef.current,
-        )
-        if (!isDrawioReady || hasDiagramRestoredRef.current) return
+        // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
+        if (!isDrawioReady) {
+            hasDiagramRestoredRef.current = false
+            setCanSaveDiagram(false)
+            return
+        }
+        if (hasDiagramRestoredRef.current) return
         hasDiagramRestoredRef.current = true
 
         try {
@@ -629,6 +633,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }, [messages])
 
+    // Save diagram XML to localStorage whenever it changes
+    useEffect(() => {
+        if (!canSaveDiagram) return
+        if (chartXML && chartXML.length > 300) {
+            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
+        }
+    }, [chartXML, canSaveDiagram])
+
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
         try {
@@ -649,20 +661,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     useEffect(() => {
         localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
     }, [sessionId])
-
-    // Save current diagram XML to localStorage whenever it changes
-    // Only save after initial restore is complete and if it's not an empty diagram
-    useEffect(() => {
-        if (!canSaveDiagram) return
-        // Don't save empty diagrams (check for minimal content)
-        if (chartXML && chartXML.length > 300) {
-            console.log(
-                "[ChatPanel] Saving diagram to localStorage, length:",
-                chartXML.length,
-            )
-            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
-        }
-    }, [chartXML, canSaveDiagram])
 
     useEffect(() => {
         if (messagesEndRef.current) {
@@ -1204,8 +1202,6 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
-                    drawioUi={drawioUi}
-                    onToggleDrawioUi={onToggleDrawioUi}
                 />
             </footer>
 
@@ -1213,6 +1209,10 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
                 onCloseProtectionChange={onCloseProtectionChange}
+                drawioUi={drawioUi}
+                onToggleDrawioUi={onToggleDrawioUi}
+                darkMode={darkMode}
+                onToggleDarkMode={onToggleDarkMode}
             />
         </div>
     )

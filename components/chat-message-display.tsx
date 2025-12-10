@@ -135,6 +135,7 @@ export function ChatMessageDisplay({
     const copyMessageToClipboard = async (messageId: string, text: string) => {
         try {
             await navigator.clipboard.writeText(text)
+
             setCopiedMessageId(messageId)
             setTimeout(() => setCopiedMessageId(null), 2000)
         } catch (err) {
