@@ -322,9 +322,6 @@ ${lastMessageText}
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
-    // Check if reasoning is enabled - only used for sendReasoning flag
-    // const enableReasoning = process.env.ENABLE_REASONING === "true"
-
     const result = streamText({
         model,
         stopWhen: stepCountIs(5),

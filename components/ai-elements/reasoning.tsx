@@ -4,7 +4,6 @@ import { useControllableState } from "@radix-ui/react-use-controllable-state"
 import { BrainIcon, ChevronDownIcon } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 import { createContext, memo, useContext, useEffect, useState } from "react"
-import { Streamdown } from "streamdown"
 import {
     Collapsible,
     CollapsibleContent,
@@ -177,7 +176,7 @@ export const ReasoningContent = memo(
             )}
             {...props}
         >
-            <Streamdown {...props}>{children}</Streamdown>
+            <div className="whitespace-pre-wrap">{children}</div>
         </CollapsibleContent>
     ),
 )

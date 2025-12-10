@@ -169,31 +169,8 @@ function buildProviderOptions(
             break
         }
 
-        case "deepseek": {
-            const options_obj: Record<string, any> = {}
-            const reasoningEffort = process.env.DEEPSEEK_REASONING_EFFORT
-            const reasoningBudget = process.env.DEEPSEEK_REASONING_BUDGET_TOKENS
-
-            if (reasoningEffort || reasoningBudget) {
-                options_obj.reasoning = {}
-                if (reasoningEffort) {
-                    ;(options_obj.reasoning as any).effort = reasoningEffort
-                }
-                if (reasoningBudget) {
-                    ;(options_obj.reasoning as any).budgetTokens = parseInt(
-                        reasoningBudget,
-                        10,
-                    )
-                }
-            }
-
-            if (Object.keys(options_obj).length > 0) {
-                options.deepseek = options_obj
-            }
-            break
-        }
-
         case "bedrock":
+        case "deepseek":
         case "ollama":
         case "openrouter":
         case "siliconflow": {
@@ -371,7 +348,10 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
-                providerOptions = BEDROCK_ANTHROPIC_BETA
+                providerOptions = {
+                    ...BEDROCK_ANTHROPIC_BETA,
+                    ...(customProviderOptions || {}),
+                }
             } else if (customProviderOptions) {
                 providerOptions = customProviderOptions
             }
@@ -490,9 +470,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 model = customDeepSeek(modelId)
             } else {
                 model = deepseek(modelId)
-            }
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
             }
             break
         }
