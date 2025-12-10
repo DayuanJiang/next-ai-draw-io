@@ -395,6 +395,366 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
 </root>`,
     },
     {
+        promptText: "Summarize this paper as a diagram",
+        hasImage: true,
+        xml: `            <root>
+                <mxCell id="0" />
+                <mxCell id="1" parent="0" />
+                <mxCell id="title_bg" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a237e;strokeColor=none;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="80" width="720" x="40" y="20" as="geometry" />
+                </mxCell>
+                <mxCell id="title" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=22;fontStyle=1;fontColor=#FFFFFF;"
+                    value="Chain-of-Thought Prompting&lt;br&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;Elicits Reasoning in Large Language Models&lt;/font&gt;"
+                    vertex="1">
+                    <mxGeometry height="70" width="720" x="40" y="25" as="geometry" />
+                </mxCell>
+                <mxCell id="authors" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#666666;"
+                    value="Wei et al. (Google Research, Brain Team) | NeurIPS 2022" vertex="1">
+                    <mxGeometry height="20" width="720" x="40" y="100" as="geometry" />
+                </mxCell>
+                <mxCell id="core_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="💡 Core Idea" vertex="1">
+                    <mxGeometry height="30" width="150" x="40" y="125" as="geometry" />
+                </mxCell>
+                <mxCell id="core_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;align=left;spacingLeft=10;spacingRight=10;fontSize=11;"
+                    value="&lt;b&gt;Chain of Thought&lt;/b&gt; = A series of intermediate reasoning steps that lead to the final answer&lt;br&gt;&lt;br&gt;Simply provide a few CoT demonstrations as exemplars in few-shot prompting"
+                    vertex="1">
+                    <mxGeometry height="75" width="340" x="40" y="155" as="geometry" />
+                </mxCell>
+                <mxCell id="compare_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="⚖️ Standard vs Chain-of-Thought Prompting" vertex="1">
+                    <mxGeometry height="30" width="350" x="40" y="240" as="geometry" />
+                </mxCell>
+                <mxCell id="std_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#C62828;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="160" width="170" x="40" y="275" as="geometry" />
+                </mxCell>
+                <mxCell id="std_title" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#C62828;"
+                    value="Standard Prompting" vertex="1">
+                    <mxGeometry height="25" width="170" x="40" y="280" as="geometry" />
+                </mxCell>
+                <mxCell id="std_q" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;spacingLeft=5;spacingRight=5;"
+                    value="Q: Roger has 5 tennis balls. He buys 2 more cans. Each can has 3 balls. How many now?"
+                    vertex="1">
+                    <mxGeometry height="55" width="160" x="45" y="305" as="geometry" />
+                </mxCell>
+                <mxCell id="std_a" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=#FFCDD2;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=1;spacingLeft=5;"
+                    value="A: The answer is 11." vertex="1">
+                    <mxGeometry height="25" width="150" x="50" y="365" as="geometry" />
+                </mxCell>
+                <mxCell id="std_result" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#C62828;"
+                    value="❌ Often Wrong" vertex="1">
+                    <mxGeometry height="30" width="170" x="40" y="400" as="geometry" />
+                </mxCell>
+                <mxCell id="cot_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="160" width="170" x="220" y="275" as="geometry" />
+                </mxCell>
+                <mxCell id="cot_title" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#2E7D32;"
+                    value="Chain-of-Thought" vertex="1">
+                    <mxGeometry height="25" width="170" x="220" y="280" as="geometry" />
+                </mxCell>
+                <mxCell id="cot_q" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;spacingLeft=5;spacingRight=5;"
+                    value="Q: Roger has 5 tennis balls. He buys 2 more cans. Each can has 3 balls. How many now?"
+                    vertex="1">
+                    <mxGeometry height="55" width="160" x="225" y="305" as="geometry" />
+                </mxCell>
+                <mxCell id="cot_a" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=#C8E6C9;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=9;fontStyle=1;spacingLeft=5;"
+                    value="A: 2 cans × 3 = 6 balls.&lt;br&gt;5 + 6 = 11. Answer: 11" vertex="1">
+                    <mxGeometry height="35" width="150" x="230" y="360" as="geometry" />
+                </mxCell>
+                <mxCell id="cot_result" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#2E7D32;"
+                    value="✓ Correct!" vertex="1">
+                    <mxGeometry height="30" width="170" x="220" y="400" as="geometry" />
+                </mxCell>
+                <mxCell id="vs_arrow" edge="1" parent="1"
+                    style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;fillColor=#FFC107;strokeColor=none;width=8;endSize=4;startSize=4;"
+                    value="">
+                    <mxGeometry relative="1" width="100" as="geometry">
+                        <mxPoint x="195" y="355" as="sourcePoint" />
+                        <mxPoint x="235" y="355" as="targetPoint" />
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="props_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="🔑 Key Properties" vertex="1">
+                    <mxGeometry height="30" width="150" x="400" y="125" as="geometry" />
+                </mxCell>
+                <mxCell id="prop1" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#EF6C00;fontSize=10;align=left;spacingLeft=8;"
+                    value="1️⃣ Decomposes multi-step problems" vertex="1">
+                    <mxGeometry height="32" width="180" x="400" y="155" as="geometry" />
+                </mxCell>
+                <mxCell id="prop2" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#EF6C00;fontSize=10;align=left;spacingLeft=8;"
+                    value="2️⃣ Interpretable reasoning window" vertex="1">
+                    <mxGeometry height="32" width="180" x="400" y="192" as="geometry" />
+                </mxCell>
+                <mxCell id="prop3" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#EF6C00;fontSize=10;align=left;spacingLeft=8;"
+                    value="3️⃣ Applicable to any language task" vertex="1">
+                    <mxGeometry height="32" width="180" x="400" y="229" as="geometry" />
+                </mxCell>
+                <mxCell id="prop4" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#EF6C00;fontSize=10;align=left;spacingLeft=8;"
+                    value="4️⃣ No finetuning required" vertex="1">
+                    <mxGeometry height="32" width="180" x="400" y="266" as="geometry" />
+                </mxCell>
+                <mxCell id="emergent_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="📈 Emergent Ability" vertex="1">
+                    <mxGeometry height="30" width="180" x="400" y="310" as="geometry" />
+                </mxCell>
+                <mxCell id="emergent_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="95" width="180" x="400" y="340" as="geometry" />
+                </mxCell>
+                <mxCell id="emergent_text" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;"
+                    value="CoT only works with&lt;br&gt;&lt;b&gt;~100B+ parameters&lt;/b&gt;&lt;br&gt;&lt;br&gt;Small models produce&lt;br&gt;fluent but illogical chains"
+                    vertex="1">
+                    <mxGeometry height="85" width="180" x="400" y="345" as="geometry" />
+                </mxCell>
+                <mxCell id="results_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="📊 Key Results" vertex="1">
+                    <mxGeometry height="30" width="150" x="600" y="125" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="100" width="160" x="600" y="155" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_title" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#2E7D32;"
+                    value="GSM8K (Math)" vertex="1">
+                    <mxGeometry height="20" width="160" x="600" y="160" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_bar1" parent="1"
+                    style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=none;"
+                    value="" vertex="1">
+                    <mxGeometry height="30" width="40" x="615" y="185" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_bar2" parent="1"
+                    style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=none;"
+                    value="" vertex="1">
+                    <mxGeometry height="30" width="80" x="665" y="185" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_label1" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1;"
+                    value="18%" vertex="1">
+                    <mxGeometry height="15" width="40" x="615" y="215" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_label2" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1;fontColor=#2E7D32;"
+                    value="57%" vertex="1">
+                    <mxGeometry height="15" width="80" x="665" y="215" as="geometry" />
+                </mxCell>
+                <mxCell id="gsm_legend" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#666666;"
+                    value="Standard → CoT (PaLM 540B)" vertex="1">
+                    <mxGeometry height="20" width="160" x="600" y="232" as="geometry" />
+                </mxCell>
+                <mxCell id="bench_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="🧪 Benchmarks Tested" vertex="1">
+                    <mxGeometry height="30" width="180" x="600" y="265" as="geometry" />
+                </mxCell>
+                <mxCell id="bench_arith" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=10;align=center;"
+                    value="🔢 Arithmetic&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;GSM8K, SVAMP, ASDiv, AQuA, MAWPS&lt;/font&gt;"
+                    vertex="1">
+                    <mxGeometry height="45" width="160" x="600" y="295" as="geometry" />
+                </mxCell>
+                <mxCell id="bench_common" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=10;align=center;"
+                    value="🧠 Commonsense&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;CSQA, StrategyQA, Date, Sports, SayCan&lt;/font&gt;"
+                    vertex="1">
+                    <mxGeometry height="45" width="160" x="600" y="345" as="geometry" />
+                </mxCell>
+                <mxCell id="bench_symbol" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=10;align=center;"
+                    value="🔣 Symbolic&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;Last Letter Concat, Coin Flip&lt;/font&gt;"
+                    vertex="1">
+                    <mxGeometry height="40" width="160" x="600" y="395" as="geometry" />
+                </mxCell>
+                <mxCell id="task_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="🎯 Task Types &amp; Results" vertex="1">
+                    <mxGeometry height="30" width="200" x="40" y="445" as="geometry" />
+                </mxCell>
+                <mxCell id="task_arith" parent="1"
+                    style="ellipse;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1565C0;fontSize=11;fontStyle=1;"
+                    value="Arithmetic&lt;br&gt;Reasoning" vertex="1">
+                    <mxGeometry height="60" width="90" x="40" y="480" as="geometry" />
+                </mxCell>
+                <mxCell id="task_arith_res" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#1565C0;"
+                    value="SOTA on GSM8K&lt;br&gt;(57% vs 55% prior)" vertex="1">
+                    <mxGeometry height="30" width="110" x="30" y="540" as="geometry" />
+                </mxCell>
+                <mxCell id="task_common" parent="1"
+                    style="ellipse;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;fontSize=11;fontStyle=1;"
+                    value="Commonsense&lt;br&gt;Reasoning" vertex="1">
+                    <mxGeometry height="60" width="90" x="160" y="480" as="geometry" />
+                </mxCell>
+                <mxCell id="task_common_res" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#2E7D32;"
+                    value="SOTA StrategyQA&lt;br&gt;(75.6% vs 69.4%)" vertex="1">
+                    <mxGeometry height="30" width="110" x="150" y="540" as="geometry" />
+                </mxCell>
+                <mxCell id="task_symbol" parent="1"
+                    style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#EF6C00;fontSize=11;fontStyle=1;"
+                    value="Symbolic&lt;br&gt;Reasoning" vertex="1">
+                    <mxGeometry height="60" width="90" x="280" y="480" as="geometry" />
+                </mxCell>
+                <mxCell id="task_symbol_res" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#EF6C00;"
+                    value="OOD Generalization&lt;br&gt;to longer sequences" vertex="1">
+                    <mxGeometry height="30" width="110" x="270" y="540" as="geometry" />
+                </mxCell>
+                <mxCell id="task_arrow1" edge="1" parent="1"
+                    style="endArrow=classic;html=1;strokeColor=#9E9E9E;strokeWidth=2;" value="">
+                    <mxGeometry height="50" relative="1" width="50" as="geometry">
+                        <mxPoint x="130" y="510" as="sourcePoint" />
+                        <mxPoint x="160" y="510" as="targetPoint" />
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="task_arrow2" edge="1" parent="1"
+                    style="endArrow=classic;html=1;strokeColor=#9E9E9E;strokeWidth=2;" value="">
+                    <mxGeometry height="50" relative="1" width="50" as="geometry">
+                        <mxPoint x="250" y="510" as="sourcePoint" />
+                        <mxPoint x="280" y="510" as="targetPoint" />
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="models_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="🤖 Models Tested" vertex="1">
+                    <mxGeometry height="30" width="150" x="400" y="445" as="geometry" />
+                </mxCell>
+                <mxCell id="models_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECEFF1;strokeColor=#607D8B;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="95" width="180" x="400" y="475" as="geometry" />
+                </mxCell>
+                <mxCell id="model1" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=10;"
+                    value="• GPT-3 (175B)" vertex="1">
+                    <mxGeometry height="20" width="90" x="400" y="480" as="geometry" />
+                </mxCell>
+                <mxCell id="model2" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=10;"
+                    value="• LaMDA (137B)" vertex="1">
+                    <mxGeometry height="20" width="90" x="400" y="500" as="geometry" />
+                </mxCell>
+                <mxCell id="model3" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=10;"
+                    value="• PaLM (540B)" vertex="1">
+                    <mxGeometry height="20" width="90" x="400" y="520" as="geometry" />
+                </mxCell>
+                <mxCell id="model4" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=10;"
+                    value="• Codex" vertex="1">
+                    <mxGeometry height="20" width="80" x="490" y="480" as="geometry" />
+                </mxCell>
+                <mxCell id="model5" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=10;"
+                    value="• UL2 (20B)" vertex="1">
+                    <mxGeometry height="20" width="80" x="490" y="500" as="geometry" />
+                </mxCell>
+                <mxCell id="model_note" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;fontColor=#607D8B;"
+                    value="No finetuning - prompting only!" vertex="1">
+                    <mxGeometry height="20" width="180" x="400" y="545" as="geometry" />
+                </mxCell>
+                <mxCell id="takeaway_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1a237e;"
+                    value="✨ Key Takeaways" vertex="1">
+                    <mxGeometry height="30" width="160" x="600" y="445" as="geometry" />
+                </mxCell>
+                <mxCell id="takeaway_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FFA000;arcSize=8;"
+                    value="" vertex="1">
+                    <mxGeometry height="95" width="160" x="600" y="475" as="geometry" />
+                </mxCell>
+                <mxCell id="take1" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=5;"
+                    value="✓ Simple yet powerful" vertex="1">
+                    <mxGeometry height="18" width="150" x="605" y="480" as="geometry" />
+                </mxCell>
+                <mxCell id="take2" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=5;"
+                    value="✓ Emergent at scale" vertex="1">
+                    <mxGeometry height="18" width="150" x="605" y="498" as="geometry" />
+                </mxCell>
+                <mxCell id="take3" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=5;"
+                    value="✓ Broadly applicable" vertex="1">
+                    <mxGeometry height="18" width="150" x="605" y="516" as="geometry" />
+                </mxCell>
+                <mxCell id="take4" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=5;"
+                    value="✓ No training needed" vertex="1">
+                    <mxGeometry height="18" width="150" x="605" y="534" as="geometry" />
+                </mxCell>
+                <mxCell id="take5" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;spacingLeft=5;"
+                    value="✓ State-of-the-art results" vertex="1">
+                    <mxGeometry height="18" width="150" x="605" y="552" as="geometry" />
+                </mxCell>
+                <mxCell id="format_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1a237e;"
+                    value="📝 Prompt Format" vertex="1">
+                    <mxGeometry height="25" width="150" x="40" y="575" as="geometry" />
+                </mxCell>
+                <mxCell id="format_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;fontSize=12;fontStyle=1;"
+                    value="〈 Input, Chain of Thought, Output 〉" vertex="1">
+                    <mxGeometry height="35" width="250" x="40" y="600" as="geometry" />
+                </mxCell>
+                <mxCell id="limit_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1a237e;"
+                    value="⚠️ Limitations" vertex="1">
+                    <mxGeometry height="25" width="120" x="310" y="575" as="geometry" />
+                </mxCell>
+                <mxCell id="limit_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#C62828;fontSize=10;align=left;spacingLeft=8;"
+                    value="• Requires large models (~100B+)&lt;br&gt;• No guarantee of correct reasoning&lt;br&gt;• Costly to serve in production"
+                    vertex="1">
+                    <mxGeometry height="55" width="200" x="310" y="600" as="geometry" />
+                </mxCell>
+                <mxCell id="impact_header" parent="1"
+                    style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1a237e;"
+                    value="🚀 Impact" vertex="1">
+                    <mxGeometry height="25" width="100" x="530" y="575" as="geometry" />
+                </mxCell>
+                <mxCell id="impact_box" parent="1"
+                    style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;fontSize=10;align=left;spacingLeft=8;spacingRight=8;"
+                    value="Foundational technique for modern LLM reasoning - inspired many follow-up works including Self-Consistency, Tree-of-Thought, etc."
+                    vertex="1">
+                    <mxGeometry height="55" width="230" x="530" y="600" as="geometry" />
+                </mxCell>
+            </root>`,
+    },
+    {
         promptText: "Draw a cat for me",
         hasImage: false,
         xml: `<root>

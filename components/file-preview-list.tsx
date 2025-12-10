@@ -1,15 +1,31 @@
 "use client"
 
-import { X } from "lucide-react"
+import { FileCode, FileText, Loader2, X } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
+import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+
+function formatCharCount(count: number): string {
+    if (count >= 1000) {
+        return `${(count / 1000).toFixed(1)}k`
+    }
+    return String(count)
+}
 
 interface FilePreviewListProps {
     files: File[]
     onRemoveFile: (fileToRemove: File) => void
+    pdfData?: Map<
+        File,
+        { text: string; charCount: number; isExtracting: boolean }
+    >
 }
 
-export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
+export function FilePreviewList({
+    files,
+    onRemoveFile,
+    pdfData = new Map(),
+}: FilePreviewListProps) {
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
     const [imageUrls, setImageUrls] = useState<Map<File, string>>(new Map())
     const imageUrlsRef = useRef<Map<File, string>>(new Map())
@@ -70,12 +86,19 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
             <div className="flex flex-wrap gap-2 mt-2 p-2 bg-muted/50 rounded-md">
                 {files.map((file, index) => {
                     const imageUrl = imageUrls.get(file) || null
+                    const pdfInfo = pdfData.get(file)
                     return (
                         <div key={file.name + index} className="relative group">
                             <div
-                                className="w-20 h-20 border rounded-md overflow-hidden bg-muted cursor-pointer"
+                                className={`w-20 h-20 border rounded-md overflow-hidden bg-muted ${
+                                    file.type.startsWith("image/") && imageUrl
+                                        ? "cursor-pointer"
+                                        : ""
+                                }`}
                                 onClick={() =>
-                                    imageUrl && setSelectedImage(imageUrl)
+                                    file.type.startsWith("image/") &&
+                                    imageUrl &&
+                                    setSelectedImage(imageUrl)
                                 }
                             >
                                 {file.type.startsWith("image/") && imageUrl ? (
@@ -87,6 +110,33 @@ export function FilePreviewList({ files, onRemoveFile }: FilePreviewListProps) {
                                         className="object-cover w-full h-full"
                                         unoptimized
                                     />
+                                ) : isPdfFile(file) || isTextFile(file) ? (
+                                    <div className="flex flex-col items-center justify-center h-full p-1">
+                                        {pdfInfo?.isExtracting ? (
+                                            <Loader2 className="h-6 w-6 text-blue-500 mb-1 animate-spin" />
+                                        ) : isPdfFile(file) ? (
+                                            <FileText className="h-6 w-6 text-red-500 mb-1" />
+                                        ) : (
+                                            <FileCode className="h-6 w-6 text-blue-500 mb-1" />
+                                        )}
+                                        <span className="text-xs text-center truncate w-full px-1">
+                                            {file.name.length > 10
+                                                ? `${file.name.slice(0, 7)}...`
+                                                : file.name}
+                                        </span>
+                                        {pdfInfo?.isExtracting ? (
+                                            <span className="text-[10px] text-muted-foreground">
+                                                Reading...
+                                            </span>
+                                        ) : pdfInfo?.charCount ? (
+                                            <span className="text-[10px] text-green-600 font-medium">
+                                                {formatCharCount(
+                                                    pdfInfo.charCount,
+                                                )}{" "}
+                                                chars
+                                            </span>
+                                        ) : null}
+                                    </div>
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-xs text-center p-1">
                                         {file.name}

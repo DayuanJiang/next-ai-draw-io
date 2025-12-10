@@ -44,6 +44,13 @@ const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
 
 import { useDiagram } from "@/contexts/diagram-context"
 import { findCachedResponse } from "@/lib/cached-responses"
+import {
+    extractPdfText,
+    extractTextFileContent,
+    isPdfFile,
+    isTextFile,
+    MAX_EXTRACTED_CHARS,
+} from "@/lib/pdf-utils"
 import { formatXML, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
@@ -105,6 +112,10 @@ export default function ChatPanel({
     }
 
     const [files, setFiles] = useState<File[]>([])
+    // Store extracted PDF text with extraction status
+    const [pdfData, setPdfData] = useState<
+        Map<File, { text: string; charCount: number; isExtracting: boolean }>
+    >(new Map())
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [, setAccessCodeRequired] = useState(false)
@@ -711,11 +722,28 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     // Add user message and fake assistant response to messages
                     // The chat-message-display useEffect will handle displaying the diagram
                     const toolCallId = `cached-${Date.now()}`
+
+                    // Build user message text including any file content
+                    let userText = input
+                    for (const file of files) {
+                        if (isPdfFile(file)) {
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
+                            }
+                        } else if (isTextFile(file)) {
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[File: ${file.name}]\n${extracted.text}`
+                            }
+                        }
+                    }
+
                     setMessages([
                         {
                             id: `user-${Date.now()}`,
                             role: "user" as const,
-                            parts: [{ type: "text" as const, text: input }],
+                            parts: [{ type: "text" as const, text: userText }],
                         },
                         {
                             id: `assistant-${Date.now()}`,
@@ -745,24 +773,47 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 // This ensures edit_diagram has the correct XML before AI responds
                 chartXMLRef.current = chartXml
 
-                const parts: any[] = [{ type: "text", text: input }]
+                // Build user text by concatenating input with pre-extracted text
+                // (Backend only reads first text part, so we must combine them)
+                let userText = input
+                const parts: any[] = []
 
                 if (files.length > 0) {
                     for (const file of files) {
-                        const reader = new FileReader()
-                        const dataUrl = await new Promise<string>((resolve) => {
-                            reader.onload = () =>
-                                resolve(reader.result as string)
-                            reader.readAsDataURL(file)
-                        })
+                        if (isPdfFile(file)) {
+                            // Use pre-extracted PDF text from pdfData
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
+                            }
+                        } else if (isTextFile(file)) {
+                            // Use pre-extracted text file content from pdfData
+                            const extracted = pdfData.get(file)
+                            if (extracted?.text) {
+                                userText += `\n\n[File: ${file.name}]\n${extracted.text}`
+                            }
+                        } else {
+                            // Handle as image
+                            const reader = new FileReader()
+                            const dataUrl = await new Promise<string>(
+                                (resolve) => {
+                                    reader.onload = () =>
+                                        resolve(reader.result as string)
+                                    reader.readAsDataURL(file)
+                                },
+                            )
 
-                        parts.push({
-                            type: "file",
-                            url: dataUrl,
-                            mediaType: file.type,
-                        })
+                            parts.push({
+                                type: "file",
+                                url: dataUrl,
+                                mediaType: file.type,
+                            })
+                        }
                     }
                 }
+
+                // Add the combined text as the first part
+                parts.unshift({ type: "text", text: userText })
 
                 // Get previous XML from the last snapshot (before this message)
                 const snapshotKeys = Array.from(
@@ -843,8 +894,81 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         setInput(e.target.value)
     }
 
-    const handleFileChange = (newFiles: File[]) => {
+    const handleFileChange = async (newFiles: File[]) => {
         setFiles(newFiles)
+
+        // Extract text immediately for new PDF/text files
+        for (const file of newFiles) {
+            const needsExtraction =
+                (isPdfFile(file) || isTextFile(file)) && !pdfData.has(file)
+            if (needsExtraction) {
+                // Mark as extracting
+                setPdfData((prev) => {
+                    const next = new Map(prev)
+                    next.set(file, {
+                        text: "",
+                        charCount: 0,
+                        isExtracting: true,
+                    })
+                    return next
+                })
+
+                // Extract text asynchronously
+                try {
+                    let text: string
+                    if (isPdfFile(file)) {
+                        text = await extractPdfText(file)
+                    } else {
+                        text = await extractTextFileContent(file)
+                    }
+
+                    // Check character limit
+                    if (text.length > MAX_EXTRACTED_CHARS) {
+                        const limitK = MAX_EXTRACTED_CHARS / 1000
+                        toast.error(
+                            `${file.name}: Content exceeds ${limitK}k character limit (${(text.length / 1000).toFixed(1)}k chars)`,
+                        )
+                        setPdfData((prev) => {
+                            const next = new Map(prev)
+                            next.delete(file)
+                            return next
+                        })
+                        // Remove the file from the list
+                        setFiles((prev) => prev.filter((f) => f !== file))
+                        continue
+                    }
+
+                    setPdfData((prev) => {
+                        const next = new Map(prev)
+                        next.set(file, {
+                            text,
+                            charCount: text.length,
+                            isExtracting: false,
+                        })
+                        return next
+                    })
+                } catch (error) {
+                    console.error("Failed to extract text:", error)
+                    toast.error(`Failed to read file: ${file.name}`)
+                    setPdfData((prev) => {
+                        const next = new Map(prev)
+                        next.delete(file)
+                        return next
+                    })
+                }
+            }
+        }
+
+        // Clean up pdfData for removed files
+        setPdfData((prev) => {
+            const next = new Map(prev)
+            for (const key of prev.keys()) {
+                if (!newFiles.includes(key)) {
+                    next.delete(key)
+                }
+            }
+            return next
+        })
     }
 
     const handleRegenerate = async (messageIndex: number) => {
@@ -1228,6 +1352,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     }}
                     files={files}
                     onFileChange={handleFileChange}
+                    pdfData={pdfData}
                     showHistory={showHistory}
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}

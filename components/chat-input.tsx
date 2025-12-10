@@ -19,10 +19,15 @@ import { SaveDialog } from "@/components/save-dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useDiagram } from "@/contexts/diagram-context"
+import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { FilePreviewList } from "./file-preview-list"
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
 const MAX_FILES = 5
+
+function isValidFileType(file: File): boolean {
+    return file.type.startsWith("image/") || isPdfFile(file) || isTextFile(file)
+}
 
 function formatFileSize(bytes: number): string {
     const mb = bytes / 1024 / 1024
@@ -63,9 +68,16 @@ function validateFiles(
             errors.push(`Only ${availableSlots} more file(s) allowed`)
             break
         }
-        if (file.size > MAX_FILE_SIZE) {
+        if (!isValidFileType(file)) {
+            errors.push(`"${file.name}" is not a supported file type`)
+            continue
+        }
+        // Only check size for images (PDFs/text files are extracted client-side, so file size doesn't matter)
+        const isExtractedFile = isPdfFile(file) || isTextFile(file)
+        if (!isExtractedFile && file.size > MAX_IMAGE_SIZE) {
+            const maxSizeMB = MAX_IMAGE_SIZE / 1024 / 1024
             errors.push(
-                `"${file.name}" is ${formatFileSize(file.size)} (exceeds 2MB)`,
+                `"${file.name}" is ${formatFileSize(file.size)} (exceeds ${maxSizeMB}MB)`,
             )
         } else {
             validFiles.push(file)
@@ -109,6 +121,10 @@ interface ChatInputProps {
     onClearChat: () => void
     files?: File[]
     onFileChange?: (files: File[]) => void
+    pdfData?: Map<
+        File,
+        { text: string; charCount: number; isExtracting: boolean }
+    >
     showHistory?: boolean
     onToggleHistory?: (show: boolean) => void
     sessionId?: string
@@ -123,6 +139,7 @@ export function ChatInput({
     onClearChat,
     files = [],
     onFileChange = () => {},
+    pdfData = new Map(),
     showHistory = false,
     onToggleHistory = () => {},
     sessionId,
@@ -245,11 +262,14 @@ export function ChatInput({
         if (isDisabled) return
 
         const droppedFiles = e.dataTransfer.files
-        const imageFiles = Array.from(droppedFiles).filter((file) =>
-            file.type.startsWith("image/"),
+        const supportedFiles = Array.from(droppedFiles).filter((file) =>
+            isValidFileType(file),
         )
 
-        const { validFiles, errors } = validateFiles(imageFiles, files.length)
+        const { validFiles, errors } = validateFiles(
+            supportedFiles,
+            files.length,
+        )
         showValidationErrors(errors)
         if (validFiles.length > 0) {
             onFileChange([...files, ...validFiles])
@@ -279,6 +299,7 @@ export function ChatInput({
                     <FilePreviewList
                         files={files}
                         onRemoveFile={handleRemoveFile}
+                        pdfData={pdfData}
                     />
                 </div>
             )}
@@ -291,7 +312,7 @@ export function ChatInput({
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
-                    placeholder="Describe your diagram or paste an image..."
+                    placeholder="Describe your diagram or upload a file..."
                     disabled={isDisabled}
                     aria-label="Chat input"
                     className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
@@ -367,7 +388,7 @@ export function ChatInput({
                             size="sm"
                             onClick={triggerFileInput}
                             disabled={isDisabled}
-                            tooltipContent="Upload image"
+                            tooltipContent="Upload file (image, PDF, text)"
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                         >
                             <ImageIcon className="h-4 w-4" />
@@ -378,7 +399,7 @@ export function ChatInput({
                             ref={fileInputRef}
                             className="hidden"
                             onChange={handleFileChange}
-                            accept="image/*"
+                            accept="image/*,.pdf,application/pdf,text/*,.md,.markdown,.json,.csv,.xml,.yaml,.yml,.toml"
                             multiple
                             disabled={isDisabled}
                         />
