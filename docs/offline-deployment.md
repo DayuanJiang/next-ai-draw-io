@@ -1,63 +1,39 @@
 # Offline Deployment
 
-In some corporate environments, `embed.diagrams.net` is blocked by network policies. This guide explains how to deploy Next AI Draw.io in offline/air-gapped environments using a self-hosted draw.io instance.
+Deploy Next AI Draw.io offline by self-hosting draw.io to replace `embed.diagrams.net`.
 
-## Overview
+**Note:** `NEXT_PUBLIC_DRAWIO_BASE_URL` is a **build-time** variable. Changing it requires rebuilding the Docker image.
 
-By default, Next AI Draw.io uses `embed.diagrams.net` for the diagram editor. For offline deployment, you need to:
+## Docker Compose Setup
 
-1. Run a local draw.io instance
-2. Build Next AI Draw.io with a custom `NEXT_PUBLIC_DRAWIO_BASE_URL`
-
-**Important:** This is a **build-time** configuration. You need to rebuild the Docker image to change the draw.io URL.
-
-## Quick Start
-
-Create a `docker-compose.yml`:
+1. Clone the repository and define API keys in `.env`.
+2. Create `docker-compose.yml`:
 
 ```yaml
 services:
   drawio:
     image: jgraph/drawio:latest
-    ports:
-      - "8080:8080"
-
+    ports: ["8080:8080"]
   next-ai-draw-io:
     build:
       context: .
       args:
-        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://drawio:8080
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    depends_on:
-      - drawio
+        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
+    ports: ["3000:3000"]
+    env_file: .env
+    depends_on: [drawio]
 ```
 
-Then run:
+3. Run `docker compose up -d` and open `http://localhost:3000`.
 
-```bash
-docker compose up -d
-```
+## Configuration & Critical Warning
 
-## Local Development
+**The `NEXT_PUBLIC_DRAWIO_BASE_URL` must be accessible from the user's browser.**
 
-1. Start a local draw.io instance:
+| Scenario | URL Value |
+|----------|-----------|
+| Localhost | `http://localhost:8080` |
+| Remote/Server | `http://YOUR_SERVER_IP:8080` or `https://drawio.your-domain.com` |
 
-```bash
-docker run -d -p 8080:8080 jgraph/drawio:latest
-```
+**Do NOT use** internal Docker aliases like `http://drawio:8080`; the browser cannot resolve them.
 
-2. Add to your `.env.local`:
-
-```bash
-NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
-```
-
-3. Rebuild and run:
-
-```bash
-npm run build
-npm run start
-```

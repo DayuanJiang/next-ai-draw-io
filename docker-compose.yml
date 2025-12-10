@@ -1,0 +1,12 @@
+services:
+  drawio:
+    image: jgraph/drawio:latest
+    ports: ["8080:8080"]
+  next-ai-draw-io:
+    build:
+      context: .
+      args:
+        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
+    ports: ["3000:3000"]
+    env_file: .env
+    depends_on: [drawio]
