@@ -66,6 +66,35 @@ function isMinimalDiagram(xml: string): boolean {
     return !stripped.includes('id="2"')
 }
 
+// Helper function to replace historical tool call XML with placeholders
+// This reduces token usage and forces LLM to rely on the current diagram XML (source of truth)
+function replaceHistoricalToolInputs(messages: any[]): any[] {
+    return messages.map((msg) => {
+        if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+            return msg
+        }
+        const replacedContent = msg.content.map((part: any) => {
+            if (part.type === "tool-call") {
+                const toolName = part.toolName
+                if (
+                    toolName === "display_diagram" ||
+                    toolName === "edit_diagram"
+                ) {
+                    return {
+                        ...part,
+                        input: {
+                            placeholder:
+                                "[XML content replaced - see current diagram XML in system context]",
+                        },
+                    }
+                }
+            }
+            return part
+        })
+        return { ...msg, content: replacedContent }
+    })
+}
+
 // Helper function to fix tool call inputs for Bedrock API
 // Bedrock requires toolUse.input to be a JSON object, not a string
 function fixToolCallInputs(messages: any[]): any[] {
@@ -144,7 +173,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
-    const { messages, xml, sessionId } = await req.json()
+    const { messages, xml, previousXml, sessionId } = await req.json()
 
     // Get user IP for Langfuse tracking
     const forwardedFor = req.headers.get("x-forwarded-for")
@@ -242,9 +271,12 @@ ${lastMessageText}
     // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
     const fixedMessages = fixToolCallInputs(modelMessages)
 
+    // Replace historical tool call XML with placeholders to reduce tokens and avoid confusion
+    const placeholderMessages = replaceHistoricalToolInputs(fixedMessages)
+
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
-    let enhancedMessages = fixedMessages.filter(
+    let enhancedMessages = placeholderMessages.filter(
         (msg: any) =>
             msg.content && Array.isArray(msg.content) && msg.content.length > 0,
     )
@@ -308,10 +340,10 @@ ${lastMessageText}
                 },
             }),
         },
-        // Cache breakpoint 2: Current diagram XML context
+        // Cache breakpoint 2: Previous and Current diagram XML context
         {
             role: "system" as const,
-            content: `Current diagram XML:\n"""xml\n${xml || ""}\n"""\nWhen using edit_diagram, COPY search patterns exactly from this XML - attribute order matters!`,
+            content: `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`,
             ...(shouldCache && {
                 providerOptions: {
                     bedrock: { cachePoint: { type: "default" } },
