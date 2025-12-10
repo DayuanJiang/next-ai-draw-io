@@ -208,13 +208,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const isFirstMessage = messages.length === 1
     const isEmptyDiagram = !xml || xml.trim() === "" || isMinimalDiagram(xml)
 
-    // DEBUG: Log cache check conditions
-    console.log("[Cache DEBUG] messages.length:", messages.length)
-    console.log("[Cache DEBUG] isFirstMessage:", isFirstMessage)
-    console.log("[Cache DEBUG] xml length:", xml?.length || 0)
-    console.log("[Cache DEBUG] xml preview:", xml?.substring(0, 200))
-    console.log("[Cache DEBUG] isEmptyDiagram:", isEmptyDiagram)
-
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]
         const textPart = lastMessage.parts?.find((p: any) => p.type === "text")
@@ -358,7 +351,7 @@ ${lastMessageText}
         model,
         stopWhen: stepCountIs(5),
         messages: allMessages,
-        ...(providerOptions && { providerOptions }),
+        ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
         ...(headers && { headers }),
         // Langfuse telemetry config (returns undefined if not configured)
         ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
@@ -394,13 +387,6 @@ ${lastMessageText}
             return null
         },
         onFinish: ({ text, usage }) => {
-            // Log token usage
-            if (usage) {
-                const cachedTokens = (usage as any).cachedInputTokens ?? 0
-                console.log(
-                    `[Token Usage] input: ${usage.inputTokens ?? 0}, cached: ${cachedTokens}, output: ${usage.outputTokens ?? 0}, total: ${(usage.inputTokens ?? 0) + cachedTokens + (usage.outputTokens ?? 0)}`,
-                )
-            }
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
             setTraceOutput(text, {
                 promptTokens: usage?.inputTokens,
@@ -488,6 +474,7 @@ IMPORTANT: Keep edits concise:
     })
 
     return result.toUIMessageStreamResponse({
+        sendReasoning: true,
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage
