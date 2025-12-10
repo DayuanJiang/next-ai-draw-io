@@ -57,18 +57,44 @@ const ANTHROPIC_BETA_HEADERS = {
 }
 
 /**
+ * Safely parse integer from environment variable with validation
+ */
+function parseIntSafe(
+    value: string | undefined,
+    varName: string,
+    min?: number,
+    max?: number,
+): number | undefined {
+    if (!value) return undefined
+    const parsed = Number.parseInt(value, 10)
+    if (Number.isNaN(parsed)) {
+        throw new Error(`${varName} must be a valid integer, got: ${value}`)
+    }
+    if (min !== undefined && parsed < min) {
+        throw new Error(`${varName} must be >= ${min}, got: ${parsed}`)
+    }
+    if (max !== undefined && parsed > max) {
+        throw new Error(`${varName} must be <= ${max}, got: ${parsed}`)
+    }
+    return parsed
+}
+
+/**
  * Build provider-specific options from environment variables
  * Supports various AI SDK providers with their unique configuration options
  *
  * Environment variables:
- * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (low, medium, high)
- * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (none, brief, detailed)
- * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens
+ * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (minimal/low/medium/high) - for o1/o3/gpt-5
+ * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (none/brief/detailed) - auto-enabled for o1/o3/gpt-5
+ * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens (1024-64000)
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
- * - GOOGLE_REASONING_EFFORT: Google reasoning effort (low, medium, high)
- * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low, medium, high)
- * - DEEPSEEK_REASONING_EFFORT: DeepSeek reasoning effort (low, medium, high)
- * - DEEPSEEK_REASONING_BUDGET_TOKENS: DeepSeek reasoning budget in tokens
+ * - GOOGLE_THINKING_BUDGET: Google Gemini 2.5 thinking budget in tokens (1024-100000)
+ * - GOOGLE_THINKING_LEVEL: Google Gemini 3 thinking level (low/high)
+ * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low/medium/high)
+ * - AZURE_REASONING_SUMMARY: Azure reasoning summary (none/brief/detailed)
+ * - BEDROCK_REASONING_BUDGET_TOKENS: Bedrock Claude reasoning budget in tokens (1024-64000)
+ * - BEDROCK_REASONING_EFFORT: Bedrock Nova reasoning effort (low/medium/high)
+ * - OLLAMA_ENABLE_THINKING: Enable Ollama thinking mode (set to "true")
  */
 function buildProviderOptions(
     provider: ProviderName,
@@ -124,7 +150,12 @@ function buildProviderOptions(
         }
 
         case "anthropic": {
-            const thinkingBudget = process.env.ANTHROPIC_THINKING_BUDGET_TOKENS
+            const thinkingBudget = parseIntSafe(
+                process.env.ANTHROPIC_THINKING_BUDGET_TOKENS,
+                "ANTHROPIC_THINKING_BUDGET_TOKENS",
+                1024,
+                64000,
+            )
             const thinkingType =
                 process.env.ANTHROPIC_THINKING_TYPE || "enabled"
 
@@ -132,7 +163,7 @@ function buildProviderOptions(
                 options.anthropic = {
                     thinking: {
                         type: thinkingType,
-                        budgetTokens: parseInt(thinkingBudget, 10),
+                        budgetTokens: thinkingBudget,
                     },
                 }
             }
@@ -141,7 +172,12 @@ function buildProviderOptions(
 
         case "google": {
             const reasoningEffort = process.env.GOOGLE_REASONING_EFFORT
-            const thinkingBudget = process.env.GOOGLE_THINKING_BUDGET
+            const thinkingBudgetVal = parseIntSafe(
+                process.env.GOOGLE_THINKING_BUDGET,
+                "GOOGLE_THINKING_BUDGET",
+                1024,
+                100000,
+            )
             const thinkingLevel = process.env.GOOGLE_THINKING_LEVEL
 
             // Google Gemini 2.5/3 models think by default, but need includeThoughts: true
@@ -159,10 +195,10 @@ function buildProviderOptions(
 
                 // Optionally configure thinking budget or level
                 if (
-                    thinkingBudget &&
+                    thinkingBudgetVal &&
                     (modelId.includes("2.5") || modelId.includes("2-5"))
                 ) {
-                    thinkingConfig.thinkingBudget = parseInt(thinkingBudget, 10)
+                    thinkingConfig.thinkingBudget = thinkingBudgetVal
                 } else if (
                     thinkingLevel &&
                     (modelId.includes("gemini-3") ||
@@ -185,17 +221,32 @@ function buildProviderOptions(
 
             // Keep existing Google options
             const options_obj: Record<string, any> = {}
-            if (process.env.GOOGLE_CANDIDATE_COUNT) {
-                options_obj.candidateCount = parseInt(
-                    process.env.GOOGLE_CANDIDATE_COUNT,
-                    10,
-                )
+            const candidateCount = parseIntSafe(
+                process.env.GOOGLE_CANDIDATE_COUNT,
+                "GOOGLE_CANDIDATE_COUNT",
+                1,
+                8,
+            )
+            if (candidateCount) {
+                options_obj.candidateCount = candidateCount
             }
-            if (process.env.GOOGLE_TOP_K) {
-                options_obj.topK = parseInt(process.env.GOOGLE_TOP_K, 10)
+            const topK = parseIntSafe(
+                process.env.GOOGLE_TOP_K,
+                "GOOGLE_TOP_K",
+                1,
+                100,
+            )
+            if (topK) {
+                options_obj.topK = topK
             }
             if (process.env.GOOGLE_TOP_P) {
-                options_obj.topP = parseFloat(process.env.GOOGLE_TOP_P)
+                const topP = Number.parseFloat(process.env.GOOGLE_TOP_P)
+                if (Number.isNaN(topP) || topP < 0 || topP > 1) {
+                    throw new Error(
+                        `GOOGLE_TOP_P must be a number between 0 and 1, got: ${process.env.GOOGLE_TOP_P}`,
+                    )
+                }
+                options_obj.topP = topP
             }
 
             if (Object.keys(options_obj).length > 0) {
@@ -227,7 +278,12 @@ function buildProviderOptions(
         }
 
         case "bedrock": {
-            const budgetTokens = process.env.BEDROCK_REASONING_BUDGET_TOKENS
+            const budgetTokens = parseIntSafe(
+                process.env.BEDROCK_REASONING_BUDGET_TOKENS,
+                "BEDROCK_REASONING_BUDGET_TOKENS",
+                1024,
+                64000,
+            )
             const reasoningEffort = process.env.BEDROCK_REASONING_EFFORT
 
             // Bedrock reasoning ONLY for Claude and Nova models
@@ -248,7 +304,7 @@ function buildProviderOptions(
                     (modelId.includes("claude") ||
                         modelId.includes("anthropic"))
                 ) {
-                    reasoningConfig.budgetTokens = parseInt(budgetTokens, 10)
+                    reasoningConfig.budgetTokens = budgetTokens
                 }
                 // Nova models: use maxReasoningEffort (low/medium/high)
                 else if (
@@ -452,9 +508,12 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
+                // Deep merge to preserve both anthropicBeta and reasoningConfig
                 providerOptions = {
-                    ...BEDROCK_ANTHROPIC_BETA,
-                    ...(customProviderOptions || {}),
+                    bedrock: {
+                        ...BEDROCK_ANTHROPIC_BETA.bedrock,
+                        ...(customProviderOptions?.bedrock || {}),
+                    },
                 }
             } else if (customProviderOptions) {
                 providerOptions = customProviderOptions
@@ -474,9 +533,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             } else {
                 model = openai(modelId)
             }
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
-            }
             break
         }
 
@@ -494,9 +550,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             model = customProvider(modelId)
             // Add beta headers for fine-grained tool streaming
             headers = ANTHROPIC_BETA_HEADERS
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
-            }
             break
         }
 
@@ -513,9 +566,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             } else {
                 model = google(modelId)
             }
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
-            }
             break
         }
 
@@ -530,9 +580,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 model = customAzure(modelId)
             } else {
                 model = azure(modelId)
-            }
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
             }
             break
         }
@@ -557,9 +604,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 ...(baseURL && { baseURL }),
             })
             model = openrouter(modelId)
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
-            }
             break
         }
 
@@ -589,9 +633,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 baseURL,
             })
             model = siliconflowProvider.chat(modelId)
-            if (customProviderOptions) {
-                providerOptions = customProviderOptions
-            }
             break
         }
 
@@ -599,6 +640,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             throw new Error(
                 `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow`,
             )
+    }
+
+    // Apply provider-specific options for all providers except bedrock (which has special handling)
+    if (customProviderOptions && provider !== "bedrock" && !providerOptions) {
+        providerOptions = customProviderOptions
     }
 
     return { model, providerOptions, headers, modelId }
