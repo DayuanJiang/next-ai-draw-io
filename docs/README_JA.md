@@ -114,7 +114,7 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-または env ファイルを使用（`env.example` から作成）：
+または env ファイルを使用：
 
 ```bash
 cp env.example .env

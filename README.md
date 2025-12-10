@@ -114,7 +114,7 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-Or use an env file (create one from `env.example`):
+Or use an env file:
 
 ```bash
 cp env.example .env
