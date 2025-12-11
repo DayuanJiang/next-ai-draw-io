@@ -80,13 +80,23 @@ SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflo
 
 ```bash
 AZURE_API_KEY=your_api_key
+AZURE_RESOURCE_NAME=your-resource-name  # Required: your Azure resource name
 AI_MODEL=your-deployment-name
 ```
 
-Optional custom endpoint:
+Or use a custom endpoint instead of resource name:
 
 ```bash
-AZURE_BASE_URL=https://your-resource.openai.azure.com
+AZURE_API_KEY=your_api_key
+AZURE_BASE_URL=https://your-resource.openai.azure.com  # Alternative to AZURE_RESOURCE_NAME
+AI_MODEL=your-deployment-name
+```
+
+Optional reasoning configuration:
+
+```bash
+AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
+AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
 ```
 
 ### AWS Bedrock
