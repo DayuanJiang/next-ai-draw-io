@@ -1,10 +1,7 @@
 "use client"
 
 import { useChat } from "@ai-sdk/react"
-import {
-    DefaultChatTransport,
-    lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai"
+import { DefaultChatTransport } from "ai"
 import {
     AlertTriangle,
     PanelRightClose,
@@ -54,6 +51,20 @@ import {
 import { formatXML, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
+// Type for message parts (tool calls and their states)
+interface MessagePart {
+    type: string
+    state?: string
+    toolName?: string
+    [key: string]: unknown
+}
+
+interface ChatMessage {
+    role: string
+    parts?: MessagePart[]
+    [key: string]: unknown
+}
+
 interface ChatPanelProps {
     isVisible: boolean
     onToggleVisibility: () => void
@@ -63,6 +74,70 @@ interface ChatPanelProps {
     onToggleDarkMode: () => void
     isMobile?: boolean
     onCloseProtectionChange?: (enabled: boolean) => void
+}
+
+// Constants for tool states
+const TOOL_ERROR_STATE = "output-error" as const
+const DEBUG = process.env.NODE_ENV === "development"
+
+/**
+ * Custom auto-resubmit logic for the AI chat.
+ *
+ * Strategy:
+ * - When tools return errors (e.g., invalid XML), automatically resubmit
+ *   the conversation to let the AI retry with corrections
+ * - When tools succeed (e.g., diagram displayed), stop without AI acknowledgment
+ *   to prevent unnecessary regeneration cycles
+ *
+ * This fixes the issue where successful diagrams were being regenerated
+ * multiple times because the previous logic (lastAssistantMessageIsCompleteWithToolCalls)
+ * auto-resubmitted on BOTH success and error.
+ *
+ * @param messages - Current conversation messages from AI SDK
+ * @returns true to auto-resubmit (for error recovery), false to stop
+ */
+function shouldAutoResubmit(messages: ChatMessage[]): boolean {
+    const lastMessage = messages[messages.length - 1]
+    if (!lastMessage || lastMessage.role !== "assistant") {
+        if (DEBUG) {
+            console.log(
+                "[sendAutomaticallyWhen] No assistant message, returning false",
+            )
+        }
+        return false
+    }
+
+    const toolParts =
+        (lastMessage.parts as MessagePart[] | undefined)?.filter((part) =>
+            part.type?.startsWith("tool-"),
+        ) || []
+
+    if (toolParts.length === 0) {
+        if (DEBUG) {
+            console.log(
+                "[sendAutomaticallyWhen] No tool parts, returning false",
+            )
+        }
+        return false
+    }
+
+    // Only auto-resubmit if ANY tool has an error
+    const hasError = toolParts.some((part) => part.state === TOOL_ERROR_STATE)
+
+    if (DEBUG) {
+        if (hasError) {
+            console.log(
+                "[sendAutomaticallyWhen] Retrying due to errors in tools:",
+                toolParts
+                    .filter((p) => p.state === TOOL_ERROR_STATE)
+                    .map((p) => p.toolName),
+            )
+        } else {
+            console.log("[sendAutomaticallyWhen] No errors, stopping")
+        }
+    }
+
+    return hasError
 }
 
 export default function ChatPanel({
@@ -369,8 +444,19 @@ export default function ChatPanel({
             api: "/api/chat",
         }),
         async onToolCall({ toolCall }) {
+            if (DEBUG) {
+                console.log(
+                    `[onToolCall] Tool: ${toolCall.toolName}, CallId: ${toolCall.toolCallId}`,
+                )
+            }
+
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
+                if (DEBUG) {
+                    console.log(
+                        `[display_diagram] Received XML length: ${xml.length}`,
+                    )
+                }
 
                 // Wrap raw XML with full mxfile structure for draw.io
                 const fullXml = wrapWithMxFile(xml)
@@ -392,6 +478,11 @@ Your failed XML:
 \`\`\`xml
 ${xml}
 \`\`\``
+                    if (DEBUG) {
+                        console.log(
+                            "[display_diagram] Adding tool output with state: output-error",
+                        )
+                    }
                     addToolOutput({
                         tool: "display_diagram",
                         toolCallId: toolCall.toolCallId,
@@ -400,11 +491,21 @@ ${xml}
                     })
                 } else {
                     // Success - diagram will be rendered by chat-message-display
+                    if (DEBUG) {
+                        console.log(
+                            "[display_diagram] Success! Adding tool output with state: output-available",
+                        )
+                    }
                     addToolOutput({
                         tool: "display_diagram",
                         toolCallId: toolCall.toolCallId,
                         output: "Successfully displayed the diagram.",
                     })
+                    if (DEBUG) {
+                        console.log(
+                            "[display_diagram] Tool output added. Diagram should be visible now.",
+                        )
+                    }
                 }
             } else if (toolCall.toolName === "edit_diagram") {
                 const { edits } = toolCall.input as {
@@ -549,9 +650,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 }
             }
         },
-        // Auto-resubmit when all tool results are available (including errors)
-        // This enables the model to retry when a tool returns an error
-        sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+        sendAutomaticallyWhen: ({ messages }) =>
+            shouldAutoResubmit(messages as unknown as ChatMessage[]),
     })
 
     // Update stopRef so onToolCall can access it
