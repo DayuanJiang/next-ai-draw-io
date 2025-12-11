@@ -745,7 +745,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
         setShowNewChatDialog(false)
         toast.success("Started a fresh chat")
-    }, [clearDiagram, setFiles, setMessages])
+    }, [clearDiagram, setFiles, setMessages, setSessionId])
 
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
