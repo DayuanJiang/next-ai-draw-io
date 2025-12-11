@@ -85,9 +85,11 @@ Here are some example prompts and their generated diagrams:
 
 -   **LLM-Powered Diagram Creation**: Leverage Large Language Models to create and manipulate draw.io diagrams directly through natural language commands
 -   **Image-Based Diagram Replication**: Upload existing diagrams or images and have the AI replicate and enhance them automatically
+-   **PDF & Text File Upload**: Upload PDF documents and text files to extract content and generate diagrams from existing documents
+-   **AI Reasoning Display**: View the AI's thinking process for supported models (OpenAI o1/o3, Gemini, Claude, etc.)
 -   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
--   **AWS Architecture Diagram Support**: Specialized support for generating AWS architecture diagrams
+-   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
 ## Getting Started
