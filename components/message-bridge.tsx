@@ -3,26 +3,31 @@
 import { useEffect } from "react"
 import { useDiagram } from "@/contexts/diagram-context"
 
-/**
- * Listens for messages from the parent window (iframe host)
- * and translates them into DiagramContext actions.
- */
 export function MessageBridge() {
     const { loadDiagram, chartXML, saveDiagramToFile, isDrawioReady } =
         useDiagram()
 
-    // Announce readiness when draw.io loads
     useEffect(() => {
         if (isDrawioReady) {
             window.parent.postMessage(JSON.stringify({ event: "init" }), "*")
         }
     }, [isDrawioReady])
 
-    // Listen for inbound commands
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
-            // In production, you might want to check event.origin check here.
-            // For localhost dev, we skip strict origin check or verify against allowed list.
+            // Check for trusted origin if configured
+            const allowedOriginsStr = process.env.NEXT_PUBLIC_ALLOWED_ORIGIN
+            if (allowedOriginsStr) {
+                const allowedOrigins = allowedOriginsStr
+                    .split(",")
+                    .map((o) => o.trim())
+                if (!allowedOrigins.includes(event.origin)) {
+                    console.warn(
+                        `[MessageBridge] Blocked message from unknown origin: ${event.origin}. Expected one of: ${allowedOrigins.join(", ")}`,
+                    )
+                    return
+                }
+            }
 
             let data = event.data
             try {
@@ -30,7 +35,6 @@ export function MessageBridge() {
                     data = JSON.parse(data)
                 }
             } catch (e) {
-                // Not JSON, ignore
                 return
             }
 
