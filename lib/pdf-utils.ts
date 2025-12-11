@@ -1,7 +1,10 @@
 import { extractText, getDocumentProxy } from "unpdf"
 
-// Maximum characters allowed for extracted text
-export const MAX_EXTRACTED_CHARS = 150000 // 150k chars
+// Maximum characters allowed for extracted text (configurable via env)
+const DEFAULT_MAX_EXTRACTED_CHARS = 150000 // 150k chars
+export const MAX_EXTRACTED_CHARS =
+    Number(process.env.NEXT_PUBLIC_MAX_EXTRACTED_CHARS) ||
+    DEFAULT_MAX_EXTRACTED_CHARS
 
 // Text file extensions we support
 const TEXT_EXTENSIONS = [
