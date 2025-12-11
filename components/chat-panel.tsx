@@ -61,31 +61,15 @@ interface ChatPanelProps {
 // Constants for tool states
 const TOOL_ERROR_STATE = "output-error" as const
 const DEBUG = process.env.NODE_ENV === "development"
+const MAX_AUTO_RETRY_COUNT = 3
 
 /**
- * Custom auto-resubmit logic for the AI chat.
- *
- * Strategy:
- * - When tools return errors (e.g., invalid XML), automatically resubmit
- *   the conversation to let the AI retry with corrections
- * - When tools succeed (e.g., diagram displayed), stop without AI acknowledgment
- *   to prevent unnecessary regeneration cycles
- *
- * This fixes the issue where successful diagrams were being regenerated
- * multiple times because the previous logic (lastAssistantMessageIsCompleteWithToolCalls)
- * auto-resubmitted on BOTH success and error.
- *
- * @param messages - Current conversation messages from AI SDK
- * @returns true to auto-resubmit (for error recovery), false to stop
+ * Check if auto-resubmit should happen based on tool errors.
+ * Does NOT handle retry count or quota - those are handled by the caller.
  */
-function shouldAutoResubmit(messages: ChatMessage[]): boolean {
+function hasToolErrors(messages: ChatMessage[]): boolean {
     const lastMessage = messages[messages.length - 1]
     if (!lastMessage || lastMessage.role !== "assistant") {
-        if (DEBUG) {
-            console.log(
-                "[sendAutomaticallyWhen] No assistant message, returning false",
-            )
-        }
         return false
     }
 
@@ -95,31 +79,10 @@ function shouldAutoResubmit(messages: ChatMessage[]): boolean {
         ) || []
 
     if (toolParts.length === 0) {
-        if (DEBUG) {
-            console.log(
-                "[sendAutomaticallyWhen] No tool parts, returning false",
-            )
-        }
         return false
     }
 
-    // Only auto-resubmit if ANY tool has an error
-    const hasError = toolParts.some((part) => part.state === TOOL_ERROR_STATE)
-
-    if (DEBUG) {
-        if (hasError) {
-            console.log(
-                "[sendAutomaticallyWhen] Retrying due to errors in tools:",
-                toolParts
-                    .filter((p) => p.state === TOOL_ERROR_STATE)
-                    .map((p) => p.toolName),
-            )
-        } else {
-            console.log("[sendAutomaticallyWhen] No errors, stopping")
-        }
-    }
-
-    return hasError
+    return toolParts.some((part) => part.state === TOOL_ERROR_STATE)
 }
 
 export default function ChatPanel({
@@ -222,6 +185,9 @@ export default function ChatPanel({
 
     // Ref to hold stop function for use in onToolCall (avoids stale closure)
     const stopRef = useRef<(() => void) | null>(null)
+
+    // Ref to track consecutive auto-retry count (reset on user action)
+    const autoRetryCountRef = useRef(0)
 
     const {
         messages,
@@ -441,8 +407,68 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 }
             }
         },
-        sendAutomaticallyWhen: ({ messages }) =>
-            shouldAutoResubmit(messages as unknown as ChatMessage[]),
+        sendAutomaticallyWhen: ({ messages }) => {
+            const shouldRetry = hasToolErrors(
+                messages as unknown as ChatMessage[],
+            )
+
+            if (!shouldRetry) {
+                // No error, reset retry count
+                autoRetryCountRef.current = 0
+                if (DEBUG) {
+                    console.log("[sendAutomaticallyWhen] No errors, stopping")
+                }
+                return false
+            }
+
+            // Check retry count limit
+            if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
+                if (DEBUG) {
+                    console.log(
+                        `[sendAutomaticallyWhen] Max retry count (${MAX_AUTO_RETRY_COUNT}) reached, stopping`,
+                    )
+                }
+                toast.error(
+                    `Auto-retry limit reached (${MAX_AUTO_RETRY_COUNT}). Please try again manually.`,
+                )
+                autoRetryCountRef.current = 0
+                return false
+            }
+
+            // Check quota limits before auto-retry
+            const tokenLimitCheck = quotaManager.checkTokenLimit()
+            if (!tokenLimitCheck.allowed) {
+                if (DEBUG) {
+                    console.log(
+                        "[sendAutomaticallyWhen] Token limit exceeded, stopping",
+                    )
+                }
+                quotaManager.showTokenLimitToast(tokenLimitCheck.used)
+                autoRetryCountRef.current = 0
+                return false
+            }
+
+            const tpmCheck = quotaManager.checkTPMLimit()
+            if (!tpmCheck.allowed) {
+                if (DEBUG) {
+                    console.log(
+                        "[sendAutomaticallyWhen] TPM limit exceeded, stopping",
+                    )
+                }
+                quotaManager.showTPMLimitToast()
+                autoRetryCountRef.current = 0
+                return false
+            }
+
+            // Increment retry count and allow retry
+            autoRetryCountRef.current++
+            if (DEBUG) {
+                console.log(
+                    `[sendAutomaticallyWhen] Retrying (${autoRetryCountRef.current}/${MAX_AUTO_RETRY_COUNT})`,
+                )
+            }
+            return true
+        },
     })
 
     // Update stopRef so onToolCall can access it
@@ -759,6 +785,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         previousXml: string,
         sessionId: string,
     ) => {
+        // Reset auto-retry count on user-initiated message
+        autoRetryCountRef.current = 0
+
         const config = getAIConfig()
 
         sendMessage(
