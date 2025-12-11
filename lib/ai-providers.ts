@@ -371,7 +371,16 @@ function detectProvider(): ProviderName | null {
             continue
         }
         if (process.env[envVar]) {
-            configuredProviders.push(provider as ProviderName)
+            // Azure requires additional config (baseURL or resourceName)
+            if (provider === "azure") {
+                const hasBaseUrl = !!process.env.AZURE_BASE_URL
+                const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
+                if (hasBaseUrl || hasResourceName) {
+                    configuredProviders.push(provider as ProviderName)
+                }
+            } else {
+                configuredProviders.push(provider as ProviderName)
+            }
         }
     }
 
@@ -392,6 +401,18 @@ function validateProviderCredentials(provider: ProviderName): void {
             `${requiredVar} environment variable is required for ${provider} provider. ` +
                 `Please set it in your .env.local file.`,
         )
+    }
+
+    // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition to API key
+    if (provider === "azure") {
+        const hasBaseUrl = !!process.env.AZURE_BASE_URL
+        const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
+        if (!hasBaseUrl && !hasResourceName) {
+            throw new Error(
+                `Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME to be set. ` +
+                    `Please set one in your .env.local file.`,
+            )
+        }
     }
 }
 
