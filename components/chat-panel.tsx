@@ -17,39 +17,21 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
-import { QuotaLimitToast } from "@/components/quota-limit-toast"
-import {
-    SettingsDialog,
-    STORAGE_ACCESS_CODE_KEY,
-    STORAGE_AI_API_KEY_KEY,
-    STORAGE_AI_BASE_URL_KEY,
-    STORAGE_AI_MODEL_KEY,
-    STORAGE_AI_PROVIDER_KEY,
-} from "@/components/settings-dialog"
+import { SettingsDialog } from "@/components/settings-dialog"
+import { useDiagram } from "@/contexts/diagram-context"
+import { getAIConfig } from "@/lib/ai-config"
+import { findCachedResponse } from "@/lib/cached-responses"
+import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
+import { useQuotaManager } from "@/lib/use-quota-manager"
+import { formatXML, wrapWithMxFile } from "@/lib/utils"
+import { ChatMessageDisplay } from "./chat-message-display"
 
 // localStorage keys for persistence
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
-const STORAGE_REQUEST_COUNT_KEY = "next-ai-draw-io-request-count"
-const STORAGE_REQUEST_DATE_KEY = "next-ai-draw-io-request-date"
-const STORAGE_TOKEN_COUNT_KEY = "next-ai-draw-io-token-count"
-const STORAGE_TOKEN_DATE_KEY = "next-ai-draw-io-token-date"
-const STORAGE_TPM_COUNT_KEY = "next-ai-draw-io-tpm-count"
-const STORAGE_TPM_MINUTE_KEY = "next-ai-draw-io-tpm-minute"
-
-import { useDiagram } from "@/contexts/diagram-context"
-import { findCachedResponse } from "@/lib/cached-responses"
-import {
-    extractPdfText,
-    extractTextFileContent,
-    isPdfFile,
-    isTextFile,
-    MAX_EXTRACTED_CHARS,
-} from "@/lib/pdf-utils"
-import { formatXML, wrapWithMxFile } from "@/lib/utils"
-import { ChatMessageDisplay } from "./chat-message-display"
 
 // Type for message parts (tool calls and their states)
 interface MessagePart {
@@ -186,11 +168,9 @@ export default function ChatPanel({
         ])
     }
 
-    const [files, setFiles] = useState<File[]>([])
-    // Store extracted PDF text with extraction status
-    const [pdfData, setPdfData] = useState<
-        Map<File, { text: string; charCount: number; isExtracting: boolean }>
-    >(new Map())
+    // File processing using extracted hook
+    const { files, pdfData, handleFileChange, setFiles } = useFileProcessor()
+
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [, setAccessCodeRequired] = useState(false)
@@ -212,200 +192,12 @@ export default function ChatPanel({
             .catch(() => setAccessCodeRequired(false))
     }, [])
 
-    // Helper to check daily request limit
-    // Check if user has their own API key configured (bypass limits)
-    const hasOwnApiKey = useCallback((): boolean => {
-        const provider = localStorage.getItem(STORAGE_AI_PROVIDER_KEY)
-        const apiKey = localStorage.getItem(STORAGE_AI_API_KEY_KEY)
-        return !!(provider && apiKey)
-    }, [])
-
-    const checkDailyLimit = useCallback((): {
-        allowed: boolean
-        remaining: number
-        used: number
-    } => {
-        // Skip limit if user has their own API key
-        if (hasOwnApiKey()) return { allowed: true, remaining: -1, used: 0 }
-        if (dailyRequestLimit <= 0)
-            return { allowed: true, remaining: -1, used: 0 }
-
-        const today = new Date().toDateString()
-        const storedDate = localStorage.getItem(STORAGE_REQUEST_DATE_KEY)
-        let count = parseInt(
-            localStorage.getItem(STORAGE_REQUEST_COUNT_KEY) || "0",
-            10,
-        )
-
-        if (storedDate !== today) {
-            count = 0
-            localStorage.setItem(STORAGE_REQUEST_DATE_KEY, today)
-            localStorage.setItem(STORAGE_REQUEST_COUNT_KEY, "0")
-        }
-
-        return {
-            allowed: count < dailyRequestLimit,
-            remaining: dailyRequestLimit - count,
-            used: count,
-        }
-    }, [dailyRequestLimit, hasOwnApiKey])
-
-    // Helper to increment request count
-    const incrementRequestCount = useCallback((): void => {
-        const count = parseInt(
-            localStorage.getItem(STORAGE_REQUEST_COUNT_KEY) || "0",
-            10,
-        )
-        localStorage.setItem(STORAGE_REQUEST_COUNT_KEY, String(count + 1))
-    }, [])
-
-    // Helper to show quota limit toast (request-based)
-    const showQuotaLimitToast = useCallback(() => {
-        toast.custom(
-            (t) => (
-                <QuotaLimitToast
-                    used={dailyRequestLimit}
-                    limit={dailyRequestLimit}
-                    onDismiss={() => toast.dismiss(t)}
-                />
-            ),
-            { duration: 15000 },
-        )
-    }, [dailyRequestLimit, hasOwnApiKey])
-
-    // Helper to check daily token limit (checks if already over limit)
-    const checkTokenLimit = useCallback((): {
-        allowed: boolean
-        remaining: number
-        used: number
-    } => {
-        // Skip limit if user has their own API key
-        if (hasOwnApiKey()) return { allowed: true, remaining: -1, used: 0 }
-        if (dailyTokenLimit <= 0)
-            return { allowed: true, remaining: -1, used: 0 }
-
-        const today = new Date().toDateString()
-        const storedDate = localStorage.getItem(STORAGE_TOKEN_DATE_KEY)
-        let count = parseInt(
-            localStorage.getItem(STORAGE_TOKEN_COUNT_KEY) || "0",
-            10,
-        )
-
-        // Guard against NaN (e.g., if "NaN" was stored)
-        if (Number.isNaN(count)) count = 0
-
-        if (storedDate !== today) {
-            count = 0
-            localStorage.setItem(STORAGE_TOKEN_DATE_KEY, today)
-            localStorage.setItem(STORAGE_TOKEN_COUNT_KEY, "0")
-        }
-
-        return {
-            allowed: count < dailyTokenLimit,
-            remaining: dailyTokenLimit - count,
-            used: count,
-        }
-    }, [dailyTokenLimit, hasOwnApiKey])
-
-    // Helper to increment token count
-    const incrementTokenCount = useCallback((tokens: number): void => {
-        // Guard against NaN tokens
-        if (!Number.isFinite(tokens) || tokens <= 0) return
-
-        let count = parseInt(
-            localStorage.getItem(STORAGE_TOKEN_COUNT_KEY) || "0",
-            10,
-        )
-        // Guard against NaN count
-        if (Number.isNaN(count)) count = 0
-
-        localStorage.setItem(STORAGE_TOKEN_COUNT_KEY, String(count + tokens))
-    }, [])
-
-    // Helper to show token limit toast
-    const showTokenLimitToast = useCallback(
-        (used: number) => {
-            toast.custom(
-                (t) => (
-                    <QuotaLimitToast
-                        type="token"
-                        used={used}
-                        limit={dailyTokenLimit}
-                        onDismiss={() => toast.dismiss(t)}
-                    />
-                ),
-                { duration: 15000 },
-            )
-        },
-        [dailyTokenLimit],
-    )
-
-    // Helper to check TPM (tokens per minute) limit
-    // Note: This only READS, doesn't write. incrementTPMCount handles writes.
-    const checkTPMLimit = useCallback((): {
-        allowed: boolean
-        remaining: number
-        used: number
-    } => {
-        // Skip limit if user has their own API key
-        if (hasOwnApiKey()) return { allowed: true, remaining: -1, used: 0 }
-        if (tpmLimit <= 0) return { allowed: true, remaining: -1, used: 0 }
-
-        const currentMinute = Math.floor(Date.now() / 60000).toString()
-        const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
-        let count = parseInt(
-            localStorage.getItem(STORAGE_TPM_COUNT_KEY) || "0",
-            10,
-        )
-
-        // Guard against NaN
-        if (Number.isNaN(count)) count = 0
-
-        // If we're in a new minute, treat count as 0 (will be reset on next increment)
-        if (storedMinute !== currentMinute) {
-            count = 0
-        }
-
-        return {
-            allowed: count < tpmLimit,
-            remaining: tpmLimit - count,
-            used: count,
-        }
-    }, [tpmLimit, hasOwnApiKey])
-
-    // Helper to increment TPM count
-    const incrementTPMCount = useCallback((tokens: number): void => {
-        // Guard against NaN tokens
-        if (!Number.isFinite(tokens) || tokens <= 0) return
-
-        const currentMinute = Math.floor(Date.now() / 60000).toString()
-        const storedMinute = localStorage.getItem(STORAGE_TPM_MINUTE_KEY)
-        let count = parseInt(
-            localStorage.getItem(STORAGE_TPM_COUNT_KEY) || "0",
-            10,
-        )
-
-        // Guard against NaN
-        if (Number.isNaN(count)) count = 0
-
-        // Reset if we're in a new minute
-        if (storedMinute !== currentMinute) {
-            count = 0
-            localStorage.setItem(STORAGE_TPM_MINUTE_KEY, currentMinute)
-        }
-
-        localStorage.setItem(STORAGE_TPM_COUNT_KEY, String(count + tokens))
-    }, [])
-
-    // Helper to show TPM limit toast
-    const showTPMLimitToast = useCallback(() => {
-        const limitDisplay =
-            tpmLimit >= 1000 ? `${tpmLimit / 1000}k` : String(tpmLimit)
-        toast.error(
-            `Rate limit reached (${limitDisplay} tokens/min). Please wait 60 seconds before sending another request.`,
-            { duration: 8000 },
-        )
-    }, [tpmLimit])
+    // Quota management using extracted hook
+    const quotaManager = useQuotaManager({
+        dailyRequestLimit,
+        dailyTokenLimit,
+        tpmLimit,
+    })
 
     // Generate a unique session ID for Langfuse tracing (restore from localStorage if available)
     const [sessionId, setSessionId] = useState(() => {
@@ -470,14 +262,6 @@ export default function ChatPanel({
                         validationError,
                     )
                     // Return error to model - sendAutomaticallyWhen will trigger retry
-                    const errorMessage = `${validationError}
-
-Please fix the XML issues and call display_diagram again with corrected XML.
-
-Your failed XML:
-\`\`\`xml
-${xml}
-\`\`\``
                     if (DEBUG) {
                         console.log(
                             "[display_diagram] Adding tool output with state: output-error",
@@ -487,7 +271,14 @@ ${xml}
                         tool: "display_diagram",
                         toolCallId: toolCall.toolCallId,
                         state: "output-error",
-                        errorText: errorMessage,
+                        errorText: `${validationError}
+
+Please fix the XML issues and call display_diagram again with corrected XML.
+
+Your failed XML:
+\`\`\`xml
+${xml}
+\`\`\``,
                     })
                 } else {
                     // Success - diagram will be rendered by chat-message-display
@@ -645,8 +436,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     : 0
                 const actualTokens = inputTokens + outputTokens
                 if (actualTokens > 0) {
-                    incrementTokenCount(actualTokens)
-                    incrementTPMCount(actualTokens)
+                    quotaManager.incrementTokenCount(actualTokens)
+                    quotaManager.incrementTPMCount(actualTokens)
                 }
             }
         },
@@ -824,20 +615,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     const toolCallId = `cached-${Date.now()}`
 
                     // Build user message text including any file content
-                    let userText = input
-                    for (const file of files) {
-                        if (isPdfFile(file)) {
-                            const extracted = pdfData.get(file)
-                            if (extracted?.text) {
-                                userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
-                            }
-                        } else if (isTextFile(file)) {
-                            const extracted = pdfData.get(file)
-                            if (extracted?.text) {
-                                userText += `\n\n[File: ${file.name}]\n${extracted.text}`
-                            }
-                        }
-                    }
+                    const userText = await processFilesAndAppendContent(
+                        input,
+                        files,
+                        pdfData,
+                    )
 
                     setMessages([
                         {
@@ -875,42 +657,13 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
                 // Build user text by concatenating input with pre-extracted text
                 // (Backend only reads first text part, so we must combine them)
-                let userText = input
                 const parts: any[] = []
-
-                if (files.length > 0) {
-                    for (const file of files) {
-                        if (isPdfFile(file)) {
-                            // Use pre-extracted PDF text from pdfData
-                            const extracted = pdfData.get(file)
-                            if (extracted?.text) {
-                                userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
-                            }
-                        } else if (isTextFile(file)) {
-                            // Use pre-extracted text file content from pdfData
-                            const extracted = pdfData.get(file)
-                            if (extracted?.text) {
-                                userText += `\n\n[File: ${file.name}]\n${extracted.text}`
-                            }
-                        } else {
-                            // Handle as image
-                            const reader = new FileReader()
-                            const dataUrl = await new Promise<string>(
-                                (resolve) => {
-                                    reader.onload = () =>
-                                        resolve(reader.result as string)
-                                    reader.readAsDataURL(file)
-                                },
-                            )
-
-                            parts.push({
-                                type: "file",
-                                url: dataUrl,
-                                mediaType: file.type,
-                            })
-                        }
-                    }
-                }
+                const userText = await processFilesAndAppendContent(
+                    input,
+                    files,
+                    pdfData,
+                    parts,
+                )
 
                 // Add the combined text as the first part
                 parts.unshift({ type: "text", text: userText })
@@ -929,56 +682,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 xmlSnapshotsRef.current.set(messageIndex, chartXml)
                 saveXmlSnapshots()
 
-                // Check daily limit
-                const limitCheck = checkDailyLimit()
-                if (!limitCheck.allowed) {
-                    showQuotaLimitToast()
-                    return
-                }
+                // Check all quota limits
+                if (!checkAllQuotaLimits()) return
 
-                // Check daily token limit (actual usage tracked after response)
-                const tokenLimitCheck = checkTokenLimit()
-                if (!tokenLimitCheck.allowed) {
-                    showTokenLimitToast(tokenLimitCheck.used)
-                    return
-                }
+                sendChatMessage(parts, chartXml, previousXml, sessionId)
 
-                // Check TPM (tokens per minute) limit
-                const tpmCheck = checkTPMLimit()
-                if (!tpmCheck.allowed) {
-                    showTPMLimitToast()
-                    return
-                }
-
-                const accessCode =
-                    localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
-                const aiProvider =
-                    localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || ""
-                const aiBaseUrl =
-                    localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || ""
-                const aiApiKey =
-                    localStorage.getItem(STORAGE_AI_API_KEY_KEY) || ""
-                const aiModel = localStorage.getItem(STORAGE_AI_MODEL_KEY) || ""
-
-                sendMessage(
-                    { parts },
-                    {
-                        body: {
-                            xml: chartXml,
-                            previousXml,
-                            sessionId,
-                        },
-                        headers: {
-                            "x-access-code": accessCode,
-                            ...(aiProvider && { "x-ai-provider": aiProvider }),
-                            ...(aiBaseUrl && { "x-ai-base-url": aiBaseUrl }),
-                            ...(aiApiKey && { "x-ai-api-key": aiApiKey }),
-                            ...(aiModel && { "x-ai-model": aiModel }),
-                        },
-                    },
-                )
-
-                incrementRequestCount()
                 // Token count is tracked in onFinish with actual server usage
                 setInput("")
                 setFiles([])
@@ -994,81 +702,122 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         setInput(e.target.value)
     }
 
-    const handleFileChange = async (newFiles: File[]) => {
-        setFiles(newFiles)
+    // Helper functions for message actions (regenerate/edit)
+    // Extract previous XML snapshot before a given message index
+    const getPreviousXml = (beforeIndex: number): string => {
+        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
+            .filter((k) => k < beforeIndex)
+            .sort((a, b) => b - a)
+        return snapshotKeys.length > 0
+            ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+            : ""
+    }
 
-        // Extract text immediately for new PDF/text files
-        for (const file of newFiles) {
-            const needsExtraction =
-                (isPdfFile(file) || isTextFile(file)) && !pdfData.has(file)
-            if (needsExtraction) {
-                // Mark as extracting
-                setPdfData((prev) => {
-                    const next = new Map(prev)
-                    next.set(file, {
-                        text: "",
-                        charCount: 0,
-                        isExtracting: true,
-                    })
-                    return next
+    // Restore diagram from snapshot and update ref
+    const restoreDiagramFromSnapshot = (savedXml: string) => {
+        onDisplayChart(savedXml, true) // Skip validation for trusted snapshots
+        chartXMLRef.current = savedXml
+    }
+
+    // Clean up snapshots after a given message index
+    const cleanupSnapshotsAfter = (messageIndex: number) => {
+        for (const key of xmlSnapshotsRef.current.keys()) {
+            if (key > messageIndex) {
+                xmlSnapshotsRef.current.delete(key)
+            }
+        }
+        saveXmlSnapshots()
+    }
+
+    // Check all quota limits (daily requests, tokens, TPM)
+    const checkAllQuotaLimits = (): boolean => {
+        const limitCheck = quotaManager.checkDailyLimit()
+        if (!limitCheck.allowed) {
+            quotaManager.showQuotaLimitToast()
+            return false
+        }
+
+        const tokenLimitCheck = quotaManager.checkTokenLimit()
+        if (!tokenLimitCheck.allowed) {
+            quotaManager.showTokenLimitToast(tokenLimitCheck.used)
+            return false
+        }
+
+        const tpmCheck = quotaManager.checkTPMLimit()
+        if (!tpmCheck.allowed) {
+            quotaManager.showTPMLimitToast()
+            return false
+        }
+
+        return true
+    }
+
+    // Send chat message with headers and increment quota
+    const sendChatMessage = (
+        parts: any,
+        xml: string,
+        previousXml: string,
+        sessionId: string,
+    ) => {
+        const config = getAIConfig()
+
+        sendMessage(
+            { parts },
+            {
+                body: { xml, previousXml, sessionId },
+                headers: {
+                    "x-access-code": config.accessCode,
+                    ...(config.aiProvider && {
+                        "x-ai-provider": config.aiProvider,
+                    }),
+                    ...(config.aiBaseUrl && {
+                        "x-ai-base-url": config.aiBaseUrl,
+                    }),
+                    ...(config.aiApiKey && { "x-ai-api-key": config.aiApiKey }),
+                    ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                },
+            },
+        )
+        quotaManager.incrementRequestCount()
+    }
+
+    // Process files and append content to user text (handles PDF, text, and optionally images)
+    const processFilesAndAppendContent = async (
+        baseText: string,
+        files: File[],
+        pdfData: Map<File, FileData>,
+        imageParts?: any[],
+    ): Promise<string> => {
+        let userText = baseText
+
+        for (const file of files) {
+            if (isPdfFile(file)) {
+                const extracted = pdfData.get(file)
+                if (extracted?.text) {
+                    userText += `\n\n[PDF: ${file.name}]\n${extracted.text}`
+                }
+            } else if (isTextFile(file)) {
+                const extracted = pdfData.get(file)
+                if (extracted?.text) {
+                    userText += `\n\n[File: ${file.name}]\n${extracted.text}`
+                }
+            } else if (imageParts) {
+                // Handle as image (only if imageParts array provided)
+                const reader = new FileReader()
+                const dataUrl = await new Promise<string>((resolve) => {
+                    reader.onload = () => resolve(reader.result as string)
+                    reader.readAsDataURL(file)
                 })
 
-                // Extract text asynchronously
-                try {
-                    let text: string
-                    if (isPdfFile(file)) {
-                        text = await extractPdfText(file)
-                    } else {
-                        text = await extractTextFileContent(file)
-                    }
-
-                    // Check character limit
-                    if (text.length > MAX_EXTRACTED_CHARS) {
-                        const limitK = MAX_EXTRACTED_CHARS / 1000
-                        toast.error(
-                            `${file.name}: Content exceeds ${limitK}k character limit (${(text.length / 1000).toFixed(1)}k chars)`,
-                        )
-                        setPdfData((prev) => {
-                            const next = new Map(prev)
-                            next.delete(file)
-                            return next
-                        })
-                        // Remove the file from the list
-                        setFiles((prev) => prev.filter((f) => f !== file))
-                        continue
-                    }
-
-                    setPdfData((prev) => {
-                        const next = new Map(prev)
-                        next.set(file, {
-                            text,
-                            charCount: text.length,
-                            isExtracting: false,
-                        })
-                        return next
-                    })
-                } catch (error) {
-                    console.error("Failed to extract text:", error)
-                    toast.error(`Failed to read file: ${file.name}`)
-                    setPdfData((prev) => {
-                        const next = new Map(prev)
-                        next.delete(file)
-                        return next
-                    })
-                }
+                imageParts.push({
+                    type: "file",
+                    url: dataUrl,
+                    mediaType: file.type,
+                })
             }
         }
 
-        // Clean up pdfData for removed files
-        setPdfData((prev) => {
-            const next = new Map(prev)
-            for (const key of prev.keys()) {
-                if (!newFiles.includes(key)) {
-                    next.delete(key)
-                }
-            }
-            return next
-        })
+        return userText
     }
 
     const handleRegenerate = async (messageIndex: number) => {
@@ -1103,28 +852,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             return
         }
 
-        // Get previous XML (snapshot before the one being regenerated)
-        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
-            .filter((k) => k < userMessageIndex)
-            .sort((a, b) => b - a)
-        const previousXml =
-            snapshotKeys.length > 0
-                ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
-                : ""
-
-        // Restore the diagram to the saved state (skip validation for trusted snapshots)
-        onDisplayChart(savedXml, true)
-
-        // Update ref directly to ensure edit_diagram has the correct XML
-        chartXMLRef.current = savedXml
+        // Get previous XML and restore diagram state
+        const previousXml = getPreviousXml(userMessageIndex)
+        restoreDiagramFromSnapshot(savedXml)
 
         // Clean up snapshots for messages after the user message (they will be removed)
-        for (const key of xmlSnapshotsRef.current.keys()) {
-            if (key > userMessageIndex) {
-                xmlSnapshotsRef.current.delete(key)
-            }
-        }
-        saveXmlSnapshots()
+        cleanupSnapshotsAfter(userMessageIndex)
 
         // Remove the user message AND assistant message onwards (sendMessage will re-add the user message)
         // Use flushSync to ensure state update is processed synchronously before sending
@@ -1133,53 +866,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             setMessages(newMessages)
         })
 
-        // Check daily limit
-        const limitCheck = checkDailyLimit()
-        if (!limitCheck.allowed) {
-            showQuotaLimitToast()
-            return
-        }
-
-        // Check daily token limit (actual usage tracked after response)
-        const tokenLimitCheck = checkTokenLimit()
-        if (!tokenLimitCheck.allowed) {
-            showTokenLimitToast(tokenLimitCheck.used)
-            return
-        }
-
-        // Check TPM (tokens per minute) limit
-        const tpmCheck = checkTPMLimit()
-        if (!tpmCheck.allowed) {
-            showTPMLimitToast()
-            return
-        }
+        // Check all quota limits
+        if (!checkAllQuotaLimits()) return
 
         // Now send the message after state is guaranteed to be updated
-        const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
-        const aiProvider = localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || ""
-        const aiBaseUrl = localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || ""
-        const aiApiKey = localStorage.getItem(STORAGE_AI_API_KEY_KEY) || ""
-        const aiModel = localStorage.getItem(STORAGE_AI_MODEL_KEY) || ""
+        sendChatMessage(userParts, savedXml, previousXml, sessionId)
 
-        sendMessage(
-            { parts: userParts },
-            {
-                body: {
-                    xml: savedXml,
-                    previousXml,
-                    sessionId,
-                },
-                headers: {
-                    "x-access-code": accessCode,
-                    ...(aiProvider && { "x-ai-provider": aiProvider }),
-                    ...(aiBaseUrl && { "x-ai-base-url": aiBaseUrl }),
-                    ...(aiApiKey && { "x-ai-api-key": aiApiKey }),
-                    ...(aiModel && { "x-ai-model": aiModel }),
-                },
-            },
-        )
-
-        incrementRequestCount()
         // Token count is tracked in onFinish with actual server usage
     }
 
@@ -1200,28 +892,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             return
         }
 
-        // Get previous XML (snapshot before the one being edited)
-        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
-            .filter((k) => k < messageIndex)
-            .sort((a, b) => b - a)
-        const previousXml =
-            snapshotKeys.length > 0
-                ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
-                : ""
-
-        // Restore the diagram to the saved state (skip validation for trusted snapshots)
-        onDisplayChart(savedXml, true)
-
-        // Update ref directly to ensure edit_diagram has the correct XML
-        chartXMLRef.current = savedXml
+        // Get previous XML and restore diagram state
+        const previousXml = getPreviousXml(messageIndex)
+        restoreDiagramFromSnapshot(savedXml)
 
         // Clean up snapshots for messages after the user message (they will be removed)
-        for (const key of xmlSnapshotsRef.current.keys()) {
-            if (key > messageIndex) {
-                xmlSnapshotsRef.current.delete(key)
-            }
-        }
-        saveXmlSnapshots()
+        cleanupSnapshotsAfter(messageIndex)
 
         // Create new parts with updated text
         const newParts = message.parts?.map((part: any) => {
@@ -1238,53 +914,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             setMessages(newMessages)
         })
 
-        // Check daily limit
-        const limitCheck = checkDailyLimit()
-        if (!limitCheck.allowed) {
-            showQuotaLimitToast()
-            return
-        }
-
-        // Check daily token limit (actual usage tracked after response)
-        const tokenLimitCheck = checkTokenLimit()
-        if (!tokenLimitCheck.allowed) {
-            showTokenLimitToast(tokenLimitCheck.used)
-            return
-        }
-
-        // Check TPM (tokens per minute) limit
-        const tpmCheck = checkTPMLimit()
-        if (!tpmCheck.allowed) {
-            showTPMLimitToast()
-            return
-        }
+        // Check all quota limits
+        if (!checkAllQuotaLimits()) return
 
         // Now send the edited message after state is guaranteed to be updated
-        const accessCode = localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
-        const aiProvider = localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || ""
-        const aiBaseUrl = localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || ""
-        const aiApiKey = localStorage.getItem(STORAGE_AI_API_KEY_KEY) || ""
-        const aiModel = localStorage.getItem(STORAGE_AI_MODEL_KEY) || ""
-
-        sendMessage(
-            { parts: newParts },
-            {
-                body: {
-                    xml: savedXml,
-                    previousXml,
-                    sessionId,
-                },
-                headers: {
-                    "x-access-code": accessCode,
-                    ...(aiProvider && { "x-ai-provider": aiProvider }),
-                    ...(aiBaseUrl && { "x-ai-base-url": aiBaseUrl }),
-                    ...(aiApiKey && { "x-ai-api-key": aiApiKey }),
-                    ...(aiModel && { "x-ai-model": aiModel }),
-                },
-            },
-        )
-
-        incrementRequestCount()
+        sendChatMessage(newParts, savedXml, previousXml, sessionId)
         // Token count is tracked in onFinish with actual server usage
     }
 
