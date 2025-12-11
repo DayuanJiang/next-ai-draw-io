@@ -189,6 +189,9 @@ export default function ChatPanel({
     // Ref to track consecutive auto-retry count (reset on user action)
     const autoRetryCountRef = useRef(0)
 
+    // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
+    const processedToolCallsRef = useRef<Set<string>>(new Set())
+
     const {
         messages,
         sendMessage,
@@ -1081,6 +1084,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     messages={messages}
                     setInput={setInput}
                     setFiles={handleFileChange}
+                    processedToolCallsRef={processedToolCallsRef}
                     sessionId={sessionId}
                     onRegenerate={handleRegenerate}
                     status={status}
