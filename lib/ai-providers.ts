@@ -572,10 +572,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "azure": {
             const apiKey = overrides?.apiKey || process.env.AZURE_API_KEY
             const baseURL = overrides?.baseUrl || process.env.AZURE_BASE_URL
-            if (baseURL || overrides?.apiKey) {
+            const resourceName = process.env.AZURE_RESOURCE_NAME
+            // Azure requires either baseURL or resourceName to construct the endpoint
+            // resourceName constructs: https://{resourceName}.openai.azure.com/openai/v1{path}
+            if (baseURL || resourceName || overrides?.apiKey) {
                 const customAzure = createAzure({
                     apiKey,
+                    // baseURL takes precedence over resourceName per SDK behavior
                     ...(baseURL && { baseURL }),
+                    ...(!baseURL && resourceName && { resourceName }),
                 })
                 model = customAzure(modelId)
             } else {
