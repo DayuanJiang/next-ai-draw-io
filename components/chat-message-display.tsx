@@ -19,6 +19,7 @@ import {
     X,
 } from "lucide-react"
 import Image from "next/image"
+import type { MutableRefObject } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import {
@@ -169,6 +170,7 @@ interface ChatMessageDisplayProps {
     messages: UIMessage[]
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
+    processedToolCallsRef: MutableRefObject<Set<string>>
     sessionId?: string
     onRegenerate?: (messageIndex: number) => void
     onEditMessage?: (messageIndex: number, newText: string) => void
@@ -179,6 +181,7 @@ export function ChatMessageDisplay({
     messages,
     setInput,
     setFiles,
+    processedToolCallsRef,
     sessionId,
     onRegenerate,
     onEditMessage,
@@ -187,7 +190,7 @@ export function ChatMessageDisplay({
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
-    const processedToolCalls = useRef<Set<string>>(new Set())
+    const processedToolCalls = processedToolCallsRef
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {},
     )
