@@ -92,6 +92,13 @@ AZURE_BASE_URL=https://your-resource.openai.azure.com  # Alternative to AZURE_RE
 AI_MODEL=your-deployment-name
 ```
 
+Optional reasoning configuration:
+
+```bash
+AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
+AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
+```
+
 ### AWS Bedrock
 
 ```bash
