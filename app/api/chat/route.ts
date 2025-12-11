@@ -264,8 +264,13 @@ ${lastMessageText}
     // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
     const fixedMessages = fixToolCallInputs(modelMessages)
 
-    // Replace historical tool call XML with placeholders to reduce tokens and avoid confusion
-    const placeholderMessages = replaceHistoricalToolInputs(fixedMessages)
+    // Replace historical tool call XML with placeholders to reduce tokens
+    // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
+    const enableHistoryReplace =
+        process.env.ENABLE_HISTORY_XML_REPLACE === "true"
+    const placeholderMessages = enableHistoryReplace
+        ? replaceHistoricalToolInputs(fixedMessages)
+        : fixedMessages
 
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
