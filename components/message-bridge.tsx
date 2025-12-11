@@ -4,14 +4,31 @@ import { useEffect } from "react"
 import { useDiagram } from "@/contexts/diagram-context"
 
 export function MessageBridge() {
-    const { loadDiagram, chartXML, saveDiagramToFile, isDrawioReady } =
-        useDiagram()
+    const {
+        loadDiagram,
+        chartXML,
+        saveDiagramToFile,
+        isDrawioReady,
+        handleExportWithoutHistory,
+    } = useDiagram()
 
     useEffect(() => {
         if (isDrawioReady) {
             window.parent.postMessage(JSON.stringify({ event: "init" }), "*")
         }
     }, [isDrawioReady])
+
+    // Broadcast chartXML changes (sync)
+    useEffect(() => {
+        if (!chartXML) return
+        window.parent.postMessage(
+            JSON.stringify({
+                event: "save",
+                xml: chartXML,
+            }),
+            "*",
+        )
+    }, [chartXML])
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -44,9 +61,6 @@ export function MessageBridge() {
 
             switch (action) {
                 case "status":
-                    // Parent asking "are you there?"
-                    // If we are mounted, we are at least partially ready.
-                    // If drawio is fully ready, we send init.
                     if (isDrawioReady) {
                         window.parent.postMessage(
                             JSON.stringify({ event: "init" }),
@@ -57,33 +71,19 @@ export function MessageBridge() {
 
                 case "load":
                     if (data.xml) {
-                        loadDiagram(data.xml, true) // skip validation if trusted? or keep validation
+                        loadDiagram(data.xml, true)
                     }
                     break
 
                 case "save":
-                    // Parent wants the current XML
-                    window.parent.postMessage(
-                        JSON.stringify({
-                            event: "save",
-                            xml: chartXML,
-                        }),
-                        "*",
-                    )
+                    // Trigger an internal export to update chartXML.
+                    // The useEffect above will catch the change and send the 'save' event.
+                    handleExportWithoutHistory()
                     break
 
                 case "export":
-                    // Parent wants to export/download
-                    // data.format could be 'png', 'svg', 'xml' (drawio)
                     if (data.format) {
-                        // usage: saveDiagramToFile(filename, format, sessionId)
-                        // We use a default filename "diagram"
                         saveDiagramToFile("diagram", data.format)
-
-                        // NOTE: saveDiagramToFile triggers a download in the *iframe*.
-                        // If the parent wants the data URI back, this bridge needs
-                        // significant changes to hooking into the saveResolver.
-                        // For now, "download in iframe" fulfills "export the diagram".
                     }
                     break
             }
@@ -91,7 +91,12 @@ export function MessageBridge() {
 
         window.addEventListener("message", handleMessage)
         return () => window.removeEventListener("message", handleMessage)
-    }, [loadDiagram, chartXML, saveDiagramToFile, isDrawioReady])
+    }, [
+        loadDiagram,
+        saveDiagramToFile,
+        isDrawioReady,
+        handleExportWithoutHistory,
+    ])
 
-    return null // logical component only, no UI
+    return null
 }
