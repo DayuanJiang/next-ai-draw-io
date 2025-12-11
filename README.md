@@ -19,7 +19,11 @@ English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
-https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+
+
+https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
+
+
 
 ## Table of Contents
 - [Next AI Draw.io ](#next-ai-drawio-)
