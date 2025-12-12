@@ -209,8 +209,6 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
-    // Track if we've shown an error toast for current streaming session (to avoid spamming)
-    const errorToastShownRef = useRef(false)
 
     const copyMessageToClipboard = async (messageId: string, text: string) => {
         try {
@@ -284,7 +282,7 @@ export function ChatMessageDisplay({
     }
 
     const handleDisplayChart = useCallback(
-        (xml: string) => {
+        (xml: string, showToast = false) => {
             const currentXml = xml || ""
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
@@ -297,12 +295,11 @@ export function ChatMessageDisplay({
                     console.error(
                         "[ChatMessageDisplay] Malformed XML detected - skipping update",
                     )
-                    // Show toast once per streaming session to avoid spamming
-                    if (!errorToastShownRef.current) {
+                    // Only show toast if this is the final XML (not during streaming)
+                    if (showToast) {
                         toast.error(
                             "AI generated invalid diagram XML. Please try regenerating.",
                         )
-                        errorToastShownRef.current = true
                     }
                     return // Skip this update
                 }
@@ -325,12 +322,11 @@ export function ChatMessageDisplay({
                             "[ChatMessageDisplay] XML validation failed:",
                             validationError,
                         )
-                        // Show toast once per streaming session to avoid spamming
-                        if (!errorToastShownRef.current) {
+                        // Only show toast if this is the final XML (not during streaming)
+                        if (showToast) {
                             toast.error(
                                 "Diagram validation failed. Please try regenerating.",
                             )
-                            errorToastShownRef.current = true
                         }
                     }
                 } catch (error) {
@@ -338,12 +334,11 @@ export function ChatMessageDisplay({
                         "[ChatMessageDisplay] Error processing XML:",
                         error,
                     )
-                    // Show toast once per streaming session to avoid spamming
-                    if (!errorToastShownRef.current) {
+                    // Only show toast if this is the final XML (not during streaming)
+                    if (showToast) {
                         toast.error(
                             "Failed to process diagram. Please try regenerating.",
                         )
-                        errorToastShownRef.current = true
                     }
                 }
             }
@@ -387,14 +382,14 @@ export function ChatMessageDisplay({
                                 state === "input-streaming" ||
                                 state === "input-available"
                             ) {
-                                // Reset error toast flag when streaming starts
-                                errorToastShownRef.current = false
-                                handleDisplayChart(xml)
+                                // During streaming, don't show toast (XML may be incomplete)
+                                handleDisplayChart(xml, false)
                             } else if (
                                 state === "output-available" &&
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
-                                handleDisplayChart(xml)
+                                // Show toast only if final XML is malformed
+                                handleDisplayChart(xml, true)
                                 processedToolCalls.current.add(toolCallId)
                             }
                         }
