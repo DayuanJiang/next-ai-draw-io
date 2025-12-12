@@ -22,6 +22,7 @@ import Image from "next/image"
 import type { MutableRefObject } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
+import { toast } from "sonner"
 import {
     Reasoning,
     ReasoningContent,
@@ -266,7 +267,14 @@ export function ChatMessageDisplay({
                 }),
             })
         } catch (error) {
-            console.warn("Failed to log feedback:", error)
+            console.error("Failed to log feedback:", error)
+            toast.error("Failed to record your feedback. Please try again.")
+            // Revert optimistic UI update
+            setFeedback((prev) => {
+                const next = { ...prev }
+                delete next[messageId]
+                return next
+            })
         }
     }
 
