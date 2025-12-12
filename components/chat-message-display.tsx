@@ -22,6 +22,7 @@ import Image from "next/image"
 import type { MutableRefObject } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
+import { toast } from "sonner"
 import {
     Reasoning,
     ReasoningContent,
@@ -234,6 +235,9 @@ export function ChatMessageDisplay({
                 setTimeout(() => setCopiedMessageId(null), 2000)
             } catch (fallbackErr) {
                 console.error("Failed to copy message:", fallbackErr)
+                toast.error(
+                    "Failed to copy message. Please copy manually or check clipboard permissions.",
+                )
                 setCopyFailedMessageId(messageId)
                 setTimeout(() => setCopyFailedMessageId(null), 2000)
             } finally {
