@@ -801,12 +801,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     "x-access-code": config.accessCode,
                     ...(config.aiProvider && {
                         "x-ai-provider": config.aiProvider,
+                        ...(config.aiBaseUrl && {
+                            "x-ai-base-url": config.aiBaseUrl,
+                        }),
+                        ...(config.aiApiKey && {
+                            "x-ai-api-key": config.aiApiKey,
+                        }),
+                        ...(config.aiModel && { "x-ai-model": config.aiModel }),
                     }),
-                    ...(config.aiBaseUrl && {
-                        "x-ai-base-url": config.aiBaseUrl,
-                    }),
-                    ...(config.aiApiKey && { "x-ai-api-key": config.aiApiKey }),
-                    ...(config.aiModel && { "x-ai-model": config.aiModel }),
                 },
             },
         )
