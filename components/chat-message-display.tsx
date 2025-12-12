@@ -270,7 +270,14 @@ export function ChatMessageDisplay({
                 }),
             })
         } catch (error) {
-            console.warn("Failed to log feedback:", error)
+            console.error("Failed to log feedback:", error)
+            toast.error("Failed to record your feedback. Please try again.")
+            // Revert optimistic UI update
+            setFeedback((prev) => {
+                const next = { ...prev }
+                delete next[messageId]
+                return next
+            })
         }
     }
 
