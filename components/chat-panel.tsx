@@ -731,21 +731,28 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     const handleNewChat = useCallback(() => {
         setMessages([])
         clearDiagram()
-        setFiles([])
+        handleFileChange([]) // Use handleFileChange to also clear pdfData
         const newSessionId = `session-${Date.now()}-${Math.random()
             .toString(36)
             .slice(2, 9)}`
         setSessionId(newSessionId)
         xmlSnapshotsRef.current.clear()
-        // Clear localStorage
-        localStorage.removeItem(STORAGE_MESSAGES_KEY)
-        localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
-        localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
-        localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
+        // Clear localStorage with error handling
+        try {
+            localStorage.removeItem(STORAGE_MESSAGES_KEY)
+            localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
+            localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
+            localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
+            toast.success("Started a fresh chat")
+        } catch (error) {
+            console.error("Failed to clear localStorage:", error)
+            toast.warning(
+                "Chat cleared but browser storage could not be updated",
+            )
+        }
 
         setShowNewChatDialog(false)
-        toast.success("Started a fresh chat")
-    }, [clearDiagram, setFiles, setMessages, setSessionId])
+    }, [clearDiagram, handleFileChange, setMessages, setSessionId])
 
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
