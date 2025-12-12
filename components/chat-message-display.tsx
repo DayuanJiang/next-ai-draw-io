@@ -282,27 +282,64 @@ export function ChatMessageDisplay({
     }
 
     const handleDisplayChart = useCallback(
-        (xml: string) => {
+        (xml: string, showToast = false) => {
             const currentXml = xml || ""
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
-                // If chartXML is empty, create a default mxfile structure to use with replaceNodes
-                // This ensures the XML is properly wrapped in mxfile/diagram/mxGraphModel format
-                const baseXML =
-                    chartXML ||
-                    `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
-                const replacedXML = replaceNodes(baseXML, convertedXml)
+                // Parse and validate XML BEFORE calling replaceNodes
+                const parser = new DOMParser()
+                const testDoc = parser.parseFromString(convertedXml, "text/xml")
+                const parseError = testDoc.querySelector("parsererror")
 
-                const validationError = validateMxCellStructure(replacedXML)
-                if (!validationError) {
-                    previousXML.current = convertedXml
-                    // Skip validation in loadDiagram since we already validated above
-                    onDisplayChart(replacedXML, true)
-                } else {
-                    console.log(
-                        "[ChatMessageDisplay] XML validation failed:",
-                        validationError,
+                if (parseError) {
+                    console.error(
+                        "[ChatMessageDisplay] Malformed XML detected - skipping update",
                     )
+                    // Only show toast if this is the final XML (not during streaming)
+                    if (showToast) {
+                        toast.error(
+                            "AI generated invalid diagram XML. Please try regenerating.",
+                        )
+                    }
+                    return // Skip this update
+                }
+
+                try {
+                    // If chartXML is empty, create a default mxfile structure to use with replaceNodes
+                    // This ensures the XML is properly wrapped in mxfile/diagram/mxGraphModel format
+                    const baseXML =
+                        chartXML ||
+                        `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+                    const replacedXML = replaceNodes(baseXML, convertedXml)
+
+                    const validationError = validateMxCellStructure(replacedXML)
+                    if (!validationError) {
+                        previousXML.current = convertedXml
+                        // Skip validation in loadDiagram since we already validated above
+                        onDisplayChart(replacedXML, true)
+                    } else {
+                        console.error(
+                            "[ChatMessageDisplay] XML validation failed:",
+                            validationError,
+                        )
+                        // Only show toast if this is the final XML (not during streaming)
+                        if (showToast) {
+                            toast.error(
+                                "Diagram validation failed. Please try regenerating.",
+                            )
+                        }
+                    }
+                } catch (error) {
+                    console.error(
+                        "[ChatMessageDisplay] Error processing XML:",
+                        error,
+                    )
+                    // Only show toast if this is the final XML (not during streaming)
+                    if (showToast) {
+                        toast.error(
+                            "Failed to process diagram. Please try regenerating.",
+                        )
+                    }
                 }
             }
         },
@@ -345,12 +382,14 @@ export function ChatMessageDisplay({
                                 state === "input-streaming" ||
                                 state === "input-available"
                             ) {
-                                handleDisplayChart(xml)
+                                // During streaming, don't show toast (XML may be incomplete)
+                                handleDisplayChart(xml, false)
                             } else if (
                                 state === "output-available" &&
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
-                                handleDisplayChart(xml)
+                                // Show toast only if final XML is malformed
+                                handleDisplayChart(xml, true)
                                 processedToolCalls.current.add(toolCallId)
                             }
                         }
