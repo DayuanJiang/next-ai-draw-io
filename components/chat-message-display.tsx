@@ -209,6 +209,8 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
+    // Track which tool calls have shown error toasts (to avoid spamming during streaming)
+    const errorToastsShownRef = useRef<Set<string>>(new Set())
 
     const copyMessageToClipboard = async (messageId: string, text: string) => {
         try {
@@ -282,7 +284,7 @@ export function ChatMessageDisplay({
     }
 
     const handleDisplayChart = useCallback(
-        (xml: string) => {
+        (xml: string, toolCallId?: string, showToast = false) => {
             const currentXml = xml || ""
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
@@ -295,9 +297,17 @@ export function ChatMessageDisplay({
                     console.error(
                         "[ChatMessageDisplay] Malformed XML detected - skipping update",
                     )
-                    toast.error(
-                        "AI generated invalid diagram XML. Please try regenerating.",
-                    )
+                    // Only show toast once per tool call to avoid spamming during streaming
+                    if (
+                        showToast &&
+                        toolCallId &&
+                        !errorToastsShownRef.current.has(toolCallId)
+                    ) {
+                        toast.error(
+                            "AI generated invalid diagram XML. Please try regenerating.",
+                        )
+                        errorToastsShownRef.current.add(toolCallId)
+                    }
                     return // Skip this update
                 }
 
@@ -319,18 +329,34 @@ export function ChatMessageDisplay({
                             "[ChatMessageDisplay] XML validation failed:",
                             validationError,
                         )
-                        toast.error(
-                            "Diagram validation failed. Please try regenerating.",
-                        )
+                        // Only show toast once per tool call to avoid spamming during streaming
+                        if (
+                            showToast &&
+                            toolCallId &&
+                            !errorToastsShownRef.current.has(toolCallId)
+                        ) {
+                            toast.error(
+                                "Diagram validation failed. Please try regenerating.",
+                            )
+                            errorToastsShownRef.current.add(toolCallId)
+                        }
                     }
                 } catch (error) {
                     console.error(
                         "[ChatMessageDisplay] Error processing XML:",
                         error,
                     )
-                    toast.error(
-                        "Failed to process diagram. Please try regenerating.",
-                    )
+                    // Only show toast once per tool call to avoid spamming during streaming
+                    if (
+                        showToast &&
+                        toolCallId &&
+                        !errorToastsShownRef.current.has(toolCallId)
+                    ) {
+                        toast.error(
+                            "Failed to process diagram. Please try regenerating.",
+                        )
+                        errorToastsShownRef.current.add(toolCallId)
+                    }
                 }
             }
         },
@@ -373,12 +399,14 @@ export function ChatMessageDisplay({
                                 state === "input-streaming" ||
                                 state === "input-available"
                             ) {
-                                handleDisplayChart(xml)
+                                // During streaming: update diagram but don't show error toasts
+                                handleDisplayChart(xml, toolCallId, false)
                             } else if (
                                 state === "output-available" &&
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
-                                handleDisplayChart(xml)
+                                // After streaming completes: show error toasts if needed
+                                handleDisplayChart(xml, toolCallId, true)
                                 processedToolCalls.current.add(toolCallId)
                             }
                         }
