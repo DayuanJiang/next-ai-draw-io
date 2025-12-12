@@ -18,7 +18,7 @@ import {
 } from "@/lib/langfuse"
 import { getSystemPrompt } from "@/lib/system-prompts"
 
-export const maxDuration = 300
+export const maxDuration = 120
 
 // File upload limits (must match client-side)
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
