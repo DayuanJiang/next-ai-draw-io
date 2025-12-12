@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import {
     AlertTriangle,
+    MessageSquarePlus,
     PanelRightClose,
     PanelRightOpen,
     Settings,
@@ -17,6 +18,7 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { getAIConfig } from "@/lib/ai-config"
@@ -141,6 +143,7 @@ export default function ChatPanel({
     const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
+    const [showNewChatDialog, setShowNewChatDialog] = useState(false)
 
     // Check config on mount
     useEffect(() => {
@@ -725,6 +728,32 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         }
     }
 
+    const handleNewChat = useCallback(() => {
+        setMessages([])
+        clearDiagram()
+        handleFileChange([]) // Use handleFileChange to also clear pdfData
+        const newSessionId = `session-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 9)}`
+        setSessionId(newSessionId)
+        xmlSnapshotsRef.current.clear()
+        // Clear localStorage with error handling
+        try {
+            localStorage.removeItem(STORAGE_MESSAGES_KEY)
+            localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
+            localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
+            localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
+            toast.success("Started a fresh chat")
+        } catch (error) {
+            console.error("Failed to clear localStorage:", error)
+            toast.warning(
+                "Chat cleared but browser storage could not be updated",
+            )
+        }
+
+        setShowNewChatDialog(false)
+    }, [clearDiagram, handleFileChange, setMessages, setSessionId])
+
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
@@ -1044,6 +1073,18 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         )}
                     </div>
                     <div className="flex items-center gap-1">
+                        <ButtonWithTooltip
+                            tooltipContent="Start fresh chat"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setShowNewChatDialog(true)}
+                            className="hover:bg-accent"
+                        >
+                            <MessageSquarePlus
+                                className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
+                            />
+                        </ButtonWithTooltip>
+                        <div className="w-px h-5 bg-border mx-1" />
                         <a
                             href="https://github.com/DayuanJiang/next-ai-draw-io"
                             target="_blank"
@@ -1103,23 +1144,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     status={status}
                     onSubmit={onFormSubmit}
                     onChange={handleInputChange}
-                    onClearChat={() => {
-                        setMessages([])
-                        clearDiagram()
-                        const newSessionId = `session-${Date.now()}-${Math.random()
-                            .toString(36)
-                            .slice(2, 9)}`
-                        setSessionId(newSessionId)
-                        xmlSnapshotsRef.current.clear()
-                        // Clear localStorage
-                        localStorage.removeItem(STORAGE_MESSAGES_KEY)
-                        localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
-                        localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
-                        localStorage.setItem(
-                            STORAGE_SESSION_ID_KEY,
-                            newSessionId,
-                        )
-                    }}
+                    onClearChat={handleNewChat}
                     files={files}
                     onFileChange={handleFileChange}
                     pdfData={pdfData}
@@ -1138,6 +1163,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
+            />
+
+            <ResetWarningModal
+                open={showNewChatDialog}
+                onOpenChange={setShowNewChatDialog}
+                onClear={handleNewChat}
             />
         </div>
     )
