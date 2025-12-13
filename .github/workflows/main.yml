@@ -1,0 +1,136 @@
+name: Next-AI Build and Deploy
+
+on:
+  push:
+    branches:
+      - develop
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image Version Release'
+        required: true
+        type: string
+      branch:
+        description: 'Flask Branch'
+        required: true
+        type: string
+      build_type:
+        description: 'Build Type'
+        required: true
+        type: choice
+        options:
+          - dev
+          - release
+
+env:
+  DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+  IMAGE_TAG: ${{ github.event.inputs.version }}
+
+jobs:
+  set-env:
+    runs-on: self-hosted
+    outputs:
+      release: ${{ steps.setenv.outputs.release }}
+      image_tag: ${{ steps.setenv.outputs.image_tag }}
+      build_type: ${{ steps.setenv.outputs.build_type }}
+      image_name: ${{ steps.setenv.outputs.image_name }}
+      env_type: ${{ steps.setenv.outputs.env_type }}
+      docker_registry: ${{ steps.setenv.outputs.docker_registry }}
+
+    steps:
+      - id: setenv
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "release=develop" >> $GITHUB_OUTPUT
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            IMAGE_TAG="$(date +'%y.%m.%d')-$SHORT_SHA"
+            echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+            echo "docker_registry=${{ env.DOCKER_REGISTRY }}" >> $GITHUB_OUTPUT
+            echo "env_type=dev" >> $GITHUB_OUTPUT
+            echo "build_type=dev" >> $GITHUB_OUTPUT
+            echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            echo "release=$RELEASE_TAG" >> $GITHUB_OUTPUT
+            echo "image_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+            echo "docker_registry=${{ env.DOCKER_REGISTRY }}" >> $GITHUB_OUTPUT
+            echo "env_type=release" >> $GITHUB_OUTPUT
+            echo "build_type=release" >> $GITHUB_OUTPUT
+            echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+
+          else  
+            echo "release=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            IMAGE_TAG="${{ github.event.inputs.branch }}"
+            echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+            echo "docker_registry=${{ env.DOCKER_REGISTRY }}" >> $GITHUB_OUTPUT
+            BUILD_TYPE="${{ github.event.inputs.build_type }}"
+            echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+            if [[ "$BUILD_TYPE" == "dev" ]]; then
+              echo "env_type=dev" >> $GITHUB_OUTPUT
+              echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+
+            else
+              echo "env_type=release" >> $GITHUB_OUTPUT
+              echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+
+            fi
+          fi
+
+  build_and_package:
+    runs-on: self-hosted
+    needs: set-env
+    container:
+      image: nexus.techfinite.com/techfinite-docker-public/node-lts-docker:25.09.29
+      credentials:
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v3
+      with:
+          ref: ${{ needs.set-env.outputs.release }}
+          fetch-depth: 0
+          clean: true
+
+    - name: Log in to Docker registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+
+    - name: Build Docker image
+      run: |
+        docker build \
+                     -t ${{ env.DOCKER_REGISTRY }}/${{ needs.set-env.outputs.image_name }}:${{ needs.set-env.outputs.image_tag }} .
+
+    - name: Push Docker image
+      run: |
+        docker push ${{ env.DOCKER_REGISTRY }}/${{ needs.set-env.outputs.image_name }}:${{ needs.set-env.outputs.image_tag }}
+
+  cleanup:
+    runs-on: self-hosted
+    if: always()
+    needs: [build_and_package]
+    steps:
+      - name: Cleanup Runner
+        run: |
+          echo "Running cleanup job..."
+          docker system prune -af || true
+          docker volume prune -f || true
+          docker builder prune -af || true
+          docker image prune -af || true
+          docker container prune -f || true
+
+  deploy:
+    needs: [set-env, build_and_package]
+    if: ${{ needs.set-env.outputs.env_type == 'dev' }}
+    uses: techfinite-org/yultra-ai-agent/.github/workflows/deploy.yml@develop
+    with:
+      image_tag: ${{ needs.set-env.outputs.image_tag }}
+      environment: ${{ needs.set-env.outputs.env_type }}
+    secrets: inherit
