@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
+import { toast } from "sonner"
 import ChatPanel from "@/components/chat-panel"
 import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
@@ -15,8 +16,13 @@ const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        resetDrawioReady,
+        resolverRef,
+    } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
@@ -35,12 +41,10 @@ export default function Home() {
 
         const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
         if (savedDarkMode !== null) {
-            // Use saved preference
             const isDark = savedDarkMode === "true"
             setDarkMode(isDark)
             document.documentElement.classList.toggle("dark", isDark)
         } else {
-            // First visit: match browser preference
             const prefersDark = window.matchMedia(
                 "(prefers-color-scheme: dark)",
             ).matches
@@ -58,13 +62,84 @@ export default function Home() {
         setIsLoaded(true)
     }, [])
 
-    const toggleDarkMode = () => {
+    const handleDarkModeChange = async () => {
+        // Explicitly fetch current diagram from DrawIO before theme change
+        if (drawioRef && "current" in drawioRef && drawioRef.current) {
+            try {
+                // Export current diagram and wait for it to be saved
+                const currentXml = await new Promise<string>((resolve) => {
+                    if (resolverRef && "current" in resolverRef) {
+                        resolverRef.current = resolve
+                    }
+                    if (
+                        drawioRef &&
+                        "current" in drawioRef &&
+                        drawioRef.current
+                    ) {
+                        drawioRef.current.exportDiagram({ format: "xmlsvg" })
+                    }
+                })
+
+                // Save to localStorage
+                if (currentXml && currentXml.length > 300) {
+                    localStorage.setItem(
+                        "next-ai-draw-io-diagram-xml",
+                        currentXml,
+                    )
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to save diagram before theme change:",
+                    error,
+                )
+            }
+        }
+
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
-        // Reset so onDrawioLoad fires again after remount
         resetDrawioReady()
+
+        toast.success("Theme changed - diagram preserved")
+    }
+
+    const handleDrawioUiChange = async () => {
+        // Explicitly fetch current diagram from DrawIO before UI change
+        if (drawioRef && "current" in drawioRef && drawioRef.current) {
+            try {
+                // Export current diagram and wait for it to be saved
+                const currentXml = await new Promise<string>((resolve) => {
+                    if (resolverRef && "current" in resolverRef) {
+                        resolverRef.current = resolve
+                    }
+                    if (
+                        drawioRef &&
+                        "current" in drawioRef &&
+                        drawioRef.current
+                    ) {
+                        drawioRef.current.exportDiagram({ format: "xmlsvg" })
+                    }
+                })
+
+                // Save to localStorage
+                if (currentXml && currentXml.length > 300) {
+                    localStorage.setItem(
+                        "next-ai-draw-io-diagram-xml",
+                        currentXml,
+                    )
+                }
+            } catch (error) {
+                console.error("Failed to save diagram before UI change:", error)
+            }
+        }
+
+        const newUi = drawioUi === "min" ? "sketch" : "min"
+        localStorage.setItem("drawio-theme", newUi)
+        setDrawioUi(newUi)
+        resetDrawioReady()
+
+        toast.success("UI style changed - diagram preserved")
     }
 
     // Check mobile
@@ -182,15 +257,9 @@ export default function Home() {
                             isVisible={isChatVisible}
                             onToggleVisibility={toggleChatPanel}
                             drawioUi={drawioUi}
-                            onToggleDrawioUi={() => {
-                                const newUi =
-                                    drawioUi === "min" ? "sketch" : "min"
-                                localStorage.setItem("drawio-theme", newUi)
-                                setDrawioUi(newUi)
-                                resetDrawioReady()
-                            }}
+                            onToggleDrawioUi={handleDrawioUiChange}
                             darkMode={darkMode}
-                            onToggleDarkMode={toggleDarkMode}
+                            onToggleDarkMode={handleDarkModeChange}
                             isMobile={isMobile}
                             onCloseProtectionChange={setCloseProtection}
                         />
