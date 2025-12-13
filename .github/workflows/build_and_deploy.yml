@@ -43,14 +43,14 @@ jobs:
       - id: setenv
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "release=develop" >> $GITHUB_OUTPUT
+            echo "release=main" >> $GITHUB_OUTPUT
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
             IMAGE_TAG="$(date +'%y.%m.%d')-$SHORT_SHA"
             echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
             echo "docker_registry=${{ env.DOCKER_REGISTRY }}" >> $GITHUB_OUTPUT
             echo "env_type=dev" >> $GITHUB_OUTPUT
             echo "build_type=dev" >> $GITHUB_OUTPUT
-            echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+            echo "image_name=next-ai-draw-io" >> $GITHUB_OUTPUT
 
           elif [[ "${{ github.event_name }}" == "release" ]]; then
             RELEASE_TAG="${{ github.event.release.tag_name }}"
@@ -59,7 +59,7 @@ jobs:
             echo "docker_registry=${{ env.DOCKER_REGISTRY }}" >> $GITHUB_OUTPUT
             echo "env_type=release" >> $GITHUB_OUTPUT
             echo "build_type=release" >> $GITHUB_OUTPUT
-            echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+            echo "image_name=next-ai-draw-io" >> $GITHUB_OUTPUT
 
           else  
             echo "release=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
@@ -70,11 +70,11 @@ jobs:
             echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
             if [[ "$BUILD_TYPE" == "dev" ]]; then
               echo "env_type=dev" >> $GITHUB_OUTPUT
-              echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+              echo "image_name=next-ai-draw-io" >> $GITHUB_OUTPUT
 
             else
               echo "env_type=release" >> $GITHUB_OUTPUT
-              echo "image_name=yultra-ai" >> $GITHUB_OUTPUT
+              echo "image_name=next-ai-draw-io" >> $GITHUB_OUTPUT
 
             fi
           fi
