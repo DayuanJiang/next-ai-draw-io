@@ -47,11 +47,11 @@ jobs:
           helm repo list | grep yultra || helm repo add yultra https://nexus.techfinite.com/repository/yultra.ai-helm/ --username="${{ secrets.REGISTRY_USERNAME }}" --password="${{ secrets.REGISTRY_PASSWORD }}"
           helm repo update
           if [[ "${{ inputs.environment }}" == "dev" ]]; then
-            helm upgrade yultra-dev -n yultra yultra/yultra --reuse-values --set drawio.image=${{ secrets.DOCKER_REGISTRY }}/next-ai-draw-io:${{ inputs.image_tag }}
+            helm upgrade yultra-dev -n yultra yultra/yultra --reuse-values --set nextAiDrawio.image=${{ secrets.DOCKER_REGISTRY }}/next-ai-draw-io:${{ inputs.image_tag }}
           elif [[ "${{ inputs.environment }}" == "qa" ]]; then
-            helm upgrade yultra-qa -n yultra-qa yultra/yultra --reuse-values --set drawio.image=${{ secrets.DOCKER_REGISTRY }}/next-ai-draw-io:${{ inputs.image_tag }}
+            helm upgrade yultra-qa -n yultra-qa yultra/yultra --reuse-values --set nextAiDrawio.image=${{ secrets.DOCKER_REGISTRY }}/next-ai-draw-io:${{ inputs.image_tag }}
           else
-            helm upgrade yultra -n yultra yultra/yultra --reuse-values --set drawio.image=${{ secrets.DOCKER_REGISTRY }}/next-ai-draw-io:${{ inputs.image_tag }}
+            helm upgrade yultra -n yultra yultra/yultra --reuse-values --set nextAiDrawio.image=${{ secrets.DOCKER_REGISTRY }}/next-ai-draw-io:${{ inputs.image_tag }}
           fi
 
   cleanup:
