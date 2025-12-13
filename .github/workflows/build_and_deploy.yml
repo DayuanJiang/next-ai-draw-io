@@ -129,7 +129,7 @@ jobs:
   deploy:
     needs: [set-env, build_and_package]
     if: ${{ needs.set-env.outputs.env_type == 'dev' }}
-    uses: techfinite-org/yultra-ai-agent/.github/workflows/deploy.yml@develop
+    uses: techfinite-org/next-ai-draw-io/.github/workflows/deploy.yml@develop
     with:
       image_tag: ${{ needs.set-env.outputs.image_tag }}
       environment: ${{ needs.set-env.outputs.env_type }}
