@@ -13,7 +13,7 @@
         "prepare": "husky"
     },
     "dependencies": {
-        "@ai-sdk/amazon-bedrock": "^3.0.62",
+        "@ai-sdk/amazon-bedrock": "^3.0.70",
         "@ai-sdk/anthropic": "^2.0.44",
         "@ai-sdk/azure": "^2.0.69",
         "@ai-sdk/deepseek": "^1.0.30",

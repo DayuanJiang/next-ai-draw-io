@@ -63,7 +63,7 @@ interface ChatPanelProps {
 // Constants for tool states
 const TOOL_ERROR_STATE = "output-error" as const
 const DEBUG = process.env.NODE_ENV === "development"
-const MAX_AUTO_RETRY_COUNT = 3
+const MAX_AUTO_RETRY_COUNT = 1
 
 /**
  * Check if auto-resubmit should happen based on tool errors.

@@ -95,35 +95,6 @@ function replaceHistoricalToolInputs(messages: any[]): any[] {
     })
 }
 
-// Helper function to fix tool call inputs for Bedrock API
-// Bedrock requires toolUse.input to be a JSON object, not a string
-function fixToolCallInputs(messages: any[]): any[] {
-    return messages.map((msg) => {
-        if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
-            return msg
-        }
-        const fixedContent = msg.content.map((part: any) => {
-            if (part.type === "tool-call") {
-                if (typeof part.input === "string") {
-                    try {
-                        const parsed = JSON.parse(part.input)
-                        return { ...part, input: parsed }
-                    } catch {
-                        // If parsing fails, wrap the string in an object
-                        return { ...part, input: { rawInput: part.input } }
-                    }
-                }
-                // Input is already an object, but verify it's not null/undefined
-                if (part.input === null || part.input === undefined) {
-                    return { ...part, input: {} }
-                }
-            }
-            return part
-        })
-        return { ...msg, content: fixedContent }
-    })
-}
-
 // Helper function to create cached stream response
 function createCachedStreamResponse(xml: string): Response {
     const toolCallId = `cached-${Date.now()}`
@@ -186,9 +157,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
             : undefined
 
     // Extract user input text for Langfuse trace
-    const currentMessage = messages[messages.length - 1]
+    const lastMessage = messages[messages.length - 1]
     const userInputText =
-        currentMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+        lastMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -242,12 +213,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId)
 
-    const lastMessage = messages[messages.length - 1]
-
-    // Extract text from the last message parts
-    const lastMessageText =
-        lastMessage.parts?.find((part: any) => part.type === "text")?.text || ""
-
     // Extract file parts (images) from the last message
     const fileParts =
         lastMessage.parts?.filter((part: any) => part.type === "file") || []
@@ -255,22 +220,19 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // User input only - XML is now in a separate cached system message
     const formattedUserInput = `User input:
 """md
-${lastMessageText}
+${userInputText}
 """`
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
-
-    // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
-    const fixedMessages = fixToolCallInputs(modelMessages)
 
     // Replace historical tool call XML with placeholders to reduce tokens
     // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
     const enableHistoryReplace =
         process.env.ENABLE_HISTORY_XML_REPLACE === "true"
     const placeholderMessages = enableHistoryReplace
-        ? replaceHistoricalToolInputs(fixedMessages)
-        : fixedMessages
+        ? replaceHistoricalToolInputs(modelMessages)
+        : modelMessages
 
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
@@ -354,6 +316,9 @@ ${lastMessageText}
 
     const result = streamText({
         model,
+        ...(process.env.MAX_OUTPUT_TOKENS && {
+            maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
+        }),
         stopWhen: stepCountIs(5),
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
@@ -365,32 +330,6 @@ ${lastMessageText}
                 userId,
             }),
         }),
-        // Repair malformed tool calls (model sometimes generates invalid JSON with unescaped quotes)
-        experimental_repairToolCall: async ({ toolCall }) => {
-            // The toolCall.input contains the raw JSON string that failed to parse
-            const rawJson =
-                typeof toolCall.input === "string" ? toolCall.input : null
-
-            if (rawJson) {
-                try {
-                    // Fix unescaped quotes: x="520" should be x=\"520\"
-                    const fixed = rawJson.replace(
-                        /([a-zA-Z])="(\d+)"/g,
-                        '$1=\\"$2\\"',
-                    )
-                    const parsed = JSON.parse(fixed)
-                    return {
-                        type: "tool-call" as const,
-                        toolCallId: toolCall.toolCallId,
-                        toolName: toolCall.toolName,
-                        input: JSON.stringify(parsed),
-                    }
-                } catch {
-                    // Repair failed, return null
-                }
-            }
-            return null
-        },
         onFinish: ({ text, usage }) => {
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
             setTraceOutput(text, {
