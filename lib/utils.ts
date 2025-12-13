@@ -768,10 +768,31 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
 
-    // 1. Remove CDATA wrapper
+    // 0. Fix backslash-escaped quotes (common LLM mistakes)
+    // Handles: attr=\"value\", value="text\"inner\"more", and mixed patterns
+    // Uses backreference to match opening/closing quote style, then normalizes
+    if (/\\"/.test(fixed)) {
+        fixed = fixed.replace(
+            /(\s[\w:-]+)\s*=\s*(\\"|")([\s\S]*?)\2(?=[\s/>?]|$)/g,
+            (_match, attrName, _openQuote, content) => {
+                const cleanContent = content.replace(/\\"/g, "&quot;")
+                return `${attrName}="${cleanContent}"`
+            },
+        )
+        fixes.push("Fixed backslash-escaped quotes")
+    }
+
+    // 1. Remove CDATA wrapper (MUST be before text-before-root check)
     if (/^\s*<!\[CDATA\[/.test(fixed)) {
         fixed = fixed.replace(/^\s*<!\[CDATA\[/, "").replace(/\]\]>\s*$/, "")
         fixes.push("Removed CDATA wrapper")
+    }
+
+    // 2. Remove text before XML declaration or root element (only if it's garbage text, not valid XML)
+    const xmlStart = fixed.search(/<(\?xml|mxGraphModel|mxfile)/i)
+    if (xmlStart > 0 && !/^<[a-zA-Z]/.test(fixed.trim())) {
+        fixed = fixed.substring(xmlStart)
+        fixes.push("Removed text before XML root")
     }
 
     // 2. Fix duplicate attributes (keep first occurrence, remove duplicates)
@@ -1169,6 +1190,54 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     )
     if (emptyIdCount > 0) {
         fixes.push(`Generated ${emptyIdCount} missing ID(s)`)
+    }
+
+    // 13. Aggressive: drop broken mxCell elements that can't be fixed
+    // Only do this if DOM parser still finds errors after all other fixes
+    if (typeof DOMParser !== "undefined") {
+        let droppedCells = 0
+        let maxIterations = 50
+        while (maxIterations-- > 0) {
+            const parser = new DOMParser()
+            const doc = parser.parseFromString(fixed, "text/xml")
+            const parseError = doc.querySelector("parsererror")
+            if (!parseError) break // Valid now!
+
+            const errText = parseError.textContent || ""
+            const match = errText.match(/(\d+):\d+:/)
+            if (!match) break
+
+            const errLine = parseInt(match[1], 10) - 1
+            const lines = fixed.split("\n")
+
+            // Find the mxCell containing this error line
+            let cellStart = errLine
+            let cellEnd = errLine
+
+            // Go back to find <mxCell
+            while (cellStart > 0 && !lines[cellStart].includes("<mxCell")) {
+                cellStart--
+            }
+
+            // Go forward to find </mxCell> or />
+            while (cellEnd < lines.length - 1) {
+                if (
+                    lines[cellEnd].includes("</mxCell>") ||
+                    lines[cellEnd].trim().endsWith("/>")
+                ) {
+                    break
+                }
+                cellEnd++
+            }
+
+            // Remove these lines
+            lines.splice(cellStart, cellEnd - cellStart + 1)
+            fixed = lines.join("\n")
+            droppedCells++
+        }
+        if (droppedCells > 0) {
+            fixes.push(`Dropped ${droppedCells} unfixable mxCell element(s)`)
+        }
     }
 
     return { fixed, fixes }
