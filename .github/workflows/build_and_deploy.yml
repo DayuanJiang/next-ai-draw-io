@@ -3,7 +3,7 @@ name: Next-AI Build and Deploy
 on:
   push:
     branches:
-      - develop
+      - main
   release:
     types: [published]
   workflow_dispatch:
