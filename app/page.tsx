@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
+import { MessageBridge } from "@/components/message-bridge"
 import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
     ResizableHandle,
@@ -120,6 +121,7 @@ export default function Home() {
 
     return (
         <div className="h-screen bg-background relative overflow-hidden">
+            <MessageBridge />
             <ResizablePanelGroup
                 id="main-panel-group"
                 key={isMobile ? "mobile" : "desktop"}
@@ -163,7 +165,7 @@ export default function Home() {
                     </div>
                 </ResizablePanel>
 
-                <ResizableHandle withHandle />
+                <ResizableHandle withHandle id="resize-handle" />
 
                 {/* Chat Panel */}
                 <ResizablePanel
