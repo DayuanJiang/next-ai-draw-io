@@ -6,6 +6,95 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
 }
 
+// ============================================================================
+// XML Validation/Fix Constants
+// ============================================================================
+
+/** Maximum XML size to process (1MB) - larger XMLs may cause performance issues */
+const MAX_XML_SIZE = 1_000_000
+
+/** Maximum iterations for aggressive cell dropping to prevent infinite loops */
+const MAX_DROP_ITERATIONS = 10
+
+/** Structural attributes that should not be duplicated in draw.io */
+const STRUCTURAL_ATTRS = [
+    "edge",
+    "parent",
+    "source",
+    "target",
+    "vertex",
+    "connectable",
+]
+
+/** Valid XML entity names */
+const VALID_ENTITIES = new Set(["lt", "gt", "amp", "quot", "apos"])
+
+// ============================================================================
+// XML Parsing Helpers
+// ============================================================================
+
+interface ParsedTag {
+    tag: string
+    tagName: string
+    isClosing: boolean
+    isSelfClosing: boolean
+    startIndex: number
+    endIndex: number
+}
+
+/**
+ * Parse XML tags while properly handling quoted strings
+ * This is a shared utility used by both validation and fixing logic
+ */
+function parseXmlTags(xml: string): ParsedTag[] {
+    const tags: ParsedTag[] = []
+    let i = 0
+
+    while (i < xml.length) {
+        const tagStart = xml.indexOf("<", i)
+        if (tagStart === -1) break
+
+        // Find matching > by tracking quotes
+        let tagEnd = tagStart + 1
+        let inQuote = false
+        let quoteChar = ""
+
+        while (tagEnd < xml.length) {
+            const c = xml[tagEnd]
+            if (inQuote) {
+                if (c === quoteChar) inQuote = false
+            } else {
+                if (c === '"' || c === "'") {
+                    inQuote = true
+                    quoteChar = c
+                } else if (c === ">") {
+                    break
+                }
+            }
+            tagEnd++
+        }
+
+        if (tagEnd >= xml.length) break
+
+        const tag = xml.substring(tagStart, tagEnd + 1)
+        i = tagEnd + 1
+
+        const tagMatch = /^<(\/?)([a-zA-Z][a-zA-Z0-9:_-]*)/.exec(tag)
+        if (!tagMatch) continue
+
+        tags.push({
+            tag,
+            tagName: tagMatch[2],
+            isClosing: tagMatch[1] === "/",
+            isSelfClosing: tag.endsWith("/>"),
+            startIndex: tagStart,
+            endIndex: tagEnd,
+        })
+    }
+
+    return tags
+}
+
 /**
  * Format XML string with proper indentation and line breaks
  * @param xml - The XML string to format
@@ -533,48 +622,13 @@ export function replaceXMLParts(
     return result
 }
 
-/**
- * Validates draw.io XML structure for common issues
- * Uses DOM parsing + additional regex checks for high accuracy
- * @param xml - The XML string to validate
- * @returns null if valid, error message string if invalid
- */
-export function validateMxCellStructure(xml: string): string | null {
-    // 0. First use DOM parser to catch syntax errors (most accurate)
-    try {
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(xml, "text/xml")
-        const parseError = doc.querySelector("parsererror")
-        if (parseError) {
-            return `Invalid XML: The XML contains syntax errors (likely unescaped special characters like <, >, & in attribute values). Please escape special characters: use &lt; for <, &gt; for >, &amp; for &, &quot; for ". Regenerate the diagram with properly escaped values.`
-        }
+// ============================================================================
+// Validation Helper Functions
+// ============================================================================
 
-        // DOM-based checks for nested mxCell
-        const allCells = doc.querySelectorAll("mxCell")
-        for (const cell of allCells) {
-            if (cell.parentElement?.tagName === "mxCell") {
-                const id = cell.getAttribute("id") || "unknown"
-                return `Invalid XML: Found nested mxCell (id="${id}"). Cells should be siblings, not nested inside other mxCell elements.`
-            }
-        }
-    } catch {
-        // If DOMParser fails, continue with regex checks
-    }
-
-    // 1. Check for CDATA wrapper (invalid at document root)
-    if (/^\s*<!\[CDATA\[/.test(xml)) {
-        return "Invalid XML: XML is wrapped in CDATA section - remove <![CDATA[ from start and ]]> from end"
-    }
-
-    // 2. Check for duplicate structural attributes in tags
-    const structuralAttrs = new Set([
-        "edge",
-        "parent",
-        "source",
-        "target",
-        "vertex",
-        "connectable",
-    ])
+/** Check for duplicate structural attributes in a tag */
+function checkDuplicateAttributes(xml: string): string | null {
+    const structuralSet = new Set(STRUCTURAL_ATTRS)
     const tagPattern = /<[^>]+>/g
     let tagMatch
     while ((tagMatch = tagPattern.exec(xml)) !== null) {
@@ -587,24 +641,17 @@ export function validateMxCellStructure(xml: string): string | null {
             attributes.set(attrName, (attributes.get(attrName) || 0) + 1)
         }
         const duplicates = Array.from(attributes.entries())
-            .filter(([name, count]) => count > 1 && structuralAttrs.has(name))
+            .filter(([name, count]) => count > 1 && structuralSet.has(name))
             .map(([name]) => name)
         if (duplicates.length > 0) {
             return `Invalid XML: Duplicate structural attribute(s): ${duplicates.join(", ")}. Remove duplicate attributes.`
         }
     }
+    return null
+}
 
-    // 3. Check for unescaped < in attribute values
-    const attrValuePattern = /=\s*"([^"]*)"/g
-    let attrValMatch
-    while ((attrValMatch = attrValuePattern.exec(xml)) !== null) {
-        const value = attrValMatch[1]
-        if (/</.test(value) && !/&lt;/.test(value)) {
-            return "Invalid XML: Unescaped < character in attribute values. Replace < with &lt;"
-        }
-    }
-
-    // 4. Check for duplicate IDs
+/** Check for duplicate IDs in XML */
+function checkDuplicateIds(xml: string): string | null {
     const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
     const ids = new Map<string, number>()
     let idMatch
@@ -618,50 +665,16 @@ export function validateMxCellStructure(xml: string): string | null {
     if (duplicateIds.length > 0) {
         return `Invalid XML: Found duplicate ID(s): ${duplicateIds.slice(0, 3).join(", ")}. All id attributes must be unique.`
     }
+    return null
+}
 
-    // 5. Check for tag mismatches using stateful parser
+/** Check for tag mismatches using parsed tags */
+function checkTagMismatches(xml: string): string | null {
     const xmlWithoutComments = xml.replace(/<!--[\s\S]*?-->/g, "")
+    const tags = parseXmlTags(xmlWithoutComments)
     const tagStack: string[] = []
 
-    // Parse tags properly by handling quoted strings
-    let i = 0
-    while (i < xmlWithoutComments.length) {
-        // Find next <
-        const tagStart = xmlWithoutComments.indexOf("<", i)
-        if (tagStart === -1) break
-
-        // Find matching > by tracking quotes
-        let tagEnd = tagStart + 1
-        let inQuote = false
-        let quoteChar = ""
-        while (tagEnd < xmlWithoutComments.length) {
-            const c = xmlWithoutComments[tagEnd]
-            if (inQuote) {
-                if (c === quoteChar) inQuote = false
-            } else {
-                if (c === '"' || c === "'") {
-                    inQuote = true
-                    quoteChar = c
-                } else if (c === ">") {
-                    break
-                }
-            }
-            tagEnd++
-        }
-
-        if (tagEnd >= xmlWithoutComments.length) break
-
-        const tag = xmlWithoutComments.substring(tagStart, tagEnd + 1)
-        i = tagEnd + 1
-
-        // Parse the tag
-        const tagMatch = /^<(\/?)([a-zA-Z][a-zA-Z0-9:_-]*)/.exec(tag)
-        if (!tagMatch) continue
-
-        const isClosing = tagMatch[1] === "/"
-        const tagName = tagMatch[2]
-        const isSelfClosing = tag.endsWith("/>")
-
+    for (const { tagName, isClosing, isSelfClosing } of tags) {
         if (isClosing) {
             if (tagStack.length === 0) {
                 return `Invalid XML: Closing tag </${tagName}> without matching opening tag`
@@ -677,8 +690,11 @@ export function validateMxCellStructure(xml: string): string | null {
     if (tagStack.length > 0) {
         return `Invalid XML: Document has ${tagStack.length} unclosed tag(s): ${tagStack.join(", ")}`
     }
+    return null
+}
 
-    // 6. Check invalid character references
+/** Check for invalid character references */
+function checkCharacterReferences(xml: string): string | null {
     const charRefPattern = /&#x?[^;]+;?/g
     let charMatch
     while ((charMatch = charRefPattern.exec(xml)) !== null) {
@@ -701,42 +717,30 @@ export function validateMxCellStructure(xml: string): string | null {
             }
         }
     }
+    return null
+}
 
-    // 7. Check for invalid comment syntax (-- inside comments)
-    const commentPattern = /<!--([\s\S]*?)-->/g
-    let commentMatch
-    while ((commentMatch = commentPattern.exec(xml)) !== null) {
-        if (/--/.test(commentMatch[1])) {
-            return "Invalid XML: Comment contains -- (double hyphen) which is not allowed"
-        }
-    }
-
-    // 8. Check for unescaped entity references and invalid entity names
+/** Check for invalid entity references */
+function checkEntityReferences(xml: string): string | null {
+    const xmlWithoutComments = xml.replace(/<!--[\s\S]*?-->/g, "")
     const bareAmpPattern = /&(?!(?:lt|gt|amp|quot|apos|#))/g
     if (bareAmpPattern.test(xmlWithoutComments)) {
         return "Invalid XML: Found unescaped & character(s). Replace & with &amp;"
     }
     const invalidEntityPattern = /&([a-zA-Z][a-zA-Z0-9]*);/g
-    const validEntities = new Set(["lt", "gt", "amp", "quot", "apos"])
     let entityMatch
     while (
         (entityMatch = invalidEntityPattern.exec(xmlWithoutComments)) !== null
     ) {
-        if (!validEntities.has(entityMatch[1])) {
+        if (!VALID_ENTITIES.has(entityMatch[1])) {
             return `Invalid XML: Invalid entity reference: &${entityMatch[1]}; - use only valid XML entities (lt, gt, amp, quot, apos)`
         }
     }
+    return null
+}
 
-    // 9. Check for empty id attributes on mxCell
-    if (/<mxCell[^>]*\sid\s*=\s*["']\s*["'][^>]*>/g.test(xml)) {
-        return "Invalid XML: Found mxCell element(s) with empty id attribute"
-    }
-
-    // 10. Check for mxfile wrapper (warning only - may not work with URL hash loading)
-    // Disabled: This is just a warning, not an error
-    // if (xml.trim().startsWith('<mxfile')) { ... }
-
-    // 11. Check for nested mxCell tags
+/** Check for nested mxCell tags using regex */
+function checkNestedMxCells(xml: string): string | null {
     const cellTagPattern = /<\/?mxCell[^>]*>/g
     const cellStack: number[] = []
     let cellMatch
@@ -755,6 +759,100 @@ export function validateMxCellStructure(xml: string): string | null {
             }
         }
     }
+    return null
+}
+
+/**
+ * Validates draw.io XML structure for common issues
+ * Uses DOM parsing + additional regex checks for high accuracy
+ * @param xml - The XML string to validate
+ * @returns null if valid, error message string if invalid
+ */
+export function validateMxCellStructure(xml: string): string | null {
+    // Size check for performance
+    if (xml.length > MAX_XML_SIZE) {
+        console.warn(
+            `[validateMxCellStructure] XML size (${xml.length}) exceeds ${MAX_XML_SIZE} bytes, may cause performance issues`,
+        )
+    }
+
+    // 0. First use DOM parser to catch syntax errors (most accurate)
+    try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(xml, "text/xml")
+        const parseError = doc.querySelector("parsererror")
+        if (parseError) {
+            return `Invalid XML: The XML contains syntax errors (likely unescaped special characters like <, >, & in attribute values). Please escape special characters: use &lt; for <, &gt; for >, &amp; for &, &quot; for ". Regenerate the diagram with properly escaped values.`
+        }
+
+        // DOM-based checks for nested mxCell
+        const allCells = doc.querySelectorAll("mxCell")
+        for (const cell of allCells) {
+            if (cell.parentElement?.tagName === "mxCell") {
+                const id = cell.getAttribute("id") || "unknown"
+                return `Invalid XML: Found nested mxCell (id="${id}"). Cells should be siblings, not nested inside other mxCell elements.`
+            }
+        }
+    } catch (error) {
+        // Log unexpected DOMParser errors before falling back to regex checks
+        console.warn(
+            "[validateMxCellStructure] DOMParser threw unexpected error, falling back to regex validation:",
+            error,
+        )
+    }
+
+    // 1. Check for CDATA wrapper (invalid at document root)
+    if (/^\s*<!\[CDATA\[/.test(xml)) {
+        return "Invalid XML: XML is wrapped in CDATA section - remove <![CDATA[ from start and ]]> from end"
+    }
+
+    // 2. Check for duplicate structural attributes
+    const dupAttrError = checkDuplicateAttributes(xml)
+    if (dupAttrError) return dupAttrError
+
+    // 3. Check for unescaped < in attribute values
+    const attrValuePattern = /=\s*"([^"]*)"/g
+    let attrValMatch
+    while ((attrValMatch = attrValuePattern.exec(xml)) !== null) {
+        const value = attrValMatch[1]
+        if (/</.test(value) && !/&lt;/.test(value)) {
+            return "Invalid XML: Unescaped < character in attribute values. Replace < with &lt;"
+        }
+    }
+
+    // 4. Check for duplicate IDs
+    const dupIdError = checkDuplicateIds(xml)
+    if (dupIdError) return dupIdError
+
+    // 5. Check for tag mismatches
+    const tagMismatchError = checkTagMismatches(xml)
+    if (tagMismatchError) return tagMismatchError
+
+    // 6. Check invalid character references
+    const charRefError = checkCharacterReferences(xml)
+    if (charRefError) return charRefError
+
+    // 7. Check for invalid comment syntax (-- inside comments)
+    const commentPattern = /<!--([\s\S]*?)-->/g
+    let commentMatch
+    while ((commentMatch = commentPattern.exec(xml)) !== null) {
+        if (/--/.test(commentMatch[1])) {
+            return "Invalid XML: Comment contains -- (double hyphen) which is not allowed"
+        }
+    }
+
+    // 8. Check for unescaped entity references and invalid entity names
+    const entityError = checkEntityReferences(xml)
+    if (entityError) return entityError
+
+    // 9. Check for empty id attributes on mxCell
+    if (/<mxCell[^>]*\sid\s*=\s*["']\s*["'][^>]*>/g.test(xml)) {
+        return "Invalid XML: Found mxCell element(s) with empty id attribute"
+    }
+
+    // 10. Check for nested mxCell tags
+    const nestedCellError = checkNestedMxCells(xml)
+    if (nestedCellError) return nestedCellError
 
     return null
 }
@@ -768,18 +866,15 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
 
-    // 0. Fix backslash-escaped quotes (common LLM mistakes)
-    // Handles: attr=\"value\", value="text\"inner\"more", and mixed patterns
-    // Uses backreference to match opening/closing quote style, then normalizes
-    if (/\\"/.test(fixed)) {
-        fixed = fixed.replace(
-            /(\s[\w:-]+)\s*=\s*(\\"|")([\s\S]*?)\2(?=[\s/>?]|$)/g,
-            (_match, attrName, _openQuote, content) => {
-                const cleanContent = content.replace(/\\"/g, "&quot;")
-                return `${attrName}="${cleanContent}"`
-            },
-        )
-        fixes.push("Fixed backslash-escaped quotes")
+    // 0. Fix JSON-escaped XML (common when XML is stored in JSON without unescaping)
+    // Only apply when we see JSON-escaped attribute patterns like =\"value\"
+    // Don't apply to legitimate \n in value attributes (draw.io uses these for line breaks)
+    if (/=\\"/.test(fixed)) {
+        // Replace literal \" with actual quotes
+        fixed = fixed.replace(/\\"/g, '"')
+        // Replace literal \n with actual newlines (only after confirming JSON-escaped)
+        fixed = fixed.replace(/\\n/g, "\n")
+        fixes.push("Fixed JSON-escaped XML")
     }
 
     // 1. Remove CDATA wrapper (MUST be before text-before-root check)
@@ -796,20 +891,11 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
 
     // 2. Fix duplicate attributes (keep first occurrence, remove duplicates)
-    const structuralAttrsToFix = [
-        "edge",
-        "parent",
-        "source",
-        "target",
-        "vertex",
-        "connectable",
-    ]
     let dupAttrFixed = false
     fixed = fixed.replace(/<[^>]+>/g, (tag) => {
-        const seenAttrs = new Set<string>()
         let newTag = tag
 
-        for (const attr of structuralAttrsToFix) {
+        for (const attr of STRUCTURAL_ATTRS) {
             // Find all occurrences of this attribute
             const attrRegex = new RegExp(
                 `\\s${attr}\\s*=\\s*["'][^"']*["']`,
@@ -864,18 +950,42 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         }
     }
 
-    // 3b. Fix malformed attribute values where &quot; is used as delimiter
-    // Pattern: attr=&quot;value&quot; should be attr="&quot;value&quot;"
-    const malformedQuotePattern =
-        /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*(?:&(?!quot;)[^&]*)*)&quot;/g
+    // 3b. Fix malformed attribute values where &quot; is used as delimiter instead of actual quotes
+    // Pattern: attr=&quot;value&quot; should become attr="value" (the &quot; was meant to be the quote delimiter)
+    // This commonly happens with dashPattern=&quot;1 1;&quot;
+    const malformedQuotePattern = /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;/
     if (malformedQuotePattern.test(fixed)) {
+        // Replace =&quot; with =" and trailing &quot; before next attribute or tag end with "
         fixed = fixed.replace(
-            /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*(?:&(?!quot;)[^&]*)*)&quot;/g,
-            '$1="&quot;$2&quot;"',
+            /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*?)&quot;/g,
+            '$1="$2"',
         )
         fixes.push(
-            'Fixed malformed attribute quotes (=&quot;...&quot; to ="&quot;...&quot;")',
+            'Fixed malformed attribute quotes (=&quot;...&quot; to ="...")',
         )
+    }
+
+    // 3c. Fix malformed closing tags like </tag/> -> </tag>
+    const malformedClosingTag = /<\/([a-zA-Z][a-zA-Z0-9]*)\s*\/>/g
+    if (malformedClosingTag.test(fixed)) {
+        fixed = fixed.replace(/<\/([a-zA-Z][a-zA-Z0-9]*)\s*\/>/g, "</$1>")
+        fixes.push("Fixed malformed closing tags (</tag/> to </tag>)")
+    }
+
+    // 3d. Fix missing space between attributes like vertex="1"parent="1"
+    const missingSpacePattern = /("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g
+    if (missingSpacePattern.test(fixed)) {
+        fixed = fixed.replace(/("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g, "$1 $2")
+        fixes.push("Added missing space between attributes")
+    }
+
+    // 3e. Fix unescaped quotes in style color values like fillColor="#fff2e6"
+    // The " after Color= prematurely ends the style attribute. Remove it.
+    // Pattern: ;fillColor="#fff → ;fillColor=#fff (remove first ", keep second as style closer)
+    const quotedColorPattern = /;([a-zA-Z]*[Cc]olor)="#/
+    if (quotedColorPattern.test(fixed)) {
+        fixed = fixed.replace(/;([a-zA-Z]*[Cc]olor)="#/g, ";$1=#")
+        fixes.push("Removed quotes around color values in style")
     }
 
     // 4. Fix unescaped < in attribute values
@@ -891,7 +1001,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
     if (hasUnescapedLt) {
         // Replace < with &lt; inside attribute values
-        fixed = fixed.replace(/=\s*"([^"]*)"/g, (match, value) => {
+        fixed = fixed.replace(/=\s*"([^"]*)"/g, (_match, value) => {
             const escaped = value.replace(/</g, "&lt;")
             return `="${escaped}"`
         })
@@ -977,45 +1087,11 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
 
     // 10. Fix unclosed tags by appending missing closing tags
-    // Track open tags and close any that are left open using stateful parser
+    // Use parseXmlTags helper to track open tags
     const tagStack: string[] = []
+    const parsedTags = parseXmlTags(fixed)
 
-    let idx = 0
-    while (idx < fixed.length) {
-        const tagStart = fixed.indexOf("<", idx)
-        if (tagStart === -1) break
-
-        // Find matching > by tracking quotes
-        let tagEnd = tagStart + 1
-        let inQuote = false
-        let quoteChar = ""
-        while (tagEnd < fixed.length) {
-            const c = fixed[tagEnd]
-            if (inQuote) {
-                if (c === quoteChar) inQuote = false
-            } else {
-                if (c === '"' || c === "'") {
-                    inQuote = true
-                    quoteChar = c
-                } else if (c === ">") {
-                    break
-                }
-            }
-            tagEnd++
-        }
-
-        if (tagEnd >= fixed.length) break
-
-        const tag = fixed.substring(tagStart, tagEnd + 1)
-        idx = tagEnd + 1
-
-        const tagMatch2 = /^<(\/?)([a-zA-Z][a-zA-Z0-9:_-]*)/.exec(tag)
-        if (!tagMatch2) continue
-
-        const isClosing = tagMatch2[1] === "/"
-        const tagName = tagMatch2[2]
-        const isSelfClosing = tag.endsWith("/>")
-
+    for (const { tagName, isClosing, isSelfClosing } of parsedTags) {
         if (isClosing) {
             // Find matching opening tag (may not be the last one if there's mismatch)
             const lastIdx = tagStack.lastIndexOf(tagName)
@@ -1112,7 +1188,6 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         // Track mxCell depth
         const isOpenCell = /<mxCell\s/.test(trimmed) && !trimmed.endsWith("/>")
         const isCloseCell = trimmed === "</mxCell>"
-        const isSelfClose = /<mxCell[^>]*\/>/.test(trimmed)
 
         if (isOpenCell) {
             if (cellDepth > 0) {
@@ -1143,14 +1218,13 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
 
     // 12. Fix duplicate IDs by appending suffix
-    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
     const seenIds = new Map<string, number>()
     const duplicateIds: string[] = []
 
     // First pass: find duplicates
+    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
     let idMatch
-    const tempPattern = /\bid\s*=\s*["']([^"']+)["']/gi
-    while ((idMatch = tempPattern.exec(fixed)) !== null) {
+    while ((idMatch = idPattern.exec(fixed)) !== null) {
         const id = idMatch[1]
         seenIds.set(id, (seenIds.get(id) || 0) + 1)
     }
@@ -1182,7 +1256,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let emptyIdCount = 0
     fixed = fixed.replace(
         /<mxCell([^>]*)\sid\s*=\s*["']\s*["']([^>]*)>/g,
-        (match, before, after) => {
+        (_match, before, after) => {
             emptyIdCount++
             const newId = `cell_${Date.now()}_${emptyIdCount}`
             return `<mxCell${before} id="${newId}"${after}>`
@@ -1196,7 +1270,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     // Only do this if DOM parser still finds errors after all other fixes
     if (typeof DOMParser !== "undefined") {
         let droppedCells = 0
-        let maxIterations = 50
+        let maxIterations = MAX_DROP_ITERATIONS
         while (maxIterations-- > 0) {
             const parser = new DOMParser()
             const doc = parser.parseFromString(fixed, "text/xml")
