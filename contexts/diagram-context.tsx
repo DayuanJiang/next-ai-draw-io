@@ -5,7 +5,7 @@ import { createContext, useContext, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
 import { STORAGE_DIAGRAM_XML_KEY } from "@/components/chat-panel"
 import type { ExportFormat } from "@/components/save-dialog"
-import { extractDiagramXML, validateMxCellStructure } from "../lib/utils"
+import { extractDiagramXML, validateAndFixXml } from "../lib/utils"
 
 interface DiagramContextType {
     chartXML: string
@@ -86,21 +86,34 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         chart: string,
         skipValidation?: boolean,
     ): string | null => {
+        let xmlToLoad = chart
+
         // Validate XML structure before loading (unless skipped for internal use)
         if (!skipValidation) {
-            const validationError = validateMxCellStructure(chart)
-            if (validationError) {
-                console.warn("[loadDiagram] Validation error:", validationError)
-                return validationError
+            const validation = validateAndFixXml(chart)
+            if (!validation.valid) {
+                console.warn(
+                    "[loadDiagram] Validation error:",
+                    validation.error,
+                )
+                return validation.error
+            }
+            // Use fixed XML if auto-fix was applied
+            if (validation.fixed) {
+                console.log(
+                    "[loadDiagram] Auto-fixed XML issues:",
+                    validation.fixes,
+                )
+                xmlToLoad = validation.fixed
             }
         }
 
         // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
-        setChartXML(chart)
+        setChartXML(xmlToLoad)
 
         if (drawioRef.current) {
             drawioRef.current.load({
-                xml: chart,
+                xml: xmlToLoad,
             })
         }
 

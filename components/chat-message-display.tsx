@@ -29,11 +29,7 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-    convertToLegalXml,
-    replaceNodes,
-    validateMxCellStructure,
-} from "@/lib/utils"
+import { convertToLegalXml, replaceNodes, validateAndFixXml } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
 
@@ -312,15 +308,24 @@ export function ChatMessageDisplay({
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
                     const replacedXML = replaceNodes(baseXML, convertedXml)
 
-                    const validationError = validateMxCellStructure(replacedXML)
-                    if (!validationError) {
+                    // Validate and auto-fix the XML
+                    const validation = validateAndFixXml(replacedXML)
+                    if (validation.valid) {
                         previousXML.current = convertedXml
+                        // Use fixed XML if available, otherwise use original
+                        const xmlToLoad = validation.fixed || replacedXML
+                        if (validation.fixes.length > 0) {
+                            console.log(
+                                "[ChatMessageDisplay] Auto-fixed XML issues:",
+                                validation.fixes,
+                            )
+                        }
                         // Skip validation in loadDiagram since we already validated above
-                        onDisplayChart(replacedXML, true)
+                        onDisplayChart(xmlToLoad, true)
                     } else {
                         console.error(
                             "[ChatMessageDisplay] XML validation failed:",
-                            validationError,
+                            validation.error,
                         )
                         // Only show toast if this is the final XML (not during streaming)
                         if (showToast) {
