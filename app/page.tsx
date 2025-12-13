@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
+import { toast } from "sonner"
 import ChatPanel from "@/components/chat-panel"
 import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
@@ -58,13 +59,50 @@ export default function Home() {
         setIsLoaded(true)
     }, [])
 
-    const toggleDarkMode = () => {
-        const newValue = !darkMode
-        setDarkMode(newValue)
-        localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
-        document.documentElement.classList.toggle("dark", newValue)
-        // Reset so onDrawioLoad fires again after remount
-        resetDrawioReady()
+    const handleDarkModeChange = () => {
+        toast.warning("Theme Change Warning", {
+            description:
+                "Changing the theme will reset the diagram and remove all unsaved edits.",
+            action: {
+                label: "Continue",
+                onClick: () => {
+                    const newValue = !darkMode
+                    setDarkMode(newValue)
+                    localStorage.setItem(
+                        "next-ai-draw-io-dark-mode",
+                        String(newValue),
+                    )
+                    document.documentElement.classList.toggle("dark", newValue)
+                    resetDrawioReady()
+                },
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {},
+            },
+            duration: 10000, // Give user time to read
+        })
+    }
+
+    const handleDrawioUiChange = () => {
+        toast.warning("UI Style Change Warning", {
+            description:
+                "Changing the draw.io UI style will reset the diagram and remove all unsaved edits.",
+            action: {
+                label: "Continue",
+                onClick: () => {
+                    const newUi = drawioUi === "min" ? "sketch" : "min"
+                    localStorage.setItem("drawio-theme", newUi)
+                    setDrawioUi(newUi)
+                    resetDrawioReady()
+                },
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {},
+            },
+            duration: 10000,
+        })
     }
 
     // Check mobile
@@ -182,15 +220,9 @@ export default function Home() {
                             isVisible={isChatVisible}
                             onToggleVisibility={toggleChatPanel}
                             drawioUi={drawioUi}
-                            onToggleDrawioUi={() => {
-                                const newUi =
-                                    drawioUi === "min" ? "sketch" : "min"
-                                localStorage.setItem("drawio-theme", newUi)
-                                setDrawioUi(newUi)
-                                resetDrawioReady()
-                            }}
+                            onToggleDrawioUi={handleDrawioUiChange}
                             darkMode={darkMode}
-                            onToggleDarkMode={toggleDarkMode}
+                            onToggleDarkMode={handleDarkModeChange}
                             isMobile={isMobile}
                             onCloseProtectionChange={setCloseProtection}
                         />
