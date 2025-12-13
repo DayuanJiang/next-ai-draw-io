@@ -866,18 +866,15 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
 
-    // 0. Fix backslash-escaped quotes (common LLM mistakes)
-    // Handles: attr=\"value\", value="text\"inner\"more", and mixed patterns
-    // Uses backreference to match opening/closing quote style, then normalizes
-    if (/\\"/.test(fixed)) {
-        fixed = fixed.replace(
-            /(\s[\w:-]+)\s*=\s*(\\"|")([\s\S]*?)\2(?=[\s/>?]|$)/g,
-            (_match, attrName, _openQuote, content) => {
-                const cleanContent = content.replace(/\\"/g, "&quot;")
-                return `${attrName}="${cleanContent}"`
-            },
-        )
-        fixes.push("Fixed backslash-escaped quotes")
+    // 0. Fix JSON-escaped XML (common when XML is stored in JSON without unescaping)
+    // Only apply when we see JSON-escaped attribute patterns like =\"value\"
+    // Don't apply to legitimate \n in value attributes (draw.io uses these for line breaks)
+    if (/=\\"/.test(fixed)) {
+        // Replace literal \" with actual quotes
+        fixed = fixed.replace(/\\"/g, '"')
+        // Replace literal \n with actual newlines (only after confirming JSON-escaped)
+        fixed = fixed.replace(/\\n/g, "\n")
+        fixes.push("Fixed JSON-escaped XML")
     }
 
     // 1. Remove CDATA wrapper (MUST be before text-before-root check)
@@ -953,18 +950,42 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         }
     }
 
-    // 3b. Fix malformed attribute values where &quot; is used as delimiter
-    // Pattern: attr=&quot;value&quot; should be attr="&quot;value&quot;"
-    const malformedQuotePattern =
-        /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*(?:&(?!quot;)[^&]*)*)&quot;/g
+    // 3b. Fix malformed attribute values where &quot; is used as delimiter instead of actual quotes
+    // Pattern: attr=&quot;value&quot; should become attr="value" (the &quot; was meant to be the quote delimiter)
+    // This commonly happens with dashPattern=&quot;1 1;&quot;
+    const malformedQuotePattern = /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;/
     if (malformedQuotePattern.test(fixed)) {
+        // Replace =&quot; with =" and trailing &quot; before next attribute or tag end with "
         fixed = fixed.replace(
-            /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*(?:&(?!quot;)[^&]*)*)&quot;/g,
-            '$1="&quot;$2&quot;"',
+            /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*?)&quot;/g,
+            '$1="$2"',
         )
         fixes.push(
-            'Fixed malformed attribute quotes (=&quot;...&quot; to ="&quot;...&quot;")',
+            'Fixed malformed attribute quotes (=&quot;...&quot; to ="...")',
         )
+    }
+
+    // 3c. Fix malformed closing tags like </tag/> -> </tag>
+    const malformedClosingTag = /<\/([a-zA-Z][a-zA-Z0-9]*)\s*\/>/g
+    if (malformedClosingTag.test(fixed)) {
+        fixed = fixed.replace(/<\/([a-zA-Z][a-zA-Z0-9]*)\s*\/>/g, "</$1>")
+        fixes.push("Fixed malformed closing tags (</tag/> to </tag>)")
+    }
+
+    // 3d. Fix missing space between attributes like vertex="1"parent="1"
+    const missingSpacePattern = /("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g
+    if (missingSpacePattern.test(fixed)) {
+        fixed = fixed.replace(/("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g, "$1 $2")
+        fixes.push("Added missing space between attributes")
+    }
+
+    // 3e. Fix unescaped quotes in style color values like fillColor="#fff2e6"
+    // The " after Color= prematurely ends the style attribute. Remove it.
+    // Pattern: ;fillColor="#fff → ;fillColor=#fff (remove first ", keep second as style closer)
+    const quotedColorPattern = /;([a-zA-Z]*[Cc]olor)="#/
+    if (quotedColorPattern.test(fixed)) {
+        fixed = fixed.replace(/;([a-zA-Z]*[Cc]olor)="#/g, ";$1=#")
+        fixes.push("Removed quotes around color values in style")
     }
 
     // 4. Fix unescaped < in attribute values
