@@ -243,10 +243,10 @@ export function wrapWithMxFile(xml: string): string {
     }
 
     // Remove any existing root cells from content (LLM shouldn't include them, but handle it gracefully)
-    // Use flexible patterns that match regardless of attribute order
+    // Use flexible patterns that match both self-closing (/>) and non-self-closing (></mxCell>) formats
     content = content
-        .replace(/<mxCell[^>]*\bid=["']0["'][^>]*\/>/g, "")
-        .replace(/<mxCell[^>]*\bid=["']1["'][^>]*\/>/g, "")
+        .replace(/<mxCell[^>]*\bid=["']0["'][^>]*(?:\/>|><\/mxCell>)/g, "")
+        .replace(/<mxCell[^>]*\bid=["']1["'][^>]*(?:\/>|><\/mxCell>)/g, "")
         .trim()
 
     return `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel></diagram></mxfile>`
