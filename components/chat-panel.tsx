@@ -40,6 +40,7 @@ interface MessagePart {
     type: string
     state?: string
     toolName?: string
+    input?: { xml?: string; [key: string]: unknown }
     [key: string]: unknown
 }
 
@@ -86,6 +87,37 @@ function hasToolErrors(messages: ChatMessage[]): boolean {
 
     const lastToolPart = toolParts[toolParts.length - 1]
     return lastToolPart?.state === TOOL_ERROR_STATE
+}
+
+/**
+ * Check if a message contains valid diagram XML.
+ * Used to filter out corrupted messages when restoring from localStorage.
+ * Validates both display_diagram and append_diagram tool calls.
+ */
+function hasValidDiagramXml(message: {
+    parts?: Array<{ type?: string; input?: unknown }>
+}): boolean {
+    if (!message.parts) return true // No parts = valid (user messages, text-only)
+
+    const parser = new DOMParser()
+    for (const part of message.parts) {
+        // Check both display_diagram and append_diagram tools
+        const isDiagramTool =
+            part.type === "tool-display_diagram" ||
+            part.type === "tool-append_diagram"
+        const input = part.input as { xml?: string } | undefined
+        if (isDiagramTool && input?.xml) {
+            try {
+                const doc = parser.parseFromString(input.xml, "text/xml")
+                if (doc.querySelector("parsererror")) {
+                    return false
+                }
+            } catch {
+                return false
+            }
+        }
+    }
+    return true
 }
 
 export default function ChatPanel({
@@ -598,6 +630,7 @@ Continue from EXACTLY where you stopped.`,
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
     // Restore messages and XML snapshots from localStorage on mount
+    // Validates and filters out corrupted messages to prevent crash loops
     useEffect(() => {
         if (hasRestoredRef.current) return
         hasRestoredRef.current = true
@@ -608,7 +641,32 @@ Continue from EXACTLY where you stopped.`,
             if (savedMessages) {
                 const parsed = JSON.parse(savedMessages)
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                    setMessages(parsed)
+                    // Filter out messages with invalid XML to prevent crash loops
+                    const validMessages = parsed.filter((msg: ChatMessage) => {
+                        try {
+                            return hasValidDiagramXml(msg)
+                        } catch {
+                            return false
+                        }
+                    })
+
+                    if (validMessages.length < parsed.length) {
+                        const removedCount =
+                            parsed.length - validMessages.length
+                        console.warn(
+                            `[ChatPanel] Filtered ${removedCount} corrupted message(s) from storage`,
+                        )
+                        toast.warning(
+                            `Removed ${removedCount} message(s) with invalid diagrams to recover session.`,
+                        )
+                        // Update storage with cleaned messages
+                        localStorage.setItem(
+                            STORAGE_MESSAGES_KEY,
+                            JSON.stringify(validMessages),
+                        )
+                    }
+
+                    setMessages(validMessages)
                 }
             }
 
@@ -622,6 +680,10 @@ Continue from EXACTLY where you stopped.`,
             }
         } catch (error) {
             console.error("Failed to restore from localStorage:", error)
+            // On complete failure, clear storage to allow recovery
+            localStorage.removeItem(STORAGE_MESSAGES_KEY)
+            localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
+            toast.error("Session data was corrupted. Starting fresh.")
         }
     }, [setMessages])
 
