@@ -566,6 +566,12 @@ Continue from EXACTLY where you stopped.`,
                 friendlyMessage = "Network error. Please check your connection."
             }
 
+            // Truncated tool input error (model output limit too low)
+            if (friendlyMessage.includes("toolUse.input is invalid")) {
+                friendlyMessage =
+                    "Output was truncated before the diagram could be generated. Try a simpler request or increase the maxOutputLength."
+            }
+
             // Translate image not supported error
             if (friendlyMessage.includes("image content block")) {
                 friendlyMessage = "This model doesn't support image input."
