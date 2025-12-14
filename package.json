@@ -44,6 +44,7 @@
         "clsx": "^2.1.1",
         "js-tiktoken": "^1.0.21",
         "jsdom": "^26.0.0",
+        "jsonrepair": "^3.13.1",
         "lucide-react": "^0.483.0",
         "motion": "^12.23.25",
         "next": "^16.0.7",
