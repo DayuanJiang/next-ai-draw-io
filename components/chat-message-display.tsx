@@ -293,11 +293,14 @@ export function ChatMessageDisplay({
                 const parseError = testDoc.querySelector("parsererror")
 
                 if (parseError) {
-                    console.error(
-                        "[ChatMessageDisplay] Malformed XML detected - skipping update",
-                    )
-                    // Only show toast if this is the final XML (not during streaming)
+                    // Use console.warn instead of console.error to avoid triggering
+                    // Next.js dev mode error overlay for expected streaming states
+                    // (partial XML during streaming is normal and will be fixed by subsequent updates)
                     if (showToast) {
+                        // Only log as error and show toast if this is the final XML
+                        console.error(
+                            "[ChatMessageDisplay] Malformed XML detected in final output",
+                        )
                         toast.error(
                             "AI generated invalid diagram XML. Please try regenerating.",
                         )

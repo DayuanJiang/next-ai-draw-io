@@ -214,6 +214,13 @@ export function convertToLegalXml(xmlString: string): string {
             )
         }
 
+        // Fix unescaped & characters in attribute values (but not valid entities)
+        // This prevents DOMParser from failing on content like "semantic & missing-step"
+        cellContent = cellContent.replace(
+            /&(?!(?:lt|gt|amp|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)/g,
+            "&amp;",
+        )
+
         // Indent each line of the matched block for readability.
         const formatted = cellContent
             .split("\n")
