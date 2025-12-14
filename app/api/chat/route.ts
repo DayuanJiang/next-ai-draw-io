@@ -3,10 +3,12 @@ import {
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    InvalidToolInputError,
     LoadAPIKeyError,
     stepCountIs,
     streamText,
 } from "ai"
+import { jsonrepair } from "jsonrepair"
 import { z } from "zod"
 import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -320,6 +322,31 @@ ${userInputText}
             maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
         }),
         stopWhen: stepCountIs(5),
+        // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
+        experimental_repairToolCall: async ({ toolCall, error }) => {
+            // Only attempt repair for invalid tool input (broken JSON from truncation)
+            if (
+                error instanceof InvalidToolInputError ||
+                error.name === "AI_InvalidToolInputError"
+            ) {
+                try {
+                    // Use jsonrepair to fix truncated JSON
+                    const repairedInput = jsonrepair(toolCall.input)
+                    console.log(
+                        `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
+                    )
+                    return { ...toolCall, input: repairedInput }
+                } catch (repairError) {
+                    console.warn(
+                        `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
+                        repairError,
+                    )
+                    return null
+                }
+            }
+            // Don't attempt to repair other errors (like NoSuchToolError)
+            return null
+        },
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
         ...(headers && { headers }),
@@ -411,6 +438,26 @@ IMPORTANT: Keep edits concise:
                         ),
                 }),
             },
+            append_diagram: {
+                description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.
+
+WHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).
+
+CRITICAL INSTRUCTIONS:
+1. Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> - they already exist in the partial
+2. Continue from EXACTLY where your previous output stopped
+3. End with the closing </root> tag to complete the diagram
+4. If still truncated, call append_diagram again with the next fragment
+
+Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
+                inputSchema: z.object({
+                    xml: z
+                        .string()
+                        .describe(
+                            "Continuation XML fragment to append (NO wrapper tags)",
+                        ),
+                }),
+            },
         },
         ...(process.env.TEMPERATURE !== undefined && {
             temperature: parseFloat(process.env.TEMPERATURE),
@@ -435,6 +482,7 @@ IMPORTANT: Keep edits concise:
                 return {
                     inputTokens: totalInputTokens,
                     outputTokens: usage.outputTokens ?? 0,
+                    finishReason: (part as any).finishReason,
                 }
             }
             return undefined

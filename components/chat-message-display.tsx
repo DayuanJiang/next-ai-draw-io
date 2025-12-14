@@ -451,11 +451,24 @@ export function ChatMessageDisplay({
                                 Complete
                             </span>
                         )}
-                        {state === "output-error" && (
-                            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                                Error
-                            </span>
-                        )}
+                        {state === "output-error" &&
+                            (() => {
+                                // Check if this is a truncation (incomplete XML) vs real error
+                                const isTruncated =
+                                    (toolName === "display_diagram" ||
+                                        toolName === "append_diagram") &&
+                                    (!input?.xml ||
+                                        !input.xml.includes("</root>"))
+                                return isTruncated ? (
+                                    <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
+                                        Truncated
+                                    </span>
+                                ) : (
+                                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                                        Error
+                                    </span>
+                                )
+                            })()}
                         {input && Object.keys(input).length > 0 && (
                             <button
                                 type="button"
@@ -488,11 +501,23 @@ export function ChatMessageDisplay({
                         ) : null}
                     </div>
                 )}
-                {output && state === "output-error" && (
-                    <div className="px-4 py-3 border-t border-border/40 text-sm text-red-600">
-                        {output}
-                    </div>
-                )}
+                {output &&
+                    state === "output-error" &&
+                    (() => {
+                        const isTruncated =
+                            (toolName === "display_diagram" ||
+                                toolName === "append_diagram") &&
+                            (!input?.xml || !input.xml.includes("</root>"))
+                        return (
+                            <div
+                                className={`px-4 py-3 border-t border-border/40 text-sm ${isTruncated ? "text-yellow-600" : "text-red-600"}`}
+                            >
+                                {isTruncated
+                                    ? "Output truncated due to length limits. Try a simpler request or increase the maxOutputLength."
+                                    : output}
+                            </div>
+                        )
+                    })()}
             </div>
         )
     }

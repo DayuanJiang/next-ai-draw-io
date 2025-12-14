@@ -42,11 +42,18 @@ description: Edit specific parts of the EXISTING diagram. Use this when making s
 parameters: {
   edits: Array<{search: string, replace: string}>
 }
+---Tool3---
+tool name: append_diagram
+description: Continue generating diagram XML when display_diagram was truncated due to output length limits. Only use this after display_diagram truncation.
+parameters: {
+  xml: string  // Continuation fragment (NO wrapper tags like <mxGraphModel> or <root>)
+}
 ---End of tools---
 
 IMPORTANT: Choose the right tool:
 - Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
+- Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams
@@ -173,6 +180,18 @@ const EXTENDED_ADDITIONS = `
   </mxCell>
 </root>
 \`\`\`
+
+### append_diagram Details
+
+**WHEN TO USE:** Only call this tool when display_diagram output was truncated (you'll see an error message about truncation).
+
+**CRITICAL RULES:**
+1. Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> - they already exist in the partial
+2. Continue from EXACTLY where your previous output stopped
+3. End with the closing </root> tag to complete the diagram
+4. If still truncated, call append_diagram again with the next fragment
+
+**Example:** If previous output ended with \`<mxCell id="x" style="rounded=1\`, continue with \`;" vertex="1">...\` and complete the remaining elements.
 
 ### edit_diagram Details
 

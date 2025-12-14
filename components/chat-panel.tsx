@@ -67,7 +67,7 @@ const MAX_AUTO_RETRY_COUNT = 1
 
 /**
  * Check if auto-resubmit should happen based on tool errors.
- * Does NOT handle retry count or quota - those are handled by the caller.
+ * Only checks the LAST tool part (most recent tool call), not all tool parts.
  */
 function hasToolErrors(messages: ChatMessage[]): boolean {
     const lastMessage = messages[messages.length - 1]
@@ -84,7 +84,8 @@ function hasToolErrors(messages: ChatMessage[]): boolean {
         return false
     }
 
-    return toolParts.some((part) => part.state === TOOL_ERROR_STATE)
+    const lastToolPart = toolParts[toolParts.length - 1]
+    return lastToolPart?.state === TOOL_ERROR_STATE
 }
 
 export default function ChatPanel({
@@ -192,6 +193,10 @@ export default function ChatPanel({
     // Ref to track consecutive auto-retry count (reset on user action)
     const autoRetryCountRef = useRef(0)
 
+    // Ref to accumulate partial XML when output is truncated due to maxOutputTokens
+    // When partialXmlRef.current.length > 0, we're in continuation mode
+    const partialXmlRef = useRef<string>("")
+
     // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
     const processedToolCallsRef = useRef<Set<string>>(new Set())
 
@@ -216,14 +221,43 @@ export default function ChatPanel({
 
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
-                if (DEBUG) {
-                    console.log(
-                        `[display_diagram] Received XML length: ${xml.length}`,
-                    )
+
+                // Check if XML is truncated (missing </root> indicates incomplete output)
+                const isTruncated =
+                    !xml.includes("</root>") && !xml.trim().endsWith("/>")
+
+                if (isTruncated) {
+                    // Store the partial XML for continuation via append_diagram
+                    partialXmlRef.current = xml
+
+                    // Tell LLM to use append_diagram to continue
+                    const partialEnding = partialXmlRef.current.slice(-500)
+                    addToolOutput({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `Output was truncated due to length limits. Use the append_diagram tool to continue.
+
+Your output ended with:
+\`\`\`
+${partialEnding}
+\`\`\`
+
+NEXT STEP: Call append_diagram with the continuation XML.
+- Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> (they already exist)
+- Start from EXACTLY where you stopped
+- End with the closing </root> tag to complete the diagram`,
+                    })
+                    return
                 }
 
+                // Complete XML received - use it directly
+                // (continuation is now handled via append_diagram tool)
+                const finalXml = xml
+                partialXmlRef.current = "" // Reset any partial from previous truncation
+
                 // Wrap raw XML with full mxfile structure for draw.io
-                const fullXml = wrapWithMxFile(xml)
+                const fullXml = wrapWithMxFile(finalXml)
 
                 // loadDiagram validates and returns error if invalid
                 const validationError = onDisplayChart(fullXml)
@@ -249,7 +283,7 @@ Please fix the XML issues and call display_diagram again with corrected XML.
 
 Your failed XML:
 \`\`\`xml
-${xml}
+${finalXml}
 \`\`\``,
                     })
                 } else {
@@ -277,27 +311,13 @@ ${xml}
 
                 let currentXml = ""
                 try {
-                    console.log("[edit_diagram] Starting...")
                     // Use chartXML from ref directly - more reliable than export
-                    // especially on Vercel where DrawIO iframe may have latency issues
-                    // Using ref to avoid stale closure in callback
                     const cachedXML = chartXMLRef.current
                     if (cachedXML) {
                         currentXml = cachedXML
-                        console.log(
-                            "[edit_diagram] Using cached chartXML, length:",
-                            currentXml.length,
-                        )
                     } else {
                         // Fallback to export only if no cached XML
-                        console.log(
-                            "[edit_diagram] No cached XML, fetching from DrawIO...",
-                        )
                         currentXml = await onFetchChart(false)
-                        console.log(
-                            "[edit_diagram] Got XML from export, length:",
-                            currentXml.length,
-                        )
                     }
 
                     const { replaceXMLParts } = await import("@/lib/utils")
@@ -331,7 +351,6 @@ Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid ref
                         toolCallId: toolCall.toolCallId,
                         output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
                     })
-                    console.log("[edit_diagram] Success")
                 } catch (error) {
                     console.error("[edit_diagram] Failed:", error)
 
@@ -353,6 +372,83 @@ ${currentXml || "No XML available"}
 Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
                     })
                 }
+            } else if (toolCall.toolName === "append_diagram") {
+                const { xml } = toolCall.input as { xml: string }
+
+                // Detect if LLM incorrectly started fresh instead of continuing
+                const isFreshStart =
+                    xml.trim().startsWith("<mxGraphModel") ||
+                    xml.trim().startsWith("<root") ||
+                    xml.trim().startsWith('<mxCell id="0"')
+
+                if (isFreshStart) {
+                    addToolOutput({
+                        tool: "append_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `ERROR: You started fresh with wrapper tags. Do NOT include <mxGraphModel>, <root>, or <mxCell id="0">.
+
+Continue from EXACTLY where the partial ended:
+\`\`\`
+${partialXmlRef.current.slice(-500)}
+\`\`\`
+
+Start your continuation with the NEXT character after where it stopped.`,
+                    })
+                    return
+                }
+
+                // Append to accumulated XML
+                partialXmlRef.current += xml
+
+                // Check if XML is now complete
+                const isComplete = partialXmlRef.current.includes("</root>")
+
+                if (isComplete) {
+                    // Wrap and display the complete diagram
+                    const finalXml = partialXmlRef.current
+                    partialXmlRef.current = "" // Reset
+
+                    const fullXml = wrapWithMxFile(finalXml)
+                    const validationError = onDisplayChart(fullXml)
+
+                    if (validationError) {
+                        addToolOutput({
+                            tool: "append_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            state: "output-error",
+                            errorText: `Validation error after assembly: ${validationError}
+
+Assembled XML:
+\`\`\`xml
+${finalXml.substring(0, 2000)}...
+\`\`\`
+
+Please use display_diagram with corrected XML.`,
+                        })
+                    } else {
+                        addToolOutput({
+                            tool: "append_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Diagram assembly complete and displayed successfully.",
+                        })
+                    }
+                } else {
+                    // Still incomplete - signal to continue
+                    addToolOutput({
+                        tool: "append_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `XML still incomplete (missing </root>). Call append_diagram again to continue.
+
+Current ending:
+\`\`\`
+${partialXmlRef.current.slice(-500)}
+\`\`\`
+
+Continue from EXACTLY where you stopped.`,
+                    })
+                }
             }
         },
         onError: (error) => {
@@ -369,6 +465,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             // Simple check for network errors if message is generic
             if (friendlyMessage === "Failed to fetch") {
                 friendlyMessage = "Network error. Please check your connection."
+            }
+
+            // Truncated tool input error (model output limit too low)
+            if (friendlyMessage.includes("toolUse.input is invalid")) {
+                friendlyMessage =
+                    "Output was truncated before the diagram could be generated. Try a simpler request or increase the maxOutputLength."
             }
 
             // Translate image not supported error
@@ -398,6 +500,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             const metadata = message?.metadata as
                 | Record<string, unknown>
                 | undefined
+
             if (metadata) {
                 // Use Number.isFinite to guard against NaN (typeof NaN === 'number' is true)
                 const inputTokens = Number.isFinite(metadata.inputTokens)
@@ -414,65 +517,55 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             }
         },
         sendAutomaticallyWhen: ({ messages }) => {
+            const isInContinuationMode = partialXmlRef.current.length > 0
+
             const shouldRetry = hasToolErrors(
                 messages as unknown as ChatMessage[],
             )
 
             if (!shouldRetry) {
-                // No error, reset retry count
+                // No error, reset retry count and clear state
                 autoRetryCountRef.current = 0
-                if (DEBUG) {
-                    console.log("[sendAutomaticallyWhen] No errors, stopping")
-                }
+                partialXmlRef.current = ""
                 return false
             }
 
-            // Check retry count limit
-            if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
-                if (DEBUG) {
-                    console.log(
-                        `[sendAutomaticallyWhen] Max retry count (${MAX_AUTO_RETRY_COUNT}) reached, stopping`,
+            // Continuation mode: unlimited retries (truncation continuation, not real errors)
+            // Server limits to 5 steps via stepCountIs(5)
+            if (isInContinuationMode) {
+                // Don't count against retry limit for continuation
+                // Quota checks still apply below
+            } else {
+                // Regular error: check retry count limit
+                if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
+                    toast.error(
+                        `Auto-retry limit reached (${MAX_AUTO_RETRY_COUNT}). Please try again manually.`,
                     )
+                    autoRetryCountRef.current = 0
+                    partialXmlRef.current = ""
+                    return false
                 }
-                toast.error(
-                    `Auto-retry limit reached (${MAX_AUTO_RETRY_COUNT}). Please try again manually.`,
-                )
-                autoRetryCountRef.current = 0
-                return false
+                // Increment retry count for actual errors
+                autoRetryCountRef.current++
             }
 
             // Check quota limits before auto-retry
             const tokenLimitCheck = quotaManager.checkTokenLimit()
             if (!tokenLimitCheck.allowed) {
-                if (DEBUG) {
-                    console.log(
-                        "[sendAutomaticallyWhen] Token limit exceeded, stopping",
-                    )
-                }
                 quotaManager.showTokenLimitToast(tokenLimitCheck.used)
                 autoRetryCountRef.current = 0
+                partialXmlRef.current = ""
                 return false
             }
 
             const tpmCheck = quotaManager.checkTPMLimit()
             if (!tpmCheck.allowed) {
-                if (DEBUG) {
-                    console.log(
-                        "[sendAutomaticallyWhen] TPM limit exceeded, stopping",
-                    )
-                }
                 quotaManager.showTPMLimitToast()
                 autoRetryCountRef.current = 0
+                partialXmlRef.current = ""
                 return false
             }
 
-            // Increment retry count and allow retry
-            autoRetryCountRef.current++
-            if (DEBUG) {
-                console.log(
-                    `[sendAutomaticallyWhen] Retrying (${autoRetryCountRef.current}/${MAX_AUTO_RETRY_COUNT})`,
-                )
-            }
             return true
         },
     })
@@ -817,8 +910,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         previousXml: string,
         sessionId: string,
     ) => {
-        // Reset auto-retry count on user-initiated message
+        // Reset all retry/continuation state on user-initiated message
         autoRetryCountRef.current = 0
+        partialXmlRef.current = ""
 
         const config = getAIConfig()
 
