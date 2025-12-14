@@ -20,7 +20,7 @@ export default function Home() {
         handleDiagramExport,
         onDrawioLoad,
         resetDrawioReady,
-        resolverRef,
+        saveDiagramToStorage,
     } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
@@ -61,61 +61,21 @@ export default function Home() {
         setIsLoaded(true)
     }, [])
 
-    const exportAndSaveDiagram = async (): Promise<void> => {
-        if (drawioRef && "current" in drawioRef && drawioRef.current) {
-            try {
-                const currentXml = await Promise.race([
-                    new Promise<string>((resolve) => {
-                        if (resolverRef && "current" in resolverRef) {
-                            resolverRef.current = resolve
-                        }
-                        if (
-                            drawioRef &&
-                            "current" in drawioRef &&
-                            drawioRef.current
-                        ) {
-                            drawioRef.current.exportDiagram({
-                                format: "xmlsvg",
-                            })
-                        }
-                    }),
-                    new Promise<string>((_, reject) =>
-                        setTimeout(
-                            () => reject(new Error("Export timeout")),
-                            10000,
-                        ),
-                    ),
-                ])
-
-                if (currentXml && currentXml.length > 300) {
-                    localStorage.setItem(
-                        "next-ai-draw-io-diagram-xml",
-                        currentXml,
-                    )
-                }
-            } catch (error) {
-                console.error("Failed to save diagram:", error)
-            }
-        }
-    }
-
     const handleDarkModeChange = async () => {
-        await exportAndSaveDiagram()
-
+        await saveDiagramToStorage()
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
-        resetDrawioReady() // toast.success("Theme changed - diagram preserved")
+        resetDrawioReady()
     }
 
     const handleDrawioUiChange = async () => {
-        await exportAndSaveDiagram()
-
+        await saveDiagramToStorage()
         const newUi = drawioUi === "min" ? "sketch" : "min"
         localStorage.setItem("drawio-theme", newUi)
         setDrawioUi(newUi)
-        resetDrawioReady() // toast.success("UI style changed - diagram preserved")
+        resetDrawioReady()
     }
 
     // Check mobile
