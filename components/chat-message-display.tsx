@@ -193,6 +193,14 @@ export function ChatMessageDisplay({
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
     const processedToolCalls = processedToolCallsRef
+    // Track the last processed XML per toolCallId to skip redundant processing during streaming
+    const lastProcessedXmlRef = useRef<Map<string, string>>(new Map())
+    // Debounce streaming diagram updates - store pending XML and timeout
+    const pendingXmlRef = useRef<string | null>(null)
+    const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    )
+    const STREAMING_DEBOUNCE_MS = 150 // Only update diagram every 150ms during streaming
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {},
     )
@@ -284,12 +292,15 @@ export function ChatMessageDisplay({
 
     const handleDisplayChart = useCallback(
         (xml: string, showToast = false) => {
+            console.time("perf:handleDisplayChart")
             const currentXml = xml || ""
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
                 // Parse and validate XML BEFORE calling replaceNodes
+                console.time("perf:DOMParser")
                 const parser = new DOMParser()
                 const testDoc = parser.parseFromString(convertedXml, "text/xml")
+                console.timeEnd("perf:DOMParser")
                 const parseError = testDoc.querySelector("parsererror")
 
                 if (parseError) {
@@ -305,6 +316,7 @@ export function ChatMessageDisplay({
                             "AI generated invalid diagram XML. Please try regenerating.",
                         )
                     }
+                    console.timeEnd("perf:handleDisplayChart")
                     return // Skip this update
                 }
 
@@ -314,10 +326,14 @@ export function ChatMessageDisplay({
                     const baseXML =
                         chartXML ||
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+                    console.time("perf:replaceNodes")
                     const replacedXML = replaceNodes(baseXML, convertedXml)
+                    console.timeEnd("perf:replaceNodes")
 
                     // Validate and auto-fix the XML
+                    console.time("perf:validateAndFixXml")
                     const validation = validateAndFixXml(replacedXML)
+                    console.timeEnd("perf:validateAndFixXml")
                     if (validation.valid) {
                         previousXML.current = convertedXml
                         // Use fixed XML if available, otherwise use original
@@ -354,6 +370,9 @@ export function ChatMessageDisplay({
                         )
                     }
                 }
+                console.timeEnd("perf:handleDisplayChart")
+            } else {
+                console.timeEnd("perf:handleDisplayChart")
             }
         },
         [chartXML, onDisplayChart],
@@ -372,7 +391,17 @@ export function ChatMessageDisplay({
     }, [editingMessageId])
 
     useEffect(() => {
-        messages.forEach((message) => {
+        console.time("perf:message-display-useEffect")
+        let processedCount = 0
+        let skippedCount = 0
+        let debouncedCount = 0
+
+        // Only process the last message for streaming performance
+        // Previous messages are already processed and won't change
+        const messagesToProcess =
+            messages.length > 0 ? [messages[messages.length - 1]] : []
+
+        messagesToProcess.forEach((message) => {
             if (message.parts) {
                 message.parts.forEach((part) => {
                     if (part.type?.startsWith("tool-")) {
@@ -391,25 +420,82 @@ export function ChatMessageDisplay({
                             input?.xml
                         ) {
                             const xml = input.xml as string
+
+                            // Skip if XML hasn't changed since last processing
+                            const lastXml =
+                                lastProcessedXmlRef.current.get(toolCallId)
+                            if (lastXml === xml) {
+                                skippedCount++
+                                return // Skip redundant processing
+                            }
+
                             if (
                                 state === "input-streaming" ||
                                 state === "input-available"
                             ) {
-                                // During streaming, don't show toast (XML may be incomplete)
-                                handleDisplayChart(xml, false)
+                                // Debounce streaming updates - queue the XML and process after delay
+                                pendingXmlRef.current = xml
+
+                                if (!debounceTimeoutRef.current) {
+                                    // No pending timeout - set one up
+                                    debounceTimeoutRef.current = setTimeout(
+                                        () => {
+                                            const pendingXml =
+                                                pendingXmlRef.current
+                                            debounceTimeoutRef.current = null
+                                            pendingXmlRef.current = null
+                                            if (pendingXml) {
+                                                console.log(
+                                                    "perf:debounced-handleDisplayChart executing",
+                                                )
+                                                handleDisplayChart(
+                                                    pendingXml,
+                                                    false,
+                                                )
+                                                lastProcessedXmlRef.current.set(
+                                                    toolCallId,
+                                                    pendingXml,
+                                                )
+                                            }
+                                        },
+                                        STREAMING_DEBOUNCE_MS,
+                                    )
+                                }
+                                debouncedCount++
                             } else if (
                                 state === "output-available" &&
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
+                                // Final output - process immediately (clear any pending debounce)
+                                if (debounceTimeoutRef.current) {
+                                    clearTimeout(debounceTimeoutRef.current)
+                                    debounceTimeoutRef.current = null
+                                    pendingXmlRef.current = null
+                                }
                                 // Show toast only if final XML is malformed
                                 handleDisplayChart(xml, true)
                                 processedToolCalls.current.add(toolCallId)
+                                // Clean up the ref entry - tool is complete, no longer needed
+                                lastProcessedXmlRef.current.delete(toolCallId)
+                                processedCount++
                             }
                         }
                     }
                 })
             }
         })
+        console.log(
+            `perf:message-display-useEffect processed=${processedCount} skipped=${skippedCount} debounced=${debouncedCount}`,
+        )
+        console.timeEnd("perf:message-display-useEffect")
+
+        // Cleanup: clear any pending debounce timeout on unmount
+        return () => {
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current)
+                debounceTimeoutRef.current = null
+            }
+        }
     }, [messages, handleDisplayChart])
 
     const renderToolPart = (part: ToolPartLike) => {
