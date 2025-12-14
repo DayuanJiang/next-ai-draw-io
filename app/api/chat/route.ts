@@ -202,6 +202,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
         modelId: req.headers.get("x-ai-model"),
     }
 
+    // Read minimal style preference from header
+    const minimalStyle = req.headers.get("x-minimal-style") === "true"
+
     // Get AI model with optional client overrides
     const { model, providerOptions, headers, modelId } =
         getAIModel(clientOverrides)
@@ -213,7 +216,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
-    const systemMessage = getSystemPrompt(modelId)
+    const systemMessage = getSystemPrompt(modelId, minimalStyle)
 
     // Extract file parts (images) from the last message
     const fileParts =

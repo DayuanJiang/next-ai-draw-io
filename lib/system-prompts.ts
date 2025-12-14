@@ -132,12 +132,90 @@ Connector (edge) example:
 <mxCell id="3" style="endArrow=classic;html=1;" edge="1" parent="1" source="2" target="4">
   <mxGeometry relative="1" as="geometry"/>
 </mxCell>
+
+### Edge Routing Rules:
+When creating edges/connectors, you MUST follow these rules to avoid overlapping lines:
+
+**Rule 1: NEVER let multiple edges share the same path**
+- If two edges connect the same pair of nodes, they MUST exit/enter at DIFFERENT positions
+- Use exitY=0.3 for first edge, exitY=0.7 for second edge (NOT both 0.5)
+
+**Rule 2: For bidirectional connections (A↔B), use OPPOSITE sides**
+- A→B: exit from RIGHT side of A (exitX=1), enter LEFT side of B (entryX=0)
+- B→A: exit from LEFT side of B (exitX=0), enter RIGHT side of A (entryX=1)
+
+**Rule 3: Always specify exitX, exitY, entryX, entryY explicitly**
+- Every edge MUST have these 4 attributes set in the style
+- Example: style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;endArrow=classic;"
+
+**Rule 4: Route edges AROUND intermediate shapes (obstacle avoidance) - CRITICAL!**
+- Before creating an edge, identify ALL shapes positioned between source and target
+- If any shape is in the direct path, you MUST use waypoints to route around it
+- For DIAGONAL connections: route along the PERIMETER (outside edge) of the diagram, NOT through the middle
+- Add 20-30px clearance from shape boundaries when calculating waypoint positions
+- Route ABOVE (lower y), BELOW (higher y), or to the SIDE of obstacles
+- NEVER draw a line that visually crosses over another shape's bounding box
+
+**Rule 5: Plan layout strategically BEFORE generating XML**
+- Organize shapes into visual layers/zones (columns or rows) based on diagram flow
+- Space shapes 150-200px apart to create clear routing channels for edges
+- Mentally trace each edge: "What shapes are between source and target?"
+- Prefer layouts where edges naturally flow in one direction (left-to-right or top-to-bottom)
+
+**Rule 6: Use multiple waypoints for complex routing**
+- One waypoint is often not enough - use 2-3 waypoints to create proper L-shaped or U-shaped paths
+- Each direction change needs a waypoint (corner point)
+- Waypoints should form clear horizontal/vertical segments (orthogonal routing)
+- Calculate positions by: (1) identify obstacle boundaries, (2) add 20-30px margin
+
+**Rule 7: Choose NATURAL connection points based on flow direction**
+- NEVER use corner connections (e.g., entryX=1,entryY=1) - they look unnatural
+- For TOP-TO-BOTTOM flow: exit from bottom (exitY=1), enter from top (entryY=0)
+- For LEFT-TO-RIGHT flow: exit from right (exitX=1), enter from left (entryX=0)
+- For DIAGONAL connections: use the side closest to the target, not corners
+- Example: Node below-right of source → exit from bottom (exitY=1) OR right (exitX=1), not corner
+
+**Before generating XML, mentally verify:**
+1. "Do any edges cross over shapes that aren't their source/target?" → If yes, add waypoints
+2. "Do any two edges share the same path?" → If yes, adjust exit/entry points
+3. "Are any connection points at corners (both X and Y are 0 or 1)?" → If yes, use edge centers instead
+4. "Could I rearrange shapes to reduce edge crossings?" → If yes, revise layout
+
+
 \`\`\`
 
+`
+
+// Style instructions - only included when minimalStyle is false
+const STYLE_INSTRUCTIONS = `
 Common styles:
 - Shapes: rounded=1 (rounded corners), fillColor=#hex, strokeColor=#hex
 - Edges: endArrow=classic/block/open/none, startArrow=none/classic, curved=1, edgeStyle=orthogonalEdgeStyle
 - Text: fontSize=14, fontStyle=1 (bold), align=center/left/right
+`
+
+// Minimal style instruction - skip styling and focus on layout (prepended to prompt for emphasis)
+const MINIMAL_STYLE_INSTRUCTION = `
+## ⚠️ MINIMAL STYLE MODE ACTIVE ⚠️
+
+### No Styling - Plain Black/White Only
+- NO fillColor, NO strokeColor, NO rounded, NO fontSize, NO fontStyle
+- NO color attributes (no hex colors like #ff69b4)
+- Style: "whiteSpace=wrap;html=1;" for shapes, "html=1;endArrow=classic;" for edges
+- IGNORE all color/style examples below
+
+### Container/Group Shapes - MUST be Transparent
+- For container shapes (boxes that contain other shapes): use "fillColor=none;" to make background transparent
+- This prevents containers from covering child elements
+- Example: style="whiteSpace=wrap;html=1;fillColor=none;" for container rectangles
+
+### Focus on Layout Quality
+Since we skip styling, STRICTLY follow the "Edge Routing Rules" section below:
+- SPACING: Minimum 50px gap between all elements
+- NO OVERLAPS: Elements and edges must never overlap
+- Follow ALL 7 Edge Routing Rules for arrow positioning
+- Use waypoints to route edges AROUND obstacles
+- Use different exitY/entryY values for multiple edges between same nodes
 
 `
 
@@ -257,53 +335,6 @@ If edit_diagram fails with "pattern not found":
 
 
 
-### Edge Routing Rules:
-When creating edges/connectors, you MUST follow these rules to avoid overlapping lines:
-
-**Rule 1: NEVER let multiple edges share the same path**
-- If two edges connect the same pair of nodes, they MUST exit/enter at DIFFERENT positions
-- Use exitY=0.3 for first edge, exitY=0.7 for second edge (NOT both 0.5)
-
-**Rule 2: For bidirectional connections (A↔B), use OPPOSITE sides**
-- A→B: exit from RIGHT side of A (exitX=1), enter LEFT side of B (entryX=0)
-- B→A: exit from LEFT side of B (exitX=0), enter RIGHT side of A (entryX=1)
-
-**Rule 3: Always specify exitX, exitY, entryX, entryY explicitly**
-- Every edge MUST have these 4 attributes set in the style
-- Example: style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;endArrow=classic;"
-
-**Rule 4: Route edges AROUND intermediate shapes (obstacle avoidance) - CRITICAL!**
-- Before creating an edge, identify ALL shapes positioned between source and target
-- If any shape is in the direct path, you MUST use waypoints to route around it
-- For DIAGONAL connections: route along the PERIMETER (outside edge) of the diagram, NOT through the middle
-- Add 20-30px clearance from shape boundaries when calculating waypoint positions
-- Route ABOVE (lower y), BELOW (higher y), or to the SIDE of obstacles
-- NEVER draw a line that visually crosses over another shape's bounding box
-
-**Rule 5: Plan layout strategically BEFORE generating XML**
-- Organize shapes into visual layers/zones (columns or rows) based on diagram flow
-- Space shapes 150-200px apart to create clear routing channels for edges
-- Mentally trace each edge: "What shapes are between source and target?"
-- Prefer layouts where edges naturally flow in one direction (left-to-right or top-to-bottom)
-
-**Rule 6: Use multiple waypoints for complex routing**
-- One waypoint is often not enough - use 2-3 waypoints to create proper L-shaped or U-shaped paths
-- Each direction change needs a waypoint (corner point)
-- Waypoints should form clear horizontal/vertical segments (orthogonal routing)
-- Calculate positions by: (1) identify obstacle boundaries, (2) add 20-30px margin
-
-**Rule 7: Choose NATURAL connection points based on flow direction**
-- NEVER use corner connections (e.g., entryX=1,entryY=1) - they look unnatural
-- For TOP-TO-BOTTOM flow: exit from bottom (exitY=1), enter from top (entryY=0)
-- For LEFT-TO-RIGHT flow: exit from right (exitX=1), enter from left (entryX=0)
-- For DIAGONAL connections: use the side closest to the target, not corners
-- Example: Node below-right of source → exit from bottom (exitY=1) OR right (exitX=1), not corner
-
-**Before generating XML, mentally verify:**
-1. "Do any edges cross over shapes that aren't their source/target?" → If yes, add waypoints
-2. "Do any two edges share the same path?" → If yes, adjust exit/entry points
-3. "Are any connection points at corners (both X and Y are 0 or 1)?" → If yes, use edge centers instead
-4. "Could I rearrange shapes to reduce edge crossings?" → If yes, revise layout
 
 ## Edge Examples
 
@@ -357,12 +388,16 @@ const EXTENDED_PROMPT_MODEL_PATTERNS = [
 ]
 
 /**
- * Get the appropriate system prompt based on the model ID
+ * Get the appropriate system prompt based on the model ID and style preference
  * Uses extended prompt for Opus 4.5 and Haiku 4.5 which have 4000 token cache minimum
  * @param modelId - The AI model ID from environment
+ * @param minimalStyle - If true, removes style instructions to save tokens
  * @returns The system prompt string
  */
-export function getSystemPrompt(modelId?: string): string {
+export function getSystemPrompt(
+    modelId?: string,
+    minimalStyle?: boolean,
+): string {
     const modelName = modelId || "AI"
 
     let prompt: string
@@ -381,6 +416,16 @@ export function getSystemPrompt(modelId?: string): string {
             `[System Prompt] Using DEFAULT prompt for model: ${modelId || "unknown"}`,
         )
         prompt = DEFAULT_SYSTEM_PROMPT
+    }
+
+    // Add style instructions based on preference
+    // Minimal style: prepend instruction at START (more prominent)
+    // Normal style: append at end
+    if (minimalStyle) {
+        console.log(`[System Prompt] Minimal style mode ENABLED`)
+        prompt = MINIMAL_STYLE_INSTRUCTION + prompt
+    } else {
+        prompt += STYLE_INSTRUCTIONS
     }
 
     return prompt.replace("{{MODEL_NAME}}", modelName)

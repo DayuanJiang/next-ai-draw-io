@@ -17,7 +17,13 @@ import { HistoryDialog } from "@/components/history-dialog"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SaveDialog } from "@/components/save-dialog"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useDiagram } from "@/contexts/diagram-context"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { FilePreviewList } from "./file-preview-list"
@@ -129,6 +135,8 @@ interface ChatInputProps {
     onToggleHistory?: (show: boolean) => void
     sessionId?: string
     error?: Error | null
+    minimalStyle?: boolean
+    onMinimalStyleChange?: (value: boolean) => void
 }
 
 export function ChatInput({
@@ -144,6 +152,8 @@ export function ChatInput({
     onToggleHistory = () => {},
     sessionId,
     error = null,
+    minimalStyle = false,
+    onMinimalStyleChange = () => {},
 }: ChatInputProps) {
     const { diagramHistory, saveDiagramToFile } = useDiagram()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -343,6 +353,32 @@ export function ChatInput({
                             showHistory={showHistory}
                             onToggleHistory={onToggleHistory}
                         />
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5">
+                                    <Switch
+                                        id="minimal-style"
+                                        checked={minimalStyle}
+                                        onCheckedChange={onMinimalStyleChange}
+                                        className="scale-75"
+                                    />
+                                    <label
+                                        htmlFor="minimal-style"
+                                        className={`text-xs cursor-pointer select-none ${
+                                            minimalStyle
+                                                ? "text-primary font-medium"
+                                                : "text-muted-foreground"
+                                        }`}
+                                    >
+                                        {minimalStyle ? "Minimal" : "Styled"}
+                                    </label>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                                Use minimal for faster generation (no colors)
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
 
                     {/* Right actions */}
