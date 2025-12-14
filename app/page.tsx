@@ -82,7 +82,7 @@ export default function Home() {
                     new Promise<string>((_, reject) =>
                         setTimeout(
                             () => reject(new Error("Export timeout")),
-                            5000,
+                            10000,
                         ),
                     ),
                 ])
