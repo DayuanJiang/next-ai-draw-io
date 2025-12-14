@@ -26,7 +26,7 @@ import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { formatXML, wrapWithMxFile } from "@/lib/utils"
+import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 // localStorage keys for persistence
@@ -223,10 +223,7 @@ export default function ChatPanel({
                 const { xml } = toolCall.input as { xml: string }
 
                 // Check if XML is truncated (incomplete mxCell indicates truncated output)
-                // LLM now outputs bare mxCells (no wrapper tags), so check for complete mxCell
-                const trimmed = xml.trim()
-                const isTruncated =
-                    !trimmed.endsWith("/>") && !trimmed.endsWith("</mxCell>")
+                const isTruncated = !isMxCellXmlComplete(xml)
 
                 if (isTruncated) {
                     // Store the partial XML for continuation via append_diagram
@@ -246,9 +243,9 @@ ${partialEnding}
 \`\`\`
 
 NEXT STEP: Call append_diagram with the continuation XML.
-- Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> (they already exist)
+- Do NOT include wrapper tags or root cells (id="0", id="1")
 - Start from EXACTLY where you stopped
-- End with the closing </root> tag to complete the diagram`,
+- Complete all remaining mxCell elements`,
                     })
                     return
                 }
@@ -408,10 +405,7 @@ Start your continuation with the NEXT character after where it stopped.`,
                 partialXmlRef.current += xml
 
                 // Check if XML is now complete (last mxCell is complete)
-                const accumulated = partialXmlRef.current.trim()
-                const isComplete =
-                    accumulated.endsWith("/>") ||
-                    accumulated.endsWith("</mxCell>")
+                const isComplete = isMxCellXmlComplete(partialXmlRef.current)
 
                 if (isComplete) {
                     // Wrap and display the complete diagram

@@ -30,6 +30,22 @@ const STRUCTURAL_ATTRS = [
 const VALID_ENTITIES = new Set(["lt", "gt", "amp", "quot", "apos"])
 
 // ============================================================================
+// mxCell XML Helpers
+// ============================================================================
+
+/**
+ * Check if mxCell XML output is complete (not truncated).
+ * Complete XML ends with a self-closing tag (/>) or closing mxCell tag.
+ * @param xml - The XML string to check (can be undefined/null)
+ * @returns true if XML appears complete, false if truncated or empty
+ */
+export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
+    const trimmed = xml?.trim() || ""
+    if (!trimmed) return false
+    return trimmed.endsWith("/>") || trimmed.endsWith("</mxCell>")
+}
+
+// ============================================================================
 // XML Parsing Helpers
 // ============================================================================
 
@@ -198,6 +214,7 @@ export function convertToLegalXml(xmlString: string): string {
 /**
  * Wrap XML content with the full mxfile structure required by draw.io.
  * Always adds root cells (id="0" and id="1") automatically.
+ * If input already contains root cells, they are removed to avoid duplication.
  * LLM should only generate mxCell elements starting from id="2".
  * @param xml - The XML string (bare mxCells, <root>, <mxGraphModel>, or full <mxfile>)
  * @returns Full mxfile-wrapped XML string with root cells included
@@ -226,9 +243,10 @@ export function wrapWithMxFile(xml: string): string {
     }
 
     // Remove any existing root cells from content (LLM shouldn't include them, but handle it gracefully)
+    // Use flexible patterns that match regardless of attribute order
     content = content
-        .replace(/<mxCell\s+id=["']0["']\s*\/>/g, "")
-        .replace(/<mxCell\s+id=["']1["']\s+parent=["']0["']\s*\/>/g, "")
+        .replace(/<mxCell[^>]*\bid=["']0["'][^>]*\/>/g, "")
+        .replace(/<mxCell[^>]*\bid=["']1["'][^>]*\/>/g, "")
         .trim()
 
     return `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel></diagram></mxfile>`
