@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
-import { toast } from "sonner"
 import ChatPanel from "@/components/chat-panel"
 import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
@@ -62,25 +61,32 @@ export default function Home() {
         setIsLoaded(true)
     }, [])
 
-    const handleDarkModeChange = async () => {
-        // Explicitly fetch current diagram from DrawIO before theme change
+    const exportAndSaveDiagram = async (): Promise<void> => {
         if (drawioRef && "current" in drawioRef && drawioRef.current) {
             try {
-                // Export current diagram and wait for it to be saved
-                const currentXml = await new Promise<string>((resolve) => {
-                    if (resolverRef && "current" in resolverRef) {
-                        resolverRef.current = resolve
-                    }
-                    if (
-                        drawioRef &&
-                        "current" in drawioRef &&
-                        drawioRef.current
-                    ) {
-                        drawioRef.current.exportDiagram({ format: "xmlsvg" })
-                    }
-                })
+                const currentXml = await Promise.race([
+                    new Promise<string>((resolve) => {
+                        if (resolverRef && "current" in resolverRef) {
+                            resolverRef.current = resolve
+                        }
+                        if (
+                            drawioRef &&
+                            "current" in drawioRef &&
+                            drawioRef.current
+                        ) {
+                            drawioRef.current.exportDiagram({
+                                format: "xmlsvg",
+                            })
+                        }
+                    }),
+                    new Promise<string>((_, reject) =>
+                        setTimeout(
+                            () => reject(new Error("Export timeout")),
+                            5000,
+                        ),
+                    ),
+                ])
 
-                // Save to localStorage
                 if (currentXml && currentXml.length > 300) {
                     localStorage.setItem(
                         "next-ai-draw-io-diagram-xml",
@@ -88,58 +94,28 @@ export default function Home() {
                     )
                 }
             } catch (error) {
-                console.error(
-                    "Failed to save diagram before theme change:",
-                    error,
-                )
+                console.error("Failed to save diagram:", error)
             }
         }
+    }
+
+    const handleDarkModeChange = async () => {
+        await exportAndSaveDiagram()
 
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
-        resetDrawioReady()
-
-        toast.success("Theme changed - diagram preserved")
+        resetDrawioReady() // toast.success("Theme changed - diagram preserved")
     }
 
     const handleDrawioUiChange = async () => {
-        // Explicitly fetch current diagram from DrawIO before UI change
-        if (drawioRef && "current" in drawioRef && drawioRef.current) {
-            try {
-                // Export current diagram and wait for it to be saved
-                const currentXml = await new Promise<string>((resolve) => {
-                    if (resolverRef && "current" in resolverRef) {
-                        resolverRef.current = resolve
-                    }
-                    if (
-                        drawioRef &&
-                        "current" in drawioRef &&
-                        drawioRef.current
-                    ) {
-                        drawioRef.current.exportDiagram({ format: "xmlsvg" })
-                    }
-                })
-
-                // Save to localStorage
-                if (currentXml && currentXml.length > 300) {
-                    localStorage.setItem(
-                        "next-ai-draw-io-diagram-xml",
-                        currentXml,
-                    )
-                }
-            } catch (error) {
-                console.error("Failed to save diagram before UI change:", error)
-            }
-        }
+        await exportAndSaveDiagram()
 
         const newUi = drawioUi === "min" ? "sketch" : "min"
         localStorage.setItem("drawio-theme", newUi)
         setDrawioUi(newUi)
-        resetDrawioReady()
-
-        toast.success("UI style changed - diagram preserved")
+        resetDrawioReady() // toast.success("UI style changed - diagram preserved")
     }
 
     // Check mobile
