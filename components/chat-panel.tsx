@@ -233,6 +233,15 @@ export default function ChatPanel({
     // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
     const processedToolCallsRef = useRef<Set<string>>(new Set())
 
+    // Debounce timeout for localStorage writes (prevents blocking during streaming)
+    const localStorageDebounceRef = useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null)
+    const xmlStorageDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    )
+    const LOCAL_STORAGE_DEBOUNCE_MS = 1000 // Save at most once per second
+
     const {
         messages,
         sendMessage,
@@ -728,32 +737,71 @@ Continue from EXACTLY where you stopped.`,
         }, 500)
     }, [isDrawioReady, onDisplayChart])
 
-    // Save messages to localStorage whenever they change
+    // Save messages to localStorage whenever they change (debounced to prevent blocking during streaming)
     useEffect(() => {
         if (!hasRestoredRef.current) return
-        try {
-            localStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(messages))
-        } catch (error) {
-            console.error("Failed to save messages to localStorage:", error)
+
+        // Clear any pending save
+        if (localStorageDebounceRef.current) {
+            clearTimeout(localStorageDebounceRef.current)
+        }
+
+        // Debounce: save after 1 second of no changes
+        localStorageDebounceRef.current = setTimeout(() => {
+            try {
+                console.time("perf:localStorage-messages")
+                localStorage.setItem(
+                    STORAGE_MESSAGES_KEY,
+                    JSON.stringify(messages),
+                )
+                console.timeEnd("perf:localStorage-messages")
+            } catch (error) {
+                console.error("Failed to save messages to localStorage:", error)
+            }
+        }, LOCAL_STORAGE_DEBOUNCE_MS)
+
+        // Cleanup on unmount
+        return () => {
+            if (localStorageDebounceRef.current) {
+                clearTimeout(localStorageDebounceRef.current)
+            }
         }
     }, [messages])
 
-    // Save diagram XML to localStorage whenever it changes
+    // Save diagram XML to localStorage whenever it changes (debounced)
     useEffect(() => {
         if (!canSaveDiagram) return
-        if (chartXML && chartXML.length > 300) {
+        if (!chartXML || chartXML.length <= 300) return
+
+        // Clear any pending save
+        if (xmlStorageDebounceRef.current) {
+            clearTimeout(xmlStorageDebounceRef.current)
+        }
+
+        // Debounce: save after 1 second of no changes
+        xmlStorageDebounceRef.current = setTimeout(() => {
+            console.time("perf:localStorage-xml")
             localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
+            console.timeEnd("perf:localStorage-xml")
+        }, LOCAL_STORAGE_DEBOUNCE_MS)
+
+        return () => {
+            if (xmlStorageDebounceRef.current) {
+                clearTimeout(xmlStorageDebounceRef.current)
+            }
         }
     }, [chartXML, canSaveDiagram])
 
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
         try {
+            console.time("perf:localStorage-snapshots")
             const snapshotsArray = Array.from(xmlSnapshotsRef.current.entries())
             localStorage.setItem(
                 STORAGE_XML_SNAPSHOTS_KEY,
                 JSON.stringify(snapshotsArray),
             )
+            console.timeEnd("perf:localStorage-snapshots")
         } catch (error) {
             console.error(
                 "Failed to save XML snapshots to localStorage:",

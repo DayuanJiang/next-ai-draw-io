@@ -823,6 +823,8 @@ function checkNestedMxCells(xml: string): string | null {
  * @returns null if valid, error message string if invalid
  */
 export function validateMxCellStructure(xml: string): string | null {
+    console.time("perf:validateMxCellStructure")
+    console.log(`perf:validateMxCellStructure XML size: ${xml.length} bytes`)
     // Size check for performance
     if (xml.length > MAX_XML_SIZE) {
         console.warn(
@@ -832,8 +834,10 @@ export function validateMxCellStructure(xml: string): string | null {
 
     // 0. First use DOM parser to catch syntax errors (most accurate)
     try {
+        console.time("perf:validate-DOMParser")
         const parser = new DOMParser()
         const doc = parser.parseFromString(xml, "text/xml")
+        console.timeEnd("perf:validate-DOMParser")
         const parseError = doc.querySelector("parsererror")
         if (parseError) {
             const actualError = parseError.textContent || "Unknown parse error"
@@ -841,6 +845,7 @@ export function validateMxCellStructure(xml: string): string | null {
                 "[validateMxCellStructure] DOMParser error:",
                 actualError,
             )
+            console.timeEnd("perf:validateMxCellStructure")
             return `Invalid XML: The XML contains syntax errors (likely unescaped special characters like <, >, & in attribute values). Please escape special characters: use &lt; for <, &gt; for >, &amp; for &, &quot; for ". Regenerate the diagram with properly escaped values.`
         }
 
@@ -849,6 +854,7 @@ export function validateMxCellStructure(xml: string): string | null {
         for (const cell of allCells) {
             if (cell.parentElement?.tagName === "mxCell") {
                 const id = cell.getAttribute("id") || "unknown"
+                console.timeEnd("perf:validateMxCellStructure")
                 return `Invalid XML: Found nested mxCell (id="${id}"). Cells should be siblings, not nested inside other mxCell elements.`
             }
         }
@@ -862,12 +868,18 @@ export function validateMxCellStructure(xml: string): string | null {
 
     // 1. Check for CDATA wrapper (invalid at document root)
     if (/^\s*<!\[CDATA\[/.test(xml)) {
+        console.timeEnd("perf:validateMxCellStructure")
         return "Invalid XML: XML is wrapped in CDATA section - remove <![CDATA[ from start and ]]> from end"
     }
 
     // 2. Check for duplicate structural attributes
+    console.time("perf:checkDuplicateAttributes")
     const dupAttrError = checkDuplicateAttributes(xml)
-    if (dupAttrError) return dupAttrError
+    console.timeEnd("perf:checkDuplicateAttributes")
+    if (dupAttrError) {
+        console.timeEnd("perf:validateMxCellStructure")
+        return dupAttrError
+    }
 
     // 3. Check for unescaped < in attribute values
     const attrValuePattern = /=\s*"([^"]*)"/g
@@ -875,44 +887,67 @@ export function validateMxCellStructure(xml: string): string | null {
     while ((attrValMatch = attrValuePattern.exec(xml)) !== null) {
         const value = attrValMatch[1]
         if (/</.test(value) && !/&lt;/.test(value)) {
+            console.timeEnd("perf:validateMxCellStructure")
             return "Invalid XML: Unescaped < character in attribute values. Replace < with &lt;"
         }
     }
 
     // 4. Check for duplicate IDs
+    console.time("perf:checkDuplicateIds")
     const dupIdError = checkDuplicateIds(xml)
-    if (dupIdError) return dupIdError
+    console.timeEnd("perf:checkDuplicateIds")
+    if (dupIdError) {
+        console.timeEnd("perf:validateMxCellStructure")
+        return dupIdError
+    }
 
     // 5. Check for tag mismatches
+    console.time("perf:checkTagMismatches")
     const tagMismatchError = checkTagMismatches(xml)
-    if (tagMismatchError) return tagMismatchError
+    console.timeEnd("perf:checkTagMismatches")
+    if (tagMismatchError) {
+        console.timeEnd("perf:validateMxCellStructure")
+        return tagMismatchError
+    }
 
     // 6. Check invalid character references
     const charRefError = checkCharacterReferences(xml)
-    if (charRefError) return charRefError
+    if (charRefError) {
+        console.timeEnd("perf:validateMxCellStructure")
+        return charRefError
+    }
 
     // 7. Check for invalid comment syntax (-- inside comments)
     const commentPattern = /<!--([\s\S]*?)-->/g
     let commentMatch
     while ((commentMatch = commentPattern.exec(xml)) !== null) {
         if (/--/.test(commentMatch[1])) {
+            console.timeEnd("perf:validateMxCellStructure")
             return "Invalid XML: Comment contains -- (double hyphen) which is not allowed"
         }
     }
 
     // 8. Check for unescaped entity references and invalid entity names
     const entityError = checkEntityReferences(xml)
-    if (entityError) return entityError
+    if (entityError) {
+        console.timeEnd("perf:validateMxCellStructure")
+        return entityError
+    }
 
     // 9. Check for empty id attributes on mxCell
     if (/<mxCell[^>]*\sid\s*=\s*["']\s*["'][^>]*>/g.test(xml)) {
+        console.timeEnd("perf:validateMxCellStructure")
         return "Invalid XML: Found mxCell element(s) with empty id attribute"
     }
 
     // 10. Check for nested mxCell tags
     const nestedCellError = checkNestedMxCells(xml)
-    if (nestedCellError) return nestedCellError
+    if (nestedCellError) {
+        console.timeEnd("perf:validateMxCellStructure")
+        return nestedCellError
+    }
 
+    console.timeEnd("perf:validateMxCellStructure")
     return null
 }
 

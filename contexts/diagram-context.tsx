@@ -86,16 +86,20 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         chart: string,
         skipValidation?: boolean,
     ): string | null => {
+        console.time("perf:loadDiagram")
         let xmlToLoad = chart
 
         // Validate XML structure before loading (unless skipped for internal use)
         if (!skipValidation) {
+            console.time("perf:loadDiagram-validation")
             const validation = validateAndFixXml(chart)
+            console.timeEnd("perf:loadDiagram-validation")
             if (!validation.valid) {
                 console.warn(
                     "[loadDiagram] Validation error:",
                     validation.error,
                 )
+                console.timeEnd("perf:loadDiagram")
                 return validation.error
             }
             // Use fixed XML if auto-fix was applied
@@ -112,11 +116,14 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setChartXML(xmlToLoad)
 
         if (drawioRef.current) {
+            console.time("perf:drawio-iframe-load")
             drawioRef.current.load({
                 xml: xmlToLoad,
             })
+            console.timeEnd("perf:drawio-iframe-load")
         }
 
+        console.timeEnd("perf:loadDiagram")
         return null
     }
 
@@ -138,14 +145,20 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setLatestSvg(data.data)
 
         // Only add to history if this was a user-initiated export
+        // Limit to 20 entries to prevent memory leaks during long sessions
+        const MAX_HISTORY_SIZE = 20
         if (expectHistoryExportRef.current) {
-            setDiagramHistory((prev) => [
-                ...prev,
-                {
-                    svg: data.data,
-                    xml: extractedXML,
-                },
-            ])
+            setDiagramHistory((prev) => {
+                const newHistory = [
+                    ...prev,
+                    {
+                        svg: data.data,
+                        xml: extractedXML,
+                    },
+                ]
+                // Keep only the last MAX_HISTORY_SIZE entries (circular buffer)
+                return newHistory.slice(-MAX_HISTORY_SIZE)
+            })
             expectHistoryExportRef.current = false
         }
 
