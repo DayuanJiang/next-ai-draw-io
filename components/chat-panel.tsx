@@ -244,9 +244,9 @@ ${partialEnding}
 \`\`\`
 
 NEXT STEP: Call append_diagram with the continuation XML.
-- Do NOT include <mxGraphModel> or <root> tags
+- Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> (they already exist)
 - Start from EXACTLY where you stopped
-- Continue until complete with </root></mxGraphModel>`,
+- End with the closing </root> tag to complete the diagram`,
                     })
                     return
                 }
