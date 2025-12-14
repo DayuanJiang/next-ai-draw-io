@@ -454,11 +454,14 @@ export function ChatMessageDisplay({
                         {state === "output-error" &&
                             (() => {
                                 // Check if this is a truncation (incomplete XML) vs real error
+                                // LLM now outputs bare mxCells, so check for complete mxCell ending
+                                const xml = input?.xml?.trim() || ""
                                 const isTruncated =
                                     (toolName === "display_diagram" ||
                                         toolName === "append_diagram") &&
-                                    (!input?.xml ||
-                                        !input.xml.includes("</root>"))
+                                    (!xml ||
+                                        (!xml.endsWith("/>") &&
+                                            !xml.endsWith("</mxCell>")))
                                 return isTruncated ? (
                                     <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
                                         Truncated

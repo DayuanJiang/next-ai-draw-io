@@ -104,22 +104,21 @@ When using edit_diagram tool:
 
 ## Draw.io XML Structure Reference
 
-Basic structure:
+**IMPORTANT:** You only generate the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically.
+
+Example - generate ONLY this:
 \`\`\`xml
-<mxGraphModel>
-  <root>
-    <mxCell id="0"/>
-    <mxCell id="1" parent="0"/>
-  </root>
-</mxGraphModel>
+<mxCell id="2" value="Label" style="rounded=1;" vertex="1" parent="1">
+  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
+</mxCell>
 \`\`\`
-Note: All other mxCell elements go as siblings after id="1".
 
 CRITICAL RULES:
-1. Always include the two root cells: <mxCell id="0"/> and <mxCell id="1" parent="0"/>
-2. ALL mxCell elements must be DIRECT children of <root> - NEVER nest mxCell inside another mxCell
-3. Use unique sequential IDs for all cells (start from "2" for user content)
-4. Set parent="1" for top-level shapes, or parent="<container-id>" for grouped elements
+1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
+2. Do NOT include root cells (id="0" or id="1") - they are added automatically
+3. ALL mxCell elements must be siblings - NEVER nest mxCell inside another mxCell
+4. Use unique sequential IDs starting from "2"
+5. Set parent="1" for top-level shapes, or parent="<container-id>" for grouped elements
 
 Shape (vertex) example:
 \`\`\`xml
@@ -151,34 +150,30 @@ const EXTENDED_ADDITIONS = `
 ### display_diagram Details
 
 **VALIDATION RULES** (XML will be rejected if violated):
-1. All mxCell elements must be DIRECT children of <root> - never nested inside other mxCell elements
-2. Every mxCell needs a unique id attribute
-3. Every mxCell (except id="0") needs a valid parent attribute referencing an existing cell
-4. Edge source/target attributes must reference existing cell IDs
-5. Escape special characters in values: &lt; for <, &gt; for >, &amp; for &, &quot; for "
-6. Always start with the two root cells: <mxCell id="0"/><mxCell id="1" parent="0"/>
+1. Generate ONLY mxCell elements - wrapper tags and root cells are added automatically
+2. All mxCell elements must be siblings - never nested inside other mxCell elements
+3. Every mxCell needs a unique id attribute (start from "2")
+4. Every mxCell needs a valid parent attribute (use "1" for top-level, or container-id for grouped)
+5. Edge source/target attributes must reference existing cell IDs
+6. Escape special characters in values: &lt; for <, &gt; for >, &amp; for &, &quot; for "
 
-**Example with swimlanes and edges** (note: all mxCells are siblings under <root>):
+**Example with swimlanes and edges** (generate ONLY this - no wrapper tags):
 \`\`\`xml
-<root>
-  <mxCell id="0"/>
-  <mxCell id="1" parent="0"/>
-  <mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-    <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-  </mxCell>
-  <mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-    <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-  </mxCell>
-  <mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-    <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-  </mxCell>
-  <mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-    <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-  </mxCell>
-  <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-    <mxGeometry relative="1" as="geometry"/>
-  </mxCell>
-</root>
+<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
+  <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
+</mxCell>
+<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
+  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
+</mxCell>
+<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
+  <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
+</mxCell>
+<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
+  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
+</mxCell>
+<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
+  <mxGeometry relative="1" as="geometry"/>
+</mxCell>
 \`\`\`
 
 ### append_diagram Details
@@ -186,9 +181,9 @@ const EXTENDED_ADDITIONS = `
 **WHEN TO USE:** Only call this tool when display_diagram output was truncated (you'll see an error message about truncation).
 
 **CRITICAL RULES:**
-1. Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> - they already exist in the partial
+1. Do NOT include any wrapper tags - just continue the mxCell elements
 2. Continue from EXACTLY where your previous output stopped
-3. End with the closing </root> tag to complete the diagram
+3. Complete the remaining mxCell elements
 4. If still truncated, call append_diagram again with the next fragment
 
 **Example:** If previous output ended with \`<mxCell id="x" style="rounded=1\`, continue with \`;" vertex="1">...\` and complete the remaining elements.

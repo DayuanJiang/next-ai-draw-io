@@ -222,9 +222,11 @@ export default function ChatPanel({
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
 
-                // Check if XML is truncated (missing </root> indicates incomplete output)
+                // Check if XML is truncated (incomplete mxCell indicates truncated output)
+                // LLM now outputs bare mxCells (no wrapper tags), so check for complete mxCell
+                const trimmed = xml.trim()
                 const isTruncated =
-                    !xml.includes("</root>") && !xml.trim().endsWith("/>")
+                    !trimmed.endsWith("/>") && !trimmed.endsWith("</mxCell>")
 
                 if (isTruncated) {
                     // Store the partial XML for continuation via append_diagram
@@ -376,17 +378,21 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 const { xml } = toolCall.input as { xml: string }
 
                 // Detect if LLM incorrectly started fresh instead of continuing
+                // LLM should only output bare mxCells now, so wrapper tags indicate error
+                const trimmed = xml.trim()
                 const isFreshStart =
-                    xml.trim().startsWith("<mxGraphModel") ||
-                    xml.trim().startsWith("<root") ||
-                    xml.trim().startsWith('<mxCell id="0"')
+                    trimmed.startsWith("<mxGraphModel") ||
+                    trimmed.startsWith("<root") ||
+                    trimmed.startsWith("<mxfile") ||
+                    trimmed.startsWith('<mxCell id="0"') ||
+                    trimmed.startsWith('<mxCell id="1"')
 
                 if (isFreshStart) {
                     addToolOutput({
                         tool: "append_diagram",
                         toolCallId: toolCall.toolCallId,
                         state: "output-error",
-                        errorText: `ERROR: You started fresh with wrapper tags. Do NOT include <mxGraphModel>, <root>, or <mxCell id="0">.
+                        errorText: `ERROR: You started fresh with wrapper tags. Do NOT include wrapper tags or root cells (id="0", id="1").
 
 Continue from EXACTLY where the partial ended:
 \`\`\`
@@ -401,8 +407,11 @@ Start your continuation with the NEXT character after where it stopped.`,
                 // Append to accumulated XML
                 partialXmlRef.current += xml
 
-                // Check if XML is now complete
-                const isComplete = partialXmlRef.current.includes("</root>")
+                // Check if XML is now complete (last mxCell is complete)
+                const accumulated = partialXmlRef.current.trim()
+                const isComplete =
+                    accumulated.endsWith("/>") ||
+                    accumulated.endsWith("</mxCell>")
 
                 if (isComplete) {
                     // Wrap and display the complete diagram
@@ -439,7 +448,7 @@ Please use display_diagram with corrected XML.`,
                         tool: "append_diagram",
                         toolCallId: toolCall.toolCallId,
                         state: "output-error",
-                        errorText: `XML still incomplete (missing </root>). Call append_diagram again to continue.
+                        errorText: `XML still incomplete (mxCell not closed). Call append_diagram again to continue.
 
 Current ending:
 \`\`\`
