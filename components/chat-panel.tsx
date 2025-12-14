@@ -145,6 +145,7 @@ export default function ChatPanel({
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
+    const [minimalStyle, setMinimalStyle] = useState(false)
 
     // Check config on mount
     useEffect(() => {
@@ -222,8 +223,16 @@ export default function ChatPanel({
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
 
+                // DEBUG: Log raw input to diagnose false truncation detection
+                console.log(
+                    "[display_diagram] XML ending (last 100 chars):",
+                    xml.slice(-100),
+                )
+                console.log("[display_diagram] XML length:", xml.length)
+
                 // Check if XML is truncated (incomplete mxCell indicates truncated output)
                 const isTruncated = !isMxCellXmlComplete(xml)
+                console.log("[display_diagram] isTruncated:", isTruncated)
 
                 if (isTruncated) {
                     // Store the partial XML for continuation via append_diagram
@@ -503,6 +512,10 @@ Continue from EXACTLY where you stopped.`,
             const metadata = message?.metadata as
                 | Record<string, unknown>
                 | undefined
+
+            // DEBUG: Log finish reason to diagnose truncation
+            console.log("[onFinish] finishReason:", metadata?.finishReason)
+            console.log("[onFinish] metadata:", metadata)
 
             if (metadata) {
                 // Use Number.isFinite to guard against NaN (typeof NaN === 'number' is true)
@@ -935,6 +948,9 @@ Continue from EXACTLY where you stopped.`,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
                     }),
+                    ...(minimalStyle && {
+                        "x-minimal-style": "true",
+                    }),
                 },
             },
         )
@@ -1250,6 +1266,8 @@ Continue from EXACTLY where you stopped.`,
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
+                    minimalStyle={minimalStyle}
+                    onMinimalStyleChange={setMinimalStyle}
                 />
             </footer>
 
