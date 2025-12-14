@@ -1023,6 +1023,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     style: {
                         maxWidth: "480px",
                     },
+                    duration: 2000,
                 }}
             />
             {/* Header */}
