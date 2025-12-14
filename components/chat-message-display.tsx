@@ -29,7 +29,12 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { convertToLegalXml, replaceNodes, validateAndFixXml } from "@/lib/utils"
+import {
+    convertToLegalXml,
+    isMxCellXmlComplete,
+    replaceNodes,
+    validateAndFixXml,
+} from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
 
@@ -457,8 +462,7 @@ export function ChatMessageDisplay({
                                 const isTruncated =
                                     (toolName === "display_diagram" ||
                                         toolName === "append_diagram") &&
-                                    (!input?.xml ||
-                                        !input.xml.includes("</root>"))
+                                    !isMxCellXmlComplete(input?.xml)
                                 return isTruncated ? (
                                     <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
                                         Truncated
@@ -507,7 +511,7 @@ export function ChatMessageDisplay({
                         const isTruncated =
                             (toolName === "display_diagram" ||
                                 toolName === "append_diagram") &&
-                            (!input?.xml || !input.xml.includes("</root>"))
+                            !isMxCellXmlComplete(input?.xml)
                         return (
                             <div
                                 className={`px-4 py-3 border-t border-border/40 text-sm ${isTruncated ? "text-yellow-600" : "text-red-600"}`}

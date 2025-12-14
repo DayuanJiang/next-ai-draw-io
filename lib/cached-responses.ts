@@ -9,12 +9,7 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
         promptText:
             "Give me a **animated connector** diagram of transformer's architecture",
         hasImage: false,
-        xml: `<root>
-  <mxCell id="0"/>
-  <mxCell id="1" parent="0"/>
-
-
-  <mxCell id="title" value="Transformer Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+        xml: `<mxCell id="title" value="Transformer Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
     <mxGeometry x="300" y="20" width="250" height="30" as="geometry"/>
   </mxCell>
 
@@ -254,18 +249,12 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
 
   <mxCell id="output_label" value="Outputs&#xa;(shifted right)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;" vertex="1" parent="1">
     <mxGeometry x="660" y="530" width="100" height="30" as="geometry"/>
-  </mxCell>
-</root>`,
+  </mxCell>`,
     },
     {
         promptText: "Replicate this in aws style",
         hasImage: true,
-        xml: `<root>
-  <mxCell id="0"/>
-  <mxCell id="1" parent="0"/>
-
-
-  <mxCell id="2" value="AWS" style="sketch=0;outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;rounded=1;arcSize=5;" vertex="1" parent="1">
+        xml: `<mxCell id="2" value="AWS" style="sketch=0;outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;rounded=1;arcSize=5;" vertex="1" parent="1">
     <mxGeometry x="340" y="40" width="880" height="520" as="geometry"/>
   </mxCell>
 
@@ -324,18 +313,12 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
       <mxPoint x="700" y="350" as="sourcePoint"/>
       <mxPoint x="750" y="300" as="targetPoint"/>
     </mxGeometry>
-  </mxCell>
-</root>`,
+  </mxCell>`,
     },
     {
         promptText: "Replicate this flowchart.",
         hasImage: true,
-        xml: `<root>
-  <mxCell id="0"/>
-  <mxCell id="1" parent="0"/>
-
-
-  <mxCell id="2" value="Lamp doesn't work" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcccc;strokeColor=#000000;strokeWidth=2;fontSize=18;fontStyle=0;" vertex="1" parent="1">
+        xml: `<mxCell id="2" value="Lamp doesn't work" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcccc;strokeColor=#000000;strokeWidth=2;fontSize=18;fontStyle=0;" vertex="1" parent="1">
     <mxGeometry x="140" y="40" width="180" height="60" as="geometry"/>
   </mxCell>
 
@@ -391,16 +374,12 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
 
   <mxCell id="12" value="Repair lamp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#99ff99;strokeColor=#000000;strokeWidth=2;fontSize=18;fontStyle=0;" vertex="1" parent="1">
     <mxGeometry x="130" y="650" width="200" height="60" as="geometry"/>
-  </mxCell>
-</root>`,
+  </mxCell>`,
     },
     {
         promptText: "Summarize this paper as a diagram",
         hasImage: true,
-        xml: `            <root>
-                <mxCell id="0" />
-                <mxCell id="1" parent="0" />
-                <mxCell id="title_bg" parent="1"
+        xml: `<mxCell id="title_bg" parent="1"
                     style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a237e;strokeColor=none;arcSize=8;"
                     value="" vertex="1">
                     <mxGeometry height="80" width="720" x="40" y="20" as="geometry" />
@@ -751,18 +730,12 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
                     value="Foundational technique for modern LLM reasoning - inspired many follow-up works including Self-Consistency, Tree-of-Thought, etc."
                     vertex="1">
                     <mxGeometry height="55" width="230" x="530" y="600" as="geometry" />
-                </mxCell>
-            </root>`,
+                </mxCell>`,
     },
     {
         promptText: "Draw a cat for me",
         hasImage: false,
-        xml: `<root>
-  <mxCell id="0"/>
-  <mxCell id="1" parent="0"/>
-
-
-  <mxCell id="2" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFE6CC;strokeColor=#000000;strokeWidth=2;" vertex="1" parent="1">
+        xml: `<mxCell id="2" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFE6CC;strokeColor=#000000;strokeWidth=2;" vertex="1" parent="1">
     <mxGeometry x="300" y="150" width="120" height="120" as="geometry"/>
   </mxCell>
 
@@ -902,9 +875,7 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
         <mxPoint x="235" y="290"/>
       </Array>
     </mxGeometry>
-  </mxCell>
-
-</root>`,
+  </mxCell>`,
     },
 ]
 

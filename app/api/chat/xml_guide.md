@@ -81,16 +81,15 @@ Contains the actual diagram data.
 
 ## Root Cell Container: `<root>`
 
-Contains all the cells in the diagram.
+Contains all the cells in the diagram. **Note:** When generating diagrams, you only need to provide the mxCell elements - the root container and root cells (id="0", id="1") are added automatically.
 
-**Example:**
+**Internal structure (auto-generated):**
 
 ```xml
 <root>
-<mxCell id="0"/>
-<mxCell id="1" parent="0"/>
-
-  <!-- Other cells go here -->
+  <mxCell id="0"/>           <!-- Auto-added -->
+  <mxCell id="1" parent="0"/> <!-- Auto-added -->
+  <!-- Your mxCell elements go here (start from id="2") -->
 </root>
 ```
 
@@ -203,15 +202,15 @@ Draw.io files contain two special cells that are always present:
 1.  **Root Cell** (id = "0"): The parent of all cells
 2.  **Default Parent Cell** (id = "1", parent = "0"): The default layer and parent for most cells
 
-## Tips for Manually Creating Draw.io XML
+## Tips for Creating Draw.io XML
 
-1.  Start with the basic structure (`mxfile`, `diagram`, `mxGraphModel`, `root`)
-2.  Always include the two special cells (id = "0" and id = "1")
+1.  **Generate ONLY mxCell elements** - wrapper tags and root cells (id="0", id="1") are added automatically
+2.  Start IDs from "2" (id="0" and id="1" are reserved for root cells)
 3.  Assign unique and sequential IDs to all cells
-4.  Define parent relationships correctly
+4.  Define parent relationships correctly (use parent="1" for top-level shapes)
 5.  Use `mxGeometry` elements to position shapes
 6.  For connectors, specify `source` and `target` attributes
-7.  **CRITICAL: All mxCell elements must be DIRECT children of `<root>`. NEVER nest mxCell inside another mxCell.**
+7.  **CRITICAL: All mxCell elements must be siblings. NEVER nest mxCell inside another mxCell.**
 
 ## Common Patterns
 

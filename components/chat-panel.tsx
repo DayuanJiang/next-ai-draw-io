@@ -26,7 +26,7 @@ import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { formatXML, wrapWithMxFile } from "@/lib/utils"
+import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 // localStorage keys for persistence
@@ -222,9 +222,8 @@ export default function ChatPanel({
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
 
-                // Check if XML is truncated (missing </root> indicates incomplete output)
-                const isTruncated =
-                    !xml.includes("</root>") && !xml.trim().endsWith("/>")
+                // Check if XML is truncated (incomplete mxCell indicates truncated output)
+                const isTruncated = !isMxCellXmlComplete(xml)
 
                 if (isTruncated) {
                     // Store the partial XML for continuation via append_diagram
@@ -244,9 +243,9 @@ ${partialEnding}
 \`\`\`
 
 NEXT STEP: Call append_diagram with the continuation XML.
-- Do NOT start with <mxGraphModel>, <root>, or <mxCell id="0"> (they already exist)
+- Do NOT include wrapper tags or root cells (id="0", id="1")
 - Start from EXACTLY where you stopped
-- End with the closing </root> tag to complete the diagram`,
+- Complete all remaining mxCell elements`,
                     })
                     return
                 }
@@ -376,17 +375,21 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 const { xml } = toolCall.input as { xml: string }
 
                 // Detect if LLM incorrectly started fresh instead of continuing
+                // LLM should only output bare mxCells now, so wrapper tags indicate error
+                const trimmed = xml.trim()
                 const isFreshStart =
-                    xml.trim().startsWith("<mxGraphModel") ||
-                    xml.trim().startsWith("<root") ||
-                    xml.trim().startsWith('<mxCell id="0"')
+                    trimmed.startsWith("<mxGraphModel") ||
+                    trimmed.startsWith("<root") ||
+                    trimmed.startsWith("<mxfile") ||
+                    trimmed.startsWith('<mxCell id="0"') ||
+                    trimmed.startsWith('<mxCell id="1"')
 
                 if (isFreshStart) {
                     addToolOutput({
                         tool: "append_diagram",
                         toolCallId: toolCall.toolCallId,
                         state: "output-error",
-                        errorText: `ERROR: You started fresh with wrapper tags. Do NOT include <mxGraphModel>, <root>, or <mxCell id="0">.
+                        errorText: `ERROR: You started fresh with wrapper tags. Do NOT include wrapper tags or root cells (id="0", id="1").
 
 Continue from EXACTLY where the partial ended:
 \`\`\`
@@ -401,8 +404,8 @@ Start your continuation with the NEXT character after where it stopped.`,
                 // Append to accumulated XML
                 partialXmlRef.current += xml
 
-                // Check if XML is now complete
-                const isComplete = partialXmlRef.current.includes("</root>")
+                // Check if XML is now complete (last mxCell is complete)
+                const isComplete = isMxCellXmlComplete(partialXmlRef.current)
 
                 if (isComplete) {
                     // Wrap and display the complete diagram
@@ -439,7 +442,7 @@ Please use display_diagram with corrected XML.`,
                         tool: "append_diagram",
                         toolCallId: toolCall.toolCallId,
                         state: "output-error",
-                        errorText: `XML still incomplete (missing </root>). Call append_diagram again to continue.
+                        errorText: `XML still incomplete (mxCell not closed). Call append_diagram again to continue.
 
 Current ending:
 \`\`\`
