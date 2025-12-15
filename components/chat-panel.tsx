@@ -323,8 +323,12 @@ ${finalXml}
                     }
                 }
             } else if (toolCall.toolName === "edit_diagram") {
-                const { edits } = toolCall.input as {
-                    edits: Array<{ search: string; replace: string }>
+                const { operations } = toolCall.input as {
+                    operations: Array<{
+                        type: "update" | "add" | "delete"
+                        cell_id: string
+                        new_xml?: string
+                    }>
                 }
 
                 let currentXml = ""
@@ -338,8 +342,36 @@ ${finalXml}
                         currentXml = await onFetchChart(false)
                     }
 
-                    const { replaceXMLParts } = await import("@/lib/utils")
-                    const editedXml = replaceXMLParts(currentXml, edits)
+                    const { applyDiagramOperations } = await import(
+                        "@/lib/utils"
+                    )
+                    const { result: editedXml, errors } =
+                        applyDiagramOperations(currentXml, operations)
+
+                    // Check for operation errors
+                    if (errors.length > 0) {
+                        const errorMessages = errors
+                            .map(
+                                (e) =>
+                                    `- ${e.type} on cell_id="${e.cellId}": ${e.message}`,
+                            )
+                            .join("\n")
+
+                        addToolOutput({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            state: "output-error",
+                            errorText: `Some operations failed:\n${errorMessages}
+
+Current diagram XML:
+\`\`\`xml
+${currentXml}
+\`\`\`
+
+Please check the cell IDs and retry.`,
+                        })
+                        return
+                    }
 
                     // loadDiagram validates and returns error if invalid
                     const validationError = onDisplayChart(editedXml)
@@ -359,7 +391,7 @@ Current diagram XML:
 ${currentXml}
 \`\`\`
 
-Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid references).`,
+Please fix the operations to avoid structural issues.`,
                         })
                         return
                     }
@@ -367,7 +399,7 @@ Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid ref
                     addToolOutput({
                         tool: "edit_diagram",
                         toolCallId: toolCall.toolCallId,
-                        output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                        output: `Successfully applied ${operations.length} operation(s) to the diagram.`,
                     })
                 } catch (error) {
                     console.error("[edit_diagram] Failed:", error)
@@ -375,7 +407,6 @@ Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid ref
                     const errorMessage =
                         error instanceof Error ? error.message : String(error)
 
-                    // Use addToolOutput with state: 'output-error' for proper error signaling
                     addToolOutput({
                         tool: "edit_diagram",
                         toolCallId: toolCall.toolCallId,
@@ -387,7 +418,7 @@ Current diagram XML:
 ${currentXml || "No XML available"}
 \`\`\`
 
-Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
+Please check cell IDs and retry, or use display_diagram to regenerate.`,
                     })
                 }
             } else if (toolCall.toolName === "append_diagram") {

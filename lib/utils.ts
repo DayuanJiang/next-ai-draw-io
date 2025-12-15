@@ -377,303 +377,223 @@ export function replaceNodes(currentXML: string, nodes: string): string {
     }
 }
 
-/**
- * Create a character count dictionary from a string
- * Used for attribute-order agnostic comparison
- */
-function charCountDict(str: string): Map<string, number> {
-    const dict = new Map<string, number>()
-    for (const char of str) {
-        dict.set(char, (dict.get(char) || 0) + 1)
-    }
-    return dict
+// ============================================================================
+// ID-based Diagram Operations
+// ============================================================================
+
+export interface DiagramOperation {
+    type: "update" | "add" | "delete"
+    cell_id: string
+    new_xml?: string
+}
+
+export interface OperationError {
+    type: "update" | "add" | "delete"
+    cellId: string
+    message: string
+}
+
+export interface ApplyOperationsResult {
+    result: string
+    errors: OperationError[]
 }
 
 /**
- * Compare two strings by character frequency (order-agnostic)
+ * Apply diagram operations (update/add/delete) using ID-based lookup.
+ * This replaces the text-matching approach with direct DOM manipulation.
+ *
+ * @param xmlContent - The full mxfile XML content
+ * @param operations - Array of operations to apply
+ * @returns Object with result XML and any errors
  */
-function sameCharFrequency(a: string, b: string): boolean {
-    const trimmedA = a.trim()
-    const trimmedB = b.trim()
-    if (trimmedA.length !== trimmedB.length) return false
-
-    const dictA = charCountDict(trimmedA)
-    const dictB = charCountDict(trimmedB)
-
-    if (dictA.size !== dictB.size) return false
-
-    for (const [char, count] of dictA) {
-        if (dictB.get(char) !== count) return false
-    }
-    return true
-}
-
-/**
- * Replace specific parts of XML content using search and replace pairs
- * @param xmlContent - The original XML string
- * @param searchReplacePairs - Array of {search: string, replace: string} objects
- * @returns The updated XML string with replacements applied
- */
-export function replaceXMLParts(
+export function applyDiagramOperations(
     xmlContent: string,
-    searchReplacePairs: Array<{ search: string; replace: string }>,
-): string {
-    // Format the XML first to ensure consistent line breaks
-    let result = formatXML(xmlContent)
+    operations: DiagramOperation[],
+): ApplyOperationsResult {
+    const errors: OperationError[] = []
 
-    for (const { search, replace } of searchReplacePairs) {
-        // Also format the search content for consistency
-        const formattedSearch = formatXML(search)
-        const searchLines = formattedSearch.split("\n")
+    // Parse the XML
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xmlContent, "text/xml")
 
-        // Split into lines for exact line matching
-        const resultLines = result.split("\n")
-
-        // Remove trailing empty line if exists (from the trailing \n in search content)
-        if (searchLines[searchLines.length - 1] === "") {
-            searchLines.pop()
+    // Check for parse errors
+    const parseError = doc.querySelector("parsererror")
+    if (parseError) {
+        return {
+            result: xmlContent,
+            errors: [
+                {
+                    type: "update",
+                    cellId: "",
+                    message: `XML parse error: ${parseError.textContent}`,
+                },
+            ],
         }
-
-        // Always search from the beginning - pairs may not be in document order
-        const startLineNum = 0
-
-        // Try to find match using multiple strategies
-        let matchFound = false
-        let matchStartLine = -1
-        let matchEndLine = -1
-
-        // First try: exact match
-        for (
-            let i = startLineNum;
-            i <= resultLines.length - searchLines.length;
-            i++
-        ) {
-            let matches = true
-
-            for (let j = 0; j < searchLines.length; j++) {
-                if (resultLines[i + j] !== searchLines[j]) {
-                    matches = false
-                    break
-                }
-            }
-
-            if (matches) {
-                matchStartLine = i
-                matchEndLine = i + searchLines.length
-                matchFound = true
-                break
-            }
-        }
-
-        // Second try: line-trimmed match (fallback)
-        if (!matchFound) {
-            for (
-                let i = startLineNum;
-                i <= resultLines.length - searchLines.length;
-                i++
-            ) {
-                let matches = true
-
-                for (let j = 0; j < searchLines.length; j++) {
-                    const originalTrimmed = resultLines[i + j].trim()
-                    const searchTrimmed = searchLines[j].trim()
-
-                    if (originalTrimmed !== searchTrimmed) {
-                        matches = false
-                        break
-                    }
-                }
-
-                if (matches) {
-                    matchStartLine = i
-                    matchEndLine = i + searchLines.length
-                    matchFound = true
-                    break
-                }
-            }
-        }
-
-        // Third try: substring match as last resort (for single-line XML)
-        if (!matchFound) {
-            // Try to find as a substring in the entire content
-            const searchStr = search.trim()
-            const resultStr = result
-            const index = resultStr.indexOf(searchStr)
-
-            if (index !== -1) {
-                // Found as substring - replace it
-                result =
-                    resultStr.substring(0, index) +
-                    replace.trim() +
-                    resultStr.substring(index + searchStr.length)
-                // Re-format after substring replacement
-                result = formatXML(result)
-                continue // Skip the line-based replacement below
-            }
-        }
-
-        // Fourth try: character frequency match (attribute-order agnostic)
-        // This handles cases where the model generates XML with different attribute order
-        if (!matchFound) {
-            for (
-                let i = startLineNum;
-                i <= resultLines.length - searchLines.length;
-                i++
-            ) {
-                let matches = true
-
-                for (let j = 0; j < searchLines.length; j++) {
-                    if (
-                        !sameCharFrequency(resultLines[i + j], searchLines[j])
-                    ) {
-                        matches = false
-                        break
-                    }
-                }
-
-                if (matches) {
-                    matchStartLine = i
-                    matchEndLine = i + searchLines.length
-                    matchFound = true
-                    break
-                }
-            }
-        }
-
-        // Fifth try: Match by mxCell id attribute
-        // Extract id from search pattern and find the element with that id
-        if (!matchFound) {
-            const idMatch = search.match(/id="([^"]+)"/)
-            if (idMatch) {
-                const searchId = idMatch[1]
-                // Find lines that contain this id
-                for (let i = startLineNum; i < resultLines.length; i++) {
-                    if (resultLines[i].includes(`id="${searchId}"`)) {
-                        // Found the element with matching id
-                        // Now find the extent of this element (it might span multiple lines)
-                        let endLine = i + 1
-                        const line = resultLines[i].trim()
-
-                        // Check if it's a self-closing tag or has children
-                        if (!line.endsWith("/>")) {
-                            // Find the closing tag or the end of the mxCell block
-                            let depth = 1
-                            while (endLine < resultLines.length && depth > 0) {
-                                const currentLine = resultLines[endLine].trim()
-                                if (
-                                    currentLine.startsWith("<") &&
-                                    !currentLine.startsWith("</") &&
-                                    !currentLine.endsWith("/>")
-                                ) {
-                                    depth++
-                                } else if (currentLine.startsWith("</")) {
-                                    depth--
-                                }
-                                endLine++
-                            }
-                        }
-
-                        matchStartLine = i
-                        matchEndLine = endLine
-                        matchFound = true
-                        break
-                    }
-                }
-            }
-        }
-
-        // Sixth try: Match by value attribute (label text)
-        // Extract value from search pattern and find elements with that value
-        if (!matchFound) {
-            const valueMatch = search.match(/value="([^"]*)"/)
-            if (valueMatch) {
-                const searchValue = valueMatch[0] // Use full match like value="text"
-                for (let i = startLineNum; i < resultLines.length; i++) {
-                    if (resultLines[i].includes(searchValue)) {
-                        // Found element with matching value
-                        let endLine = i + 1
-                        const line = resultLines[i].trim()
-
-                        if (!line.endsWith("/>")) {
-                            let depth = 1
-                            while (endLine < resultLines.length && depth > 0) {
-                                const currentLine = resultLines[endLine].trim()
-                                if (
-                                    currentLine.startsWith("<") &&
-                                    !currentLine.startsWith("</") &&
-                                    !currentLine.endsWith("/>")
-                                ) {
-                                    depth++
-                                } else if (currentLine.startsWith("</")) {
-                                    depth--
-                                }
-                                endLine++
-                            }
-                        }
-
-                        matchStartLine = i
-                        matchEndLine = endLine
-                        matchFound = true
-                        break
-                    }
-                }
-            }
-        }
-
-        // Seventh try: Normalized whitespace match
-        // Collapse all whitespace and compare
-        if (!matchFound) {
-            const normalizeWs = (s: string) => s.replace(/\s+/g, " ").trim()
-            const normalizedSearch = normalizeWs(search)
-
-            for (
-                let i = startLineNum;
-                i <= resultLines.length - searchLines.length;
-                i++
-            ) {
-                // Build a normalized version of the candidate lines
-                const candidateLines = resultLines.slice(
-                    i,
-                    i + searchLines.length,
-                )
-                const normalizedCandidate = normalizeWs(
-                    candidateLines.join(" "),
-                )
-
-                if (normalizedCandidate === normalizedSearch) {
-                    matchStartLine = i
-                    matchEndLine = i + searchLines.length
-                    matchFound = true
-                    break
-                }
-            }
-        }
-
-        if (!matchFound) {
-            throw new Error(
-                `Search pattern not found in the diagram. The pattern may not exist in the current structure.`,
-            )
-        }
-
-        // Replace the matched lines
-        const replaceLines = replace.split("\n")
-
-        // Remove trailing empty line if exists
-        if (replaceLines[replaceLines.length - 1] === "") {
-            replaceLines.pop()
-        }
-
-        // Perform the replacement
-        const newResultLines = [
-            ...resultLines.slice(0, matchStartLine),
-            ...replaceLines,
-            ...resultLines.slice(matchEndLine),
-        ]
-
-        result = newResultLines.join("\n")
     }
 
-    return result
+    // Find the root element (inside mxGraphModel)
+    const root = doc.querySelector("root")
+    if (!root) {
+        return {
+            result: xmlContent,
+            errors: [
+                {
+                    type: "update",
+                    cellId: "",
+                    message: "Could not find <root> element in XML",
+                },
+            ],
+        }
+    }
+
+    // Build a map of cell IDs to elements
+    const cellMap = new Map<string, Element>()
+    root.querySelectorAll("mxCell").forEach((cell) => {
+        const id = cell.getAttribute("id")
+        if (id) cellMap.set(id, cell)
+    })
+
+    // Process each operation
+    for (const op of operations) {
+        if (op.type === "update") {
+            const existingCell = cellMap.get(op.cell_id)
+            if (!existingCell) {
+                errors.push({
+                    type: "update",
+                    cellId: op.cell_id,
+                    message: `Cell with id="${op.cell_id}" not found`,
+                })
+                continue
+            }
+
+            if (!op.new_xml) {
+                errors.push({
+                    type: "update",
+                    cellId: op.cell_id,
+                    message: "new_xml is required for update operation",
+                })
+                continue
+            }
+
+            // Parse the new XML
+            const newDoc = parser.parseFromString(
+                `<wrapper>${op.new_xml}</wrapper>`,
+                "text/xml",
+            )
+            const newCell = newDoc.querySelector("mxCell")
+            if (!newCell) {
+                errors.push({
+                    type: "update",
+                    cellId: op.cell_id,
+                    message: "new_xml must contain an mxCell element",
+                })
+                continue
+            }
+
+            // Validate ID matches
+            const newCellId = newCell.getAttribute("id")
+            if (newCellId !== op.cell_id) {
+                errors.push({
+                    type: "update",
+                    cellId: op.cell_id,
+                    message: `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`,
+                })
+                continue
+            }
+
+            // Import and replace the node
+            const importedNode = doc.importNode(newCell, true)
+            existingCell.parentNode?.replaceChild(importedNode, existingCell)
+
+            // Update the map with the new element
+            cellMap.set(op.cell_id, importedNode)
+        } else if (op.type === "add") {
+            // Check if ID already exists
+            if (cellMap.has(op.cell_id)) {
+                errors.push({
+                    type: "add",
+                    cellId: op.cell_id,
+                    message: `Cell with id="${op.cell_id}" already exists`,
+                })
+                continue
+            }
+
+            if (!op.new_xml) {
+                errors.push({
+                    type: "add",
+                    cellId: op.cell_id,
+                    message: "new_xml is required for add operation",
+                })
+                continue
+            }
+
+            // Parse the new XML
+            const newDoc = parser.parseFromString(
+                `<wrapper>${op.new_xml}</wrapper>`,
+                "text/xml",
+            )
+            const newCell = newDoc.querySelector("mxCell")
+            if (!newCell) {
+                errors.push({
+                    type: "add",
+                    cellId: op.cell_id,
+                    message: "new_xml must contain an mxCell element",
+                })
+                continue
+            }
+
+            // Validate ID matches
+            const newCellId = newCell.getAttribute("id")
+            if (newCellId !== op.cell_id) {
+                errors.push({
+                    type: "add",
+                    cellId: op.cell_id,
+                    message: `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`,
+                })
+                continue
+            }
+
+            // Import and append the node
+            const importedNode = doc.importNode(newCell, true)
+            root.appendChild(importedNode)
+
+            // Add to map
+            cellMap.set(op.cell_id, importedNode)
+        } else if (op.type === "delete") {
+            const existingCell = cellMap.get(op.cell_id)
+            if (!existingCell) {
+                errors.push({
+                    type: "delete",
+                    cellId: op.cell_id,
+                    message: `Cell with id="${op.cell_id}" not found`,
+                })
+                continue
+            }
+
+            // Check for edges referencing this cell (warning only, still delete)
+            const referencingEdges = root.querySelectorAll(
+                `mxCell[source="${op.cell_id}"], mxCell[target="${op.cell_id}"]`,
+            )
+            if (referencingEdges.length > 0) {
+                const edgeIds = Array.from(referencingEdges)
+                    .map((e) => e.getAttribute("id"))
+                    .join(", ")
+                console.warn(
+                    `[applyDiagramOperations] Deleting cell "${op.cell_id}" which is referenced by edges: ${edgeIds}`,
+                )
+            }
+
+            // Remove the node
+            existingCell.parentNode?.removeChild(existingCell)
+            cellMap.delete(op.cell_id)
+        }
+    }
+
+    // Serialize back to string
+    const serializer = new XMLSerializer()
+    const result = serializer.serializeToString(doc)
+
+    return { result, errors }
 }
 
 // ============================================================================

@@ -88,19 +88,15 @@ Note that:
 - NEVER include XML comments (<!-- ... -->) in your generated XML. Draw.io strips comments, which breaks edit_diagram patterns.
 
 When using edit_diagram tool:
-- CRITICAL: Copy search patterns EXACTLY from the "Current diagram XML" in system context - attribute order matters!
-- Always include the element's id attribute for unique targeting: {"search": "<mxCell id=\\"5\\"", ...}
-- Include complete elements (mxCell + mxGeometry) for reliable matching
-- Preserve exact whitespace, indentation, and line breaks
-- BAD: {"search": "value=\\"Label\\"", ...} - too vague, matches multiple elements
-- GOOD: {"search": "<mxCell id=\\"3\\" value=\\"Old\\" style=\\"...\\">", "replace": "<mxCell id=\\"3\\" value=\\"New\\" style=\\"...\\">"}
-- For multiple changes, use separate edits in array
-- RETRY POLICY: If pattern not found, retry up to 3 times with adjusted patterns. After 3 failures, use display_diagram instead.
+- Use operations: update (modify cell by id), add (new cell), delete (remove cell by id)
+- For update/add: provide cell_id and complete new_xml (full mxCell element including mxGeometry)
+- For delete: only cell_id is needed
+- Find the cell_id from "Current diagram XML" in system context
+- Example update: {"operations": [{"type": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example delete: {"operations": [{"type": "delete", "cell_id": "5"}]}
+- Example add: {"operations": [{"type": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 
-⚠️ CRITICAL JSON ESCAPING: When outputting edit_diagram tool calls, you MUST escape ALL double quotes inside string values:
-- CORRECT: "y=\\"119\\""  (both quotes escaped)
-- WRONG: "y="119\\""  (missing backslash before first quote - causes JSON parse error!)
-- Every " inside a JSON string value needs \\" - no exceptions!
+⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
 ## Draw.io XML Structure Reference
 
@@ -268,69 +264,43 @@ const EXTENDED_ADDITIONS = `
 
 ### edit_diagram Details
 
-**CRITICAL RULES:**
-- Copy-paste the EXACT search pattern from the "Current diagram XML" in system context
-- Do NOT reorder attributes or reformat - the attribute order in draw.io XML varies and you MUST match it exactly
-- Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
-- Break large changes into multiple smaller edits
-- Each search must contain complete lines (never truncate mid-line)
-- First match only - be specific enough to target the right element
+edit_diagram uses ID-based operations to modify cells directly by their id attribute.
+
+**Operations:**
+- **update**: Replace an existing cell. Provide cell_id and new_xml.
+- **add**: Add a new cell. Provide cell_id (new unique id) and new_xml.
+- **delete**: Remove a cell. Only cell_id is needed.
 
 **Input Format:**
 \`\`\`json
 {
-  "edits": [
-    {
-      "search": "EXACT lines copied from current XML (preserve attribute order!)",
-      "replace": "Replacement lines"
-    }
+  "operations": [
+    {"type": "update", "cell_id": "3", "new_xml": "<mxCell ...complete element...>"},
+    {"type": "add", "cell_id": "new1", "new_xml": "<mxCell ...new element...>"},
+    {"type": "delete", "cell_id": "5"}
   ]
 }
 \`\`\`
 
-## edit_diagram Best Practices
+**Examples:**
 
-### Core Principle: Unique & Precise Patterns
-Your search pattern MUST uniquely identify exactly ONE location in the XML. Before writing a search pattern:
-1. Review the "Current diagram XML" in the system context
-2. Identify the exact element(s) to modify by their unique id attribute
-3. Include enough context to ensure uniqueness
-
-### Pattern Construction Rules
-
-**Rule 1: Always include the element's id attribute**
+Change label:
 \`\`\`json
-{"search": "<mxCell id=\\"node5\\"", "replace": "<mxCell id=\\"node5\\" value=\\"New Label\\""}
+{"operations": [{"type": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
-**Rule 2: Include complete XML elements when possible**
+Add new shape:
 \`\`\`json
-{
-  "search": "<mxCell id=\\"3\\" value=\\"Old\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>",
-  "replace": "<mxCell id=\\"3\\" value=\\"New\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"
-}
+{"operations": [{"type": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
-**Rule 3: Preserve exact whitespace and formatting**
-Copy the search pattern EXACTLY from the current XML, including leading spaces, line breaks (\\n), and attribute order.
+Delete cell:
+\`\`\`json
+{"operations": [{"type": "delete", "cell_id": "5"}]}
+\`\`\`
 
-### Good vs Bad Patterns
-
-**BAD:** \`{"search": "value=\\"Label\\""}\` - Too vague, matches multiple elements
-**BAD:** \`{"search": "<mxCell value=\\"X\\" id=\\"5\\""}\` - Reordered attributes won't match
-**GOOD:** \`{"search": "<mxCell id=\\"5\\" parent=\\"1\\" style=\\"...\\" value=\\"Old\\" vertex=\\"1\\">"}\` - Uses unique id with full context
-
-### ⚠️ JSON Escaping (CRITICAL)
-Every double quote inside JSON string values MUST be escaped with backslash:
-- **CORRECT:** \`"x=\\"100\\" y=\\"200\\""\` - both quotes escaped
-- **WRONG:** \`"x=\\"100\\" y="200\\""\` - missing backslash causes JSON parse error!
-
-### Error Recovery
-If edit_diagram fails with "pattern not found":
-1. **First retry**: Check attribute order - copy EXACTLY from current XML
-2. **Second retry**: Expand context - include more surrounding lines
-3. **Third retry**: Try matching on just \`<mxCell id="X"\` prefix + full replacement
-4. **After 3 failures**: Fall back to display_diagram to regenerate entire diagram
+**Error Recovery:**
+If cell_id not found, check "Current diagram XML" for correct IDs. Use display_diagram if major restructuring is needed
 
 
 

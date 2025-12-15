@@ -408,33 +408,37 @@ Notes:
                 }),
             },
             edit_diagram: {
-                description: `Edit specific parts of the current diagram by replacing exact line matches. Use this tool to make targeted fixes without regenerating the entire XML.
-CRITICAL: Copy-paste the EXACT search pattern from the "Current diagram XML" in system context. Do NOT reorder attributes or reformat - the attribute order in draw.io XML varies and you MUST match it exactly.
-IMPORTANT: Keep edits concise:
-- COPY the exact mxCell line from the current XML (attribute order matters!)
-- Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
-- Break large changes into multiple smaller edits
-- Each search must contain complete lines (never truncate mid-line)
-- First match only - be specific enough to target the right element
+                description: `Edit the current diagram by ID-based operations (update/add/delete cells).
 
-⚠️ JSON ESCAPING: Every " inside string values MUST be escaped as \\". Example: x=\\"100\\" y=\\"200\\" - BOTH quotes need backslashes!`,
+Operations:
+- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.
+- add: Add a new cell. Provide cell_id (new unique id) and new_xml.
+- delete: Remove a cell by its id. Only cell_id is needed.
+
+For update/add, new_xml must be a complete mxCell element including mxGeometry.
+
+⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"`,
                 inputSchema: z.object({
-                    edits: z
+                    operations: z
                         .array(
                             z.object({
-                                search: z
+                                type: z
+                                    .enum(["update", "add", "delete"])
+                                    .describe("Operation type"),
+                                cell_id: z
                                     .string()
                                     .describe(
-                                        "EXACT lines copied from current XML (preserve attribute order!)",
+                                        "The id of the mxCell. Must match the id attribute in new_xml.",
                                     ),
-                                replace: z
+                                new_xml: z
                                     .string()
-                                    .describe("Replacement lines"),
+                                    .optional()
+                                    .describe(
+                                        "Complete mxCell XML element (required for update/add)",
+                                    ),
                             }),
                         )
-                        .describe(
-                            "Array of search/replace pairs to apply sequentially",
-                        ),
+                        .describe("Array of operations to apply"),
                 }),
             },
             append_diagram: {
