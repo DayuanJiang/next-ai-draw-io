@@ -23,6 +23,7 @@ interface DiagramContextType {
         format: ExportFormat,
         sessionId?: string,
     ) => void
+    saveDiagramToStorage: () => Promise<void>
     isDrawioReady: boolean
     onDrawioLoad: () => void
     resetDrawioReady: () => void
@@ -79,6 +80,30 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             drawioRef.current.exportDiagram({
                 format: "xmlsvg",
             })
+        }
+    }
+
+    // Save current diagram to localStorage (used before theme/UI changes)
+    const saveDiagramToStorage = async (): Promise<void> => {
+        if (!drawioRef.current) return
+
+        try {
+            const currentXml = await Promise.race([
+                new Promise<string>((resolve) => {
+                    resolverRef.current = resolve
+                    drawioRef.current?.exportDiagram({ format: "xmlsvg" })
+                }),
+                new Promise<string>((_, reject) =>
+                    setTimeout(() => reject(new Error("Export timeout")), 2000),
+                ),
+            ])
+
+            // Only save if diagram has meaningful content (not empty template)
+            if (currentXml && currentXml.length > 300) {
+                localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, currentXml)
+            }
+        } catch (error) {
+            console.error("Failed to save diagram to storage:", error)
         }
     }
 
@@ -280,6 +305,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 handleDiagramExport,
                 clearDiagram,
                 saveDiagramToFile,
+                saveDiagramToStorage,
                 isDrawioReady,
                 onDrawioLoad,
                 resetDrawioReady,

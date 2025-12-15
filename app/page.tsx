@@ -15,8 +15,13 @@ const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        resetDrawioReady,
+        saveDiagramToStorage,
+    } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
@@ -35,12 +40,10 @@ export default function Home() {
 
         const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
         if (savedDarkMode !== null) {
-            // Use saved preference
             const isDark = savedDarkMode === "true"
             setDarkMode(isDark)
             document.documentElement.classList.toggle("dark", isDark)
         } else {
-            // First visit: match browser preference
             const prefersDark = window.matchMedia(
                 "(prefers-color-scheme: dark)",
             ).matches
@@ -58,12 +61,20 @@ export default function Home() {
         setIsLoaded(true)
     }, [])
 
-    const toggleDarkMode = () => {
+    const handleDarkModeChange = async () => {
+        await saveDiagramToStorage()
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
-        // Reset so onDrawioLoad fires again after remount
+        resetDrawioReady()
+    }
+
+    const handleDrawioUiChange = async () => {
+        await saveDiagramToStorage()
+        const newUi = drawioUi === "min" ? "sketch" : "min"
+        localStorage.setItem("drawio-theme", newUi)
+        setDrawioUi(newUi)
         resetDrawioReady()
     }
 
@@ -182,15 +193,9 @@ export default function Home() {
                             isVisible={isChatVisible}
                             onToggleVisibility={toggleChatPanel}
                             drawioUi={drawioUi}
-                            onToggleDrawioUi={() => {
-                                const newUi =
-                                    drawioUi === "min" ? "sketch" : "min"
-                                localStorage.setItem("drawio-theme", newUi)
-                                setDrawioUi(newUi)
-                                resetDrawioReady()
-                            }}
+                            onToggleDrawioUi={handleDrawioUiChange}
                             darkMode={darkMode}
-                            onToggleDarkMode={toggleDarkMode}
+                            onToggleDarkMode={handleDarkModeChange}
                             isMobile={isMobile}
                             onCloseProtectionChange={setCloseProtection}
                         />
