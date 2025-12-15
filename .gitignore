@@ -46,3 +46,4 @@ push-via-ec2.sh
 .dev.vars
 .open-next/
 .wrangler/
+.env*.local
