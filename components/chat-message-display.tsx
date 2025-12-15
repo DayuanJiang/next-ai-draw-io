@@ -10,9 +10,7 @@ import {
     Cpu,
     FileCode,
     FileText,
-    Minus,
     Pencil,
-    Plus,
     RotateCcw,
     ThumbsDown,
     ThumbsUp,
@@ -38,9 +36,10 @@ import {
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
 
-interface EditPair {
-    search: string
-    replace: string
+interface DiagramOperation {
+    type: "update" | "add" | "delete"
+    cell_id: string
+    new_xml?: string
 }
 
 // Tool part interface for type safety
@@ -48,49 +47,44 @@ interface ToolPartLike {
     type: string
     toolCallId: string
     state?: string
-    input?: { xml?: string; edits?: EditPair[] } & Record<string, unknown>
+    input?: {
+        xml?: string
+        operations?: DiagramOperation[]
+    } & Record<string, unknown>
     output?: string
 }
 
-function EditDiffDisplay({ edits }: { edits: EditPair[] }) {
+function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
     return (
         <div className="space-y-3">
-            {edits.map((edit, index) => (
+            {operations.map((op, index) => (
                 <div
-                    key={`${(edit.search || "").slice(0, 50)}-${(edit.replace || "").slice(0, 50)}-${index}`}
+                    key={`${op.type}-${op.cell_id}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
-                        <span className="text-xs font-medium text-muted-foreground">
-                            Change {index + 1}
+                        <span
+                            className={`text-[10px] font-medium uppercase tracking-wide ${
+                                op.type === "delete"
+                                    ? "text-red-600"
+                                    : op.type === "add"
+                                      ? "text-green-600"
+                                      : "text-blue-600"
+                            }`}
+                        >
+                            {op.type}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                            cell_id: {op.cell_id}
                         </span>
                     </div>
-                    <div className="divide-y divide-border/30">
-                        {/* Search (old) */}
+                    {op.new_xml && (
                         <div className="px-3 py-2">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                                <Minus className="w-3 h-3 text-red-500" />
-                                <span className="text-[10px] font-medium text-red-600 uppercase tracking-wide">
-                                    Remove
-                                </span>
-                            </div>
-                            <pre className="text-[11px] font-mono text-red-700 bg-red-50 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
-                                {edit.search}
+                            <pre className="text-[11px] font-mono text-foreground/80 bg-muted/30 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
+                                {op.new_xml}
                             </pre>
                         </div>
-                        {/* Replace (new) */}
-                        <div className="px-3 py-2">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                                <Plus className="w-3 h-3 text-green-500" />
-                                <span className="text-[10px] font-medium text-green-600 uppercase tracking-wide">
-                                    Add
-                                </span>
-                            </div>
-                            <pre className="text-[11px] font-mono text-green-700 bg-green-50 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
-                                {edit.replace}
-                            </pre>
-                        </div>
-                    </div>
+                    )}
                 </div>
             ))}
         </div>
@@ -582,9 +576,9 @@ export function ChatMessageDisplay({
                         {typeof input === "object" && input.xml ? (
                             <CodeBlock code={input.xml} language="xml" />
                         ) : typeof input === "object" &&
-                          input.edits &&
-                          Array.isArray(input.edits) ? (
-                            <EditDiffDisplay edits={input.edits} />
+                          input.operations &&
+                          Array.isArray(input.operations) ? (
+                            <OperationsDisplay operations={input.operations} />
                         ) : typeof input === "object" &&
                           Object.keys(input).length > 0 ? (
                             <CodeBlock
