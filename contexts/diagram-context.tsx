@@ -94,10 +94,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     drawioRef.current?.exportDiagram({ format: "xmlsvg" })
                 }),
                 new Promise<string>((_, reject) =>
-                    setTimeout(
-                        () => reject(new Error("Export timeout")),
-                        10000,
-                    ),
+                    setTimeout(() => reject(new Error("Export timeout")), 2000),
                 ),
             ])
 
