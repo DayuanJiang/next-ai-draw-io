@@ -428,7 +428,7 @@ For update/add, new_xml must be a complete mxCell element including mxGeometry.
                                 cell_id: z
                                     .string()
                                     .describe(
-                                        "The id of the mxCell to modify/delete, or new id for add",
+                                        "The id of the mxCell. Must match the id attribute in new_xml.",
                                     ),
                                 new_xml: z
                                     .string()
