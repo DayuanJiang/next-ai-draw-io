@@ -70,29 +70,41 @@ function isMinimalDiagram(xml: string): boolean {
 
 // Helper function to replace historical tool call XML with placeholders
 // This reduces token usage and forces LLM to rely on the current diagram XML (source of truth)
+// Also fixes invalid/undefined inputs from interrupted streaming
 function replaceHistoricalToolInputs(messages: any[]): any[] {
     return messages.map((msg) => {
         if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
             return msg
         }
-        const replacedContent = msg.content.map((part: any) => {
-            if (part.type === "tool-call") {
-                const toolName = part.toolName
-                if (
-                    toolName === "display_diagram" ||
-                    toolName === "edit_diagram"
-                ) {
-                    return {
-                        ...part,
-                        input: {
-                            placeholder:
-                                "[XML content replaced - see current diagram XML in system context]",
-                        },
+        const replacedContent = msg.content
+            .map((part: any) => {
+                if (part.type === "tool-call") {
+                    const toolName = part.toolName
+                    // Fix invalid/undefined inputs from interrupted streaming
+                    if (
+                        !part.input ||
+                        typeof part.input !== "object" ||
+                        Object.keys(part.input).length === 0
+                    ) {
+                        // Skip tool calls with invalid inputs entirely
+                        return null
+                    }
+                    if (
+                        toolName === "display_diagram" ||
+                        toolName === "edit_diagram"
+                    ) {
+                        return {
+                            ...part,
+                            input: {
+                                placeholder:
+                                    "[XML content replaced - see current diagram XML in system context]",
+                            },
+                        }
                     }
                 }
-            }
-            return part
-        })
+                return part
+            })
+            .filter(Boolean) // Remove null entries (invalid tool calls)
         return { ...msg, content: replacedContent }
     })
 }
@@ -231,6 +243,36 @@ ${userInputText}
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
 
+    // DEBUG: Log incoming messages structure
+    console.log("[route.ts] Incoming messages count:", messages.length)
+    messages.forEach((msg: any, idx: number) => {
+        console.log(
+            `[route.ts] Message ${idx} role:`,
+            msg.role,
+            "parts count:",
+            msg.parts?.length,
+        )
+        if (msg.parts) {
+            msg.parts.forEach((part: any, partIdx: number) => {
+                if (
+                    part.type === "tool-invocation" ||
+                    part.type === "tool-result"
+                ) {
+                    console.log(`[route.ts]   Part ${partIdx}:`, {
+                        type: part.type,
+                        toolName: part.toolName,
+                        hasInput: !!part.input,
+                        inputType: typeof part.input,
+                        inputKeys:
+                            part.input && typeof part.input === "object"
+                                ? Object.keys(part.input)
+                                : null,
+                    })
+                }
+            })
+        }
+    })
+
     // Replace historical tool call XML with placeholders to reduce tokens
     // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
     const enableHistoryReplace =
@@ -245,6 +287,63 @@ ${userInputText}
         (msg: any) =>
             msg.content && Array.isArray(msg.content) && msg.content.length > 0,
     )
+
+    // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
+    // Bedrock API rejects messages where toolUse.input is not a valid JSON object
+    enhancedMessages = enhancedMessages
+        .map((msg: any) => {
+            if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+                return msg
+            }
+            const filteredContent = msg.content.filter((part: any) => {
+                if (part.type === "tool-call") {
+                    // Check if input is a valid object (not null, undefined, or empty)
+                    if (
+                        !part.input ||
+                        typeof part.input !== "object" ||
+                        Object.keys(part.input).length === 0
+                    ) {
+                        console.warn(
+                            `[route.ts] Filtering out tool-call with invalid input:`,
+                            { toolName: part.toolName, input: part.input },
+                        )
+                        return false
+                    }
+                }
+                return true
+            })
+            return { ...msg, content: filteredContent }
+        })
+        .filter((msg: any) => msg.content && msg.content.length > 0)
+
+    // DEBUG: Log modelMessages structure (what's being sent to AI)
+    console.log("[route.ts] Model messages count:", enhancedMessages.length)
+    enhancedMessages.forEach((msg: any, idx: number) => {
+        console.log(
+            `[route.ts] ModelMsg ${idx} role:`,
+            msg.role,
+            "content count:",
+            msg.content?.length,
+        )
+        if (msg.content) {
+            msg.content.forEach((part: any, partIdx: number) => {
+                if (part.type === "tool-call" || part.type === "tool-result") {
+                    console.log(`[route.ts]   Content ${partIdx}:`, {
+                        type: part.type,
+                        toolName: part.toolName,
+                        hasInput: !!part.input,
+                        inputType: typeof part.input,
+                        inputValue:
+                            part.input === undefined
+                                ? "undefined"
+                                : part.input === null
+                                  ? "null"
+                                  : "object",
+                    })
+                }
+            })
+        }
+    })
 
     // Update the last message with user input only (XML moved to separate cached system message)
     if (enhancedMessages.length >= 1) {
@@ -327,14 +426,30 @@ ${userInputText}
         stopWhen: stepCountIs(5),
         // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
         experimental_repairToolCall: async ({ toolCall, error }) => {
+            // DEBUG: Log what we're trying to repair
+            console.log(`[repairToolCall] Tool: ${toolCall.toolName}`)
+            console.log(
+                `[repairToolCall] Error: ${error.name} - ${error.message}`,
+            )
+            console.log(`[repairToolCall] Input type: ${typeof toolCall.input}`)
+            console.log(`[repairToolCall] Input value:`, toolCall.input)
+
             // Only attempt repair for invalid tool input (broken JSON from truncation)
             if (
                 error instanceof InvalidToolInputError ||
                 error.name === "AI_InvalidToolInputError"
             ) {
                 try {
+                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
+                    let inputToRepair = toolCall.input
+                    if (typeof inputToRepair === "string") {
+                        // Fix `:=` instead of `: ` (LLM sometimes generates this)
+                        inputToRepair = inputToRepair.replace(/:=/g, ": ")
+                        // Fix `= "` instead of `: "`
+                        inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
+                    }
                     // Use jsonrepair to fix truncated JSON
-                    const repairedInput = jsonrepair(toolCall.input)
+                    const repairedInput = jsonrepair(inputToRepair)
                     console.log(
                         `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
                     )
@@ -344,6 +459,26 @@ ${userInputText}
                         `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
                         repairError,
                     )
+                    // Return a placeholder input to avoid API errors in multi-step
+                    // The tool will fail gracefully on client side
+                    if (toolCall.toolName === "edit_diagram") {
+                        return {
+                            ...toolCall,
+                            input: {
+                                operations: [],
+                                _error: "JSON repair failed - no operations to apply",
+                            },
+                        }
+                    }
+                    if (toolCall.toolName === "display_diagram") {
+                        return {
+                            ...toolCall,
+                            input: {
+                                xml: "",
+                                _error: "JSON repair failed - empty diagram",
+                            },
+                        }
+                    }
                     return null
                 }
             }
