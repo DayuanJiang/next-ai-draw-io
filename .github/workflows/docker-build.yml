@@ -80,8 +80,11 @@ jobs:
 
       - name: Push to ECR (triggers App Runner auto-deploy)
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          REPO_LOWER: ${{ github.repository }}
         run: |
-          docker pull ghcr.io/${{ github.repository }}:latest
-          docker tag ghcr.io/${{ github.repository }}:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/next-ai-draw-io:latest
+          REPO_LOWER=$(echo "$REPO_LOWER" | tr '[:upper:]' '[:lower:]')
+          docker pull ghcr.io/${REPO_LOWER}:latest
+          docker tag ghcr.io/${REPO_LOWER}:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/next-ai-draw-io:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/next-ai-draw-io:latest
 
