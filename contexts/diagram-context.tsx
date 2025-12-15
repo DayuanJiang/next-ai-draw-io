@@ -86,20 +86,16 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         chart: string,
         skipValidation?: boolean,
     ): string | null => {
-        console.time("perf:loadDiagram")
         let xmlToLoad = chart
 
         // Validate XML structure before loading (unless skipped for internal use)
         if (!skipValidation) {
-            console.time("perf:loadDiagram-validation")
             const validation = validateAndFixXml(chart)
-            console.timeEnd("perf:loadDiagram-validation")
             if (!validation.valid) {
                 console.warn(
                     "[loadDiagram] Validation error:",
                     validation.error,
                 )
-                console.timeEnd("perf:loadDiagram")
                 return validation.error
             }
             // Use fixed XML if auto-fix was applied
@@ -116,14 +112,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setChartXML(xmlToLoad)
 
         if (drawioRef.current) {
-            console.time("perf:drawio-iframe-load")
             drawioRef.current.load({
                 xml: xmlToLoad,
             })
-            console.timeEnd("perf:drawio-iframe-load")
         }
 
-        console.timeEnd("perf:loadDiagram")
         return null
     }
 

@@ -202,6 +202,10 @@ export default function ChatPanel({
     // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
     const processedToolCallsRef = useRef<Set<string>>(new Set())
 
+    // Store original XML for edit_diagram streaming - shared between streaming preview and tool handler
+    // Key: toolCallId, Value: original XML before any operations applied
+    const editDiagramOriginalXmlRef = useRef<Map<string, string>>(new Map())
+
     // Debounce timeout for localStorage writes (prevents blocking during streaming)
     const localStorageDebounceRef = useRef<ReturnType<
         typeof setTimeout
@@ -333,13 +337,22 @@ ${finalXml}
 
                 let currentXml = ""
                 try {
-                    // Use chartXML from ref directly - more reliable than export
-                    const cachedXML = chartXMLRef.current
-                    if (cachedXML) {
-                        currentXml = cachedXML
+                    // Use the original XML captured during streaming (shared with chat-message-display)
+                    // This ensures we apply operations to the same base XML that streaming used
+                    const originalXml = editDiagramOriginalXmlRef.current.get(
+                        toolCall.toolCallId,
+                    )
+                    if (originalXml) {
+                        currentXml = originalXml
                     } else {
-                        // Fallback to export only if no cached XML
-                        currentXml = await onFetchChart(false)
+                        // Fallback: use chartXML from ref if streaming didn't capture original
+                        const cachedXML = chartXMLRef.current
+                        if (cachedXML) {
+                            currentXml = cachedXML
+                        } else {
+                            // Last resort: export from iframe
+                            currentXml = await onFetchChart(false)
+                        }
                     }
 
                     const { applyDiagramOperations } = await import(
@@ -370,6 +383,10 @@ ${currentXml}
 
 Please check the cell IDs and retry.`,
                         })
+                        // Clean up the shared original XML ref
+                        editDiagramOriginalXmlRef.current.delete(
+                            toolCall.toolCallId,
+                        )
                         return
                     }
 
@@ -393,6 +410,10 @@ ${currentXml}
 
 Please fix the operations to avoid structural issues.`,
                         })
+                        // Clean up the shared original XML ref
+                        editDiagramOriginalXmlRef.current.delete(
+                            toolCall.toolCallId,
+                        )
                         return
                     }
                     onExport()
@@ -401,6 +422,10 @@ Please fix the operations to avoid structural issues.`,
                         toolCallId: toolCall.toolCallId,
                         output: `Successfully applied ${operations.length} operation(s) to the diagram.`,
                     })
+                    // Clean up the shared original XML ref
+                    editDiagramOriginalXmlRef.current.delete(
+                        toolCall.toolCallId,
+                    )
                 } catch (error) {
                     console.error("[edit_diagram] Failed:", error)
 
@@ -420,6 +445,10 @@ ${currentXml || "No XML available"}
 
 Please check cell IDs and retry, or use display_diagram to regenerate.`,
                     })
+                    // Clean up the shared original XML ref even on error
+                    editDiagramOriginalXmlRef.current.delete(
+                        toolCall.toolCallId,
+                    )
                 }
             } else if (toolCall.toolName === "append_diagram") {
                 const { xml } = toolCall.input as { xml: string }
@@ -508,6 +537,32 @@ Continue from EXACTLY where you stopped.`,
             // Silence access code error in console since it's handled by UI
             if (!error.message.includes("Invalid or missing access code")) {
                 console.error("Chat error:", error)
+                // Debug: Log messages structure when error occurs
+                console.log("[onError] messages count:", messages.length)
+                messages.forEach((msg, idx) => {
+                    console.log(`[onError] Message ${idx}:`, {
+                        role: msg.role,
+                        partsCount: msg.parts?.length,
+                    })
+                    if (msg.parts) {
+                        msg.parts.forEach((part: any, partIdx: number) => {
+                            console.log(
+                                `[onError]   Part ${partIdx}:`,
+                                JSON.stringify({
+                                    type: part.type,
+                                    toolName: part.toolName,
+                                    hasInput: !!part.input,
+                                    inputType: typeof part.input,
+                                    inputKeys:
+                                        part.input &&
+                                        typeof part.input === "object"
+                                            ? Object.keys(part.input)
+                                            : null,
+                                }),
+                            )
+                        })
+                    }
+                })
             }
 
             // Translate technical errors into user-friendly messages
@@ -723,12 +778,10 @@ Continue from EXACTLY where you stopped.`,
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(() => {
             try {
-                console.time("perf:localStorage-messages")
                 localStorage.setItem(
                     STORAGE_MESSAGES_KEY,
                     JSON.stringify(messages),
                 )
-                console.timeEnd("perf:localStorage-messages")
             } catch (error) {
                 console.error("Failed to save messages to localStorage:", error)
             }
@@ -754,9 +807,7 @@ Continue from EXACTLY where you stopped.`,
 
         // Debounce: save after 1 second of no changes
         xmlStorageDebounceRef.current = setTimeout(() => {
-            console.time("perf:localStorage-xml")
             localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
-            console.timeEnd("perf:localStorage-xml")
         }, LOCAL_STORAGE_DEBOUNCE_MS)
 
         return () => {
@@ -769,13 +820,11 @@ Continue from EXACTLY where you stopped.`,
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
         try {
-            console.time("perf:localStorage-snapshots")
             const snapshotsArray = Array.from(xmlSnapshotsRef.current.entries())
             localStorage.setItem(
                 STORAGE_XML_SNAPSHOTS_KEY,
                 JSON.stringify(snapshotsArray),
             )
-            console.timeEnd("perf:localStorage-snapshots")
         } catch (error) {
             console.error(
                 "Failed to save XML snapshots to localStorage:",
@@ -1326,6 +1375,7 @@ Continue from EXACTLY where you stopped.`,
                     setInput={setInput}
                     setFiles={handleFileChange}
                     processedToolCallsRef={processedToolCallsRef}
+                    editDiagramOriginalXmlRef={editDiagramOriginalXmlRef}
                     sessionId={sessionId}
                     onRegenerate={handleRegenerate}
                     status={status}
