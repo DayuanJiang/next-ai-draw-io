@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="draw-io-mcp" version="22.0.0" type="device">
+  <diagram name="Mind Map" id="mindmap-template">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="800" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <!-- Central Topic -->
+        <mxCell id="central" value="Main Topic" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=16;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="320" y="240" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <!-- Branch 1: Top Right -->
+        <mxCell id="branch1" value="Branch 1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="520" y="100" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b1" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="central" target="branch1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 1 Sub-items -->
+        <mxCell id="b1_sub1" value="Sub-topic 1.1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="60" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b1_sub1" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#82b366;" edge="1" parent="1" source="branch1" target="b1_sub1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="b1_sub2" value="Sub-topic 1.2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="120" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b1_sub2" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#82b366;" edge="1" parent="1" source="branch1" target="b1_sub2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 2: Bottom Right -->
+        <mxCell id="branch2" value="Branch 2" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="520" y="380" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b2" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=2;strokeColor=#d79b00;" edge="1" parent="1" source="central" target="branch2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 2 Sub-items -->
+        <mxCell id="b2_sub1" value="Sub-topic 2.1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="360" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b2_sub1" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#d79b00;" edge="1" parent="1" source="branch2" target="b2_sub1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="b2_sub2" value="Sub-topic 2.2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="420" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b2_sub2" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#d79b00;" edge="1" parent="1" source="branch2" target="b2_sub2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 3: Top Left -->
+        <mxCell id="branch3" value="Branch 3" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="160" y="100" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b3" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=2;strokeColor=#9673a6;" edge="1" parent="1" source="central" target="branch3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 3 Sub-items -->
+        <mxCell id="b3_sub1" value="Sub-topic 3.1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="60" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b3_sub1" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#9673a6;" edge="1" parent="1" source="branch3" target="b3_sub1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="b3_sub2" value="Sub-topic 3.2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="120" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b3_sub2" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#9673a6;" edge="1" parent="1" source="branch3" target="b3_sub2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 4: Bottom Left -->
+        <mxCell id="branch4" value="Branch 4" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="160" y="380" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b4" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="1" source="central" target="branch4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 4 Sub-items -->
+        <mxCell id="b4_sub1" value="Sub-topic 4.1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="360" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b4_sub1" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#b85450;" edge="1" parent="1" source="branch4" target="b4_sub1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="b4_sub2" value="Sub-topic 4.2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="420" width="90" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b4_sub2" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=1;strokeColor=#b85450;" edge="1" parent="1" source="branch4" target="b4_sub2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 5: Left -->
+        <mxCell id="branch5" value="Branch 5" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="240" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b5" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=2;strokeColor=#d6b656;" edge="1" parent="1" source="central" target="branch5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Branch 6: Right -->
+        <mxCell id="branch6" value="Branch 6" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="600" y="240" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="conn_b6" style="edgeStyle=none;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="central" target="branch6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

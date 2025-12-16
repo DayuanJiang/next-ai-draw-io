@@ -1,0 +1,67 @@
+{
+  "name": "drawio-diagram-mcp",
+  "version": "0.2.0",
+  "description": "MCP server for draw.io diagram generation, editing, and export - collaborative architecture for AI assistants",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "drawio-diagram-mcp": "./bin/draw-io-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "biome lint .",
+    "format": "biome check --write .",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anthropics/draw-io-mcp.git",
+    "directory": "mcp-server"
+  },
+  "homepage": "https://github.com/anthropics/draw-io-mcp/tree/main/mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/anthropics/draw-io-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "draw.io",
+    "drawio",
+    "diagrams",
+    "flowchart",
+    "claude",
+    "ai",
+    "xml",
+    "export",
+    "png",
+    "svg"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@xmldom/xmldom": "^0.9.8",
+    "pako": "^2.1.0",
+    "puppeteer": "^24.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.8",
+    "@types/node": "^20",
+    "@types/pako": "^2.0.3",
+    "tsx": "^4.0.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ]
+}

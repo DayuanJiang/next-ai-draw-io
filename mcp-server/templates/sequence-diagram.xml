@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="draw-io-mcp" version="22.0.0" type="device">
+  <diagram name="Sequence Diagram" id="sequence-diagram-template">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="800" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <!-- Actor 1: User -->
+        <mxCell id="actor1" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="40" width="30" height="60" as="geometry"/>
+        </mxCell>
+        <!-- Actor 1 Lifeline -->
+        <mxCell id="lifeline1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;dashed=1;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="114" y="100" width="1" height="380" as="geometry"/>
+        </mxCell>
+        <!-- Actor 2: Client -->
+        <mxCell id="actor2" value="Client" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="40" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <!-- Actor 2 Lifeline -->
+        <mxCell id="lifeline2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;dashed=1;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="279" y="80" width="1" height="400" as="geometry"/>
+        </mxCell>
+        <!-- Actor 3: Server -->
+        <mxCell id="actor3" value="Server" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="40" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <!-- Actor 3 Lifeline -->
+        <mxCell id="lifeline3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;dashed=1;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="439" y="80" width="1" height="400" as="geometry"/>
+        </mxCell>
+        <!-- Actor 4: Database -->
+        <mxCell id="actor4" value="Database" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="30" width="60" height="60" as="geometry"/>
+        </mxCell>
+        <!-- Actor 4 Lifeline -->
+        <mxCell id="lifeline4" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;dashed=1;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="589" y="90" width="1" height="390" as="geometry"/>
+        </mxCell>
+        <!-- Message 1: User to Client -->
+        <mxCell id="msg1" value="1. Request" style="html=1;verticalAlign=bottom;endArrow=classic;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="115" y="140" as="sourcePoint"/>
+            <mxPoint x="279" y="140" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Activation Box on Client -->
+        <mxCell id="activation1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="274" y="140" width="10" height="180" as="geometry"/>
+        </mxCell>
+        <!-- Message 2: Client to Server -->
+        <mxCell id="msg2" value="2. API Call" style="html=1;verticalAlign=bottom;endArrow=classic;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="284" y="180" as="sourcePoint"/>
+            <mxPoint x="439" y="180" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Activation Box on Server -->
+        <mxCell id="activation2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="434" y="180" width="10" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Message 3: Server to Database -->
+        <mxCell id="msg3" value="3. Query" style="html=1;verticalAlign=bottom;endArrow=classic;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="444" y="220" as="sourcePoint"/>
+            <mxPoint x="589" y="220" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Activation Box on Database -->
+        <mxCell id="activation3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="584" y="220" width="10" height="40" as="geometry"/>
+        </mxCell>
+        <!-- Message 4: Database to Server (return) -->
+        <mxCell id="msg4" value="4. Result" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="584" y="260" as="sourcePoint"/>
+            <mxPoint x="444" y="260" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Message 5: Server to Client (return) -->
+        <mxCell id="msg5" value="5. Response" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="434" y="280" as="sourcePoint"/>
+            <mxPoint x="284" y="280" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <!-- Message 6: Client to User (return) -->
+        <mxCell id="msg6" value="6. Display" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="274" y="320" as="sourcePoint"/>
+            <mxPoint x="115" y="320" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

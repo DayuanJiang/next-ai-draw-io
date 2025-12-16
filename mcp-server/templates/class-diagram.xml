@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="draw-io-mcp" version="22.0.0" type="device">
+  <diagram name="Class Diagram" id="class-diagram-template">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="800" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <!-- Interface: IVehicle -->
+        <mxCell id="interface_vehicle" value="&lt;&lt;interface&gt;&gt;&#xa;IVehicle" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="280" y="40" width="200" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="interface_vehicle_attrs" value="" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="interface_vehicle">
+          <mxGeometry y="40" width="200" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="interface_vehicle_sep" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="interface_vehicle">
+          <mxGeometry y="66" width="200" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="interface_vehicle_methods" value="+ start(): void&#xa;+ stop(): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="interface_vehicle">
+          <mxGeometry y="74" width="200" height="36" as="geometry"/>
+        </mxCell>
+        <!-- Abstract Class: Vehicle -->
+        <mxCell id="abstract_vehicle" value="&lt;&lt;abstract&gt;&gt;&#xa;Vehicle" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="280" y="200" width="200" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="abstract_vehicle_attrs" value="# brand: String&#xa;# model: String&#xa;# year: int" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="abstract_vehicle">
+          <mxGeometry y="40" width="200" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="abstract_vehicle_sep" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="abstract_vehicle">
+          <mxGeometry y="92" width="200" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="abstract_vehicle_methods" value="+ getInfo(): String&#xa;+ abstract calculateCost(): double" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontStyle=2;" vertex="1" parent="abstract_vehicle">
+          <mxGeometry y="100" width="200" height="40" as="geometry"/>
+        </mxCell>
+        <!-- Class: Car -->
+        <mxCell id="class_car" value="Car" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="80" y="400" width="180" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_car_attrs" value="- numDoors: int&#xa;- fuelType: String&#xa;- transmission: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_car">
+          <mxGeometry y="26" width="180" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_car_sep" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="class_car">
+          <mxGeometry y="78" width="180" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_car_methods" value="+ start(): void&#xa;+ stop(): void&#xa;+ calculateCost(): double" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_car">
+          <mxGeometry y="86" width="180" height="54" as="geometry"/>
+        </mxCell>
+        <!-- Class: Motorcycle -->
+        <mxCell id="class_motorcycle" value="Motorcycle" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="300" y="400" width="180" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_motorcycle_attrs" value="- engineCC: int&#xa;- hasSidecar: boolean" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_motorcycle">
+          <mxGeometry y="26" width="180" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_motorcycle_sep" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="class_motorcycle">
+          <mxGeometry y="66" width="180" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_motorcycle_methods" value="+ start(): void&#xa;+ stop(): void&#xa;+ calculateCost(): double&#xa;+ wheelie(): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_motorcycle">
+          <mxGeometry y="74" width="180" height="66" as="geometry"/>
+        </mxCell>
+        <!-- Class: Truck -->
+        <mxCell id="class_truck" value="Truck" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="400" width="180" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_truck_attrs" value="- payloadCapacity: double&#xa;- numAxles: int" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_truck">
+          <mxGeometry y="26" width="180" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_truck_sep" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="class_truck">
+          <mxGeometry y="66" width="180" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_truck_methods" value="+ start(): void&#xa;+ stop(): void&#xa;+ calculateCost(): double&#xa;+ loadCargo(): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_truck">
+          <mxGeometry y="74" width="180" height="66" as="geometry"/>
+        </mxCell>
+        <!-- Class: Engine (Composition) -->
+        <mxCell id="class_engine" value="Engine" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="560" y="200" width="160" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_engine_attrs" value="- horsepower: int&#xa;- type: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_engine">
+          <mxGeometry y="26" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_engine_sep" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="class_engine">
+          <mxGeometry y="66" width="160" height="8" as="geometry"/>
+        </mxCell>
+        <mxCell id="class_engine_methods" value="+ run(): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;" vertex="1" parent="class_engine">
+          <mxGeometry y="74" width="160" height="26" as="geometry"/>
+        </mxCell>
+        <!-- Implements Arrow (Interface to Abstract) -->
+        <mxCell id="implements_arrow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="interface_vehicle" target="abstract_vehicle">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Inheritance Arrows -->
+        <mxCell id="extends_car" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="class_car" target="abstract_vehicle">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="extends_motorcycle" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="class_motorcycle" target="abstract_vehicle">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="extends_truck" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="class_truck" target="abstract_vehicle">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Composition Arrow (Vehicle to Engine) -->
+        <mxCell id="composition_engine" value="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=diamondThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="abstract_vehicle" target="class_engine">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="draw-io-mcp" version="22.0.0" type="device">
+  <diagram name="Flowchart" id="flowchart-template">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="800" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <!-- Start Node -->
+        <mxCell id="start" value="Start" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <!-- Process Step 1 -->
+        <mxCell id="step1" value="Process Step 1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="340" y="120" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <!-- Arrow from Start to Step 1 -->
+        <mxCell id="arrow1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="start" target="step1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Decision Diamond -->
+        <mxCell id="decision1" value="Condition?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="330" y="220" width="140" height="80" as="geometry"/>
+        </mxCell>
+        <!-- Arrow from Step 1 to Decision -->
+        <mxCell id="arrow2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="step1" target="decision1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Process Step 2 (Yes branch) -->
+        <mxCell id="step2" value="Process Step 2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="340" y="340" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <!-- Yes Arrow -->
+        <mxCell id="arrow3" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="decision1" target="step2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Process Step 3 (No branch) -->
+        <mxCell id="step3" value="Alternative Step" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="520" y="230" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <!-- No Arrow -->
+        <mxCell id="arrow4" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="decision1" target="step3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- End Node -->
+        <mxCell id="end" value="End" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="440" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <!-- Arrow from Step 2 to End -->
+        <mxCell id="arrow5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="step2" target="end">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- Arrow from Step 3 to End -->
+        <mxCell id="arrow6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="step3" target="end">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="460"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
