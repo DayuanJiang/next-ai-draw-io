@@ -136,6 +136,23 @@ Optional custom URL:
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
+### Vercel AI Gateway
+
+Vercel AI Gateway provides unified access to multiple AI providers through a single API key. This simplifies authentication and allows you to switch between providers without managing multiple API keys.
+
+```bash
+AI_GATEWAY_API_KEY=your_gateway_api_key
+AI_MODEL=openai/gpt-4o
+```
+
+Model format uses `provider/model` syntax:
+
+-   `openai/gpt-4o` - OpenAI GPT-4o
+-   `anthropic/claude-sonnet-4-5` - Anthropic Claude Sonnet 4.5
+-   `google/gemini-2.0-flash` - Google Gemini 2.0 Flash
+
+Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
@@ -143,7 +160,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, azure, bedrock, openrouter, ollama
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, azure, bedrock, openrouter, ollama, gateway
 ```
 
 ## Model Capability Requirements
