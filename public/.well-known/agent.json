@@ -1,0 +1,37 @@
+{
+    "name": "AI Draw.io Agent",
+    "description": "An AI-powered diagram generation agent that creates draw.io diagrams from natural language descriptions.",
+    "url": "http://localhost:6002",
+    "version": "1.0.0",
+    "capabilities": {
+        "streaming": true,
+        "pushNotifications": false,
+        "stateTransitionHistory": true
+    },
+    "skills": [
+        {
+            "id": "generate-diagram",
+            "name": "Generate Diagram",
+            "description": "Generate a draw.io diagram from a text description. Supports flowcharts, architecture diagrams, sequence diagrams, and more.",
+            "inputModes": ["text"],
+            "outputModes": ["text", "data"],
+            "examples": [
+                "Draw a simple flowchart with start, process, and end",
+                "Create an AWS architecture diagram with EC2, RDS, and S3",
+                "Draw a transformer architecture with animated connectors"
+            ]
+        },
+        {
+            "id": "edit-diagram",
+            "name": "Edit Diagram",
+            "description": "Edit an existing draw.io diagram based on instructions.",
+            "inputModes": ["text", "data"],
+            "outputModes": ["text", "data"]
+        }
+    ],
+    "authentication": {
+        "schemes": ["none"]
+    },
+    "defaultInputModes": ["text"],
+    "defaultOutputModes": ["text", "data"]
+}
