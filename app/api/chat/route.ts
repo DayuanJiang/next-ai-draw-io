@@ -139,56 +139,144 @@ function createCachedStreamResponse(xml: string): Response {
     return createUIMessageStreamResponse({ stream })
 }
 
-const tools = {
-    // Client-side tool that will be executed on the client
-    display_diagram: {
-        description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.\n\nVALIDATION RULES (XML will be rejected if violated):\n1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)\n2. Do NOT include root cells (id="0" or id="1") - they are added automatically\n3. All mxCell elements must be siblings - never nested\n4. Every mxCell needs a unique id (start from "2")\n5. Every mxCell needs a valid parent attribute (use "1" for top-level)\n6. Escape special chars in values: &lt; &gt; &amp; &quot;\n\nExample (generate ONLY this - no wrapper tags):\n<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">\n<mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>\n</mxCell>\n<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">\n<mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>\n</mxCell>\n<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">\n<mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>\n</mxCell>\n<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">\n<mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>\n</mxCell>\n<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">\n<mxGeometry relative="1" as="geometry"/>\n</mxCell>\n\nNotes:\n- For AWS diagrams, use **AWS 2025 icons**.\n- For animated connectors, add "flowAnimation=1" to edge style.\n`,
-        inputSchema: z.object({
-            xml: z
-                .string()
-                .describe("XML string to be displayed on draw.io"),
-        }),
-    },
-    edit_diagram: {
-        description: `Edit the current diagram by ID-based operations (update/add/delete cells).\n\nOperations:\n- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n- add: Add a new cell. Provide cell_id (new unique id) and new_xml.\n- delete: Remove a cell by its id. Only cell_id is needed.\n\nFor update/add, new_xml must be a complete mxCell element including mxGeometry.\n\n⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\\"5\\\" value=\\\"Label\\\"`,
-        inputSchema: z.object({
-            operations: z
-                .array(
-                    z.object({
-                        type: z
-                            .enum(["update", "add", "delete"])
-                            .describe("Operation type"),
-                        cell_id: z
-                            .string()
-                            .describe(
-                                "The id of the mxCell. Must match the id attribute in new_xml.",
-                            ),
-                        new_xml: z
-                            .string()
-                            .optional()
-                            .describe(
-                                "Complete mxCell XML element (required for update/add)",
-                            ),
-                    }),
-                )
-                .describe("Array of operations to apply"),
-        }),
-    },
-    append_diagram: {
-        description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.\n\nWHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).\n\nCRITICAL INSTRUCTIONS:\n1. Do NOT include any wrapper tags - just continue the mxCell elements\n2. Continue from EXACTLY where your previous output stopped\n3. Complete the remaining mxCell elements\n4. If still truncated, call append_diagram again with the next fragment\n\nExample: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
-        inputSchema: z.object({
-            xml: z
-                .string()
-                .describe(
-                    "Continuation XML fragment to append (NO wrapper tags)",
-                ),
-        }),
-    },
-}
+    const allMessages = [...systemMessages, ...enhancedMessages]
 
+    const tools = {
+        // Client-side tool that will be executed on the client
+        display_diagram: {
+            description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.\n\nVALIDATION RULES (XML will be rejected if violated):\n1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)\n2. Do NOT include root cells (id="0" or id="1") - they are added automatically\n3. All mxCell elements must be siblings - never nested\n4. Every mxCell needs a unique id (start from "2")\n5. Every mxCell needs a valid parent attribute (use "1" for top-level)\n6. Escape special chars in values: &lt; &gt; &amp; &quot;\n\nExample (generate ONLY this - no wrapper tags):\n<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">\n<mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>\n</mxCell>\n<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">\n<mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>\n</mxCell>\n<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">\n<mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>\n</mxCell>\n<mxCell id="step2" value="Step 1" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">\n<mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>\n</mxCell>\n<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">\n<mxGeometry relative="1" as="geometry"/>\n</mxCell>\n\nNotes:\n- For AWS diagrams, use **AWS 2025 icons**.\n- For animated connectors, add "flowAnimation=1" to edge style.\n`,
+            inputSchema: z.object({
+                xml: z
+                    .string()
+                    .describe("XML string to be displayed on draw.io"),
+            }),
+        },
+        edit_diagram: {
+            description: `Edit the current diagram by ID-based operations (update/add/delete cells).\n\nOperations:\n- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n- add: Add a new cell. Provide cell_id (new unique id) and new_xml.\n- delete: Remove a cell by its id. Only cell_id is needed.\n\nFor update/add, new_xml must be a complete mxCell element including mxGeometry.\n\n⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\\"5\\\" value=\\\"Label\\\"`,
+            inputSchema: z.object({
+                operations: z
+                    .array(
+                        z.object({
+                            type: z
+                                .enum(["update", "add", "delete"])
+                                .describe("Operation type"),
+                            cell_id: z
+                                .string()
+                                .describe(
+                                    "The id of the mxCell. Must match the id attribute in new_xml.",
+                                ),
+                            new_xml: z
+                                .string()
+                                .optional()
+                                .describe(
+                                    "Complete mxCell XML element (required for update/add)",
+                                ),
+                        }),
+                    )
+                    .describe("Array of operations to apply"),
+            }),
+        },
+        append_diagram: {
+            description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.\n\nWHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).\n\nCRITICAL INSTRUCTIONS:\n1. Do NOT include any wrapper tags - just continue the mxCell elements\n2. Continue from EXACTLY where your previous output stopped\n3. Complete the remaining mxCell elements\n4. If still truncated, call append_diagram again with the next fragment\n\nExample: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
+            inputSchema: z.object({
+                xml: z
+                    .string()
+                    .describe(
+                        "Continuation XML fragment to append (NO wrapper tags)",
+                    ),
+            }),
+        },
+    }
 
-// Inner handler function
-async function handleChatRequest(req: Request): Promise<Response> {
+    const result = streamText({
+        model,
+        ...(process.env.MAX_OUTPUT_TOKENS && {
+            maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
+        }),
+        stopWhen: stepCountIs(5),
+        // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
+        experimental_repairToolCall: async ({ toolCall, error }) => {
+            // DEBUG: Log what we're trying to repair
+            console.log(`[repairToolCall] Tool: ${toolCall.toolName}`)
+            console.log(
+                `[repairToolCall] Error: ${error.name} - ${error.message}`,
+            )
+            console.log(`[repairToolCall] Input type: ${typeof toolCall.input}`)
+            console.log(`[repairToolCall] Input value:`, toolCall.input)
+
+            // Only attempt repair for invalid tool input (broken JSON from truncation)
+            if (
+                error instanceof InvalidToolInputError ||
+                error.name === "AI_InvalidToolInputError"
+            ) {
+                try {
+                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
+                    let inputToRepair = toolCall.input
+                    if (typeof inputToRepair === "string") {
+                        // Fix `:=` instead of `: ` (LLM sometimes generates this)
+                        inputToRepair = inputToRepair.replace(/:=/g, ": ")
+                        // Fix `= "` instead of `: "`
+                        inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
+                    }
+                    // Use jsonrepair to fix truncated JSON
+                    const repairedInput = jsonrepair(inputToRepair)
+                    console.log(
+                        `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
+                    )
+                    return { ...toolCall, input: repairedInput }
+                } catch (repairError) {
+                    console.warn(
+                        `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
+                        repairError,
+                    )
+                    // Return a placeholder input to avoid API errors in multi-step
+                    // The tool will fail gracefully on client side
+                    if (toolCall.toolName === "edit_diagram") {
+                        return {
+                            ...toolCall,
+                            input: {
+                                operations: [],
+                                _error: "JSON repair failed - no operations to apply",
+                            },
+                        }
+                    }
+                    if (toolCall.toolName === "display_diagram") {
+                        return {
+                            ...toolCall,
+                            input: {
+                                xml: "",
+                                _error: "JSON repair failed - empty diagram",
+                            },
+                        }
+                    }
+                    return null
+                }
+            }
+            // Don't attempt to repair other errors (like NoSuchToolError)
+            return null
+        },
+        messages: allMessages,
+        tools,
+        ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
+        ...(headers && { headers }),
+        // Langfuse telemetry config (returns undefined if not configured)
+        ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
+            experimental_telemetry: getTelemetryConfig({
+                sessionId: validSessionId,
+                userId,
+            }),
+        }),
+        onFinish: ({ text, usage }) => {
+            // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
+            setTraceOutput(text, {
+                promptTokens: usage?.inputTokens,
+                completionTokens: usage?.outputTokens,
+            })
+        },
+        ...(process.env.TEMPERATURE !== undefined && {
+            temperature: parseFloat(process.env.TEMPERATURE),
+        }),
+    })
     // Check for access code
     const accessCodes =
         process.env.ACCESS_CODE_LIST?.split(",")
