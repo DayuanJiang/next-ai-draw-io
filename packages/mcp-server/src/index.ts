@@ -57,7 +57,7 @@ let currentSession: {
 // Create MCP server
 const server = new McpServer({
     name: "next-ai-drawio",
-    version: "0.1.1",
+    version: "0.1.2",
 })
 
 // Register prompt with workflow guidance
