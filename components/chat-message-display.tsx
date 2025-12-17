@@ -327,7 +327,7 @@ export function ChatMessageDisplay({
                     // Next.js dev mode error overlay for expected streaming states
                     // (partial XML during streaming is normal and will be fixed by subsequent updates)
                     if (showToast) {
-                        // Only log as error and show toast if this is the final XML
+                        // Only log as error and show toast if this is the final output
                         console.error(
                             "[ChatMessageDisplay] Malformed XML detected in final output",
                         )
@@ -731,6 +731,9 @@ export function ChatMessageDisplay({
             </div>
         )
     }
+
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
+    const isLastMessageFromAssistant = lastMessage?.role === 'assistant'
 
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
