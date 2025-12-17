@@ -1,0 +1,55 @@
+{
+    "name": "@next-ai-drawio/mcp-server",
+    "version": "0.1.2",
+    "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
+    "type": "module",
+    "main": "dist/index.js",
+    "bin": {
+        "next-ai-drawio-mcp": "./dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsx watch src/index.ts",
+        "start": "node dist/index.js",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "mcp",
+        "drawio",
+        "diagram",
+        "ai",
+        "claude",
+        "model-context-protocol"
+    ],
+    "author": "Biki-dev",
+    "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Biki-dev/next-ai-draw-io",
+        "directory": "packages/mcp-server"
+    },
+    "homepage": "https://next-ai-drawio.jiang.jp",
+    "bugs": {
+        "url": "https://github.com/Biki-dev/next-ai-draw-io/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.0.4",
+        "linkedom": "^0.18.0",
+        "open": "^10.1.0",
+        "zod": "^3.24.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "tsx": "^4.19.0",
+        "typescript": "^5"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "files": [
+        "dist"
+    ]
+}
