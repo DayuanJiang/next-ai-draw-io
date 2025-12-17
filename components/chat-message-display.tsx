@@ -1254,6 +1254,16 @@ export function ChatMessageDisplay({
                                             )
                                         })()
                                     )}
+                                    {/* UX Improvement: Show a "Generating diagram..." indicator during streaming pauses */}
+                                    {isLastAssistantMessage &&
+                                        status === "streaming" &&
+                                        getMessageTextContent(message).trim() ===
+                                            "" && (
+                                            <div className="mt-3 flex items-center gap-2 text-muted-foreground text-xs px-4">
+                                                <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                <span>Generating diagram...</span>
+                                            </div>
+                                        )}
                                     {/* Action buttons for assistant messages */}
                                     {message.role === "assistant" && (
                                         <div className="flex items-center gap-1 mt-2">
