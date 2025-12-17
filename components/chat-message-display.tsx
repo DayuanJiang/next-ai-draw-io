@@ -732,6 +732,9 @@ export function ChatMessageDisplay({
         )
     }
 
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
+    const isLastMessageFromAssistant = lastMessage?.role === 'assistant'
+
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
             {messages.length === 0 ? (
@@ -1355,6 +1358,20 @@ export function ChatMessageDisplay({
                             </div>
                         )
                     })}
+
+                    {/* UX Improvement: Show a "Generating diagram..." indicator during streaming pauses */}
+                    {isLastMessageFromAssistant && status === 'streaming' && (
+                        <div className="flex w-full justify-start animate-message-in">
+                            <div className="max-w-[85%]">
+                                <div className="bg-muted/60 text-foreground rounded-2xl rounded-bl-md px-4 py-3 mt-4">
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                        <span>Generating diagram...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
             <div ref={messagesEndRef} />

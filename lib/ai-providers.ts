@@ -18,6 +18,7 @@ export type ProviderName =
     | "openrouter"
     | "deepseek"
     | "siliconflow"
+    | "sglang"
 
 interface ModelConfig {
     model: any
@@ -42,6 +43,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "openrouter",
     "deepseek",
     "siliconflow",
+    "sglang",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -333,7 +335,8 @@ function buildProviderOptions(
 
         case "deepseek":
         case "openrouter":
-        case "siliconflow": {
+        case "siliconflow":
+        case "sglang": {
             // These providers don't have reasoning configs in AI SDK yet
             break
         }
@@ -356,6 +359,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     openrouter: "OPENROUTER_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
+    sglang: "SGLANG_API_KEY",
 }
 
 /**
@@ -420,7 +424,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -436,6 +440,8 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  * - SILICONFLOW_API_KEY: SiliconFlow API key
  * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.com/v1)
+ * - SGLANG_API_KEY: SGLang API key
+ * - SGLANG_BASE_URL: SGLang endpoint (optional)
  */
 export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
@@ -503,6 +509,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                         `- OPENROUTER_API_KEY for OpenRouter\n` +
                         `- AZURE_API_KEY for Azure\n` +
                         `- SILICONFLOW_API_KEY for SiliconFlow\n` +
+                        `- SGLANG_API_KEY for SGLang\n` +
                         `Or set AI_PROVIDER=ollama for local Ollama.`,
                 )
             } else {
@@ -672,9 +679,93 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "sglang": {
+            const apiKey = overrides?.apiKey || process.env.SGLANG_API_KEY
+            const baseURL =
+                overrides?.baseUrl ||
+                process.env.SGLANG_BASE_URL
+            
+            const sglangProvider = createOpenAI({
+                apiKey,
+                baseURL,
+                // Add a custom fetch wrapper to intercept and fix the stream from sglang
+                fetch: async (url, options) => {
+                    const response = await fetch(url, options);
+                    if (!response.body) {
+                        return response;
+                    }
+
+                    // Create a transform stream to fix the non-compliant sglang stream
+                    let buffer = '';
+                    const decoder = new TextDecoder();
+
+                    const transformStream = new TransformStream({
+                        transform(chunk, controller) {
+                            buffer += decoder.decode(chunk, { stream: true });
+                            // Process all complete messages in the buffer
+                            let messageEndPos;
+                            while ((messageEndPos = buffer.indexOf('\n\n')) !== -1) {
+                                const message = buffer.substring(0, messageEndPos);
+                                buffer = buffer.substring(messageEndPos + 2); // Move past the '\n\n'
+
+                                if (message.startsWith('data: ')) {
+                                    const jsonStr = message.substring(6).trim();
+                                    if (jsonStr === '[DONE]') {
+                                        controller.enqueue(new TextEncoder().encode(message + '\n\n'));
+                                        continue;
+                                    }
+                                    try {
+                                        const data = JSON.parse(jsonStr);
+                                        const delta = data.choices?.[0]?.delta;
+
+                                        if (delta) {
+                                            // Fix 1: remove invalid empty role
+                                            if (delta.role === '') {
+                                                delete delta.role;
+                                            }
+                                            // Fix 2: remove non-standard reasoning_content field
+                                            if ('reasoning_content' in delta) {
+                                                delete delta.reasoning_content;
+                                            }
+                                        }
+                                        
+                                        // Re-serialize and forward the corrected data with the correct SSE format
+                                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
+                                    } catch (e) {
+                                        // If parsing fails, forward the original message to avoid breaking the stream.
+                                        controller.enqueue(new TextEncoder().encode(message + '\n\n'));
+                                    }
+                                } else if (message.trim() !== '') {
+                                    // Pass through other message types (e.g., 'event: ...')
+                                    controller.enqueue(new TextEncoder().encode(message + '\n\n'));
+                                }
+                            }
+                        },
+                        flush(controller) {
+                            // If there's anything left in the buffer, forward it.
+                            if (buffer.trim()) {
+                                controller.enqueue(new TextEncoder().encode(buffer));
+                            }
+                        }
+                    });
+
+                    const transformedBody = response.body.pipeThrough(transformStream);
+
+                    // Return a new response with the transformed body
+                    return new Response(transformedBody, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: response.headers,
+                    });
+                }
+            });
+            model = sglangProvider.chat(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang`,
             )
     }
 
