@@ -192,13 +192,14 @@ function createDrawioViewerHtml(xml: string, options: ExportOptions): string {
 </head>
 <body>
     <div id="diagram-container">
-        <div class="mxgraph" style="max-width:100%;"></div>
+        <div class="mxgraph" style="max-width:100%;border:1px solid transparent;">
+        </div>
     </div>
-    <script>
+    <script type="text/javascript">
         // Store XML for later use
         window.diagramXml = ${jsEscapedXml};
     </script>
-    <script src="https://viewer.diagrams.net/js/viewer-static.min.js"></script>
+    <script type="text/javascript" src="https://viewer.diagrams.net/js/viewer-static.min.js"></script>
 </body>
 </html>`
 }
