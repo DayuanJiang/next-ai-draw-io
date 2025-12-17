@@ -30,6 +30,7 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
   - [Table of Contents](#table-of-contents)
   - [Examples](#examples)
   - [Features](#features)
+  - [MCP Server (Preview)](#mcp-server-preview)
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
@@ -91,6 +92,38 @@ Here are some example prompts and their generated diagrams:
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
 -   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
+
+## MCP Server (Preview)
+
+> **Preview Feature**: This feature is experimental and may change.
+
+Use Next AI Draw.io with AI agents like Claude Desktop and Cursor via MCP (Model Context Protocol).
+
+```bash
+npx -y @next-ai-drawio/mcp-server
+```
+
+### Claude Desktop Configuration
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@next-ai-drawio/mcp-server"]
+    }
+  }
+}
+```
+
+Then ask Claude to create diagrams:
+> "Create a flowchart showing user authentication with login, MFA, and session management"
+
+The diagram appears in your browser in real-time!
+
+See the [MCP Server README](./packages/mcp-server/README.md) for more details.
 
 ## Getting Started
 
