@@ -1,6 +1,13 @@
 "use client"
 
-import { Cloud, FileText, GitBranch, Palette, Zap } from "lucide-react"
+import {
+    Cloud,
+    FileText,
+    GitBranch,
+    Palette,
+    Terminal,
+    Zap,
+} from "lucide-react"
 
 interface ExampleCardProps {
     icon: React.ReactNode
@@ -108,6 +115,33 @@ export default function ExamplePanel({
 
     return (
         <div className="py-6 px-2 animate-fade-in">
+            {/* MCP Server Notice */}
+            <a
+                href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block mb-4 p-3 rounded-xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 hover:border-purple-500/40 transition-colors group"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center shrink-0">
+                        <Terminal className="w-4 h-4 text-purple-500" />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-foreground group-hover:text-purple-500 transition-colors">
+                                MCP Server
+                            </span>
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-500 text-white rounded">
+                                PREVIEW
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Use in Claude Desktop, VS Code & Cursor
+                        </p>
+                    </div>
+                </div>
+            </a>
+
             {/* Welcome section */}
             <div className="text-center mb-6">
                 <h2 className="text-lg font-semibold text-foreground mb-2">
