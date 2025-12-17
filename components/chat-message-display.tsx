@@ -240,6 +240,9 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
+    // Track if any tool input is currently streaming
+    const [isToolInputStreaming, setIsToolInputStreaming] =
+        useState<boolean>(false)
 
     const copyMessageToClipboard = async (messageId: string, text: string) => {
         try {
@@ -402,6 +405,8 @@ export function ChatMessageDisplay({
     }, [editingMessageId])
 
     useEffect(() => {
+        let anyToolInputStreaming = false
+
         // Only process the last message for streaming performance
         // Previous messages are already processed and won't change
         const messagesToProcess =
@@ -413,6 +418,10 @@ export function ChatMessageDisplay({
                     if (part.type?.startsWith("tool-")) {
                         const toolPart = part as ToolPartLike
                         const { toolCallId, state, input } = toolPart
+
+                        if (state === "input-streaming") {
+                            anyToolInputStreaming = true
+                        }
 
                         if (state === "output-available") {
                             setExpandedTools((prev) => ({
@@ -601,6 +610,8 @@ export function ChatMessageDisplay({
                 })
             }
         })
+
+        setIsToolInputStreaming(anyToolInputStreaming)
 
         // Cleanup: clear any pending debounce timeout on unmount
         return () => {
@@ -1130,9 +1141,7 @@ export function ChatMessageDisplay({
                                                                                                     : section.charCount
                                                                                             return (
                                                                                                 <div
-                                                                                                    key={
-                                                                                                        pdfKey
-                                                                                                    }
+                                                                                                    key={pdfKey}
                                                                                                     className="rounded-lg border border-border/60 bg-muted/30 overflow-hidden"
                                                                                                 >
                                                                                                     <button
@@ -1360,18 +1369,20 @@ export function ChatMessageDisplay({
                     })}
 
                     {/* UX Improvement: Show a "Generating diagram..." indicator during streaming pauses */}
-                    {isLastMessageFromAssistant && status === 'streaming' && (
-                        <div className="flex w-full justify-start animate-message-in">
-                            <div className="max-w-[85%]">
-                                <div className="bg-muted/60 text-foreground rounded-2xl rounded-bl-md px-4 py-3 mt-4">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                                        <span>Generating diagram...</span>
+                    {isLastMessageFromAssistant &&
+                        status === "streaming" &&
+                        !isToolInputStreaming && (
+                            <div className="flex w-full justify-start animate-message-in">
+                                <div className="max-w-[85%]">
+                                    <div className="bg-muted/60 text-foreground rounded-2xl rounded-bl-md px-4 py-3 mt-4">
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                            <span>Generating diagram...</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
                 </div>
             )}
             <div ref={messagesEndRef} />
