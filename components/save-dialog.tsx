@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
@@ -72,6 +73,9 @@ export function SaveDialog({
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Save Diagram</DialogTitle>
+                    <DialogDescription>
+                        Choose a format and filename to save your diagram.
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-2">

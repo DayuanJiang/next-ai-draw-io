@@ -27,6 +27,8 @@ interface DiagramContextType {
     isDrawioReady: boolean
     onDrawioLoad: () => void
     resetDrawioReady: () => void
+    showSaveDialog: boolean
+    setShowSaveDialog: (show: boolean) => void
 }
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
@@ -38,6 +40,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         { svg: string; xml: string }[]
     >([])
     const [isDrawioReady, setIsDrawioReady] = useState(false)
+    const [showSaveDialog, setShowSaveDialog] = useState(false)
     const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
     const resolverRef = useRef<((value: string) => void) | null>(null)
@@ -309,6 +312,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 isDrawioReady,
                 onDrawioLoad,
                 resetDrawioReady,
+                showSaveDialog,
+                setShowSaveDialog,
             }}
         >
             {children}
