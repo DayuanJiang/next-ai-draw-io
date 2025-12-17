@@ -2,6 +2,7 @@ import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
+import { gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
@@ -19,6 +20,7 @@ export type ProviderName =
     | "deepseek"
     | "siliconflow"
     | "sglang"
+    | "gateway"
 
 interface ModelConfig {
     model: any
@@ -44,6 +46,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "deepseek",
     "siliconflow",
     "sglang",
+    "gateway",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -336,8 +339,10 @@ function buildProviderOptions(
         case "deepseek":
         case "openrouter":
         case "siliconflow":
-        case "sglang": {
+        case "sglang":
+        case "gateway": {
             // These providers don't have reasoning configs in AI SDK yet
+            // Gateway passes through to underlying providers which handle their own configs
             break
         }
 
@@ -360,6 +365,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
+    gateway: "AI_GATEWAY_API_KEY",
 }
 
 /**
@@ -501,6 +507,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             if (configured.length === 0) {
                 throw new Error(
                     `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
+                        `- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
                         `- DEEPSEEK_API_KEY for DeepSeek\n` +
                         `- OPENAI_API_KEY for OpenAI\n` +
                         `- ANTHROPIC_API_KEY for Anthropic\n` +
@@ -681,91 +688,121 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         case "sglang": {
             const apiKey = overrides?.apiKey || process.env.SGLANG_API_KEY
-            const baseURL =
-                overrides?.baseUrl ||
-                process.env.SGLANG_BASE_URL
-            
+            const baseURL = overrides?.baseUrl || process.env.SGLANG_BASE_URL
+
             const sglangProvider = createOpenAI({
                 apiKey,
                 baseURL,
                 // Add a custom fetch wrapper to intercept and fix the stream from sglang
                 fetch: async (url, options) => {
-                    const response = await fetch(url, options);
+                    const response = await fetch(url, options)
                     if (!response.body) {
-                        return response;
+                        return response
                     }
 
                     // Create a transform stream to fix the non-compliant sglang stream
-                    let buffer = '';
-                    const decoder = new TextDecoder();
+                    let buffer = ""
+                    const decoder = new TextDecoder()
 
                     const transformStream = new TransformStream({
                         transform(chunk, controller) {
-                            buffer += decoder.decode(chunk, { stream: true });
+                            buffer += decoder.decode(chunk, { stream: true })
                             // Process all complete messages in the buffer
-                            let messageEndPos;
-                            while ((messageEndPos = buffer.indexOf('\n\n')) !== -1) {
-                                const message = buffer.substring(0, messageEndPos);
-                                buffer = buffer.substring(messageEndPos + 2); // Move past the '\n\n'
+                            let messageEndPos
+                            while (
+                                (messageEndPos = buffer.indexOf("\n\n")) !== -1
+                            ) {
+                                const message = buffer.substring(
+                                    0,
+                                    messageEndPos,
+                                )
+                                buffer = buffer.substring(messageEndPos + 2) // Move past the '\n\n'
 
-                                if (message.startsWith('data: ')) {
-                                    const jsonStr = message.substring(6).trim();
-                                    if (jsonStr === '[DONE]') {
-                                        controller.enqueue(new TextEncoder().encode(message + '\n\n'));
-                                        continue;
+                                if (message.startsWith("data: ")) {
+                                    const jsonStr = message.substring(6).trim()
+                                    if (jsonStr === "[DONE]") {
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                message + "\n\n",
+                                            ),
+                                        )
+                                        continue
                                     }
                                     try {
-                                        const data = JSON.parse(jsonStr);
-                                        const delta = data.choices?.[0]?.delta;
+                                        const data = JSON.parse(jsonStr)
+                                        const delta = data.choices?.[0]?.delta
 
                                         if (delta) {
                                             // Fix 1: remove invalid empty role
-                                            if (delta.role === '') {
-                                                delete delta.role;
+                                            if (delta.role === "") {
+                                                delete delta.role
                                             }
                                             // Fix 2: remove non-standard reasoning_content field
-                                            if ('reasoning_content' in delta) {
-                                                delete delta.reasoning_content;
+                                            if ("reasoning_content" in delta) {
+                                                delete delta.reasoning_content
                                             }
                                         }
-                                        
+
                                         // Re-serialize and forward the corrected data with the correct SSE format
-                                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                `data: ${JSON.stringify(data)}\n\n`,
+                                            ),
+                                        )
                                     } catch (e) {
                                         // If parsing fails, forward the original message to avoid breaking the stream.
-                                        controller.enqueue(new TextEncoder().encode(message + '\n\n'));
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                message + "\n\n",
+                                            ),
+                                        )
                                     }
-                                } else if (message.trim() !== '') {
+                                } else if (message.trim() !== "") {
                                     // Pass through other message types (e.g., 'event: ...')
-                                    controller.enqueue(new TextEncoder().encode(message + '\n\n'));
+                                    controller.enqueue(
+                                        new TextEncoder().encode(
+                                            message + "\n\n",
+                                        ),
+                                    )
                                 }
                             }
                         },
                         flush(controller) {
                             // If there's anything left in the buffer, forward it.
                             if (buffer.trim()) {
-                                controller.enqueue(new TextEncoder().encode(buffer));
+                                controller.enqueue(
+                                    new TextEncoder().encode(buffer),
+                                )
                             }
-                        }
-                    });
+                        },
+                    })
 
-                    const transformedBody = response.body.pipeThrough(transformStream);
+                    const transformedBody =
+                        response.body.pipeThrough(transformStream)
 
                     // Return a new response with the transformed body
                     return new Response(transformedBody, {
                         status: response.status,
                         statusText: response.statusText,
                         headers: response.headers,
-                    });
-                }
-            });
+                    })
+                },
+            })
             model = sglangProvider.chat(modelId)
+            break
+        }
+
+        case "gateway": {
+            // Vercel AI Gateway - unified access to multiple AI providers
+            // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
+            // See: https://vercel.com/ai-gateway
+            model = gateway(modelId)
             break
         }
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway`,
             )
     }
 
