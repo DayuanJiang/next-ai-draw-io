@@ -155,12 +155,16 @@ export function ChatInput({
     minimalStyle = false,
     onMinimalStyleChange = () => {},
 }: ChatInputProps) {
-    const { diagramHistory, saveDiagramToFile } = useDiagram()
+    const {
+        diagramHistory,
+        saveDiagramToFile,
+        showSaveDialog,
+        setShowSaveDialog,
+    } = useDiagram()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [showClearDialog, setShowClearDialog] = useState(false)
-    const [showSaveDialog, setShowSaveDialog] = useState(false)
 
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
@@ -401,7 +405,7 @@ export function ChatInput({
                             size="sm"
                             onClick={() => setShowSaveDialog(true)}
                             disabled={isDisabled}
-                            tooltipContent="Save diagram"
+                            tooltipContent="Save diagram (deprecated: use Save button in upper right corner of draw.io)"
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                         >
                             <Download className="h-4 w-4" />

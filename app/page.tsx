@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
@@ -21,6 +21,8 @@ export default function Home() {
         onDrawioLoad,
         resetDrawioReady,
         saveDiagramToStorage,
+        showSaveDialog,
+        setShowSaveDialog,
     } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
@@ -30,6 +32,24 @@ export default function Home() {
     const [closeProtection, setCloseProtection] = useState(false)
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
+    const isSavingRef = useRef(false)
+
+    // Reset saving flag when dialog closes (with delay to ignore lingering save events from draw.io)
+    useEffect(() => {
+        if (!showSaveDialog && isSavingRef.current) {
+            const timeout = setTimeout(() => {
+                isSavingRef.current = false
+            }, 1000)
+            return () => clearTimeout(timeout)
+        }
+    }, [showSaveDialog])
+
+    // Handle save from draw.io's built-in save button
+    const handleDrawioSave = useCallback(() => {
+        if (isSavingRef.current) return
+        isSavingRef.current = true
+        setShowSaveDialog(true)
+    }, [setShowSaveDialog])
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -155,6 +175,7 @@ export default function Home() {
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
+                                    onSave={handleDrawioSave}
                                     baseUrl={drawioBaseUrl}
                                     urlParameters={{
                                         ui: drawioUi,
