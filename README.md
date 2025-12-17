@@ -95,7 +95,7 @@ Here are some example prompts and their generated diagrams:
 
 ## MCP Server (Preview)
 
-> **Preview Feature**: This feature is experimental and may change.
+> **Preview Feature**: This feature is experimental and may not stable.
 
 Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
 
