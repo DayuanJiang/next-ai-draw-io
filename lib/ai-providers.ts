@@ -2,6 +2,7 @@ import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
+import { gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
@@ -19,6 +20,7 @@ export type ProviderName =
     | "deepseek"
     | "siliconflow"
     | "sglang"
+    | "gateway"
 
 interface ModelConfig {
     model: any
@@ -44,6 +46,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "deepseek",
     "siliconflow",
     "sglang",
+    "gateway",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -336,8 +339,10 @@ function buildProviderOptions(
         case "deepseek":
         case "openrouter":
         case "siliconflow":
-        case "sglang": {
+        case "sglang":
+        case "gateway": {
             // These providers don't have reasoning configs in AI SDK yet
+            // Gateway passes through to underlying providers which handle their own configs
             break
         }
 
@@ -360,6 +365,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
+    gateway: "AI_GATEWAY_API_KEY",
 }
 
 /**
@@ -501,6 +507,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             if (configured.length === 0) {
                 throw new Error(
                     `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
+                        `- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
                         `- DEEPSEEK_API_KEY for DeepSeek\n` +
                         `- OPENAI_API_KEY for OpenAI\n` +
                         `- ANTHROPIC_API_KEY for Anthropic\n` +
@@ -762,10 +769,17 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             model = sglangProvider.chat(modelId)
             break
         }
+        case "gateway": {
+            // Vercel AI Gateway - unified access to multiple AI providers
+            // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
+            // See: https://vercel.com/ai-gateway
+            model = gateway(modelId)
+            break
+        }
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, gateway sglang`,
             )
     }
 

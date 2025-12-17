@@ -155,12 +155,16 @@ export function ChatInput({
     minimalStyle = false,
     onMinimalStyleChange = () => {},
 }: ChatInputProps) {
-    const { diagramHistory, saveDiagramToFile } = useDiagram()
+    const {
+        diagramHistory,
+        saveDiagramToFile,
+        showSaveDialog,
+        setShowSaveDialog,
+    } = useDiagram()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [showClearDialog, setShowClearDialog] = useState(false)
-    const [showSaveDialog, setShowSaveDialog] = useState(false)
 
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =

@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目录](#目录)
   - [示例](#示例)
   - [功能特性](#功能特性)
+  - [MCP服务器（预览）](#mcp服务器预览)
   - [快速开始](#快速开始)
     - [在线试用](#在线试用)
     - [使用Docker运行（推荐）](#使用docker运行推荐)
@@ -87,6 +88,36 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **交互式聊天界面**：与AI实时对话来完善您的图表
 -   **云架构图支持**：专门支持生成云架构图（AWS、GCP、Azure）
 -   **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
+
+## MCP服务器（预览）
+
+> **预览功能**：此功能为实验性功能，可能会有变化。
+
+通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"]
+    }
+  }
+}
+```
+
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+```
+
+然后让Claude创建图表：
+> "创建一个展示用户认证流程的流程图，包含登录、MFA和会话管理"
+
+图表会实时显示在浏览器中！
+
+详情请参阅[MCP服务器README](../packages/mcp-server/README.md)，了解VS Code、Cursor等客户端配置。
 
 ## 快速开始
 
