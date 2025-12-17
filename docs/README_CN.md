@@ -95,20 +95,12 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
 
-```bash
-npx -y @next-ai-drawio/mcp-server
-```
-
-### Claude Desktop配置
-
-添加到Claude Desktop配置文件（macOS上为`~/Library/Application Support/Claude/claude_desktop_config.json`）：
-
 ```json
 {
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"]
+      "args": ["@next-ai-drawio/mcp-server@latest"]
     }
   }
 }
@@ -117,7 +109,7 @@ npx -y @next-ai-drawio/mcp-server
 ### Claude Code CLI
 
 ```bash
-claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 然后让Claude创建图表：

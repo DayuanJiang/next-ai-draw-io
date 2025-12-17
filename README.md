@@ -99,20 +99,12 @@ Here are some example prompts and their generated diagrams:
 
 Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
 
-```bash
-npx -y @next-ai-drawio/mcp-server
-```
-
-### Claude Desktop
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
 ```json
 {
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"]
+      "args": ["@next-ai-drawio/mcp-server@latest"]
     }
   }
 }
@@ -121,7 +113,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 ### Claude Code CLI
 
 ```bash
-claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 Then ask Claude to create diagrams:

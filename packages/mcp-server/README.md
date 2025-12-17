@@ -6,8 +6,15 @@ MCP (Model Context Protocol) server that enables AI agents like Claude Desktop a
 
 ## Quick Start
 
-```bash
-npx -y @next-ai-drawio/mcp-server
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"]
+    }
+  }
+}
 ```
 
 ## Installation
@@ -21,7 +28,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"]
+      "args": ["@next-ai-drawio/mcp-server@latest"]
     }
   }
 }
@@ -36,7 +43,7 @@ Add to your VS Code settings (`.vscode/mcp.json` in workspace or user settings):
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"]
+      "args": ["@next-ai-drawio/mcp-server@latest"]
     }
   }
 }
@@ -51,7 +58,7 @@ Add to Cursor MCP config (`~/.cursor/mcp.json`):
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"]
+      "args": ["@next-ai-drawio/mcp-server@latest"]
     }
   }
 }
@@ -60,14 +67,14 @@ Add to Cursor MCP config (`~/.cursor/mcp.json`):
 ### Claude Code CLI
 
 ```bash
-claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 ### Other MCP Clients
 
 Use the standard MCP configuration with:
 - **Command**: `npx`
-- **Args**: `["-y", "@next-ai-drawio/mcp-server"]`
+- **Args**: `["@next-ai-drawio/mcp-server@latest"]`
 
 ## Usage
 
@@ -135,7 +142,7 @@ Or set a custom port:
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"],
+      "args": ["@next-ai-drawio/mcp-server@latest"],
       "env": { "PORT": "6003" }
     }
   }

@@ -95,20 +95,12 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 
-```bash
-npx -y @next-ai-drawio/mcp-server
-```
-
-### Claude Desktop設定
-
-Claude Desktopの設定ファイル（macOSでは`~/Library/Application Support/Claude/claude_desktop_config.json`）に追加：
-
 ```json
 {
   "mcpServers": {
     "drawio": {
       "command": "npx",
-      "args": ["-y", "@next-ai-drawio/mcp-server"]
+      "args": ["@next-ai-drawio/mcp-server@latest"]
     }
   }
 }
@@ -117,7 +109,7 @@ Claude Desktopの設定ファイル（macOSでは`~/Library/Application Support/
 ### Claude Code CLI
 
 ```bash
-claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 Claudeにダイアグラムの作成を依頼：
