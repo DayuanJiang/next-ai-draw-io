@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 > **プレビュー機能**：この機能は実験的であり、変更される可能性があります。
 
-MCP（Model Context Protocol）を介して、Claude DesktopやCursorなどのAIエージェントでNext AI Draw.ioを使用できます。
+MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 
 ```bash
 npx -y @next-ai-drawio/mcp-server
@@ -114,12 +114,18 @@ Claude Desktopの設定ファイル（macOSでは`~/Library/Application Support/
 }
 ```
 
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+```
+
 Claudeにダイアグラムの作成を依頼：
 > 「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを作成してください」
 
 ダイアグラムがリアルタイムでブラウザに表示されます！
 
-詳細は[MCPサーバーREADME](../packages/mcp-server/README.md)をご覧ください。
+詳細は[MCPサーバーREADME](../packages/mcp-server/README.md)をご覧ください（VS Code、Cursorなどのクライアント設定も含む）。
 
 ## はじめに
 

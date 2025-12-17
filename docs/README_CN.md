@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 > **预览功能**：此功能为实验性功能，可能会有变化。
 
-通过MCP（模型上下文协议）在Claude Desktop和Cursor等AI代理中使用Next AI Draw.io。
+通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
 
 ```bash
 npx -y @next-ai-drawio/mcp-server
@@ -114,12 +114,18 @@ npx -y @next-ai-drawio/mcp-server
 }
 ```
 
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+```
+
 然后让Claude创建图表：
 > "创建一个展示用户认证流程的流程图，包含登录、MFA和会话管理"
 
 图表会实时显示在浏览器中！
 
-详情请参阅[MCP服务器README](../packages/mcp-server/README.md)。
+详情请参阅[MCP服务器README](../packages/mcp-server/README.md)，了解VS Code、Cursor等客户端配置。
 
 ## 快速开始
 

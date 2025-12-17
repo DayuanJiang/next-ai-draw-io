@@ -97,13 +97,13 @@ Here are some example prompts and their generated diagrams:
 
 > **Preview Feature**: This feature is experimental and may change.
 
-Use Next AI Draw.io with AI agents like Claude Desktop and Cursor via MCP (Model Context Protocol).
+Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
 
 ```bash
 npx -y @next-ai-drawio/mcp-server
 ```
 
-### Claude Desktop Configuration
+### Claude Desktop
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
@@ -118,12 +118,18 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+```
+
 Then ask Claude to create diagrams:
 > "Create a flowchart showing user authentication with login, MFA, and session management"
 
 The diagram appears in your browser in real-time!
 
-See the [MCP Server README](./packages/mcp-server/README.md) for more details.
+See the [MCP Server README](./packages/mcp-server/README.md) for VS Code, Cursor, and other client configurations.
 
 ## Getting Started
 

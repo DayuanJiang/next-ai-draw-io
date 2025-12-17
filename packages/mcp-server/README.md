@@ -4,17 +4,15 @@ MCP (Model Context Protocol) server that enables AI agents like Claude Desktop a
 
 **Self-contained** - includes an embedded HTTP server, no external dependencies required.
 
-## Features
-
-- **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
-- **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
-- **Edit Support**: Modify existing diagrams with natural language instructions
-- **Export**: Save diagrams as `.drawio` files
-- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from embed.diagrams.net)
-
 ## Quick Start
 
-### Claude Desktop Configuration
+```bash
+npx -y @next-ai-drawio/mcp-server
+```
+
+## Installation
+
+### Claude Desktop
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
@@ -29,37 +27,62 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
-That's it! The MCP server runs its own embedded HTTP server.
+### VS Code
 
-### Use with Claude
+Add to your VS Code settings (`.vscode/mcp.json` in workspace or user settings):
 
-1. Restart Claude Desktop after updating config
-2. Ask Claude to create a diagram:
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@next-ai-drawio/mcp-server"]
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to Cursor MCP config (`~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@next-ai-drawio/mcp-server"]
+    }
+  }
+}
+```
+
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx -y @next-ai-drawio/mcp-server
+```
+
+### Other MCP Clients
+
+Use the standard MCP configuration with:
+- **Command**: `npx`
+- **Args**: `["-y", "@next-ai-drawio/mcp-server"]`
+
+## Usage
+
+1. Restart your MCP client after updating config
+2. Ask the AI to create a diagram:
    > "Create a flowchart showing user authentication with login, MFA, and session management"
 3. The diagram appears in your browser in real-time!
 
-## How It Works
+## Features
 
-```
-┌─────────────────┐     stdio      ┌─────────────────┐
-│  Claude Desktop │ <───────────> │   MCP Server    │
-│    (AI Agent)   │               │  (this package) │
-└─────────────────┘               └────────┬────────┘
-                                           │
-                                  ┌────────▼────────┐
-                                  │ Embedded HTTP   │
-                                  │ Server (:6002)  │
-                                  └────────┬────────┘
-                                           │
-                                  ┌────────▼────────┐
-                                  │  User's Browser │
-                                  │ (draw.io embed) │
-                                  └─────────────────┘
-```
-
-1. **MCP Server** receives tool calls from Claude via stdio
-2. **Embedded HTTP Server** serves the draw.io UI and handles state
-3. **Browser** shows real-time diagram updates via polling
+- **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
+- **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
+- **Edit Support**: Modify existing diagrams with natural language instructions
+- **Export**: Save diagrams as `.drawio` files
+- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from embed.diagrams.net)
 
 ## Available Tools
 
@@ -71,7 +94,30 @@ That's it! The MCP server runs its own embedded HTTP server.
 | `get_diagram` | Get the current diagram XML |
 | `export_diagram` | Save diagram to a `.drawio` file |
 
-## Environment Variables
+## How It Works
+
+```
+┌─────────────────┐     stdio      ┌─────────────────┐
+│  Claude Desktop │ <───────────> │   MCP Server    │
+│    (AI Agent)   │               │  (this package) │
+└─────────────────┘               └────────┬────────┘
+                                          │
+                                 ┌────────▼────────┐
+                                 │ Embedded HTTP   │
+                                 │ Server (:6002)  │
+                                 └────────┬────────┘
+                                          │
+                                 ┌────────▼────────┐
+                                 │  User's Browser │
+                                 │ (draw.io embed) │
+                                 └─────────────────┘
+```
+
+1. **MCP Server** receives tool calls from Claude via stdio
+2. **Embedded HTTP Server** serves the draw.io UI and handles state
+3. **Browser** shows real-time diagram updates via polling
+
+## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -81,7 +127,7 @@ That's it! The MCP server runs its own embedded HTTP server.
 
 ### Port already in use
 
-If port 6002 is in use, the server will automatically try the next available port.
+If port 6002 is in use, the server will automatically try the next available port (up to 6020).
 
 Or set a custom port:
 ```json
