@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { getApiEndpoint } from "@/lib/base-path"
 
 interface SettingsDialogProps {
     open: boolean
@@ -71,7 +72,7 @@ export function SettingsDialog({
         // Only fetch if not cached in localStorage
         if (getStoredAccessCodeRequired() !== null) return
 
-        fetch("/api/config")
+        fetch(getApiEndpoint("/api/config"))
             .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`)
                 return res.json()
@@ -119,12 +120,15 @@ export function SettingsDialog({
         setIsVerifying(true)
 
         try {
-            const response = await fetch("/api/verify-access-code", {
-                method: "POST",
-                headers: {
-                    "x-access-code": accessCode.trim(),
+            const response = await fetch(
+                getApiEndpoint("/api/verify-access-code"),
+                {
+                    method: "POST",
+                    headers: {
+                        "x-access-code": accessCode.trim(),
+                    },
                 },
-            })
+            )
 
             const data = await response.json()
 

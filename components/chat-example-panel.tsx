@@ -8,6 +8,7 @@ import {
     Terminal,
     Zap,
 } from "lucide-react"
+import { getAssetUrl } from "@/lib/base-path"
 
 interface ExampleCardProps {
     icon: React.ReactNode
@@ -74,7 +75,7 @@ export default function ExamplePanel({
         setInput("Replicate this flowchart.")
 
         try {
-            const response = await fetch("/example.png")
+            const response = await fetch(getAssetUrl("/example.png"))
             const blob = await response.blob()
             const file = new File([blob], "example.png", { type: "image/png" })
             setFiles([file])
@@ -87,7 +88,7 @@ export default function ExamplePanel({
         setInput("Replicate this in aws style")
 
         try {
-            const response = await fetch("/architecture.png")
+            const response = await fetch(getAssetUrl("/architecture.png"))
             const blob = await response.blob()
             const file = new File([blob], "architecture.png", {
                 type: "image/png",
@@ -102,7 +103,7 @@ export default function ExamplePanel({
         setInput("Summarize this paper as a diagram")
 
         try {
-            const response = await fetch("/chain-of-thought.txt")
+            const response = await fetch(getAssetUrl("/chain-of-thought.txt"))
             const blob = await response.blob()
             const file = new File([blob], "chain-of-thought.txt", {
                 type: "text/plain",

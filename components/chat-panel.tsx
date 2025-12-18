@@ -22,6 +22,7 @@ import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { getAIConfig } from "@/lib/ai-config"
+import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
@@ -150,7 +151,7 @@ export default function ChatPanel({
 
     // Check config on mount
     useEffect(() => {
-        fetch("/api/config")
+        fetch(getApiEndpoint("/api/config"))
             .then((res) => res.json())
             .then((data) => {
                 setAccessCodeRequired(data.accessCodeRequired)
@@ -225,7 +226,7 @@ export default function ChatPanel({
         setMessages,
     } = useChat({
         transport: new DefaultChatTransport({
-            api: "/api/chat",
+            api: getApiEndpoint("/api/chat"),
         }),
         async onToolCall({ toolCall }) {
             if (DEBUG) {

@@ -27,6 +27,7 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { getApiEndpoint } from "@/lib/base-path"
 import {
     applyDiagramOperations,
     convertToLegalXml,
@@ -291,7 +292,7 @@ export function ChatMessageDisplay({
         setFeedback((prev) => ({ ...prev, [messageId]: value }))
 
         try {
-            await fetch("/api/log-feedback", {
+            await fetch(getApiEndpoint("/api/log-feedback"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
