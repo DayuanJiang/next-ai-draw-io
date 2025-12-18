@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
 import { STORAGE_DIAGRAM_XML_KEY } from "@/components/chat-panel"
 import type { ExportFormat } from "@/components/save-dialog"
@@ -40,12 +40,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         { svg: string; xml: string }[]
     >([])
     const [isDrawioReady, setIsDrawioReady] = useState(false)
+    const [canSaveDiagram, setCanSaveDiagram] = useState(false)
     const [showSaveDialog, setShowSaveDialog] = useState(false)
     const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
     const resolverRef = useRef<((value: string) => void) | null>(null)
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false)
+    // Track if diagram has been restored from localStorage
+    const hasDiagramRestoredRef = useRef<boolean>(false)
 
     const onDrawioLoad = () => {
         // Only set ready state once to prevent infinite loops
@@ -60,6 +63,48 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         hasCalledOnLoadRef.current = false
         setIsDrawioReady(false)
     }
+
+    // Restore diagram XML when DrawIO becomes ready
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadDiagram uses refs internally and is stable
+    useEffect(() => {
+        // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
+        if (!isDrawioReady) {
+            hasDiagramRestoredRef.current = false
+            setCanSaveDiagram(false)
+            return
+        }
+        if (hasDiagramRestoredRef.current) return
+        hasDiagramRestoredRef.current = true
+
+        try {
+            const savedDiagramXml = localStorage.getItem(
+                STORAGE_DIAGRAM_XML_KEY,
+            )
+            if (savedDiagramXml) {
+                // Skip validation for trusted saved diagrams
+                loadDiagram(savedDiagramXml, true)
+            }
+        } catch (error) {
+            console.error("Failed to restore diagram from localStorage:", error)
+        }
+
+        // Allow saving after restore is complete
+        setTimeout(() => {
+            setCanSaveDiagram(true)
+        }, 500)
+    }, [isDrawioReady])
+
+    // Save diagram XML to localStorage whenever it changes (debounced)
+    useEffect(() => {
+        if (!canSaveDiagram) return
+        if (!chartXML || chartXML.length <= 300) return
+
+        const timeoutId = setTimeout(() => {
+            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
+        }, 1000)
+
+        return () => clearTimeout(timeoutId)
+    }, [chartXML, canSaveDiagram])
 
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
