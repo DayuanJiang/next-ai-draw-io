@@ -2,6 +2,7 @@
 
 import {
     Download,
+    FileCode,
     History,
     Image as ImageIcon,
     Loader2,
@@ -13,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ErrorToast } from "@/components/error-toast"
+import { ExportStructurizrDialog } from "@/components/export-structurizr-dialog"
 import { HistoryDialog } from "@/components/history-dialog"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SaveDialog } from "@/components/save-dialog"
@@ -160,11 +162,13 @@ export function ChatInput({
         saveDiagramToFile,
         showSaveDialog,
         setShowSaveDialog,
+        chartXML,
     } = useDiagram()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [showClearDialog, setShowClearDialog] = useState(false)
+    const [showExportDslDialog, setShowExportDslDialog] = useState(false)
 
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
@@ -403,6 +407,18 @@ export function ChatInput({
                             type="button"
                             variant="ghost"
                             size="sm"
+                            onClick={() => setShowExportDslDialog(true)}
+                            disabled={isDisabled || !chartXML}
+                            tooltipContent="Export to Structurizr DSL"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                        >
+                            <FileCode className="h-4 w-4" />
+                        </ButtonWithTooltip>
+
+                        <ButtonWithTooltip
+                            type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setShowSaveDialog(true)}
                             disabled={isDisabled}
                             tooltipContent="Save diagram"
@@ -420,6 +436,12 @@ export function ChatInput({
                             defaultFilename={`diagram-${new Date()
                                 .toISOString()
                                 .slice(0, 10)}`}
+                        />
+
+                        <ExportStructurizrDialog
+                            open={showExportDslDialog}
+                            onOpenChange={setShowExportDslDialog}
+                            xml={chartXML}
                         />
 
                         <ButtonWithTooltip

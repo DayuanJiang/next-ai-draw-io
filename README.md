@@ -92,6 +92,7 @@ Here are some example prompts and their generated diagrams:
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
 -   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
+-   **Structurizr DSL Export**: Export C4 model diagrams to [Structurizr DSL](https://structurizr.com/) format for use with Structurizr Lite, CLI, or cloud service - perfect for architecture documentation and code-as-diagrams workflows
 
 ## MCP Server (Preview)
 
