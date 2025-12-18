@@ -65,6 +65,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Restore diagram XML when DrawIO becomes ready
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadDiagram uses refs internally and is stable
     useEffect(() => {
         // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
         if (!isDrawioReady) {
@@ -79,15 +80,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             const savedDiagramXml = localStorage.getItem(
                 STORAGE_DIAGRAM_XML_KEY,
             )
-            console.log(
-                "[DiagramContext] Restoring diagram, has saved XML:",
-                !!savedDiagramXml,
-            )
             if (savedDiagramXml) {
-                console.log(
-                    "[DiagramContext] Loading saved diagram XML, length:",
-                    savedDiagramXml.length,
-                )
                 // Skip validation for trusted saved diagrams
                 loadDiagram(savedDiagramXml, true)
             }
@@ -97,7 +90,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
         // Allow saving after restore is complete
         setTimeout(() => {
-            console.log("[DiagramContext] Enabling diagram save")
             setCanSaveDiagram(true)
         }, 500)
     }, [isDrawioReady])

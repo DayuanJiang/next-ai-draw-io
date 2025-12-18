@@ -104,19 +104,24 @@ export default function Home() {
     }
 
     // Check mobile - save diagram and reset draw.io before crossing breakpoint
+    const isInitialRenderRef = useRef(true)
     useEffect(() => {
         const checkMobile = () => {
             const newIsMobile = window.innerWidth < 768
-            // If crossing the breakpoint, save diagram and reset draw.io
-            if (newIsMobile !== isMobileRef.current) {
+            // If crossing the breakpoint (not initial render), save diagram and reset draw.io
+            if (
+                !isInitialRenderRef.current &&
+                newIsMobile !== isMobileRef.current
+            ) {
                 // Save diagram before remounting (fire and forget)
                 saveDiagramToStorage().catch(() => {
                     // Ignore timeout errors during resize
                 })
                 // Reset draw.io ready state so onLoad triggers again after remount
                 resetDrawioReady()
-                isMobileRef.current = newIsMobile
             }
+            isMobileRef.current = newIsMobile
+            isInitialRenderRef.current = false
             setIsMobile(newIsMobile)
         }
 
