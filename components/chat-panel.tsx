@@ -1229,14 +1229,14 @@ Continue from EXACTLY where you stopped.`,
                 className={`${isMobile ? "px-3 py-2" : "px-5 py-4"} border-b border-border/50`}
             >
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-x-hidden">
                         <div className="flex items-center gap-2">
                             <Image
                                 src="/favicon.ico"
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
-                                className="rounded"
+                                className="rounded flex-shrink-0"
                             />
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
@@ -1271,7 +1271,7 @@ Continue from EXACTLY where you stopped.`,
                             </Link>
                         )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 justify-end overflow-x-hidden">
                         <ButtonWithTooltip
                             tooltipContent="Start fresh chat"
                             variant="ghost"
