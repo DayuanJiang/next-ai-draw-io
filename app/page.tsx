@@ -34,6 +34,7 @@ export default function Home() {
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isSavingRef = useRef(false)
     const mouseOverDrawioRef = useRef(false)
+    const isMobileRef = useRef(false)
 
     // Reset saving flag when dialog closes (with delay to ignore lingering save events from draw.io)
     useEffect(() => {
@@ -102,16 +103,24 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile
+    // Check mobile - save diagram before crossing breakpoint to prevent data loss
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768)
+            const newIsMobile = window.innerWidth < 768
+            // If crossing the breakpoint, save diagram first (fire and forget, don't block)
+            if (newIsMobile !== isMobileRef.current) {
+                saveDiagramToStorage().catch(() => {
+                    // Ignore timeout errors during resize - diagram context will restore from localStorage
+                })
+                isMobileRef.current = newIsMobile
+            }
+            setIsMobile(newIsMobile)
         }
 
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [])
+    }, [saveDiagramToStorage])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -161,7 +170,11 @@ export default function Home() {
                 className="h-full"
             >
                 {/* Draw.io Canvas */}
-                <ResizablePanel id="drawio-panel" minSize={20}>
+                <ResizablePanel
+                    id="drawio-panel"
+                    defaultSize={isMobile ? 50 : 67}
+                    minSize={20}
+                >
                     <div
                         className={`h-full relative ${
                             isMobile ? "p-1" : "p-2"
