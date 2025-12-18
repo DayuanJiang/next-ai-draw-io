@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { FaGithub } from "react-icons/fa"
+import nextConfig from "@/next.config"
 
 export const metadata: Metadata = {
     title: "概要 - Next AI Draw.io",
@@ -280,7 +281,7 @@ export default function AboutJA() {
                                 付きのTransformerアーキテクチャ図を作成してください。
                             </p>
                             <Image
-                                src="/animated_connectors.svg"
+                                src={`${nextConfig.basePath}/animated_connectors.svg`}
                                 alt="アニメーションコネクタ付きTransformerアーキテクチャ"
                                 width={480}
                                 height={360}
@@ -300,7 +301,7 @@ export default function AboutJA() {
                                     を使用してGCPアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
                                 </p>
                                 <Image
-                                    src="/gcp_demo.svg"
+                                    src={`${nextConfig.basePath}/gcp_demo.svg`}
                                     alt="GCPアーキテクチャ図"
                                     width={400}
                                     height={300}
@@ -317,7 +318,7 @@ export default function AboutJA() {
                                     を使用してAWSアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
                                 </p>
                                 <Image
-                                    src="/aws_demo.svg"
+                                    src={`${nextConfig.basePath}/aws_demo.svg`}
                                     alt="AWSアーキテクチャ図"
                                     width={400}
                                     height={300}
@@ -334,7 +335,7 @@ export default function AboutJA() {
                                     を使用してAzureアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
                                 </p>
                                 <Image
-                                    src="/azure_demo.svg"
+                                    src={`${nextConfig.basePath}/azure_demo.svg`}
                                     alt="Azureアーキテクチャ図"
                                     width={400}
                                     height={300}
@@ -350,7 +351,7 @@ export default function AboutJA() {
                                     かわいい猫を描いてください。
                                 </p>
                                 <Image
-                                    src="/cat_demo.svg"
+                                    src={`${nextConfig.basePath}/cat_demo.svg`}
                                     alt="猫の絵"
                                     width={240}
                                     height={240}

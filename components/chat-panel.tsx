@@ -27,6 +27,7 @@ import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
+import nextConfig from "@/next.config"
 import { ChatMessageDisplay } from "./chat-message-display"
 
 // localStorage keys for persistence
@@ -150,7 +151,7 @@ export default function ChatPanel({
 
     // Check config on mount
     useEffect(() => {
-        fetch("/api/config")
+        fetch(`${nextConfig.basePath}/api/config`)
             .then((res) => res.json())
             .then((data) => {
                 setAccessCodeRequired(data.accessCodeRequired)
@@ -225,7 +226,7 @@ export default function ChatPanel({
         setMessages,
     } = useChat({
         transport: new DefaultChatTransport({
-            api: "/api/chat",
+            api: `${nextConfig.basePath}/api/chat`,
         }),
         async onToolCall({ toolCall }) {
             if (DEBUG) {

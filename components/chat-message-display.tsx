@@ -34,6 +34,7 @@ import {
     replaceNodes,
     validateAndFixXml,
 } from "@/lib/utils"
+import nextConfig from "@/next.config"
 import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
 
@@ -291,7 +292,7 @@ export function ChatMessageDisplay({
         setFeedback((prev) => ({ ...prev, [messageId]: value }))
 
         try {
-            await fetch("/api/log-feedback", {
+            await fetch(`${nextConfig.basePath}/api/log-feedback`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

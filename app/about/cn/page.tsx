@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { FaGithub } from "react-icons/fa"
+import nextConfig from "@/next.config"
 
 export const metadata: Metadata = {
     title: "关于 - Next AI Draw.io",
@@ -270,7 +271,7 @@ export default function AboutCN() {
                                 <strong>动画连接器</strong>的Transformer架构图。
                             </p>
                             <Image
-                                src="/animated_connectors.svg"
+                                src={`${nextConfig.basePath}/animated_connectors.svg`}
                                 alt="带动画连接器的Transformer架构"
                                 width={480}
                                 height={360}
@@ -290,7 +291,7 @@ export default function AboutCN() {
                                     生成一个GCP架构图。用户连接到托管在实例上的前端。
                                 </p>
                                 <Image
-                                    src="/gcp_demo.svg"
+                                    src={`${nextConfig.basePath}/gcp_demo.svg`}
                                     alt="GCP架构图"
                                     width={400}
                                     height={300}
@@ -307,7 +308,7 @@ export default function AboutCN() {
                                     生成一个AWS架构图。用户连接到托管在实例上的前端。
                                 </p>
                                 <Image
-                                    src="/aws_demo.svg"
+                                    src={`${nextConfig.basePath}/aws_demo.svg`}
                                     alt="AWS架构图"
                                     width={400}
                                     height={300}
@@ -324,7 +325,7 @@ export default function AboutCN() {
                                     生成一个Azure架构图。用户连接到托管在实例上的前端。
                                 </p>
                                 <Image
-                                    src="/azure_demo.svg"
+                                    src={`${nextConfig.basePath}/azure_demo.svg`}
                                     alt="Azure架构图"
                                     width={400}
                                     height={300}
@@ -340,7 +341,7 @@ export default function AboutCN() {
                                     给我画一只可爱的猫。
                                 </p>
                                 <Image
-                                    src="/cat_demo.svg"
+                                    src={`${nextConfig.basePath}/cat_demo.svg`}
                                     alt="猫咪绘图"
                                     width={240}
                                     height={240}

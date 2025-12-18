@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { FaGithub } from "react-icons/fa"
+import nextConfig from "@/next.config"
 
 export const metadata: Metadata = {
     title: "About - Next AI Draw.io",
@@ -301,7 +302,7 @@ export default function About() {
                                 transformer&apos;s architecture.
                             </p>
                             <Image
-                                src="/animated_connectors.svg"
+                                src={`${nextConfig.basePath}/animated_connectors.svg`}
                                 alt="Transformer Architecture with Animated Connectors"
                                 width={480}
                                 height={360}
@@ -322,7 +323,7 @@ export default function About() {
                                     a frontend hosted on an instance.
                                 </p>
                                 <Image
-                                    src="/gcp_demo.svg"
+                                    src={`${nextConfig.basePath}/gcp_demo.svg`}
                                     alt="GCP Architecture Diagram"
                                     width={400}
                                     height={300}
@@ -340,7 +341,7 @@ export default function About() {
                                     a frontend hosted on an instance.
                                 </p>
                                 <Image
-                                    src="/aws_demo.svg"
+                                    src={`${nextConfig.basePath}/aws_demo.svg`}
                                     alt="AWS Architecture Diagram"
                                     width={400}
                                     height={300}
@@ -358,7 +359,7 @@ export default function About() {
                                     to a frontend hosted on an instance.
                                 </p>
                                 <Image
-                                    src="/azure_demo.svg"
+                                    src={`${nextConfig.basePath}/azure_demo.svg`}
                                     alt="Azure Architecture Diagram"
                                     width={400}
                                     height={300}
@@ -374,7 +375,7 @@ export default function About() {
                                     me.
                                 </p>
                                 <Image
-                                    src="/cat_demo.svg"
+                                    src={`${nextConfig.basePath}/cat_demo.svg`}
                                     alt="Cat Drawing"
                                     width={240}
                                     height={240}

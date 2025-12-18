@@ -8,5 +8,7 @@ services:
       args:
         - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
     ports: ["3000:3000"]
+    environment:
+      - NEXT_PUBLIC_BASE_PATH=/nextaidrawio
     env_file: .env
     depends_on: [drawio]
