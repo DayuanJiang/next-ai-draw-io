@@ -8,11 +8,6 @@
  * Set NEXT_PUBLIC_BASE_PATH environment variable to your subdirectory path (e.g., /nextaidrawio)
  */
 export function getBasePath(): string {
-    // Only available on client side
-    if (typeof window === "undefined") {
-        return ""
-    }
-
     // Read from environment variable (must start with NEXT_PUBLIC_ to be available on client)
     return process.env.NEXT_PUBLIC_BASE_PATH || ""
 }
