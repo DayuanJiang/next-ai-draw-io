@@ -103,15 +103,18 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile - save diagram before crossing breakpoint to prevent data loss
+    // Check mobile - save diagram and reset draw.io before crossing breakpoint
     useEffect(() => {
         const checkMobile = () => {
             const newIsMobile = window.innerWidth < 768
-            // If crossing the breakpoint, save diagram first (fire and forget, don't block)
+            // If crossing the breakpoint, save diagram and reset draw.io
             if (newIsMobile !== isMobileRef.current) {
+                // Save diagram before remounting (fire and forget)
                 saveDiagramToStorage().catch(() => {
-                    // Ignore timeout errors during resize - diagram context will restore from localStorage
+                    // Ignore timeout errors during resize
                 })
+                // Reset draw.io ready state so onLoad triggers again after remount
+                resetDrawioReady()
                 isMobileRef.current = newIsMobile
             }
             setIsMobile(newIsMobile)
@@ -120,7 +123,7 @@ export default function Home() {
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [saveDiagramToStorage])
+    }, [saveDiagramToStorage, resetDrawioReady])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
