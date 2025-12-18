@@ -501,7 +501,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             if (configured.length === 0) {
                 throw new Error(
                     `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
-                        I`- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
+                        `- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
                         `- DEEPSEEK_API_KEY for DeepSeek\n` +
                         `- OPENAI_API_KEY for OpenAI\n` +
                         `- ANTHROPIC_API_KEY for Anthropic\n` +
