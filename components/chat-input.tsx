@@ -58,6 +58,7 @@ interface ValidationResult {
 function validateFiles(
     newFiles: File[],
     existingCount: number,
+    imageSupported: boolean,
 ): ValidationResult {
     const errors: string[] = []
     const validFiles: File[] = []
@@ -74,7 +75,10 @@ function validateFiles(
             errors.push(`Only ${availableSlots} more file(s) allowed`)
             break
         }
-        if (!isValidFileType(file)) {
+        if (
+            !isValidFileType(file) ||
+            (!imageSupported && file.type.startsWith("image/"))
+        ) {
             errors.push(`"${file.name}" is not a supported file type`)
             continue
         }
@@ -137,6 +141,7 @@ interface ChatInputProps {
     error?: Error | null
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    imageSupported?: boolean
 }
 
 export function ChatInput({
@@ -154,6 +159,7 @@ export function ChatInput({
     error = null,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    imageSupported = true,
 }: ChatInputProps) {
     const {
         diagramHistory,
@@ -224,6 +230,7 @@ export function ChatInput({
             const { validFiles, errors } = validateFiles(
                 imageFiles,
                 files.length,
+                imageSupported,
             )
             showValidationErrors(errors)
             if (validFiles.length > 0) {
@@ -234,7 +241,11 @@ export function ChatInput({
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newFiles = Array.from(e.target.files || [])
-        const { validFiles, errors } = validateFiles(newFiles, files.length)
+        const { validFiles, errors } = validateFiles(
+            newFiles,
+            files.length,
+            imageSupported,
+        )
         showValidationErrors(errors)
         if (validFiles.length > 0) {
             onFileChange([...files, ...validFiles])
@@ -428,7 +439,11 @@ export function ChatInput({
                             size="sm"
                             onClick={triggerFileInput}
                             disabled={isDisabled}
-                            tooltipContent="Upload file (image, PDF, text)"
+                            tooltipContent={
+                                imageSupported
+                                    ? "Upload file (image, PDF, text)"
+                                    : "Upload file (PDF, text)"
+                            }
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                         >
                             <ImageIcon className="h-4 w-4" />
