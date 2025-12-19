@@ -1261,7 +1261,7 @@ Continue from EXACTLY where you stopped.`,
                                 rel="noopener noreferrer"
                             >
                                 <ButtonWithTooltip
-                                    tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
+                                    tooltipContent="Sponsored by ByteDance Doubao K2-thinking. See About page for details."
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-amber-500 hover:text-amber-600"

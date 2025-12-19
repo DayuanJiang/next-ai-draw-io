@@ -11,6 +11,15 @@ This guide explains how to configure different AI model providers for next-ai-dr
 
 ## Supported Providers
 
+### Doubao (ByteDance Volcengine)
+
+> **Free tokens**: Register on the [Volcengine ARK platform](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) to get 500K free tokens for all models!
+
+```bash
+DOUBAO_API_KEY=your_api_key
+AI_MODEL=doubao-seed-1-8-251215  # or other Doubao model
+```
+
 ### Google Gemini
 
 ```bash
@@ -75,6 +84,8 @@ Optional custom endpoint (defaults to the recommended domain):
 ```bash
 SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflow.cn/v1
 ```
+
+
 
 ### Azure OpenAI
 
@@ -179,7 +190,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, azure, bedrock, openrouter, ollama, gateway
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway
 ```
 
 ## Model Capability Requirements

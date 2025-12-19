@@ -104,73 +104,68 @@ export default function AboutJA() {
                         </div>
                     </div>
 
-                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-[1px] shadow-lg">
-                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 opacity-20" />
+                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
                         <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    モデル変更と利用制限について{" "}
-                                    <span className="text-sm text-amber-600 font-medium italic font-normal">
-                                        （別名：お財布が悲鳴を上げています）
-                                    </span>
+                                    ByteDance Doubao提供
                                 </h3>
                             </div>
 
                             {/* Story */}
                             <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
                                 <p>
-                                    予想以上の反響をいただき、ありがとうございます！皆様にダイアグラム作成を楽しんでいただいているのは嬉しい限りですが、その熱量により
-                                    AI API のレート制限 (TPS/TPM)
-                                    に頻繁に引っかかってしまっています。制限に達するとシステムが一時停止し、エラーが発生してしまいます。
-                                </p>
-                                <p>
-                                    利用量の増加に伴い、コスト削減のためモデルを
-                                    Claude から{" "}
+                                    朗報です！
+                                    <a
+                                        href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-blue-600 hover:underline"
+                                    >
+                                        ByteDance Doubao
+                                    </a>
+                                    様のご支援により、デモサイトでは強力な{" "}
                                     <span className="font-semibold text-amber-700">
-                                        minimax-m2
+                                        K2-thinking
                                     </span>{" "}
-                                    に変更しました。
-                                </p>
-                                <p>
-                                    私は現在、
+                                    モデルを利用できるようになり、より高品質なダイアグラム生成が可能になりました。リンクから登録すると、すべてのモデルで使える{" "}
                                     <span className="font-semibold text-amber-700">
-                                        個人開発者
+                                        50万トークン
                                     </span>
-                                    として API
-                                    費用を全額自腹で負担しています。サービスを継続し、かつ私自身が借金を背負わないようにするため（笑）、一時的に以下の利用制限も設けさせていただきました。
+                                    が無料でもらえます！
                                 </p>
                             </div>
 
-                            {/* Limits Cards */}
-                            <div className="grid grid-cols-2 gap-3 mb-5">
-                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
-                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
-                                        トークン使用量
-                                    </div>
-                                    <div className="text-lg font-bold text-gray-900">
-                                        {formatNumber(tpmLimit)}
-                                        <span className="text-sm font-normal text-gray-600">
-                                            /分
-                                        </span>
-                                    </div>
-                                    <div className="text-lg font-bold text-gray-900">
-                                        {formatNumber(dailyTokenLimit)}
-                                        <span className="text-sm font-normal text-gray-600">
-                                            /日
-                                        </span>
-                                    </div>
+                            {/* Usage Limits */}
+                            <p className="text-sm text-gray-600 mb-3">
+                                現在の使用制限：
+                            </p>
+                            <div className="grid grid-cols-3 gap-3 mb-5">
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(dailyRequestLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        リクエスト/日
+                                    </p>
                                 </div>
-                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
-                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
-                                        1日のリクエスト数
-                                    </div>
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {dailyRequestLimit}
-                                    </div>
-                                    <div className="text-sm text-gray-600">
-                                        回
-                                    </div>
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(dailyTokenLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        トークン/日
+                                    </p>
+                                </div>
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(tpmLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        トークン/分
+                                    </p>
                                 </div>
                             </div>
 
@@ -180,43 +175,16 @@ export default function AboutJA() {
                             </div>
 
                             {/* Bring Your Own Key */}
-                            <div className="text-center mb-5">
+                            <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">
                                     自分のAPIキーを使用
                                 </h4>
                                 <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
-                                    自分のAPIキーを使用することで、これらの制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。
+                                    お好みのプロバイダーで自分のAPIキーを使用することもできます。チャットパネルの設定アイコンをクリックして設定してください。
                                 </p>
                                 <p className="text-xs text-gray-500 max-w-md mx-auto">
                                     キーはブラウザのローカルに保存され、サーバーには保存されません。
                                 </p>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="flex items-center gap-3 mb-5">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
-                            </div>
-
-                            {/* Sponsorship CTA */}
-                            <div className="text-center">
-                                <h4 className="text-base font-bold text-gray-900 mb-2">
-                                    スポンサー募集
-                                </h4>
-                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
-                                    これらの制限を取り払い、バックエンドをスケールさせるには皆様の支援が必要です。現在、AI
-                                    API
-                                    プロバイダー様やクラウドプラットフォーム様からのスポンサー支援を積極的に募集しています。
-                                </p>
-                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
-                                    ご支援（クレジット提供や資金援助）をいただける場合、GitHub
-                                    リポジトリおよびデモサイトにて、プラットフォームスポンサーとして貴社を大々的にご紹介させていただきます。
-                                </p>
-                                <a
-                                    href="mailto:me@jiang.jp"
-                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
-                                >
-                                    お問い合わせ
-                                </a>
                             </div>
                         </div>
                     </div>
@@ -391,6 +359,16 @@ export default function AboutJA() {
                         マルチプロバイダーサポート
                     </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                        <li>
+                            <a
+                                href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                            >
+                                ByteDance Doubao
+                            </a>
+                        </li>
                         <li>AWS Bedrock（デフォルト）</li>
                         <li>
                             OpenAI / OpenAI互換API（<code>OPENAI_BASE_URL</code>
@@ -402,6 +380,7 @@ export default function AboutJA() {
                         <li>Ollama</li>
                         <li>OpenRouter</li>
                         <li>DeepSeek</li>
+                        <li>SiliconFlow</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         注：<code>claude-sonnet-4-5</code>
@@ -409,18 +388,21 @@ export default function AboutJA() {
                     </p>
 
                     {/* Support */}
-                    <div className="flex items-center gap-4 mt-10 mb-4">
-                        <h2 className="text-2xl font-semibold text-gray-900">
-                            サポート＆お問い合わせ
-                        </h2>
-                        <iframe
-                            src="https://github.com/sponsors/DayuanJiang/button"
-                            title="Sponsor DayuanJiang"
-                            height="32"
-                            width="114"
-                            style={{ border: 0, borderRadius: 6 }}
-                        />
-                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        サポート＆お問い合わせ
+                    </h2>
+                    <p className="text-gray-700 mb-4 font-semibold">
+                        デモサイトのAPIトークン使用を支援してくださった{" "}
+                        <a
+                            href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            ByteDance Doubao
+                        </a>{" "}
+                        様に、心より感謝申し上げます。
+                    </p>
                     <p className="text-gray-700">
                         このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために{" "}
                         <a
