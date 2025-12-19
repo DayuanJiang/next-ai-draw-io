@@ -355,12 +355,17 @@ ${userInputText}
             ]
 
             // Add image parts back
-            for (const filePart of fileParts) {
-                contentParts.push({
-                    type: "image",
-                    image: filePart.url,
-                    mimeType: filePart.mediaType,
-                })
+            const allowImages =
+                typeof modelId === "string" &&
+                !modelId.toLowerCase().includes("deepseek")
+            if (allowImages) {
+                for (const filePart of fileParts) {
+                    contentParts.push({
+                        type: "image",
+                        image: filePart.url,
+                        mimeType: filePart.mediaType,
+                    })
+                }
             }
 
             enhancedMessages = [
