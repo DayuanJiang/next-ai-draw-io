@@ -208,11 +208,11 @@
 }
 
 .animate-fade-in {
-    animation: fadeIn 0.3s ease-out forwards;
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-slide-in-right {
-    animation: slideInRight 0.3s ease-out forwards;
+    animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Message bubble animations */
@@ -228,22 +228,33 @@
 }
 
 .animate-message-in {
-    animation: messageIn 0.25s ease-out forwards;
+    animation: messageIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Subtle floating shadow for cards */
 .shadow-soft {
     box-shadow:
-        0 1px 2px oklch(0.23 0.02 260 / 0.04),
-        0 4px 12px oklch(0.23 0.02 260 / 0.06),
-        0 8px 24px oklch(0.23 0.02 260 / 0.04);
+        0 2px 4px oklch(0.23 0.02 260 / 0.02),
+        0 6px 12px oklch(0.23 0.02 260 / 0.03),
+        0 12px 24px oklch(0.23 0.02 260 / 0.03);
 }
 
 .shadow-soft-lg {
     box-shadow:
-        0 2px 4px oklch(0.23 0.02 260 / 0.04),
-        0 8px 20px oklch(0.23 0.02 260 / 0.08),
-        0 16px 40px oklch(0.23 0.02 260 / 0.06);
+        0 4px 8px oklch(0.23 0.02 260 / 0.03),
+        0 12px 24px oklch(0.23 0.02 260 / 0.05),
+        0 24px 48px oklch(0.23 0.02 260 / 0.04);
+}
+
+/* Gradient borders */
+.border-gradient-primary {
+    position: relative;
+    background:
+        linear-gradient(var(--background), var(--background)) padding-box,
+        linear-gradient(135deg, oklch(0.55 0.18 265), oklch(0.6 0.2 290))
+        border-box;
+    border: 2px solid transparent;
+    border-radius: var(--radius);
 }
 
 /* Gradient text utility */

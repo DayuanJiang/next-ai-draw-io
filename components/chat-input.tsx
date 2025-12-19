@@ -58,6 +58,7 @@ interface ValidationResult {
 function validateFiles(
     newFiles: File[],
     existingCount: number,
+    imageSupported: boolean,
 ): ValidationResult {
     const errors: string[] = []
     const validFiles: File[] = []
@@ -74,7 +75,10 @@ function validateFiles(
             errors.push(`Only ${availableSlots} more file(s) allowed`)
             break
         }
-        if (!isValidFileType(file)) {
+        if (
+            !isValidFileType(file) ||
+            (!imageSupported && file.type.startsWith("image/"))
+        ) {
             errors.push(`"${file.name}" is not a supported file type`)
             continue
         }
@@ -137,6 +141,7 @@ interface ChatInputProps {
     error?: Error | null
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    imageSupported?: boolean
 }
 
 export function ChatInput({
@@ -154,6 +159,7 @@ export function ChatInput({
     error = null,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    imageSupported = true,
 }: ChatInputProps) {
     const {
         diagramHistory,
@@ -224,6 +230,7 @@ export function ChatInput({
             const { validFiles, errors } = validateFiles(
                 imageFiles,
                 files.length,
+                imageSupported,
             )
             showValidationErrors(errors)
             if (validFiles.length > 0) {
@@ -234,7 +241,11 @@ export function ChatInput({
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newFiles = Array.from(e.target.files || [])
-        const { validFiles, errors } = validateFiles(newFiles, files.length)
+        const { validFiles, errors } = validateFiles(
+            newFiles,
+            files.length,
+            imageSupported,
+        )
         showValidationErrors(errors)
         if (validFiles.length > 0) {
             onFileChange([...files, ...validFiles])
@@ -283,6 +294,7 @@ export function ChatInput({
         const { validFiles, errors } = validateFiles(
             supportedFiles,
             files.length,
+            imageSupported,
         )
         showValidationErrors(errors)
         if (validFiles.length > 0) {
@@ -333,7 +345,7 @@ export function ChatInput({
                 />
 
                 {/* Action bar */}
-                <div className="flex items-center justify-between px-3 py-2 border-t border-border/50">
+                <div className="flex items-center justify-between px-3 py-2 border-t border-border/50 bg-muted/20 rounded-b-2xl">
                     {/* Left actions */}
                     <div className="flex items-center gap-1 overflow-x-hidden">
                         <ButtonWithTooltip
@@ -360,18 +372,18 @@ export function ChatInput({
 
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted/50 transition-colors">
                                     <Switch
                                         id="minimal-style"
                                         checked={minimalStyle}
                                         onCheckedChange={onMinimalStyleChange}
-                                        className="scale-75"
+                                        className="scale-75 data-[state=checked]:bg-primary"
                                     />
                                     <label
                                         htmlFor="minimal-style"
-                                        className={`text-xs cursor-pointer select-none ${
+                                        className={`text-xs cursor-pointer select-none font-medium ${
                                             minimalStyle
-                                                ? "text-primary font-medium"
+                                                ? "text-primary"
                                                 : "text-muted-foreground"
                                         }`}
                                     >
@@ -379,7 +391,7 @@ export function ChatInput({
                                     </label>
                                 </div>
                             </TooltipTrigger>
-                            <TooltipContent side="top">
+                            <TooltipContent side="top" className="text-xs">
                                 Use minimal for faster generation (no colors)
                             </TooltipContent>
                         </Tooltip>
@@ -394,7 +406,7 @@ export function ChatInput({
                             onClick={() => onToggleHistory(true)}
                             disabled={isDisabled || diagramHistory.length === 0}
                             tooltipContent="Diagram history"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <History className="h-4 w-4" />
                         </ButtonWithTooltip>
@@ -406,7 +418,7 @@ export function ChatInput({
                             onClick={() => setShowSaveDialog(true)}
                             disabled={isDisabled}
                             tooltipContent="Save diagram"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <Download className="h-4 w-4" />
                         </ButtonWithTooltip>
@@ -428,8 +440,12 @@ export function ChatInput({
                             size="sm"
                             onClick={triggerFileInput}
                             disabled={isDisabled}
-                            tooltipContent="Upload file (image, PDF, text)"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            tooltipContent={
+                                imageSupported
+                                    ? "Upload file (image, PDF, text)"
+                                    : "Upload file (PDF, text)"
+                            }
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <ImageIcon className="h-4 w-4" />
                         </ButtonWithTooltip>
@@ -448,9 +464,16 @@ export function ChatInput({
 
                         <Button
                             type="submit"
-                            disabled={isDisabled || !input.trim()}
+                            disabled={
+                                isDisabled ||
+                                (!input.trim() && files.length === 0)
+                            }
                             size="sm"
-                            className="h-8 px-4 rounded-xl font-medium shadow-sm"
+                            className={`h-8 px-4 rounded-xl font-medium shadow-sm transition-all duration-300 ${
+                                input.trim() || files.length > 0
+                                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105"
+                                    : "bg-muted text-muted-foreground opacity-70"
+                            }`}
                             aria-label={
                                 isDisabled ? "Sending..." : "Send message"
                             }

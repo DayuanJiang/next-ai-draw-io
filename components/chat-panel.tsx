@@ -23,6 +23,10 @@ import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { getAIConfig } from "@/lib/ai-config"
 import { findCachedResponse } from "@/lib/cached-responses"
+import {
+    resolveImageSupport,
+    setCachedImageCapability,
+} from "@/lib/model-capabilities"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
@@ -588,9 +592,15 @@ Continue from EXACTLY where you stopped.`,
                     "Output was truncated before the diagram could be generated. Try a simpler request or increase the maxOutputLength."
             }
 
-            // Translate image not supported error
-            if (friendlyMessage.includes("image content block")) {
+            if (
+                friendlyMessage.includes("image content block") ||
+                friendlyMessage.toLowerCase().includes("image_url") ||
+                friendlyMessage.toLowerCase().includes("unknown variant")
+            ) {
                 friendlyMessage = "This model doesn't support image input."
+                // Cache capability as unsupported for current provider/model
+                const cfg = getAIConfig()
+                setCachedImageCapability(cfg.aiProvider, cfg.aiModel, false)
             }
 
             // Add system message for error so it can be cleared
@@ -904,7 +914,29 @@ Continue from EXACTLY where you stopped.`,
                 // Check all quota limits
                 if (!checkAllQuotaLimits()) return
 
-                sendChatMessage(parts, chartXml, previousXml, sessionId)
+                {
+                    const config = getAIConfig()
+                    const provider = config.aiProvider
+                    const modelId = config.aiModel
+                    const canUseImages = resolveImageSupport(provider, modelId)
+                    const hasImage =
+                        files.some((f) => !isPdfFile(f) && !isTextFile(f)) &&
+                        parts.some((p) => p.type === "file")
+                    if (hasImage && !canUseImages) {
+                        const filtered = parts.filter((p) => p.type !== "file")
+                        sendChatMessage(
+                            filtered,
+                            chartXml,
+                            previousXml,
+                            sessionId,
+                        )
+                        toast.warning(
+                            "当前模型不支持图片输入，已忽略上传的图片",
+                        )
+                    } else {
+                        sendChatMessage(parts, chartXml, previousXml, sessionId)
+                    }
+                }
 
                 // Token count is tracked in onFinish with actual server usage
                 setInput("")
@@ -1186,18 +1218,18 @@ Continue from EXACTLY where you stopped.`,
     // Collapsed view (desktop only)
     if (!isVisible && !isMobile) {
         return (
-            <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
+            <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl shadow-sm transition-all duration-300 ease-in-out">
                 <ButtonWithTooltip
                     tooltipContent="Show chat panel (Ctrl+B)"
                     variant="ghost"
                     size="icon"
                     onClick={onToggleVisibility}
-                    className="hover:bg-accent transition-colors"
+                    className="hover:bg-accent transition-colors rounded-xl"
                 >
                     <PanelRightOpen className="h-5 w-5 text-muted-foreground" />
                 </ButtonWithTooltip>
                 <div
-                    className="text-sm font-medium text-muted-foreground mt-8 tracking-wide"
+                    className="text-sm font-medium text-muted-foreground mt-8 tracking-wide opacity-80"
                     style={{
                         writingMode: "vertical-rl",
                         transform: "rotate(180deg)",
@@ -1211,7 +1243,8 @@ Continue from EXACTLY where you stopped.`,
 
     // Full view
     return (
-        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30 relative">
+        <div className="h-full flex flex-col bg-card/80 backdrop-blur-sm shadow-soft animate-slide-in-right rounded-xl border border-border/40 relative overflow-hidden transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-b from-background/50 to-transparent pointer-events-none" />
             <Toaster
                 position="bottom-center"
                 richColors
@@ -1339,22 +1372,32 @@ Continue from EXACTLY where you stopped.`,
             <footer
                 className={`${isMobile ? "p-2" : "p-4"} border-t border-border/50 bg-card/50`}
             >
-                <ChatInput
-                    input={input}
-                    status={status}
-                    onSubmit={onFormSubmit}
-                    onChange={handleInputChange}
-                    onClearChat={handleNewChat}
-                    files={files}
-                    onFileChange={handleFileChange}
-                    pdfData={pdfData}
-                    showHistory={showHistory}
-                    onToggleHistory={setShowHistory}
-                    sessionId={sessionId}
-                    error={error}
-                    minimalStyle={minimalStyle}
-                    onMinimalStyleChange={setMinimalStyle}
-                />
+                {(() => {
+                    const cfg = getAIConfig()
+                    const imgCap = resolveImageSupport(
+                        cfg.aiProvider,
+                        cfg.aiModel,
+                    )
+                    return (
+                        <ChatInput
+                            input={input}
+                            status={status}
+                            onSubmit={onFormSubmit}
+                            onChange={handleInputChange}
+                            onClearChat={handleNewChat}
+                            files={files}
+                            onFileChange={handleFileChange}
+                            pdfData={pdfData}
+                            showHistory={showHistory}
+                            onToggleHistory={setShowHistory}
+                            sessionId={sessionId}
+                            error={error}
+                            minimalStyle={minimalStyle}
+                            onMinimalStyleChange={setMinimalStyle}
+                            imageSupported={imgCap}
+                        />
+                    )
+                })()}
             </footer>
 
             <SettingsDialog
