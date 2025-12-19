@@ -1266,18 +1266,18 @@ Continue from EXACTLY where you stopped.`,
     // Collapsed view (desktop only)
     if (!isVisible && !isMobile) {
         return (
-            <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
+            <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl shadow-sm transition-all duration-300 ease-in-out">
                 <ButtonWithTooltip
                     tooltipContent="Show chat panel (Ctrl+B)"
                     variant="ghost"
                     size="icon"
                     onClick={onToggleVisibility}
-                    className="hover:bg-accent transition-colors"
+                    className="hover:bg-accent transition-colors rounded-xl"
                 >
                     <PanelRightOpen className="h-5 w-5 text-muted-foreground" />
                 </ButtonWithTooltip>
                 <div
-                    className="text-sm font-medium text-muted-foreground mt-8 tracking-wide"
+                    className="text-sm font-medium text-muted-foreground mt-8 tracking-wide opacity-80"
                     style={{
                         writingMode: "vertical-rl",
                         transform: "rotate(180deg)",
@@ -1291,7 +1291,8 @@ Continue from EXACTLY where you stopped.`,
 
     // Full view
     return (
-        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30 relative">
+        <div className="h-full flex flex-col bg-card/80 backdrop-blur-sm shadow-soft animate-slide-in-right rounded-xl border border-border/40 relative overflow-hidden transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-b from-background/50 to-transparent pointer-events-none" />
             <Toaster
                 position="bottom-center"
                 richColors

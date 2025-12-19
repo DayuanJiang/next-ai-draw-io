@@ -1006,15 +1006,15 @@ export function ChatMessageDisplay({
                                                     return (
                                                         <div
                                                             key={`${message.id}-content-${group.startIndex}`}
-                                                            className={`px-4 py-3 text-sm leading-relaxed ${
+                                                            className={`px-5 py-3.5 text-sm leading-7 shadow-sm transition-all duration-300 ${
                                                                 message.role ===
                                                                 "user"
-                                                                    ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md shadow-sm"
+                                                                    ? "bg-primary text-primary-foreground rounded-[20px] rounded-br-md ml-12"
                                                                     : message.role ===
                                                                         "system"
-                                                                      ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-2xl rounded-bl-md"
-                                                                      : "bg-muted/60 text-foreground rounded-2xl rounded-bl-md"
-                                                            } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:opacity-90 transition-opacity" : ""} ${groupIndex > 0 ? "mt-3" : ""}`}
+                                                                      ? "bg-destructive/5 text-destructive border border-destructive/10 rounded-xl rounded-bl-md mr-12"
+                                                                      : "bg-background border border-border/50 text-foreground rounded-[20px] rounded-bl-md mr-12 shadow-soft"
+                                                            } ${message.role === "user" && isLastUserMessage && onEditMessage ? "cursor-pointer hover:brightness-110" : ""} ${groupIndex > 0 ? "mt-2" : ""}`}
                                                             role={
                                                                 message.role ===
                                                                     "user" &&
