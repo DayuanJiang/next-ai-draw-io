@@ -8,6 +8,8 @@ import {
     ChevronUp,
     Copy,
     Cpu,
+    Download,
+    Eye,
     FileCode,
     FileText,
     Pencil,
@@ -26,6 +28,7 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import { ImagePreviewModal } from "@/components/image-preview-modal"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     applyDiagramOperations,
@@ -234,6 +237,10 @@ export function ChatMessageDisplay({
     const [editingMessageId, setEditingMessageId] = useState<string | null>(
         null,
     )
+    const [previewImage, setPreviewImage] = useState<{
+        url: string
+        alt: string
+    } | null>(null)
     const editTextareaRef = useRef<HTMLTextAreaElement>(null)
     const [editText, setEditText] = useState<string>("")
     // Track which PDF sections are expanded (key: messageId-sectionIndex)
@@ -1084,6 +1091,170 @@ export function ChatMessageDisplay({
                                                                     part,
                                                                     partIndex,
                                                                 ) => {
+                                                                    // Handle image parts
+                                                                    if (
+                                                                        part.type ===
+                                                                            "image" ||
+                                                                        (
+                                                                            part as any
+                                                                        ).image
+                                                                    ) {
+                                                                        const imageUrl =
+                                                                            (
+                                                                                part as any
+                                                                            )
+                                                                                .image ||
+                                                                            (
+                                                                                part as any
+                                                                            )
+                                                                                .url
+
+                                                                        const handleDownload =
+                                                                            async () => {
+                                                                                try {
+                                                                                    // Convert to PNG
+                                                                                    const img =
+                                                                                        new Image()
+                                                                                    img.crossOrigin =
+                                                                                        "anonymous"
+
+                                                                                    await new Promise(
+                                                                                        (
+                                                                                            resolve,
+                                                                                            reject,
+                                                                                        ) => {
+                                                                                            img.onload =
+                                                                                                resolve
+                                                                                            img.onerror =
+                                                                                                reject
+                                                                                            img.src =
+                                                                                                imageUrl
+                                                                                        },
+                                                                                    )
+
+                                                                                    const canvas =
+                                                                                        document.createElement(
+                                                                                            "canvas",
+                                                                                        )
+                                                                                    canvas.width =
+                                                                                        img.width
+                                                                                    canvas.height =
+                                                                                        img.height
+                                                                                    const ctx =
+                                                                                        canvas.getContext(
+                                                                                            "2d",
+                                                                                        )
+
+                                                                                    if (
+                                                                                        ctx
+                                                                                    ) {
+                                                                                        ctx.drawImage(
+                                                                                            img,
+                                                                                            0,
+                                                                                            0,
+                                                                                        )
+                                                                                        canvas.toBlob(
+                                                                                            (
+                                                                                                blob,
+                                                                                            ) => {
+                                                                                                if (
+                                                                                                    blob
+                                                                                                ) {
+                                                                                                    const url =
+                                                                                                        URL.createObjectURL(
+                                                                                                            blob,
+                                                                                                        )
+                                                                                                    const link =
+                                                                                                        document.createElement(
+                                                                                                            "a",
+                                                                                                        )
+                                                                                                    link.href =
+                                                                                                        url
+                                                                                                    link.download = `ai-generated-image-${Date.now()}.png`
+                                                                                                    document.body.appendChild(
+                                                                                                        link,
+                                                                                                    )
+                                                                                                    link.click()
+                                                                                                    document.body.removeChild(
+                                                                                                        link,
+                                                                                                    )
+                                                                                                    URL.revokeObjectURL(
+                                                                                                        url,
+                                                                                                    )
+                                                                                                    toast.success(
+                                                                                                        "图片已下载为 PNG 格式",
+                                                                                                    )
+                                                                                                }
+                                                                                            },
+                                                                                            "image/png",
+                                                                                        )
+                                                                                    }
+                                                                                } catch (error) {
+                                                                                    console.error(
+                                                                                        "Download failed:",
+                                                                                        error,
+                                                                                    )
+                                                                                    toast.error(
+                                                                                        "下载失败",
+                                                                                    )
+                                                                                }
+                                                                            }
+
+                                                                        const handlePreview =
+                                                                            () => {
+                                                                                setPreviewImage(
+                                                                                    {
+                                                                                        url: imageUrl,
+                                                                                        alt: "AI生成图片",
+                                                                                    },
+                                                                                )
+                                                                            }
+
+                                                                        return (
+                                                                            <div
+                                                                                key={`${message.id}-image-${partIndex}`}
+                                                                                className="my-2 relative group"
+                                                                            >
+                                                                                <img
+                                                                                    src={
+                                                                                        imageUrl
+                                                                                    }
+                                                                                    alt="AI生成图片"
+                                                                                    className="max-w-full h-auto rounded-lg border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                                                                                    style={{
+                                                                                        maxHeight:
+                                                                                            "500px",
+                                                                                    }}
+                                                                                    onClick={
+                                                                                        handlePreview
+                                                                                    }
+                                                                                />
+                                                                                <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={
+                                                                                            handlePreview
+                                                                                        }
+                                                                                        className="p-2 bg-background/90 hover:bg-accent rounded-lg border border-border shadow-sm transition-colors"
+                                                                                        title="放大预览"
+                                                                                    >
+                                                                                        <Eye className="h-4 w-4" />
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={
+                                                                                            handleDownload
+                                                                                        }
+                                                                                        className="p-2 bg-background/90 hover:bg-accent rounded-lg border border-border shadow-sm transition-colors"
+                                                                                        title="下载为 PNG"
+                                                                                    >
+                                                                                        <Download className="h-4 w-4" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        )
+                                                                    }
+
                                                                     if (
                                                                         part.type ===
                                                                         "text"
@@ -1358,6 +1529,12 @@ export function ChatMessageDisplay({
                 </div>
             )}
             <div ref={messagesEndRef} />
+            <ImagePreviewModal
+                open={!!previewImage}
+                onOpenChange={(open) => !open && setPreviewImage(null)}
+                imageUrl={previewImage?.url || ""}
+                imageAlt={previewImage?.alt}
+            />
         </ScrollArea>
     )
 }

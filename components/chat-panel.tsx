@@ -18,6 +18,7 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { ImageGenerationConfig } from "@/components/image-generation-config"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
@@ -34,6 +35,10 @@ const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+const STORAGE_IMAGE_GENERATION_ENABLED_KEY =
+    "next-ai-draw-io-image-generation-enabled"
+const STORAGE_IMAGE_RESOLUTION_KEY = "next-ai-draw-io-image-resolution"
+const STORAGE_IMAGE_ASPECT_RATIO_KEY = "next-ai-draw-io-image-aspect-ratio"
 
 // sessionStorage keys
 const SESSION_STORAGE_INPUT_KEY = "next-ai-draw-io-input"
@@ -150,11 +155,38 @@ export default function ChatPanel({
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
     const [minimalStyle, setMinimalStyle] = useState(false)
 
+    // Image generation configuration states
+    const [imageGenerationEnabled, setImageGenerationEnabled] = useState(false)
+    const [imageResolution, setImageResolution] = useState("1K")
+    const [imageAspectRatio, setImageAspectRatio] = useState("1:1")
+
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
     useEffect(() => {
         const savedInput = sessionStorage.getItem(SESSION_STORAGE_INPUT_KEY)
         if (savedInput) {
             setInput(savedInput)
+        }
+
+        // Restore image generation config from localStorage
+        const savedImageEnabled = localStorage.getItem(
+            STORAGE_IMAGE_GENERATION_ENABLED_KEY,
+        )
+        if (savedImageEnabled !== null) {
+            setImageGenerationEnabled(savedImageEnabled === "true")
+        }
+
+        const savedResolution = localStorage.getItem(
+            STORAGE_IMAGE_RESOLUTION_KEY,
+        )
+        if (savedResolution) {
+            setImageResolution(savedResolution)
+        }
+
+        const savedAspectRatio = localStorage.getItem(
+            STORAGE_IMAGE_ASPECT_RATIO_KEY,
+        )
+        if (savedAspectRatio) {
+            setImageAspectRatio(savedAspectRatio)
         }
     }, [])
 
@@ -239,6 +271,40 @@ export default function ChatPanel({
                 console.log(
                     `[onToolCall] Tool: ${toolCall.toolName}, CallId: ${toolCall.toolCallId}`,
                 )
+            }
+
+            if (toolCall.toolName === "display_image") {
+                const { imageData, description } = toolCall.input as {
+                    imageData: string
+                    description?: string
+                }
+
+                // Create an mxCell with the image
+                const imageId = `img-${Date.now()}`
+                const imageXml = `<mxCell id="${imageId}" value="${description || "AI生成图片"}" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/png;base64,${imageData};" vertex="1" parent="1">
+  <mxGeometry x="50" y="50" width="400" height="400" as="geometry"/>
+</mxCell>`
+
+                try {
+                    const validatedXml = validateAndFixXml(imageXml)
+                    onDisplayChart(wrapWithMxFile(validatedXml), true)
+
+                    addToolOutput({
+                        tool: "display_image",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-available",
+                        output: "图片已成功显示在画布上。",
+                    })
+                } catch (error) {
+                    console.error("[display_image] Error:", error)
+                    addToolOutput({
+                        tool: "display_image",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `显示图片失败: ${error instanceof Error ? error.message : String(error)}`,
+                    })
+                }
+                return
             }
 
             if (toolCall.toolName === "display_diagram") {
@@ -619,6 +685,49 @@ Continue from EXACTLY where you stopped.`,
             // DEBUG: Log finish reason to diagnose truncation
             console.log("[onFinish] finishReason:", metadata?.finishReason)
             console.log("[onFinish] metadata:", metadata)
+            console.log("[onFinish] message parts:", message?.parts)
+
+            // Check if image generation mode produced an image
+            if (imageGenerationEnabled && message?.parts) {
+                for (const part of message.parts) {
+                    // Check for image data in the part
+                    if (part.type === "image" || (part as any).image) {
+                        console.log("[onFinish] Found image in response:", part)
+                        // Extract base64 image data
+                        const imageUrl =
+                            (part as any).image || (part as any).url
+                        if (imageUrl && typeof imageUrl === "string") {
+                            // Remove data URL prefix if present
+                            const base64Data = imageUrl.replace(
+                                /^data:image\/[^;]+;base64,/,
+                                "",
+                            )
+
+                            // Create an mxCell with the image
+                            const imageId = `img-${Date.now()}`
+                            const imageXml = `<mxCell id="${imageId}" value="AI生成图片" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;aspect=fixed;imageAspect=0;image=${imageUrl};" vertex="1" parent="1">
+  <mxGeometry x="50" y="50" width="600" height="600" as="geometry"/>
+</mxCell>`
+
+                            try {
+                                const validatedXml = validateAndFixXml(imageXml)
+                                onDisplayChart(
+                                    wrapWithMxFile(validatedXml),
+                                    true,
+                                )
+                                console.log(
+                                    "[onFinish] Image displayed on canvas",
+                                )
+                            } catch (error) {
+                                console.error(
+                                    "[onFinish] Error displaying image:",
+                                    error,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             if (metadata) {
                 // Use Number.isFinite to guard against NaN (typeof NaN === 'number' is true)
@@ -954,6 +1063,25 @@ Continue from EXACTLY where you stopped.`,
         sessionStorage.setItem(SESSION_STORAGE_INPUT_KEY, input)
     }
 
+    // Image generation config handlers
+    const handleImageGenerationEnabledChange = (enabled: boolean) => {
+        setImageGenerationEnabled(enabled)
+        localStorage.setItem(
+            STORAGE_IMAGE_GENERATION_ENABLED_KEY,
+            String(enabled),
+        )
+    }
+
+    const handleImageResolutionChange = (resolution: string) => {
+        setImageResolution(resolution)
+        localStorage.setItem(STORAGE_IMAGE_RESOLUTION_KEY, resolution)
+    }
+
+    const handleImageAspectRatioChange = (aspectRatio: string) => {
+        setImageAspectRatio(aspectRatio)
+        localStorage.setItem(STORAGE_IMAGE_ASPECT_RATIO_KEY, aspectRatio)
+    }
+
     // Helper functions for message actions (regenerate/edit)
     // Extract previous XML snapshot before a given message index
     const getPreviousXml = (beforeIndex: number): string => {
@@ -1035,6 +1163,11 @@ Continue from EXACTLY where you stopped.`,
                     }),
                     ...(minimalStyle && {
                         "x-minimal-style": "true",
+                    }),
+                    ...(imageGenerationEnabled && {
+                        "x-image-generation": "true",
+                        "x-image-resolution": imageResolution,
+                        "x-image-aspect-ratio": imageAspectRatio,
                     }),
                 },
             },
@@ -1334,6 +1467,16 @@ Continue from EXACTLY where you stopped.`,
                     onEditMessage={handleEditMessage}
                 />
             </main>
+
+            {/* Image Generation Config */}
+            <ImageGenerationConfig
+                enabled={imageGenerationEnabled}
+                onEnabledChange={handleImageGenerationEnabledChange}
+                resolution={imageResolution}
+                onResolutionChange={handleImageResolutionChange}
+                aspectRatio={imageAspectRatio}
+                onAspectRatioChange={handleImageAspectRatioChange}
+            />
 
             {/* Input */}
             <footer

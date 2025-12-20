@@ -1,3 +1,4 @@
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import {
     APICallError,
     convertToModelMessages,
@@ -217,9 +218,45 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Read minimal style preference from header
     const minimalStyle = req.headers.get("x-minimal-style") === "true"
 
+    // Read image generation config from headers
+    const imageGenerationEnabled =
+        req.headers.get("x-image-generation") === "true"
+    const imageResolution = req.headers.get("x-image-resolution") || "1K"
+    const imageAspectRatio = req.headers.get("x-image-aspect-ratio") || "1:1"
+
     // Get AI model with optional client overrides
-    const { model, providerOptions, headers, modelId } =
-        getAIModel(clientOverrides)
+    // If image generation is enabled, use gemini-3-pro-image-preview
+    let model: any
+    let providerOptions: any = {}
+    let headers: any = {}
+    let modelId: string
+
+    if (imageGenerationEnabled) {
+        // Use Google Gemini for image generation
+        const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+        if (!googleApiKey) {
+            return Response.json(
+                { error: "Google API key not configured for image generation" },
+                { status: 500 },
+            )
+        }
+        const googleProvider = createGoogleGenerativeAI({
+            apiKey: googleApiKey,
+        })
+        model = googleProvider("gemini-3-pro-image-preview", {
+            imageConfig: {
+                aspectRatio: imageAspectRatio,
+                imageSize: imageResolution,
+            },
+        })
+        modelId = "gemini-3-pro-image-preview"
+    } else {
+        const result = getAIModel(clientOverrides)
+        model = result.model
+        providerOptions = result.providerOptions
+        headers = result.headers
+        modelId = result.modelId
+    }
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
@@ -287,6 +324,40 @@ ${userInputText}
         (msg: any) =>
             msg.content && Array.isArray(msg.content) && msg.content.length > 0,
     )
+
+    // In image generation mode, filter out images from assistant messages
+    // Gemini API doesn't support images in assistant messages
+    if (imageGenerationEnabled) {
+        enhancedMessages = enhancedMessages.map((msg: any) => {
+            if (msg.role === "assistant" && Array.isArray(msg.content)) {
+                const filteredContent = msg.content.filter((part: any) => {
+                    // Remove image parts from assistant messages (multiple checks for different formats)
+                    if (
+                        part.type === "image" ||
+                        part.image ||
+                        part.url ||
+                        part.mimeType?.startsWith("image/") ||
+                        (part.experimental_providerMetadata &&
+                            part.experimental_providerMetadata.anthropic
+                                ?.type === "image")
+                    ) {
+                        console.log(
+                            "[route.ts] Filtering out image from assistant message",
+                            part.type,
+                        )
+                        return false
+                    }
+                    return true
+                })
+                return { ...msg, content: filteredContent }
+            }
+            return msg
+        })
+        // Remove messages with empty content after filtering
+        enhancedMessages = enhancedMessages.filter(
+            (msg: any) => msg.content && msg.content.length > 0,
+        )
+    }
 
     // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
     // Bedrock API rejects messages where toolUse.input is not a valid JSON object
@@ -393,28 +464,35 @@ ${userInputText}
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
     // This allows: if only user message changes, both system caches are reused
     //              if XML changes, instruction cache is still reused
-    const systemMessages = [
-        // Cache breakpoint 1: Instructions (rarely change)
-        {
-            role: "system" as const,
-            content: systemMessage,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
-        },
-        // Cache breakpoint 2: Previous and Current diagram XML context
-        {
-            role: "system" as const,
-            content: `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
-        },
-    ]
+    const systemMessages = imageGenerationEnabled
+        ? [
+              {
+                  role: "system" as const,
+                  content: `你是一个 AI 图片生成器。根据用户的描述创建高质量的图片。请充满创意和细节。`,
+              },
+          ]
+        : [
+              // Cache breakpoint 1: Instructions (rarely change)
+              {
+                  role: "system" as const,
+                  content: systemMessage,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+              // Cache breakpoint 2: Previous and Current diagram XML context
+              {
+                  role: "system" as const,
+                  content: `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+          ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
@@ -423,72 +501,10 @@ ${userInputText}
         ...(process.env.MAX_OUTPUT_TOKENS && {
             maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
         }),
-        stopWhen: stepCountIs(5),
-        // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
-        experimental_repairToolCall: async ({ toolCall, error }) => {
-            // DEBUG: Log what we're trying to repair
-            console.log(`[repairToolCall] Tool: ${toolCall.toolName}`)
-            console.log(
-                `[repairToolCall] Error: ${error.name} - ${error.message}`,
-            )
-            console.log(`[repairToolCall] Input type: ${typeof toolCall.input}`)
-            console.log(`[repairToolCall] Input value:`, toolCall.input)
-
-            // Only attempt repair for invalid tool input (broken JSON from truncation)
-            if (
-                error instanceof InvalidToolInputError ||
-                error.name === "AI_InvalidToolInputError"
-            ) {
-                try {
-                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
-                    let inputToRepair = toolCall.input
-                    if (typeof inputToRepair === "string") {
-                        // Fix `:=` instead of `: ` (LLM sometimes generates this)
-                        inputToRepair = inputToRepair.replace(/:=/g, ": ")
-                        // Fix `= "` instead of `: "`
-                        inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
-                    }
-                    // Use jsonrepair to fix truncated JSON
-                    const repairedInput = jsonrepair(inputToRepair)
-                    console.log(
-                        `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
-                    )
-                    return { ...toolCall, input: repairedInput }
-                } catch (repairError) {
-                    console.warn(
-                        `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
-                        repairError,
-                    )
-                    // Return a placeholder input to avoid API errors in multi-step
-                    // The tool will fail gracefully on client side
-                    if (toolCall.toolName === "edit_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                operations: [],
-                                _error: "JSON repair failed - no operations to apply",
-                            },
-                        }
-                    }
-                    if (toolCall.toolName === "display_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                xml: "",
-                                _error: "JSON repair failed - empty diagram",
-                            },
-                        }
-                    }
-                    return null
-                }
-            }
-            // Don't attempt to repair other errors (like NoSuchToolError)
-            return null
-        },
+        stopWhen: imageGenerationEnabled ? undefined : stepCountIs(5),
         messages: allMessages,
-        ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
+        ...(providerOptions && { providerOptions }),
         ...(headers && { headers }),
-        // Langfuse telemetry config (returns undefined if not configured)
         ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
             experimental_telemetry: getTelemetryConfig({
                 sessionId: validSessionId,
@@ -496,16 +512,85 @@ ${userInputText}
             }),
         }),
         onFinish: ({ text, usage }) => {
-            // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
             setTraceOutput(text, {
                 promptTokens: usage?.inputTokens,
                 completionTokens: usage?.outputTokens,
             })
         },
-        tools: {
-            // Client-side tool that will be executed on the client
-            display_diagram: {
-                description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
+        // Only add repair and tools for diagram mode
+        ...(!imageGenerationEnabled && {
+            experimental_repairToolCall: async ({ toolCall, error }) => {
+                // DEBUG: Log what we're trying to repair
+                console.log(`[repairToolCall] Tool: ${toolCall.toolName}`)
+                console.log(
+                    `[repairToolCall] Error: ${error.name} - ${error.message}`,
+                )
+                console.log(
+                    `[repairToolCall] Input type: ${typeof toolCall.input}`,
+                )
+                console.log(`[repairToolCall] Input value:`, toolCall.input)
+
+                // Only attempt repair for invalid tool input (broken JSON from truncation)
+                if (
+                    error instanceof InvalidToolInputError ||
+                    error.name === "AI_InvalidToolInputError"
+                ) {
+                    try {
+                        // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
+                        let inputToRepair = toolCall.input
+                        if (typeof inputToRepair === "string") {
+                            // Fix `:=` instead of `: ` (LLM sometimes generates this)
+                            inputToRepair = inputToRepair.replace(/:=/g, ": ")
+                            // Fix `= "` instead of `: "`
+                            inputToRepair = inputToRepair.replace(
+                                /=\s*"/g,
+                                ': "',
+                            )
+                        }
+                        // Use jsonrepair to fix truncated JSON
+                        const repairedInput = jsonrepair(inputToRepair)
+                        console.log(
+                            `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
+                        )
+                        return { ...toolCall, input: repairedInput }
+                    } catch (repairError) {
+                        console.warn(
+                            `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
+                            repairError,
+                        )
+                        // Return a placeholder input to avoid API errors in multi-step
+                        // The tool will fail gracefully on client side
+                        if (toolCall.toolName === "edit_diagram") {
+                            return {
+                                ...toolCall,
+                                input: {
+                                    operations: [],
+                                    _error: "JSON repair failed - no operations to apply",
+                                },
+                            }
+                        }
+                        if (toolCall.toolName === "display_diagram") {
+                            return {
+                                ...toolCall,
+                                input: {
+                                    xml: "",
+                                    _error: "JSON repair failed - empty diagram",
+                                },
+                            }
+                        }
+                        return null
+                    }
+                }
+                // Don't attempt to repair other errors (like NoSuchToolError)
+                return null
+            },
+        }),
+        // Tools - only for diagram mode
+        ...(!imageGenerationEnabled && {
+            tools: {
+                // Client-side tool that will be executed on the client
+                display_diagram: {
+                    description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
 
 VALIDATION RULES (XML will be rejected if violated):
 1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
@@ -536,14 +621,14 @@ Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
 - For animated connectors, add "flowAnimation=1" to edge style.
 `,
-                inputSchema: z.object({
-                    xml: z
-                        .string()
-                        .describe("XML string to be displayed on draw.io"),
-                }),
-            },
-            edit_diagram: {
-                description: `Edit the current diagram by ID-based operations (update/add/delete cells).
+                    inputSchema: z.object({
+                        xml: z
+                            .string()
+                            .describe("XML string to be displayed on draw.io"),
+                    }),
+                },
+                edit_diagram: {
+                    description: `Edit the current diagram by ID-based operations (update/add/delete cells).
 
 Operations:
 - update: Replace an existing cell by its id. Provide cell_id and complete new_xml.
@@ -553,31 +638,31 @@ Operations:
 For update/add, new_xml must be a complete mxCell element including mxGeometry.
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"`,
-                inputSchema: z.object({
-                    operations: z
-                        .array(
-                            z.object({
-                                type: z
-                                    .enum(["update", "add", "delete"])
-                                    .describe("Operation type"),
-                                cell_id: z
-                                    .string()
-                                    .describe(
-                                        "The id of the mxCell. Must match the id attribute in new_xml.",
-                                    ),
-                                new_xml: z
-                                    .string()
-                                    .optional()
-                                    .describe(
-                                        "Complete mxCell XML element (required for update/add)",
-                                    ),
-                            }),
-                        )
-                        .describe("Array of operations to apply"),
-                }),
-            },
-            append_diagram: {
-                description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.
+                    inputSchema: z.object({
+                        operations: z
+                            .array(
+                                z.object({
+                                    type: z
+                                        .enum(["update", "add", "delete"])
+                                        .describe("Operation type"),
+                                    cell_id: z
+                                        .string()
+                                        .describe(
+                                            "The id of the mxCell. Must match the id attribute in new_xml.",
+                                        ),
+                                    new_xml: z
+                                        .string()
+                                        .optional()
+                                        .describe(
+                                            "Complete mxCell XML element (required for update/add)",
+                                        ),
+                                }),
+                            )
+                            .describe("Array of operations to apply"),
+                    }),
+                },
+                append_diagram: {
+                    description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.
 
 WHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).
 
@@ -588,15 +673,30 @@ CRITICAL INSTRUCTIONS:
 4. If still truncated, call append_diagram again with the next fragment
 
 Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
-                inputSchema: z.object({
-                    xml: z
-                        .string()
-                        .describe(
-                            "Continuation XML fragment to append (NO wrapper tags)",
-                        ),
-                }),
+                    inputSchema: z.object({
+                        xml: z
+                            .string()
+                            .describe(
+                                "Continuation XML fragment to append (NO wrapper tags)",
+                            ),
+                    }),
+                },
+                display_image: {
+                    description: `在 draw.io 画布上显示生成的图片。此工具接收 base64 编码的图片数据并将其显示在画布上。`,
+                    inputSchema: z.object({
+                        imageData: z
+                            .string()
+                            .describe(
+                                "Base64 编码的图片数据（不包含 data:image 前缀）",
+                            ),
+                        description: z
+                            .string()
+                            .optional()
+                            .describe("图片的可选描述"),
+                    }),
+                },
             },
-        },
+        }),
         ...(process.env.TEMPERATURE !== undefined && {
             temperature: parseFloat(process.env.TEMPERATURE),
         }),
