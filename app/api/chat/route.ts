@@ -596,6 +596,63 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
                         ),
                 }),
             },
+            get_shape_library: {
+                description: `Get draw.io shape/icon library documentation with style syntax and shape names.
+
+Available libraries:
+- Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
+- Networking: cisco19, network, kubernetes, vvd, rack
+- Business: bpmn, lean_mapping
+- General: flowchart, basic, arrows2, infographic, sitemap
+- UI/Mockups: android
+- Enterprise: citrix, sap, mscae, atlassian
+- Engineering: fluidpower, electrical, pid, cabinets, floorplan
+- Icons: webicons
+
+Call this tool to get shape names and usage syntax for a specific library.`,
+                inputSchema: z.object({
+                    library: z
+                        .string()
+                        .describe(
+                            "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
+                        ),
+                }),
+                execute: async ({ library }) => {
+                    const fs = await import("fs/promises")
+                    const path = await import("path")
+
+                    // Sanitize input - prevent path traversal attacks
+                    const sanitizedLibrary = library
+                        .toLowerCase()
+                        .replace(/[^a-z0-9_-]/g, "")
+
+                    if (sanitizedLibrary !== library.toLowerCase()) {
+                        return `Invalid library name. Use only letters, numbers, underscores, and hyphens.`
+                    }
+
+                    try {
+                        const baseDir = path.join(
+                            process.cwd(),
+                            "docs/shape-libraries",
+                        )
+                        const filePath = path.join(
+                            baseDir,
+                            `${sanitizedLibrary}.md`,
+                        )
+
+                        // Verify path stays within expected directory
+                        const resolvedPath = path.resolve(filePath)
+                        if (!resolvedPath.startsWith(path.resolve(baseDir))) {
+                            return `Invalid library path.`
+                        }
+
+                        const content = await fs.readFile(filePath, "utf-8")
+                        return content
+                    } catch {
+                        return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, lean_mapping, openstack, rack`
+                    }
+                },
+            },
         },
         ...(process.env.TEMPERATURE !== undefined && {
             temperature: parseFloat(process.env.TEMPERATURE),
