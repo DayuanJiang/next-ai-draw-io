@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { useDictionary } from "@/hooks/use-dictionary"
 
 interface SettingsDialogProps {
     open: boolean
@@ -55,6 +56,7 @@ export function SettingsDialog({
     darkMode,
     onToggleDarkMode,
 }: SettingsDialogProps) {
+    const dict = useDictionary()
     const [accessCode, setAccessCode] = useState("")
     const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
@@ -129,14 +131,14 @@ export function SettingsDialog({
             const data = await response.json()
 
             if (!data.valid) {
-                setError(data.message || "Invalid access code")
+                setError(data.message || dict.errors.invalidAccessCode)
                 return
             }
 
             localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim())
             onOpenChange(false)
         } catch {
-            setError("Failed to verify access code")
+            setError(dict.errors.networkError)
         } finally {
             setIsVerifying(false)
         }
@@ -153,15 +155,17 @@ export function SettingsDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Settings</DialogTitle>
+                    <DialogTitle>{dict.settings.title}</DialogTitle>
                     <DialogDescription>
-                        Configure your application settings.
+                        {dict.settings.description}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                     {accessCodeRequired && (
                         <div className="space-y-2">
-                            <Label htmlFor="access-code">Access Code</Label>
+                            <Label htmlFor="access-code">
+                                {dict.settings.accessCode}
+                            </Label>
                             <div className="flex gap-2">
                                 <Input
                                     id="access-code"
@@ -171,18 +175,20 @@ export function SettingsDialog({
                                         setAccessCode(e.target.value)
                                     }
                                     onKeyDown={handleKeyDown}
-                                    placeholder="Enter access code"
+                                    placeholder={
+                                        dict.settings.accessCodePlaceholder
+                                    }
                                     autoComplete="off"
                                 />
                                 <Button
                                     onClick={handleSave}
                                     disabled={isVerifying || !accessCode.trim()}
                                 >
-                                    {isVerifying ? "..." : "Save"}
+                                    {isVerifying ? "..." : dict.common.save}
                                 </Button>
                             </div>
                             <p className="text-[0.8rem] text-muted-foreground">
-                                Required to use this application.
+                                {dict.settings.accessCodeDescription}
                             </p>
                             {error && (
                                 <p className="text-[0.8rem] text-destructive">
@@ -192,15 +198,15 @@ export function SettingsDialog({
                         </div>
                     )}
                     <div className="space-y-2">
-                        <Label>AI Provider Settings</Label>
+                        <Label>{dict.settings.aiProvider}</Label>
                         <p className="text-[0.8rem] text-muted-foreground">
-                            Use your own API key to bypass usage limits. Your
-                            key is stored locally in your browser and is never
-                            stored on the server.
+                            {dict.settings.aiProviderDescription}
                         </p>
                         <div className="space-y-3 pt-2">
                             <div className="space-y-2">
-                                <Label htmlFor="ai-provider">Provider</Label>
+                                <Label htmlFor="ai-provider">
+                                    {dict.settings.provider}
+                                </Label>
                                 <Select
                                     value={provider || "default"}
                                     onValueChange={(value) => {
@@ -214,32 +220,36 @@ export function SettingsDialog({
                                     }}
                                 >
                                     <SelectTrigger id="ai-provider">
-                                        <SelectValue placeholder="Use Server Default" />
+                                        <SelectValue
+                                            placeholder={
+                                                dict.settings.useServerDefault
+                                            }
+                                        />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="default">
-                                            Use Server Default
+                                            {dict.settings.useServerDefault}
                                         </SelectItem>
                                         <SelectItem value="openai">
-                                            OpenAI
+                                            {dict.providers.openai}
                                         </SelectItem>
                                         <SelectItem value="anthropic">
-                                            Anthropic
+                                            {dict.providers.anthropic}
                                         </SelectItem>
                                         <SelectItem value="google">
-                                            Google
+                                            {dict.providers.google}
                                         </SelectItem>
                                         <SelectItem value="azure">
-                                            Azure OpenAI
+                                            {dict.providers.azure}
                                         </SelectItem>
                                         <SelectItem value="openrouter">
-                                            OpenRouter
+                                            {dict.providers.openrouter}
                                         </SelectItem>
                                         <SelectItem value="deepseek">
-                                            DeepSeek
+                                            {dict.providers.deepseek}
                                         </SelectItem>
                                         <SelectItem value="siliconflow">
-                                            SiliconFlow
+                                            {dict.providers.siliconflow}
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -248,7 +258,7 @@ export function SettingsDialog({
                                 <>
                                     <div className="space-y-2">
                                         <Label htmlFor="ai-model">
-                                            Model ID
+                                            {dict.settings.modelId}
                                         </Label>
                                         <Input
                                             id="ai-model"
@@ -270,13 +280,14 @@ export function SettingsDialog({
                                                         : provider ===
                                                             "deepseek"
                                                           ? "e.g., deepseek-chat"
-                                                          : "Model ID"
+                                                          : dict.settings
+                                                                .modelId
                                             }
                                         />
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="ai-api-key">
-                                            API Key
+                                            {dict.settings.apiKey}
                                         </Label>
                                         <Input
                                             id="ai-api-key"
@@ -289,11 +300,13 @@ export function SettingsDialog({
                                                     e.target.value,
                                                 )
                                             }}
-                                            placeholder="Your API key"
+                                            placeholder={
+                                                dict.settings.apiKeyPlaceholder
+                                            }
                                             autoComplete="off"
                                         />
                                         <p className="text-[0.8rem] text-muted-foreground">
-                                            Overrides{" "}
+                                            {dict.settings.overrides}{" "}
                                             {provider === "openai"
                                                 ? "OPENAI_API_KEY"
                                                 : provider === "anthropic"
@@ -316,7 +329,7 @@ export function SettingsDialog({
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="ai-base-url">
-                                            Base URL (optional)
+                                            {dict.settings.baseUrl}
                                         </Label>
                                         <Input
                                             id="ai-base-url"
@@ -333,7 +346,8 @@ export function SettingsDialog({
                                                     ? "https://api.anthropic.com/v1"
                                                     : provider === "siliconflow"
                                                       ? "https://api.siliconflow.com/v1"
-                                                      : "Custom endpoint URL"
+                                                      : dict.settings
+                                                            .customEndpoint
                                             }
                                         />
                                     </div>
@@ -360,7 +374,7 @@ export function SettingsDialog({
                                             setModelId("")
                                         }}
                                     >
-                                        Clear Settings
+                                        {dict.settings.clearSettings}
                                     </Button>
                                 </>
                             )}
@@ -369,9 +383,11 @@ export function SettingsDialog({
 
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <Label htmlFor="theme-toggle">Theme</Label>
+                            <Label htmlFor="theme-toggle">
+                                {dict.settings.theme}
+                            </Label>
                             <p className="text-[0.8rem] text-muted-foreground">
-                                Dark/Light mode for interface and DrawIO canvas.
+                                {dict.settings.themeDescription}
                             </p>
                         </div>
                         <Button
@@ -390,10 +406,14 @@ export function SettingsDialog({
 
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <Label htmlFor="drawio-ui">DrawIO Style</Label>
+                            <Label htmlFor="drawio-ui">
+                                {dict.settings.drawioStyle}
+                            </Label>
                             <p className="text-[0.8rem] text-muted-foreground">
-                                Canvas style:{" "}
-                                {drawioUi === "min" ? "Minimal" : "Sketch"}
+                                {dict.settings.drawioStyleDescription}{" "}
+                                {drawioUi === "min"
+                                    ? dict.settings.minimal
+                                    : dict.settings.sketch}
                             </p>
                         </div>
                         <Button
@@ -402,18 +422,20 @@ export function SettingsDialog({
                             size="sm"
                             onClick={onToggleDrawioUi}
                         >
-                            Switch to{" "}
-                            {drawioUi === "min" ? "Sketch" : "Minimal"}
+                            {dict.settings.switchTo}{" "}
+                            {drawioUi === "min"
+                                ? dict.settings.sketch
+                                : dict.settings.minimal}
                         </Button>
                     </div>
 
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <Label htmlFor="close-protection">
-                                Close Protection
+                                {dict.settings.closeProtection}
                             </Label>
                             <p className="text-[0.8rem] text-muted-foreground">
-                                Show confirmation when leaving the page.
+                                {dict.settings.closeProtectionDescription}
                             </p>
                         </div>
                         <Switch

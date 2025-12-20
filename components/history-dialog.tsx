@@ -12,6 +12,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useDictionary } from "@/hooks/use-dictionary"
+import { formatMessage } from "@/lib/i18n/utils"
 
 interface HistoryDialogProps {
     showHistory: boolean
@@ -22,6 +24,7 @@ export function HistoryDialog({
     showHistory,
     onToggleHistory,
 }: HistoryDialogProps) {
+    const dict = useDictionary()
     const { loadDiagram: onDisplayChart, diagramHistory } = useDiagram()
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
@@ -42,18 +45,15 @@ export function HistoryDialog({
         <Dialog open={showHistory} onOpenChange={onToggleHistory}>
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Diagram History</DialogTitle>
+                    <DialogTitle>{dict.history.title}</DialogTitle>
                     <DialogDescription>
-                        Here saved each diagram before AI modification.
-                        <br />
-                        Click on a diagram to restore it
+                        {dict.history.description}
                     </DialogDescription>
                 </DialogHeader>
 
                 {diagramHistory.length === 0 ? (
                     <div className="text-center p-4 text-gray-500">
-                        No history available yet. Send messages to create
-                        diagram history.
+                        {dict.history.noHistory}
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-4">
@@ -70,14 +70,14 @@ export function HistoryDialog({
                                 <div className="aspect-video bg-white rounded overflow-hidden flex items-center justify-center">
                                     <Image
                                         src={item.svg}
-                                        alt={`Diagram version ${index + 1}`}
+                                        alt={`${dict.history.version} ${index + 1}`}
                                         width={200}
                                         height={100}
                                         className="object-contain w-full h-full p-1"
                                     />
                                 </div>
                                 <div className="text-xs text-center mt-1 text-gray-500">
-                                    Version {index + 1}
+                                    {dict.history.version} {index + 1}
                                 </div>
                             </div>
                         ))}
@@ -88,21 +88,23 @@ export function HistoryDialog({
                     {selectedIndex !== null ? (
                         <>
                             <div className="flex-1 text-sm text-muted-foreground">
-                                Restore to Version {selectedIndex + 1}?
+                                {formatMessage(dict.history.restoreTo, {
+                                    version: selectedIndex + 1,
+                                })}
                             </div>
                             <Button
                                 variant="outline"
                                 onClick={() => setSelectedIndex(null)}
                             >
-                                Cancel
+                                {dict.common.cancel}
                             </Button>
                             <Button onClick={handleConfirmRestore}>
-                                Confirm
+                                {dict.common.confirm}
                             </Button>
                         </>
                     ) : (
                         <Button variant="outline" onClick={handleClose}>
-                            Close
+                            {dict.common.close}
                         </Button>
                     )}
                 </DialogFooter>

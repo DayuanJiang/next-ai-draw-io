@@ -18,18 +18,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { useDictionary } from "@/hooks/use-dictionary"
 
 export type ExportFormat = "drawio" | "png" | "svg"
-
-const FORMAT_OPTIONS: {
-    value: ExportFormat
-    label: string
-    extension: string
-}[] = [
-    { value: "drawio", label: "Draw.io XML", extension: ".drawio" },
-    { value: "png", label: "PNG Image", extension: ".png" },
-    { value: "svg", label: "SVG Image", extension: ".svg" },
-]
 
 interface SaveDialogProps {
     open: boolean
@@ -44,6 +35,7 @@ export function SaveDialog({
     onSave,
     defaultFilename,
 }: SaveDialogProps) {
+    const dict = useDictionary()
     const [filename, setFilename] = useState(defaultFilename)
     const [format, setFormat] = useState<ExportFormat>("drawio")
 
@@ -66,20 +58,40 @@ export function SaveDialog({
         }
     }
 
+    const FORMAT_OPTIONS = [
+        {
+            value: "drawio" as const,
+            label: dict.save.formats.drawio,
+            extension: ".drawio",
+        },
+        {
+            value: "png" as const,
+            label: dict.save.formats.png,
+            extension: ".png",
+        },
+        {
+            value: "svg" as const,
+            label: dict.save.formats.svg,
+            extension: ".svg",
+        },
+    ]
+
     const currentFormat = FORMAT_OPTIONS.find((f) => f.value === format)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Save Diagram</DialogTitle>
+                    <DialogTitle>{dict.save.title}</DialogTitle>
                     <DialogDescription>
-                        Choose a format and filename to save your diagram.
+                        {dict.save.description}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Format</label>
+                        <label className="text-sm font-medium">
+                            {dict.save.format}
+                        </label>
                         <Select
                             value={format}
                             onValueChange={(v) => setFormat(v as ExportFormat)}
@@ -100,13 +112,15 @@ export function SaveDialog({
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Filename</label>
+                        <label className="text-sm font-medium">
+                            {dict.save.filename}
+                        </label>
                         <div className="flex items-stretch">
                             <Input
                                 value={filename}
                                 onChange={(e) => setFilename(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder="Enter filename"
+                                placeholder={dict.save.filenamePlaceholder}
                                 autoFocus
                                 onFocus={(e) => e.target.select()}
                                 className="rounded-r-none border-r-0 focus-visible:z-10"
@@ -122,9 +136,9 @@ export function SaveDialog({
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                     >
-                        Cancel
+                        {dict.common.cancel}
                     </Button>
-                    <Button onClick={handleSave}>Save</Button>
+                    <Button onClick={handleSave}>{dict.common.save}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
