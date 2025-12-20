@@ -39,7 +39,7 @@
         "saveDiagram": "ダイアグラムを保存",
         "uploadFile": "ファイルをアップロード（画像、PDF、テキスト）",
         "minimalStyle": "ミニマル",
-        "styledMode": "スタイル",
+        "styledMode": "スタイル付き",
         "minimalTooltip": "高速生成のためミニマルを使用（色なし）",
         "regenerate": "応答を再生成",
         "copyResponse": "応答をコピー",
@@ -94,7 +94,7 @@
         "switchTo": "切り替え",
         "minimal": "ミニマル",
         "sketch": "スケッチ",
-        "closeProtection": "閉じる保護",
+        "closeProtection": "ページ離脱確認",
         "closeProtectionDescription": "ページを離れる際に確認を表示します。"
     },
     "save": {
@@ -129,7 +129,7 @@
         "unsupportedType": "「{name}」はサポートされていないファイルタイプです",
         "filesRejected": "{count} 個のファイルが拒否されました：",
         "andMore": "...およびさらに {count} 個",
-        "invalidAccessCode": "無効または欠落したアクセスコード。設定で構成してください。",
+        "invalidAccessCode": "無効または欠落したアクセスコード。設定で入力してください。",
         "networkError": "ネットワークエラー。接続を確認してください。",
         "retryLimit": "自動再試行制限に達しました（{max}）。手動で再試行してください。",
         "validationFailed": "ダイアグラムの検証に失敗しました。再生成してみてください。",
@@ -159,7 +159,7 @@
     "tools": {
         "generateDiagram": "ダイアグラムを生成",
         "editDiagram": "ダイアグラムを編集",
-        "appendDiagram": "ダイアグラムを続ける",
+        "appendDiagram": "ダイアグラムに追加",
         "complete": "完了",
         "error": "エラー",
         "truncated": "切り捨て"

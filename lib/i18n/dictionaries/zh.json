@@ -7,8 +7,8 @@
         "clear": "清除",
         "edit": "编辑",
         "delete": "删除",
-        "loading": "加载中..",
-        "new": "新"
+        "loading": "加载中...",
+        "new": "新建"
     },
     "nav": {
         "about": "关于",
@@ -39,14 +39,14 @@
         "saveDiagram": "保存图表",
         "uploadFile": "上传文件（图片、PDF、文本）",
         "minimalStyle": "简约",
-        "styledMode": "样式化",
+        "styledMode": "精致",
         "minimalTooltip": "使用简约模式以加快生成速度（无颜色）",
         "regenerate": "重新生成响应",
         "copyResponse": "复制响应",
         "copied": "已复制！",
         "failedToCopy": "复制失败",
-        "goodResponse": "好的响应",
-        "badResponse": "不好的响应",
+        "goodResponse": "有帮助",
+        "badResponse": "无帮助",
         "clickToEdit": "点击编辑",
         "editMessage": "编辑消息",
         "saveAndSubmit": "保存并提交"
@@ -64,7 +64,7 @@
         "replicateFlowchart": "复制流程图",
         "replicateDescription": "上传并复制现有流程图",
         "creativeDrawing": "创意绘图",
-        "creativeDescription": "绘制有趣和创意的内容",
+        "creativeDescription": "绘制有趣且富有创意的内容",
         "cachedNote": "示例已缓存，可即时响应",
         "mcpServer": "MCP 服务器",
         "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用",
@@ -94,7 +94,7 @@
         "switchTo": "切换到",
         "minimal": "简约",
         "sketch": "草图",
-        "closeProtection": "关闭保护",
+        "closeProtection": "关闭确认",
         "closeProtectionDescription": "离开页面时显示确认。"
     },
     "save": {
@@ -125,7 +125,7 @@
     "errors": {
         "maxFiles": "文件太多。最多允许 {max} 个。",
         "onlyMoreAllowed": "只能再添加 {slots} 个文件",
-        "fileExceeds": "\"{name}\" 是 {size}（超过 {max}MB）",
+        "fileExceeds": "\"{name}\" 大小为 {size}（超过 {max}MB）",
         "unsupportedType": "\"{name}\" 不是支持的文件类型",
         "filesRejected": "{count} 个文件被拒绝：",
         "andMore": "...还有 {count} 个",

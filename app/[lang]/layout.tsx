@@ -1,11 +1,12 @@
 import { GoogleAnalytics } from "@next/third-parties/google"
 import type { Metadata, Viewport } from "next"
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
+import { notFound } from "next/navigation"
 import { DiagramProvider } from "@/contexts/diagram-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Locale } from "@/lib/i18n/config"
 import { i18n } from "@/lib/i18n/config"
-import { getDictionary } from "@/lib/i18n/dictionaries"
+import { getDictionary, hasLocale } from "@/lib/i18n/dictionaries"
 
 import "../globals.css"
 
@@ -37,9 +38,10 @@ export async function generateStaticParams() {
 export async function generateMetadata({
     params,
 }: {
-    params: { lang: Locale }
+    params: Promise<{ lang: string }>
 }): Promise<Metadata> {
-    const { lang } = await params
+    const { lang: rawLang } = await params
+    const lang = (rawLang in { en: 1, zh: 1, ja: 1 } ? rawLang : "en") as Locale
 
     // Default to English metadata
     const titles: Record<Locale, string> = {
@@ -123,10 +125,12 @@ export default async function RootLayout({
     params,
 }: Readonly<{
     children: React.ReactNode
-    params: { lang: Locale }
+    params: Promise<{ lang: string }>
 }>) {
     const { lang } = await params
-    const dictionary = await getDictionary(lang)
+    if (!hasLocale(lang)) notFound()
+    const validLang = lang as Locale
+    const dictionary = await getDictionary(validLang)
 
     const jsonLd = {
         "@context": "https://schema.org",
@@ -137,7 +141,7 @@ export default async function RootLayout({
         description:
             "AI-powered diagram generator with targeted XML editing capabilities that integrates with draw.io for creating AWS architecture diagrams, flowcharts, and technical diagrams. Features diagram history, multi-provider AI support, and real-time collaboration.",
         url: "https://next-ai-drawio.jiang.jp",
-        inLanguage: lang,
+        inLanguage: validLang,
         offers: {
             "@type": "Offer",
             price: "0",
@@ -146,7 +150,7 @@ export default async function RootLayout({
     }
 
     return (
-        <html lang={lang} suppressHydrationWarning>
+        <html lang={validLang} suppressHydrationWarning>
             <head>
                 <script
                     type="application/ld+json"

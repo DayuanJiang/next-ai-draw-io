@@ -153,7 +153,7 @@
         "reset": "Your limit resets tomorrow. Thanks for understanding!",
         "selfHost": "Self-host",
         "sponsor": "Sponsor",
-        "learnmore": "Learn more →",
+        "learnMore": "Learn more →",
         "usedOf": "{used}/{limit}"
     },
     "tools": {

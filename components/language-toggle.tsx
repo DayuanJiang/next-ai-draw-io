@@ -2,7 +2,7 @@
 
 import { Globe } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 const LABELS: Record<string, string> = {
@@ -10,11 +10,8 @@ const LABELS: Record<string, string> = {
     zh: "中文",
     ja: "日本語",
 }
-export default function LanguageToggle({
-    className = "",
-}: {
-    className?: string
-}) {
+
+function LanguageToggleInner({ className = "" }: { className?: string }) {
     const router = useRouter()
     const pathname = usePathname() || "/"
     const search = useSearchParams()
@@ -47,7 +44,7 @@ export default function LanguageToggle({
             parts.splice(1, 0, lang)
         }
         const newPath = parts.join("/") || "/"
-        const searchStr = search ? `?${search.toString()}` : ""
+        const searchStr = search?.toString() ? `?${search.toString()}` : ""
         setOpen(false)
         router.push(newPath + searchStr)
     }
@@ -59,7 +56,7 @@ export default function LanguageToggle({
                 aria-expanded={open}
                 onClick={() => setOpen((s) => !s)}
                 className="p-2 rounded-full hover:bg-accent/20 transition-colors text-muted-foreground"
-                title="Change language"
+                aria-label="Change language"
             >
                 <Globe className="w-5 h-5" />
             </button>
@@ -86,5 +83,26 @@ export default function LanguageToggle({
                 </div>
             )}
         </div>
+    )
+}
+
+export default function LanguageToggle({
+    className = "",
+}: {
+    className?: string
+}) {
+    return (
+        <Suspense
+            fallback={
+                <button
+                    className="p-2 rounded-full text-muted-foreground opacity-50"
+                    disabled
+                >
+                    <Globe className="w-5 h-5" />
+                </button>
+            }
+        >
+            <LanguageToggleInner className={className} />
+        </Suspense>
     )
 }
