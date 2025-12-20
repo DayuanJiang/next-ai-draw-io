@@ -41,6 +41,7 @@ import {
     startHttpServer,
 } from "./http-server.js"
 import { log } from "./logger.js"
+import { validateAndFixXml } from "./xml-validation.js"
 
 // Server configuration
 const config = {
@@ -160,7 +161,7 @@ server.registerTool(
                 .describe("The draw.io XML to display (mxGraphModel format)"),
         },
     },
-    async ({ xml }) => {
+    async ({ xml: inputXml }) => {
         try {
             if (!currentSession) {
                 return {
@@ -168,6 +169,26 @@ server.registerTool(
                         {
                             type: "text",
                             text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            // Validate and auto-fix XML
+            let xml = inputXml
+            const { valid, error, fixed, fixes } = validateAndFixXml(xml)
+            if (fixed) {
+                xml = fixed
+                log.info(`XML auto-fixed: ${fixes.join(", ")}`)
+            }
+            if (!valid && error) {
+                log.error(`XML validation failed: ${error}`)
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: XML validation failed - ${error}`,
                         },
                     ],
                     isError: true,
@@ -274,10 +295,31 @@ server.registerTool(
 
             log.info(`Editing diagram with ${operations.length} operation(s)`)
 
+            // Validate and auto-fix new_xml for each operation
+            const validatedOps = operations.map((op) => {
+                if (op.new_xml) {
+                    const { valid, error, fixed, fixes } = validateAndFixXml(
+                        op.new_xml,
+                    )
+                    if (fixed) {
+                        log.info(
+                            `Operation ${op.type} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
+                        )
+                        return { ...op, new_xml: fixed }
+                    }
+                    if (!valid && error) {
+                        log.warn(
+                            `Operation ${op.type} ${op.cell_id}: XML validation failed: ${error}`,
+                        )
+                    }
+                }
+                return op
+            })
+
             // Apply operations
             const { result, errors } = applyDiagramOperations(
                 currentSession.xml,
-                operations as DiagramOperation[],
+                validatedOps as DiagramOperation[],
             )
 
             if (errors.length > 0) {
