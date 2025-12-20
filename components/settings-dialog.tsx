@@ -452,6 +452,11 @@ export function SettingsDialog({
                         />
                     </div>
                 </div>
+                <div className="pt-4 border-t border-border/50">
+                    <p className="text-[0.75rem] text-muted-foreground text-center">
+                        Version {process.env.APP_VERSION}
+                    </p>
+                </div>
             </DialogContent>
         </Dialog>
     )
