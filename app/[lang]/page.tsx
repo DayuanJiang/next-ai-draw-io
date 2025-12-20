@@ -108,16 +108,11 @@ export default function Home() {
     useEffect(() => {
         const checkMobile = () => {
             const newIsMobile = window.innerWidth < 768
-            // If crossing the breakpoint (not initial render), save diagram and reset draw.io
             if (
                 !isInitialRenderRef.current &&
                 newIsMobile !== isMobileRef.current
             ) {
-                // Save diagram before remounting (fire and forget)
-                saveDiagramToStorage().catch(() => {
-                    // Ignore timeout errors during resize
-                })
-                // Reset draw.io ready state so onLoad triggers again after remount
+                saveDiagramToStorage().catch(() => {})
                 resetDrawioReady()
             }
             isMobileRef.current = newIsMobile
@@ -177,7 +172,6 @@ export default function Home() {
                 direction={isMobile ? "vertical" : "horizontal"}
                 className="h-full"
             >
-                {/* Draw.io Canvas */}
                 <ResizablePanel
                     id="drawio-panel"
                     defaultSize={isMobile ? 50 : 67}

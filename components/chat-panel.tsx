@@ -21,6 +21,7 @@ import { ChatInput } from "@/components/chat-input"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { getAIConfig } from "@/lib/ai-config"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -28,6 +29,7 @@ import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
+import LanguageToggle from "./language-toggle"
 
 // localStorage keys for persistence
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
@@ -110,6 +112,8 @@ export default function ChatPanel({
         chartXML,
         clearDiagram,
     } = useDiagram()
+
+    const dict = useDictionary()
 
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
@@ -1271,9 +1275,9 @@ Continue from EXACTLY where you stopped.`,
                             </Link>
                         )}
                     </div>
-                    <div className="flex items-center gap-1 justify-end overflow-x-hidden">
+                    <div className="flex items-center gap-1 justify-end overflow-visible">
                         <ButtonWithTooltip
-                            tooltipContent="Start fresh chat"
+                            tooltipContent={dict.nav.newChat}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowNewChatDialog(true)}
@@ -1295,7 +1299,7 @@ Continue from EXACTLY where you stopped.`,
                             />
                         </a>
                         <ButtonWithTooltip
-                            tooltipContent="Settings"
+                            tooltipContent={dict.nav.settings}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowSettingsDialog(true)}
@@ -1305,17 +1309,20 @@ Continue from EXACTLY where you stopped.`,
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
                         </ButtonWithTooltip>
-                        {!isMobile && (
-                            <ButtonWithTooltip
-                                tooltipContent="Hide chat panel (Ctrl+B)"
-                                variant="ghost"
-                                size="icon"
-                                onClick={onToggleVisibility}
-                                className="hover:bg-accent"
-                            >
-                                <PanelRightClose className="h-5 w-5 text-muted-foreground" />
-                            </ButtonWithTooltip>
-                        )}
+                        <div className="hidden sm:flex items-center gap-2">
+                            <LanguageToggle />
+                            {!isMobile && (
+                                <ButtonWithTooltip
+                                    tooltipContent={dict.nav.hidePanel}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="hover:bg-accent"
+                                    onClick={onToggleVisibility}
+                                >
+                                    <PanelRightClose className="h-5 w-5 text-muted-foreground" />
+                                </ButtonWithTooltip>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

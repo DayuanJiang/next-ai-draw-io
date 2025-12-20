@@ -8,6 +8,7 @@ import {
     Terminal,
     Zap,
 } from "lucide-react"
+import { useDictionary } from "@/hooks/use-dictionary"
 
 interface ExampleCardProps {
     icon: React.ReactNode
@@ -24,6 +25,8 @@ function ExampleCard({
     onClick,
     isNew,
 }: ExampleCardProps) {
+    const dict = useDictionary()
+
     return (
         <button
             onClick={onClick}
@@ -50,7 +53,7 @@ function ExampleCard({
                         </h3>
                         {isNew && (
                             <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded">
-                                NEW
+                                {dict.common.new}
                             </span>
                         )}
                     </div>
@@ -70,6 +73,8 @@ export default function ExamplePanel({
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
 }) {
+    const dict = useDictionary()
+
     const handleReplicateFlowchart = async () => {
         setInput("Replicate this flowchart.")
 
@@ -79,7 +84,7 @@ export default function ExamplePanel({
             const file = new File([blob], "example.png", { type: "image/png" })
             setFiles([file])
         } catch (error) {
-            console.error("Error loading example image:", error)
+            console.error(dict.errors.failedToLoadExample, error)
         }
     }
 
@@ -94,7 +99,7 @@ export default function ExamplePanel({
             })
             setFiles([file])
         } catch (error) {
-            console.error("Error loading architecture image:", error)
+            console.error(dict.errors.failedToLoadExample, error)
         }
     }
 
@@ -109,7 +114,7 @@ export default function ExamplePanel({
             })
             setFiles([file])
         } catch (error) {
-            console.error("Error loading text file:", error)
+            console.error(dict.errors.failedToLoadExample, error)
         }
     }
 
@@ -129,14 +134,14 @@ export default function ExamplePanel({
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-foreground group-hover:text-purple-500 transition-colors">
-                                MCP Server
+                                {dict.examples.mcpServer}
                             </span>
                             <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-500 text-white rounded">
-                                PREVIEW
+                                {dict.examples.preview}
                             </span>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Use in Claude Desktop, VS Code & Cursor
+                            {dict.examples.mcpDescription}
                         </p>
                     </div>
                 </div>
@@ -145,33 +150,32 @@ export default function ExamplePanel({
             {/* Welcome section */}
             <div className="text-center mb-6">
                 <h2 className="text-lg font-semibold text-foreground mb-2">
-                    Create diagrams with AI
+                    {dict.examples.title}
                 </h2>
                 <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                    Describe what you want to create or upload an image to
-                    replicate
+                    {dict.examples.subtitle}
                 </p>
             </div>
 
             {/* Examples grid */}
             <div className="space-y-3">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
-                    Quick Examples
+                    {dict.examples.quickExamples}
                 </p>
 
                 <div className="grid gap-2">
                     <ExampleCard
                         icon={<FileText className="w-4 h-4 text-primary" />}
-                        title="Paper to Diagram"
-                        description="Upload .pdf, .txt, .md, .json, .csv, .py, .js, .ts and more"
+                        title={dict.examples.paperToDiagram}
+                        description={dict.examples.paperDescription}
                         onClick={handlePdfExample}
                         isNew
                     />
 
                     <ExampleCard
                         icon={<Zap className="w-4 h-4 text-primary" />}
-                        title="Animated Diagram"
-                        description="Draw a transformer architecture with animated connectors"
+                        title={dict.examples.animatedDiagram}
+                        description={dict.examples.animatedDescription}
                         onClick={() => {
                             setInput(
                                 "Give me a **animated connector** diagram of transformer's architecture",
@@ -182,22 +186,22 @@ export default function ExamplePanel({
 
                     <ExampleCard
                         icon={<Cloud className="w-4 h-4 text-primary" />}
-                        title="AWS Architecture"
-                        description="Create a cloud architecture diagram with AWS icons"
+                        title={dict.examples.awsArchitecture}
+                        description={dict.examples.awsDescription}
                         onClick={handleReplicateArchitecture}
                     />
 
                     <ExampleCard
                         icon={<GitBranch className="w-4 h-4 text-primary" />}
-                        title="Replicate Flowchart"
-                        description="Upload and replicate an existing flowchart"
+                        title={dict.examples.replicateFlowchart}
+                        description={dict.examples.replicateDescription}
                         onClick={handleReplicateFlowchart}
                     />
 
                     <ExampleCard
                         icon={<Palette className="w-4 h-4 text-primary" />}
-                        title="Creative Drawing"
-                        description="Draw something fun and creative"
+                        title={dict.examples.creativeDrawing}
+                        description={dict.examples.creativeDescription}
                         onClick={() => {
                             setInput("Draw a cat for me")
                             setFiles([])
@@ -206,7 +210,7 @@ export default function ExamplePanel({
                 </div>
 
                 <p className="text-[11px] text-muted-foreground/60 text-center mt-4">
-                    Examples are cached for instant response
+                    {dict.examples.cachedNote}
                 </p>
             </div>
         </div>
