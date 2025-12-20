@@ -634,6 +634,8 @@ export function ChatMessageDisplay({
                     return "Generate Diagram"
                 case "edit_diagram":
                     return "Edit Diagram"
+                case "get_shape_library":
+                    return "Get Shape Library"
                 default:
                     return name
             }
@@ -728,6 +730,25 @@ export function ChatMessageDisplay({
                             </div>
                         )
                     })()}
+                {/* Show get_shape_library output on success */}
+                {output &&
+                    toolName === "get_shape_library" &&
+                    state === "output-available" &&
+                    isExpanded && (
+                        <div className="px-4 py-3 border-t border-border/40">
+                            <div className="text-xs text-muted-foreground mb-2">
+                                Library loaded (
+                                {typeof output === "string" ? output.length : 0}{" "}
+                                chars)
+                            </div>
+                            <pre className="text-xs bg-muted/50 p-2 rounded-md overflow-auto max-h-32 whitespace-pre-wrap">
+                                {typeof output === "string"
+                                    ? output.substring(0, 800) +
+                                      (output.length > 800 ? "\n..." : "")
+                                    : String(output)}
+                            </pre>
+                        </div>
+                    )}
             </div>
         )
     }
