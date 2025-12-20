@@ -733,7 +733,8 @@ export function ChatMessageDisplay({
                 {/* Show get_shape_library output on success */}
                 {output &&
                     toolName === "get_shape_library" &&
-                    state === "output-available" && (
+                    state === "output-available" &&
+                    isExpanded && (
                         <div className="px-4 py-3 border-t border-border/40">
                             <div className="text-xs text-muted-foreground mb-2">
                                 Library loaded (
