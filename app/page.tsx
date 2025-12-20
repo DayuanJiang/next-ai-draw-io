@@ -34,6 +34,7 @@ export default function Home() {
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isSavingRef = useRef(false)
     const mouseOverDrawioRef = useRef(false)
+    const isMobileRef = useRef(false)
 
     // Reset saving flag when dialog closes (with delay to ignore lingering save events from draw.io)
     useEffect(() => {
@@ -102,16 +103,32 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile
+    // Check mobile - save diagram and reset draw.io before crossing breakpoint
+    const isInitialRenderRef = useRef(true)
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768)
+            const newIsMobile = window.innerWidth < 768
+            // If crossing the breakpoint (not initial render), save diagram and reset draw.io
+            if (
+                !isInitialRenderRef.current &&
+                newIsMobile !== isMobileRef.current
+            ) {
+                // Save diagram before remounting (fire and forget)
+                saveDiagramToStorage().catch(() => {
+                    // Ignore timeout errors during resize
+                })
+                // Reset draw.io ready state so onLoad triggers again after remount
+                resetDrawioReady()
+            }
+            isMobileRef.current = newIsMobile
+            isInitialRenderRef.current = false
+            setIsMobile(newIsMobile)
         }
 
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [])
+    }, [saveDiagramToStorage, resetDrawioReady])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -157,7 +174,6 @@ export default function Home() {
         <div className="h-screen bg-background relative overflow-hidden">
             <ResizablePanelGroup
                 id="main-panel-group"
-                key={isMobile ? "mobile" : "desktop"}
                 direction={isMobile ? "vertical" : "horizontal"}
                 className="h-full"
             >
@@ -209,6 +225,7 @@ export default function Home() {
 
                 {/* Chat Panel */}
                 <ResizablePanel
+                    key={isMobile ? "mobile" : "desktop"}
                     id="chat-panel"
                     ref={chatPanelRef}
                     defaultSize={isMobile ? 50 : 33}

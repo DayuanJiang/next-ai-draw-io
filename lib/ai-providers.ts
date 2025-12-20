@@ -2,7 +2,7 @@ import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
-import { gateway } from "@ai-sdk/gateway"
+import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
@@ -683,7 +683,20 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             // Vercel AI Gateway - unified access to multiple AI providers
             // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
             // See: https://vercel.com/ai-gateway
-            model = gateway(modelId)
+            const apiKey = overrides?.apiKey || process.env.AI_GATEWAY_API_KEY
+            const baseURL =
+                overrides?.baseUrl || process.env.AI_GATEWAY_BASE_URL
+            // Only use custom configuration if explicitly set (local dev or custom Gateway)
+            // Otherwise undefined → AI SDK uses Vercel default (https://ai-gateway.vercel.sh/v1/ai) + OIDC
+            if (baseURL || overrides?.apiKey) {
+                const customGateway = createGateway({
+                    apiKey,
+                    ...(baseURL && { baseURL }),
+                })
+                model = customGateway(modelId)
+            } else {
+                model = gateway(modelId)
+            }
             break
         }
 
