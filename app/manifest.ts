@@ -1,24 +1,24 @@
 import type { MetadataRoute } from "next"
-
+import { getAssetUrl } from "@/lib/base-path"
 export default function manifest(): MetadataRoute.Manifest {
     return {
         name: "Next AI Draw.io",
         short_name: "AIDraw.io",
         description:
             "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating draw.io with AI assistance for professional diagram creation.",
-        start_url: process.env.NEXT_PUBLIC_BASE_PATH || "/",
+        start_url: getAssetUrl("/"),
         display: "standalone",
         background_color: "#f9fafb",
         theme_color: "#171d26",
         icons: [
             {
-                src: `${process.env.NEXT_PUBLIC_BASE_PATH}/favicon-192x192.png`,
+                src: getAssetUrl("/favicon-192x192.png"),
                 sizes: "192x192",
                 type: "image/png",
                 purpose: "any",
             },
             {
-                src: `${process.env.NEXT_PUBLIC_BASE_PATH}/favicon-512x512.png`,
+                src: getAssetUrl("/favicon-512x512.png"),
                 sizes: "512x512",
                 type: "image/png",
                 purpose: "any",
