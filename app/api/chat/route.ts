@@ -8,7 +8,9 @@ import {
     stepCountIs,
     streamText,
 } from "ai"
+import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
+import path from "path"
 import { z } from "zod"
 import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -618,38 +620,44 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                         ),
                 }),
                 execute: async ({ library }) => {
-                    const fs = await import("fs/promises")
-                    const path = await import("path")
-
                     // Sanitize input - prevent path traversal attacks
                     const sanitizedLibrary = library
                         .toLowerCase()
                         .replace(/[^a-z0-9_-]/g, "")
 
                     if (sanitizedLibrary !== library.toLowerCase()) {
-                        return `Invalid library name. Use only letters, numbers, underscores, and hyphens.`
+                        return `Invalid library name "${library}". Use only letters, numbers, underscores, and hyphens.`
+                    }
+
+                    const baseDir = path.join(
+                        process.cwd(),
+                        "docs/shape-libraries",
+                    )
+                    const filePath = path.join(
+                        baseDir,
+                        `${sanitizedLibrary}.md`,
+                    )
+
+                    // Verify path stays within expected directory
+                    const resolvedPath = path.resolve(filePath)
+                    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
+                        return `Invalid library path.`
                     }
 
                     try {
-                        const baseDir = path.join(
-                            process.cwd(),
-                            "docs/shape-libraries",
-                        )
-                        const filePath = path.join(
-                            baseDir,
-                            `${sanitizedLibrary}.md`,
-                        )
-
-                        // Verify path stays within expected directory
-                        const resolvedPath = path.resolve(filePath)
-                        if (!resolvedPath.startsWith(path.resolve(baseDir))) {
-                            return `Invalid library path.`
-                        }
-
                         const content = await fs.readFile(filePath, "utf-8")
                         return content
-                    } catch {
-                        return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, lean_mapping, openstack, rack`
+                    } catch (error) {
+                        if (
+                            (error as NodeJS.ErrnoException).code === "ENOENT"
+                        ) {
+                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, lean_mapping, openstack, rack`
+                        }
+                        console.error(
+                            `[get_shape_library] Error loading "${library}":`,
+                            error,
+                        )
+                        return `Error loading library "${library}". Please try again.`
                     }
                 },
             },
