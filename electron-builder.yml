@@ -74,6 +74,7 @@ nsis:
 linux:
   icon: resources/icon.png
   category: Office
+  maintainer: Next AI Draw.io <nextaidrawio@users.noreply.github.com>
   target:
     - target: AppImage
       arch:
