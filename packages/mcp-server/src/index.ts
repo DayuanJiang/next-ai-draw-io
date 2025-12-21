@@ -35,7 +35,13 @@ import {
     type DiagramOperation,
 } from "./diagram-operations.js"
 import { addHistory } from "./history.js"
-import { getState, setState, startHttpServer } from "./http-server.js"
+import {
+    getState,
+    requestSync,
+    setState,
+    startHttpServer,
+    waitForSync,
+} from "./http-server.js"
 import { log } from "./logger.js"
 import { validateAndFixXml } from "./xml-validation.js"
 
@@ -49,6 +55,7 @@ let currentSession: {
     id: string
     xml: string
     version: number
+    lastGetDiagramTime: number // Track when get_diagram was last called (for enforcing workflow)
 } | null = null
 
 // Create MCP server
@@ -114,6 +121,7 @@ server.registerTool(
                 id: sessionId,
                 xml: "",
                 version: 0,
+                lastGetDiagramTime: 0,
             }
 
             // Open browser
@@ -245,11 +253,14 @@ server.registerTool(
     "edit_diagram",
     {
         description:
-            "Edit the current diagram by ID-based operations (update/add/delete cells). " +
-            "ALWAYS fetches the latest state from browser first, so user's manual changes are preserved.\n\n" +
-            "IMPORTANT workflow:\n" +
-            "- For ADD operations: Can use directly - just provide new unique cell_id and new_xml.\n" +
-            "- For UPDATE/DELETE: Call get_diagram FIRST to see current cell IDs, then edit.\n\n" +
+            "Edit the current diagram by ID-based operations (update/add/delete cells).\n\n" +
+            "⚠️ REQUIRED: You MUST call get_diagram BEFORE this tool!\n" +
+            "This fetches the latest state from the browser including any manual user edits.\n" +
+            "Skipping get_diagram WILL cause user's changes to be LOST.\n\n" +
+            "Workflow:\n" +
+            "1. Call get_diagram to see current cell IDs and structure\n" +
+            "2. Use the returned XML to construct your edit operations\n" +
+            "3. Call edit_diagram with your operations\n\n" +
             "Operations:\n" +
             "- add: Add a new cell. Provide cell_id (new unique id) and new_xml.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
@@ -282,6 +293,27 @@ server.registerTool(
                         {
                             type: "text",
                             text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            // Enforce workflow: require get_diagram to be called first
+            const timeSinceGet = Date.now() - currentSession.lastGetDiagramTime
+            if (timeSinceGet > 30000) {
+                // 30 seconds
+                log.warn(
+                    "edit_diagram called without recent get_diagram - rejecting to prevent data loss",
+                )
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text:
+                                "Error: You must call get_diagram first before edit_diagram.\n\n" +
+                                "This ensures you have the latest diagram state including any manual edits the user made in the browser. " +
+                                "Please call get_diagram, then use that XML to construct your edit operations.",
                         },
                     ],
                     isError: true,
@@ -410,6 +442,18 @@ server.registerTool(
                     isError: true,
                 }
             }
+
+            // Request browser to push fresh state and wait for it
+            const syncRequested = requestSync(currentSession.id)
+            if (syncRequested) {
+                const synced = await waitForSync(currentSession.id)
+                if (!synced) {
+                    log.warn("get_diagram: sync timeout - state may be stale")
+                }
+            }
+
+            // Mark that get_diagram was called (for edit_diagram workflow check)
+            currentSession.lastGetDiagramTime = Date.now()
 
             // Fetch latest state from browser
             const browserState = getState(currentSession.id)

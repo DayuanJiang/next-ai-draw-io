@@ -18,6 +18,7 @@ interface SessionState {
     version: number
     lastUpdated: Date
     svg?: string // Cached SVG from last browser save
+    syncRequested?: number // Timestamp when sync requested, cleared when browser responds
 }
 
 export const stateStore = new Map<string, SessionState>()
@@ -39,9 +40,35 @@ export function setState(sessionId: string, xml: string, svg?: string): number {
         version: newVersion,
         lastUpdated: new Date(),
         svg: svg || existing?.svg, // Preserve cached SVG if not provided
+        syncRequested: undefined, // Clear sync request when browser pushes state
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
     return newVersion
+}
+
+export function requestSync(sessionId: string): boolean {
+    const state = stateStore.get(sessionId)
+    if (state) {
+        state.syncRequested = Date.now()
+        log.debug(`Sync requested for session=${sessionId}`)
+        return true
+    }
+    log.debug(`Sync requested for non-existent session=${sessionId}`)
+    return false
+}
+
+export async function waitForSync(
+    sessionId: string,
+    timeoutMs = 3000,
+): Promise<boolean> {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+        const state = stateStore.get(sessionId)
+        if (!state?.syncRequested) return true // Sync completed
+        await new Promise((r) => setTimeout(r, 100))
+    }
+    log.warn(`Sync timeout for session=${sessionId}`)
+    return false // Timeout
 }
 
 export function startHttpServer(port = 6002): Promise<number> {
@@ -157,6 +184,7 @@ function handleStateApi(
             JSON.stringify({
                 xml: state?.xml || null,
                 version: state?.version || 0,
+                syncRequested: !!state?.syncRequested,
             }),
         )
     } else if (req.method === "POST") {
@@ -415,6 +443,13 @@ function getHtmlPage(sessionId: string): string {
                     // Fallback if export doesn't respond
                     setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
                 } else if (msg.event === 'export' && msg.data) {
+                    // Handle sync export (XML format) - server requested fresh state
+                    if (pendingSyncExport && !msg.data.startsWith('data:') && !msg.data.startsWith('<svg')) {
+                        pendingSyncExport = false;
+                        pushState(msg.data, '');
+                        return;
+                    }
+                    // Handle SVG export
                     let svg = msg.data;
                     if (!svg.startsWith('data:')) svg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
                     if (pendingSvgExport) {
@@ -457,12 +492,20 @@ function getHtmlPage(sessionId: string): string {
             } catch (e) { console.error('Push failed:', e); }
         }
 
+        let pendingSyncExport = false;
+
         async function poll() {
             if (!sessionId) return;
             try {
                 const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
                 if (!r.ok) return;
                 const s = await r.json();
+                // Handle sync request - server needs fresh state
+                if (s.syncRequested && !pendingSyncExport) {
+                    pendingSyncExport = true;
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
+                }
+                // Load new diagram from server
                 if (s.version > currentVersion && s.xml) {
                     currentVersion = s.version;
                     loadDiagram(s.xml, true);
