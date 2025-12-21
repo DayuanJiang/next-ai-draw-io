@@ -34,12 +34,8 @@ import {
     applyDiagramOperations,
     type DiagramOperation,
 } from "./diagram-operations.js"
-import {
-    getServerPort,
-    getState,
-    setState,
-    startHttpServer,
-} from "./http-server.js"
+import { addHistory } from "./history.js"
+import { getState, setState, startHttpServer } from "./http-server.js"
 import { log } from "./logger.js"
 import { validateAndFixXml } from "./xml-validation.js"
 
@@ -197,12 +193,30 @@ server.registerTool(
 
             log.info(`Displaying diagram, ${xml.length} chars`)
 
+            // Sync from browser state first
+            const browserState = getState(currentSession.id)
+            if (browserState?.xml) {
+                currentSession.xml = browserState.xml
+            }
+
+            // Save user's state before AI overwrites (with cached SVG)
+            if (currentSession.xml) {
+                addHistory(
+                    currentSession.id,
+                    currentSession.xml,
+                    browserState?.svg || "",
+                )
+            }
+
             // Update session state
             currentSession.xml = xml
             currentSession.version++
 
             // Push to embedded server state
             setState(currentSession.id, xml)
+
+            // Save AI result (no SVG yet - will be captured by browser)
+            addHistory(currentSession.id, xml, "")
 
             log.info(`Diagram displayed successfully`)
 
@@ -295,6 +309,13 @@ server.registerTool(
 
             log.info(`Editing diagram with ${operations.length} operation(s)`)
 
+            // Save before editing (with cached SVG from browser)
+            addHistory(
+                currentSession.id,
+                currentSession.xml,
+                browserState?.svg || "",
+            )
+
             // Validate and auto-fix new_xml for each operation
             const validatedOps = operations.map((op) => {
                 if (op.new_xml) {
@@ -335,6 +356,9 @@ server.registerTool(
 
             // Push to embedded server
             setState(currentSession.id, result)
+
+            // Save AI result (no SVG yet - will be captured by browser)
+            addHistory(currentSession.id, result, "")
 
             log.info(`Diagram edited successfully`)
 
