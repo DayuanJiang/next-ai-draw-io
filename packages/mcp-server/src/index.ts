@@ -4,16 +4,23 @@
  *
  * Enables AI agents (Claude Desktop, Cursor, etc.) to generate and edit
  * draw.io diagrams with real-time browser preview.
+ *
+ * Uses an embedded HTTP server - no external dependencies required.
  */
 
 // Setup DOM polyfill for Node.js (required for XML operations)
 import { DOMParser } from "linkedom"
 ;(globalThis as any).DOMParser = DOMParser
 
+// Create XMLSerializer polyfill using outerHTML
 class XMLSerializerPolyfill {
     serializeToString(node: any): string {
-        if (node.outerHTML !== undefined) return node.outerHTML
-        if (node.documentElement) return node.documentElement.outerHTML
+        if (node.outerHTML !== undefined) {
+            return node.outerHTML
+        }
+        if (node.documentElement) {
+            return node.documentElement.outerHTML
+        }
         return ""
     }
 }
@@ -32,13 +39,25 @@ import { getState, setState, startHttpServer } from "./http-server.js"
 import { log } from "./logger.js"
 import { validateAndFixXml } from "./xml-validation.js"
 
-const config = { port: parseInt(process.env.PORT || "6002") }
+// Server configuration
+const config = {
+    port: parseInt(process.env.PORT || "6002"),
+}
 
-let currentSession: { id: string; xml: string } | null = null
+// Session state (single session for simplicity)
+let currentSession: {
+    id: string
+    xml: string
+    version: number
+} | null = null
 
-const server = new McpServer({ name: "next-ai-drawio", version: "0.1.2" })
+// Create MCP server
+const server = new McpServer({
+    name: "next-ai-drawio",
+    version: "0.1.2",
+})
 
-// Workflow guidance prompt
+// Register prompt with workflow guidance
 server.prompt(
     "diagram-workflow",
     "Guidelines for creating and editing draw.io diagrams",
@@ -86,10 +105,18 @@ server.registerTool(
     },
     async () => {
         try {
+            // Start embedded HTTP server
             const port = await startHttpServer(config.port)
-            const sessionId = `mcp-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`
-            currentSession = { id: sessionId, xml: "" }
 
+            // Create session
+            const sessionId = `mcp-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`
+            currentSession = {
+                id: sessionId,
+                xml: "",
+                version: 0,
+            }
+
+            // Open browser
             const browserUrl = `http://localhost:${port}?mcp=${sessionId}`
             await open(browserUrl)
 
@@ -144,6 +171,7 @@ server.registerTool(
                 }
             }
 
+            // Validate and auto-fix XML
             let xml = inputXml
             const { valid, error, fixed, fixes } = validateAndFixXml(xml)
             if (fixed) {
@@ -151,6 +179,7 @@ server.registerTool(
                 log.info(`XML auto-fixed: ${fixes.join(", ")}`)
             }
             if (!valid && error) {
+                log.error(`XML validation failed: ${error}`)
                 return {
                     content: [
                         {
@@ -161,6 +190,8 @@ server.registerTool(
                     isError: true,
                 }
             }
+
+            log.info(`Displaying diagram, ${xml.length} chars`)
 
             // Sync from browser state first
             const browserState = getState(currentSession.id)
@@ -177,19 +208,23 @@ server.registerTool(
                 )
             }
 
+            // Update session state
             currentSession.xml = xml
+            currentSession.version++
+
+            // Push to embedded server state
             setState(currentSession.id, xml)
 
-            // Save AI result (no SVG yet)
+            // Save AI result (no SVG yet - will be captured by browser)
             addHistory(currentSession.id, xml, "")
 
-            log.info(`Displayed diagram, ${xml.length} chars`)
+            log.info(`Diagram displayed successfully`)
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Diagram displayed! (${xml.length} chars)`,
+                        text: `Diagram displayed successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters`,
                     },
                 ],
             }
@@ -210,22 +245,33 @@ server.registerTool(
     "edit_diagram",
     {
         description:
-            "Edit diagram by operations (update/add/delete cells). " +
-            "Fetches latest browser state first, preserving user's changes.\n\n" +
+            "Edit the current diagram by ID-based operations (update/add/delete cells). " +
+            "ALWAYS fetches the latest state from browser first, so user's manual changes are preserved.\n\n" +
+            "IMPORTANT workflow:\n" +
+            "- For ADD operations: Can use directly - just provide new unique cell_id and new_xml.\n" +
+            "- For UPDATE/DELETE: Call get_diagram FIRST to see current cell IDs, then edit.\n\n" +
             "Operations:\n" +
-            "- add: Add new cell (cell_id + new_xml)\n" +
-            "- update: Replace cell (cell_id + new_xml)\n" +
-            "- delete: Remove cell (cell_id only)",
+            "- add: Add a new cell. Provide cell_id (new unique id) and new_xml.\n" +
+            "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
+            "- delete: Remove a cell by its id. Only cell_id is needed.\n\n" +
+            "For add/update, new_xml must be a complete mxCell element including mxGeometry.",
         inputSchema: {
             operations: z
                 .array(
                     z.object({
-                        type: z.enum(["update", "add", "delete"]),
-                        cell_id: z.string(),
-                        new_xml: z.string().optional(),
+                        type: z
+                            .enum(["update", "add", "delete"])
+                            .describe("Operation type"),
+                        cell_id: z.string().describe("The id of the mxCell"),
+                        new_xml: z
+                            .string()
+                            .optional()
+                            .describe(
+                                "Complete mxCell XML element (required for update/add)",
+                            ),
                     }),
                 )
-                .describe("Operations to apply"),
+                .describe("Array of operations to apply"),
         },
     },
     async ({ operations }) => {
@@ -242,10 +288,11 @@ server.registerTool(
                 }
             }
 
-            // Fetch latest from browser
+            // Fetch latest state from browser
             const browserState = getState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
+                log.info("Fetched latest diagram state from browser")
             }
 
             if (!currentSession.xml) {
@@ -253,12 +300,14 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "Error: No diagram to edit. Use display_diagram first.",
+                            text: "Error: No diagram to edit. Please create a diagram first with display_diagram.",
                         },
                     ],
                     isError: true,
                 }
             }
+
+            log.info(`Editing diagram with ${operations.length} operation(s)`)
 
             // Save before editing (with cached SVG from browser)
             addHistory(
@@ -267,40 +316,66 @@ server.registerTool(
                 browserState?.svg || "",
             )
 
-            // Validate operations
+            // Validate and auto-fix new_xml for each operation
             const validatedOps = operations.map((op) => {
                 if (op.new_xml) {
-                    const { fixed, fixes } = validateAndFixXml(op.new_xml)
+                    const { valid, error, fixed, fixes } = validateAndFixXml(
+                        op.new_xml,
+                    )
                     if (fixed) {
                         log.info(
-                            `${op.type} ${op.cell_id}: auto-fixed: ${fixes.join(", ")}`,
+                            `Operation ${op.type} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
                         )
                         return { ...op, new_xml: fixed }
+                    }
+                    if (!valid && error) {
+                        log.warn(
+                            `Operation ${op.type} ${op.cell_id}: XML validation failed: ${error}`,
+                        )
                     }
                 }
                 return op
             })
 
+            // Apply operations
             const { result, errors } = applyDiagramOperations(
                 currentSession.xml,
                 validatedOps as DiagramOperation[],
             )
 
+            if (errors.length > 0) {
+                const errorMessages = errors
+                    .map((e) => `${e.type} ${e.cellId}: ${e.message}`)
+                    .join("\n")
+                log.warn(`Edit had ${errors.length} error(s): ${errorMessages}`)
+            }
+
+            // Update state
             currentSession.xml = result
+            currentSession.version++
+
+            // Push to embedded server
             setState(currentSession.id, result)
 
-            // Save AI result (no SVG yet)
+            // Save AI result (no SVG yet - will be captured by browser)
             addHistory(currentSession.id, result, "")
 
-            log.info(`Edited diagram: ${operations.length} operation(s)`)
+            log.info(`Diagram edited successfully`)
 
-            const msg = `Applied ${operations.length} operation(s).`
-            const warn =
+            const successMsg = `Diagram edited successfully!\n\nApplied ${operations.length} operation(s).`
+            const errorMsg =
                 errors.length > 0
-                    ? `\nWarnings: ${errors.map((e) => `${e.type} ${e.cellId}: ${e.message}`).join(", ")}`
+                    ? `\n\nWarnings:\n${errors.map((e) => `- ${e.type} ${e.cellId}: ${e.message}`).join("\n")}`
                     : ""
 
-            return { content: [{ type: "text", text: msg + warn }] }
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: successMsg + errorMsg,
+                    },
+                ],
+            }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
@@ -318,8 +393,9 @@ server.registerTool(
     "get_diagram",
     {
         description:
-            "Get current diagram XML (fetches latest from browser). " +
-            "Call before edit_diagram to see cell IDs.",
+            "Get the current diagram XML (fetches latest from browser, including user's manual edits). " +
+            "Call this BEFORE edit_diagram if you need to update or delete existing elements, " +
+            "so you can see the current cell IDs and structure.",
     },
     async () => {
         try {
@@ -335,6 +411,7 @@ server.registerTool(
                 }
             }
 
+            // Fetch latest state from browser
             const browserState = getState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
@@ -345,7 +422,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "No diagram yet. Use display_diagram to create one.",
+                            text: "No diagram exists yet. Use display_diagram to create one.",
                         },
                     ],
                 }
@@ -355,13 +432,14 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Current diagram:\n\n${currentSession.xml}`,
+                        text: `Current diagram XML:\n\n${currentSession.xml}`,
                     },
                 ],
             }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
+            log.error("get_diagram failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,
@@ -374,9 +452,13 @@ server.registerTool(
 server.registerTool(
     "export_diagram",
     {
-        description: "Export diagram to .drawio file.",
+        description: "Export the current diagram to a .drawio file.",
         inputSchema: {
-            path: z.string().describe("File path (e.g., ./diagram.drawio)"),
+            path: z
+                .string()
+                .describe(
+                    "File path to save the diagram (e.g., ./diagram.drawio)",
+                ),
         },
     },
     async ({ path }) => {
@@ -393,6 +475,7 @@ server.registerTool(
                 }
             }
 
+            // Fetch latest state
             const browserState = getState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
@@ -401,7 +484,10 @@ server.registerTool(
             if (!currentSession.xml) {
                 return {
                     content: [
-                        { type: "text", text: "Error: No diagram to export." },
+                        {
+                            type: "text",
+                            text: "Error: No diagram to export. Please create a diagram first.",
+                        },
                     ],
                     isError: true,
                 }
@@ -411,24 +497,27 @@ server.registerTool(
             const nodePath = await import("node:path")
 
             let filePath = path
-            if (!filePath.endsWith(".drawio")) filePath += ".drawio"
+            if (!filePath.endsWith(".drawio")) {
+                filePath = `${filePath}.drawio`
+            }
 
             const absolutePath = nodePath.resolve(filePath)
             await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
 
-            log.info(`Exported to ${absolutePath}`)
+            log.info(`Diagram exported to ${absolutePath}`)
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Exported to ${absolutePath}`,
+                        text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${currentSession.xml.length} characters`,
                     },
                 ],
             }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
+            log.error("export_diagram failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,
@@ -437,15 +526,17 @@ server.registerTool(
     },
 )
 
-// Start server
+// Start the MCP server
 async function main() {
-    log.info("Starting MCP server...")
+    log.info("Starting MCP server for Next AI Draw.io (embedded mode)...")
+
     const transport = new StdioServerTransport()
     await server.connect(transport)
-    log.info("MCP server running")
+
+    log.info("MCP server running on stdio")
 }
 
 main().catch((error) => {
-    log.error("Fatal:", error)
+    log.error("Fatal error:", error)
     process.exit(1)
 })
