@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+        "drawio": {
+            "command": "node",
+            "args": [
+                "/Users/jiangdy/Documents/programming/next-ai-draw-io/packages/mcp-server/dist/index.js"
+            ]
+        }
+    }
+}

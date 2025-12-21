@@ -35,6 +35,12 @@ import {
     type DiagramOperation,
 } from "./diagram-operations.js"
 import {
+    addHistoryEntry,
+    getHistory,
+    getHistoryCount,
+    getVersion as getHistoryVersion,
+} from "./history.js"
+import {
     getServerPort,
     getState,
     setState,
@@ -197,12 +203,37 @@ server.registerTool(
 
             log.info(`Displaying diagram, ${xml.length} chars`)
 
+            // 1. Save current state to history BEFORE replacing (preserve user's work)
+            if (currentSession.xml) {
+                // Check last entry's source to use correct label
+                const lastEntry = getHistory(currentSession.id, 1)[0]
+                const actualSource = lastEntry?.source || "human"
+                addHistoryEntry(currentSession.id, {
+                    xml: currentSession.xml,
+                    svg: "",
+                    source: actualSource,
+                    tool: "display_diagram",
+                    timestamp: new Date(),
+                    description: "Before AI replaced",
+                })
+            }
+
             // Update session state
             currentSession.xml = xml
             currentSession.version++
 
             // Push to embedded server state
             setState(currentSession.id, xml)
+
+            // 2. Save new state to history AFTER generation (capture AI result)
+            addHistoryEntry(currentSession.id, {
+                xml: xml,
+                svg: "",
+                source: "ai",
+                tool: "display_diagram",
+                timestamp: new Date(),
+                description: "AI generated diagram",
+            })
 
             log.info(`Diagram displayed successfully`)
 
@@ -295,6 +326,19 @@ server.registerTool(
 
             log.info(`Editing diagram with ${operations.length} operation(s)`)
 
+            // 1. Save current state to history BEFORE editing (preserve user's work)
+            // Check last entry's source to use correct label
+            const lastEntry = getHistory(currentSession.id, 1)[0]
+            const actualSource = lastEntry?.source || "human"
+            addHistoryEntry(currentSession.id, {
+                xml: currentSession.xml,
+                svg: "",
+                source: actualSource,
+                tool: "edit_diagram",
+                timestamp: new Date(),
+                description: "Before AI edit",
+            })
+
             // Validate and auto-fix new_xml for each operation
             const validatedOps = operations.map((op) => {
                 if (op.new_xml) {
@@ -335,6 +379,16 @@ server.registerTool(
 
             // Push to embedded server
             setState(currentSession.id, result)
+
+            // 2. Save new state to history AFTER editing (capture AI result)
+            addHistoryEntry(currentSession.id, {
+                xml: result,
+                svg: "",
+                source: "ai",
+                tool: "edit_diagram",
+                timestamp: new Date(),
+                description: `AI edit: ${operations.length} operation(s)`,
+            })
 
             log.info(`Diagram edited successfully`)
 
@@ -494,6 +548,216 @@ server.registerTool(
             const message =
                 error instanceof Error ? error.message : String(error)
             log.error("export_diagram failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+// Tool: list_history
+server.registerTool(
+    "list_history",
+    {
+        description:
+            "List diagram version history for the current session. " +
+            "Shows version numbers, who made each change (AI vs human), and timestamps. " +
+            "Use this to find a version to restore.",
+        inputSchema: {
+            limit: z
+                .number()
+                .optional()
+                .describe("Maximum number of entries to return (default: 20)"),
+        },
+    },
+    async ({ limit = 20 }) => {
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            const history = getHistory(currentSession.id, limit)
+
+            if (history.length === 0) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "No history available yet. Make some changes to create history.",
+                        },
+                    ],
+                }
+            }
+
+            const historyText = history
+                .map((entry) => {
+                    const time = entry.timestamp.toLocaleTimeString()
+                    const source = entry.source === "ai" ? "AI" : "Human"
+                    const desc = entry.description
+                        ? ` - ${entry.description}`
+                        : ""
+                    return `v${entry.version} [${source}] ${time}${desc}`
+                })
+                .join("\n")
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Diagram History (${history.length} entries, newest first):\n\n${historyText}\n\nUse restore_version to restore a specific version.`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("list_history failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+// Tool: restore_version
+server.registerTool(
+    "restore_version",
+    {
+        description:
+            "Restore diagram to a previous version from history. " +
+            "Use list_history first to see available versions. " +
+            "This creates a NEW history entry (non-destructive).",
+        inputSchema: {
+            version: z.number().describe("Version number to restore"),
+        },
+    },
+    async ({ version }) => {
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            const entry = getHistoryVersion(currentSession.id, version)
+            if (!entry) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: Version ${version} not found in history. Use list_history to see available versions.`,
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            // Restore by updating session and state
+            currentSession.xml = entry.xml
+            currentSession.version++
+            setState(currentSession.id, entry.xml)
+
+            // Add history entry for the restore
+            addHistoryEntry(currentSession.id, {
+                xml: entry.xml,
+                svg: entry.svg,
+                source: "ai",
+                tool: "restore_version",
+                timestamp: new Date(),
+                description: `Restored from v${version}`,
+            })
+
+            log.info(`Restored diagram to v${version}`)
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Diagram restored to version ${version} successfully!\n\nThe browser will update automatically.`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("restore_version failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+// Tool: get_version
+server.registerTool(
+    "get_version",
+    {
+        description:
+            "Get the XML content of a specific version from history. " +
+            "Use this to inspect what a previous version looked like before restoring.",
+        inputSchema: {
+            version: z.number().describe("Version number to retrieve"),
+        },
+    },
+    async ({ version }) => {
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            const entry = getHistoryVersion(currentSession.id, version)
+            if (!entry) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: Version ${version} not found in history.`,
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            const source = entry.source === "ai" ? "AI" : "Human"
+            const time = entry.timestamp.toISOString()
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Version ${version} (${source} edit at ${time}):\n\n${entry.xml}`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("get_version failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,
