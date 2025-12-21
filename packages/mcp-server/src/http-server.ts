@@ -46,12 +46,15 @@ export function setState(sessionId: string, xml: string, svg?: string): number {
     return newVersion
 }
 
-export function requestSync(sessionId: string): void {
+export function requestSync(sessionId: string): boolean {
     const state = stateStore.get(sessionId)
     if (state) {
         state.syncRequested = Date.now()
         log.debug(`Sync requested for session=${sessionId}`)
+        return true
     }
+    log.debug(`Sync requested for non-existent session=${sessionId}`)
+    return false
 }
 
 export async function waitForSync(

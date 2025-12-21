@@ -55,10 +55,8 @@ let currentSession: {
     id: string
     xml: string
     version: number
+    lastGetDiagramTime: number // Track when get_diagram was last called (for enforcing workflow)
 } | null = null
-
-// Track when get_diagram was last called (for enforcing workflow)
-let lastGetDiagramTime = 0
 
 // Create MCP server
 const server = new McpServer({
@@ -123,6 +121,7 @@ server.registerTool(
                 id: sessionId,
                 xml: "",
                 version: 0,
+                lastGetDiagramTime: 0,
             }
 
             // Open browser
@@ -301,7 +300,7 @@ server.registerTool(
             }
 
             // Enforce workflow: require get_diagram to be called first
-            const timeSinceGet = Date.now() - lastGetDiagramTime
+            const timeSinceGet = Date.now() - currentSession.lastGetDiagramTime
             if (timeSinceGet > 30000) {
                 // 30 seconds
                 log.warn(
@@ -445,14 +444,16 @@ server.registerTool(
             }
 
             // Request browser to push fresh state and wait for it
-            requestSync(currentSession.id)
-            const synced = await waitForSync(currentSession.id)
-            if (!synced) {
-                log.warn("get_diagram: sync timeout - state may be stale")
+            const syncRequested = requestSync(currentSession.id)
+            if (syncRequested) {
+                const synced = await waitForSync(currentSession.id)
+                if (!synced) {
+                    log.warn("get_diagram: sync timeout - state may be stale")
+                }
             }
 
             // Mark that get_diagram was called (for edit_diagram workflow check)
-            lastGetDiagramTime = Date.now()
+            currentSession.lastGetDiagramTime = Date.now()
 
             // Fetch latest state from browser
             const browserState = getState(currentSession.id)
