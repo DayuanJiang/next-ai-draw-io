@@ -49,3 +49,14 @@ export function getHistoryEntry(
 export function clearHistory(sessionId: string): void {
     historyStore.delete(sessionId)
 }
+
+export function updateLastHistorySvg(sessionId: string, svg: string): boolean {
+    const history = historyStore.get(sessionId)
+    if (!history || history.length === 0) return false
+    const last = history[history.length - 1]
+    if (!last.svg) {
+        last.svg = svg
+        return true
+    }
+    return false
+}

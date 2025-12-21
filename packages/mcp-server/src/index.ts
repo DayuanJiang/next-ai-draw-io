@@ -48,22 +48,26 @@ server.prompt(
                 role: "user",
                 content: {
                     type: "text",
-                    text: `# Draw.io Diagram Workflow
+                    text: `# Draw.io Diagram Workflow Guidelines
 
 ## Creating a New Diagram
-1. Call start_session to open browser preview
-2. Use display_diagram with mxGraphModel XML
+1. Call start_session to open the browser preview
+2. Use display_diagram with complete mxGraphModel XML to create a new diagram
 
-## Adding Elements
-Use edit_diagram with "add" operation - provide cell_id and new_xml
+## Adding Elements to Existing Diagram
+1. Use edit_diagram with "add" operation
+2. Provide a unique cell_id and complete mxCell XML
+3. No need to call get_diagram first - the server fetches latest state automatically
 
-## Modifying/Deleting Elements
-1. Call get_diagram to see current cell IDs
-2. Use edit_diagram with "update" or "delete" operations
+## Modifying or Deleting Existing Elements
+1. FIRST call get_diagram to see current cell IDs and structure
+2. THEN call edit_diagram with "update" or "delete" operations
+3. For update, provide the cell_id and complete new mxCell XML
 
-## Notes
-- display_diagram REPLACES entire diagram
-- edit_diagram PRESERVES user's manual changes`,
+## Important Notes
+- display_diagram REPLACES the entire diagram - only use for new diagrams
+- edit_diagram PRESERVES user's manual changes (fetches browser state first)
+- Always use unique cell_ids when adding elements (e.g., "shape-1", "arrow-2")`,
                 },
             },
         ],
@@ -75,7 +79,9 @@ server.registerTool(
     "start_session",
     {
         description:
-            "Start a new diagram session and open browser for real-time preview.",
+            "Start a new diagram session and open the browser for real-time preview. " +
+            "Starts an embedded server and opens a browser window with draw.io. " +
+            "The browser will show diagram updates as they happen.",
         inputSchema: {},
     },
     async () => {
@@ -93,7 +99,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Session started!\n\nSession ID: ${sessionId}\nBrowser: ${browserUrl}`,
+                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.`,
                     },
                 ],
             }
@@ -115,7 +121,9 @@ server.registerTool(
     {
         description:
             "Display a NEW draw.io diagram from XML. REPLACES the entire diagram. " +
-            "Use edit_diagram to add elements to existing diagram.",
+            "Use this for creating new diagrams from scratch. " +
+            "To ADD elements to an existing diagram, use edit_diagram with 'add' operation instead. " +
+            "You should generate valid draw.io/mxGraph XML format.",
         inputSchema: {
             xml: z
                 .string()
@@ -129,7 +137,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "Error: No active session. Call start_session first.",
+                            text: "Error: No active session. Please call start_session first.",
                         },
                     ],
                     isError: true,
@@ -154,16 +162,26 @@ server.registerTool(
                 }
             }
 
-            // Save current state before replacing
+            // Sync from browser state first
+            const browserState = getState(currentSession.id)
+            if (browserState?.xml) {
+                currentSession.xml = browserState.xml
+            }
+
+            // Save user's state before AI overwrites (with cached SVG)
             if (currentSession.xml) {
-                addHistory(currentSession.id, currentSession.xml)
+                addHistory(
+                    currentSession.id,
+                    currentSession.xml,
+                    browserState?.svg || "",
+                )
             }
 
             currentSession.xml = xml
             setState(currentSession.id, xml)
 
-            // Save new state
-            addHistory(currentSession.id, xml)
+            // Save AI result (no SVG yet)
+            addHistory(currentSession.id, xml, "")
 
             log.info(`Displayed diagram, ${xml.length} chars`)
 
@@ -217,7 +235,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "Error: No active session. Call start_session first.",
+                            text: "Error: No active session. Please call start_session first.",
                         },
                     ],
                     isError: true,
@@ -242,8 +260,12 @@ server.registerTool(
                 }
             }
 
-            // Save before editing
-            addHistory(currentSession.id, currentSession.xml)
+            // Save before editing (with cached SVG from browser)
+            addHistory(
+                currentSession.id,
+                currentSession.xml,
+                browserState?.svg || "",
+            )
 
             // Validate operations
             const validatedOps = operations.map((op) => {
@@ -267,8 +289,8 @@ server.registerTool(
             currentSession.xml = result
             setState(currentSession.id, result)
 
-            // Save after editing
-            addHistory(currentSession.id, result)
+            // Save AI result (no SVG yet)
+            addHistory(currentSession.id, result, "")
 
             log.info(`Edited diagram: ${operations.length} operation(s)`)
 
@@ -306,7 +328,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "Error: No active session. Call start_session first.",
+                            text: "Error: No active session. Please call start_session first.",
                         },
                     ],
                     isError: true,
@@ -364,7 +386,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "Error: No active session. Call start_session first.",
+                            text: "Error: No active session. Please call start_session first.",
                         },
                     ],
                     isError: true,

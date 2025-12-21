@@ -9,6 +9,7 @@ import {
     clearHistory,
     getHistory,
     getHistoryEntry,
+    updateLastHistorySvg,
 } from "./history.js"
 import { log } from "./logger.js"
 
@@ -16,6 +17,7 @@ interface SessionState {
     xml: string
     version: number
     lastUpdated: Date
+    svg?: string // Cached SVG from last browser save
 }
 
 export const stateStore = new Map<string, SessionState>()
@@ -29,13 +31,14 @@ export function getState(sessionId: string): SessionState | undefined {
     return stateStore.get(sessionId)
 }
 
-export function setState(sessionId: string, xml: string): number {
+export function setState(sessionId: string, xml: string, svg?: string): number {
     const existing = stateStore.get(sessionId)
     const newVersion = (existing?.version || 0) + 1
     stateStore.set(sessionId, {
         xml,
         version: newVersion,
         lastUpdated: new Date(),
+        svg: svg || existing?.svg, // Preserve cached SVG if not provided
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
     return newVersion
@@ -128,6 +131,8 @@ function handleRequest(
         handleHistoryApi(req, res, url)
     } else if (url.pathname === "/api/restore") {
         handleRestoreApi(req, res)
+    } else if (url.pathname === "/api/history-svg") {
+        handleHistorySvgApi(req, res)
     } else {
         res.writeHead(404)
         res.end("Not Found")
@@ -161,13 +166,13 @@ function handleStateApi(
         })
         req.on("end", () => {
             try {
-                const { sessionId, xml } = JSON.parse(body)
+                const { sessionId, xml, svg } = JSON.parse(body)
                 if (!sessionId) {
                     res.writeHead(400, { "Content-Type": "application/json" })
                     res.end(JSON.stringify({ error: "sessionId required" }))
                     return
                 }
-                const version = setState(sessionId, xml)
+                const version = setState(sessionId, xml, svg)
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ success: true, version }))
             } catch {
@@ -248,6 +253,39 @@ function handleRestoreApi(
 
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true, newVersion }))
+        } catch {
+            res.writeHead(400, { "Content-Type": "application/json" })
+            res.end(JSON.stringify({ error: "Invalid JSON" }))
+        }
+    })
+}
+
+function handleHistorySvgApi(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+): void {
+    if (req.method !== "POST") {
+        res.writeHead(405)
+        res.end("Method Not Allowed")
+        return
+    }
+
+    let body = ""
+    req.on("data", (chunk) => {
+        body += chunk
+    })
+    req.on("end", () => {
+        try {
+            const { sessionId, svg } = JSON.parse(body)
+            if (!sessionId || !svg) {
+                res.writeHead(400, { "Content-Type": "application/json" })
+                res.end(JSON.stringify({ error: "sessionId and svg required" }))
+                return
+            }
+
+            updateLastHistorySvg(sessionId, svg)
+            res.writeHead(200, { "Content-Type": "application/json" })
+            res.end(JSON.stringify({ success: true }))
         } catch {
             res.writeHead(400, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ error: "Invalid JSON" }))
@@ -358,6 +396,8 @@ function getHtmlPage(sessionId: string): string {
         const iframe = document.getElementById('drawio');
         const statusEl = document.getElementById('status');
         let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
+        let pendingSvgExport = null;
+        let pendingAiSvg = false;
 
         window.addEventListener('message', (e) => {
             if (e.origin !== 'https://embed.diagrams.net') return;
@@ -369,24 +409,49 @@ function getHtmlPage(sessionId: string): string {
                     statusEl.className = 'status connected';
                     if (pendingXml) { loadDiagram(pendingXml); pendingXml = null; }
                 } else if ((msg.event === 'save' || msg.event === 'autosave') && msg.xml && msg.xml !== lastXml) {
-                    pushState(msg.xml);
+                    // Request SVG export, then push state with SVG
+                    pendingSvgExport = msg.xml;
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
+                    // Fallback if export doesn't respond
+                    setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
+                } else if (msg.event === 'export' && msg.data) {
+                    let svg = msg.data;
+                    if (!svg.startsWith('data:')) svg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+                    if (pendingSvgExport) {
+                        const xml = pendingSvgExport;
+                        pendingSvgExport = null;
+                        pushState(xml, svg);
+                    } else if (pendingAiSvg) {
+                        pendingAiSvg = false;
+                        fetch('/api/history-svg', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId, svg })
+                        }).catch(() => {});
+                    }
                 }
             } catch {}
         });
 
-        function loadDiagram(xml) {
+        function loadDiagram(xml, capturePreview = false) {
             if (!isReady) { pendingXml = xml; return; }
             lastXml = xml;
             iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml, autosave: 1 }), '*');
+            if (capturePreview) {
+                setTimeout(() => {
+                    pendingAiSvg = true;
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
+                }, 500);
+            }
         }
 
-        async function pushState(xml) {
+        async function pushState(xml, svg = '') {
             if (!sessionId) return;
             try {
                 const r = await fetch('/api/state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, xml })
+                    body: JSON.stringify({ sessionId, xml, svg })
                 });
                 if (r.ok) { const d = await r.json(); currentVersion = d.version; lastXml = xml; }
             } catch (e) { console.error('Push failed:', e); }
@@ -400,7 +465,7 @@ function getHtmlPage(sessionId: string): string {
                 const s = await r.json();
                 if (s.version > currentVersion && s.xml) {
                     currentVersion = s.version;
-                    loadDiagram(s.xml);
+                    loadDiagram(s.xml, true);
                 }
             } catch {}
         }
