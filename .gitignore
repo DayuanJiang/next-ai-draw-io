@@ -60,3 +60,6 @@ push-via-ec2.sh
 *.deb
 *.rpm
 *.snap
+
+CLAUDE.md
+.spec-workflow

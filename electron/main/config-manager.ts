@@ -1,7 +1,95 @@
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { app } from "electron"
+import { app, safeStorage } from "electron"
+
+/**
+ * Fields that contain sensitive data and should be encrypted
+ */
+const SENSITIVE_FIELDS = ["AI_API_KEY"] as const
+
+/**
+ * Prefix to identify encrypted values
+ */
+const ENCRYPTED_PREFIX = "encrypted:"
+
+/**
+ * Check if safeStorage encryption is available
+ */
+function isEncryptionAvailable(): boolean {
+    return safeStorage.isEncryptionAvailable()
+}
+
+/**
+ * Encrypt a sensitive value using safeStorage
+ * Returns the original value if encryption is not available
+ */
+function encryptValue(value: string): string {
+    if (!isEncryptionAvailable() || !value) {
+        return value
+    }
+    try {
+        const encrypted = safeStorage.encryptString(value)
+        return ENCRYPTED_PREFIX + encrypted.toString("base64")
+    } catch (error) {
+        console.error("Failed to encrypt value:", error)
+        return value
+    }
+}
+
+/**
+ * Decrypt a sensitive value using safeStorage
+ * Returns the original value if it's not encrypted or decryption fails
+ */
+function decryptValue(value: string): string {
+    if (!value || !value.startsWith(ENCRYPTED_PREFIX)) {
+        return value
+    }
+    if (!isEncryptionAvailable()) {
+        console.warn(
+            "Cannot decrypt value: safeStorage encryption is not available",
+        )
+        return value
+    }
+    try {
+        const base64Data = value.slice(ENCRYPTED_PREFIX.length)
+        const buffer = Buffer.from(base64Data, "base64")
+        return safeStorage.decryptString(buffer)
+    } catch (error) {
+        console.error("Failed to decrypt value:", error)
+        return value
+    }
+}
+
+/**
+ * Encrypt sensitive fields in a config object
+ */
+function encryptConfig(
+    config: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+    const encrypted = { ...config }
+    for (const field of SENSITIVE_FIELDS) {
+        if (encrypted[field]) {
+            encrypted[field] = encryptValue(encrypted[field] as string)
+        }
+    }
+    return encrypted
+}
+
+/**
+ * Decrypt sensitive fields in a config object
+ */
+function decryptConfig(
+    config: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+    const decrypted = { ...config }
+    for (const field of SENSITIVE_FIELDS) {
+        if (decrypted[field]) {
+            decrypted[field] = decryptValue(decrypted[field] as string)
+        }
+    }
+    return decrypted
+}
 
 /**
  * Configuration preset interface
@@ -42,6 +130,7 @@ function getConfigFilePath(): string {
 
 /**
  * Load presets from the config file
+ * Decrypts sensitive fields automatically
  */
 export function loadPresets(): ConfigPresetsFile {
     const configPath = getConfigFilePath()
@@ -57,6 +146,13 @@ export function loadPresets(): ConfigPresetsFile {
     try {
         const content = readFileSync(configPath, "utf-8")
         const data = JSON.parse(content) as ConfigPresetsFile
+
+        // Decrypt sensitive fields in each preset
+        data.presets = data.presets.map((preset) => ({
+            ...preset,
+            config: decryptConfig(preset.config) as ConfigPreset["config"],
+        }))
+
         return data
     } catch (error) {
         console.error("Failed to load config presets:", error)
@@ -70,6 +166,7 @@ export function loadPresets(): ConfigPresetsFile {
 
 /**
  * Save presets to the config file
+ * Encrypts sensitive fields automatically
  */
 export function savePresets(data: ConfigPresetsFile): void {
     const configPath = getConfigFilePath()
@@ -80,8 +177,17 @@ export function savePresets(data: ConfigPresetsFile): void {
         mkdirSync(userDataPath, { recursive: true })
     }
 
+    // Encrypt sensitive fields before saving
+    const dataToSave: ConfigPresetsFile = {
+        ...data,
+        presets: data.presets.map((preset) => ({
+            ...preset,
+            config: encryptConfig(preset.config) as ConfigPreset["config"],
+        })),
+    }
+
     try {
-        writeFileSync(configPath, JSON.stringify(data, null, 2), "utf-8")
+        writeFileSync(configPath, JSON.stringify(dataToSave, null, 2), "utf-8")
     } catch (error) {
         console.error("Failed to save config presets:", error)
         throw error

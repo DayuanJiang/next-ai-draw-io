@@ -1,6 +1,7 @@
 import {
     app,
     BrowserWindow,
+    dialog,
     Menu,
     type MenuItemConstructorOptions,
     shell,
@@ -9,6 +10,7 @@ import {
     applyPresetToEnv,
     getAllPresets,
     getCurrentPresetId,
+    setCurrentPreset,
 } from "./config-manager"
 import { restartNextServer } from "./next-server"
 import { showSettingsWindow } from "./settings-window"
@@ -183,13 +185,31 @@ function buildConfigMenu(): MenuItemConstructorOptions {
         type: "radio",
         checked: preset.id === currentPresetId,
         click: async () => {
+            const previousPresetId = getCurrentPresetId()
             const env = applyPresetToEnv(preset.id)
+
             if (env) {
                 try {
                     await restartNextServer()
                     rebuildAppMenu() // Rebuild menu to update checkmarks
                 } catch (error) {
                     console.error("Failed to restart server:", error)
+
+                    // Revert to previous preset on failure
+                    if (previousPresetId) {
+                        applyPresetToEnv(previousPresetId)
+                    } else {
+                        setCurrentPreset(null)
+                    }
+
+                    // Rebuild menu to restore previous checkmark state
+                    rebuildAppMenu()
+
+                    // Show error dialog to notify user
+                    dialog.showErrorBox(
+                        "Configuration Error",
+                        `Failed to apply preset "${preset.name}". The server could not be restarted.\n\nThe previous configuration has been restored.\n\nError: ${error instanceof Error ? error.message : String(error)}`,
+                    )
                 }
             }
         },

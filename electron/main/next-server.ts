@@ -1,9 +1,13 @@
-import net from "node:net"
 import path from "node:path"
 import { app, type UtilityProcess, utilityProcess } from "electron"
+import {
+    findAvailablePort,
+    getAllocatedPort,
+    getServerUrl,
+    isPortAvailable,
+} from "./port-manager"
 
 let serverProcess: UtilityProcess | null = null
-const PORT = 6001
 
 /**
  * Get the path to the standalone server resources
@@ -15,21 +19,6 @@ function getResourcePath(): string {
         return path.join(process.resourcesPath, "standalone")
     }
     return path.join(app.getAppPath(), ".next", "standalone")
-}
-
-/**
- * Check if a port is available
- */
-async function isPortAvailable(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-        const server = net.createServer()
-        server.once("error", () => resolve(false))
-        server.once("listening", () => {
-            server.close()
-            resolve(true)
-        })
-        server.listen(port)
-    })
 }
 
 /**
@@ -62,19 +51,14 @@ export async function startNextServer(): Promise<string> {
     console.log(`Starting Next.js server from: ${resourcePath}`)
     console.log(`Server script path: ${serverPath}`)
 
-    // Check if port is already in use
-    const available = await isPortAvailable(PORT)
-    if (!available) {
-        console.log(
-            `Port ${PORT} is already in use, assuming server is running`,
-        )
-        return `http://localhost:${PORT}`
-    }
+    // Find an available port (random in production, fixed in development)
+    const port = await findAvailablePort()
+    console.log(`Using port: ${port}`)
 
     // Set up environment variables
     const env: Record<string, string> = {
         NODE_ENV: "production",
-        PORT: String(PORT),
+        PORT: String(port),
         HOSTNAME: "localhost",
     }
 
@@ -113,7 +97,7 @@ export async function startNextServer(): Promise<string> {
         serverProcess = null
     })
 
-    const url = `http://localhost:${PORT}`
+    const url = getServerUrl()
     await waitForServer(url)
     console.log(`Next.js server started at ${url}`)
 
@@ -135,9 +119,14 @@ export function stopNextServer(): void {
  * Wait for the server to fully stop
  */
 async function waitForServerStop(timeout = 5000): Promise<void> {
+    const port = getAllocatedPort()
+    if (port === null) {
+        return
+    }
+
     const start = Date.now()
     while (Date.now() - start < timeout) {
-        const available = await isPortAvailable(PORT)
+        const available = await isPortAvailable(port)
         if (available) {
             return
         }
