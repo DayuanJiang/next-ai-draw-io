@@ -21,6 +21,7 @@ import {
     Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -264,7 +265,8 @@ export function ModelConfigDialog({
         if (!selectedProviderId || !selectedProvider) return
         // Prevent duplicate model IDs
         if (existingModelIds.includes(modelId)) {
-            return // Model already exists, don't add
+            toast.warning(`Model "${modelId}" already exists in this provider`)
+            return
         }
         addModel(selectedProviderId, modelId)
     }
@@ -1190,10 +1192,27 @@ export function ModelConfigDialog({
                                                                             onChange={(
                                                                                 e,
                                                                             ) => {
+                                                                                // Allow free typing - validation happens on blur
+                                                                                updateModel(
+                                                                                    selectedProviderId!,
+                                                                                    model.id,
+                                                                                    {
+                                                                                        modelId:
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        validated:
+                                                                                            undefined,
+                                                                                        validationError:
+                                                                                            undefined,
+                                                                                    },
+                                                                                )
+                                                                            }}
+                                                                            onBlur={(
+                                                                                e,
+                                                                            ) => {
                                                                                 const newModelId =
-                                                                                    e
-                                                                                        .target
-                                                                                        .value
+                                                                                    e.target.value.trim()
                                                                                 // Check if new ID would be duplicate (excluding current model)
                                                                                 const otherModelIds =
                                                                                     selectedProvider?.models
@@ -1212,24 +1231,15 @@ export function ModelConfigDialog({
                                                                                         ) ||
                                                                                     []
                                                                                 if (
+                                                                                    newModelId &&
                                                                                     otherModelIds.includes(
                                                                                         newModelId,
                                                                                     )
                                                                                 ) {
-                                                                                    return // Don't allow duplicate
+                                                                                    toast.warning(
+                                                                                        `Model "${newModelId}" already exists. Please use a unique ID.`,
+                                                                                    )
                                                                                 }
-                                                                                updateModel(
-                                                                                    selectedProviderId!,
-                                                                                    model.id,
-                                                                                    {
-                                                                                        modelId:
-                                                                                            newModelId,
-                                                                                        validated:
-                                                                                            undefined,
-                                                                                        validationError:
-                                                                                            undefined,
-                                                                                    },
-                                                                                )
                                                                             }}
                                                                             className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                         />
