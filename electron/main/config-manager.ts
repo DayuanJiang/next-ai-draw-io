@@ -21,19 +21,40 @@ function isEncryptionAvailable(): boolean {
 }
 
 /**
+ * Track if we've already warned about plaintext storage
+ */
+let hasWarnedAboutPlaintext = false
+
+/**
  * Encrypt a sensitive value using safeStorage
- * Returns the original value if encryption is not available
+ * Warns if encryption is not available (API key stored in plaintext)
  */
 function encryptValue(value: string): string {
-    if (!isEncryptionAvailable() || !value) {
+    if (!value) {
         return value
     }
+
+    if (!isEncryptionAvailable()) {
+        if (!hasWarnedAboutPlaintext) {
+            console.warn(
+                "⚠️ SECURITY WARNING: safeStorage not available. " +
+                    "API keys will be stored in PLAINTEXT. " +
+                    "On Linux, install gnome-keyring or similar for secure storage.",
+            )
+            hasWarnedAboutPlaintext = true
+        }
+        return value
+    }
+
     try {
         const encrypted = safeStorage.encryptString(value)
         return ENCRYPTED_PREFIX + encrypted.toString("base64")
     } catch (error) {
-        console.error("Failed to encrypt value:", error)
-        return value
+        console.error("Encryption failed:", error)
+        // Fail secure: don't store if encryption fails
+        throw new Error(
+            "Failed to encrypt API key. Cannot securely store credentials.",
+        )
     }
 }
 
