@@ -13,6 +13,33 @@ import {
 import { restartNextServer } from "./next-server"
 
 /**
+ * Allowed configuration keys for presets
+ * This whitelist prevents arbitrary environment variable injection
+ */
+const ALLOWED_CONFIG_KEYS = new Set([
+    "AI_PROVIDER",
+    "AI_MODEL",
+    "AI_API_KEY",
+    "AI_BASE_URL",
+    "TEMPERATURE",
+])
+
+/**
+ * Sanitize preset config to only include allowed keys
+ */
+function sanitizePresetConfig(
+    config: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+    const sanitized: Record<string, string | undefined> = {}
+    for (const key of ALLOWED_CONFIG_KEYS) {
+        if (key in config && typeof config[key] === "string") {
+            sanitized[key] = config[key]
+        }
+    }
+    return sanitized
+}
+
+/**
  * Register all IPC handlers
  */
 export function registerIpcHandlers(): void {
@@ -119,15 +146,26 @@ export function registerIpcHandlers(): void {
                 id?: string
             },
         ) => {
+            // Validate preset name
+            if (typeof preset.name !== "string" || !preset.name.trim()) {
+                throw new Error("Invalid preset name")
+            }
+
+            // Sanitize config to only allow whitelisted keys
+            const sanitizedConfig = sanitizePresetConfig(preset.config ?? {})
+
             if (preset.id) {
                 // Update existing preset
                 return updatePreset(preset.id, {
-                    name: preset.name,
-                    config: preset.config,
+                    name: preset.name.trim(),
+                    config: sanitizedConfig,
                 })
             }
             // Create new preset
-            return createPreset(preset)
+            return createPreset({
+                name: preset.name.trim(),
+                config: sanitizedConfig,
+            })
         },
     )
 

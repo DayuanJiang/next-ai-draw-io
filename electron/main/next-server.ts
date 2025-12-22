@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { app, type UtilityProcess, utilityProcess } from "electron"
 import {
@@ -50,6 +51,14 @@ export async function startNextServer(): Promise<string> {
 
     console.log(`Starting Next.js server from: ${resourcePath}`)
     console.log(`Server script path: ${serverPath}`)
+
+    // Verify server script exists before attempting to start
+    if (!existsSync(serverPath)) {
+        throw new Error(
+            `Server script not found at ${serverPath}. ` +
+                "Please ensure the app was built correctly with 'npm run build'.",
+        )
+    }
 
     // Find an available port (random in production, fixed in development)
     const port = await findAvailablePort()

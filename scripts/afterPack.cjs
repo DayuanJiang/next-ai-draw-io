@@ -31,5 +31,9 @@ module.exports = async function (context) {
         console.error("[afterPack] Source or target directory not found!")
         console.error(`  Source: ${sourceNodeModules} exists: ${existsSync(sourceNodeModules)}`)
         console.error(`  Target dir: ${standaloneDir} exists: ${existsSync(standaloneDir)}`)
+        throw new Error(
+            "[afterPack] Failed: Required directories not found. " +
+            "Ensure 'npm run electron:prepare' was run before building."
+        )
     }
 }
