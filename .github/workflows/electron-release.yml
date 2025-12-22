@@ -41,7 +41,7 @@ jobs:
         run: npm ci
 
       - name: Build Electron app
-        run: npm run dist:${{ matrix.platform }}
+        run: npm run electron:build && npm run electron:prepare && npx electron-builder --${{ matrix.platform }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
