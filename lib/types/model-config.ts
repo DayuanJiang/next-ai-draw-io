@@ -83,29 +83,22 @@ export const PROVIDER_INFO: Record<
 // Suggested models per provider for quick add
 export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
     openai: [
-        // GPT-5.2 series
-        "gpt-5.2-pro",
-        "gpt-5.2-chat-latest",
-        "gpt-5.2",
-        // GPT-5.1 series
-        "gpt-5.1-codex-mini",
-        "gpt-5.1-codex",
-        "gpt-5.1-chat-latest",
-        "gpt-5.1",
-        // GPT-5 series
-        "gpt-5-pro",
-        "gpt-5",
-        "gpt-5-mini",
-        "gpt-5-nano",
-        "gpt-5-codex",
-        "gpt-5-chat-latest",
-        // GPT-4.1 series
-        "gpt-4.1",
-        "gpt-4.1-mini",
-        "gpt-4.1-nano",
-        // GPT-4o series
+        // GPT-4o series (latest)
         "gpt-4o",
         "gpt-4o-mini",
+        "gpt-4o-2024-11-20",
+        // GPT-4 Turbo
+        "gpt-4-turbo",
+        "gpt-4-turbo-preview",
+        // o1/o3 reasoning models
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o3-mini",
+        // GPT-4
+        "gpt-4",
+        // GPT-3.5
+        "gpt-3.5-turbo",
     ],
     anthropic: [
         // Claude 4.5 series (latest)

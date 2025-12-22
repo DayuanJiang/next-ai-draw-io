@@ -116,6 +116,9 @@ export function ModelConfigDialog({
     const [scrollState, setScrollState] = useState({ top: false, bottom: true })
     const [customModelInput, setCustomModelInput] = useState("")
     const scrollRef = useRef<HTMLDivElement>(null)
+    const validationResetTimeoutRef = useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [validatingModelIndex, setValidatingModelIndex] = useState<
         number | null
@@ -155,6 +158,15 @@ export function ModelConfigDialog({
         scrollEl.addEventListener("scroll", handleScroll)
         return () => scrollEl.removeEventListener("scroll", handleScroll)
     }, [selectedProvider])
+
+    // Cleanup validation reset timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (validationResetTimeoutRef.current) {
+                clearTimeout(validationResetTimeoutRef.current)
+            }
+        }
+    }, [])
 
     // Get suggested models for current provider
     const suggestedModels = selectedProvider
@@ -292,8 +304,14 @@ export function ModelConfigDialog({
         if (allValid) {
             setValidationStatus("success")
             updateProvider(selectedProviderId!, { validated: true })
-            // Reset to idle after showing success briefly
-            setTimeout(() => setValidationStatus("idle"), 1500)
+            // Reset to idle after showing success briefly (with cleanup)
+            if (validationResetTimeoutRef.current) {
+                clearTimeout(validationResetTimeoutRef.current)
+            }
+            validationResetTimeoutRef.current = setTimeout(() => {
+                setValidationStatus("idle")
+                validationResetTimeoutRef.current = null
+            }, 1500)
         } else {
             setValidationStatus("error")
             setValidationError(`${errorCount} model(s) failed validation`)
@@ -360,7 +378,7 @@ export function ModelConfigDialog({
                                                     setShowApiKey(false)
                                                 }}
                                                 className={cn(
-                                                    "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 hover:bg-accent",
+                                                    "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                                                     selectedProviderId ===
                                                         provider.id &&
                                                         "bg-background shadow-sm ring-1 ring-border",
@@ -605,7 +623,12 @@ export function ModelConfigDialog({
                                                                             !showApiKey,
                                                                         )
                                                                     }
-                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                                    aria-label={
+                                                                        showApiKey
+                                                                            ? "Hide secret access key"
+                                                                            : "Show secret access key"
+                                                                    }
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                                                                 >
                                                                     {showApiKey ? (
                                                                         <EyeOff className="h-4 w-4" />
@@ -642,11 +665,15 @@ export function ModelConfigDialog({
                                                                 <SelectTrigger className="h-9 font-mono text-xs hover:bg-accent">
                                                                     <SelectValue placeholder="Select region" />
                                                                 </SelectTrigger>
-                                                                <SelectContent>
+                                                                <SelectContent className="max-h-64">
                                                                     <SelectItem value="us-east-1">
                                                                         us-east-1
                                                                         (N.
                                                                         Virginia)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="us-east-2">
+                                                                        us-east-2
+                                                                        (Ohio)
                                                                     </SelectItem>
                                                                     <SelectItem value="us-west-2">
                                                                         us-west-2
@@ -656,13 +683,29 @@ export function ModelConfigDialog({
                                                                         eu-west-1
                                                                         (Ireland)
                                                                     </SelectItem>
+                                                                    <SelectItem value="eu-west-2">
+                                                                        eu-west-2
+                                                                        (London)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="eu-west-3">
+                                                                        eu-west-3
+                                                                        (Paris)
+                                                                    </SelectItem>
                                                                     <SelectItem value="eu-central-1">
                                                                         eu-central-1
                                                                         (Frankfurt)
                                                                     </SelectItem>
+                                                                    <SelectItem value="ap-south-1">
+                                                                        ap-south-1
+                                                                        (Mumbai)
+                                                                    </SelectItem>
                                                                     <SelectItem value="ap-northeast-1">
                                                                         ap-northeast-1
                                                                         (Tokyo)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="ap-northeast-2">
+                                                                        ap-northeast-2
+                                                                        (Seoul)
                                                                     </SelectItem>
                                                                     <SelectItem value="ap-southeast-1">
                                                                         ap-southeast-1
@@ -671,6 +714,11 @@ export function ModelConfigDialog({
                                                                     <SelectItem value="ap-southeast-2">
                                                                         ap-southeast-2
                                                                         (Sydney)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="sa-east-1">
+                                                                        sa-east-1
+                                                                        (São
+                                                                        Paulo)
                                                                     </SelectItem>
                                                                 </SelectContent>
                                                             </Select>
@@ -771,7 +819,12 @@ export function ModelConfigDialog({
                                                                                 !showApiKey,
                                                                             )
                                                                         }
-                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                                        aria-label={
+                                                                            showApiKey
+                                                                                ? "Hide API key"
+                                                                                : "Show API key"
+                                                                        }
+                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                                                                     >
                                                                         {showApiKey ? (
                                                                             <EyeOff className="h-4 w-4" />
@@ -984,7 +1037,7 @@ export function ModelConfigDialog({
                                                                         model.id
                                                                     }
                                                                     className={cn(
-                                                                        "flex items-center gap-3 p-3 transition-colors hover:bg-muted/30",
+                                                                        "transition-colors hover:bg-muted/30",
                                                                         index ===
                                                                             0 &&
                                                                             "rounded-t-xl",
@@ -996,87 +1049,94 @@ export function ModelConfigDialog({
                                                                             "rounded-b-xl",
                                                                     )}
                                                                 >
-                                                                    {/* Status icon */}
-                                                                    <div
-                                                                        className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0"
-                                                                        title={
-                                                                            model.validationError ||
-                                                                            ""
-                                                                        }
-                                                                    >
-                                                                        {validatingModelIndex !==
-                                                                            null &&
-                                                                        index ===
-                                                                            validatingModelIndex ? (
-                                                                            // Currently validating
-                                                                            <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
-                                                                                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                                                                            </div>
-                                                                        ) : validatingModelIndex !==
-                                                                              null &&
-                                                                          index >
-                                                                              validatingModelIndex &&
-                                                                          model.validated ===
-                                                                              undefined ? (
-                                                                            // Queued
-                                                                            <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
-                                                                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                            </div>
-                                                                        ) : model.validated ===
-                                                                          true ? (
-                                                                            // Valid
-                                                                            <div className="w-full h-full rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                                                                                <Check className="h-4 w-4 text-emerald-500" />
-                                                                            </div>
-                                                                        ) : model.validated ===
-                                                                          false ? (
-                                                                            // Invalid
-                                                                            <div className="w-full h-full rounded-lg bg-destructive/10 flex items-center justify-center">
-                                                                                <AlertCircle className="h-4 w-4 text-destructive" />
-                                                                            </div>
-                                                                        ) : (
-                                                                            // Not validated yet
-                                                                            <div className="w-full h-full rounded-lg bg-primary/5 flex items-center justify-center">
-                                                                                <Zap className="h-4 w-4 text-primary" />
-                                                                            </div>
-                                                                        )}
+                                                                    <div className="flex items-center gap-3 p-3">
+                                                                        {/* Status icon */}
+                                                                        <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
+                                                                            {validatingModelIndex !==
+                                                                                null &&
+                                                                            index ===
+                                                                                validatingModelIndex ? (
+                                                                                // Currently validating
+                                                                                <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                                                                    <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                                                                                </div>
+                                                                            ) : validatingModelIndex !==
+                                                                                  null &&
+                                                                              index >
+                                                                                  validatingModelIndex &&
+                                                                              model.validated ===
+                                                                                  undefined ? (
+                                                                                // Queued
+                                                                                <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
+                                                                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                                                                </div>
+                                                                            ) : model.validated ===
+                                                                              true ? (
+                                                                                // Valid
+                                                                                <div className="w-full h-full rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                                                                    <Check className="h-4 w-4 text-emerald-500" />
+                                                                                </div>
+                                                                            ) : model.validated ===
+                                                                              false ? (
+                                                                                // Invalid
+                                                                                <div className="w-full h-full rounded-lg bg-destructive/10 flex items-center justify-center">
+                                                                                    <AlertCircle className="h-4 w-4 text-destructive" />
+                                                                                </div>
+                                                                            ) : (
+                                                                                // Not validated yet
+                                                                                <div className="w-full h-full rounded-lg bg-primary/5 flex items-center justify-center">
+                                                                                    <Zap className="h-4 w-4 text-primary" />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <Input
+                                                                            value={
+                                                                                model.modelId
+                                                                            }
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) => {
+                                                                                updateModel(
+                                                                                    selectedProviderId!,
+                                                                                    model.id,
+                                                                                    {
+                                                                                        modelId:
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        validated:
+                                                                                            undefined,
+                                                                                        validationError:
+                                                                                            undefined,
+                                                                                    },
+                                                                                )
+                                                                            }}
+                                                                            className="flex-1 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
+                                                                        />
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                            onClick={() =>
+                                                                                handleDeleteModel(
+                                                                                    model.id,
+                                                                                )
+                                                                            }
+                                                                            aria-label={`Delete ${model.modelId}`}
+                                                                        >
+                                                                            <X className="h-4 w-4" />
+                                                                        </Button>
                                                                     </div>
-                                                                    <Input
-                                                                        value={
-                                                                            model.modelId
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) => {
-                                                                            updateModel(
-                                                                                selectedProviderId!,
-                                                                                model.id,
+                                                                    {/* Show validation error inline */}
+                                                                    {model.validated ===
+                                                                        false &&
+                                                                        model.validationError && (
+                                                                            <p className="text-xs text-destructive px-3 pb-2 pl-14">
                                                                                 {
-                                                                                    modelId:
-                                                                                        e
-                                                                                            .target
-                                                                                            .value,
-                                                                                    validated:
-                                                                                        undefined,
-                                                                                    validationError:
-                                                                                        undefined,
-                                                                                },
-                                                                            )
-                                                                        }}
-                                                                        className="flex-1 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
-                                                                    />
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                                                        onClick={() =>
-                                                                            handleDeleteModel(
-                                                                                model.id,
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <X className="h-4 w-4" />
-                                                                    </Button>
+                                                                                    model.validationError
+                                                                                }
+                                                                            </p>
+                                                                        )}
                                                                 </div>
                                                             ),
                                                         )}

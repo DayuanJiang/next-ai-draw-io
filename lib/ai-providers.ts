@@ -33,6 +33,11 @@ export interface ClientOverrides {
     baseUrl?: string | null
     apiKey?: string | null
     modelId?: string | null
+    // AWS Bedrock credentials
+    awsAccessKeyId?: string | null
+    awsSecretAccessKey?: string | null
+    awsRegion?: string | null
+    awsSessionToken?: string | null
 }
 
 // Providers that can be used with client-provided API keys
@@ -41,6 +46,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "anthropic",
     "google",
     "azure",
+    "bedrock",
     "openrouter",
     "deepseek",
     "siliconflow",
@@ -537,12 +543,25 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
     switch (provider) {
         case "bedrock": {
-            // Use credential provider chain for IAM role support (Lambda, EC2, etc.)
-            // Falls back to env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
-            const bedrockProvider = createAmazonBedrock({
-                region: process.env.AWS_REGION || "us-west-2",
-                credentialProvider: fromNodeProviderChain(),
-            })
+            // Use client-provided credentials if available, otherwise fall back to IAM/env vars
+            const hasClientCredentials =
+                overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey
+            const bedrockRegion =
+                overrides?.awsRegion || process.env.AWS_REGION || "us-west-2"
+
+            const bedrockProvider = hasClientCredentials
+                ? createAmazonBedrock({
+                      region: bedrockRegion,
+                      accessKeyId: overrides.awsAccessKeyId!,
+                      secretAccessKey: overrides.awsSecretAccessKey!,
+                      ...(overrides?.awsSessionToken && {
+                          sessionToken: overrides.awsSessionToken,
+                      }),
+                  })
+                : createAmazonBedrock({
+                      region: bedrockRegion,
+                      credentialProvider: fromNodeProviderChain(),
+                  })
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {

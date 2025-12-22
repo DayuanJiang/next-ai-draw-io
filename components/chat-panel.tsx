@@ -1041,6 +1041,20 @@ Continue from EXACTLY where you stopped.`,
                             "x-ai-api-key": config.aiApiKey,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                        // AWS Bedrock credentials
+                        ...(config.awsAccessKeyId && {
+                            "x-aws-access-key-id": config.awsAccessKeyId,
+                        }),
+                        ...(config.awsSecretAccessKey && {
+                            "x-aws-secret-access-key":
+                                config.awsSecretAccessKey,
+                        }),
+                        ...(config.awsRegion && {
+                            "x-aws-region": config.awsRegion,
+                        }),
+                        ...(config.awsSessionToken && {
+                            "x-aws-session-token": config.awsSessionToken,
+                        }),
                     }),
                     ...(minimalStyle && {
                         "x-minimal-style": "true",

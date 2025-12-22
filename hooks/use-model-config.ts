@@ -299,6 +299,11 @@ export function getSelectedAIConfig(): {
     aiBaseUrl: string
     aiApiKey: string
     aiModel: string
+    // AWS Bedrock credentials
+    awsAccessKeyId: string
+    awsSecretAccessKey: string
+    awsRegion: string
+    awsSessionToken: string
 } {
     const empty = {
         accessCode: "",
@@ -306,6 +311,10 @@ export function getSelectedAIConfig(): {
         aiBaseUrl: "",
         aiApiKey: "",
         aiModel: "",
+        awsAccessKeyId: "",
+        awsSecretAccessKey: "",
+        awsRegion: "",
+        awsSessionToken: "",
     }
 
     if (typeof window === "undefined") return empty
@@ -323,6 +332,11 @@ export function getSelectedAIConfig(): {
             aiBaseUrl: localStorage.getItem(OLD_KEYS.aiBaseUrl) || "",
             aiApiKey: localStorage.getItem(OLD_KEYS.aiApiKey) || "",
             aiModel: localStorage.getItem(OLD_KEYS.aiModel) || "",
+            // Old format didn't support AWS
+            awsAccessKeyId: "",
+            awsSecretAccessKey: "",
+            awsRegion: "",
+            awsSessionToken: "",
         }
     }
 
@@ -350,5 +364,10 @@ export function getSelectedAIConfig(): {
         aiBaseUrl: model.baseUrl || "",
         aiApiKey: model.apiKey,
         aiModel: model.modelId,
+        // AWS Bedrock credentials
+        awsAccessKeyId: model.awsAccessKeyId || "",
+        awsSecretAccessKey: model.awsSecretAccessKey || "",
+        awsRegion: model.awsRegion || "",
+        awsSessionToken: model.awsSessionToken || "",
     }
 }
