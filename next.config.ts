@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
     env: {
         APP_VERSION: packageJson.version,
     },
+    // Include instrumentation.ts in standalone build for Langfuse telemetry
+    outputFileTracingIncludes: {
+        "*": ["./instrumentation.ts"],
+    },
 }
 
 export default nextConfig
