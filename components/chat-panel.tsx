@@ -18,10 +18,17 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useDiagram } from "@/contexts/diagram-context"
-import { getAIConfig } from "@/lib/ai-config"
+import { useDictionary } from "@/hooks/use-dictionary"
+import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
@@ -34,6 +41,9 @@ const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
 const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
+
+// sessionStorage keys
+const SESSION_STORAGE_INPUT_KEY = "next-ai-draw-io-input"
 
 // Type for message parts (tool calls and their states)
 interface MessagePart {
@@ -106,8 +116,9 @@ export default function ChatPanel({
         resolverRef,
         chartXML,
         clearDiagram,
-        isDrawioReady,
     } = useDiagram()
+
+    const dict = useDictionary()
 
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
@@ -140,7 +151,10 @@ export default function ChatPanel({
 
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
-    const [, setAccessCodeRequired] = useState(false)
+    const [showModelConfigDialog, setShowModelConfigDialog] = useState(false)
+
+    // Model configuration hook
+    const modelConfig = useModelConfig()
     const [input, setInput] = useState("")
     const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
@@ -148,17 +162,24 @@ export default function ChatPanel({
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
     const [minimalStyle, setMinimalStyle] = useState(false)
 
+    // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
+    useEffect(() => {
+        const savedInput = sessionStorage.getItem(SESSION_STORAGE_INPUT_KEY)
+        if (savedInput) {
+            setInput(savedInput)
+        }
+    }, [])
+
     // Check config on mount
     useEffect(() => {
         fetch("/api/config")
             .then((res) => res.json())
             .then((data) => {
-                setAccessCodeRequired(data.accessCodeRequired)
                 setDailyRequestLimit(data.dailyRequestLimit || 0)
                 setDailyTokenLimit(data.dailyTokenLimit || 0)
                 setTpmLimit(data.tpmLimit || 0)
             })
-            .catch(() => setAccessCodeRequired(false))
+            .catch(() => {})
     }, [])
 
     // Quota management using extracted hook
@@ -210,9 +231,6 @@ export default function ChatPanel({
     const localStorageDebounceRef = useRef<ReturnType<
         typeof setTimeout
     > | null>(null)
-    const xmlStorageDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    )
     const LOCAL_STORAGE_DEBOUNCE_MS = 1000 // Save at most once per second
 
     const {
@@ -598,8 +616,7 @@ Continue from EXACTLY where you stopped.`,
             })
 
             if (error.message.includes("Invalid or missing access code")) {
-                // Show settings button and open dialog to help user fix it
-                setAccessCodeRequired(true)
+                // Show settings dialog to help user fix it
                 setShowSettingsDialog(true)
             }
         },
@@ -725,47 +742,6 @@ Continue from EXACTLY where you stopped.`,
         }
     }, [setMessages])
 
-    // Restore diagram XML when DrawIO becomes ready
-    const hasDiagramRestoredRef = useRef(false)
-    const [canSaveDiagram, setCanSaveDiagram] = useState(false)
-    useEffect(() => {
-        // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
-        if (!isDrawioReady) {
-            hasDiagramRestoredRef.current = false
-            setCanSaveDiagram(false)
-            return
-        }
-        if (hasDiagramRestoredRef.current) return
-        hasDiagramRestoredRef.current = true
-
-        try {
-            const savedDiagramXml = localStorage.getItem(
-                STORAGE_DIAGRAM_XML_KEY,
-            )
-            console.log(
-                "[ChatPanel] Restoring diagram, has saved XML:",
-                !!savedDiagramXml,
-            )
-            if (savedDiagramXml) {
-                console.log(
-                    "[ChatPanel] Loading saved diagram XML, length:",
-                    savedDiagramXml.length,
-                )
-                // Skip validation for trusted saved diagrams
-                onDisplayChart(savedDiagramXml, true)
-                chartXMLRef.current = savedDiagramXml
-            }
-        } catch (error) {
-            console.error("Failed to restore diagram from localStorage:", error)
-        }
-
-        // Allow saving after restore is complete
-        setTimeout(() => {
-            console.log("[ChatPanel] Enabling diagram save")
-            setCanSaveDiagram(true)
-        }, 500)
-    }, [isDrawioReady, onDisplayChart])
-
     // Save messages to localStorage whenever they change (debounced to prevent blocking during streaming)
     useEffect(() => {
         if (!hasRestoredRef.current) return
@@ -794,28 +770,6 @@ Continue from EXACTLY where you stopped.`,
             }
         }
     }, [messages])
-
-    // Save diagram XML to localStorage whenever it changes (debounced)
-    useEffect(() => {
-        if (!canSaveDiagram) return
-        if (!chartXML || chartXML.length <= 300) return
-
-        // Clear any pending save
-        if (xmlStorageDebounceRef.current) {
-            clearTimeout(xmlStorageDebounceRef.current)
-        }
-
-        // Debounce: save after 1 second of no changes
-        xmlStorageDebounceRef.current = setTimeout(() => {
-            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
-        }, LOCAL_STORAGE_DEBOUNCE_MS)
-
-        return () => {
-            if (xmlStorageDebounceRef.current) {
-                clearTimeout(xmlStorageDebounceRef.current)
-            }
-        }
-    }, [chartXML, canSaveDiagram])
 
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
@@ -916,6 +870,7 @@ Continue from EXACTLY where you stopped.`,
                         },
                     ] as any)
                     setInput("")
+                    sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                     setFiles([])
                     return
                 }
@@ -963,6 +918,7 @@ Continue from EXACTLY where you stopped.`,
 
                 // Token count is tracked in onFinish with actual server usage
                 setInput("")
+                sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                 setFiles([])
             } catch (error) {
                 console.error("Error fetching chart data:", error)
@@ -985,6 +941,7 @@ Continue from EXACTLY where you stopped.`,
             localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
             localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
             localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
+            sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
             toast.success("Started a fresh chat")
         } catch (error) {
             console.error("Failed to clear localStorage:", error)
@@ -999,7 +956,12 @@ Continue from EXACTLY where you stopped.`,
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
+        saveInputToSessionStorage(e.target.value)
         setInput(e.target.value)
+    }
+
+    const saveInputToSessionStorage = (input: string) => {
+        sessionStorage.setItem(SESSION_STORAGE_INPUT_KEY, input)
     }
 
     // Helper functions for message actions (regenerate/edit)
@@ -1063,7 +1025,7 @@ Continue from EXACTLY where you stopped.`,
         autoRetryCountRef.current = 0
         partialXmlRef.current = ""
 
-        const config = getAIConfig()
+        const config = getSelectedAIConfig()
 
         sendMessage(
             { parts },
@@ -1080,6 +1042,20 @@ Continue from EXACTLY where you stopped.`,
                             "x-ai-api-key": config.aiApiKey,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                        // AWS Bedrock credentials
+                        ...(config.awsAccessKeyId && {
+                            "x-aws-access-key-id": config.awsAccessKeyId,
+                        }),
+                        ...(config.awsSecretAccessKey && {
+                            "x-aws-secret-access-key":
+                                config.awsSecretAccessKey,
+                        }),
+                        ...(config.awsRegion && {
+                            "x-aws-region": config.awsRegion,
+                        }),
+                        ...(config.awsSessionToken && {
+                            "x-aws-session-token": config.awsSessionToken,
+                        }),
                     }),
                     ...(minimalStyle && {
                         "x-minimal-style": "true",
@@ -1277,14 +1253,14 @@ Continue from EXACTLY where you stopped.`,
                 className={`${isMobile ? "px-3 py-2" : "px-5 py-4"} border-b border-border/50`}
             >
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-x-hidden">
                         <div className="flex items-center gap-2">
                             <Image
                                 src="/favicon.ico"
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
-                                className="rounded"
+                                className="rounded flex-shrink-0"
                             />
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
@@ -1319,9 +1295,9 @@ Continue from EXACTLY where you stopped.`,
                             </Link>
                         )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 justify-end overflow-visible">
                         <ButtonWithTooltip
-                            tooltipContent="Start fresh chat"
+                            tooltipContent={dict.nav.newChat}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowNewChatDialog(true)}
@@ -1332,18 +1308,25 @@ Continue from EXACTLY where you stopped.`,
                             />
                         </ButtonWithTooltip>
                         <div className="w-px h-5 bg-border mx-1" />
-                        <a
-                            href="https://github.com/DayuanJiang/next-ai-draw-io"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        >
-                            <FaGithub
-                                className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
-                            />
-                        </a>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <a
+                                    href="https://github.com/DayuanJiang/next-ai-draw-io"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                >
+                                    <FaGithub
+                                        className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
+                                    />
+                                </a>
+                            </TooltipTrigger>
+                            <TooltipContent>{dict.nav.github}</TooltipContent>
+                        </Tooltip>
+
                         <ButtonWithTooltip
-                            tooltipContent="Settings"
+                            tooltipContent={dict.nav.settings}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowSettingsDialog(true)}
@@ -1353,17 +1336,19 @@ Continue from EXACTLY where you stopped.`,
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
                         </ButtonWithTooltip>
-                        {!isMobile && (
-                            <ButtonWithTooltip
-                                tooltipContent="Hide chat panel (Ctrl+B)"
-                                variant="ghost"
-                                size="icon"
-                                onClick={onToggleVisibility}
-                                className="hover:bg-accent"
-                            >
-                                <PanelRightClose className="h-5 w-5 text-muted-foreground" />
-                            </ButtonWithTooltip>
-                        )}
+                        <div className="hidden sm:flex items-center gap-2">
+                            {!isMobile && (
+                                <ButtonWithTooltip
+                                    tooltipContent={dict.nav.hidePanel}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="hover:bg-accent"
+                                    onClick={onToggleVisibility}
+                                >
+                                    <PanelRightClose className="h-5 w-5 text-muted-foreground" />
+                                </ButtonWithTooltip>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -1402,6 +1387,10 @@ Continue from EXACTLY where you stopped.`,
                     error={error}
                     minimalStyle={minimalStyle}
                     onMinimalStyleChange={setMinimalStyle}
+                    models={modelConfig.models}
+                    selectedModelId={modelConfig.selectedModelId}
+                    onModelSelect={modelConfig.setSelectedModelId}
+                    onConfigureModels={() => setShowModelConfigDialog(true)}
                 />
             </footer>
 
@@ -1413,6 +1402,12 @@ Continue from EXACTLY where you stopped.`,
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
+            />
+
+            <ModelConfigDialog
+                open={showModelConfigDialog}
+                onOpenChange={setShowModelConfigDialog}
+                modelConfig={modelConfig}
             />
 
             <ResetWarningModal

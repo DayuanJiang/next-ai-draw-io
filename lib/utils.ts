@@ -1054,7 +1054,31 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Fixed <Cell> tags to <mxCell>")
     }
 
-    // 8b. Remove non-draw.io tags (LLM sometimes includes Claude's function calling XML)
+    // 8b. Fix common closing tag typos (MUST run before foreign tag removal)
+    const tagTypos = [
+        { wrong: /<\/mxElement>/gi, right: "</mxCell>", name: "</mxElement>" },
+        { wrong: /<\/mxcell>/g, right: "</mxCell>", name: "</mxcell>" }, // case sensitivity
+        {
+            wrong: /<\/mxgeometry>/g,
+            right: "</mxGeometry>",
+            name: "</mxgeometry>",
+        },
+        { wrong: /<\/mxpoint>/g, right: "</mxPoint>", name: "</mxpoint>" },
+        {
+            wrong: /<\/mxgraphmodel>/gi,
+            right: "</mxGraphModel>",
+            name: "</mxgraphmodel>",
+        },
+    ]
+    for (const { wrong, right, name } of tagTypos) {
+        const before = fixed
+        fixed = fixed.replace(wrong, right)
+        if (fixed !== before) {
+            fixes.push(`Fixed typo ${name} to ${right}`)
+        }
+    }
+
+    // 8c. Remove non-draw.io tags (after typo fixes so lowercase variants are fixed first)
     // Valid draw.io tags: mxfile, diagram, mxGraphModel, root, mxCell, mxGeometry, mxPoint, Array, Object
     const validDrawioTags = new Set([
         "mxfile",
@@ -1079,7 +1103,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
     if (foreignTags.size > 0) {
         console.log(
-            "[autoFixXml] Step 8b: Found foreign tags:",
+            "[autoFixXml] Step 8c: Found foreign tags:",
             Array.from(foreignTags),
         )
         for (const tag of foreignTags) {
@@ -1091,29 +1115,6 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push(
             `Removed foreign tags: ${Array.from(foreignTags).join(", ")}`,
         )
-    }
-
-    // 9. Fix common closing tag typos
-    const tagTypos = [
-        { wrong: /<\/mxElement>/gi, right: "</mxCell>", name: "</mxElement>" },
-        { wrong: /<\/mxcell>/g, right: "</mxCell>", name: "</mxcell>" }, // case sensitivity
-        {
-            wrong: /<\/mxgeometry>/g,
-            right: "</mxGeometry>",
-            name: "</mxgeometry>",
-        },
-        { wrong: /<\/mxpoint>/g, right: "</mxPoint>", name: "</mxpoint>" },
-        {
-            wrong: /<\/mxgraphmodel>/gi,
-            right: "</mxGraphModel>",
-            name: "</mxgraphmodel>",
-        },
-    ]
-    for (const { wrong, right, name } of tagTypos) {
-        if (wrong.test(fixed)) {
-            fixed = fixed.replace(wrong, right)
-            fixes.push(`Fixed typo ${name} to ${right}`)
-        }
     }
 
     // 10. Fix unclosed tags by appending missing closing tags
