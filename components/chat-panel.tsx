@@ -1388,7 +1388,6 @@ Continue from EXACTLY where you stopped.`,
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
                 onCloseProtectionChange={onCloseProtectionChange}
-                onOpenModelConfig={() => setShowModelConfigDialog(true)}
                 drawioUi={drawioUi}
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}

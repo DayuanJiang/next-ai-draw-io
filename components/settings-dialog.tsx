@@ -1,6 +1,6 @@
 "use client"
 
-import { Moon, Settings2, Sun } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,7 +19,6 @@ interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     onCloseProtectionChange?: (enabled: boolean) => void
-    onOpenModelConfig: () => void
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
     darkMode: boolean
@@ -41,7 +40,6 @@ export function SettingsDialog({
     open,
     onOpenChange,
     onCloseProtectionChange,
-    onOpenModelConfig,
     drawioUi,
     onToggleDrawioUi,
     darkMode,
@@ -178,26 +176,6 @@ export function SettingsDialog({
                             )}
                         </div>
                     )}
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                            <Label>{dict.settings.aiProvider}</Label>
-                            <p className="text-[0.8rem] text-muted-foreground">
-                                {dict.settings.aiProviderDescription}
-                            </p>
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                onOpenChange(false)
-                                onOpenModelConfig()
-                            }}
-                        >
-                            <Settings2 className="h-4 w-4 mr-2" />
-                            {dict.modelConfig?.configure || "Configure"}
-                        </Button>
-                    </div>
-
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <Label htmlFor="theme-toggle">

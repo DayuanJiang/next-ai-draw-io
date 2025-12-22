@@ -1,6 +1,6 @@
 "use client"
 
-import { Bot, Check, Server, Settings2 } from "lucide-react"
+import { Bot, Check, ChevronDown, Server, Settings2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import {
     ModelSelectorContent,
@@ -96,8 +96,8 @@ export function ModelSelector({
     }
 
     const tooltipContent = selectedModel
-        ? `Model: ${selectedModel.modelId}`
-        : "Model: Server Default"
+        ? `${selectedModel.modelId} (click to change)`
+        : "Using server default model (click to change)"
 
     return (
         <ModelSelectorRoot open={open} onOpenChange={setOpen}>
@@ -105,11 +105,15 @@ export function ModelSelector({
                 <ButtonWithTooltip
                     tooltipContent={tooltipContent}
                     variant="ghost"
-                    size="icon"
+                    size="sm"
                     disabled={disabled}
-                    className="hover:bg-accent"
+                    className="hover:bg-accent gap-1.5 h-8 max-w-[180px] px-2"
                 >
-                    <Bot className="h-5 w-5 text-muted-foreground" />
+                    <Bot className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    <span className="text-xs truncate">
+                        {selectedModel ? selectedModel.modelId : "Default"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                 </ButtonWithTooltip>
             </ModelSelectorTrigger>
             <ModelSelectorContent title="Select Model">

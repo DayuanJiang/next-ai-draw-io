@@ -13,6 +13,7 @@ import {
     Loader2,
     Plus,
     Server,
+    Settings2,
     Sparkles,
     Tag,
     Trash2,
@@ -100,6 +101,42 @@ function ProviderLogo({
     )
 }
 
+// Reusable validation button component
+function ValidationButton({
+    status,
+    onClick,
+    disabled,
+}: {
+    status: ValidationStatus
+    onClick: () => void
+    disabled: boolean
+}) {
+    return (
+        <Button
+            variant={status === "success" ? "outline" : "default"}
+            size="sm"
+            onClick={onClick}
+            disabled={disabled}
+            className={cn(
+                "h-9 px-4 min-w-[80px]",
+                status === "success" &&
+                    "text-emerald-600 border-emerald-200 dark:border-emerald-800",
+            )}
+        >
+            {status === "validating" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+            ) : status === "success" ? (
+                <>
+                    <Check className="h-4 w-4 mr-1.5" />
+                    Verified
+                </>
+            ) : (
+                "Test"
+            )}
+        </Button>
+    )
+}
+
 export function ModelConfigDialog({
     open,
     onOpenChange,
@@ -120,6 +157,7 @@ export function ModelConfigDialog({
         typeof setTimeout
     > | null>(null)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+    const [deleteConfirmText, setDeleteConfirmText] = useState("")
     const [validatingModelIndex, setValidatingModelIndex] = useState<
         number | null
     >(null)
@@ -172,6 +210,26 @@ export function ModelConfigDialog({
     const suggestedModels = selectedProvider
         ? SUGGESTED_MODELS[selectedProvider.provider] || []
         : []
+
+    // Filter out already-added models from suggestions
+    const existingModelIds =
+        selectedProvider?.models.map((m) => m.modelId) || []
+    const availableSuggestions = suggestedModels.filter(
+        (modelId) => !existingModelIds.includes(modelId),
+    )
+
+    // Detect duplicate models in current config
+    const modelIdCounts =
+        selectedProvider?.models.reduce(
+            (acc, m) => {
+                acc[m.modelId] = (acc[m.modelId] || 0) + 1
+                return acc
+            },
+            {} as Record<string, number>,
+        ) || {}
+    const duplicateModelIds = Object.keys(modelIdCounts).filter(
+        (id) => modelIdCounts[id] > 1,
+    )
 
     // Handle adding a new provider
     const handleAddProvider = (providerType: ProviderName) => {
@@ -329,9 +387,11 @@ export function ModelConfigDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-3xl h-[75vh] max-h-[700px] overflow-hidden flex flex-col gap-0 p-0">
-                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
-                    <DialogTitle className="flex items-center gap-2 text-lg">
-                        <Server className="h-5 w-5 text-primary" />
+                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-primary/5 via-primary/3 to-transparent">
+                    <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold">
+                        <div className="p-1.5 rounded-lg bg-primary/10">
+                            <Server className="h-5 w-5 text-primary" />
+                        </div>
                         {dict.modelConfig?.title || "AI Model Configuration"}
                     </DialogTitle>
                     <DialogDescription className="text-sm">
@@ -508,7 +568,7 @@ export function ModelConfigDialog({
                                         {/* Configuration Section */}
                                         <div className="space-y-4">
                                             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                                <Key className="h-4 w-4" />
+                                                <Settings2 className="h-4 w-4" />
                                                 <span>Configuration</span>
                                             </div>
 
@@ -987,14 +1047,21 @@ export function ModelConfigDialog({
                                                                 )
                                                             }
                                                         }}
+                                                        disabled={
+                                                            availableSuggestions.length ===
+                                                            0
+                                                        }
                                                     >
                                                         <SelectTrigger className="w-32 h-8 hover:bg-accent">
                                                             <span className="text-xs">
-                                                                Suggested
+                                                                {availableSuggestions.length ===
+                                                                0
+                                                                    ? "All added"
+                                                                    : "Suggested"}
                                                             </span>
                                                         </SelectTrigger>
                                                         <SelectContent className="max-h-72">
-                                                            {suggestedModels.map(
+                                                            {availableSuggestions.map(
                                                                 (modelId) => (
                                                                     <SelectItem
                                                                         key={
@@ -1015,6 +1082,26 @@ export function ModelConfigDialog({
                                                     </Select>
                                                 </div>
                                             </div>
+
+                                            {/* Duplicate Warning Banner */}
+                                            {duplicateModelIds.length > 0 && (
+                                                <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                                                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                                                    <span>
+                                                        {
+                                                            duplicateModelIds.length
+                                                        }{" "}
+                                                        duplicate model
+                                                        {duplicateModelIds.length >
+                                                        1
+                                                            ? "s"
+                                                            : ""}{" "}
+                                                        detected. Remove
+                                                        duplicates to avoid
+                                                        confusion.
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             {/* Model List */}
                                             <div className="rounded-xl border bg-card overflow-hidden min-h-[120px]">
@@ -1049,7 +1136,7 @@ export function ModelConfigDialog({
                                                                             "rounded-b-xl",
                                                                     )}
                                                                 >
-                                                                    <div className="flex items-center gap-3 p-3">
+                                                                    <div className="flex items-center gap-3 p-3 min-w-0">
                                                                         {/* Status icon */}
                                                                         <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
                                                                             {validatingModelIndex !==
@@ -1093,6 +1180,9 @@ export function ModelConfigDialog({
                                                                             value={
                                                                                 model.modelId
                                                                             }
+                                                                            title={
+                                                                                model.modelId
+                                                                            }
                                                                             onChange={(
                                                                                 e,
                                                                             ) => {
@@ -1111,7 +1201,7 @@ export function ModelConfigDialog({
                                                                                     },
                                                                                 )
                                                                             }}
-                                                                            className="flex-1 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
+                                                                            className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                         />
                                                                         <Button
                                                                             variant="ghost"
@@ -1137,6 +1227,29 @@ export function ModelConfigDialog({
                                                                                 }
                                                                             </p>
                                                                         )}
+                                                                    {/* Show duplicate warning inline */}
+                                                                    {duplicateModelIds.includes(
+                                                                        model.modelId,
+                                                                    ) && (
+                                                                        <div className="flex items-center gap-2 px-3 pb-2 pl-14">
+                                                                            <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                                                                <AlertCircle className="h-3 w-3" />
+                                                                                Duplicate
+                                                                            </span>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-5 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                                onClick={() =>
+                                                                                    handleDeleteModel(
+                                                                                        model.id,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                Remove
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             ),
                                                         )}
@@ -1191,12 +1304,20 @@ export function ModelConfigDialog({
             {/* Delete Confirmation Dialog */}
             <AlertDialog
                 open={deleteConfirmOpen}
-                onOpenChange={setDeleteConfirmOpen}
+                onOpenChange={(open) => {
+                    setDeleteConfirmOpen(open)
+                    if (!open) setDeleteConfirmText("")
+                }}
             >
-                <AlertDialogContent>
+                <AlertDialogContent className="border-destructive/30">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Provider</AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <div className="mx-auto mb-3 p-3 rounded-full bg-destructive/10">
+                            <AlertCircle className="h-6 w-6 text-destructive" />
+                        </div>
+                        <AlertDialogTitle className="text-center">
+                            Delete Provider
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-center">
                             Are you sure you want to delete{" "}
                             <span className="font-medium text-foreground">
                                 {selectedProvider
@@ -1209,11 +1330,43 @@ export function ModelConfigDialog({
                             be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    {selectedProvider &&
+                        selectedProvider.models.length >= 3 && (
+                            <div className="mt-2 space-y-2">
+                                <Label
+                                    htmlFor="delete-confirm"
+                                    className="text-sm text-muted-foreground"
+                                >
+                                    Type &quot;
+                                    {selectedProvider.name ||
+                                        PROVIDER_INFO[selectedProvider.provider]
+                                            .label}
+                                    &quot; to confirm
+                                </Label>
+                                <Input
+                                    id="delete-confirm"
+                                    value={deleteConfirmText}
+                                    onChange={(e) =>
+                                        setDeleteConfirmText(e.target.value)
+                                    }
+                                    placeholder="Type provider name..."
+                                    className="h-9"
+                                />
+                            </div>
+                        )}
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteProvider}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={
+                                selectedProvider &&
+                                selectedProvider.models.length >= 3 &&
+                                deleteConfirmText !==
+                                    (selectedProvider.name ||
+                                        PROVIDER_INFO[selectedProvider.provider]
+                                            .label)
+                            }
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                         >
                             Delete
                         </AlertDialogAction>
