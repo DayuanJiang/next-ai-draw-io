@@ -6,7 +6,7 @@
  * that electron-builder can properly include
  */
 
-import { cpSync, rmSync, existsSync, mkdirSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 

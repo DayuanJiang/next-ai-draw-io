@@ -11,10 +11,10 @@
  */
 
 import { spawn } from "node:child_process"
-import { fileURLToPath } from "node:url"
 import { existsSync, readFileSync, watch } from "node:fs"
-import path from "node:path"
 import os from "node:os"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.join(__dirname, "..")
@@ -29,9 +29,18 @@ function getUserDataPath() {
     const appName = "next-ai-draw-io"
     switch (process.platform) {
         case "darwin":
-            return path.join(os.homedir(), "Library", "Application Support", appName)
+            return path.join(
+                os.homedir(),
+                "Library",
+                "Application Support",
+                appName,
+            )
         case "win32":
-            return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), appName)
+            return path.join(
+                process.env.APPDATA ||
+                    path.join(os.homedir(), "AppData", "Roaming"),
+                appName,
+            )
         default:
             return path.join(os.homedir(), ".config", appName)
     }
@@ -57,7 +66,7 @@ function loadPresetConfig() {
             return null
         }
 
-        const preset = data.presets.find(p => p.id === data.currentPresetId)
+        const preset = data.presets.find((p) => p.id === data.currentPresetId)
         if (!preset) {
             console.log("📋 Active preset not found, using .env.local")
             return null
@@ -207,31 +216,42 @@ async function main() {
         }
 
         try {
-            configWatcher = watch(configPath, { persistent: false }, async (eventType) => {
-                if (eventType === "change" && !restartPending) {
-                    restartPending = true
-                    console.log("\n🔄 Preset configuration changed, restarting Next.js server...")
+            configWatcher = watch(
+                configPath,
+                { persistent: false },
+                async (eventType) => {
+                    if (eventType === "change" && !restartPending) {
+                        restartPending = true
+                        console.log(
+                            "\n🔄 Preset configuration changed, restarting Next.js server...",
+                        )
 
-                    // Kill current Next.js process
-                    nextProcess.kill()
+                        // Kill current Next.js process
+                        nextProcess.kill()
 
-                    // Wait a bit for process to die
-                    await new Promise(r => setTimeout(r, 1000))
+                        // Wait a bit for process to die
+                        await new Promise((r) => setTimeout(r, 1000))
 
-                    // Reload preset and restart
-                    const newPresetEnv = loadPresetConfig()
-                    nextProcess = startNextServer(newPresetEnv)
+                        // Reload preset and restart
+                        const newPresetEnv = loadPresetConfig()
+                        nextProcess = startNextServer(newPresetEnv)
 
-                    try {
-                        await waitForServer(NEXT_URL)
-                        console.log("✅ Next.js server restarted with new configuration\n")
-                    } catch (err) {
-                        console.error("❌ Failed to restart Next.js:", err.message)
+                        try {
+                            await waitForServer(NEXT_URL)
+                            console.log(
+                                "✅ Next.js server restarted with new configuration\n",
+                            )
+                        } catch (err) {
+                            console.error(
+                                "❌ Failed to restart Next.js:",
+                                err.message,
+                            )
+                        }
+
+                        restartPending = false
                     }
-
-                    restartPending = false
-                }
-            })
+                },
+            )
             console.log("👀 Watching for preset configuration changes...")
         } catch (err) {
             // File might not exist yet, that's ok
