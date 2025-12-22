@@ -20,6 +20,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import { getServerQuotaManager } from "@/lib/server-quota-manager"
 import { getSystemPrompt } from "@/lib/system-prompts"
 
 export const maxDuration = 120
@@ -165,6 +166,36 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Get user IP for Langfuse tracking
     const forwardedFor = req.headers.get("x-forwarded-for")
     const userId = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+
+    // Check if user has their own API key (bypass limits)
+    const hasOwnApiKey = !!(
+        req.headers.get("x-ai-provider") && req.headers.get("x-ai-api-key")
+    )
+
+    // Server-side quota check (only if no own API key)
+    if (!hasOwnApiKey) {
+        const quotaManager = getServerQuotaManager()
+        const quotaCheck = quotaManager.checkAllLimits(userId)
+        if (!quotaCheck.allowed) {
+            return Response.json(
+                {
+                    error: quotaCheck.reason || "Quota limit exceeded",
+                    ...(quotaCheck.remainingRequests !== undefined && {
+                        remainingRequests: quotaCheck.remainingRequests,
+                    }),
+                    ...(quotaCheck.remainingTokens !== undefined && {
+                        remainingTokens: quotaCheck.remainingTokens,
+                    }),
+                    ...(quotaCheck.remainingTPM !== undefined && {
+                        remainingTPM: quotaCheck.remainingTPM,
+                    }),
+                },
+                { status: 429 },
+            )
+        }
+        // Increment request count immediately
+        quotaManager.incrementRequestCount(userId)
+    }
 
     // Validate sessionId for Langfuse (must be string, max 200 chars)
     const validSessionId =
@@ -503,6 +534,17 @@ ${userInputText}
                 promptTokens: usage?.inputTokens,
                 completionTokens: usage?.outputTokens,
             })
+
+            // Increment token usage for quota tracking (only if no own API key)
+            if (!hasOwnApiKey && usage) {
+                const quotaManager = getServerQuotaManager()
+                const totalTokens =
+                    (usage.inputTokens || 0) + (usage.outputTokens || 0)
+                if (totalTokens > 0) {
+                    quotaManager.incrementTokenCount(userId, totalTokens)
+                    quotaManager.incrementTPMCount(userId, totalTokens)
+                }
+            }
         },
         tools: {
             // Client-side tool that will be executed on the client
