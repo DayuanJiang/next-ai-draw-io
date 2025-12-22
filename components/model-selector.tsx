@@ -1,6 +1,6 @@
 "use client"
 
-import { Bot, Check, Settings2 } from "lucide-react"
+import { Bot, Check, Server, Settings2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import {
     ModelSelectorContent,
@@ -37,8 +37,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     openrouter: "openrouter",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
-    ollama: "ollama",
-    gateway: "openai", // fallback
+    gateway: "vercel",
 }
 
 // Group models by providerLabel (handles duplicate providers)
@@ -69,7 +68,15 @@ export function ModelSelector({
     disabled = false,
 }: ModelSelectorProps) {
     const [open, setOpen] = useState(false)
-    const groupedModels = useMemo(() => groupModelsByProvider(models), [models])
+    // Only show validated models in the selector
+    const validatedModels = useMemo(
+        () => models.filter((m) => m.validated === true),
+        [models],
+    )
+    const groupedModels = useMemo(
+        () => groupModelsByProvider(validatedModels),
+        [validatedModels],
+    )
 
     // Find selected model for display
     const selectedModel = useMemo(
@@ -108,14 +115,21 @@ export function ModelSelector({
             <ModelSelectorContent title="Select Model">
                 <ModelSelectorInput placeholder="Search models..." />
                 <ModelSelectorList>
-                    <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                    <ModelSelectorEmpty>
+                        {validatedModels.length === 0 && models.length > 0
+                            ? "No verified models. Test your models first."
+                            : "No models found."}
+                    </ModelSelectorEmpty>
 
                     {/* Server Default Option */}
-                    <ModelSelectorGroup>
+                    <ModelSelectorGroup heading="Default">
                         <ModelSelectorItem
                             value="__server_default__"
                             onSelect={handleSelect}
-                            className="cursor-pointer"
+                            className={cn(
+                                "cursor-pointer",
+                                !selectedModelId && "bg-accent",
+                            )}
                         >
                             <Check
                                 className={cn(
@@ -125,7 +139,8 @@ export function ModelSelector({
                                         : "opacity-0",
                                 )}
                             />
-                            <ModelSelectorName className="text-muted-foreground">
+                            <Server className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <ModelSelectorName>
                                 Server Default
                             </ModelSelectorName>
                         </ModelSelectorItem>
@@ -186,6 +201,10 @@ export function ModelSelector({
                             </ModelSelectorName>
                         </ModelSelectorItem>
                     </ModelSelectorGroup>
+                    {/* Info text */}
+                    <div className="px-3 py-2 text-xs text-muted-foreground border-t">
+                        Only verified models are shown
+                    </div>
                 </ModelSelectorList>
             </ModelSelectorContent>
         </ModelSelectorRoot>

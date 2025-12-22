@@ -1,3 +1,4 @@
+import { Cloud } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 import {
     Command,
@@ -112,16 +113,23 @@ export const ModelSelectorLogo = ({
     provider,
     className,
     ...props
-}: ModelSelectorLogoProps) => (
-    <img
-        {...props}
-        alt={`${provider} logo`}
-        className={cn("size-4 dark:invert", className)}
-        height={16}
-        src={`https://models.dev/logos/${provider}.svg`}
-        width={16}
-    />
-)
+}: ModelSelectorLogoProps) => {
+    // Use Lucide icon for bedrock since models.dev doesn't have a good AWS icon
+    if (provider === "amazon-bedrock") {
+        return <Cloud className={cn("size-4", className)} />
+    }
+
+    return (
+        <img
+            {...props}
+            alt={`${provider} logo`}
+            className={cn("size-4 dark:invert", className)}
+            height={16}
+            src={`https://models.dev/logos/${provider}.svg`}
+            width={16}
+        />
+    )
+}
 
 export type ModelSelectorLogoGroupProps = ComponentProps<"div">
 

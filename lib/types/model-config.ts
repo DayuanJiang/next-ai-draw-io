@@ -9,14 +9,14 @@ export type ProviderName =
     | "openrouter"
     | "deepseek"
     | "siliconflow"
-    | "ollama"
     | "gateway"
 
 // Individual model configuration
 export interface ModelConfig {
     id: string // UUID for this model
     modelId: string // e.g., "gpt-4o", "claude-sonnet-4-5"
-    streaming?: boolean // Default true
+    validated?: boolean // Has this model been validated
+    validationError?: string // Error message if validation failed
 }
 
 // Provider configuration
@@ -45,7 +45,7 @@ export interface FlattenedModel {
     providerLabel: string // Provider display name
     apiKey: string
     baseUrl?: string
-    streaming?: boolean
+    validated?: boolean // Has this model been validated
 }
 
 // Provider metadata
@@ -67,34 +67,35 @@ export const PROVIDER_INFO: Record<
         label: "SiliconFlow",
         defaultBaseUrl: "https://api.siliconflow.com/v1",
     },
-    ollama: { label: "Ollama", defaultBaseUrl: "http://localhost:11434" },
     gateway: { label: "AI Gateway" },
 }
 
 // Suggested models per provider for quick add
 export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
     openai: [
-        // GPT-4o series
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-4o-audio-preview",
+        // GPT-5.2 series
+        "gpt-5.2-pro",
+        "gpt-5.2-chat-latest",
+        "gpt-5.2",
+        // GPT-5.1 series
+        "gpt-5.1-codex-mini",
+        "gpt-5.1-codex",
+        "gpt-5.1-chat-latest",
+        "gpt-5.1",
+        // GPT-5 series
+        "gpt-5-pro",
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-nano",
+        "gpt-5-codex",
+        "gpt-5-chat-latest",
         // GPT-4.1 series
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
-        // GPT-4 Turbo
-        "gpt-4-turbo",
-        "gpt-4-turbo-preview",
-        // Reasoning models
-        "o1",
-        "o1-mini",
-        "o1-preview",
-        "o3",
-        "o3-mini",
-        "o4-mini",
-        // Legacy
-        "gpt-4",
-        "gpt-3.5-turbo",
+        // GPT-4o series
+        "gpt-4o",
+        "gpt-4o-mini",
     ],
     anthropic: [
         // Claude 4.5 series (latest)
@@ -191,19 +192,6 @@ export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
         "Qwen/Qwen2.5-7B-Instruct",
         "Qwen/Qwen2-VL-72B-Instruct",
     ],
-    ollama: [
-        "llama3.3",
-        "llama3.2",
-        "llama3.1",
-        "qwen2.5",
-        "qwen2.5-coder",
-        "deepseek-r1",
-        "deepseek-coder-v2",
-        "gemma2",
-        "phi4",
-        "mistral",
-        "codellama",
-    ],
     gateway: [
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
@@ -244,7 +232,6 @@ export function createModelConfig(modelId: string): ModelConfig {
     return {
         id: generateId(),
         modelId,
-        streaming: true,
     }
 }
 
@@ -265,7 +252,7 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 providerLabel,
                 apiKey: provider.apiKey,
                 baseUrl: provider.baseUrl,
-                streaming: model.streaming,
+                validated: model.validated,
             })
         }
     }

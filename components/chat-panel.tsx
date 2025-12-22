@@ -19,7 +19,6 @@ import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
-import { ModelSelector } from "@/components/model-selector"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
@@ -1304,16 +1303,6 @@ Continue from EXACTLY where you stopped.`,
                                 className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
                             />
                         </a>
-                        {!isMobile && modelConfig.isLoaded && (
-                            <ModelSelector
-                                models={modelConfig.models}
-                                selectedModelId={modelConfig.selectedModelId}
-                                onSelect={modelConfig.setSelectedModelId}
-                                onConfigure={() =>
-                                    setShowModelConfigDialog(true)
-                                }
-                            />
-                        )}
                         <ButtonWithTooltip
                             tooltipContent={dict.nav.settings}
                             variant="ghost"
@@ -1377,6 +1366,10 @@ Continue from EXACTLY where you stopped.`,
                     error={error}
                     minimalStyle={minimalStyle}
                     onMinimalStyleChange={setMinimalStyle}
+                    models={modelConfig.models}
+                    selectedModelId={modelConfig.selectedModelId}
+                    onModelSelect={modelConfig.setSelectedModelId}
+                    onConfigureModels={() => setShowModelConfigDialog(true)}
                 />
             </footer>
 

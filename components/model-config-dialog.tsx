@@ -1,16 +1,36 @@
 "use client"
 
-import { Check, Eye, EyeOff, Loader2, Plus, Trash2, X } from "lucide-react"
-import { useCallback, useState } from "react"
-import { Button } from "@/components/ui/button"
 import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command"
+    AlertCircle,
+    Check,
+    ChevronRight,
+    Clock,
+    Cloud,
+    Eye,
+    EyeOff,
+    Key,
+    Link2,
+    Loader2,
+    Plus,
+    Server,
+    Sparkles,
+    Tag,
+    Trash2,
+    X,
+    Zap,
+} from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
@@ -20,11 +40,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Select,
@@ -33,15 +48,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
-import type {
-    ModelConfig,
-    ProviderConfig,
-    ProviderName,
-} from "@/lib/types/model-config"
+import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
+import { cn } from "@/lib/utils"
 
 interface ModelConfigDialogProps {
     open: boolean
@@ -50,6 +61,44 @@ interface ModelConfigDialogProps {
 }
 
 type ValidationStatus = "idle" | "validating" | "success" | "error"
+
+// Map provider names to models.dev logo names
+const PROVIDER_LOGO_MAP: Record<string, string> = {
+    openai: "openai",
+    anthropic: "anthropic",
+    google: "google",
+    azure: "azure",
+    bedrock: "amazon-bedrock",
+    openrouter: "openrouter",
+    deepseek: "deepseek",
+    siliconflow: "siliconflow",
+    gateway: "vercel",
+}
+
+// Provider logo component
+function ProviderLogo({
+    provider,
+    className,
+}: {
+    provider: ProviderName
+    className?: string
+}) {
+    // Use Lucide icon for bedrock since models.dev doesn't have a good AWS icon
+    if (provider === "bedrock") {
+        return <Cloud className={cn("size-4", className)} />
+    }
+
+    const logoName = PROVIDER_LOGO_MAP[provider] || provider
+    return (
+        <img
+            alt={`${provider} logo`}
+            className={cn("size-4 dark:invert", className)}
+            height={16}
+            src={`https://models.dev/logos/${logoName}.svg`}
+            width={16}
+        />
+    )
+}
 
 export function ModelConfigDialog({
     open,
@@ -64,8 +113,13 @@ export function ModelConfigDialog({
     const [validationStatus, setValidationStatus] =
         useState<ValidationStatus>("idle")
     const [validationError, setValidationError] = useState<string>("")
-    const [modelPopoverOpen, setModelPopoverOpen] = useState(false)
-    const [modelSearchValue, setModelSearchValue] = useState("")
+    const [scrollState, setScrollState] = useState({ top: false, bottom: true })
+    const [customModelInput, setCustomModelInput] = useState("")
+    const scrollRef = useRef<HTMLDivElement>(null)
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+    const [validatingModelIndex, setValidatingModelIndex] = useState<
+        number | null
+    >(null)
 
     const {
         config,
@@ -81,6 +135,26 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
+
+    // Track scroll position for gradient shadows
+    useEffect(() => {
+        const scrollEl = scrollRef.current?.querySelector(
+            "[data-radix-scroll-area-viewport]",
+        ) as HTMLElement | null
+        if (!scrollEl) return
+
+        const handleScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = scrollEl
+            setScrollState({
+                top: scrollTop > 10,
+                bottom: scrollTop < scrollHeight - clientHeight - 10,
+            })
+        }
+
+        handleScroll() // Initial check
+        scrollEl.addEventListener("scroll", handleScroll)
+        return () => scrollEl.removeEventListener("scroll", handleScroll)
+    }, [selectedProvider])
 
     // Get suggested models for current provider
     const suggestedModels = selectedProvider
@@ -114,16 +188,6 @@ export function ModelConfigDialog({
         addModel(selectedProviderId, modelId)
     }
 
-    // Handle model field updates
-    const handleModelUpdate = (
-        modelConfigId: string,
-        field: keyof ModelConfig,
-        value: string | boolean,
-    ) => {
-        if (!selectedProviderId) return
-        updateModel(selectedProviderId, modelConfigId, { [field]: value })
-    }
-
     // Handle deleting a model
     const handleDeleteModel = (modelConfigId: string) => {
         if (!selectedProviderId) return
@@ -136,9 +200,10 @@ export function ModelConfigDialog({
         deleteProvider(selectedProviderId)
         setSelectedProviderId(null)
         setValidationStatus("idle")
+        setDeleteConfirmOpen(false)
     }
 
-    // Validate API key
+    // Validate all models
     const handleValidate = useCallback(async () => {
         if (!selectedProvider || !selectedProvider.apiKey) return
 
@@ -152,456 +217,711 @@ export function ModelConfigDialog({
         setValidationStatus("validating")
         setValidationError("")
 
-        try {
-            const response = await fetch("/api/validate-model", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    provider: selectedProvider.provider,
-                    apiKey: selectedProvider.apiKey,
-                    baseUrl: selectedProvider.baseUrl,
-                    modelId: selectedProvider.models[0].modelId,
-                }),
-            })
+        let allValid = true
+        let errorCount = 0
 
-            const data = await response.json()
+        // Validate each model
+        for (let i = 0; i < selectedProvider.models.length; i++) {
+            const model = selectedProvider.models[i]
+            setValidatingModelIndex(i)
 
-            if (data.valid) {
-                setValidationStatus("success")
-                updateProvider(selectedProviderId!, { validated: true })
-            } else {
-                setValidationStatus("error")
-                setValidationError(data.error || "Validation failed")
+            try {
+                const response = await fetch("/api/validate-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: selectedProvider.provider,
+                        apiKey: selectedProvider.apiKey,
+                        baseUrl: selectedProvider.baseUrl,
+                        modelId: model.modelId,
+                    }),
+                })
+
+                const data = await response.json()
+
+                if (data.valid) {
+                    updateModel(selectedProviderId!, model.id, {
+                        validated: true,
+                        validationError: undefined,
+                    })
+                } else {
+                    allValid = false
+                    errorCount++
+                    updateModel(selectedProviderId!, model.id, {
+                        validated: false,
+                        validationError: data.error || "Validation failed",
+                    })
+                }
+            } catch {
+                allValid = false
+                errorCount++
+                updateModel(selectedProviderId!, model.id, {
+                    validated: false,
+                    validationError: "Network error",
+                })
             }
-        } catch {
-            setValidationStatus("error")
-            setValidationError("Network error")
         }
-    }, [selectedProvider, selectedProviderId, updateProvider])
 
-    // Get all available provider types (allow duplicates for different base URLs)
+        setValidatingModelIndex(null)
+
+        if (allValid) {
+            setValidationStatus("success")
+            updateProvider(selectedProviderId!, { validated: true })
+        } else {
+            setValidationStatus("error")
+            setValidationError(`${errorCount} model(s) failed validation`)
+        }
+    }, [selectedProvider, selectedProviderId, updateProvider, updateModel])
+
+    // Get all available provider types
     const availableProviders = Object.keys(PROVIDER_INFO) as ProviderName[]
 
-    // Get display name for provider (use custom name if set)
+    // Get display name for provider
     const getProviderDisplayName = (provider: ProviderConfig) => {
         return provider.name || PROVIDER_INFO[provider.provider].label
     }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>
+            <DialogContent className="sm:max-w-3xl h-[75vh] max-h-[700px] overflow-hidden flex flex-col gap-0 p-0">
+                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
+                    <DialogTitle className="flex items-center gap-2 text-lg">
+                        <Server className="h-5 w-5 text-primary" />
                         {dict.modelConfig?.title || "AI Model Configuration"}
                     </DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="text-sm">
                         {dict.modelConfig?.description ||
-                            "Configure multiple AI providers and models"}
+                            "Configure multiple AI providers and models for your workspace"}
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex flex-1 gap-4 min-h-0 overflow-hidden">
+                <div className="flex flex-1 min-h-0 overflow-hidden">
                     {/* Provider List (Left Sidebar) */}
-                    <div className="w-48 flex-shrink-0 flex flex-col gap-2">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                            Providers
-                        </Label>
+                    <div className="w-56 flex-shrink-0 flex flex-col border-r bg-muted/20">
+                        <div className="px-4 py-3 border-b">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Providers
+                            </span>
+                        </div>
 
                         <ScrollArea className="flex-1">
-                            <div className="flex flex-col gap-1 pr-2">
-                                {config.providers.map((provider) => (
-                                    <button
-                                        key={provider.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedProviderId(provider.id)
-                                            setValidationStatus(
-                                                provider.validated
-                                                    ? "success"
-                                                    : "idle",
-                                            )
-                                            setShowApiKey(false)
-                                        }}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-left text-sm transition-colors ${
-                                            selectedProviderId === provider.id
-                                                ? "bg-accent text-accent-foreground"
-                                                : "hover:bg-accent/50"
-                                        }`}
-                                    >
-                                        <span className="flex-1 truncate">
-                                            {getProviderDisplayName(provider)}
-                                        </span>
-                                        {provider.validated && (
-                                            <Check className="h-3.5 w-3.5 text-green-500" />
-                                        )}
-                                    </button>
-                                ))}
+                            <div className="p-2">
+                                {config.providers.length === 0 ? (
+                                    <div className="px-3 py-8 text-center">
+                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-muted mb-3">
+                                            <Plus className="h-5 w-5 text-muted-foreground" />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Add a provider to get started
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-1">
+                                        {config.providers.map((provider) => (
+                                            <button
+                                                key={provider.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedProviderId(
+                                                        provider.id,
+                                                    )
+                                                    setValidationStatus(
+                                                        provider.validated
+                                                            ? "success"
+                                                            : "idle",
+                                                    )
+                                                    setShowApiKey(false)
+                                                }}
+                                                className={cn(
+                                                    "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 hover:bg-accent",
+                                                    selectedProviderId ===
+                                                        provider.id &&
+                                                        "bg-background shadow-sm ring-1 ring-border",
+                                                )}
+                                            >
+                                                <ProviderLogo
+                                                    provider={provider.provider}
+                                                    className="flex-shrink-0"
+                                                />
+                                                <span className="flex-1 truncate font-medium">
+                                                    {getProviderDisplayName(
+                                                        provider,
+                                                    )}
+                                                </span>
+                                                {provider.validated ? (
+                                                    <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10">
+                                                        <Check className="h-3 w-3 text-emerald-500" />
+                                                    </div>
+                                                ) : (
+                                                    <ChevronRight
+                                                        className={cn(
+                                                            "h-4 w-4 text-muted-foreground/50 transition-transform",
+                                                            selectedProviderId ===
+                                                                provider.id &&
+                                                                "translate-x-0.5",
+                                                        )}
+                                                    />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </ScrollArea>
 
                         {/* Add Provider */}
-                        {availableProviders.length > 0 && (
+                        <div className="p-2 border-t">
                             <Select
                                 onValueChange={(v) =>
                                     handleAddProvider(v as ProviderName)
                                 }
                             >
-                                <SelectTrigger className="h-8 text-xs">
-                                    <Plus className="h-3.5 w-3.5 mr-1" />
+                                <SelectTrigger className="h-9 bg-background">
+                                    <Plus className="h-4 w-4 mr-2 text-muted-foreground" />
                                     <SelectValue placeholder="Add Provider" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {availableProviders.map((p) => (
-                                        <SelectItem key={p} value={p}>
-                                            {PROVIDER_INFO[p].label}
+                                        <SelectItem
+                                            key={p}
+                                            value={p}
+                                            className="cursor-pointer"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <ProviderLogo provider={p} />
+                                                <span>
+                                                    {PROVIDER_INFO[p].label}
+                                                </span>
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                        )}
+                        </div>
                     </div>
 
                     {/* Provider Details (Right Panel) */}
-                    <ScrollArea className="flex-1">
+                    <div className="flex-1 min-w-0 overflow-hidden relative">
                         {selectedProvider ? (
-                            <div className="space-y-4 pr-3">
-                                {/* Provider Header */}
-                                <div className="flex items-center justify-between">
-                                    <h3 className="font-medium">
-                                        {
-                                            PROVIDER_INFO[
-                                                selectedProvider.provider
-                                            ].label
-                                        }
-                                    </h3>
-                                </div>
-
-                                {/* Provider Name */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="provider-name">
-                                        Display Name
-                                    </Label>
-                                    <Input
-                                        id="provider-name"
-                                        value={selectedProvider.name || ""}
-                                        onChange={(e) =>
-                                            handleProviderUpdate(
-                                                "name",
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder={
-                                            PROVIDER_INFO[
-                                                selectedProvider.provider
-                                            ].label
-                                        }
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Custom name to identify this provider
-                                        (e.g., &quot;OpenAI Production&quot;)
-                                    </p>
-                                </div>
-
-                                {/* API Key */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="api-key">API Key</Label>
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <Input
-                                                id="api-key"
-                                                type={
-                                                    showApiKey
-                                                        ? "text"
-                                                        : "password"
-                                                }
-                                                value={selectedProvider.apiKey}
-                                                onChange={(e) =>
-                                                    handleProviderUpdate(
-                                                        "apiKey",
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                placeholder="Enter API key"
-                                                className="pr-10"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setShowApiKey(!showApiKey)
-                                                }
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                            >
-                                                {showApiKey ? (
-                                                    <EyeOff className="h-4 w-4" />
-                                                ) : (
-                                                    <Eye className="h-4 w-4" />
-                                                )}
-                                            </button>
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleValidate}
-                                            disabled={
-                                                !selectedProvider.apiKey ||
-                                                validationStatus ===
-                                                    "validating"
-                                            }
-                                        >
-                                            {validationStatus ===
-                                            "validating" ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : validationStatus ===
-                                              "success" ? (
-                                                <Check className="h-4 w-4 text-green-500" />
-                                            ) : (
-                                                "Test"
+                            <>
+                                {/* Top gradient shadow */}
+                                <div
+                                    className={cn(
+                                        "absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
+                                        scrollState.top
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                    )}
+                                />
+                                {/* Bottom gradient shadow */}
+                                <div
+                                    className={cn(
+                                        "absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
+                                        scrollState.bottom
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                    )}
+                                />
+                                <ScrollArea className="h-full" ref={scrollRef}>
+                                    <div className="p-6 space-y-6">
+                                        {/* Provider Header */}
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted">
+                                                <ProviderLogo
+                                                    provider={
+                                                        selectedProvider.provider
+                                                    }
+                                                    className="h-5 w-5"
+                                                />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="font-semibold text-base">
+                                                    {
+                                                        PROVIDER_INFO[
+                                                            selectedProvider
+                                                                .provider
+                                                        ].label
+                                                    }
+                                                </h3>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {selectedProvider.models
+                                                        .length === 0
+                                                        ? "No models configured"
+                                                        : `${selectedProvider.models.length} model${selectedProvider.models.length > 1 ? "s" : ""} configured`}
+                                                </p>
+                                            </div>
+                                            {selectedProvider.validated && (
+                                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                                    <Check className="h-3.5 w-3.5" />
+                                                    <span className="text-xs font-medium">
+                                                        Verified
+                                                    </span>
+                                                </div>
                                             )}
-                                        </Button>
-                                    </div>
-                                    {validationStatus === "error" &&
-                                        validationError && (
-                                            <p className="text-xs text-destructive">
-                                                {validationError}
-                                            </p>
-                                        )}
-                                </div>
+                                        </div>
 
-                                {/* Base URL */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="base-url">
-                                        Base URL (optional)
-                                    </Label>
-                                    <Input
-                                        id="base-url"
-                                        value={selectedProvider.baseUrl || ""}
-                                        onChange={(e) =>
-                                            handleProviderUpdate(
-                                                "baseUrl",
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder={
-                                            PROVIDER_INFO[
-                                                selectedProvider.provider
-                                            ].defaultBaseUrl ||
-                                            "Custom endpoint URL"
-                                        }
-                                    />
-                                </div>
+                                        {/* Configuration Section */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                <Key className="h-4 w-4" />
+                                                <span>Configuration</span>
+                                            </div>
 
-                                {/* Models Section */}
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <Label>Models</Label>
-                                        <Popover
-                                            open={modelPopoverOpen}
-                                            onOpenChange={(open) => {
-                                                setModelPopoverOpen(open)
-                                                if (!open)
-                                                    setModelSearchValue("")
-                                            }}
-                                        >
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-7 text-xs"
-                                                >
-                                                    <Plus className="h-3 w-3 mr-1" />
-                                                    Add Model
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent
-                                                className="w-72 p-0 z-[60]"
-                                                align="end"
-                                            >
-                                                <Command shouldFilter={true}>
-                                                    <CommandInput
-                                                        placeholder="Search or type custom model..."
-                                                        value={modelSearchValue}
-                                                        onValueChange={
-                                                            setModelSearchValue
+                                            <div className="rounded-xl border bg-card p-4 space-y-4">
+                                                {/* Display Name */}
+                                                <div className="space-y-2">
+                                                    <Label
+                                                        htmlFor="provider-name"
+                                                        className="text-xs font-medium flex items-center gap-1.5"
+                                                    >
+                                                        <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        Display Name
+                                                    </Label>
+                                                    <Input
+                                                        id="provider-name"
+                                                        value={
+                                                            selectedProvider.name ||
+                                                            ""
                                                         }
+                                                        onChange={(e) =>
+                                                            handleProviderUpdate(
+                                                                "name",
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder={
+                                                            PROVIDER_INFO[
+                                                                selectedProvider
+                                                                    .provider
+                                                            ].label
+                                                        }
+                                                        className="h-9"
                                                     />
-                                                    <CommandList>
-                                                        <CommandEmpty>
-                                                            <span className="text-muted-foreground">
-                                                                {modelSearchValue.trim()
-                                                                    ? "Press Enter to add custom model"
-                                                                    : "Type a model ID..."}
-                                                            </span>
-                                                        </CommandEmpty>
-                                                        {/* Custom model option - appears when search doesn't match suggestions */}
-                                                        {modelSearchValue.trim() &&
-                                                            !suggestedModels.some(
-                                                                (m) =>
-                                                                    m
-                                                                        .toLowerCase()
-                                                                        .includes(
-                                                                            modelSearchValue.toLowerCase(),
-                                                                        ),
-                                                            ) && (
-                                                                <CommandGroup heading="Custom">
-                                                                    <CommandItem
-                                                                        value={`custom-${modelSearchValue.trim()}`}
-                                                                        onSelect={() => {
-                                                                            handleAddModel(
-                                                                                modelSearchValue.trim(),
-                                                                            )
-                                                                            setModelSearchValue(
-                                                                                "",
-                                                                            )
-                                                                            setModelPopoverOpen(
-                                                                                false,
-                                                                            )
-                                                                        }}
-                                                                        className="text-xs cursor-pointer"
-                                                                    >
-                                                                        Add
-                                                                        &quot;
-                                                                        {modelSearchValue.trim()}
-                                                                        &quot;
-                                                                    </CommandItem>
-                                                                </CommandGroup>
+                                                </div>
+
+                                                {/* API Key */}
+                                                <div className="space-y-2">
+                                                    <Label
+                                                        htmlFor="api-key"
+                                                        className="text-xs font-medium flex items-center gap-1.5"
+                                                    >
+                                                        <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        API Key
+                                                    </Label>
+                                                    <div className="flex gap-2">
+                                                        <div className="relative flex-1">
+                                                            <Input
+                                                                id="api-key"
+                                                                type={
+                                                                    showApiKey
+                                                                        ? "text"
+                                                                        : "password"
+                                                                }
+                                                                value={
+                                                                    selectedProvider.apiKey
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleProviderUpdate(
+                                                                        "apiKey",
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                placeholder="Enter your API key"
+                                                                className="h-9 pr-10 font-mono text-xs"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setShowApiKey(
+                                                                        !showApiKey,
+                                                                    )
+                                                                }
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                            >
+                                                                {showApiKey ? (
+                                                                    <EyeOff className="h-4 w-4" />
+                                                                ) : (
+                                                                    <Eye className="h-4 w-4" />
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                        <Button
+                                                            variant={
+                                                                validationStatus ===
+                                                                "success"
+                                                                    ? "outline"
+                                                                    : "default"
+                                                            }
+                                                            size="sm"
+                                                            onClick={
+                                                                handleValidate
+                                                            }
+                                                            disabled={
+                                                                !selectedProvider.apiKey ||
+                                                                validationStatus ===
+                                                                    "validating"
+                                                            }
+                                                            className={cn(
+                                                                "h-9 px-4",
+                                                                validationStatus ===
+                                                                    "success" &&
+                                                                    "text-emerald-600 border-emerald-200 dark:border-emerald-800",
                                                             )}
-                                                        <CommandGroup heading="Suggested">
+                                                        >
+                                                            {validationStatus ===
+                                                            "validating" ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : validationStatus ===
+                                                              "success" ? (
+                                                                <>
+                                                                    <Check className="h-4 w-4 mr-1.5" />
+                                                                    Verified
+                                                                </>
+                                                            ) : (
+                                                                "Test"
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                    {validationStatus ===
+                                                        "error" &&
+                                                        validationError && (
+                                                            <p className="text-xs text-destructive flex items-center gap-1">
+                                                                <X className="h-3 w-3" />
+                                                                {
+                                                                    validationError
+                                                                }
+                                                            </p>
+                                                        )}
+                                                </div>
+
+                                                {/* Base URL */}
+                                                <div className="space-y-2">
+                                                    <Label
+                                                        htmlFor="base-url"
+                                                        className="text-xs font-medium flex items-center gap-1.5"
+                                                    >
+                                                        <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        Base URL
+                                                        <span className="text-muted-foreground font-normal">
+                                                            (optional)
+                                                        </span>
+                                                    </Label>
+                                                    <Input
+                                                        id="base-url"
+                                                        value={
+                                                            selectedProvider.baseUrl ||
+                                                            ""
+                                                        }
+                                                        onChange={(e) =>
+                                                            handleProviderUpdate(
+                                                                "baseUrl",
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder={
+                                                            PROVIDER_INFO[
+                                                                selectedProvider
+                                                                    .provider
+                                                            ].defaultBaseUrl ||
+                                                            "Custom endpoint URL"
+                                                        }
+                                                        className="h-9 font-mono text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Models Section */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                    <Sparkles className="h-4 w-4" />
+                                                    <span>Models</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        placeholder="Custom model ID..."
+                                                        value={customModelInput}
+                                                        onChange={(e) =>
+                                                            setCustomModelInput(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        onKeyDown={(e) => {
+                                                            if (
+                                                                e.key ===
+                                                                    "Enter" &&
+                                                                customModelInput.trim()
+                                                            ) {
+                                                                handleAddModel(
+                                                                    customModelInput.trim(),
+                                                                )
+                                                                setCustomModelInput(
+                                                                    "",
+                                                                )
+                                                            }
+                                                        }}
+                                                        className="h-8 w-48 font-mono text-xs"
+                                                    />
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8"
+                                                        onClick={() => {
+                                                            if (
+                                                                customModelInput.trim()
+                                                            ) {
+                                                                handleAddModel(
+                                                                    customModelInput.trim(),
+                                                                )
+                                                                setCustomModelInput(
+                                                                    "",
+                                                                )
+                                                            }
+                                                        }}
+                                                        disabled={
+                                                            !customModelInput.trim()
+                                                        }
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Select
+                                                        onValueChange={(
+                                                            value,
+                                                        ) => {
+                                                            if (value) {
+                                                                handleAddModel(
+                                                                    value,
+                                                                )
+                                                            }
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="w-32 h-8">
+                                                            <span className="text-xs">
+                                                                Suggested
+                                                            </span>
+                                                        </SelectTrigger>
+                                                        <SelectContent className="max-h-72">
                                                             {suggestedModels.map(
                                                                 (modelId) => (
-                                                                    <CommandItem
+                                                                    <SelectItem
                                                                         key={
                                                                             modelId
                                                                         }
                                                                         value={
                                                                             modelId
                                                                         }
-                                                                        onSelect={() => {
-                                                                            handleAddModel(
-                                                                                modelId,
-                                                                            )
-                                                                            setModelSearchValue(
-                                                                                "",
-                                                                            )
-                                                                            setModelPopoverOpen(
-                                                                                false,
-                                                                            )
-                                                                        }}
-                                                                        className="text-xs cursor-pointer"
+                                                                        className="font-mono text-xs"
                                                                     >
                                                                         {
                                                                             modelId
                                                                         }
-                                                                    </CommandItem>
+                                                                    </SelectItem>
                                                                 ),
                                                             )}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
 
-                                    {/* Model List */}
-                                    <div className="space-y-2">
-                                        {selectedProvider.models.length ===
-                                        0 ? (
-                                            <p className="text-sm text-muted-foreground py-4 text-center">
-                                                No models configured. Add a
-                                                model to get started.
-                                            </p>
-                                        ) : (
-                                            selectedProvider.models.map(
-                                                (model) => (
-                                                    <div
-                                                        key={model.id}
-                                                        className="flex items-center gap-2 p-2 rounded-md border bg-card"
-                                                    >
-                                                        <Input
-                                                            value={
-                                                                model.modelId
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleModelUpdate(
-                                                                    model.id,
-                                                                    "modelId",
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder="Model ID (e.g., gpt-4o)"
-                                                            className="h-8 text-xs flex-1"
-                                                        />
-                                                        <div className="flex items-center gap-2">
-                                                            <Switch
-                                                                checked={
-                                                                    model.streaming !==
-                                                                    false
-                                                                }
-                                                                onCheckedChange={(
-                                                                    checked,
-                                                                ) =>
-                                                                    handleModelUpdate(
-                                                                        model.id,
-                                                                        "streaming",
-                                                                        checked,
-                                                                    )
-                                                                }
-                                                            />
-                                                            <span className="text-xs text-muted-foreground w-12">
-                                                                Stream
-                                                            </span>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-7 w-7"
-                                                                onClick={() =>
-                                                                    handleDeleteModel(
-                                                                        model.id,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <X className="h-3.5 w-3.5" />
-                                                            </Button>
+                                            {/* Model List */}
+                                            <div className="rounded-xl border bg-card overflow-hidden min-h-[120px]">
+                                                {selectedProvider.models
+                                                    .length === 0 ? (
+                                                    <div className="p-4 text-center h-full flex flex-col items-center justify-center">
+                                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-muted mb-2">
+                                                            <Sparkles className="h-5 w-5 text-muted-foreground" />
                                                         </div>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            No models configured
+                                                        </p>
                                                     </div>
-                                                ),
-                                            )
-                                        )}
-                                    </div>
-                                </div>
+                                                ) : (
+                                                    <div className="divide-y">
+                                                        {selectedProvider.models.map(
+                                                            (model, index) => (
+                                                                <div
+                                                                    key={
+                                                                        model.id
+                                                                    }
+                                                                    className={cn(
+                                                                        "flex items-center gap-3 p-3 transition-colors hover:bg-muted/30",
+                                                                        index ===
+                                                                            0 &&
+                                                                            "rounded-t-xl",
+                                                                        index ===
+                                                                            selectedProvider
+                                                                                .models
+                                                                                .length -
+                                                                                1 &&
+                                                                            "rounded-b-xl",
+                                                                    )}
+                                                                >
+                                                                    {/* Status icon */}
+                                                                    <div
+                                                                        className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0"
+                                                                        title={
+                                                                            model.validationError ||
+                                                                            ""
+                                                                        }
+                                                                    >
+                                                                        {validatingModelIndex !==
+                                                                            null &&
+                                                                        index ===
+                                                                            validatingModelIndex ? (
+                                                                            // Currently validating
+                                                                            <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                                                                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                                                                            </div>
+                                                                        ) : validatingModelIndex !==
+                                                                              null &&
+                                                                          index >
+                                                                              validatingModelIndex &&
+                                                                          model.validated ===
+                                                                              undefined ? (
+                                                                            // Queued
+                                                                            <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
+                                                                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                                                            </div>
+                                                                        ) : model.validated ===
+                                                                          true ? (
+                                                                            // Valid
+                                                                            <div className="w-full h-full rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                                                                <Check className="h-4 w-4 text-emerald-500" />
+                                                                            </div>
+                                                                        ) : model.validated ===
+                                                                          false ? (
+                                                                            // Invalid
+                                                                            <div className="w-full h-full rounded-lg bg-destructive/10 flex items-center justify-center">
+                                                                                <AlertCircle className="h-4 w-4 text-destructive" />
+                                                                            </div>
+                                                                        ) : (
+                                                                            // Not validated yet
+                                                                            <div className="w-full h-full rounded-lg bg-primary/5 flex items-center justify-center">
+                                                                                <Zap className="h-4 w-4 text-primary" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <Input
+                                                                        value={
+                                                                            model.modelId
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) => {
+                                                                            updateModel(
+                                                                                selectedProviderId!,
+                                                                                model.id,
+                                                                                {
+                                                                                    modelId:
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    validated:
+                                                                                        undefined,
+                                                                                    validationError:
+                                                                                        undefined,
+                                                                                },
+                                                                            )
+                                                                        }}
+                                                                        className="flex-1 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
+                                                                    />
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                        onClick={() =>
+                                                                            handleDeleteModel(
+                                                                                model.id,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <X className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                {/* Delete Provider */}
-                                <div className="pt-4 border-t">
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={handleDeleteProvider}
-                                        className="w-full"
-                                    >
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete Provider
-                                    </Button>
-                                </div>
-                            </div>
+                                        {/* Danger Zone */}
+                                        <div className="pt-4">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setDeleteConfirmOpen(true)
+                                                }
+                                                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                            >
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Delete Provider
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </ScrollArea>
+                            </>
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                                <p className="mb-2">
-                                    Select a provider or add a new one
-                                </p>
-                                <p className="text-xs">
-                                    Configure multiple AI providers and switch
-                                    between them easily
+                            <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 mb-4">
+                                    <Server className="h-8 w-8 text-primary/60" />
+                                </div>
+                                <h3 className="font-semibold mb-1">
+                                    Configure AI Providers
+                                </h3>
+                                <p className="text-sm text-muted-foreground max-w-xs">
+                                    Select a provider from the list or add a new
+                                    one to configure API keys and models
                                 </p>
                             </div>
                         )}
-                    </ScrollArea>
+                    </div>
                 </div>
 
                 {/* Footer */}
-                <div className="pt-4 border-t text-xs text-muted-foreground text-center">
-                    API keys are stored locally in your browser
+                <div className="px-6 py-3 border-t bg-muted/20">
+                    <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1.5">
+                        <Key className="h-3 w-3" />
+                        API keys are stored locally in your browser
+                    </p>
                 </div>
             </DialogContent>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog
+                open={deleteConfirmOpen}
+                onOpenChange={setDeleteConfirmOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Provider</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete{" "}
+                            <span className="font-medium text-foreground">
+                                {selectedProvider
+                                    ? selectedProvider.name ||
+                                      PROVIDER_INFO[selectedProvider.provider]
+                                          .label
+                                    : "this provider"}
+                            </span>
+                            ? This will remove all configured models and cannot
+                            be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteProvider}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Dialog>
     )
 }
