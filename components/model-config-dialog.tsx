@@ -376,7 +376,7 @@ export function ModelConfigDialog({
                                     handleAddProvider(v as ProviderName)
                                 }
                             >
-                                <SelectTrigger className="h-9 bg-background">
+                                <SelectTrigger className="h-9 bg-background hover:bg-accent">
                                     <Plus className="h-4 w-4 mr-2 text-muted-foreground" />
                                     <SelectValue placeholder="Add Provider" />
                                 </SelectTrigger>
@@ -697,7 +697,7 @@ export function ModelConfigDialog({
                                                             }
                                                         }}
                                                     >
-                                                        <SelectTrigger className="w-32 h-8">
+                                                        <SelectTrigger className="w-32 h-8 hover:bg-accent">
                                                             <span className="text-xs">
                                                                 Suggested
                                                             </span>
