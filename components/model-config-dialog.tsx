@@ -261,7 +261,11 @@ export function ModelConfigDialog({
 
     // Handle adding a model to current provider
     const handleAddModel = (modelId: string) => {
-        if (!selectedProviderId) return
+        if (!selectedProviderId || !selectedProvider) return
+        // Prevent duplicate model IDs
+        if (existingModelIds.includes(modelId)) {
+            return // Model already exists, don't add
+        }
         addModel(selectedProviderId, modelId)
     }
 
@@ -1186,14 +1190,40 @@ export function ModelConfigDialog({
                                                                             onChange={(
                                                                                 e,
                                                                             ) => {
+                                                                                const newModelId =
+                                                                                    e
+                                                                                        .target
+                                                                                        .value
+                                                                                // Check if new ID would be duplicate (excluding current model)
+                                                                                const otherModelIds =
+                                                                                    selectedProvider?.models
+                                                                                        .filter(
+                                                                                            (
+                                                                                                m,
+                                                                                            ) =>
+                                                                                                m.id !==
+                                                                                                model.id,
+                                                                                        )
+                                                                                        .map(
+                                                                                            (
+                                                                                                m,
+                                                                                            ) =>
+                                                                                                m.modelId,
+                                                                                        ) ||
+                                                                                    []
+                                                                                if (
+                                                                                    otherModelIds.includes(
+                                                                                        newModelId,
+                                                                                    )
+                                                                                ) {
+                                                                                    return // Don't allow duplicate
+                                                                                }
                                                                                 updateModel(
                                                                                     selectedProviderId!,
                                                                                     model.id,
                                                                                     {
                                                                                         modelId:
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
+                                                                                            newModelId,
                                                                                         validated:
                                                                                             undefined,
                                                                                         validationError:
