@@ -21,13 +21,15 @@ import { ChatInput } from "@/components/chat-input"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { getAIConfig } from "@/lib/ai-config"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { formatXML, wrapWithMxFile } from "@/lib/utils"
+import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
+import LanguageToggle from "./language-toggle"
 
 // localStorage keys for persistence
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
@@ -35,11 +37,15 @@ const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 
+// sessionStorage keys
+const SESSION_STORAGE_INPUT_KEY = "next-ai-draw-io-input"
+
 // Type for message parts (tool calls and their states)
 interface MessagePart {
     type: string
     state?: string
     toolName?: string
+    input?: { xml?: string; [key: string]: unknown }
     [key: string]: unknown
 }
 
@@ -63,11 +69,11 @@ interface ChatPanelProps {
 // Constants for tool states
 const TOOL_ERROR_STATE = "output-error" as const
 const DEBUG = process.env.NODE_ENV === "development"
-const MAX_AUTO_RETRY_COUNT = 3
+const MAX_AUTO_RETRY_COUNT = 1
 
 /**
  * Check if auto-resubmit should happen based on tool errors.
- * Does NOT handle retry count or quota - those are handled by the caller.
+ * Only checks the LAST tool part (most recent tool call), not all tool parts.
  */
 function hasToolErrors(messages: ChatMessage[]): boolean {
     const lastMessage = messages[messages.length - 1]
@@ -84,7 +90,8 @@ function hasToolErrors(messages: ChatMessage[]): boolean {
         return false
     }
 
-    return toolParts.some((part) => part.state === TOOL_ERROR_STATE)
+    const lastToolPart = toolParts[toolParts.length - 1]
+    return lastToolPart?.state === TOOL_ERROR_STATE
 }
 
 export default function ChatPanel({
@@ -104,8 +111,9 @@ export default function ChatPanel({
         resolverRef,
         chartXML,
         clearDiagram,
-        isDrawioReady,
     } = useDiagram()
+
+    const dict = useDictionary()
 
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
@@ -144,6 +152,15 @@ export default function ChatPanel({
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
+    const [minimalStyle, setMinimalStyle] = useState(false)
+
+    // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
+    useEffect(() => {
+        const savedInput = sessionStorage.getItem(SESSION_STORAGE_INPUT_KEY)
+        if (savedInput) {
+            setInput(savedInput)
+        }
+    }, [])
 
     // Check config on mount
     useEffect(() => {
@@ -192,8 +209,22 @@ export default function ChatPanel({
     // Ref to track consecutive auto-retry count (reset on user action)
     const autoRetryCountRef = useRef(0)
 
+    // Ref to accumulate partial XML when output is truncated due to maxOutputTokens
+    // When partialXmlRef.current.length > 0, we're in continuation mode
+    const partialXmlRef = useRef<string>("")
+
     // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
     const processedToolCallsRef = useRef<Set<string>>(new Set())
+
+    // Store original XML for edit_diagram streaming - shared between streaming preview and tool handler
+    // Key: toolCallId, Value: original XML before any operations applied
+    const editDiagramOriginalXmlRef = useRef<Map<string, string>>(new Map())
+
+    // Debounce timeout for localStorage writes (prevents blocking during streaming)
+    const localStorageDebounceRef = useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null)
+    const LOCAL_STORAGE_DEBOUNCE_MS = 1000 // Save at most once per second
 
     const {
         messages,
@@ -216,14 +247,50 @@ export default function ChatPanel({
 
             if (toolCall.toolName === "display_diagram") {
                 const { xml } = toolCall.input as { xml: string }
-                if (DEBUG) {
-                    console.log(
-                        `[display_diagram] Received XML length: ${xml.length}`,
-                    )
+
+                // DEBUG: Log raw input to diagnose false truncation detection
+                console.log(
+                    "[display_diagram] XML ending (last 100 chars):",
+                    xml.slice(-100),
+                )
+                console.log("[display_diagram] XML length:", xml.length)
+
+                // Check if XML is truncated (incomplete mxCell indicates truncated output)
+                const isTruncated = !isMxCellXmlComplete(xml)
+                console.log("[display_diagram] isTruncated:", isTruncated)
+
+                if (isTruncated) {
+                    // Store the partial XML for continuation via append_diagram
+                    partialXmlRef.current = xml
+
+                    // Tell LLM to use append_diagram to continue
+                    const partialEnding = partialXmlRef.current.slice(-500)
+                    addToolOutput({
+                        tool: "display_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `Output was truncated due to length limits. Use the append_diagram tool to continue.
+
+Your output ended with:
+\`\`\`
+${partialEnding}
+\`\`\`
+
+NEXT STEP: Call append_diagram with the continuation XML.
+- Do NOT include wrapper tags or root cells (id="0", id="1")
+- Start from EXACTLY where you stopped
+- Complete all remaining mxCell elements`,
+                    })
+                    return
                 }
 
+                // Complete XML received - use it directly
+                // (continuation is now handled via append_diagram tool)
+                const finalXml = xml
+                partialXmlRef.current = "" // Reset any partial from previous truncation
+
                 // Wrap raw XML with full mxfile structure for draw.io
-                const fullXml = wrapWithMxFile(xml)
+                const fullXml = wrapWithMxFile(finalXml)
 
                 // loadDiagram validates and returns error if invalid
                 const validationError = onDisplayChart(fullXml)
@@ -249,7 +316,7 @@ Please fix the XML issues and call display_diagram again with corrected XML.
 
 Your failed XML:
 \`\`\`xml
-${xml}
+${finalXml}
 \`\`\``,
                     })
                 } else {
@@ -271,37 +338,68 @@ ${xml}
                     }
                 }
             } else if (toolCall.toolName === "edit_diagram") {
-                const { edits } = toolCall.input as {
-                    edits: Array<{ search: string; replace: string }>
+                const { operations } = toolCall.input as {
+                    operations: Array<{
+                        type: "update" | "add" | "delete"
+                        cell_id: string
+                        new_xml?: string
+                    }>
                 }
 
                 let currentXml = ""
                 try {
-                    console.log("[edit_diagram] Starting...")
-                    // Use chartXML from ref directly - more reliable than export
-                    // especially on Vercel where DrawIO iframe may have latency issues
-                    // Using ref to avoid stale closure in callback
-                    const cachedXML = chartXMLRef.current
-                    if (cachedXML) {
-                        currentXml = cachedXML
-                        console.log(
-                            "[edit_diagram] Using cached chartXML, length:",
-                            currentXml.length,
-                        )
+                    // Use the original XML captured during streaming (shared with chat-message-display)
+                    // This ensures we apply operations to the same base XML that streaming used
+                    const originalXml = editDiagramOriginalXmlRef.current.get(
+                        toolCall.toolCallId,
+                    )
+                    if (originalXml) {
+                        currentXml = originalXml
                     } else {
-                        // Fallback to export only if no cached XML
-                        console.log(
-                            "[edit_diagram] No cached XML, fetching from DrawIO...",
-                        )
-                        currentXml = await onFetchChart(false)
-                        console.log(
-                            "[edit_diagram] Got XML from export, length:",
-                            currentXml.length,
-                        )
+                        // Fallback: use chartXML from ref if streaming didn't capture original
+                        const cachedXML = chartXMLRef.current
+                        if (cachedXML) {
+                            currentXml = cachedXML
+                        } else {
+                            // Last resort: export from iframe
+                            currentXml = await onFetchChart(false)
+                        }
                     }
 
-                    const { replaceXMLParts } = await import("@/lib/utils")
-                    const editedXml = replaceXMLParts(currentXml, edits)
+                    const { applyDiagramOperations } = await import(
+                        "@/lib/utils"
+                    )
+                    const { result: editedXml, errors } =
+                        applyDiagramOperations(currentXml, operations)
+
+                    // Check for operation errors
+                    if (errors.length > 0) {
+                        const errorMessages = errors
+                            .map(
+                                (e) =>
+                                    `- ${e.type} on cell_id="${e.cellId}": ${e.message}`,
+                            )
+                            .join("\n")
+
+                        addToolOutput({
+                            tool: "edit_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            state: "output-error",
+                            errorText: `Some operations failed:\n${errorMessages}
+
+Current diagram XML:
+\`\`\`xml
+${currentXml}
+\`\`\`
+
+Please check the cell IDs and retry.`,
+                        })
+                        // Clean up the shared original XML ref
+                        editDiagramOriginalXmlRef.current.delete(
+                            toolCall.toolCallId,
+                        )
+                        return
+                    }
 
                     // loadDiagram validates and returns error if invalid
                     const validationError = onDisplayChart(editedXml)
@@ -321,24 +419,30 @@ Current diagram XML:
 ${currentXml}
 \`\`\`
 
-Please fix the edit to avoid structural issues (e.g., duplicate IDs, invalid references).`,
+Please fix the operations to avoid structural issues.`,
                         })
+                        // Clean up the shared original XML ref
+                        editDiagramOriginalXmlRef.current.delete(
+                            toolCall.toolCallId,
+                        )
                         return
                     }
                     onExport()
                     addToolOutput({
                         tool: "edit_diagram",
                         toolCallId: toolCall.toolCallId,
-                        output: `Successfully applied ${edits.length} edit(s) to the diagram.`,
+                        output: `Successfully applied ${operations.length} operation(s) to the diagram.`,
                     })
-                    console.log("[edit_diagram] Success")
+                    // Clean up the shared original XML ref
+                    editDiagramOriginalXmlRef.current.delete(
+                        toolCall.toolCallId,
+                    )
                 } catch (error) {
                     console.error("[edit_diagram] Failed:", error)
 
                     const errorMessage =
                         error instanceof Error ? error.message : String(error)
 
-                    // Use addToolOutput with state: 'output-error' for proper error signaling
                     addToolOutput({
                         tool: "edit_diagram",
                         toolCallId: toolCall.toolCallId,
@@ -350,7 +454,92 @@ Current diagram XML:
 ${currentXml || "No XML available"}
 \`\`\`
 
-Please retry with an adjusted search pattern or use display_diagram if retries are exhausted.`,
+Please check cell IDs and retry, or use display_diagram to regenerate.`,
+                    })
+                    // Clean up the shared original XML ref even on error
+                    editDiagramOriginalXmlRef.current.delete(
+                        toolCall.toolCallId,
+                    )
+                }
+            } else if (toolCall.toolName === "append_diagram") {
+                const { xml } = toolCall.input as { xml: string }
+
+                // Detect if LLM incorrectly started fresh instead of continuing
+                // LLM should only output bare mxCells now, so wrapper tags indicate error
+                const trimmed = xml.trim()
+                const isFreshStart =
+                    trimmed.startsWith("<mxGraphModel") ||
+                    trimmed.startsWith("<root") ||
+                    trimmed.startsWith("<mxfile") ||
+                    trimmed.startsWith('<mxCell id="0"') ||
+                    trimmed.startsWith('<mxCell id="1"')
+
+                if (isFreshStart) {
+                    addToolOutput({
+                        tool: "append_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `ERROR: You started fresh with wrapper tags. Do NOT include wrapper tags or root cells (id="0", id="1").
+
+Continue from EXACTLY where the partial ended:
+\`\`\`
+${partialXmlRef.current.slice(-500)}
+\`\`\`
+
+Start your continuation with the NEXT character after where it stopped.`,
+                    })
+                    return
+                }
+
+                // Append to accumulated XML
+                partialXmlRef.current += xml
+
+                // Check if XML is now complete (last mxCell is complete)
+                const isComplete = isMxCellXmlComplete(partialXmlRef.current)
+
+                if (isComplete) {
+                    // Wrap and display the complete diagram
+                    const finalXml = partialXmlRef.current
+                    partialXmlRef.current = "" // Reset
+
+                    const fullXml = wrapWithMxFile(finalXml)
+                    const validationError = onDisplayChart(fullXml)
+
+                    if (validationError) {
+                        addToolOutput({
+                            tool: "append_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            state: "output-error",
+                            errorText: `Validation error after assembly: ${validationError}
+
+Assembled XML:
+\`\`\`xml
+${finalXml.substring(0, 2000)}...
+\`\`\`
+
+Please use display_diagram with corrected XML.`,
+                        })
+                    } else {
+                        addToolOutput({
+                            tool: "append_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Diagram assembly complete and displayed successfully.",
+                        })
+                    }
+                } else {
+                    // Still incomplete - signal to continue
+                    addToolOutput({
+                        tool: "append_diagram",
+                        toolCallId: toolCall.toolCallId,
+                        state: "output-error",
+                        errorText: `XML still incomplete (mxCell not closed). Call append_diagram again to continue.
+
+Current ending:
+\`\`\`
+${partialXmlRef.current.slice(-500)}
+\`\`\`
+
+Continue from EXACTLY where you stopped.`,
                     })
                 }
             }
@@ -359,6 +548,32 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             // Silence access code error in console since it's handled by UI
             if (!error.message.includes("Invalid or missing access code")) {
                 console.error("Chat error:", error)
+                // Debug: Log messages structure when error occurs
+                console.log("[onError] messages count:", messages.length)
+                messages.forEach((msg, idx) => {
+                    console.log(`[onError] Message ${idx}:`, {
+                        role: msg.role,
+                        partsCount: msg.parts?.length,
+                    })
+                    if (msg.parts) {
+                        msg.parts.forEach((part: any, partIdx: number) => {
+                            console.log(
+                                `[onError]   Part ${partIdx}:`,
+                                JSON.stringify({
+                                    type: part.type,
+                                    toolName: part.toolName,
+                                    hasInput: !!part.input,
+                                    inputType: typeof part.input,
+                                    inputKeys:
+                                        part.input &&
+                                        typeof part.input === "object"
+                                            ? Object.keys(part.input)
+                                            : null,
+                                }),
+                            )
+                        })
+                    }
+                })
             }
 
             // Translate technical errors into user-friendly messages
@@ -369,6 +584,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             // Simple check for network errors if message is generic
             if (friendlyMessage === "Failed to fetch") {
                 friendlyMessage = "Network error. Please check your connection."
+            }
+
+            // Truncated tool input error (model output limit too low)
+            if (friendlyMessage.includes("toolUse.input is invalid")) {
+                friendlyMessage =
+                    "Output was truncated before the diagram could be generated. Try a simpler request or increase the maxOutputLength."
             }
 
             // Translate image not supported error
@@ -398,6 +619,11 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             const metadata = message?.metadata as
                 | Record<string, unknown>
                 | undefined
+
+            // DEBUG: Log finish reason to diagnose truncation
+            console.log("[onFinish] finishReason:", metadata?.finishReason)
+            console.log("[onFinish] metadata:", metadata)
+
             if (metadata) {
                 // Use Number.isFinite to guard against NaN (typeof NaN === 'number' is true)
                 const inputTokens = Number.isFinite(metadata.inputTokens)
@@ -414,65 +640,55 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             }
         },
         sendAutomaticallyWhen: ({ messages }) => {
+            const isInContinuationMode = partialXmlRef.current.length > 0
+
             const shouldRetry = hasToolErrors(
                 messages as unknown as ChatMessage[],
             )
 
             if (!shouldRetry) {
-                // No error, reset retry count
+                // No error, reset retry count and clear state
                 autoRetryCountRef.current = 0
-                if (DEBUG) {
-                    console.log("[sendAutomaticallyWhen] No errors, stopping")
-                }
+                partialXmlRef.current = ""
                 return false
             }
 
-            // Check retry count limit
-            if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
-                if (DEBUG) {
-                    console.log(
-                        `[sendAutomaticallyWhen] Max retry count (${MAX_AUTO_RETRY_COUNT}) reached, stopping`,
+            // Continuation mode: unlimited retries (truncation continuation, not real errors)
+            // Server limits to 5 steps via stepCountIs(5)
+            if (isInContinuationMode) {
+                // Don't count against retry limit for continuation
+                // Quota checks still apply below
+            } else {
+                // Regular error: check retry count limit
+                if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
+                    toast.error(
+                        `Auto-retry limit reached (${MAX_AUTO_RETRY_COUNT}). Please try again manually.`,
                     )
+                    autoRetryCountRef.current = 0
+                    partialXmlRef.current = ""
+                    return false
                 }
-                toast.error(
-                    `Auto-retry limit reached (${MAX_AUTO_RETRY_COUNT}). Please try again manually.`,
-                )
-                autoRetryCountRef.current = 0
-                return false
+                // Increment retry count for actual errors
+                autoRetryCountRef.current++
             }
 
             // Check quota limits before auto-retry
             const tokenLimitCheck = quotaManager.checkTokenLimit()
             if (!tokenLimitCheck.allowed) {
-                if (DEBUG) {
-                    console.log(
-                        "[sendAutomaticallyWhen] Token limit exceeded, stopping",
-                    )
-                }
                 quotaManager.showTokenLimitToast(tokenLimitCheck.used)
                 autoRetryCountRef.current = 0
+                partialXmlRef.current = ""
                 return false
             }
 
             const tpmCheck = quotaManager.checkTPMLimit()
             if (!tpmCheck.allowed) {
-                if (DEBUG) {
-                    console.log(
-                        "[sendAutomaticallyWhen] TPM limit exceeded, stopping",
-                    )
-                }
                 quotaManager.showTPMLimitToast()
                 autoRetryCountRef.current = 0
+                partialXmlRef.current = ""
                 return false
             }
 
-            // Increment retry count and allow retry
-            autoRetryCountRef.current++
-            if (DEBUG) {
-                console.log(
-                    `[sendAutomaticallyWhen] Retrying (${autoRetryCountRef.current}/${MAX_AUTO_RETRY_COUNT})`,
-                )
-            }
             return true
         },
     })
@@ -513,67 +729,41 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             }
         } catch (error) {
             console.error("Failed to restore from localStorage:", error)
+            // On complete failure, clear storage to allow recovery
+            localStorage.removeItem(STORAGE_MESSAGES_KEY)
+            localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
+            toast.error("Session data was corrupted. Starting fresh.")
         }
     }, [setMessages])
 
-    // Restore diagram XML when DrawIO becomes ready
-    const hasDiagramRestoredRef = useRef(false)
-    const [canSaveDiagram, setCanSaveDiagram] = useState(false)
-    useEffect(() => {
-        // Reset restore flag when DrawIO is not ready (e.g., theme/UI change remounts it)
-        if (!isDrawioReady) {
-            hasDiagramRestoredRef.current = false
-            setCanSaveDiagram(false)
-            return
-        }
-        if (hasDiagramRestoredRef.current) return
-        hasDiagramRestoredRef.current = true
-
-        try {
-            const savedDiagramXml = localStorage.getItem(
-                STORAGE_DIAGRAM_XML_KEY,
-            )
-            console.log(
-                "[ChatPanel] Restoring diagram, has saved XML:",
-                !!savedDiagramXml,
-            )
-            if (savedDiagramXml) {
-                console.log(
-                    "[ChatPanel] Loading saved diagram XML, length:",
-                    savedDiagramXml.length,
-                )
-                // Skip validation for trusted saved diagrams
-                onDisplayChart(savedDiagramXml, true)
-                chartXMLRef.current = savedDiagramXml
-            }
-        } catch (error) {
-            console.error("Failed to restore diagram from localStorage:", error)
-        }
-
-        // Allow saving after restore is complete
-        setTimeout(() => {
-            console.log("[ChatPanel] Enabling diagram save")
-            setCanSaveDiagram(true)
-        }, 500)
-    }, [isDrawioReady, onDisplayChart])
-
-    // Save messages to localStorage whenever they change
+    // Save messages to localStorage whenever they change (debounced to prevent blocking during streaming)
     useEffect(() => {
         if (!hasRestoredRef.current) return
-        try {
-            localStorage.setItem(STORAGE_MESSAGES_KEY, JSON.stringify(messages))
-        } catch (error) {
-            console.error("Failed to save messages to localStorage:", error)
+
+        // Clear any pending save
+        if (localStorageDebounceRef.current) {
+            clearTimeout(localStorageDebounceRef.current)
+        }
+
+        // Debounce: save after 1 second of no changes
+        localStorageDebounceRef.current = setTimeout(() => {
+            try {
+                localStorage.setItem(
+                    STORAGE_MESSAGES_KEY,
+                    JSON.stringify(messages),
+                )
+            } catch (error) {
+                console.error("Failed to save messages to localStorage:", error)
+            }
+        }, LOCAL_STORAGE_DEBOUNCE_MS)
+
+        // Cleanup on unmount
+        return () => {
+            if (localStorageDebounceRef.current) {
+                clearTimeout(localStorageDebounceRef.current)
+            }
         }
     }, [messages])
-
-    // Save diagram XML to localStorage whenever it changes
-    useEffect(() => {
-        if (!canSaveDiagram) return
-        if (chartXML && chartXML.length > 300) {
-            localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, chartXML)
-        }
-    }, [chartXML, canSaveDiagram])
 
     // Save XML snapshots to localStorage whenever they change
     const saveXmlSnapshots = useCallback(() => {
@@ -674,6 +864,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                         },
                     ] as any)
                     setInput("")
+                    sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                     setFiles([])
                     return
                 }
@@ -721,6 +912,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
 
                 // Token count is tracked in onFinish with actual server usage
                 setInput("")
+                sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                 setFiles([])
             } catch (error) {
                 console.error("Error fetching chart data:", error)
@@ -743,6 +935,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
             localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
             localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
             localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
+            sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
             toast.success("Started a fresh chat")
         } catch (error) {
             console.error("Failed to clear localStorage:", error)
@@ -757,7 +950,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
+        saveInputToSessionStorage(e.target.value)
         setInput(e.target.value)
+    }
+
+    const saveInputToSessionStorage = (input: string) => {
+        sessionStorage.setItem(SESSION_STORAGE_INPUT_KEY, input)
     }
 
     // Helper functions for message actions (regenerate/edit)
@@ -817,8 +1015,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         previousXml: string,
         sessionId: string,
     ) => {
-        // Reset auto-retry count on user-initiated message
+        // Reset all retry/continuation state on user-initiated message
         autoRetryCountRef.current = 0
+        partialXmlRef.current = ""
 
         const config = getAIConfig()
 
@@ -837,6 +1036,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                             "x-ai-api-key": config.aiApiKey,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                    }),
+                    ...(minimalStyle && {
+                        "x-minimal-style": "true",
                     }),
                 },
             },
@@ -1023,6 +1225,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     style: {
                         maxWidth: "480px",
                     },
+                    duration: 2000,
                 }}
             />
             {/* Header */}
@@ -1030,14 +1233,14 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 className={`${isMobile ? "px-3 py-2" : "px-5 py-4"} border-b border-border/50`}
             >
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-x-hidden">
                         <div className="flex items-center gap-2">
                             <Image
                                 src="/favicon.ico"
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
-                                className="rounded"
+                                className="rounded flex-shrink-0"
                             />
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
@@ -1072,9 +1275,9 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                             </Link>
                         )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 justify-end overflow-visible">
                         <ButtonWithTooltip
-                            tooltipContent="Start fresh chat"
+                            tooltipContent={dict.nav.newChat}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowNewChatDialog(true)}
@@ -1096,7 +1299,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                             />
                         </a>
                         <ButtonWithTooltip
-                            tooltipContent="Settings"
+                            tooltipContent={dict.nav.settings}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowSettingsDialog(true)}
@@ -1106,17 +1309,20 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
                         </ButtonWithTooltip>
-                        {!isMobile && (
-                            <ButtonWithTooltip
-                                tooltipContent="Hide chat panel (Ctrl+B)"
-                                variant="ghost"
-                                size="icon"
-                                onClick={onToggleVisibility}
-                                className="hover:bg-accent"
-                            >
-                                <PanelRightClose className="h-5 w-5 text-muted-foreground" />
-                            </ButtonWithTooltip>
-                        )}
+                        <div className="hidden sm:flex items-center gap-2">
+                            <LanguageToggle />
+                            {!isMobile && (
+                                <ButtonWithTooltip
+                                    tooltipContent={dict.nav.hidePanel}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="hover:bg-accent"
+                                    onClick={onToggleVisibility}
+                                >
+                                    <PanelRightClose className="h-5 w-5 text-muted-foreground" />
+                                </ButtonWithTooltip>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -1128,6 +1334,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     setInput={setInput}
                     setFiles={handleFileChange}
                     processedToolCallsRef={processedToolCallsRef}
+                    editDiagramOriginalXmlRef={editDiagramOriginalXmlRef}
                     sessionId={sessionId}
                     onRegenerate={handleRegenerate}
                     status={status}
@@ -1152,6 +1359,8 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
+                    minimalStyle={minimalStyle}
+                    onMinimalStyleChange={setMinimalStyle}
                 />
             </footer>
 

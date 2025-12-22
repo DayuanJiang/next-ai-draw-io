@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+packages/*/node_modules
+packages/*/dist
 /.pnp
 .pnp.*
 .yarn/*
@@ -46,3 +48,18 @@ push-via-ec2.sh
 .dev.vars
 .open-next/
 .wrangler/
+.env*.local
+
+# Electron
+/dist-electron/
+/release/
+/electron-standalone/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+
+CLAUDE.md
+.spec-workflow

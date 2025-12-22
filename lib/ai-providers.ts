@@ -2,6 +2,7 @@ import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
+import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
@@ -18,6 +19,7 @@ export type ProviderName =
     | "openrouter"
     | "deepseek"
     | "siliconflow"
+    | "gateway"
 
 interface ModelConfig {
     model: any
@@ -42,6 +44,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "openrouter",
     "deepseek",
     "siliconflow",
+    "gateway",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -333,8 +336,10 @@ function buildProviderOptions(
 
         case "deepseek":
         case "openrouter":
-        case "siliconflow": {
+        case "siliconflow":
+        case "gateway": {
             // These providers don't have reasoning configs in AI SDK yet
+            // Gateway passes through to underlying providers which handle their own configs
             break
         }
 
@@ -356,6 +361,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     openrouter: "OPENROUTER_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
+    gateway: "AI_GATEWAY_API_KEY",
 }
 
 /**
@@ -438,6 +444,16 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.com/v1)
  */
 export function getAIModel(overrides?: ClientOverrides): ModelConfig {
+    // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
+    // If a custom baseUrl is provided, an API key MUST also be provided.
+    // This prevents attackers from redirecting server API keys to malicious endpoints.
+    if (overrides?.baseUrl && !overrides?.apiKey) {
+        throw new Error(
+            `API key is required when using a custom base URL. ` +
+                `Please provide your own API key in Settings.`,
+        )
+    }
+
     // Check if client is providing their own provider override
     const isClientOverride = !!(overrides?.provider && overrides?.apiKey)
 
@@ -485,6 +501,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             if (configured.length === 0) {
                 throw new Error(
                     `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
+                        `- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
                         `- DEEPSEEK_API_KEY for DeepSeek\n` +
                         `- OPENAI_API_KEY for OpenAI\n` +
                         `- ANTHROPIC_API_KEY for Anthropic\n` +
@@ -662,9 +679,30 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "gateway": {
+            // Vercel AI Gateway - unified access to multiple AI providers
+            // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
+            // See: https://vercel.com/ai-gateway
+            const apiKey = overrides?.apiKey || process.env.AI_GATEWAY_API_KEY
+            const baseURL =
+                overrides?.baseUrl || process.env.AI_GATEWAY_BASE_URL
+            // Only use custom configuration if explicitly set (local dev or custom Gateway)
+            // Otherwise undefined → AI SDK uses Vercel default (https://ai-gateway.vercel.sh/v1/ai) + OIDC
+            if (baseURL || overrides?.apiKey) {
+                const customGateway = createGateway({
+                    apiKey,
+                    ...(baseURL && { baseURL }),
+                })
+                model = customGateway(modelId)
+            } else {
+                model = gateway(modelId)
+            }
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, gateway`,
             )
     }
 

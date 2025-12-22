@@ -3,10 +3,14 @@ import {
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    InvalidToolInputError,
     LoadAPIKeyError,
     stepCountIs,
     streamText,
 } from "ai"
+import fs from "fs/promises"
+import { jsonrepair } from "jsonrepair"
+import path from "path"
 import { z } from "zod"
 import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -18,7 +22,7 @@ import {
 } from "@/lib/langfuse"
 import { getSystemPrompt } from "@/lib/system-prompts"
 
-export const maxDuration = 300
+export const maxDuration = 120
 
 // File upload limits (must match client-side)
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -68,59 +72,42 @@ function isMinimalDiagram(xml: string): boolean {
 
 // Helper function to replace historical tool call XML with placeholders
 // This reduces token usage and forces LLM to rely on the current diagram XML (source of truth)
+// Also fixes invalid/undefined inputs from interrupted streaming
 function replaceHistoricalToolInputs(messages: any[]): any[] {
     return messages.map((msg) => {
         if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
             return msg
         }
-        const replacedContent = msg.content.map((part: any) => {
-            if (part.type === "tool-call") {
-                const toolName = part.toolName
-                if (
-                    toolName === "display_diagram" ||
-                    toolName === "edit_diagram"
-                ) {
-                    return {
-                        ...part,
-                        input: {
-                            placeholder:
-                                "[XML content replaced - see current diagram XML in system context]",
-                        },
+        const replacedContent = msg.content
+            .map((part: any) => {
+                if (part.type === "tool-call") {
+                    const toolName = part.toolName
+                    // Fix invalid/undefined inputs from interrupted streaming
+                    if (
+                        !part.input ||
+                        typeof part.input !== "object" ||
+                        Object.keys(part.input).length === 0
+                    ) {
+                        // Skip tool calls with invalid inputs entirely
+                        return null
+                    }
+                    if (
+                        toolName === "display_diagram" ||
+                        toolName === "edit_diagram"
+                    ) {
+                        return {
+                            ...part,
+                            input: {
+                                placeholder:
+                                    "[XML content replaced - see current diagram XML in system context]",
+                            },
+                        }
                     }
                 }
-            }
-            return part
-        })
+                return part
+            })
+            .filter(Boolean) // Remove null entries (invalid tool calls)
         return { ...msg, content: replacedContent }
-    })
-}
-
-// Helper function to fix tool call inputs for Bedrock API
-// Bedrock requires toolUse.input to be a JSON object, not a string
-function fixToolCallInputs(messages: any[]): any[] {
-    return messages.map((msg) => {
-        if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
-            return msg
-        }
-        const fixedContent = msg.content.map((part: any) => {
-            if (part.type === "tool-call") {
-                if (typeof part.input === "string") {
-                    try {
-                        const parsed = JSON.parse(part.input)
-                        return { ...part, input: parsed }
-                    } catch {
-                        // If parsing fails, wrap the string in an object
-                        return { ...part, input: { rawInput: part.input } }
-                    }
-                }
-                // Input is already an object, but verify it's not null/undefined
-                if (part.input === null || part.input === undefined) {
-                    return { ...part, input: {} }
-                }
-            }
-            return part
-        })
-        return { ...msg, content: fixedContent }
     })
 }
 
@@ -186,9 +173,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
             : undefined
 
     // Extract user input text for Langfuse trace
-    const currentMessage = messages[messages.length - 1]
+    const lastMessage = messages[messages.length - 1]
     const userInputText =
-        currentMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+        lastMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -229,6 +216,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
         modelId: req.headers.get("x-ai-model"),
     }
 
+    // Read minimal style preference from header
+    const minimalStyle = req.headers.get("x-minimal-style") === "true"
+
     // Get AI model with optional client overrides
     const { model, providerOptions, headers, modelId } =
         getAIModel(clientOverrides)
@@ -240,13 +230,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
-    const systemMessage = getSystemPrompt(modelId)
-
-    const lastMessage = messages[messages.length - 1]
-
-    // Extract text from the last message parts
-    const lastMessageText =
-        lastMessage.parts?.find((part: any) => part.type === "text")?.text || ""
+    const systemMessage = getSystemPrompt(modelId, minimalStyle)
 
     // Extract file parts (images) from the last message
     const fileParts =
@@ -255,22 +239,49 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // User input only - XML is now in a separate cached system message
     const formattedUserInput = `User input:
 """md
-${lastMessageText}
+${userInputText}
 """`
 
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = convertToModelMessages(messages)
 
-    // Fix tool call inputs for Bedrock API (requires JSON objects, not strings)
-    const fixedMessages = fixToolCallInputs(modelMessages)
+    // DEBUG: Log incoming messages structure
+    console.log("[route.ts] Incoming messages count:", messages.length)
+    messages.forEach((msg: any, idx: number) => {
+        console.log(
+            `[route.ts] Message ${idx} role:`,
+            msg.role,
+            "parts count:",
+            msg.parts?.length,
+        )
+        if (msg.parts) {
+            msg.parts.forEach((part: any, partIdx: number) => {
+                if (
+                    part.type === "tool-invocation" ||
+                    part.type === "tool-result"
+                ) {
+                    console.log(`[route.ts]   Part ${partIdx}:`, {
+                        type: part.type,
+                        toolName: part.toolName,
+                        hasInput: !!part.input,
+                        inputType: typeof part.input,
+                        inputKeys:
+                            part.input && typeof part.input === "object"
+                                ? Object.keys(part.input)
+                                : null,
+                    })
+                }
+            })
+        }
+    })
 
     // Replace historical tool call XML with placeholders to reduce tokens
     // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
     const enableHistoryReplace =
         process.env.ENABLE_HISTORY_XML_REPLACE === "true"
     const placeholderMessages = enableHistoryReplace
-        ? replaceHistoricalToolInputs(fixedMessages)
-        : fixedMessages
+        ? replaceHistoricalToolInputs(modelMessages)
+        : modelMessages
 
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
@@ -278,6 +289,63 @@ ${lastMessageText}
         (msg: any) =>
             msg.content && Array.isArray(msg.content) && msg.content.length > 0,
     )
+
+    // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
+    // Bedrock API rejects messages where toolUse.input is not a valid JSON object
+    enhancedMessages = enhancedMessages
+        .map((msg: any) => {
+            if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+                return msg
+            }
+            const filteredContent = msg.content.filter((part: any) => {
+                if (part.type === "tool-call") {
+                    // Check if input is a valid object (not null, undefined, or empty)
+                    if (
+                        !part.input ||
+                        typeof part.input !== "object" ||
+                        Object.keys(part.input).length === 0
+                    ) {
+                        console.warn(
+                            `[route.ts] Filtering out tool-call with invalid input:`,
+                            { toolName: part.toolName, input: part.input },
+                        )
+                        return false
+                    }
+                }
+                return true
+            })
+            return { ...msg, content: filteredContent }
+        })
+        .filter((msg: any) => msg.content && msg.content.length > 0)
+
+    // DEBUG: Log modelMessages structure (what's being sent to AI)
+    console.log("[route.ts] Model messages count:", enhancedMessages.length)
+    enhancedMessages.forEach((msg: any, idx: number) => {
+        console.log(
+            `[route.ts] ModelMsg ${idx} role:`,
+            msg.role,
+            "content count:",
+            msg.content?.length,
+        )
+        if (msg.content) {
+            msg.content.forEach((part: any, partIdx: number) => {
+                if (part.type === "tool-call" || part.type === "tool-result") {
+                    console.log(`[route.ts]   Content ${partIdx}:`, {
+                        type: part.type,
+                        toolName: part.toolName,
+                        hasInput: !!part.input,
+                        inputType: typeof part.input,
+                        inputValue:
+                            part.input === undefined
+                                ? "undefined"
+                                : part.input === null
+                                  ? "null"
+                                  : "object",
+                    })
+                }
+            })
+        }
+    })
 
     // Update the last message with user input only (XML moved to separate cached system message)
     if (enhancedMessages.length >= 1) {
@@ -354,7 +422,71 @@ ${lastMessageText}
 
     const result = streamText({
         model,
+        ...(process.env.MAX_OUTPUT_TOKENS && {
+            maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
+        }),
         stopWhen: stepCountIs(5),
+        // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
+        experimental_repairToolCall: async ({ toolCall, error }) => {
+            // DEBUG: Log what we're trying to repair
+            console.log(`[repairToolCall] Tool: ${toolCall.toolName}`)
+            console.log(
+                `[repairToolCall] Error: ${error.name} - ${error.message}`,
+            )
+            console.log(`[repairToolCall] Input type: ${typeof toolCall.input}`)
+            console.log(`[repairToolCall] Input value:`, toolCall.input)
+
+            // Only attempt repair for invalid tool input (broken JSON from truncation)
+            if (
+                error instanceof InvalidToolInputError ||
+                error.name === "AI_InvalidToolInputError"
+            ) {
+                try {
+                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
+                    let inputToRepair = toolCall.input
+                    if (typeof inputToRepair === "string") {
+                        // Fix `:=` instead of `: ` (LLM sometimes generates this)
+                        inputToRepair = inputToRepair.replace(/:=/g, ": ")
+                        // Fix `= "` instead of `: "`
+                        inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
+                    }
+                    // Use jsonrepair to fix truncated JSON
+                    const repairedInput = jsonrepair(inputToRepair)
+                    console.log(
+                        `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
+                    )
+                    return { ...toolCall, input: repairedInput }
+                } catch (repairError) {
+                    console.warn(
+                        `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
+                        repairError,
+                    )
+                    // Return a placeholder input to avoid API errors in multi-step
+                    // The tool will fail gracefully on client side
+                    if (toolCall.toolName === "edit_diagram") {
+                        return {
+                            ...toolCall,
+                            input: {
+                                operations: [],
+                                _error: "JSON repair failed - no operations to apply",
+                            },
+                        }
+                    }
+                    if (toolCall.toolName === "display_diagram") {
+                        return {
+                            ...toolCall,
+                            input: {
+                                xml: "",
+                                _error: "JSON repair failed - empty diagram",
+                            },
+                        }
+                    }
+                    return null
+                }
+            }
+            // Don't attempt to repair other errors (like NoSuchToolError)
+            return null
+        },
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
         ...(headers && { headers }),
@@ -365,32 +497,6 @@ ${lastMessageText}
                 userId,
             }),
         }),
-        // Repair malformed tool calls (model sometimes generates invalid JSON with unescaped quotes)
-        experimental_repairToolCall: async ({ toolCall }) => {
-            // The toolCall.input contains the raw JSON string that failed to parse
-            const rawJson =
-                typeof toolCall.input === "string" ? toolCall.input : null
-
-            if (rawJson) {
-                try {
-                    // Fix unescaped quotes: x="520" should be x=\"520\"
-                    const fixed = rawJson.replace(
-                        /([a-zA-Z])="(\d+)"/g,
-                        '$1=\\"$2\\"',
-                    )
-                    const parsed = JSON.parse(fixed)
-                    return {
-                        type: "tool-call" as const,
-                        toolCallId: toolCall.toolCallId,
-                        toolName: toolCall.toolName,
-                        input: JSON.stringify(parsed),
-                    }
-                } catch {
-                    // Repair failed, return null
-                }
-            }
-            return null
-        },
         onFinish: ({ text, usage }) => {
             // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
             setTraceOutput(text, {
@@ -401,36 +507,32 @@ ${lastMessageText}
         tools: {
             // Client-side tool that will be executed on the client
             display_diagram: {
-                description: `Display a diagram on draw.io. Pass the XML content inside <root> tags.
+                description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
 
 VALIDATION RULES (XML will be rejected if violated):
-1. All mxCell elements must be DIRECT children of <root> - never nested
-2. Every mxCell needs a unique id
-3. Every mxCell (except id="0") needs a valid parent attribute
-4. Edge source/target must reference existing cell IDs
-5. Escape special chars in values: &lt; &gt; &amp; &quot;
-6. Always start with: <mxCell id="0"/><mxCell id="1" parent="0"/>
+1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
+2. Do NOT include root cells (id="0" or id="1") - they are added automatically
+3. All mxCell elements must be siblings - never nested
+4. Every mxCell needs a unique id (start from "2")
+5. Every mxCell needs a valid parent attribute (use "1" for top-level)
+6. Escape special chars in values: &lt; &gt; &amp; &quot;
 
-Example with swimlanes and edges (note: all mxCells are siblings):
-<root>
-  <mxCell id="0"/>
-  <mxCell id="1" parent="0"/>
-  <mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-    <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-  </mxCell>
-  <mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-    <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-  </mxCell>
-  <mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-    <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-  </mxCell>
-  <mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-    <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-  </mxCell>
-  <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-    <mxGeometry relative="1" as="geometry"/>
-  </mxCell>
-</root>
+Example (generate ONLY this - no wrapper tags):
+<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
+  <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
+</mxCell>
+<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
+  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
+</mxCell>
+<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
+  <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
+</mxCell>
+<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
+  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
+</mxCell>
+<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
+  <mxGeometry relative="1" as="geometry"/>
+</mxCell>
 
 Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
@@ -443,34 +545,121 @@ Notes:
                 }),
             },
             edit_diagram: {
-                description: `Edit specific parts of the current diagram by replacing exact line matches. Use this tool to make targeted fixes without regenerating the entire XML.
-CRITICAL: Copy-paste the EXACT search pattern from the "Current diagram XML" in system context. Do NOT reorder attributes or reformat - the attribute order in draw.io XML varies and you MUST match it exactly.
-IMPORTANT: Keep edits concise:
-- COPY the exact mxCell line from the current XML (attribute order matters!)
-- Only include the lines that are changing, plus 1-2 surrounding lines for context if needed
-- Break large changes into multiple smaller edits
-- Each search must contain complete lines (never truncate mid-line)
-- First match only - be specific enough to target the right element
+                description: `Edit the current diagram by ID-based operations (update/add/delete cells).
 
-⚠️ JSON ESCAPING: Every " inside string values MUST be escaped as \\". Example: x=\\"100\\" y=\\"200\\" - BOTH quotes need backslashes!`,
+Operations:
+- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.
+- add: Add a new cell. Provide cell_id (new unique id) and new_xml.
+- delete: Remove a cell by its id. Only cell_id is needed.
+
+For update/add, new_xml must be a complete mxCell element including mxGeometry.
+
+⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"`,
                 inputSchema: z.object({
-                    edits: z
+                    operations: z
                         .array(
                             z.object({
-                                search: z
+                                type: z
+                                    .enum(["update", "add", "delete"])
+                                    .describe("Operation type"),
+                                cell_id: z
                                     .string()
                                     .describe(
-                                        "EXACT lines copied from current XML (preserve attribute order!)",
+                                        "The id of the mxCell. Must match the id attribute in new_xml.",
                                     ),
-                                replace: z
+                                new_xml: z
                                     .string()
-                                    .describe("Replacement lines"),
+                                    .optional()
+                                    .describe(
+                                        "Complete mxCell XML element (required for update/add)",
+                                    ),
                             }),
                         )
+                        .describe("Array of operations to apply"),
+                }),
+            },
+            append_diagram: {
+                description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.
+
+WHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).
+
+CRITICAL INSTRUCTIONS:
+1. Do NOT include any wrapper tags - just continue the mxCell elements
+2. Continue from EXACTLY where your previous output stopped
+3. Complete the remaining mxCell elements
+4. If still truncated, call append_diagram again with the next fragment
+
+Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
+                inputSchema: z.object({
+                    xml: z
+                        .string()
                         .describe(
-                            "Array of search/replace pairs to apply sequentially",
+                            "Continuation XML fragment to append (NO wrapper tags)",
                         ),
                 }),
+            },
+            get_shape_library: {
+                description: `Get draw.io shape/icon library documentation with style syntax and shape names.
+
+Available libraries:
+- Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
+- Networking: cisco19, network, kubernetes, vvd, rack
+- Business: bpmn, lean_mapping
+- General: flowchart, basic, arrows2, infographic, sitemap
+- UI/Mockups: android
+- Enterprise: citrix, sap, mscae, atlassian
+- Engineering: fluidpower, electrical, pid, cabinets, floorplan
+- Icons: webicons
+
+Call this tool to get shape names and usage syntax for a specific library.`,
+                inputSchema: z.object({
+                    library: z
+                        .string()
+                        .describe(
+                            "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
+                        ),
+                }),
+                execute: async ({ library }) => {
+                    // Sanitize input - prevent path traversal attacks
+                    const sanitizedLibrary = library
+                        .toLowerCase()
+                        .replace(/[^a-z0-9_-]/g, "")
+
+                    if (sanitizedLibrary !== library.toLowerCase()) {
+                        return `Invalid library name "${library}". Use only letters, numbers, underscores, and hyphens.`
+                    }
+
+                    const baseDir = path.join(
+                        process.cwd(),
+                        "docs/shape-libraries",
+                    )
+                    const filePath = path.join(
+                        baseDir,
+                        `${sanitizedLibrary}.md`,
+                    )
+
+                    // Verify path stays within expected directory
+                    const resolvedPath = path.resolve(filePath)
+                    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
+                        return `Invalid library path.`
+                    }
+
+                    try {
+                        const content = await fs.readFile(filePath, "utf-8")
+                        return content
+                    } catch (error) {
+                        if (
+                            (error as NodeJS.ErrnoException).code === "ENOENT"
+                        ) {
+                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, lean_mapping, openstack, rack`
+                        }
+                        console.error(
+                            `[get_shape_library] Error loading "${library}":`,
+                            error,
+                        )
+                        return `Error loading library "${library}". Please try again.`
+                    }
+                },
             },
         },
         ...(process.env.TEMPERATURE !== undefined && {
@@ -496,6 +685,7 @@ IMPORTANT: Keep edits concise:
                 return {
                     inputTokens: totalInputTokens,
                     outputTokens: usage.outputTokens ?? 0,
+                    finishReason: (part as any).finishReason,
                 }
             }
             return undefined
