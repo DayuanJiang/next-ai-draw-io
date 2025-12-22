@@ -162,6 +162,11 @@ export function ModelConfigDialog({
     const [validatingModelIndex, setValidatingModelIndex] = useState<
         number | null
     >(null)
+    const [duplicateError, setDuplicateError] = useState<string>("")
+    const [editError, setEditError] = useState<{
+        modelId: string
+        message: string
+    } | null>(null)
 
     const {
         config,
@@ -219,19 +224,6 @@ export function ModelConfigDialog({
         (modelId) => !existingModelIds.includes(modelId),
     )
 
-    // Detect duplicate models in current config
-    const modelIdCounts =
-        selectedProvider?.models.reduce(
-            (acc, m) => {
-                acc[m.modelId] = (acc[m.modelId] || 0) + 1
-                return acc
-            },
-            {} as Record<string, number>,
-        ) || {}
-    const duplicateModelIds = Object.keys(modelIdCounts).filter(
-        (id) => modelIdCounts[id] > 1,
-    )
-
     // Handle adding a new provider
     const handleAddProvider = (providerType: ProviderName) => {
         const newProvider = addProvider(providerType)
@@ -261,14 +253,17 @@ export function ModelConfigDialog({
     }
 
     // Handle adding a model to current provider
-    const handleAddModel = (modelId: string) => {
-        if (!selectedProviderId || !selectedProvider) return
+    // Returns true if model was added successfully, false otherwise
+    const handleAddModel = (modelId: string): boolean => {
+        if (!selectedProviderId || !selectedProvider) return false
         // Prevent duplicate model IDs
         if (existingModelIds.includes(modelId)) {
-            toast.warning(`Model "${modelId}" already exists in this provider`)
-            return
+            setDuplicateError(`Model "${modelId}" already exists`)
+            return false
         }
+        setDuplicateError("")
         addModel(selectedProviderId, modelId)
+        return true
     }
 
     // Handle deleting a model
@@ -997,30 +992,58 @@ export function ModelConfigDialog({
                                                     <span>Models</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <Input
-                                                        placeholder="Custom model ID..."
-                                                        value={customModelInput}
-                                                        onChange={(e) =>
-                                                            setCustomModelInput(
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        onKeyDown={(e) => {
-                                                            if (
-                                                                e.key ===
-                                                                    "Enter" &&
-                                                                customModelInput.trim()
-                                                            ) {
-                                                                handleAddModel(
-                                                                    customModelInput.trim(),
-                                                                )
-                                                                setCustomModelInput(
-                                                                    "",
-                                                                )
+                                                    <div className="relative">
+                                                        <Input
+                                                            placeholder="Custom model ID..."
+                                                            value={
+                                                                customModelInput
                                                             }
-                                                        }}
-                                                        className="h-8 w-48 font-mono text-xs"
-                                                    />
+                                                            onChange={(e) => {
+                                                                setCustomModelInput(
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                                // Clear duplicate error when typing
+                                                                if (
+                                                                    duplicateError
+                                                                ) {
+                                                                    setDuplicateError(
+                                                                        "",
+                                                                    )
+                                                                }
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (
+                                                                    e.key ===
+                                                                        "Enter" &&
+                                                                    customModelInput.trim()
+                                                                ) {
+                                                                    const success =
+                                                                        handleAddModel(
+                                                                            customModelInput.trim(),
+                                                                        )
+                                                                    if (
+                                                                        success
+                                                                    ) {
+                                                                        setCustomModelInput(
+                                                                            "",
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className={cn(
+                                                                "h-8 w-48 font-mono text-xs",
+                                                                duplicateError &&
+                                                                    "border-destructive focus-visible:ring-destructive",
+                                                            )}
+                                                        />
+                                                        {/* Show duplicate error for custom model input */}
+                                                        {duplicateError && (
+                                                            <p className="absolute top-full left-0 mt-1 text-[11px] text-destructive">
+                                                                {duplicateError}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -1029,12 +1052,15 @@ export function ModelConfigDialog({
                                                             if (
                                                                 customModelInput.trim()
                                                             ) {
-                                                                handleAddModel(
-                                                                    customModelInput.trim(),
-                                                                )
-                                                                setCustomModelInput(
-                                                                    "",
-                                                                )
+                                                                const success =
+                                                                    handleAddModel(
+                                                                        customModelInput.trim(),
+                                                                    )
+                                                                if (success) {
+                                                                    setCustomModelInput(
+                                                                        "",
+                                                                    )
+                                                                }
                                                             }
                                                         }}
                                                         disabled={
@@ -1088,26 +1114,6 @@ export function ModelConfigDialog({
                                                     </Select>
                                                 </div>
                                             </div>
-
-                                            {/* Duplicate Warning Banner */}
-                                            {duplicateModelIds.length > 0 && (
-                                                <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                                                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                                                    <span>
-                                                        {
-                                                            duplicateModelIds.length
-                                                        }{" "}
-                                                        duplicate model
-                                                        {duplicateModelIds.length >
-                                                        1
-                                                            ? "s"
-                                                            : ""}{" "}
-                                                        detected. Remove
-                                                        duplicates to avoid
-                                                        confusion.
-                                                    </span>
-                                                </div>
-                                            )}
 
                                             {/* Model List */}
                                             <div className="rounded-xl border bg-card overflow-hidden min-h-[120px]">
@@ -1193,6 +1199,15 @@ export function ModelConfigDialog({
                                                                                 e,
                                                                             ) => {
                                                                                 // Allow free typing - validation happens on blur
+                                                                                // Clear edit error when typing
+                                                                                if (
+                                                                                    editError?.modelId ===
+                                                                                    model.id
+                                                                                ) {
+                                                                                    setEditError(
+                                                                                        null,
+                                                                                    )
+                                                                                }
                                                                                 updateModel(
                                                                                     selectedProviderId!,
                                                                                     model.id,
@@ -1208,12 +1223,80 @@ export function ModelConfigDialog({
                                                                                     },
                                                                                 )
                                                                             }}
+                                                                            onKeyDown={(
+                                                                                e,
+                                                                            ) => {
+                                                                                if (
+                                                                                    e.key ===
+                                                                                    "Enter"
+                                                                                ) {
+                                                                                    e.currentTarget.blur()
+                                                                                }
+                                                                            }}
                                                                             onBlur={(
                                                                                 e,
                                                                             ) => {
                                                                                 const newModelId =
                                                                                     e.target.value.trim()
-                                                                                // Check if new ID would be duplicate (excluding current model)
+
+                                                                                // Helper to show error with shake
+                                                                                const showError =
+                                                                                    (
+                                                                                        message: string,
+                                                                                    ) => {
+                                                                                        setEditError(
+                                                                                            {
+                                                                                                modelId:
+                                                                                                    model.id,
+                                                                                                message,
+                                                                                            },
+                                                                                        )
+                                                                                        e.target.animate(
+                                                                                            [
+                                                                                                {
+                                                                                                    transform:
+                                                                                                        "translateX(0)",
+                                                                                                },
+                                                                                                {
+                                                                                                    transform:
+                                                                                                        "translateX(-4px)",
+                                                                                                },
+                                                                                                {
+                                                                                                    transform:
+                                                                                                        "translateX(4px)",
+                                                                                                },
+                                                                                                {
+                                                                                                    transform:
+                                                                                                        "translateX(-4px)",
+                                                                                                },
+                                                                                                {
+                                                                                                    transform:
+                                                                                                        "translateX(4px)",
+                                                                                                },
+                                                                                                {
+                                                                                                    transform:
+                                                                                                        "translateX(0)",
+                                                                                                },
+                                                                                            ],
+                                                                                            {
+                                                                                                duration: 400,
+                                                                                                easing: "ease-in-out",
+                                                                                            },
+                                                                                        )
+                                                                                        e.target.focus()
+                                                                                    }
+
+                                                                                // Check for empty model name
+                                                                                if (
+                                                                                    !newModelId
+                                                                                ) {
+                                                                                    showError(
+                                                                                        "Model ID cannot be empty",
+                                                                                    )
+                                                                                    return
+                                                                                }
+
+                                                                                // Check for duplicate
                                                                                 const otherModelIds =
                                                                                     selectedProvider?.models
                                                                                         .filter(
@@ -1231,15 +1314,20 @@ export function ModelConfigDialog({
                                                                                         ) ||
                                                                                     []
                                                                                 if (
-                                                                                    newModelId &&
                                                                                     otherModelIds.includes(
                                                                                         newModelId,
                                                                                     )
                                                                                 ) {
-                                                                                    toast.warning(
-                                                                                        `Model "${newModelId}" already exists. Please use a unique ID.`,
+                                                                                    showError(
+                                                                                        "This model ID already exists",
                                                                                     )
+                                                                                    return
                                                                                 }
+
+                                                                                // Clear error on valid blur
+                                                                                setEditError(
+                                                                                    null,
+                                                                                )
                                                                             }}
                                                                             className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                         />
@@ -1261,34 +1349,20 @@ export function ModelConfigDialog({
                                                                     {model.validated ===
                                                                         false &&
                                                                         model.validationError && (
-                                                                            <p className="text-xs text-destructive px-3 pb-2 pl-14">
+                                                                            <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
                                                                                 {
                                                                                     model.validationError
                                                                                 }
                                                                             </p>
                                                                         )}
-                                                                    {/* Show duplicate warning inline */}
-                                                                    {duplicateModelIds.includes(
-                                                                        model.modelId,
-                                                                    ) && (
-                                                                        <div className="flex items-center gap-2 px-3 pb-2 pl-14">
-                                                                            <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                                                                <AlertCircle className="h-3 w-3" />
-                                                                                Duplicate
-                                                                            </span>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="sm"
-                                                                                className="h-5 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                                                onClick={() =>
-                                                                                    handleDeleteModel(
-                                                                                        model.id,
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                Remove
-                                                                            </Button>
-                                                                        </div>
+                                                                    {/* Show edit error inline */}
+                                                                    {editError?.modelId ===
+                                                                        model.id && (
+                                                                        <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
+                                                                            {
+                                                                                editError.message
+                                                                            }
+                                                                        </p>
                                                                     )}
                                                                 </div>
                                                             ),
