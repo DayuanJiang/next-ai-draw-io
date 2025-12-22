@@ -18,10 +18,17 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useDiagram } from "@/contexts/diagram-context"
-import { getAIConfig } from "@/lib/ai-config"
+import { useDictionary } from "@/hooks/use-dictionary"
+import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -112,6 +119,8 @@ export default function ChatPanel({
         clearDiagram,
     } = useDiagram()
 
+    const dict = useDictionary()
+
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
             new Promise<string>((resolve) => {
@@ -143,7 +152,10 @@ export default function ChatPanel({
 
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
-    const [, setAccessCodeRequired] = useState(false)
+    const [showModelConfigDialog, setShowModelConfigDialog] = useState(false)
+
+    // Model configuration hook
+    const modelConfig = useModelConfig()
     const [input, setInput] = useState("")
     const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
@@ -164,12 +176,11 @@ export default function ChatPanel({
         fetch(getApiEndpoint("/api/config"))
             .then((res) => res.json())
             .then((data) => {
-                setAccessCodeRequired(data.accessCodeRequired)
                 setDailyRequestLimit(data.dailyRequestLimit || 0)
                 setDailyTokenLimit(data.dailyTokenLimit || 0)
                 setTpmLimit(data.tpmLimit || 0)
             })
-            .catch(() => setAccessCodeRequired(false))
+            .catch(() => {})
     }, [])
 
     // Quota management using extracted hook
@@ -606,8 +617,7 @@ Continue from EXACTLY where you stopped.`,
             })
 
             if (error.message.includes("Invalid or missing access code")) {
-                // Show settings button and open dialog to help user fix it
-                setAccessCodeRequired(true)
+                // Show settings dialog to help user fix it
                 setShowSettingsDialog(true)
             }
         },
@@ -1016,7 +1026,7 @@ Continue from EXACTLY where you stopped.`,
         autoRetryCountRef.current = 0
         partialXmlRef.current = ""
 
-        const config = getAIConfig()
+        const config = getSelectedAIConfig()
 
         sendMessage(
             { parts },
@@ -1033,6 +1043,20 @@ Continue from EXACTLY where you stopped.`,
                             "x-ai-api-key": config.aiApiKey,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                        // AWS Bedrock credentials
+                        ...(config.awsAccessKeyId && {
+                            "x-aws-access-key-id": config.awsAccessKeyId,
+                        }),
+                        ...(config.awsSecretAccessKey && {
+                            "x-aws-secret-access-key":
+                                config.awsSecretAccessKey,
+                        }),
+                        ...(config.awsRegion && {
+                            "x-aws-region": config.awsRegion,
+                        }),
+                        ...(config.awsSessionToken && {
+                            "x-aws-session-token": config.awsSessionToken,
+                        }),
                     }),
                     ...(minimalStyle && {
                         "x-minimal-style": "true",
@@ -1272,9 +1296,9 @@ Continue from EXACTLY where you stopped.`,
                             </Link>
                         )}
                     </div>
-                    <div className="flex items-center gap-1 justify-end overflow-x-hidden">
+                    <div className="flex items-center gap-1 justify-end overflow-visible">
                         <ButtonWithTooltip
-                            tooltipContent="Start fresh chat"
+                            tooltipContent={dict.nav.newChat}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowNewChatDialog(true)}
@@ -1285,18 +1309,25 @@ Continue from EXACTLY where you stopped.`,
                             />
                         </ButtonWithTooltip>
                         <div className="w-px h-5 bg-border mx-1" />
-                        <a
-                            href="https://github.com/DayuanJiang/next-ai-draw-io"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        >
-                            <FaGithub
-                                className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
-                            />
-                        </a>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <a
+                                    href="https://github.com/DayuanJiang/next-ai-draw-io"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                >
+                                    <FaGithub
+                                        className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
+                                    />
+                                </a>
+                            </TooltipTrigger>
+                            <TooltipContent>{dict.nav.github}</TooltipContent>
+                        </Tooltip>
+
                         <ButtonWithTooltip
-                            tooltipContent="Settings"
+                            tooltipContent={dict.nav.settings}
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowSettingsDialog(true)}
@@ -1306,17 +1337,19 @@ Continue from EXACTLY where you stopped.`,
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
                         </ButtonWithTooltip>
-                        {!isMobile && (
-                            <ButtonWithTooltip
-                                tooltipContent="Hide chat panel (Ctrl+B)"
-                                variant="ghost"
-                                size="icon"
-                                onClick={onToggleVisibility}
-                                className="hover:bg-accent"
-                            >
-                                <PanelRightClose className="h-5 w-5 text-muted-foreground" />
-                            </ButtonWithTooltip>
-                        )}
+                        <div className="hidden sm:flex items-center gap-2">
+                            {!isMobile && (
+                                <ButtonWithTooltip
+                                    tooltipContent={dict.nav.hidePanel}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="hover:bg-accent"
+                                    onClick={onToggleVisibility}
+                                >
+                                    <PanelRightClose className="h-5 w-5 text-muted-foreground" />
+                                </ButtonWithTooltip>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -1355,6 +1388,10 @@ Continue from EXACTLY where you stopped.`,
                     error={error}
                     minimalStyle={minimalStyle}
                     onMinimalStyleChange={setMinimalStyle}
+                    models={modelConfig.models}
+                    selectedModelId={modelConfig.selectedModelId}
+                    onModelSelect={modelConfig.setSelectedModelId}
+                    onConfigureModels={() => setShowModelConfigDialog(true)}
                 />
             </footer>
 
@@ -1366,6 +1403,12 @@ Continue from EXACTLY where you stopped.`,
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
+            />
+
+            <ModelConfigDialog
+                open={showModelConfigDialog}
+                onOpenChange={setShowModelConfigDialog}
+                modelConfig={modelConfig}
             />
 
             <ResetWarningModal

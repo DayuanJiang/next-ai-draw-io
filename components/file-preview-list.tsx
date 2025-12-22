@@ -3,6 +3,7 @@
 import { FileCode, FileText, Loader2, X } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 
 function formatCharCount(count: number): string {
@@ -26,10 +27,10 @@ export function FilePreviewList({
     onRemoveFile,
     pdfData = new Map(),
 }: FilePreviewListProps) {
+    const dict = useDictionary()
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
     const [imageUrls, setImageUrls] = useState<Map<File, string>>(new Map())
     const imageUrlsRef = useRef<Map<File, string>>(new Map())
-
     // Create and cleanup object URLs when files change
     useEffect(() => {
         const currentUrls = imageUrlsRef.current
@@ -46,7 +47,6 @@ export function FilePreviewList({
                 }
             }
         })
-
         // Revoke URLs for files that are no longer in the list
         currentUrls.forEach((url, file) => {
             if (!newUrls.has(file)) {
@@ -57,7 +57,6 @@ export function FilePreviewList({
         imageUrlsRef.current = newUrls
         setImageUrls(newUrls)
     }, [files])
-
     // Cleanup all URLs on unmount only
     useEffect(() => {
         return () => {
@@ -68,7 +67,6 @@ export function FilePreviewList({
             imageUrlsRef.current = new Map()
         }
     }, [])
-
     // Clear selected image if its URL was revoked
     useEffect(() => {
         if (
@@ -126,14 +124,14 @@ export function FilePreviewList({
                                         </span>
                                         {pdfInfo?.isExtracting ? (
                                             <span className="text-[10px] text-muted-foreground">
-                                                Reading...
+                                                {dict.file.reading}
                                             </span>
                                         ) : pdfInfo?.charCount ? (
                                             <span className="text-[10px] text-green-600 font-medium">
                                                 {formatCharCount(
                                                     pdfInfo.charCount,
                                                 )}{" "}
-                                                chars
+                                                {dict.file.chars}
                                             </span>
                                         ) : null}
                                     </div>
@@ -147,7 +145,7 @@ export function FilePreviewList({
                                 type="button"
                                 onClick={() => onRemoveFile(file)}
                                 className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                aria-label="Remove file"
+                                aria-label={dict.file.removeFile}
                             >
                                 <X className="h-3 w-3" />
                             </button>
@@ -155,7 +153,6 @@ export function FilePreviewList({
                     )
                 })}
             </div>
-
             {/* Image Modal/Lightbox */}
             {selectedImage && (
                 <div
@@ -165,7 +162,7 @@ export function FilePreviewList({
                     <button
                         className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
                         onClick={() => setSelectedImage(null)}
-                        aria-label="Close"
+                        aria-label={dict.common.close}
                     >
                         <X className="h-6 w-6" />
                     </button>

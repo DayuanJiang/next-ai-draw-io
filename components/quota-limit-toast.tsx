@@ -4,6 +4,8 @@ import { Coffee, X } from "lucide-react"
 import Link from "next/link"
 import type React from "react"
 import { FaGithub } from "react-icons/fa"
+import { useDictionary } from "@/hooks/use-dictionary"
+import { formatMessage } from "@/lib/i18n/utils"
 
 interface QuotaLimitToastProps {
     type?: "request" | "token"
@@ -18,9 +20,11 @@ export function QuotaLimitToast({
     limit,
     onDismiss,
 }: QuotaLimitToastProps) {
+    const dict = useDictionary()
     const isTokenLimit = type === "token"
     const formatNumber = (n: number) =>
         n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString()
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Escape") {
             e.preventDefault()
@@ -44,7 +48,6 @@ export function QuotaLimitToast({
             >
                 <X className="w-4 h-4" />
             </button>
-
             {/* Title row with icon */}
             <div className="flex items-center gap-2.5 mb-3 pr-6">
                 <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
@@ -55,40 +58,26 @@ export function QuotaLimitToast({
                 </div>
                 <h3 className="font-semibold text-foreground text-sm">
                     {isTokenLimit
-                        ? "Daily Token Limit Reached"
-                        : "Daily Quota Reached"}
+                        ? dict.quota.tokenLimit
+                        : dict.quota.dailyLimit}
                 </h3>
                 <span className="px-2 py-0.5 text-xs font-medium rounded-md bg-muted text-muted-foreground">
-                    {isTokenLimit
-                        ? `${formatNumber(used)}/${formatNumber(limit)} tokens`
-                        : `${used}/${limit}`}
+                    {formatMessage(dict.quota.usedOf, {
+                        used: formatNumber(used),
+                        limit: formatNumber(limit),
+                    })}
                 </span>
             </div>
-
             {/* Message */}
             <div className="text-sm text-muted-foreground leading-relaxed mb-4 space-y-2">
                 <p>
-                    Oops — you've reached the daily{" "}
-                    {isTokenLimit ? "token" : "API"} limit for this demo! As an
-                    indie developer covering all the API costs myself, I have to
-                    set these limits to keep things sustainable.{" "}
-                    <Link
-                        href="/about"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-amber-600 font-medium hover:text-amber-700 hover:underline"
-                    >
-                        Learn more →
-                    </Link>
+                    {isTokenLimit
+                        ? dict.quota.messageToken
+                        : dict.quota.messageApi}
                 </p>
-                <p>
-                    <strong>Tip:</strong> You can use your own API key (click
-                    the Settings icon) or self-host the project to bypass these
-                    limits.
-                </p>
-                <p>Your limit resets tomorrow. Thanks for understanding!</p>
-            </div>
-
+                <p dangerouslySetInnerHTML={{ __html: dict.quota.tip }} />
+                <p>{dict.quota.reset}</p>
+            </div>{" "}
             {/* Action buttons */}
             <div className="flex items-center gap-2">
                 <a
@@ -98,7 +87,7 @@ export function QuotaLimitToast({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
                     <FaGithub className="w-3.5 h-3.5" />
-                    Self-host
+                    {dict.quota.selfHost}
                 </a>
                 <a
                     href="https://github.com/sponsors/DayuanJiang"
@@ -107,7 +96,7 @@ export function QuotaLimitToast({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
                 >
                     <Coffee className="w-3.5 h-3.5" />
-                    Sponsor
+                    {dict.quota.sponsor}
                 </a>
             </div>
         </div>

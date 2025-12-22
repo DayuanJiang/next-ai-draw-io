@@ -86,6 +86,7 @@ Use the standard MCP configuration with:
 ## Features
 
 - **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
+- **Version History**: Restore previous diagram versions with visual thumbnails - click the clock button (bottom-right) to browse and restore earlier states
 - **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
 - **Edit Support**: Modify existing diagrams with natural language instructions
 - **Export**: Save diagrams as `.drawio` files
