@@ -26,6 +26,11 @@ export interface ProviderConfig {
     name?: string // Custom display name (e.g., "OpenAI Production")
     apiKey: string
     baseUrl?: string
+    // AWS Bedrock specific fields
+    awsAccessKeyId?: string
+    awsSecretAccessKey?: string
+    awsRegion?: string
+    awsSessionToken?: string // Optional, for temporary credentials
     models: ModelConfig[]
     validated?: boolean // Has API key been validated
 }
@@ -45,6 +50,11 @@ export interface FlattenedModel {
     providerLabel: string // Provider display name
     apiKey: string
     baseUrl?: string
+    // AWS Bedrock specific fields
+    awsAccessKeyId?: string
+    awsSecretAccessKey?: string
+    awsRegion?: string
+    awsSessionToken?: string
     validated?: boolean // Has this model been validated
 }
 
@@ -252,6 +262,11 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 providerLabel,
                 apiKey: provider.apiKey,
                 baseUrl: provider.baseUrl,
+                // AWS Bedrock fields
+                awsAccessKeyId: provider.awsAccessKeyId,
+                awsSecretAccessKey: provider.awsSecretAccessKey,
+                awsRegion: provider.awsRegion,
+                awsSessionToken: provider.awsSessionToken,
                 validated: model.validated,
             })
         }

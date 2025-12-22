@@ -175,8 +175,15 @@ export function ModelConfigDialog({
     ) => {
         if (!selectedProviderId) return
         updateProvider(selectedProviderId, { [field]: value })
-        // Reset validation when API key or base URL changes
-        if (field === "apiKey" || field === "baseUrl") {
+        // Reset validation when credentials change
+        const credentialFields = [
+            "apiKey",
+            "baseUrl",
+            "awsAccessKeyId",
+            "awsSecretAccessKey",
+            "awsRegion",
+        ]
+        if (credentialFields.includes(field)) {
             setValidationStatus("idle")
             updateProvider(selectedProviderId, { validated: false })
         }
@@ -205,7 +212,21 @@ export function ModelConfigDialog({
 
     // Validate all models
     const handleValidate = useCallback(async () => {
-        if (!selectedProvider || !selectedProvider.apiKey) return
+        if (!selectedProvider) return
+
+        // Check credentials based on provider type
+        const isBedrock = selectedProvider.provider === "bedrock"
+        if (isBedrock) {
+            if (
+                !selectedProvider.awsAccessKeyId ||
+                !selectedProvider.awsSecretAccessKey ||
+                !selectedProvider.awsRegion
+            ) {
+                return
+            }
+        } else if (!selectedProvider.apiKey) {
+            return
+        }
 
         // Need at least one model to validate
         if (selectedProvider.models.length === 0) {
@@ -234,6 +255,10 @@ export function ModelConfigDialog({
                         apiKey: selectedProvider.apiKey,
                         baseUrl: selectedProvider.baseUrl,
                         modelId: model.modelId,
+                        // AWS Bedrock credentials
+                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
+                        awsRegion: selectedProvider.awsRegion,
                     }),
                 })
 
@@ -499,136 +524,347 @@ export function ModelConfigDialog({
                                                     />
                                                 </div>
 
-                                                {/* API Key */}
-                                                <div className="space-y-2">
-                                                    <Label
-                                                        htmlFor="api-key"
-                                                        className="text-xs font-medium flex items-center gap-1.5"
-                                                    >
-                                                        <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        API Key
-                                                    </Label>
-                                                    <div className="flex gap-2">
-                                                        <div className="relative flex-1">
+                                                {/* Credentials - different for Bedrock vs other providers */}
+                                                {selectedProvider.provider ===
+                                                "bedrock" ? (
+                                                    <>
+                                                        {/* AWS Access Key ID */}
+                                                        <div className="space-y-2">
+                                                            <Label
+                                                                htmlFor="aws-access-key-id"
+                                                                className="text-xs font-medium flex items-center gap-1.5"
+                                                            >
+                                                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                AWS Access Key
+                                                                ID
+                                                            </Label>
                                                             <Input
-                                                                id="api-key"
+                                                                id="aws-access-key-id"
                                                                 type={
                                                                     showApiKey
                                                                         ? "text"
                                                                         : "password"
                                                                 }
                                                                 value={
-                                                                    selectedProvider.apiKey
+                                                                    selectedProvider.awsAccessKeyId ||
+                                                                    ""
                                                                 }
                                                                 onChange={(e) =>
                                                                     handleProviderUpdate(
-                                                                        "apiKey",
+                                                                        "awsAccessKeyId",
                                                                         e.target
                                                                             .value,
                                                                     )
                                                                 }
-                                                                placeholder="Enter your API key"
-                                                                className="h-9 pr-10 font-mono text-xs"
+                                                                placeholder="AKIA..."
+                                                                className="h-9 font-mono text-xs"
                                                             />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setShowApiKey(
-                                                                        !showApiKey,
+                                                        </div>
+
+                                                        {/* AWS Secret Access Key */}
+                                                        <div className="space-y-2">
+                                                            <Label
+                                                                htmlFor="aws-secret-access-key"
+                                                                className="text-xs font-medium flex items-center gap-1.5"
+                                                            >
+                                                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                AWS Secret
+                                                                Access Key
+                                                            </Label>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    id="aws-secret-access-key"
+                                                                    type={
+                                                                        showApiKey
+                                                                            ? "text"
+                                                                            : "password"
+                                                                    }
+                                                                    value={
+                                                                        selectedProvider.awsSecretAccessKey ||
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleProviderUpdate(
+                                                                            "awsSecretAccessKey",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="Enter your secret access key"
+                                                                    className="h-9 pr-10 font-mono text-xs"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setShowApiKey(
+                                                                            !showApiKey,
+                                                                        )
+                                                                    }
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                                >
+                                                                    {showApiKey ? (
+                                                                        <EyeOff className="h-4 w-4" />
+                                                                    ) : (
+                                                                        <Eye className="h-4 w-4" />
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* AWS Region */}
+                                                        <div className="space-y-2">
+                                                            <Label
+                                                                htmlFor="aws-region"
+                                                                className="text-xs font-medium flex items-center gap-1.5"
+                                                            >
+                                                                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                AWS Region
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    selectedProvider.awsRegion ||
+                                                                    ""
+                                                                }
+                                                                onValueChange={(
+                                                                    v,
+                                                                ) =>
+                                                                    handleProviderUpdate(
+                                                                        "awsRegion",
+                                                                        v,
                                                                     )
                                                                 }
-                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                                                             >
-                                                                {showApiKey ? (
-                                                                    <EyeOff className="h-4 w-4" />
-                                                                ) : (
-                                                                    <Eye className="h-4 w-4" />
-                                                                )}
-                                                            </button>
+                                                                <SelectTrigger className="h-9 font-mono text-xs hover:bg-accent">
+                                                                    <SelectValue placeholder="Select region" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="us-east-1">
+                                                                        us-east-1
+                                                                        (N.
+                                                                        Virginia)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="us-west-2">
+                                                                        us-west-2
+                                                                        (Oregon)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="eu-west-1">
+                                                                        eu-west-1
+                                                                        (Ireland)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="eu-central-1">
+                                                                        eu-central-1
+                                                                        (Frankfurt)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="ap-northeast-1">
+                                                                        ap-northeast-1
+                                                                        (Tokyo)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="ap-southeast-1">
+                                                                        ap-southeast-1
+                                                                        (Singapore)
+                                                                    </SelectItem>
+                                                                    <SelectItem value="ap-southeast-2">
+                                                                        ap-southeast-2
+                                                                        (Sydney)
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
                                                         </div>
-                                                        <Button
-                                                            variant={
-                                                                validationStatus ===
-                                                                "success"
-                                                                    ? "outline"
-                                                                    : "default"
-                                                            }
-                                                            size="sm"
-                                                            onClick={
-                                                                handleValidate
-                                                            }
-                                                            disabled={
-                                                                !selectedProvider.apiKey ||
-                                                                validationStatus ===
-                                                                    "validating"
-                                                            }
-                                                            className={cn(
-                                                                "h-9 px-4",
-                                                                validationStatus ===
-                                                                    "success" &&
-                                                                    "text-emerald-600 border-emerald-200 dark:border-emerald-800",
-                                                            )}
-                                                        >
-                                                            {validationStatus ===
-                                                            "validating" ? (
-                                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                            ) : validationStatus ===
-                                                              "success" ? (
-                                                                <>
-                                                                    <Check className="h-4 w-4 mr-1.5" />
-                                                                    Verified
-                                                                </>
-                                                            ) : (
-                                                                "Test"
-                                                            )}
-                                                        </Button>
-                                                    </div>
-                                                    {validationStatus ===
-                                                        "error" &&
-                                                        validationError && (
-                                                            <p className="text-xs text-destructive flex items-center gap-1">
-                                                                <X className="h-3 w-3" />
-                                                                {
-                                                                    validationError
-                                                                }
-                                                            </p>
-                                                        )}
-                                                </div>
 
-                                                {/* Base URL */}
-                                                <div className="space-y-2">
-                                                    <Label
-                                                        htmlFor="base-url"
-                                                        className="text-xs font-medium flex items-center gap-1.5"
-                                                    >
-                                                        <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        Base URL
-                                                        <span className="text-muted-foreground font-normal">
-                                                            (optional)
-                                                        </span>
-                                                    </Label>
-                                                    <Input
-                                                        id="base-url"
-                                                        value={
-                                                            selectedProvider.baseUrl ||
-                                                            ""
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleProviderUpdate(
-                                                                "baseUrl",
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        placeholder={
-                                                            PROVIDER_INFO[
-                                                                selectedProvider
-                                                                    .provider
-                                                            ].defaultBaseUrl ||
-                                                            "Custom endpoint URL"
-                                                        }
-                                                        className="h-9 font-mono text-xs"
-                                                    />
-                                                </div>
+                                                        {/* Test Button for Bedrock */}
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                variant={
+                                                                    validationStatus ===
+                                                                    "success"
+                                                                        ? "outline"
+                                                                        : "default"
+                                                                }
+                                                                size="sm"
+                                                                onClick={
+                                                                    handleValidate
+                                                                }
+                                                                disabled={
+                                                                    !selectedProvider.awsAccessKeyId ||
+                                                                    !selectedProvider.awsSecretAccessKey ||
+                                                                    !selectedProvider.awsRegion ||
+                                                                    validationStatus ===
+                                                                        "validating"
+                                                                }
+                                                                className={cn(
+                                                                    "h-9 px-4",
+                                                                    validationStatus ===
+                                                                        "success" &&
+                                                                        "text-emerald-600 border-emerald-200 dark:border-emerald-800",
+                                                                )}
+                                                            >
+                                                                {validationStatus ===
+                                                                "validating" ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : validationStatus ===
+                                                                  "success" ? (
+                                                                    <>
+                                                                        <Check className="h-4 w-4 mr-1.5" />
+                                                                        Verified
+                                                                    </>
+                                                                ) : (
+                                                                    "Test"
+                                                                )}
+                                                            </Button>
+                                                            {validationStatus ===
+                                                                "error" &&
+                                                                validationError && (
+                                                                    <p className="text-xs text-destructive flex items-center gap-1">
+                                                                        <X className="h-3 w-3" />
+                                                                        {
+                                                                            validationError
+                                                                        }
+                                                                    </p>
+                                                                )}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {/* API Key */}
+                                                        <div className="space-y-2">
+                                                            <Label
+                                                                htmlFor="api-key"
+                                                                className="text-xs font-medium flex items-center gap-1.5"
+                                                            >
+                                                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                API Key
+                                                            </Label>
+                                                            <div className="flex gap-2">
+                                                                <div className="relative flex-1">
+                                                                    <Input
+                                                                        id="api-key"
+                                                                        type={
+                                                                            showApiKey
+                                                                                ? "text"
+                                                                                : "password"
+                                                                        }
+                                                                        value={
+                                                                            selectedProvider.apiKey
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleProviderUpdate(
+                                                                                "apiKey",
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            )
+                                                                        }
+                                                                        placeholder="Enter your API key"
+                                                                        className="h-9 pr-10 font-mono text-xs"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            setShowApiKey(
+                                                                                !showApiKey,
+                                                                            )
+                                                                        }
+                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                                    >
+                                                                        {showApiKey ? (
+                                                                            <EyeOff className="h-4 w-4" />
+                                                                        ) : (
+                                                                            <Eye className="h-4 w-4" />
+                                                                        )}
+                                                                    </button>
+                                                                </div>
+                                                                <Button
+                                                                    variant={
+                                                                        validationStatus ===
+                                                                        "success"
+                                                                            ? "outline"
+                                                                            : "default"
+                                                                    }
+                                                                    size="sm"
+                                                                    onClick={
+                                                                        handleValidate
+                                                                    }
+                                                                    disabled={
+                                                                        !selectedProvider.apiKey ||
+                                                                        validationStatus ===
+                                                                            "validating"
+                                                                    }
+                                                                    className={cn(
+                                                                        "h-9 px-4",
+                                                                        validationStatus ===
+                                                                            "success" &&
+                                                                            "text-emerald-600 border-emerald-200 dark:border-emerald-800",
+                                                                    )}
+                                                                >
+                                                                    {validationStatus ===
+                                                                    "validating" ? (
+                                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                                    ) : validationStatus ===
+                                                                      "success" ? (
+                                                                        <>
+                                                                            <Check className="h-4 w-4 mr-1.5" />
+                                                                            Verified
+                                                                        </>
+                                                                    ) : (
+                                                                        "Test"
+                                                                    )}
+                                                                </Button>
+                                                            </div>
+                                                            {validationStatus ===
+                                                                "error" &&
+                                                                validationError && (
+                                                                    <p className="text-xs text-destructive flex items-center gap-1">
+                                                                        <X className="h-3 w-3" />
+                                                                        {
+                                                                            validationError
+                                                                        }
+                                                                    </p>
+                                                                )}
+                                                        </div>
+
+                                                        {/* Base URL */}
+                                                        <div className="space-y-2">
+                                                            <Label
+                                                                htmlFor="base-url"
+                                                                className="text-xs font-medium flex items-center gap-1.5"
+                                                            >
+                                                                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                Base URL
+                                                                <span className="text-muted-foreground font-normal">
+                                                                    (optional)
+                                                                </span>
+                                                            </Label>
+                                                            <Input
+                                                                id="base-url"
+                                                                value={
+                                                                    selectedProvider.baseUrl ||
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleProviderUpdate(
+                                                                        "baseUrl",
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                placeholder={
+                                                                    PROVIDER_INFO[
+                                                                        selectedProvider
+                                                                            .provider
+                                                                    ]
+                                                                        .defaultBaseUrl ||
+                                                                    "Custom endpoint URL"
+                                                                }
+                                                                className="h-9 font-mono text-xs"
+                                                            />
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 

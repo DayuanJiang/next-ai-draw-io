@@ -1,3 +1,4 @@
+import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGateway } from "@ai-sdk/gateway"
@@ -15,12 +16,24 @@ interface ValidateRequest {
     apiKey: string
     baseUrl?: string
     modelId: string
+    // AWS Bedrock specific
+    awsAccessKeyId?: string
+    awsSecretAccessKey?: string
+    awsRegion?: string
 }
 
 export async function POST(req: Request) {
     try {
         const body: ValidateRequest = await req.json()
-        const { provider, apiKey, baseUrl, modelId } = body
+        const {
+            provider,
+            apiKey,
+            baseUrl,
+            modelId,
+            awsAccessKeyId,
+            awsSecretAccessKey,
+            awsRegion,
+        } = body
 
         if (!provider || !modelId) {
             return NextResponse.json(
@@ -29,8 +42,18 @@ export async function POST(req: Request) {
             )
         }
 
-        // Ollama doesn't require API key
-        if (provider !== "ollama" && !apiKey) {
+        // Validate credentials based on provider
+        if (provider === "bedrock") {
+            if (!awsAccessKeyId || !awsSecretAccessKey || !awsRegion) {
+                return NextResponse.json(
+                    {
+                        valid: false,
+                        error: "AWS credentials (Access Key ID, Secret Access Key, Region) are required",
+                    },
+                    { status: 400 },
+                )
+            }
+        } else if (provider !== "ollama" && !apiKey) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -73,6 +96,16 @@ export async function POST(req: Request) {
                     baseURL: baseUrl,
                 })
                 model = azure.chat(modelId)
+                break
+            }
+
+            case "bedrock": {
+                const bedrock = createAmazonBedrock({
+                    accessKeyId: awsAccessKeyId,
+                    secretAccessKey: awsSecretAccessKey,
+                    region: awsRegion,
+                })
+                model = bedrock(modelId)
                 break
             }
 
