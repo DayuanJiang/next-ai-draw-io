@@ -3,6 +3,8 @@
 import { useCallback, useMemo } from "react"
 import { toast } from "sonner"
 import { QuotaLimitToast } from "@/components/quota-limit-toast"
+import { useDictionary } from "@/hooks/use-dictionary"
+import { formatMessage } from "@/lib/i18n/utils"
 import { STORAGE_KEYS } from "@/lib/storage"
 
 export interface QuotaConfig {
@@ -39,6 +41,8 @@ export function useQuotaManager(config: QuotaConfig): {
     showTPMLimitToast: () => void
 } {
     const { dailyRequestLimit, dailyTokenLimit, tpmLimit } = config
+
+    const dict = useDictionary()
 
     // Check if user has their own API key configured (bypass limits)
     const hasOwnApiKey = useCallback((): boolean => {
@@ -221,11 +225,12 @@ export function useQuotaManager(config: QuotaConfig): {
     const showTPMLimitToast = useCallback(() => {
         const limitDisplay =
             tpmLimit >= 1000 ? `${tpmLimit / 1000}k` : String(tpmLimit)
-        toast.error(
-            `Rate limit reached (${limitDisplay} tokens/min). Please wait 60 seconds before sending another request.`,
-            { duration: 8000 },
-        )
-    }, [tpmLimit])
+        const message = formatMessage(dict.quota.tpmMessageDetailed, {
+            limit: limitDisplay,
+            seconds: 60,
+        })
+        toast.error(message, { duration: 8000 })
+    }, [tpmLimit, dict])
 
     return {
         // Check functions

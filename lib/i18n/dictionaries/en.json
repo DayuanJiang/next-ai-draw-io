@@ -150,6 +150,7 @@
         "tokenLimit": "Daily Token Limit Reached",
         "tpmLimit": "Rate Limit",
         "tpmMessage": "Too many requests. Please wait a moment.",
+        "tpmMessageDetailed": "Rate limit reached ({limit} tokens/min). Please wait {seconds} seconds before sending another request.",
         "messageApi": "Oops — you've reached the daily API limit for this demo! As an indie developer covering all the API costs myself, I have to set these limits to keep things sustainable.",
         "messageToken": "Oops — you've reached the daily token limit for this demo! As an indie developer covering all the API costs myself, I have to set these limits to keep things sustainable.",
         "tip": "<strong>Tip:</strong> You can use your own API key (click the Settings icon) or self-host the project to bypass these limits.",
