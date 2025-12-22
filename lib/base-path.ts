@@ -9,7 +9,11 @@
  */
 export function getBasePath(): string {
     // Read from environment variable (must start with NEXT_PUBLIC_ to be available on client)
-    return process.env.NEXT_PUBLIC_BASE_PATH || ""
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ""
+    if (basePath && !basePath.startsWith("/")) {
+        console.warn("NEXT_PUBLIC_BASE_PATH should start with /")
+    }
+    return basePath
 }
 
 /**
