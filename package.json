@@ -14,7 +14,7 @@
         "prepare": "husky",
         "electron:dev": "node scripts/electron-dev.mjs",
         "electron:build": "npm run build && npm run electron:compile",
-        "electron:compile": "npx esbuild electron/main/index.ts electron/preload/index.ts electron/preload/settings.ts --bundle --platform=node --outdir=dist-electron --external:electron --sourcemap --packages=external && cp -r electron/settings dist-electron/",
+        "electron:compile": "npx esbuild electron/main/index.ts electron/preload/index.ts electron/preload/settings.ts --bundle --platform=node --outdir=dist-electron --external:electron --sourcemap --packages=external && npx shx cp -r electron/settings dist-electron/",
         "electron:start": "npx cross-env NODE_ENV=development npx electron .",
         "electron:prepare": "node scripts/prepare-electron-build.mjs",
         "dist": "npm run electron:build && npm run electron:prepare && npx electron-builder",
@@ -104,6 +104,7 @@
         "eslint-config-next": "16.0.5",
         "husky": "^9.1.7",
         "lint-staged": "^16.2.7",
+        "shx": "^0.4.0",
         "tailwindcss": "^4",
         "typescript": "^5",
         "wait-on": "^9.0.3"
