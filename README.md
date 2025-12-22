@@ -33,6 +33,7 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
   - [MCP Server (Preview)](#mcp-server-preview)
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
+    - [Desktop Application](#desktop-application)
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
     - [Installation](#installation)
   - [Deployment](#deployment)
@@ -134,6 +135,28 @@ No installation needed! Try the app directly on our demo site:
 > Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
 
 > **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
+
+### Desktop Application
+
+Download the native desktop app for your platform from the [Releases page](https://github.com/DayuanJiang/next-ai-draw-io/releases):
+
+| Platform | Download |
+|----------|----------|
+| macOS | `.dmg` (Intel & Apple Silicon) |
+| Windows | `.exe` installer (x64 & ARM64) |
+| Linux | `.AppImage` or `.deb` (x64 & ARM64) |
+
+**Features:**
+- **Secure API key storage**: Credentials encrypted using OS keychain
+- **Configuration presets**: Save and switch between AI providers via menu
+- **Native file dialogs**: Open/save `.drawio` files directly
+- **Offline capable**: Works without internet after first launch
+
+**Quick Setup:**
+1. Download and install for your platform
+2. Open the app → **Menu → Configuration → Manage Presets**
+3. Add your AI provider credentials
+4. Start creating diagrams!
 
 ### Run with Docker (Recommended)
 
