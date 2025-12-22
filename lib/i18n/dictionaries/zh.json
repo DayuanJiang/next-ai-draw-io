@@ -180,5 +180,24 @@
         "seekingSponsorship": "寻求赞助（求大佬捞一把）",
         "contactMe": "联系我",
         "usageNotice": "由于使用量过高，我已将模型从 Claude 更换为 minimax-m2，并设置了一些用量限制。详情请查看关于页面。"
+    },
+    "modelConfig": {
+        "title": "AI 模型配置",
+        "description": "配置多个 AI 提供商和模型",
+        "configure": "配置",
+        "addProvider": "添加提供商",
+        "addModel": "添加模型",
+        "modelId": "模型 ID",
+        "modelLabel": "显示名称",
+        "streaming": "启用流式输出",
+        "deleteProvider": "删除提供商",
+        "deleteModel": "删除模型",
+        "noModels": "尚未配置模型。添加模型以开始使用。",
+        "selectProvider": "选择一个提供商或添加新的",
+        "configureMultiple": "配置多个 AI 提供商并轻松切换",
+        "apiKeyStored": "API 密钥存储在您的浏览器本地",
+        "test": "测试",
+        "validationError": "验证失败",
+        "addModelFirst": "请先添加至少一个模型以进行验证"
     }
 }

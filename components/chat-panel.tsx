@@ -18,11 +18,13 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { ModelConfigDialog } from "@/components/model-config-dialog"
+import { ModelSelector } from "@/components/model-selector"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { getAIConfig } from "@/lib/ai-config"
+import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
@@ -146,7 +148,11 @@ export default function ChatPanel({
 
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+    const [showModelConfigDialog, setShowModelConfigDialog] = useState(false)
     const [, setAccessCodeRequired] = useState(false)
+
+    // Model configuration hook
+    const modelConfig = useModelConfig()
     const [input, setInput] = useState("")
     const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
@@ -1019,7 +1025,7 @@ Continue from EXACTLY where you stopped.`,
         autoRetryCountRef.current = 0
         partialXmlRef.current = ""
 
-        const config = getAIConfig()
+        const config = getSelectedAIConfig()
 
         sendMessage(
             { parts },
@@ -1298,6 +1304,16 @@ Continue from EXACTLY where you stopped.`,
                                 className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
                             />
                         </a>
+                        {!isMobile && modelConfig.isLoaded && (
+                            <ModelSelector
+                                models={modelConfig.models}
+                                selectedModelId={modelConfig.selectedModelId}
+                                onSelect={modelConfig.setSelectedModelId}
+                                onConfigure={() =>
+                                    setShowModelConfigDialog(true)
+                                }
+                            />
+                        )}
                         <ButtonWithTooltip
                             tooltipContent={dict.nav.settings}
                             variant="ghost"
@@ -1368,10 +1384,17 @@ Continue from EXACTLY where you stopped.`,
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
                 onCloseProtectionChange={onCloseProtectionChange}
+                onOpenModelConfig={() => setShowModelConfigDialog(true)}
                 drawioUi={drawioUi}
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
+            />
+
+            <ModelConfigDialog
+                open={showModelConfigDialog}
+                onOpenChange={setShowModelConfigDialog}
+                modelConfig={modelConfig}
             />
 
             <ResetWarningModal

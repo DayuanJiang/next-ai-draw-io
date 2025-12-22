@@ -180,5 +180,24 @@
         "seekingSponsorship": "Call for Sponsorship",
         "contactMe": "Contact Me",
         "usageNotice": "Due to high usage, I have changed the model from Claude to minimax-m2 and added some usage limits. See About page for details."
+    },
+    "modelConfig": {
+        "title": "AI Model Configuration",
+        "description": "Configure multiple AI providers and models",
+        "configure": "Configure",
+        "addProvider": "Add Provider",
+        "addModel": "Add Model",
+        "modelId": "Model ID",
+        "modelLabel": "Display Label",
+        "streaming": "Enable Streaming",
+        "deleteProvider": "Delete Provider",
+        "deleteModel": "Delete Model",
+        "noModels": "No models configured. Add a model to get started.",
+        "selectProvider": "Select a provider or add a new one",
+        "configureMultiple": "Configure multiple AI providers and switch between them easily",
+        "apiKeyStored": "API keys are stored locally in your browser",
+        "test": "Test",
+        "validationError": "Validation failed",
+        "addModelFirst": "Add at least one model to validate"
     }
 }

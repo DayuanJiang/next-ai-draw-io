@@ -180,5 +180,24 @@
         "seekingSponsorship": "スポンサー募集",
         "contactMe": "お問い合わせ",
         "usageNotice": "利用量の増加に伴い、コスト削減のためモデルを Claude から minimax-m2 に変更し、いくつかの利用制限を設けました。詳細は概要ページをご覧ください。"
+    },
+    "modelConfig": {
+        "title": "AIモデル設定",
+        "description": "複数のAIプロバイダーとモデルを設定",
+        "configure": "設定",
+        "addProvider": "プロバイダーを追加",
+        "addModel": "モデルを追加",
+        "modelId": "モデルID",
+        "modelLabel": "表示名",
+        "streaming": "ストリーミングを有効",
+        "deleteProvider": "プロバイダーを削除",
+        "deleteModel": "モデルを削除",
+        "noModels": "モデルが設定されていません。モデルを追加してください。",
+        "selectProvider": "プロバイダーを選択または追加してください",
+        "configureMultiple": "複数のAIプロバイダーを設定して簡単に切り替え",
+        "apiKeyStored": "APIキーはブラウザにローカル保存されます",
+        "test": "テスト",
+        "validationError": "検証に失敗しました",
+        "addModelFirst": "検証するには少なくとも1つのモデルを追加してください"
     }
 }
