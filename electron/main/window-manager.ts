@@ -5,14 +5,16 @@ let mainWindow: BrowserWindow | null = null
 
 /**
  * Get the icon path based on platform
+ * Note: electron-builder converts icon.png during packaging,
+ * but at runtime we use PNG directly - Electron handles it
  */
 function getIconPath(): string | undefined {
-    const iconName =
-        process.platform === "win32"
-            ? "icon.ico"
-            : process.platform === "darwin"
-              ? "icon.icns"
-              : "icon.png"
+    // macOS doesn't need explicit icon - it's embedded in the app bundle
+    if (process.platform === "darwin" && app.isPackaged) {
+        return undefined
+    }
+
+    const iconName = "icon.png"
 
     if (app.isPackaged) {
         return path.join(process.resourcesPath, iconName)

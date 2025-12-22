@@ -20,6 +20,9 @@ extraResources:
   # Copy prepared standalone directory (includes node_modules)
   - from: electron-standalone/
     to: standalone/
+  # Copy icon for runtime use (Windows/Linux)
+  - from: resources/icon.png
+    to: icon.png
 
 # macOS configuration
 mac:
