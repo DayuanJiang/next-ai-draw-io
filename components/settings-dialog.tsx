@@ -1,6 +1,7 @@
 "use client"
 
 import { Moon, Sun } from "lucide-react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { i18n, type Locale } from "@/lib/i18n/config"
 
 interface SettingsDialogProps {
     open: boolean
@@ -46,7 +48,6 @@ function getStoredAccessCodeRequired(): boolean | null {
     if (stored === null) return null
     return stored === "true"
 }
-
 export function SettingsDialog({
     open,
     onOpenChange,
@@ -57,6 +58,9 @@ export function SettingsDialog({
     onToggleDarkMode,
 }: SettingsDialogProps) {
     const dict = useDictionary()
+    const router = useRouter()
+    const pathname = usePathname() || "/"
+    const search = useSearchParams()
     const [accessCode, setAccessCode] = useState("")
     const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
@@ -68,6 +72,7 @@ export function SettingsDialog({
     const [baseUrl, setBaseUrl] = useState("")
     const [apiKey, setApiKey] = useState("")
     const [modelId, setModelId] = useState("")
+    const [currentLang, setCurrentLang] = useState("en")
 
     useEffect(() => {
         // Only fetch if not cached in localStorage
@@ -91,6 +96,16 @@ export function SettingsDialog({
                 setAccessCodeRequired(false)
             })
     }, [])
+    // Detect current language from pathname
+    useEffect(() => {
+        const seg = pathname.split("/").filter(Boolean)
+        const first = seg[0]
+        if (first && i18n.locales.includes(first as Locale)) {
+            setCurrentLang(first)
+        } else {
+            setCurrentLang(i18n.defaultLocale)
+        }
+    }, [pathname])
 
     useEffect(() => {
         if (open) {
@@ -113,6 +128,18 @@ export function SettingsDialog({
             setError("")
         }
     }, [open])
+
+    const changeLanguage = (lang: string) => {
+        const parts = pathname.split("/")
+        if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
+            parts[1] = lang
+        } else {
+            parts.splice(1, 0, lang)
+        }
+        const newPath = parts.join("/") || "/"
+        const searchStr = search?.toString() ? `?${search.toString()}` : ""
+        router.push(newPath + searchStr)
+    }
 
     const handleSave = async () => {
         if (!accessCodeRequired) return
@@ -197,6 +224,34 @@ export function SettingsDialog({
                             )}
                         </div>
                     )}
+
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="language-select">
+                                {dict.settings.language}
+                            </Label>
+                            <p className="text-[0.8rem] text-muted-foreground">
+                                {dict.settings.languageDescription}
+                            </p>
+                        </div>
+                        <Select
+                            value={currentLang}
+                            onValueChange={changeLanguage}
+                        >
+                            <SelectTrigger
+                                id="language-select"
+                                className="w-32"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="en">English</SelectItem>
+                                <SelectItem value="zh">中文</SelectItem>
+                                <SelectItem value="ja">日本語</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <div className="space-y-2">
                         <Label>{dict.settings.aiProvider}</Label>
                         <p className="text-[0.8rem] text-muted-foreground">
