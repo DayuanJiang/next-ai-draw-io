@@ -24,6 +24,12 @@ import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
+const LANGUAGE_LABELS: Record<Locale, string> = {
+    en: "English",
+    zh: "中文",
+    ja: "日本語",
+}
+
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -224,9 +230,11 @@ function SettingsContent({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="en">English</SelectItem>
-                            <SelectItem value="zh">中文</SelectItem>
-                            <SelectItem value="ja">日本語</SelectItem>
+                            {i18n.locales.map((locale) => (
+                                <SelectItem key={locale} value={locale}>
+                                    {LANGUAGE_LABELS[locale]}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>
