@@ -37,10 +37,6 @@ interface SettingsDialogProps {
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
 export const STORAGE_CLOSE_PROTECTION_KEY = "next-ai-draw-io-close-protection"
 const STORAGE_ACCESS_CODE_REQUIRED_KEY = "next-ai-draw-io-access-code-required"
-export const STORAGE_AI_PROVIDER_KEY = "next-ai-draw-io-ai-provider"
-export const STORAGE_AI_BASE_URL_KEY = "next-ai-draw-io-ai-base-url"
-export const STORAGE_AI_API_KEY_KEY = "next-ai-draw-io-ai-api-key"
-export const STORAGE_AI_MODEL_KEY = "next-ai-draw-io-ai-model"
 
 function getStoredAccessCodeRequired(): boolean | null {
     if (typeof window === "undefined") return null
@@ -48,6 +44,7 @@ function getStoredAccessCodeRequired(): boolean | null {
     if (stored === null) return null
     return stored === "true"
 }
+
 function SettingsContent({
     open,
     onOpenChange,
@@ -68,10 +65,6 @@ function SettingsContent({
     const [accessCodeRequired, setAccessCodeRequired] = useState(
         () => getStoredAccessCodeRequired() ?? false,
     )
-    const [provider, setProvider] = useState("")
-    const [baseUrl, setBaseUrl] = useState("")
-    const [apiKey, setApiKey] = useState("")
-    const [modelId, setModelId] = useState("")
     const [currentLang, setCurrentLang] = useState("en")
 
     useEffect(() => {
@@ -96,6 +89,7 @@ function SettingsContent({
                 setAccessCodeRequired(false)
             })
     }, [])
+
     // Detect current language from pathname
     useEffect(() => {
         const seg = pathname.split("/").filter(Boolean)
@@ -118,12 +112,6 @@ function SettingsContent({
             )
             // Default to true if not set
             setCloseProtection(storedCloseProtection !== "false")
-
-            // Load AI provider settings
-            setProvider(localStorage.getItem(STORAGE_AI_PROVIDER_KEY) || "")
-            setBaseUrl(localStorage.getItem(STORAGE_AI_BASE_URL_KEY) || "")
-            setApiKey(localStorage.getItem(STORAGE_AI_API_KEY_KEY) || "")
-            setModelId(localStorage.getItem(STORAGE_AI_MODEL_KEY) || "")
 
             setError("")
         }
@@ -241,185 +229,6 @@ function SettingsContent({
                             <SelectItem value="ja">日本語</SelectItem>
                         </SelectContent>
                     </Select>
-                </div>
-
-                <div className="space-y-2">
-                    <Label>{dict.settings.aiProvider}</Label>
-                    <p className="text-[0.8rem] text-muted-foreground">
-                        {dict.settings.aiProviderDescription}
-                    </p>
-                    <div className="space-y-3 pt-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="ai-provider">
-                                {dict.settings.provider}
-                            </Label>
-                            <Select
-                                value={provider || "default"}
-                                onValueChange={(value) => {
-                                    const actualValue =
-                                        value === "default" ? "" : value
-                                    setProvider(actualValue)
-                                    localStorage.setItem(
-                                        STORAGE_AI_PROVIDER_KEY,
-                                        actualValue,
-                                    )
-                                }}
-                            >
-                                <SelectTrigger id="ai-provider">
-                                    <SelectValue
-                                        placeholder={
-                                            dict.settings.useServerDefault
-                                        }
-                                    />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="default">
-                                        {dict.settings.useServerDefault}
-                                    </SelectItem>
-                                    <SelectItem value="openai">
-                                        {dict.providers.openai}
-                                    </SelectItem>
-                                    <SelectItem value="anthropic">
-                                        {dict.providers.anthropic}
-                                    </SelectItem>
-                                    <SelectItem value="google">
-                                        {dict.providers.google}
-                                    </SelectItem>
-                                    <SelectItem value="azure">
-                                        {dict.providers.azure}
-                                    </SelectItem>
-                                    <SelectItem value="openrouter">
-                                        {dict.providers.openrouter}
-                                    </SelectItem>
-                                    <SelectItem value="deepseek">
-                                        {dict.providers.deepseek}
-                                    </SelectItem>
-                                    <SelectItem value="siliconflow">
-                                        {dict.providers.siliconflow}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {provider && provider !== "default" && (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="ai-model">
-                                        {dict.settings.modelId}
-                                    </Label>
-                                    <Input
-                                        id="ai-model"
-                                        value={modelId}
-                                        onChange={(e) => {
-                                            setModelId(e.target.value)
-                                            localStorage.setItem(
-                                                STORAGE_AI_MODEL_KEY,
-                                                e.target.value,
-                                            )
-                                        }}
-                                        placeholder={
-                                            provider === "openai"
-                                                ? "e.g., gpt-4o"
-                                                : provider === "anthropic"
-                                                  ? "e.g., claude-sonnet-4-5"
-                                                  : provider === "google"
-                                                    ? "e.g., gemini-2.0-flash-exp"
-                                                    : provider === "deepseek"
-                                                      ? "e.g., deepseek-chat"
-                                                      : dict.settings.modelId
-                                        }
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="ai-api-key">
-                                        {dict.settings.apiKey}
-                                    </Label>
-                                    <Input
-                                        id="ai-api-key"
-                                        type="password"
-                                        value={apiKey}
-                                        onChange={(e) => {
-                                            setApiKey(e.target.value)
-                                            localStorage.setItem(
-                                                STORAGE_AI_API_KEY_KEY,
-                                                e.target.value,
-                                            )
-                                        }}
-                                        placeholder={
-                                            dict.settings.apiKeyPlaceholder
-                                        }
-                                        autoComplete="off"
-                                    />
-                                    <p className="text-[0.8rem] text-muted-foreground">
-                                        {dict.settings.overrides}{" "}
-                                        {provider === "openai"
-                                            ? "OPENAI_API_KEY"
-                                            : provider === "anthropic"
-                                              ? "ANTHROPIC_API_KEY"
-                                              : provider === "google"
-                                                ? "GOOGLE_GENERATIVE_AI_API_KEY"
-                                                : provider === "azure"
-                                                  ? "AZURE_API_KEY"
-                                                  : provider === "openrouter"
-                                                    ? "OPENROUTER_API_KEY"
-                                                    : provider === "deepseek"
-                                                      ? "DEEPSEEK_API_KEY"
-                                                      : provider ===
-                                                          "siliconflow"
-                                                        ? "SILICONFLOW_API_KEY"
-                                                        : "server API key"}
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="ai-base-url">
-                                        {dict.settings.baseUrl}
-                                    </Label>
-                                    <Input
-                                        id="ai-base-url"
-                                        value={baseUrl}
-                                        onChange={(e) => {
-                                            setBaseUrl(e.target.value)
-                                            localStorage.setItem(
-                                                STORAGE_AI_BASE_URL_KEY,
-                                                e.target.value,
-                                            )
-                                        }}
-                                        placeholder={
-                                            provider === "anthropic"
-                                                ? "https://api.anthropic.com/v1"
-                                                : provider === "siliconflow"
-                                                  ? "https://api.siliconflow.com/v1"
-                                                  : dict.settings.customEndpoint
-                                        }
-                                    />
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full"
-                                    onClick={() => {
-                                        localStorage.removeItem(
-                                            STORAGE_AI_PROVIDER_KEY,
-                                        )
-                                        localStorage.removeItem(
-                                            STORAGE_AI_BASE_URL_KEY,
-                                        )
-                                        localStorage.removeItem(
-                                            STORAGE_AI_API_KEY_KEY,
-                                        )
-                                        localStorage.removeItem(
-                                            STORAGE_AI_MODEL_KEY,
-                                        )
-                                        setProvider("")
-                                        setBaseUrl("")
-                                        setApiKey("")
-                                        setModelId("")
-                                    }}
-                                >
-                                    {dict.settings.clearSettings}
-                                </Button>
-                            </>
-                        )}
-                    </div>
                 </div>
 
                 <div className="flex items-center justify-between">

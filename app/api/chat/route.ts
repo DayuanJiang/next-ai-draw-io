@@ -214,6 +214,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         baseUrl: req.headers.get("x-ai-base-url"),
         apiKey: req.headers.get("x-ai-api-key"),
         modelId: req.headers.get("x-ai-model"),
+        // AWS Bedrock credentials
+        awsAccessKeyId: req.headers.get("x-aws-access-key-id"),
+        awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
+        awsRegion: req.headers.get("x-aws-region"),
+        awsSessionToken: req.headers.get("x-aws-session-token"),
     }
 
     // Read minimal style preference from header

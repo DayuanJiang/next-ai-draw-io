@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ErrorToast } from "@/components/error-toast"
 import { HistoryDialog } from "@/components/history-dialog"
+import { ModelSelector } from "@/components/model-selector"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SaveDialog } from "@/components/save-dialog"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,7 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+import type { FlattenedModel } from "@/lib/types/model-config"
 import { FilePreviewList } from "./file-preview-list"
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -156,6 +158,11 @@ interface ChatInputProps {
     error?: Error | null
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    // Model selector props
+    models?: FlattenedModel[]
+    selectedModelId?: string
+    onModelSelect?: (modelId: string | undefined) => void
+    onConfigureModels?: () => void
 }
 
 export function ChatInput({
@@ -173,6 +180,10 @@ export function ChatInput({
     error = null,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    models = [],
+    selectedModelId,
+    onModelSelect = () => {},
+    onConfigureModels = () => {},
 }: ChatInputProps) {
     const dict = useDictionary()
     const {
@@ -462,6 +473,14 @@ export function ChatInput({
                             onChange={handleFileChange}
                             accept="image/*,.pdf,application/pdf,text/*,.md,.markdown,.json,.csv,.xml,.yaml,.yml,.toml"
                             multiple
+                            disabled={isDisabled}
+                        />
+
+                        <ModelSelector
+                            models={models}
+                            selectedModelId={selectedModelId}
+                            onSelect={onModelSelect}
+                            onConfigure={onConfigureModels}
                             disabled={isDisabled}
                         />
 
