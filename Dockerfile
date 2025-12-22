@@ -26,6 +26,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net
 ENV NEXT_PUBLIC_DRAWIO_BASE_URL=${NEXT_PUBLIC_DRAWIO_BASE_URL}
 
+# Build-time argument to show About link and Notice icon
+ARG NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=false
+ENV NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=${NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE}
+
 # Build Next.js application (standalone mode)
 RUN npm run build
 

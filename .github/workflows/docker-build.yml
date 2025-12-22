@@ -63,6 +63,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=true
 
       # Push to AWS ECR for App Runner auto-deploy
       - name: Configure AWS credentials
