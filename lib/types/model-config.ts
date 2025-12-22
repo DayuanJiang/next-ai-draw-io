@@ -275,11 +275,3 @@ export function findModelById(
 ): FlattenedModel | undefined {
     return flattenModels(config).find((m) => m.id === modelId)
 }
-
-// Get selected model
-export function getSelectedModel(
-    config: MultiModelConfig,
-): FlattenedModel | undefined {
-    if (!config.selectedModelId) return undefined
-    return findModelById(config, config.selectedModelId)
-}

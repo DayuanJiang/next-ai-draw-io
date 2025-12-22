@@ -148,7 +148,6 @@ export default function ChatPanel({
     const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [showModelConfigDialog, setShowModelConfigDialog] = useState(false)
-    const [, setAccessCodeRequired] = useState(false)
 
     // Model configuration hook
     const modelConfig = useModelConfig()
@@ -172,12 +171,11 @@ export default function ChatPanel({
         fetch("/api/config")
             .then((res) => res.json())
             .then((data) => {
-                setAccessCodeRequired(data.accessCodeRequired)
                 setDailyRequestLimit(data.dailyRequestLimit || 0)
                 setDailyTokenLimit(data.dailyTokenLimit || 0)
                 setTpmLimit(data.tpmLimit || 0)
             })
-            .catch(() => setAccessCodeRequired(false))
+            .catch(() => {})
     }, [])
 
     // Quota management using extracted hook
@@ -614,8 +612,7 @@ Continue from EXACTLY where you stopped.`,
             })
 
             if (error.message.includes("Invalid or missing access code")) {
-                // Show settings button and open dialog to help user fix it
-                setAccessCodeRequired(true)
+                // Show settings dialog to help user fix it
                 setShowSettingsDialog(true)
             }
         },
