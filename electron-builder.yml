@@ -1,0 +1,96 @@
+appId: com.nextaidrawio.app
+productName: Next AI Draw.io
+copyright: Copyright © 2024 Next AI Draw.io
+electronVersion: 39.2.7
+
+directories:
+  output: release
+  buildResources: resources
+
+afterPack: ./scripts/afterPack.cjs
+
+files:
+  - dist-electron/**/*
+  - "!node_modules"
+
+asarUnpack:
+  - "**/*.node"
+
+extraResources:
+  # Copy prepared standalone directory (includes node_modules)
+  - from: electron-standalone/
+    to: standalone/
+  # Copy icon for runtime use (Windows/Linux)
+  - from: resources/icon.png
+    to: icon.png
+
+# macOS configuration
+mac:
+  category: public.app-category.productivity
+  icon: resources/icon.png
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+
+# Windows configuration
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+    - target: portable
+      arch:
+        - x64
+        - arm64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+# Linux configuration
+linux:
+  icon: resources/icon.png
+  category: Office
+  maintainer: Next AI Draw.io <nextaidrawio@users.noreply.github.com>
+  target:
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+
+# Publish configuration (optional)
+publish:
+  provider: github
+  releaseType: release

@@ -3,6 +3,7 @@
     "version": "0.4.4",
     "license": "Apache-2.0",
     "private": true,
+    "main": "dist-electron/main/index.js",
     "scripts": {
         "dev": "next dev --turbopack --port 6002",
         "build": "next build",
@@ -10,7 +11,17 @@
         "lint": "biome lint .",
         "format": "biome check --write .",
         "check": "biome ci",
-        "prepare": "husky"
+        "prepare": "husky",
+        "electron:dev": "node scripts/electron-dev.mjs",
+        "electron:build": "npm run build && npm run electron:compile",
+        "electron:compile": "npx esbuild electron/main/index.ts electron/preload/index.ts electron/preload/settings.ts --bundle --platform=node --outdir=dist-electron --external:electron --sourcemap --packages=external && npx shx cp -r electron/settings dist-electron/",
+        "electron:start": "npx cross-env NODE_ENV=development npx electron .",
+        "electron:prepare": "node scripts/prepare-electron-build.mjs",
+        "dist": "npm run electron:build && npm run electron:prepare && npx electron-builder",
+        "dist:mac": "npm run electron:build && npm run electron:prepare && npx electron-builder --mac",
+        "dist:win": "npm run electron:build && npm run electron:prepare && npx electron-builder --win",
+        "dist:linux": "npm run electron:build && npm run electron:prepare && npx electron-builder --linux",
+        "dist:all": "npm run electron:build && npm run electron:prepare && npx electron-builder --mac --win --linux"
     },
     "dependencies": {
         "@ai-sdk/amazon-bedrock": "^3.0.70",
@@ -84,11 +95,18 @@
         "@types/pako": "^2.0.3",
         "@types/react": "^19",
         "@types/react-dom": "^19",
+        "concurrently": "^9.2.1",
+        "cross-env": "^10.1.0",
+        "electron": "^39.2.7",
+        "electron-builder": "^26.0.12",
+        "esbuild": "^0.27.2",
         "eslint": "9.39.1",
         "eslint-config-next": "16.0.5",
         "husky": "^9.1.7",
         "lint-staged": "^16.2.7",
+        "shx": "^0.4.0",
         "tailwindcss": "^4",
-        "typescript": "^5"
+        "typescript": "^5",
+        "wait-on": "^9.0.3"
     }
 }

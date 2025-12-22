@@ -50,3 +50,16 @@ push-via-ec2.sh
 .wrangler/
 .env*.local
 
+# Electron
+/dist-electron/
+/release/
+/electron-standalone/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+
+CLAUDE.md
+.spec-workflow
