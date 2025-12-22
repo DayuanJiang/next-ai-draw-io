@@ -1269,32 +1269,36 @@ Continue from EXACTLY where you stopped.`,
                                 Next AI Drawio
                             </h1>
                         </div>
-                        {!isMobile && (
-                            <Link
-                                href="/about"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
-                            >
-                                About
-                            </Link>
-                        )}
-                        {!isMobile && (
-                            <Link
-                                href="/about"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <ButtonWithTooltip
-                                    tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                        {!isMobile &&
+                            process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE ===
+                                "true" && (
+                                <Link
+                                    href="/about"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                                 >
-                                    <AlertTriangle className="h-4 w-4" />
-                                </ButtonWithTooltip>
-                            </Link>
-                        )}
+                                    About
+                                </Link>
+                            )}
+                        {!isMobile &&
+                            process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE ===
+                                "true" && (
+                                <Link
+                                    href="/about"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <ButtonWithTooltip
+                                        tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                                    >
+                                        <AlertTriangle className="h-4 w-4" />
+                                    </ButtonWithTooltip>
+                                </Link>
+                            )}
                     </div>
                     <div className="flex items-center gap-1 justify-end overflow-visible">
                         <ButtonWithTooltip
