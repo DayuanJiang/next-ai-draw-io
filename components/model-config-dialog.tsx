@@ -290,12 +290,14 @@ export function ModelConfigDialog({
         setValidatingModelIndex(null)
 
         if (allValid) {
+            setValidationStatus("success")
             updateProvider(selectedProviderId!, { validated: true })
+            // Reset to idle after showing success briefly
+            setTimeout(() => setValidationStatus("idle"), 1500)
         } else {
+            setValidationStatus("error")
             setValidationError(`${errorCount} model(s) failed validation`)
         }
-        // Reset to idle so button shows "Test" again
-        setValidationStatus("idle")
     }, [selectedProvider, selectedProviderId, updateProvider, updateModel])
 
     // Get all available provider types
