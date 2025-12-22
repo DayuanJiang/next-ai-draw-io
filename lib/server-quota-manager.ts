@@ -148,6 +148,48 @@ class ServerQuotaManager {
         data.tpmCount += tokens
     }
 
+    // Reserve tokens before AI call to prevent abuse
+    reserveTokens(ip: string, estimatedTokens: number = 1000): boolean {
+        if (!Number.isFinite(estimatedTokens) || estimatedTokens <= 0)
+            return true
+
+        const data = this.getQuotaData(ip)
+        this.resetIfNeeded(data)
+
+        // Check if reservation would exceed limits
+        if (data.tokenCount + estimatedTokens > this.config.dailyTokenLimit) {
+            return false // Would exceed daily limit
+        }
+
+        if (data.tpmCount + estimatedTokens > this.config.tpmLimit) {
+            return false // Would exceed TPM limit
+        }
+
+        // Reserve the tokens
+        data.tokenCount += estimatedTokens
+        data.tpmCount += estimatedTokens
+        return true
+    }
+
+    // Adjust token counts after AI call with actual usage
+    adjustTokens(
+        ip: string,
+        estimatedTokens: number,
+        actualTokens: number,
+    ): void {
+        if (!Number.isFinite(estimatedTokens) || !Number.isFinite(actualTokens))
+            return
+
+        const data = this.getQuotaData(ip)
+        this.resetIfNeeded(data)
+
+        const difference = actualTokens - estimatedTokens
+        if (difference !== 0) {
+            data.tokenCount += difference
+            data.tpmCount += difference
+        }
+    }
+
     checkAllLimits(ip: string): {
         allowed: boolean
         reason?: string
@@ -189,6 +231,10 @@ class ServerQuotaManager {
             remainingTPM: tpmCheck.remaining,
         }
     }
+
+    getConfig() {
+        return this.config
+    }
 }
 
 // Global instance - in production, this should be shared across server instances
@@ -196,12 +242,25 @@ let quotaManager: ServerQuotaManager | null = null
 
 export function getServerQuotaManager(): ServerQuotaManager {
     if (!quotaManager) {
-        const config: QuotaConfig = {
-            dailyRequestLimit: Number(process.env.DAILY_REQUEST_LIMIT) || 0,
-            dailyTokenLimit: Number(process.env.DAILY_TOKEN_LIMIT) || 0,
-            tpmLimit: Number(process.env.TPM_LIMIT) || 0,
+        const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 0
+        const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 0
+        const tpmLimit = Number(process.env.TPM_LIMIT) || 0
+
+        // Validate config
+        if (dailyRequestLimit < 0 || dailyTokenLimit < 0 || tpmLimit < 0) {
+            console.warn(
+                "[ServerQuotaManager] Invalid quota config - limits must be >= 0",
+            )
         }
+
+        const config: QuotaConfig = {
+            dailyRequestLimit,
+            dailyTokenLimit,
+            tpmLimit,
+        }
+
         quotaManager = new ServerQuotaManager(config)
+        console.log("[ServerQuotaManager] Initialized with config:", config)
     }
     return quotaManager
 }

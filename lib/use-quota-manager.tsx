@@ -37,6 +37,7 @@ export function useQuotaManager(config: QuotaConfig): {
     showQuotaLimitToast: () => void
     showTokenLimitToast: (used: number) => void
     showTPMLimitToast: () => void
+    fetchServerQuota: () => Promise<any>
 } {
     const { dailyRequestLimit, dailyTokenLimit, tpmLimit } = config
 
@@ -227,6 +228,25 @@ export function useQuotaManager(config: QuotaConfig): {
         )
     }, [tpmLimit])
 
+    // Fetch quota status from server
+    const fetchServerQuota = useCallback(async () => {
+        try {
+            const response = await fetch("/api/quota", {
+                headers: {
+                    "x-ai-provider":
+                        localStorage.getItem(STORAGE_KEYS.aiProvider) || "",
+                    "x-ai-api-key":
+                        localStorage.getItem(STORAGE_KEYS.aiApiKey) || "",
+                },
+            })
+            const data = await response.json()
+            return data
+        } catch (error) {
+            console.error("Failed to fetch quota:", error)
+            return null
+        }
+    }, [])
+
     return {
         // Check functions
         hasOwnApiKey,
@@ -243,5 +263,8 @@ export function useQuotaManager(config: QuotaConfig): {
         showQuotaLimitToast,
         showTokenLimitToast,
         showTPMLimitToast,
+
+        // Server quota fetch
+        fetchServerQuota,
     }
 }

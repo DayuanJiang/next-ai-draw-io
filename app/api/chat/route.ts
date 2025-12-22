@@ -193,6 +193,21 @@ async function handleChatRequest(req: Request): Promise<Response> {
                 { status: 429 },
             )
         }
+
+        // Reserve estimated tokens to prevent concurrent request abuse
+        const estimatedTokens = 1000 // Conservative estimate for token reservation
+        if (!quotaManager.reserveTokens(userId, estimatedTokens)) {
+            return Response.json(
+                {
+                    error: "Token limit would be exceeded by this request",
+                    remainingTokens:
+                        quotaManager.checkDailyTokenLimit(userId).remaining,
+                    remainingTPM: quotaManager.checkTPMLimit(userId).remaining,
+                },
+                { status: 429 },
+            )
+        }
+
         // Increment request count immediately
         quotaManager.incrementRequestCount(userId)
     }
@@ -541,8 +556,13 @@ ${userInputText}
                 const totalTokens =
                     (usage.inputTokens || 0) + (usage.outputTokens || 0)
                 if (totalTokens > 0) {
-                    quotaManager.incrementTokenCount(userId, totalTokens)
-                    quotaManager.incrementTPMCount(userId, totalTokens)
+                    // Adjust from estimated reservation to actual usage
+                    const estimatedTokens = 1000
+                    quotaManager.adjustTokens(
+                        userId,
+                        estimatedTokens,
+                        totalTokens,
+                    )
                 }
             }
         },
