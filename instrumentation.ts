@@ -36,4 +36,5 @@ export function register() {
 
     // Register globally so AI SDK's telemetry also uses this processor
     tracerProvider.register()
+    console.log("[Langfuse] Instrumentation initialized successfully")
 }
