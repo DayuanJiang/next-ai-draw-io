@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
 import { STORAGE_DIAGRAM_XML_KEY } from "@/components/chat-panel"
 import type { ExportFormat } from "@/components/save-dialog"
+import { getApiEndpoint } from "@/lib/base-path"
 import { extractDiagramXML, validateAndFixXml } from "../lib/utils"
 
 interface DiagramContextType {
@@ -329,7 +330,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         sessionId?: string,
     ) => {
         try {
-            await fetch("/api/log-save", {
+            await fetch(getApiEndpoint("/api/log-save"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ filename, format, sessionId }),

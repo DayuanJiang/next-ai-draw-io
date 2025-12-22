@@ -29,6 +29,7 @@ import {
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
+import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
@@ -172,7 +173,7 @@ export default function ChatPanel({
 
     // Check config on mount
     useEffect(() => {
-        fetch("/api/config")
+        fetch(getApiEndpoint("/api/config"))
             .then((res) => res.json())
             .then((data) => {
                 setDailyRequestLimit(data.dailyRequestLimit || 0)
@@ -243,7 +244,7 @@ export default function ChatPanel({
         setMessages,
     } = useChat({
         transport: new DefaultChatTransport({
-            api: "/api/chat",
+            api: getApiEndpoint("/api/chat"),
         }),
         async onToolCall({ toolCall }) {
             if (DEBUG) {
