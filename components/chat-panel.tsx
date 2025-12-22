@@ -21,6 +21,11 @@ import { ChatInput } from "@/components/chat-input"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
@@ -30,7 +35,6 @@ import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
-import LanguageToggle from "./language-toggle"
 
 // localStorage keys for persistence
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
@@ -1304,16 +1308,23 @@ Continue from EXACTLY where you stopped.`,
                             />
                         </ButtonWithTooltip>
                         <div className="w-px h-5 bg-border mx-1" />
-                        <a
-                            href="https://github.com/DayuanJiang/next-ai-draw-io"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        >
-                            <FaGithub
-                                className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
-                            />
-                        </a>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <a
+                                    href="https://github.com/DayuanJiang/next-ai-draw-io"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                >
+                                    <FaGithub
+                                        className={`${isMobile ? "w-4 h-4" : "w-5 h-5"}`}
+                                    />
+                                </a>
+                            </TooltipTrigger>
+                            <TooltipContent>{dict.nav.github}</TooltipContent>
+                        </Tooltip>
+
                         <ButtonWithTooltip
                             tooltipContent={dict.nav.settings}
                             variant="ghost"
@@ -1326,7 +1337,6 @@ Continue from EXACTLY where you stopped.`,
                             />
                         </ButtonWithTooltip>
                         <div className="hidden sm:flex items-center gap-2">
-                            <LanguageToggle />
                             {!isMobile && (
                                 <ButtonWithTooltip
                                     tooltipContent={dict.nav.hidePanel}
