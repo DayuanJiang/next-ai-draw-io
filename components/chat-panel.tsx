@@ -556,6 +556,23 @@ Continue from EXACTLY where you stopped.`,
             }
         },
         onError: (error) => {
+            // Handle server-side quota limit (429 response)
+            if (error.message.includes("Daily request limit")) {
+                quotaManager.showQuotaLimitToast()
+                return
+            }
+            if (error.message.includes("Daily token limit")) {
+                quotaManager.showTokenLimitToast(dailyTokenLimit)
+                return
+            }
+            if (
+                error.message.includes("Rate limit exceeded") ||
+                error.message.includes("tokens per minute")
+            ) {
+                quotaManager.showTPMLimitToast()
+                return
+            }
+
             // Silence access code error in console since it's handled by UI
             if (!error.message.includes("Invalid or missing access code")) {
                 console.error("Chat error:", error)
@@ -632,16 +649,6 @@ Continue from EXACTLY where you stopped.`,
 
             // DEBUG: Log finish reason to diagnose truncation
             console.log("[onFinish] finishReason:", metadata?.finishReason)
-
-            // AI SDK 6 provides totalTokens directly
-            const totalTokens =
-                metadata && Number.isFinite(metadata.totalTokens)
-                    ? (metadata.totalTokens as number)
-                    : 0
-            if (totalTokens > 0) {
-                quotaManager.incrementTokenCount(totalTokens)
-                quotaManager.incrementTPMCount(totalTokens)
-            }
         },
         sendAutomaticallyWhen: ({ messages }) => {
             const isInContinuationMode = partialXmlRef.current.length > 0
@@ -684,25 +691,6 @@ Continue from EXACTLY where you stopped.`,
                 }
                 // Increment retry count for actual errors
                 autoRetryCountRef.current++
-            }
-
-            // Check quota limits before auto-retry
-            const tokenLimitCheck = quotaManager.checkTokenLimit()
-            if (!tokenLimitCheck.allowed) {
-                quotaManager.showTokenLimitToast(tokenLimitCheck.used)
-                autoRetryCountRef.current = 0
-                continuationRetryCountRef.current = 0
-                partialXmlRef.current = ""
-                return false
-            }
-
-            const tpmCheck = quotaManager.checkTPMLimit()
-            if (!tpmCheck.allowed) {
-                quotaManager.showTPMLimitToast()
-                autoRetryCountRef.current = 0
-                continuationRetryCountRef.current = 0
-                partialXmlRef.current = ""
-                return false
             }
 
             return true
@@ -921,9 +909,6 @@ Continue from EXACTLY where you stopped.`,
                 xmlSnapshotsRef.current.set(messageIndex, chartXml)
                 saveXmlSnapshots()
 
-                // Check all quota limits
-                if (!checkAllQuotaLimits()) return
-
                 sendChatMessage(parts, chartXml, previousXml, sessionId)
 
                 // Token count is tracked in onFinish with actual server usage
@@ -1001,30 +986,7 @@ Continue from EXACTLY where you stopped.`,
         saveXmlSnapshots()
     }
 
-    // Check all quota limits (daily requests, tokens, TPM)
-    const checkAllQuotaLimits = (): boolean => {
-        const limitCheck = quotaManager.checkDailyLimit()
-        if (!limitCheck.allowed) {
-            quotaManager.showQuotaLimitToast()
-            return false
-        }
-
-        const tokenLimitCheck = quotaManager.checkTokenLimit()
-        if (!tokenLimitCheck.allowed) {
-            quotaManager.showTokenLimitToast(tokenLimitCheck.used)
-            return false
-        }
-
-        const tpmCheck = quotaManager.checkTPMLimit()
-        if (!tpmCheck.allowed) {
-            quotaManager.showTPMLimitToast()
-            return false
-        }
-
-        return true
-    }
-
-    // Send chat message with headers and increment quota
+    // Send chat message with headers
     const sendChatMessage = (
         parts: any,
         xml: string,
@@ -1074,7 +1036,6 @@ Continue from EXACTLY where you stopped.`,
                 },
             },
         )
-        quotaManager.incrementRequestCount()
     }
 
     // Process files and append content to user text (handles PDF, text, and optionally images)
@@ -1162,13 +1123,8 @@ Continue from EXACTLY where you stopped.`,
             setMessages(newMessages)
         })
 
-        // Check all quota limits
-        if (!checkAllQuotaLimits()) return
-
         // Now send the message after state is guaranteed to be updated
         sendChatMessage(userParts, savedXml, previousXml, sessionId)
-
-        // Token count is tracked in onFinish with actual server usage
     }
 
     const handleEditMessage = async (messageIndex: number, newText: string) => {
@@ -1210,12 +1166,8 @@ Continue from EXACTLY where you stopped.`,
             setMessages(newMessages)
         })
 
-        // Check all quota limits
-        if (!checkAllQuotaLimits()) return
-
         // Now send the edited message after state is guaranteed to be updated
         sendChatMessage(newParts, savedXml, previousXml, sessionId)
-        // Token count is tracked in onFinish with actual server usage
     }
 
     // Collapsed view (desktop only)
