@@ -76,6 +76,7 @@ interface ChatPanelProps {
 const TOOL_ERROR_STATE = "output-error" as const
 const DEBUG = process.env.NODE_ENV === "development"
 const MAX_AUTO_RETRY_COUNT = 1
+const MAX_CONTINUATION_RETRY_COUNT = 2 // Limit for truncation continuation retries
 
 /**
  * Check if auto-resubmit should happen based on tool errors.
@@ -216,6 +217,8 @@ export default function ChatPanel({
 
     // Ref to track consecutive auto-retry count (reset on user action)
     const autoRetryCountRef = useRef(0)
+    // Ref to track continuation retry count (for truncation handling)
+    const continuationRetryCountRef = useRef(0)
 
     // Ref to accumulate partial XML when output is truncated due to maxOutputTokens
     // When partialXmlRef.current.length > 0, we're in continuation mode
@@ -656,15 +659,25 @@ Continue from EXACTLY where you stopped.`,
             if (!shouldRetry) {
                 // No error, reset retry count and clear state
                 autoRetryCountRef.current = 0
+                continuationRetryCountRef.current = 0
                 partialXmlRef.current = ""
                 return false
             }
 
-            // Continuation mode: unlimited retries (truncation continuation, not real errors)
-            // Server limits to 5 steps via stepCountIs(5)
+            // Continuation mode: limited retries for truncation handling
             if (isInContinuationMode) {
-                // Don't count against retry limit for continuation
-                // Quota checks still apply below
+                if (
+                    continuationRetryCountRef.current >=
+                    MAX_CONTINUATION_RETRY_COUNT
+                ) {
+                    toast.error(
+                        `Continuation retry limit reached (${MAX_CONTINUATION_RETRY_COUNT}). The diagram may be too complex.`,
+                    )
+                    continuationRetryCountRef.current = 0
+                    partialXmlRef.current = ""
+                    return false
+                }
+                continuationRetryCountRef.current++
             } else {
                 // Regular error: check retry count limit
                 if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
@@ -684,6 +697,7 @@ Continue from EXACTLY where you stopped.`,
             if (!tokenLimitCheck.allowed) {
                 quotaManager.showTokenLimitToast(tokenLimitCheck.used)
                 autoRetryCountRef.current = 0
+                continuationRetryCountRef.current = 0
                 partialXmlRef.current = ""
                 return false
             }
@@ -692,6 +706,7 @@ Continue from EXACTLY where you stopped.`,
             if (!tpmCheck.allowed) {
                 quotaManager.showTPMLimitToast()
                 autoRetryCountRef.current = 0
+                continuationRetryCountRef.current = 0
                 partialXmlRef.current = ""
                 return false
             }
@@ -1024,6 +1039,7 @@ Continue from EXACTLY where you stopped.`,
     ) => {
         // Reset all retry/continuation state on user-initiated message
         autoRetryCountRef.current = 0
+        continuationRetryCountRef.current = 0
         partialXmlRef.current = ""
 
         const config = getSelectedAIConfig()
