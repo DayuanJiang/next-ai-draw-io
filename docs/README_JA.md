@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目次](#目次)
   - [例](#例)
   - [機能](#機能)
+  - [MCPサーバー（プレビュー）](#mcpサーバープレビュー)
   - [はじめに](#はじめに)
     - [オンラインで試す](#オンラインで試す)
     - [Dockerで実行（推奨）](#dockerで実行推奨)
@@ -87,6 +88,36 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **インタラクティブなチャットインターフェース**：AIとリアルタイムでコミュニケーションしてダイアグラムを改善
 -   **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
 -   **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
+
+## MCPサーバー（プレビュー）
+
+> **プレビュー機能**：この機能は実験的であり、変更される可能性があります。
+
+MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"]
+    }
+  }
+}
+```
+
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+```
+
+Claudeにダイアグラムの作成を依頼：
+> 「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを作成してください」
+
+ダイアグラムがリアルタイムでブラウザに表示されます！
+
+詳細は[MCPサーバーREADME](../packages/mcp-server/README.md)をご覧ください（VS Code、Cursorなどのクライアント設定も含む）。
 
 ## はじめに
 

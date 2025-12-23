@@ -2,6 +2,7 @@ import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
+import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
@@ -18,6 +19,8 @@ export type ProviderName =
     | "openrouter"
     | "deepseek"
     | "siliconflow"
+    | "sglang"
+    | "gateway"
 
 interface ModelConfig {
     model: any
@@ -31,6 +34,11 @@ export interface ClientOverrides {
     baseUrl?: string | null
     apiKey?: string | null
     modelId?: string | null
+    // AWS Bedrock credentials
+    awsAccessKeyId?: string | null
+    awsSecretAccessKey?: string | null
+    awsRegion?: string | null
+    awsSessionToken?: string | null
 }
 
 // Providers that can be used with client-provided API keys
@@ -39,9 +47,12 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "anthropic",
     "google",
     "azure",
+    "bedrock",
     "openrouter",
     "deepseek",
     "siliconflow",
+    "sglang",
+    "gateway",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -333,8 +344,11 @@ function buildProviderOptions(
 
         case "deepseek":
         case "openrouter":
-        case "siliconflow": {
+        case "siliconflow":
+        case "sglang":
+        case "gateway": {
             // These providers don't have reasoning configs in AI SDK yet
+            // Gateway passes through to underlying providers which handle their own configs
             break
         }
 
@@ -356,6 +370,8 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     openrouter: "OPENROUTER_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
+    sglang: "SGLANG_API_KEY",
+    gateway: "AI_GATEWAY_API_KEY",
 }
 
 /**
@@ -371,7 +387,16 @@ function detectProvider(): ProviderName | null {
             continue
         }
         if (process.env[envVar]) {
-            configuredProviders.push(provider as ProviderName)
+            // Azure requires additional config (baseURL or resourceName)
+            if (provider === "azure") {
+                const hasBaseUrl = !!process.env.AZURE_BASE_URL
+                const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
+                if (hasBaseUrl || hasResourceName) {
+                    configuredProviders.push(provider as ProviderName)
+                }
+            } else {
+                configuredProviders.push(provider as ProviderName)
+            }
         }
     }
 
@@ -393,13 +418,25 @@ function validateProviderCredentials(provider: ProviderName): void {
                 `Please set it in your .env.local file.`,
         )
     }
+
+    // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition to API key
+    if (provider === "azure") {
+        const hasBaseUrl = !!process.env.AZURE_BASE_URL
+        const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
+        if (!hasBaseUrl && !hasResourceName) {
+            throw new Error(
+                `Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME to be set. ` +
+                    `Please set one in your .env.local file.`,
+            )
+        }
+    }
 }
 
 /**
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -415,8 +452,20 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  * - SILICONFLOW_API_KEY: SiliconFlow API key
  * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.com/v1)
+ * - SGLANG_API_KEY: SGLang API key
+ * - SGLANG_BASE_URL: SGLang endpoint (optional)
  */
 export function getAIModel(overrides?: ClientOverrides): ModelConfig {
+    // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
+    // If a custom baseUrl is provided, an API key MUST also be provided.
+    // This prevents attackers from redirecting server API keys to malicious endpoints.
+    if (overrides?.baseUrl && !overrides?.apiKey) {
+        throw new Error(
+            `API key is required when using a custom base URL. ` +
+                `Please provide your own API key in Settings.`,
+        )
+    }
+
     // Check if client is providing their own provider override
     const isClientOverride = !!(overrides?.provider && overrides?.apiKey)
 
@@ -464,6 +513,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             if (configured.length === 0) {
                 throw new Error(
                     `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
+                        `- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
                         `- DEEPSEEK_API_KEY for DeepSeek\n` +
                         `- OPENAI_API_KEY for OpenAI\n` +
                         `- ANTHROPIC_API_KEY for Anthropic\n` +
@@ -472,6 +522,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                         `- OPENROUTER_API_KEY for OpenRouter\n` +
                         `- AZURE_API_KEY for Azure\n` +
                         `- SILICONFLOW_API_KEY for SiliconFlow\n` +
+                        `- SGLANG_API_KEY for SGLang\n` +
                         `Or set AI_PROVIDER=ollama for local Ollama.`,
                 )
             } else {
@@ -499,12 +550,25 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
     switch (provider) {
         case "bedrock": {
-            // Use credential provider chain for IAM role support (Lambda, EC2, etc.)
-            // Falls back to env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
-            const bedrockProvider = createAmazonBedrock({
-                region: process.env.AWS_REGION || "us-west-2",
-                credentialProvider: fromNodeProviderChain(),
-            })
+            // Use client-provided credentials if available, otherwise fall back to IAM/env vars
+            const hasClientCredentials =
+                overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey
+            const bedrockRegion =
+                overrides?.awsRegion || process.env.AWS_REGION || "us-west-2"
+
+            const bedrockProvider = hasClientCredentials
+                ? createAmazonBedrock({
+                      region: bedrockRegion,
+                      accessKeyId: overrides.awsAccessKeyId!,
+                      secretAccessKey: overrides.awsSecretAccessKey!,
+                      ...(overrides?.awsSessionToken && {
+                          sessionToken: overrides.awsSessionToken,
+                      }),
+                  })
+                : createAmazonBedrock({
+                      region: bedrockRegion,
+                      credentialProvider: fromNodeProviderChain(),
+                  })
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
@@ -641,9 +705,136 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "sglang": {
+            const apiKey = overrides?.apiKey || process.env.SGLANG_API_KEY
+            const baseURL = overrides?.baseUrl || process.env.SGLANG_BASE_URL
+
+            const sglangProvider = createOpenAI({
+                apiKey,
+                baseURL,
+                // Add a custom fetch wrapper to intercept and fix the stream from sglang
+                fetch: async (url, options) => {
+                    const response = await fetch(url, options)
+                    if (!response.body) {
+                        return response
+                    }
+
+                    // Create a transform stream to fix the non-compliant sglang stream
+                    let buffer = ""
+                    const decoder = new TextDecoder()
+
+                    const transformStream = new TransformStream({
+                        transform(chunk, controller) {
+                            buffer += decoder.decode(chunk, { stream: true })
+                            // Process all complete messages in the buffer
+                            let messageEndPos
+                            while (
+                                (messageEndPos = buffer.indexOf("\n\n")) !== -1
+                            ) {
+                                const message = buffer.substring(
+                                    0,
+                                    messageEndPos,
+                                )
+                                buffer = buffer.substring(messageEndPos + 2) // Move past the '\n\n'
+
+                                if (message.startsWith("data: ")) {
+                                    const jsonStr = message.substring(6).trim()
+                                    if (jsonStr === "[DONE]") {
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                message + "\n\n",
+                                            ),
+                                        )
+                                        continue
+                                    }
+                                    try {
+                                        const data = JSON.parse(jsonStr)
+                                        const delta = data.choices?.[0]?.delta
+
+                                        if (delta) {
+                                            // Fix 1: remove invalid empty role
+                                            if (delta.role === "") {
+                                                delete delta.role
+                                            }
+                                            // Fix 2: remove non-standard reasoning_content field
+                                            if ("reasoning_content" in delta) {
+                                                delete delta.reasoning_content
+                                            }
+                                        }
+
+                                        // Re-serialize and forward the corrected data with the correct SSE format
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                `data: ${JSON.stringify(data)}\n\n`,
+                                            ),
+                                        )
+                                    } catch (e) {
+                                        // If parsing fails, forward the original message to avoid breaking the stream.
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                message + "\n\n",
+                                            ),
+                                        )
+                                    }
+                                } else if (message.trim() !== "") {
+                                    // Pass through other message types (e.g., 'event: ...')
+                                    controller.enqueue(
+                                        new TextEncoder().encode(
+                                            message + "\n\n",
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        flush(controller) {
+                            // If there's anything left in the buffer, forward it.
+                            if (buffer.trim()) {
+                                controller.enqueue(
+                                    new TextEncoder().encode(buffer),
+                                )
+                            }
+                        },
+                    })
+
+                    const transformedBody =
+                        response.body.pipeThrough(transformStream)
+
+                    // Return a new response with the transformed body
+                    return new Response(transformedBody, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: response.headers,
+                    })
+                },
+            })
+            model = sglangProvider.chat(modelId)
+            break
+        }
+
+        case "gateway": {
+            // Vercel AI Gateway - unified access to multiple AI providers
+            // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
+            // See: https://vercel.com/ai-gateway
+            const apiKey = overrides?.apiKey || process.env.AI_GATEWAY_API_KEY
+            const baseURL =
+                overrides?.baseUrl || process.env.AI_GATEWAY_BASE_URL
+            // Only use custom configuration if explicitly set (local dev or custom Gateway)
+            // Otherwise undefined → AI SDK uses Vercel default (https://ai-gateway.vercel.sh/v1/ai) + OIDC
+            if (baseURL || overrides?.apiKey) {
+                const customGateway = createGateway({
+                    apiKey,
+                    ...(baseURL && { baseURL }),
+                })
+                model = customGateway(modelId)
+            } else {
+                model = gateway(modelId)
+            }
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway`,
             )
     }
 

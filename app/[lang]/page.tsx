@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
@@ -16,8 +16,15 @@ const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        resetDrawioReady,
+        saveDiagramToStorage,
+        showSaveDialog,
+        setShowSaveDialog,
+    } = useDiagram()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
@@ -26,6 +33,29 @@ export default function Home() {
     const [closeProtection, setCloseProtection] = useState(false)
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
+    const isSavingRef = useRef(false)
+    const mouseOverDrawioRef = useRef(false)
+    const isMobileRef = useRef(false)
+
+    // Reset saving flag when dialog closes (with delay to ignore lingering save events from draw.io)
+    useEffect(() => {
+        if (!showSaveDialog) {
+            const timeout = setTimeout(() => {
+                isSavingRef.current = false
+            }, 1000)
+            return () => clearTimeout(timeout)
+        }
+    }, [showSaveDialog])
+
+    // Handle save from draw.io's built-in save button
+    // Note: draw.io sends save events for various reasons (focus changes, etc.)
+    // We use mouse position to determine if the user is interacting with draw.io
+    const handleDrawioSave = useCallback(() => {
+        if (!mouseOverDrawioRef.current) return
+        if (isSavingRef.current) return
+        isSavingRef.current = true
+        setShowSaveDialog(true)
+    }, [setShowSaveDialog])
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -36,12 +66,10 @@ export default function Home() {
 
         const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
         if (savedDarkMode !== null) {
-            // Use saved preference
             const isDark = savedDarkMode === "true"
             setDarkMode(isDark)
             document.documentElement.classList.toggle("dark", isDark)
         } else {
-            // First visit: match browser preference
             const prefersDark = window.matchMedia(
                 "(prefers-color-scheme: dark)",
             ).matches
@@ -59,25 +87,44 @@ export default function Home() {
         setIsLoaded(true)
     }, [])
 
-    const toggleDarkMode = () => {
+    const handleDarkModeChange = async () => {
+        await saveDiagramToStorage()
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
-        // Reset so onDrawioLoad fires again after remount
         resetDrawioReady()
     }
 
-    // Check mobile
+    const handleDrawioUiChange = async () => {
+        await saveDiagramToStorage()
+        const newUi = drawioUi === "min" ? "sketch" : "min"
+        localStorage.setItem("drawio-theme", newUi)
+        setDrawioUi(newUi)
+        resetDrawioReady()
+    }
+
+    // Check mobile - save diagram and reset draw.io before crossing breakpoint
+    const isInitialRenderRef = useRef(true)
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768)
+            const newIsMobile = window.innerWidth < 768
+            if (
+                !isInitialRenderRef.current &&
+                newIsMobile !== isMobileRef.current
+            ) {
+                saveDiagramToStorage().catch(() => {})
+                resetDrawioReady()
+            }
+            isMobileRef.current = newIsMobile
+            isInitialRenderRef.current = false
+            setIsMobile(newIsMobile)
         }
 
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [])
+    }, [saveDiagramToStorage, resetDrawioReady])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -124,11 +171,9 @@ export default function Home() {
             <MessageBridge />
             <ResizablePanelGroup
                 id="main-panel-group"
-                key={isMobile ? "mobile" : "desktop"}
                 direction={isMobile ? "vertical" : "horizontal"}
                 className="h-full"
             >
-                {/* Draw.io Canvas */}
                 <ResizablePanel
                     id="drawio-panel"
                     defaultSize={isMobile ? 50 : 67}
@@ -138,6 +183,12 @@ export default function Home() {
                         className={`h-full relative ${
                             isMobile ? "p-1" : "p-2"
                         }`}
+                        onMouseEnter={() => {
+                            mouseOverDrawioRef.current = true
+                        }}
+                        onMouseLeave={() => {
+                            mouseOverDrawioRef.current = false
+                        }}
                     >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30">
                             {isLoaded ? (
@@ -146,6 +197,7 @@ export default function Home() {
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
+                                    onSave={handleDrawioSave}
                                     baseUrl={drawioBaseUrl}
                                     urlParameters={{
                                         ui: drawioUi,
@@ -169,6 +221,7 @@ export default function Home() {
 
                 {/* Chat Panel */}
                 <ResizablePanel
+                    key={isMobile ? "mobile" : "desktop"}
                     id="chat-panel"
                     ref={chatPanelRef}
                     defaultSize={isMobile ? 50 : 33}
@@ -184,15 +237,9 @@ export default function Home() {
                             isVisible={isChatVisible}
                             onToggleVisibility={toggleChatPanel}
                             drawioUi={drawioUi}
-                            onToggleDrawioUi={() => {
-                                const newUi =
-                                    drawioUi === "min" ? "sketch" : "min"
-                                localStorage.setItem("drawio-theme", newUi)
-                                setDrawioUi(newUi)
-                                resetDrawioReady()
-                            }}
+                            onToggleDrawioUi={handleDrawioUiChange}
                             darkMode={darkMode}
-                            onToggleDarkMode={toggleDarkMode}
+                            onToggleDarkMode={handleDarkModeChange}
                             isMobile={isMobile}
                             onCloseProtectionChange={setCloseProtection}
                         />
