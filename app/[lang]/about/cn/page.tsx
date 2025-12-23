@@ -117,9 +117,9 @@ export default function AboutCN() {
                                     (TPS/TPM)。一旦超限，系统就会暂停，导致请求失败。
                                 </p>
                                 <p>
-                                    由于使用量过高，我已将模型从 Claude 更换为{" "}
+                                    由于使用量过高，我已将模型从 Opus 4.5 更换为{" "}
                                     <span className="font-semibold text-amber-700">
-                                        minimax-m2
+                                        Haiku 4.5
                                     </span>
                                     ，以降低成本。
                                 </p>

@@ -129,9 +129,9 @@ export default function About() {
                                 </p>
                                 <p>
                                     Due to the high usage, I have changed the
-                                    model from Claude to{" "}
+                                    model from Opus 4.5 to{" "}
                                     <span className="font-semibold text-amber-700">
-                                        minimax-m2
+                                        Haiku 4.5
                                     </span>
                                     , which is more cost-effective.
                                 </p>
