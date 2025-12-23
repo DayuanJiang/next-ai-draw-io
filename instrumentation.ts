@@ -19,10 +19,13 @@ export function register() {
             const spanName = otelSpan.name
             // Skip Next.js HTTP infrastructure spans
             if (
-                spanName.startsWith("POST /") ||
-                spanName.startsWith("GET /") ||
+                spanName.startsWith("POST") ||
+                spanName.startsWith("GET") ||
+                spanName.startsWith("RSC") ||
                 spanName.includes("BaseServer") ||
-                spanName.includes("handleRequest")
+                spanName.includes("handleRequest") ||
+                spanName.includes("resolve page") ||
+                spanName.includes("start response")
             ) {
                 return false
             }
@@ -36,4 +39,5 @@ export function register() {
 
     // Register globally so AI SDK's telemetry also uses this processor
     tracerProvider.register()
+    console.log("[Langfuse] Instrumentation initialized successfully")
 }
