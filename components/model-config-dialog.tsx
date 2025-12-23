@@ -103,41 +103,40 @@ function ProviderLogo({
     )
 }
 
-// Reusable validation button component
-function ValidationButton({
-    status,
-    onClick,
-    disabled,
-    dict,
+// Configuration section with title and optional action
+function ConfigSection({
+    title,
+    icon: Icon,
+    action,
+    children,
 }: {
-    status: ValidationStatus
-    onClick: () => void
-    disabled: boolean
-    dict: ReturnType<typeof useDictionary>
+    title: string
+    icon: React.ComponentType<{ className?: string }>
+    action?: React.ReactNode
+    children: React.ReactNode
 }) {
     return (
-        <Button
-            variant={status === "success" ? "outline" : "default"}
-            size="sm"
-            onClick={onClick}
-            disabled={disabled}
-            className={cn(
-                "h-9 px-4 min-w-[80px]",
-                status === "success" &&
-                    "text-emerald-600 border-emerald-200 dark:border-emerald-800",
-            )}
-        >
-            {status === "validating" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-            ) : status === "success" ? (
-                <>
-                    <Check className="h-4 w-4 mr-1.5" />
-                    {dict.modelConfig.verified}
-                </>
-            ) : (
-                dict.modelConfig.test
-            )}
-        </Button>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {title}
+                    </span>
+                </div>
+                {action}
+            </div>
+            {children}
+        </div>
+    )
+}
+
+// Card wrapper with subtle depth
+function ConfigCard({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="rounded-2xl border border-border-subtle bg-surface-2/50 p-5 space-y-5">
+            {children}
+        </div>
     )
 }
 
@@ -154,7 +153,6 @@ export function ModelConfigDialog({
     const [validationStatus, setValidationStatus] =
         useState<ValidationStatus>("idle")
     const [validationError, setValidationError] = useState<string>("")
-    const [scrollState, setScrollState] = useState({ top: false, bottom: true })
     const [customModelInput, setCustomModelInput] = useState("")
     const scrollRef = useRef<HTMLDivElement>(null)
     const validationResetTimeoutRef = useRef<ReturnType<
@@ -185,26 +183,6 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
-
-    // Track scroll position for gradient shadows
-    useEffect(() => {
-        const scrollEl = scrollRef.current?.querySelector(
-            "[data-radix-scroll-area-viewport]",
-        ) as HTMLElement | null
-        if (!scrollEl) return
-
-        const handleScroll = () => {
-            const { scrollTop, scrollHeight, clientHeight } = scrollEl
-            setScrollState({
-                top: scrollTop > 10,
-                bottom: scrollTop < scrollHeight - clientHeight - 10,
-            })
-        }
-
-        handleScroll() // Initial check
-        scrollEl.addEventListener("scroll", handleScroll)
-        return () => scrollEl.removeEventListener("scroll", handleScroll)
-    }, [selectedProvider])
 
     // Cleanup validation reset timeout on unmount
     useEffect(() => {
@@ -390,34 +368,35 @@ export function ModelConfigDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl h-[75vh] max-h-[700px] overflow-hidden flex flex-col gap-0 p-0">
-                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-primary/5 via-primary/3 to-transparent">
-                    <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold">
-                        <div className="p-1.5 rounded-lg bg-primary/10">
+            <DialogContent className="sm:max-w-4xl h-[80vh] max-h-[800px] overflow-hidden flex flex-col gap-0 p-0">
+                {/* Header */}
+                <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+                    <DialogTitle className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-surface-2">
                             <Server className="h-5 w-5 text-primary" />
                         </div>
                         {dict.modelConfig?.title || "AI Model Configuration"}
                     </DialogTitle>
-                    <DialogDescription className="text-sm">
+                    <DialogDescription className="mt-1">
                         {dict.modelConfig?.description ||
                             "Configure multiple AI providers and models for your workspace"}
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex flex-1 min-h-0 overflow-hidden">
+                <div className="flex flex-1 min-h-0 overflow-hidden border-t border-border-subtle">
                     {/* Provider List (Left Sidebar) */}
-                    <div className="w-56 flex-shrink-0 flex flex-col border-r bg-muted/20">
-                        <div className="px-4 py-3 border-b">
+                    <div className="w-60 shrink-0 flex flex-col bg-surface-1/50 border-r border-border-subtle">
+                        <div className="px-4 py-3">
                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                 {dict.modelConfig.providers}
                             </span>
                         </div>
 
-                        <ScrollArea className="flex-1">
-                            <div className="p-2">
+                        <ScrollArea className="flex-1 px-2">
+                            <div className="space-y-1 pb-2">
                                 {config.providers.length === 0 ? (
                                     <div className="px-3 py-8 text-center">
-                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-muted mb-3">
+                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface-2 mb-3">
                                             <Plus className="h-5 w-5 text-muted-foreground" />
                                         </div>
                                         <p className="text-xs text-muted-foreground">
@@ -425,67 +404,78 @@ export function ModelConfigDialog({
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col gap-1">
-                                        {config.providers.map((provider) => (
-                                            <button
-                                                key={provider.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setSelectedProviderId(
-                                                        provider.id,
-                                                    )
-                                                    setValidationStatus(
-                                                        provider.validated
-                                                            ? "success"
-                                                            : "idle",
-                                                    )
-                                                    setShowApiKey(false)
-                                                }}
+                                    config.providers.map((provider) => (
+                                        <button
+                                            key={provider.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedProviderId(
+                                                    provider.id,
+                                                )
+                                                setValidationStatus(
+                                                    provider.validated
+                                                        ? "success"
+                                                        : "idle",
+                                                )
+                                                setShowApiKey(false)
+                                            }}
+                                            className={cn(
+                                                "group flex items-center gap-3 px-3 py-2.5 rounded-xl w-full",
+                                                "text-left text-sm transition-all duration-150",
+                                                "hover:bg-interactive-hover",
+                                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                                selectedProviderId ===
+                                                    provider.id &&
+                                                    "bg-surface-0 shadow-sm ring-1 ring-border-subtle",
+                                            )}
+                                        >
+                                            <div
                                                 className={cn(
-                                                    "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                                    "w-8 h-8 rounded-lg flex items-center justify-center",
+                                                    "bg-surface-2 transition-colors duration-150",
                                                     selectedProviderId ===
                                                         provider.id &&
-                                                        "bg-background shadow-sm ring-1 ring-border",
+                                                        "bg-primary/10",
                                                 )}
                                             >
                                                 <ProviderLogo
                                                     provider={provider.provider}
                                                     className="flex-shrink-0"
                                                 />
-                                                <span className="flex-1 truncate font-medium">
-                                                    {getProviderDisplayName(
-                                                        provider,
-                                                    )}
-                                                </span>
-                                                {provider.validated ? (
-                                                    <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10">
-                                                        <Check className="h-3 w-3 text-emerald-500" />
-                                                    </div>
-                                                ) : (
-                                                    <ChevronRight
-                                                        className={cn(
-                                                            "h-4 w-4 text-muted-foreground/50 transition-transform",
-                                                            selectedProviderId ===
-                                                                provider.id &&
-                                                                "translate-x-0.5",
-                                                        )}
-                                                    />
+                                            </div>
+                                            <span className="flex-1 truncate font-medium">
+                                                {getProviderDisplayName(
+                                                    provider,
                                                 )}
-                                            </button>
-                                        ))}
-                                    </div>
+                                            </span>
+                                            {provider.validated ? (
+                                                <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-success-muted">
+                                                    <Check className="h-3 w-3 text-success" />
+                                                </div>
+                                            ) : (
+                                                <ChevronRight
+                                                    className={cn(
+                                                        "h-4 w-4 text-muted-foreground/50 transition-transform duration-150",
+                                                        selectedProviderId ===
+                                                            provider.id &&
+                                                            "translate-x-0.5",
+                                                    )}
+                                                />
+                                            )}
+                                        </button>
+                                    ))
                                 )}
                             </div>
                         </ScrollArea>
 
                         {/* Add Provider */}
-                        <div className="p-2 border-t">
+                        <div className="p-3 border-t border-border-subtle">
                             <Select
                                 onValueChange={(v) =>
                                     handleAddProvider(v as ProviderName)
                                 }
                             >
-                                <SelectTrigger className="h-9 bg-background hover:bg-accent">
+                                <SelectTrigger className="w-full h-9 rounded-xl bg-surface-0 border-border-subtle hover:bg-interactive-hover">
                                     <Plus className="h-4 w-4 mr-2 text-muted-foreground" />
                                     <SelectValue
                                         placeholder={
@@ -514,41 +504,23 @@ export function ModelConfigDialog({
                     </div>
 
                     {/* Provider Details (Right Panel) */}
-                    <div className="flex-1 min-w-0 overflow-hidden relative">
+                    <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
                         {selectedProvider ? (
                             <>
-                                {/* Top gradient shadow */}
-                                <div
-                                    className={cn(
-                                        "absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-                                        scrollState.top
-                                            ? "opacity-100"
-                                            : "opacity-0",
-                                    )}
-                                />
-                                {/* Bottom gradient shadow */}
-                                <div
-                                    className={cn(
-                                        "absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-                                        scrollState.bottom
-                                            ? "opacity-100"
-                                            : "opacity-0",
-                                    )}
-                                />
-                                <ScrollArea className="h-full" ref={scrollRef}>
-                                    <div className="p-6 space-y-6">
+                                <ScrollArea className="flex-1" ref={scrollRef}>
+                                    <div className="p-6 space-y-8">
                                         {/* Provider Header */}
                                         <div className="flex items-center gap-3">
-                                            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted">
+                                            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-surface-2">
                                                 <ProviderLogo
                                                     provider={
                                                         selectedProvider.provider
                                                     }
-                                                    className="h-5 w-5"
+                                                    className="h-6 w-6"
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="font-semibold text-base">
+                                                <h3 className="font-semibold text-lg tracking-tight">
                                                     {
                                                         PROVIDER_INFO[
                                                             selectedProvider
@@ -556,7 +528,7 @@ export function ModelConfigDialog({
                                                         ].label
                                                     }
                                                 </h3>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground">
                                                     {selectedProvider.models
                                                         .length === 0
                                                         ? dict.modelConfig
@@ -573,8 +545,8 @@ export function ModelConfigDialog({
                                                 </p>
                                             </div>
                                             {selectedProvider.validated && (
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                                                    <Check className="h-3.5 w-3.5" />
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-success-muted text-success">
+                                                    <Check className="h-3.5 w-3.5 animate-check-pop" />
                                                     <span className="text-xs font-medium">
                                                         {
                                                             dict.modelConfig
@@ -586,18 +558,13 @@ export function ModelConfigDialog({
                                         </div>
 
                                         {/* Configuration Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                                <Settings2 className="h-4 w-4" />
-                                                <span>
-                                                    {
-                                                        dict.modelConfig
-                                                            .configuration
-                                                    }
-                                                </span>
-                                            </div>
-
-                                            <div className="rounded-xl border bg-card p-4 space-y-4">
+                                        <ConfigSection
+                                            title={
+                                                dict.modelConfig.configuration
+                                            }
+                                            icon={Settings2}
+                                        >
+                                            <ConfigCard>
                                                 {/* Display Name */}
                                                 <div className="space-y-2">
                                                     <Label
@@ -856,7 +823,7 @@ export function ModelConfigDialog({
                                                                     "h-9 px-4",
                                                                     validationStatus ===
                                                                         "success" &&
-                                                                        "text-emerald-600 border-emerald-200 dark:border-emerald-800",
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
                                                                 )}
                                                             >
                                                                 {validationStatus ===
@@ -865,7 +832,7 @@ export function ModelConfigDialog({
                                                                 ) : validationStatus ===
                                                                   "success" ? (
                                                                     <>
-                                                                        <Check className="h-4 w-4 mr-1.5" />
+                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
                                                                         {
                                                                             dict
                                                                                 .modelConfig
@@ -975,7 +942,7 @@ export function ModelConfigDialog({
                                                                         "h-9 px-4",
                                                                         validationStatus ===
                                                                             "success" &&
-                                                                            "text-emerald-600 border-emerald-200 dark:border-emerald-800",
+                                                                            "text-success border-success/30 bg-success-muted hover:bg-success-muted",
                                                                     )}
                                                                 >
                                                                     {validationStatus ===
@@ -984,7 +951,7 @@ export function ModelConfigDialog({
                                                                     ) : validationStatus ===
                                                                       "success" ? (
                                                                         <>
-                                                                            <Check className="h-4 w-4 mr-1.5" />
+                                                                            <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
                                                                             {
                                                                                 dict
                                                                                     .modelConfig
@@ -1053,26 +1020,19 @@ export function ModelConfigDialog({
                                                                         .modelConfig
                                                                         .customEndpoint
                                                                 }
-                                                                className="h-9 font-mono text-xs"
+                                                                className="h-9 rounded-xl font-mono text-xs"
                                                             />
                                                         </div>
                                                     </>
                                                 )}
-                                            </div>
-                                        </div>
+                                            </ConfigCard>
+                                        </ConfigSection>
 
                                         {/* Models Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                                    <Sparkles className="h-4 w-4" />
-                                                    <span>
-                                                        {
-                                                            dict.modelConfig
-                                                                .models
-                                                        }
-                                                    </span>
-                                                </div>
+                                        <ConfigSection
+                                            title={dict.modelConfig.models}
+                                            icon={Sparkles}
+                                            action={
                                                 <div className="flex items-center gap-2">
                                                     <div className="relative">
                                                         <Input
@@ -1088,7 +1048,6 @@ export function ModelConfigDialog({
                                                                     e.target
                                                                         .value,
                                                                 )
-                                                                // Clear duplicate error when typing
                                                                 if (
                                                                     duplicateError
                                                                 ) {
@@ -1117,12 +1076,11 @@ export function ModelConfigDialog({
                                                                 }
                                                             }}
                                                             className={cn(
-                                                                "h-8 w-48 font-mono text-xs",
+                                                                "h-8 w-44 rounded-lg font-mono text-xs",
                                                                 duplicateError &&
                                                                     "border-destructive focus-visible:ring-destructive",
                                                             )}
                                                         />
-                                                        {/* Show duplicate error for custom model input */}
                                                         {duplicateError && (
                                                             <p className="absolute top-full left-0 mt-1 text-[11px] text-destructive">
                                                                 {duplicateError}
@@ -1132,7 +1090,7 @@ export function ModelConfigDialog({
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="h-8"
+                                                        className="h-8 rounded-lg"
                                                         onClick={() => {
                                                             if (
                                                                 customModelInput.trim()
@@ -1169,7 +1127,7 @@ export function ModelConfigDialog({
                                                             0
                                                         }
                                                     >
-                                                        <SelectTrigger className="w-32 h-8 hover:bg-accent">
+                                                        <SelectTrigger className="w-28 h-8 rounded-lg hover:bg-interactive-hover">
                                                             <span className="text-xs">
                                                                 {availableSuggestions.length ===
                                                                 0
@@ -1202,14 +1160,14 @@ export function ModelConfigDialog({
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
-                                            </div>
-
+                                            }
+                                        >
                                             {/* Model List */}
-                                            <div className="rounded-xl border bg-card overflow-hidden min-h-[120px]">
+                                            <div className="rounded-2xl border border-border-subtle bg-surface-2/30 overflow-hidden min-h-[120px]">
                                                 {selectedProvider.models
                                                     .length === 0 ? (
-                                                    <div className="p-4 text-center h-full flex flex-col items-center justify-center">
-                                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-muted mb-2">
+                                                    <div className="p-6 text-center h-full flex flex-col items-center justify-center">
+                                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface-2 mb-3">
                                                             <Sparkles className="h-5 w-5 text-muted-foreground" />
                                                         </div>
                                                         <p className="text-sm text-muted-foreground">
@@ -1220,7 +1178,7 @@ export function ModelConfigDialog({
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <div className="divide-y">
+                                                    <div className="divide-y divide-border-subtle">
                                                         {selectedProvider.models.map(
                                                             (model, index) => (
                                                                 <div
@@ -1228,16 +1186,7 @@ export function ModelConfigDialog({
                                                                         model.id
                                                                     }
                                                                     className={cn(
-                                                                        "transition-colors hover:bg-muted/30",
-                                                                        index ===
-                                                                            0 &&
-                                                                            "rounded-t-xl",
-                                                                        index ===
-                                                                            selectedProvider
-                                                                                .models
-                                                                                .length -
-                                                                                1 &&
-                                                                            "rounded-b-xl",
+                                                                        "transition-colors duration-150 hover:bg-interactive-hover/50",
                                                                     )}
                                                                 >
                                                                     <div className="flex items-center gap-3 p-3 min-w-0">
@@ -1264,8 +1213,8 @@ export function ModelConfigDialog({
                                                                             ) : model.validated ===
                                                                               true ? (
                                                                                 // Valid
-                                                                                <div className="w-full h-full rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                                                                                    <Check className="h-4 w-4 text-emerald-500" />
+                                                                                <div className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center">
+                                                                                    <Check className="h-4 w-4 text-success" />
                                                                                 </div>
                                                                             ) : model.validated ===
                                                                               false ? (
@@ -1466,7 +1415,7 @@ export function ModelConfigDialog({
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
+                                        </ConfigSection>
 
                                         {/* Danger Zone */}
                                         <div className="pt-4">
@@ -1476,7 +1425,7 @@ export function ModelConfigDialog({
                                                 onClick={() =>
                                                     setDeleteConfirmOpen(true)
                                                 }
-                                                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl"
                                             >
                                                 <Trash2 className="h-4 w-4 mr-2" />
                                                 {
@@ -1490,10 +1439,10 @@ export function ModelConfigDialog({
                             </>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 mb-4">
-                                    <Server className="h-8 w-8 text-primary/60" />
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-surface-2 mb-4">
+                                    <Server className="h-8 w-8 text-muted-foreground" />
                                 </div>
-                                <h3 className="font-semibold mb-1">
+                                <h3 className="font-semibold text-lg tracking-tight mb-1">
                                     {dict.modelConfig.configureProviders}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-xs">
@@ -1505,7 +1454,7 @@ export function ModelConfigDialog({
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-3 border-t bg-muted/20">
+                <div className="px-6 py-3 border-t border-border-subtle bg-surface-1/30 shrink-0">
                     <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1.5">
                         <Key className="h-3 w-3" />
                         {dict.modelConfig.apiKeyStored}
