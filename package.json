@@ -24,21 +24,21 @@
         "dist:all": "npm run electron:build && npm run electron:prepare && npx electron-builder --mac --win --linux"
     },
     "dependencies": {
-        "@ai-sdk/amazon-bedrock": "^3.0.70",
-        "@ai-sdk/anthropic": "^2.0.44",
-        "@ai-sdk/azure": "^2.0.69",
-        "@ai-sdk/deepseek": "^1.0.30",
-        "@ai-sdk/gateway": "^2.0.21",
-        "@ai-sdk/google": "^2.0.0",
-        "@ai-sdk/openai": "^2.0.19",
-        "@ai-sdk/react": "^2.0.107",
+        "@ai-sdk/amazon-bedrock": "^4.0.1",
+        "@ai-sdk/anthropic": "^3.0.0",
+        "@ai-sdk/azure": "^3.0.0",
+        "@ai-sdk/deepseek": "^2.0.0",
+        "@ai-sdk/gateway": "^3.0.0",
+        "@ai-sdk/google": "^3.0.0",
+        "@ai-sdk/openai": "^3.0.0",
+        "@ai-sdk/react": "^3.0.1",
         "@aws-sdk/credential-providers": "^3.943.0",
         "@formatjs/intl-localematcher": "^0.7.2",
         "@langfuse/client": "^4.4.9",
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
-        "@openrouter/ai-sdk-provider": "^1.2.3",
+        "@openrouter/ai-sdk-provider": "^1.5.4",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -53,7 +53,7 @@
         "@radix-ui/react-tooltip": "^1.1.8",
         "@radix-ui/react-use-controllable-state": "^1.2.2",
         "@xmldom/xmldom": "^0.9.8",
-        "ai": "^5.0.89",
+        "ai": "^6.0.1",
         "base-64": "^1.0.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -111,5 +111,10 @@
         "tailwindcss": "^4",
         "typescript": "^5",
         "wait-on": "^9.0.3"
+    },
+    "overrides": {
+        "@openrouter/ai-sdk-provider": {
+            "ai": "^6.0.1"
+        }
     }
 }
