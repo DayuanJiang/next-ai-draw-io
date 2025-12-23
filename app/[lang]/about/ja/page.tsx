@@ -126,9 +126,9 @@ export default function AboutJA() {
                                 </p>
                                 <p>
                                     利用量の増加に伴い、コスト削減のためモデルを
-                                    Claude から{" "}
+                                    Opus 4.5 から{" "}
                                     <span className="font-semibold text-amber-700">
-                                        minimax-m2
+                                        Haiku 4.5
                                     </span>{" "}
                                     に変更しました。
                                 </p>
