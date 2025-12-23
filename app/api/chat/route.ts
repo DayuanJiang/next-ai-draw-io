@@ -162,9 +162,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     const { messages, xml, previousXml, sessionId } = await req.json()
 
-    // Get user IP for Langfuse tracking
+    // Get user IP for Langfuse tracking (hashed for privacy)
     const forwardedFor = req.headers.get("x-forwarded-for")
-    const userId = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+    const rawIp = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+    const userId =
+        rawIp === "anonymous"
+            ? rawIp
+            : `user-${Buffer.from(rawIp).toString("base64url").slice(0, 8)}`
 
     // Validate sessionId for Langfuse (must be string, max 200 chars)
     const validSessionId =
@@ -506,12 +510,9 @@ ${userInputText}
                 userId,
             }),
         }),
-        onFinish: ({ text, usage }) => {
-            // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
-            setTraceOutput(text, {
-                promptTokens: usage?.inputTokens,
-                completionTokens: usage?.outputTokens,
-            })
+        onFinish: ({ text }) => {
+            // AI SDK 6 telemetry auto-reports token usage on its spans
+            setTraceOutput(text)
         },
         tools: {
             // Client-side tool that will be executed on the client
@@ -681,20 +682,9 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage
-                if (!usage) {
-                    console.warn(
-                        "[messageMetadata] No usage data in finish part",
-                    )
-                    return undefined
-                }
-                // Total input = non-cached + cached (these are separate counts)
-                // Note: cacheWriteInputTokens is not available on finish part
-                const totalInputTokens =
-                    (usage.inputTokens ?? 0) +
-                    (usage.inputTokenDetails?.cacheReadTokens ?? 0)
+                // AI SDK 6 provides totalTokens directly
                 return {
-                    inputTokens: totalInputTokens,
-                    outputTokens: usage.outputTokens ?? 0,
+                    totalTokens: usage?.totalTokens ?? 0,
                     finishReason: (part as any).finishReason,
                 }
             }

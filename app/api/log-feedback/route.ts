@@ -27,9 +27,18 @@ export async function POST(req: Request) {
 
     const { messageId, feedback, sessionId } = data
 
-    // Get user IP for tracking
+    // Skip logging if no sessionId - prevents attaching to wrong user's trace
+    if (!sessionId) {
+        return Response.json({ success: true, logged: false })
+    }
+
+    // Get user IP for tracking (hashed for privacy)
     const forwardedFor = req.headers.get("x-forwarded-for")
-    const userId = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+    const rawIp = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+    const userId =
+        rawIp === "anonymous"
+            ? rawIp
+            : `user-${Buffer.from(rawIp).toString("base64url").slice(0, 8)}`
 
     try {
         // Find the most recent chat trace for this session to attach the score to
