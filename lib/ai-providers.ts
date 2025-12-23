@@ -588,13 +588,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "openai": {
             const apiKey = overrides?.apiKey || process.env.OPENAI_API_KEY
             const baseURL = overrides?.baseUrl || process.env.OPENAI_BASE_URL
-            if (baseURL || overrides?.apiKey) {
-                const customOpenAI = createOpenAI({
-                    apiKey,
-                    ...(baseURL && { baseURL }),
-                })
-                // Use Responses API (default) instead of .chat() to support reasoning
-                // for gpt-5, o1, o3, o4 models. Chat Completions API does not emit reasoning events.
+            if (baseURL) {
+                // Custom base URL = third-party proxy, use Chat Completions API
+                // for compatibility (most proxies don't support /responses endpoint)
+                const customOpenAI = createOpenAI({ apiKey, baseURL })
+                model = customOpenAI.chat(modelId)
+            } else if (overrides?.apiKey) {
+                // Custom API key but official OpenAI endpoint, use Responses API
+                // to support reasoning for gpt-5, o1, o3, o4 models
+                const customOpenAI = createOpenAI({ apiKey })
                 model = customOpenAI(modelId)
             } else {
                 model = openai(modelId)
