@@ -16,6 +16,7 @@ import {
     ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
+import { useDictionary } from "@/hooks/use-dictionary"
 import type { FlattenedModel } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -67,6 +68,7 @@ export function ModelSelector({
     onConfigure,
     disabled = false,
 }: ModelSelectorProps) {
+    const dict = useDictionary()
     const [open, setOpen] = useState(false)
     // Only show validated models in the selector
     const validatedModels = useMemo(
@@ -96,8 +98,8 @@ export function ModelSelector({
     }
 
     const tooltipContent = selectedModel
-        ? `${selectedModel.modelId} (click to change)`
-        : "Using server default model (click to change)"
+        ? `${selectedModel.modelId} ${dict.modelConfig.clickToChange}`
+        : `${dict.modelConfig.usingServerDefault} ${dict.modelConfig.clickToChange}`
 
     return (
         <ModelSelectorRoot open={open} onOpenChange={setOpen}>
@@ -111,22 +113,26 @@ export function ModelSelector({
                 >
                     <Bot className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                     <span className="text-xs truncate">
-                        {selectedModel ? selectedModel.modelId : "Default"}
+                        {selectedModel
+                            ? selectedModel.modelId
+                            : dict.modelConfig.default}
                     </span>
                     <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                 </ButtonWithTooltip>
             </ModelSelectorTrigger>
-            <ModelSelectorContent title="Select Model">
-                <ModelSelectorInput placeholder="Search models..." />
+            <ModelSelectorContent title={dict.modelConfig.selectModel}>
+                <ModelSelectorInput
+                    placeholder={dict.modelConfig.searchModels}
+                />
                 <ModelSelectorList>
                     <ModelSelectorEmpty>
                         {validatedModels.length === 0 && models.length > 0
-                            ? "No verified models. Test your models first."
-                            : "No models found."}
+                            ? dict.modelConfig.noVerifiedModels
+                            : dict.modelConfig.noModelsFound}
                     </ModelSelectorEmpty>
 
                     {/* Server Default Option */}
-                    <ModelSelectorGroup heading="Default">
+                    <ModelSelectorGroup heading={dict.modelConfig.default}>
                         <ModelSelectorItem
                             value="__server_default__"
                             onSelect={handleSelect}
@@ -145,7 +151,7 @@ export function ModelSelector({
                             />
                             <Server className="mr-2 h-4 w-4 text-muted-foreground" />
                             <ModelSelectorName>
-                                Server Default
+                                {dict.modelConfig.serverDefault}
                             </ModelSelectorName>
                         </ModelSelectorItem>
                     </ModelSelectorGroup>
@@ -201,13 +207,13 @@ export function ModelSelector({
                         >
                             <Settings2 className="mr-2 h-4 w-4" />
                             <ModelSelectorName>
-                                Configure Models...
+                                {dict.modelConfig.configureModels}
                             </ModelSelectorName>
                         </ModelSelectorItem>
                     </ModelSelectorGroup>
                     {/* Info text */}
                     <div className="px-3 py-2 text-xs text-muted-foreground border-t">
-                        Only verified models are shown
+                        {dict.modelConfig.onlyVerifiedShown}
                     </div>
                 </ModelSelectorList>
             </ModelSelectorContent>
