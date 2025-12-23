@@ -248,7 +248,7 @@ ${userInputText}
 """`
 
     // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = convertToModelMessages(messages)
+    const modelMessages = await convertToModelMessages(messages)
 
     // DEBUG: Log incoming messages structure
     console.log("[route.ts] Incoming messages count:", messages.length)
@@ -686,7 +686,8 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                 // Total input = non-cached + cached (these are separate counts)
                 // Note: cacheWriteInputTokens is not available on finish part
                 const totalInputTokens =
-                    (usage.inputTokens ?? 0) + (usage.cachedInputTokens ?? 0)
+                    (usage.inputTokens ?? 0) +
+                    (usage.inputTokenDetails?.cacheReadTokens ?? 0)
                 return {
                     inputTokens: totalInputTokens,
                     outputTokens: usage.outputTokens ?? 0,
