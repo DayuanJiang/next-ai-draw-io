@@ -27,6 +27,11 @@ export async function POST(req: Request) {
 
     const { filename, format, sessionId } = data
 
+    // Skip logging if no sessionId - prevents attaching to wrong user's trace
+    if (!sessionId) {
+        return Response.json({ success: true, logged: false })
+    }
+
     try {
         const timestamp = new Date().toISOString()
 
