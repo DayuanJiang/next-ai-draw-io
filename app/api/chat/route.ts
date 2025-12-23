@@ -542,19 +542,24 @@ ${userInputText}
                 userId,
             }),
         }),
-        onFinish: ({ text, usage }) => {
+        onFinish: ({ text, totalUsage }) => {
             // AI SDK 6 telemetry auto-reports token usage on its spans
             setTraceOutput(text)
 
             // Record token usage for server-side quota tracking (if enabled)
+            // Use totalUsage (cumulative across all steps) instead of usage (final step only)
+            // Include all 4 token types: input, output, cache read, cache write
             if (
                 isQuotaEnabled() &&
                 !hasOwnApiKey &&
                 userId !== "anonymous" &&
-                usage
+                totalUsage
             ) {
                 const totalTokens =
-                    (usage.inputTokens || 0) + (usage.outputTokens || 0)
+                    (totalUsage.inputTokens || 0) +
+                    (totalUsage.outputTokens || 0) +
+                    (totalUsage.cachedInputTokens || 0) +
+                    (totalUsage.inputTokenDetails?.cacheWriteTokens || 0)
                 recordTokenUsage(userId, totalTokens)
             }
         },
