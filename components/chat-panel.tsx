@@ -557,12 +557,32 @@ Continue from EXACTLY where you stopped.`,
         },
         onError: (error) => {
             // Handle server-side quota limit (429 response)
+            // AI SDK puts the full response body in error.message for non-OK responses
+            try {
+                const data = JSON.parse(error.message)
+                if (data.type === "request") {
+                    quotaManager.showQuotaLimitToast(data.used, data.limit)
+                    return
+                }
+                if (data.type === "token") {
+                    quotaManager.showTokenLimitToast(data.used, data.limit)
+                    return
+                }
+                if (data.type === "tpm") {
+                    quotaManager.showTPMLimitToast(data.limit)
+                    return
+                }
+            } catch {
+                // Not JSON, fall through to string matching for backwards compatibility
+            }
+
+            // Fallback to string matching
             if (error.message.includes("Daily request limit")) {
                 quotaManager.showQuotaLimitToast()
                 return
             }
             if (error.message.includes("Daily token limit")) {
-                quotaManager.showTokenLimitToast(dailyTokenLimit)
+                quotaManager.showTokenLimitToast()
                 return
             }
             if (
