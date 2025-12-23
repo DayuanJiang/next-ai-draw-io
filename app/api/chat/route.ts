@@ -173,9 +173,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
             : undefined
 
     // Extract user input text for Langfuse trace
-    const lastMessage = messages[messages.length - 1]
+    // Find the last USER message, not just the last message (which could be assistant in multi-step tool flows)
+    const lastUserMessage = [...messages]
+        .reverse()
+        .find((m: any) => m.role === "user")
     const userInputText =
-        lastMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+        lastUserMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -237,9 +240,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId, minimalStyle)
 
-    // Extract file parts (images) from the last message
+    // Extract file parts (images) from the last user message
     const fileParts =
-        lastMessage.parts?.filter((part: any) => part.type === "file") || []
+        lastUserMessage?.parts?.filter((part: any) => part.type === "file") ||
+        []
 
     // User input only - XML is now in a separate cached system message
     const formattedUserInput = `User input:
