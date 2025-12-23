@@ -32,6 +32,7 @@
         "@ai-sdk/google": "^3.0.0",
         "@ai-sdk/openai": "^3.0.0",
         "@ai-sdk/react": "^3.0.1",
+        "@aws-sdk/client-dynamodb": "^3.957.0",
         "@aws-sdk/credential-providers": "^3.943.0",
         "@formatjs/intl-localematcher": "^0.7.2",
         "@langfuse/client": "^4.4.9",

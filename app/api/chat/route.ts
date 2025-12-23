@@ -15,6 +15,11 @@ import { z } from "zod"
 import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
+    checkAndIncrementRequest,
+    isQuotaEnabled,
+    recordTokenUsage,
+} from "@/lib/dynamo-quota-manager"
+import {
     getTelemetryConfig,
     setTraceInput,
     setTraceOutput,
@@ -190,6 +195,33 @@ async function handleChatRequest(req: Request): Promise<Response> {
         sessionId: validSessionId,
         userId: userId,
     })
+
+    // === SERVER-SIDE QUOTA CHECK START ===
+    // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
+    const hasOwnApiKey = !!(
+        req.headers.get("x-ai-provider") && req.headers.get("x-ai-api-key")
+    )
+
+    // Skip quota check if: quota disabled, user has own API key, or is anonymous
+    if (isQuotaEnabled() && !hasOwnApiKey && userId !== "anonymous") {
+        const quotaCheck = await checkAndIncrementRequest(userId, {
+            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+            tpm: Number(process.env.TPM_LIMIT) || 20000,
+        })
+        if (!quotaCheck.allowed) {
+            return Response.json(
+                {
+                    error: quotaCheck.error,
+                    type: quotaCheck.type,
+                    used: quotaCheck.used,
+                    limit: quotaCheck.limit,
+                },
+                { status: 429 },
+            )
+        }
+    }
+    // === SERVER-SIDE QUOTA CHECK END ===
 
     // === FILE VALIDATION START ===
     const fileValidation = validateFileParts(messages)
@@ -510,9 +542,21 @@ ${userInputText}
                 userId,
             }),
         }),
-        onFinish: ({ text }) => {
+        onFinish: ({ text, usage }) => {
             // AI SDK 6 telemetry auto-reports token usage on its spans
             setTraceOutput(text)
+
+            // Record token usage for server-side quota tracking (if enabled)
+            if (
+                isQuotaEnabled() &&
+                !hasOwnApiKey &&
+                userId !== "anonymous" &&
+                usage
+            ) {
+                const totalTokens =
+                    (usage.inputTokens || 0) + (usage.outputTokens || 0)
+                recordTokenUsage(userId, totalTokens)
+            }
         },
         tools: {
             // Client-side tool that will be executed on the client
