@@ -36,29 +36,32 @@ const VALID_ENTITIES = new Set(["lt", "gt", "amp", "quot", "apos"])
 /**
  * Check if mxCell XML output is complete (not truncated).
  * Complete XML ends with a self-closing tag (/>) or closing mxCell tag.
- * Also handles function-calling wrapper tags that may be incorrectly included.
+ * Uses a robust approach that handles any LLM provider's wrapper tags
+ * by finding the last valid mxCell ending and checking if suffix is just closing tags.
  * @param xml - The XML string to check (can be undefined/null)
  * @returns true if XML appears complete, false if truncated or empty
  */
 export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
-    let trimmed = xml?.trim() || ""
+    const trimmed = xml?.trim() || ""
     if (!trimmed) return false
 
-    // Strip Anthropic function-calling wrapper tags if present
-    // These can leak into tool input due to AI SDK parsing issues
-    // Use loop because tags are nested: </mxCell></mxParameter></invoke>
-    let prev = ""
-    while (prev !== trimmed) {
-        prev = trimmed
-        trimmed = trimmed
-            .replace(/<\/mxParameter>\s*$/i, "")
-            .replace(/<\/invoke>\s*$/i, "")
-            .replace(/<\/antml:parameter>\s*$/i, "")
-            .replace(/<\/antml:invoke>\s*$/i, "")
-            .trim()
-    }
+    // Find position of last complete mxCell ending (either /> or </mxCell>)
+    const lastSelfClose = trimmed.lastIndexOf("/>")
+    const lastMxCellClose = trimmed.lastIndexOf("</mxCell>")
 
-    return trimmed.endsWith("/>") || trimmed.endsWith("</mxCell>")
+    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
+
+    // No valid ending found at all
+    if (lastValidEnd === -1) return false
+
+    // Check what comes after the last valid ending
+    // For />: add 2 chars, for </mxCell>: add 9 chars
+    const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
+    const suffix = trimmed.slice(lastValidEnd + endOffset)
+
+    // If suffix is empty or only contains closing tags (any provider's wrapper) or whitespace, it's complete
+    // This regex matches any sequence of closing XML tags like </foo>, </bar>, </｜DSML｜xyz>
+    return /^(\s*<\/[^>]+>)*\s*$/.test(suffix)
 }
 
 /**
@@ -262,6 +265,21 @@ export function convertToLegalXml(xmlString: string): string {
             "&amp;",
         )
 
+        // Fix unescaped < and > in attribute values for XML parsing
+        // HTML content in value attributes (e.g., <b>Title</b>) needs to be escaped
+        // This is critical because DOMParser will fail on unescaped < > in attributes
+        if (/=\s*"[^"]*<[^"]*"/.test(cellContent)) {
+            cellContent = cellContent.replace(
+                /=\s*"([^"]*)"/g,
+                (_match, value) => {
+                    const escaped = value
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                    return `="${escaped}"`
+                },
+            )
+        }
+
         // Indent each line of the matched block for readability.
         const formatted = cellContent
             .split("\n")
@@ -304,6 +322,20 @@ export function wrapWithMxFile(xml: string): string {
     let content = xml
     if (xml.includes("<root>")) {
         content = xml.replace(/<\/?root>/g, "").trim()
+    }
+
+    // Strip trailing LLM wrapper tags (from any provider: Anthropic, DeepSeek, etc.)
+    // Find the last valid mxCell ending and remove everything after it
+    const lastSelfClose = content.lastIndexOf("/>")
+    const lastMxCellClose = content.lastIndexOf("</mxCell>")
+    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
+    if (lastValidEnd !== -1) {
+        const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
+        const suffix = content.slice(lastValidEnd + endOffset)
+        // If suffix is only closing tags (wrapper tags), strip it
+        if (/^(\s*<\/[^>]+>)*\s*$/.test(suffix)) {
+            content = content.slice(0, lastValidEnd + endOffset)
+        }
     }
 
     // Remove any existing root cells from content (LLM shouldn't include them, but handle it gracefully)
@@ -910,6 +942,21 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Removed CDATA wrapper")
     }
 
+    // 1b. Strip trailing LLM wrapper tags (DeepSeek, Anthropic, etc.)
+    // These are closing tags after the last valid mxCell that break XML parsing
+    const lastSelfClose = fixed.lastIndexOf("/>")
+    const lastMxCellClose = fixed.lastIndexOf("</mxCell>")
+    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
+    if (lastValidEnd !== -1) {
+        const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
+        const suffix = fixed.slice(lastValidEnd + endOffset)
+        // If suffix contains only closing tags (wrapper tags) or whitespace, strip it
+        if (/^(\s*<\/[^>]+>)+\s*$/.test(suffix)) {
+            fixed = fixed.slice(0, lastValidEnd + endOffset)
+            fixes.push("Stripped trailing LLM wrapper tags")
+        }
+    }
+
     // 2. Remove text before XML declaration or root element (only if it's garbage text, not valid XML)
     const xmlStart = fixed.search(/<(\?xml|mxGraphModel|mxfile)/i)
     if (xmlStart > 0 && !/^<[a-zA-Z]/.test(fixed.trim())) {
@@ -1015,8 +1062,8 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Removed quotes around color values in style")
     }
 
-    // 4. Fix unescaped < in attribute values
-    // This is tricky - we need to find < inside quoted attribute values
+    // 4. Fix unescaped < and > in attribute values
+    // < is required to be escaped, > is not strictly required but we escape for consistency
     const attrPattern = /(=\s*")([^"]*?)(<)([^"]*?)(")/g
     let attrMatch
     let hasUnescapedLt = false
@@ -1027,12 +1074,12 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         }
     }
     if (hasUnescapedLt) {
-        // Replace < with &lt; inside attribute values
+        // Replace < and > with &lt; and &gt; inside attribute values
         fixed = fixed.replace(/=\s*"([^"]*)"/g, (_match, value) => {
-            const escaped = value.replace(/</g, "&lt;")
+            const escaped = value.replace(/</g, "&lt;").replace(/>/g, "&gt;")
             return `="${escaped}"`
         })
-        fixes.push("Escaped < characters in attribute values")
+        fixes.push("Escaped <> characters in attribute values")
     }
 
     // 5. Fix invalid character references (remove malformed ones)
@@ -1120,7 +1167,8 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
 
     // 8c. Remove non-draw.io tags (after typo fixes so lowercase variants are fixed first)
-    // Valid draw.io tags: mxfile, diagram, mxGraphModel, root, mxCell, mxGeometry, mxPoint, Array, Object
+    // IMPORTANT: Only remove tags at the element level, NOT inside quoted attribute values
+    // Tags like <b>, <br> inside value="<b>text</b>" should be preserved (they're HTML content)
     const validDrawioTags = new Set([
         "mxfile",
         "diagram",
@@ -1133,25 +1181,59 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         "Object",
         "mxRectangle",
     ])
+
+    // Helper: Check if a position is inside a quoted attribute value
+    // by counting unescaped quotes before that position
+    const isInsideQuotes = (str: string, pos: number): boolean => {
+        let inQuote = false
+        let quoteChar = ""
+        for (let i = 0; i < pos && i < str.length; i++) {
+            const c = str[i]
+            if (inQuote) {
+                if (c === quoteChar) inQuote = false
+            } else if (c === '"' || c === "'") {
+                // Check if this quote is part of an attribute (preceded by =)
+                // Look back for = sign
+                let j = i - 1
+                while (j >= 0 && /\s/.test(str[j])) j--
+                if (j >= 0 && str[j] === "=") {
+                    inQuote = true
+                    quoteChar = c
+                }
+            }
+        }
+        return inQuote
+    }
+
     const foreignTagPattern = /<\/?([a-zA-Z][a-zA-Z0-9_]*)[^>]*>/g
     let foreignMatch
     const foreignTags = new Set<string>()
+    const foreignTagPositions: Array<{
+        tag: string
+        start: number
+        end: number
+    }> = []
+
     while ((foreignMatch = foreignTagPattern.exec(fixed)) !== null) {
         const tagName = foreignMatch[1]
-        if (!validDrawioTags.has(tagName)) {
-            foreignTags.add(tagName)
-        }
+        // Skip if this is a valid draw.io tag
+        if (validDrawioTags.has(tagName)) continue
+        // Skip if this tag is inside a quoted attribute value
+        if (isInsideQuotes(fixed, foreignMatch.index)) continue
+
+        foreignTags.add(tagName)
+        foreignTagPositions.push({
+            tag: tagName,
+            start: foreignMatch.index,
+            end: foreignMatch.index + foreignMatch[0].length,
+        })
     }
-    if (foreignTags.size > 0) {
-        console.log(
-            "[autoFixXml] Step 8c: Found foreign tags:",
-            Array.from(foreignTags),
-        )
-        for (const tag of foreignTags) {
-            // Remove opening tags (with or without attributes)
-            fixed = fixed.replace(new RegExp(`<${tag}[^>]*>`, "gi"), "")
-            // Remove closing tags
-            fixed = fixed.replace(new RegExp(`</${tag}>`, "gi"), "")
+
+    if (foreignTagPositions.length > 0) {
+        // Remove tags from end to start to preserve indices
+        foreignTagPositions.sort((a, b) => b.start - a.start)
+        for (const { start, end } of foreignTagPositions) {
+            fixed = fixed.slice(0, start) + fixed.slice(end)
         }
         fixes.push(
             `Removed foreign tags: ${Array.from(foreignTags).join(", ")}`,
@@ -1202,6 +1284,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 
     // 10b. Remove extra closing tags (more closes than opens)
     // Need to properly count self-closing tags (they don't need closing tags)
+    // IMPORTANT: Only count tags at element level, NOT inside quoted attribute values
     const tagCounts = new Map<
         string,
         { opens: number; closes: number; selfClosing: number }
@@ -1210,11 +1293,17 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     const fullTagPattern = /<(\/?[a-zA-Z][a-zA-Z0-9]*)[^>]*>/g
     let tagCountMatch
     while ((tagCountMatch = fullTagPattern.exec(fixed)) !== null) {
+        // Skip tags inside quoted attribute values (e.g., value="<b>Title</b>")
+        if (isInsideQuotes(fixed, tagCountMatch.index)) continue
+
         const fullMatch = tagCountMatch[0] // e.g., "<mxCell .../>" or "</mxCell>"
         const tagPart = tagCountMatch[1] // e.g., "mxCell" or "/mxCell"
         const isClosing = tagPart.startsWith("/")
         const isSelfClosing = fullMatch.endsWith("/>")
         const tagName = isClosing ? tagPart.slice(1) : tagPart
+
+        // Only count valid draw.io tags - skip partial/invalid tags like "mx" from streaming
+        if (!validDrawioTags.has(tagName)) continue
 
         let counts = tagCounts.get(tagName)
         if (!counts) {

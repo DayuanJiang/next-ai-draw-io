@@ -459,7 +459,8 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Removed quotes around color values in style")
     }
 
-    // 10. Fix unescaped < in attribute values
+    // 10. Fix unescaped < and > in attribute values
+    // < is required to be escaped, > is not strictly required but we escape for consistency
     const attrPattern = /(=\s*")([^"]*?)(<)([^"]*?)(")/g
     let attrMatch
     let hasUnescapedLt = false
@@ -471,10 +472,10 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
     if (hasUnescapedLt) {
         fixed = fixed.replace(/=\s*"([^"]*)"/g, (_match, value) => {
-            const escaped = value.replace(/</g, "&lt;")
+            const escaped = value.replace(/</g, "&lt;").replace(/>/g, "&gt;")
             return `="${escaped}"`
         })
-        fixes.push("Escaped < characters in attribute values")
+        fixes.push("Escaped <> characters in attribute values")
     }
 
     // 11. Fix invalid hex character references
@@ -903,24 +904,30 @@ export function validateAndFixXml(xml: string): {
 
 /**
  * Check if mxCell XML output is complete (not truncated).
+ * Uses a robust approach that handles any LLM provider's wrapper tags
+ * by finding the last valid mxCell ending and checking if suffix is just closing tags.
  * @param xml - The XML string to check (can be undefined/null)
  * @returns true if XML appears complete, false if truncated or empty
  */
 export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
-    let trimmed = xml?.trim() || ""
+    const trimmed = xml?.trim() || ""
     if (!trimmed) return false
 
-    // Strip wrapper tags if present
-    let prev = ""
-    while (prev !== trimmed) {
-        prev = trimmed
-        trimmed = trimmed
-            .replace(/<\/mxParameter>\s*$/i, "")
-            .replace(/<\/invoke>\s*$/i, "")
-            .replace(/<\/antml:parameter>\s*$/i, "")
-            .replace(/<\/antml:invoke>\s*$/i, "")
-            .trim()
-    }
+    // Find position of last complete mxCell ending (either /> or </mxCell>)
+    const lastSelfClose = trimmed.lastIndexOf("/>")
+    const lastMxCellClose = trimmed.lastIndexOf("</mxCell>")
 
-    return trimmed.endsWith("/>") || trimmed.endsWith("</mxCell>")
+    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
+
+    // No valid ending found at all
+    if (lastValidEnd === -1) return false
+
+    // Check what comes after the last valid ending
+    // For />: add 2 chars, for </mxCell>: add 9 chars
+    const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
+    const suffix = trimmed.slice(lastValidEnd + endOffset)
+
+    // If suffix is empty or only contains closing tags (any provider's wrapper) or whitespace, it's complete
+    // This regex matches any sequence of closing XML tags like </foo>, </bar>, </｜DSML｜xyz>
+    return /^(\s*<\/[^>]+>)*\s*$/.test(suffix)
 }
