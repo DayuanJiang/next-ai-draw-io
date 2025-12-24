@@ -1256,7 +1256,7 @@ Continue from EXACTLY where you stopped.`,
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 overflow-x-hidden">
                         <div className="flex items-center gap-2">
-                            <Image
+                            {/*<Image
                                 src="/favicon.ico"
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
@@ -1266,7 +1266,7 @@ Continue from EXACTLY where you stopped.`,
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
                             >
-                                Next AI Drawio
+                                Designer Agent
                             </h1>
                         </div>
                         {!isMobile &&
