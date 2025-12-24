@@ -124,7 +124,7 @@ export function ModelSelector({
                 <ModelSelectorInput
                     placeholder={dict.modelConfig.searchModels}
                 />
-                <ModelSelectorList>
+                <ModelSelectorList className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <ModelSelectorEmpty>
                         {validatedModels.length === 0 && models.length > 0
                             ? dict.modelConfig.noVerifiedModels

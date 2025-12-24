@@ -66,8 +66,22 @@ export const ModelSelectorInput = ({
 
 export type ModelSelectorListProps = ComponentProps<typeof CommandList>
 
-export const ModelSelectorList = (props: ModelSelectorListProps) => (
-    <CommandList {...props} />
+export const ModelSelectorList = ({
+    className,
+    ...props
+}: ModelSelectorListProps) => (
+    <div className="relative">
+        <CommandList
+            className={cn(
+                // Hide scrollbar on all platforms
+                "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+                className,
+            )}
+            {...props}
+        />
+        {/* Bottom shadow indicator for scrollable content */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-muted/80 via-muted/40 to-transparent" />
+    </div>
 )
 
 export type ModelSelectorEmptyProps = ComponentProps<typeof CommandEmpty>
