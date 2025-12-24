@@ -14,22 +14,14 @@ export function register() {
         publicKey: process.env.LANGFUSE_PUBLIC_KEY,
         secretKey: process.env.LANGFUSE_SECRET_KEY,
         baseUrl: process.env.LANGFUSE_BASEURL,
-        // Filter out Next.js HTTP request spans so AI SDK spans become root traces
+        // Whitelist approach: only export AI-related spans
         shouldExportSpan: ({ otelSpan }) => {
             const spanName = otelSpan.name
-            // Skip Next.js HTTP infrastructure spans
-            if (
-                spanName.startsWith("POST") ||
-                spanName.startsWith("GET") ||
-                spanName.startsWith("RSC") ||
-                spanName.includes("BaseServer") ||
-                spanName.includes("handleRequest") ||
-                spanName.includes("resolve page") ||
-                spanName.includes("start response")
-            ) {
-                return false
+            // Only export AI SDK spans (ai.*) and our explicit "chat" wrapper
+            if (spanName === "chat" || spanName.startsWith("ai.")) {
+                return true
             }
-            return true
+            return false
         },
     })
 
