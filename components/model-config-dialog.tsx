@@ -504,7 +504,7 @@ export function ModelConfigDialog({
                     </div>
 
                     {/* Provider Details (Right Panel) */}
-                    <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+                    <div className="flex-1 min-w-0 flex flex-col overflow-auto [&::-webkit-scrollbar]:hidden ">
                         {selectedProvider ? (
                             <>
                                 <ScrollArea className="flex-1" ref={scrollRef}>
