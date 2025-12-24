@@ -1431,7 +1431,6 @@ Continue from EXACTLY where you stopped.`,
                     setFiles={handleFileChange}
                     processedToolCallsRef={processedToolCallsRef}
                     editDiagramOriginalXmlRef={editDiagramOriginalXmlRef}
-                    partialXmlRef={partialXmlRef}
                     sessionId={sessionId}
                     onRegenerate={handleRegenerate}
                     status={status}
