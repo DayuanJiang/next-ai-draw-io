@@ -36,6 +36,7 @@ import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { formatXML, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
+import { DevXmlSimulator } from "./dev-xml-simulator"
 
 // localStorage keys for persistence
 const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
@@ -76,6 +77,7 @@ interface ChatPanelProps {
 const TOOL_ERROR_STATE = "output-error" as const
 const DEBUG = process.env.NODE_ENV === "development"
 const MAX_AUTO_RETRY_COUNT = 1
+
 const MAX_CONTINUATION_RETRY_COUNT = 2 // Limit for truncation continuation retries
 
 /**
@@ -163,28 +165,6 @@ export default function ChatPanel({
     const [tpmLimit, setTpmLimit] = useState(0)
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
     const [minimalStyle, setMinimalStyle] = useState(false)
-
-    // Dev simulation state (only used in development)
-    const [devXml, setDevXml] = useState("")
-    const [isSimulating, setIsSimulating] = useState(false)
-    const [devIntervalMs, setDevIntervalMs] = useState(20)
-    const [devChunkSize, setDevChunkSize] = useState(5)
-    const devStopRef = useRef(false)
-    const devXmlInitializedRef = useRef(false)
-
-    // Restore dev XML from localStorage on mount (after hydration)
-    useEffect(() => {
-        const saved = localStorage.getItem("dev-xml-simulator")
-        if (saved) setDevXml(saved)
-        devXmlInitializedRef.current = true
-    }, [])
-
-    // Save dev XML to localStorage (only after initial load)
-    useEffect(() => {
-        if (devXmlInitializedRef.current) {
-            localStorage.setItem("dev-xml-simulator", devXml)
-        }
-    }, [devXml])
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
     useEffect(() => {
@@ -1212,85 +1192,6 @@ Continue from EXACTLY where you stopped.`,
         sendChatMessage(newParts, savedXml, previousXml, sessionId)
     }
 
-    // Dev: Simulate display_diagram streaming
-    const handleDevSimulate = async () => {
-        if (!devXml.trim() || isSimulating) return
-
-        setIsSimulating(true)
-        devStopRef.current = false
-        const toolCallId = `dev-sim-${Date.now()}`
-        const xml = devXml.trim()
-
-        // Add user message and initial assistant message with empty XML
-        const userMsg = {
-            id: `user-${Date.now()}`,
-            role: "user" as const,
-            parts: [
-                {
-                    type: "text" as const,
-                    text: "[Dev] Simulating XML streaming",
-                },
-            ],
-        }
-        const assistantMsg = {
-            id: `assistant-${Date.now()}`,
-            role: "assistant" as const,
-            parts: [
-                {
-                    type: "tool-display_diagram" as const,
-                    toolCallId,
-                    state: "input-streaming" as const,
-                    input: { xml: "" },
-                },
-            ],
-        }
-        setMessages((prev) => [...prev, userMsg, assistantMsg] as any)
-
-        // Stream characters progressively
-        for (let i = 0; i < xml.length; i += devChunkSize) {
-            if (devStopRef.current) {
-                setIsSimulating(false)
-                return
-            }
-
-            const chunk = xml.slice(0, i + devChunkSize)
-
-            setMessages((prev) => {
-                const updated = [...prev]
-                const lastMsg = updated[updated.length - 1] as any
-                if (lastMsg?.role === "assistant" && lastMsg.parts?.[0]) {
-                    lastMsg.parts[0].input = { xml: chunk }
-                }
-                return updated
-            })
-
-            await new Promise((r) => setTimeout(r, devIntervalMs))
-        }
-
-        if (devStopRef.current) {
-            setIsSimulating(false)
-            return
-        }
-
-        // Finalize: set state to output-available
-        setMessages((prev) => {
-            const updated = [...prev]
-            const lastMsg = updated[updated.length - 1] as any
-            if (lastMsg?.role === "assistant" && lastMsg.parts?.[0]) {
-                lastMsg.parts[0].state = "output-available"
-                lastMsg.parts[0].output = "Successfully displayed the diagram."
-                lastMsg.parts[0].input = { xml }
-            }
-            return updated
-        })
-
-        // Display the final diagram
-        const fullXml = wrapWithMxFile(xml)
-        onDisplayChart(fullXml)
-
-        setIsSimulating(false)
-    }
-
     // Collapsed view (desktop only)
     if (!isVisible && !isMobile) {
         return (
@@ -1440,87 +1341,10 @@ Continue from EXACTLY where you stopped.`,
 
             {/* Dev XML Streaming Simulator - only in development */}
             {DEBUG && (
-                <div className="border-t border-dashed border-orange-500/50 px-4 py-2 bg-orange-50/50 dark:bg-orange-950/30">
-                    <details>
-                        <summary className="text-xs text-orange-600 dark:text-orange-400 cursor-pointer font-medium">
-                            Dev: XML Streaming Simulator
-                        </summary>
-                        <div className="mt-2 space-y-2">
-                            <textarea
-                                value={devXml}
-                                onChange={(e) => setDevXml(e.target.value)}
-                                placeholder="Paste mxCell XML here..."
-                                className="w-full h-24 text-xs font-mono p-2 border rounded bg-background"
-                            />
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 flex-1">
-                                    <label className="text-xs text-muted-foreground whitespace-nowrap">
-                                        Interval:
-                                    </label>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="200"
-                                        step="1"
-                                        value={devIntervalMs}
-                                        onChange={(e) =>
-                                            setDevIntervalMs(
-                                                Number(e.target.value),
-                                            )
-                                        }
-                                        className="flex-1 h-1 accent-orange-500"
-                                    />
-                                    <span className="text-xs text-muted-foreground w-12">
-                                        {devIntervalMs}ms
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <label className="text-xs text-muted-foreground whitespace-nowrap">
-                                        Chars:
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="100"
-                                        value={devChunkSize}
-                                        onChange={(e) =>
-                                            setDevChunkSize(
-                                                Math.max(
-                                                    1,
-                                                    Number(e.target.value),
-                                                ),
-                                            )
-                                        }
-                                        className="w-14 text-xs p-1 border rounded bg-background"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleDevSimulate}
-                                    disabled={isSimulating || !devXml.trim()}
-                                    className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isSimulating
-                                        ? "Streaming..."
-                                        : `Simulate (${devChunkSize} chars/${devIntervalMs}ms)`}
-                                </button>
-                                {isSimulating && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            devStopRef.current = true
-                                        }}
-                                        className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                                    >
-                                        Stop
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </details>
-                </div>
+                <DevXmlSimulator
+                    setMessages={setMessages}
+                    onDisplayChart={onDisplayChart}
+                />
             )}
 
             {/* Input */}
