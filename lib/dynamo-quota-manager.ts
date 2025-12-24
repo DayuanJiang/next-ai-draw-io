@@ -9,6 +9,30 @@ import {
 // OSS users who don't need quota tracking can simply not set this env var
 const TABLE = process.env.DYNAMODB_QUOTA_TABLE
 const DYNAMODB_REGION = process.env.DYNAMODB_REGION || "ap-northeast-1"
+// Timezone for daily quota reset (e.g., "Asia/Tokyo" for JST midnight reset)
+// Defaults to UTC if not set
+let QUOTA_TIMEZONE = process.env.QUOTA_TIMEZONE || "UTC"
+
+// Validate timezone at module load
+try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: QUOTA_TIMEZONE }).format(
+        new Date(),
+    )
+} catch {
+    console.warn(
+        `[quota] Invalid QUOTA_TIMEZONE "${QUOTA_TIMEZONE}", using UTC`,
+    )
+    QUOTA_TIMEZONE = "UTC"
+}
+
+/**
+ * Get today's date string in the configured timezone (YYYY-MM-DD format)
+ */
+function getTodayInTimezone(): string {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: QUOTA_TIMEZONE,
+    }).format(new Date())
+}
 
 // Only create client if quota is enabled
 const client = TABLE ? new DynamoDBClient({ region: DYNAMODB_REGION }) : null
@@ -49,32 +73,67 @@ export async function checkAndIncrementRequest(
         return { allowed: true }
     }
 
-    const today = new Date().toISOString().split("T")[0]
+    const today = getTodayInTimezone()
     const currentMinute = Math.floor(Date.now() / 60000).toString()
     const ttl = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
 
     try {
-        // Atomic check-and-increment with ConditionExpression
-        // This prevents race conditions by failing if limits are exceeded
+        // First, try to reset counts if it's a new day (atomic day reset)
+        // This will succeed only if lastResetDate < today or doesn't exist
+        try {
+            await client.send(
+                new UpdateItemCommand({
+                    TableName: TABLE,
+                    Key: { PK: { S: `IP#${ip}` } },
+                    // Reset all counts to 1/0 for the new day
+                    UpdateExpression: `
+                        SET lastResetDate = :today,
+                            dailyReqCount = :one,
+                            dailyTokenCount = :zero,
+                            lastMinute = :minute,
+                            tpmCount = :zero,
+                            #ttl = :ttl
+                    `,
+                    // Only succeed if it's a new day (or new item)
+                    ConditionExpression: `
+                        attribute_not_exists(lastResetDate) OR lastResetDate < :today
+                    `,
+                    ExpressionAttributeNames: { "#ttl": "ttl" },
+                    ExpressionAttributeValues: {
+                        ":today": { S: today },
+                        ":zero": { N: "0" },
+                        ":one": { N: "1" },
+                        ":minute": { S: currentMinute },
+                        ":ttl": { N: String(ttl) },
+                    },
+                }),
+            )
+            // New day reset successful
+            return { allowed: true }
+        } catch (resetError: any) {
+            // If condition failed, it's the same day - continue to increment logic
+            if (!(resetError instanceof ConditionalCheckFailedException)) {
+                throw resetError // Re-throw unexpected errors
+            }
+        }
+
+        // Same day - increment request count with limit checks
         await client.send(
             new UpdateItemCommand({
                 TableName: TABLE,
                 Key: { PK: { S: `IP#${ip}` } },
-                // Reset counts if new day/minute, then increment request count
+                // Increment request count, handle minute boundary for TPM
                 UpdateExpression: `
-                    SET lastResetDate = :today,
-                        dailyReqCount = if_not_exists(dailyReqCount, :zero) + :one,
-                        dailyTokenCount = if_not_exists(dailyTokenCount, :zero),
-                        lastMinute = :minute,
+                    SET lastMinute = :minute,
                         tpmCount = if_not_exists(tpmCount, :zero),
                         #ttl = :ttl
+                    ADD dailyReqCount :one
                 `,
-                // Atomic condition: only succeed if ALL limits pass
-                // Uses attribute_not_exists for new items, then checks limits for existing items
+                // Check all limits before allowing increment
                 ConditionExpression: `
-                    (attribute_not_exists(lastResetDate) OR lastResetDate < :today OR
-                     ((attribute_not_exists(dailyReqCount) OR dailyReqCount < :reqLimit) AND
-                      (attribute_not_exists(dailyTokenCount) OR dailyTokenCount < :tokenLimit))) AND
+                    lastResetDate = :today AND
+                    (attribute_not_exists(dailyReqCount) OR dailyReqCount < :reqLimit) AND
+                    (attribute_not_exists(dailyTokenCount) OR dailyTokenCount < :tokenLimit) AND
                     (attribute_not_exists(lastMinute) OR lastMinute <> :minute OR
                      attribute_not_exists(tpmCount) OR tpmCount < :tpmLimit)
                 `,
