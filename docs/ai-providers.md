@@ -80,13 +80,23 @@ SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflo
 
 ```bash
 AZURE_API_KEY=your_api_key
+AZURE_RESOURCE_NAME=your-resource-name  # Required: your Azure resource name
 AI_MODEL=your-deployment-name
 ```
 
-Optional custom endpoint:
+Or use a custom endpoint instead of resource name:
 
 ```bash
-AZURE_BASE_URL=https://your-resource.openai.azure.com
+AZURE_API_KEY=your_api_key
+AZURE_BASE_URL=https://your-resource.openai.azure.com  # Alternative to AZURE_RESOURCE_NAME
+AI_MODEL=your-deployment-name
+```
+
+Optional reasoning configuration:
+
+```bash
+AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
+AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
 ```
 
 ### AWS Bedrock
@@ -126,6 +136,42 @@ Optional custom URL:
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
+### Vercel AI Gateway
+
+Vercel AI Gateway provides unified access to multiple AI providers through a single API key. This simplifies authentication and allows you to switch between providers without managing multiple API keys.
+
+**Basic Usage (Vercel-hosted Gateway):**
+
+```bash
+AI_GATEWAY_API_KEY=your_gateway_api_key
+AI_MODEL=openai/gpt-4o
+```
+
+**Custom Gateway URL (for local development or self-hosted Gateway):**
+
+```bash
+AI_GATEWAY_API_KEY=your_custom_api_key
+AI_GATEWAY_BASE_URL=https://your-custom-gateway.com/v1/ai
+AI_MODEL=openai/gpt-4o
+```
+
+Model format uses `provider/model` syntax:
+
+-   `openai/gpt-4o` - OpenAI GPT-4o
+-   `anthropic/claude-sonnet-4-5` - Anthropic Claude Sonnet 4.5
+-   `google/gemini-2.0-flash` - Google Gemini 2.0 Flash
+
+**Configuration notes:**
+
+-   If `AI_GATEWAY_BASE_URL` is not set, the default Vercel Gateway URL (`https://ai-gateway.vercel.sh/v1/ai`) is used
+-   Custom base URL is useful for:
+    -   Local development with a custom Gateway instance
+    -   Self-hosted AI Gateway deployments
+    -   Enterprise proxy configurations
+-   When using a custom base URL, you must also provide `AI_GATEWAY_API_KEY`
+
+Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
@@ -133,7 +179,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, azure, bedrock, openrouter, ollama
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, azure, bedrock, openrouter, ollama, gateway
 ```
 
 ## Model Capability Requirements
