@@ -998,48 +998,50 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2">
-                            <Image
+                            {/*<Image
                                 src="/favicon.ico"
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
                                 className="rounded"
-                            />
+                            />*/}
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
                             >
-                                Next AI Drawio
+                                Designer Agent
                             </h1>
                         </div>
+                        {/* Hidden for now
                         {!isMobile && (
-                            <Link
-                                href="/about"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
-                            >
-                                About
-                            </Link>
-                        )}
-                        {!isMobile && (
-                            <Link
-                                href="/about"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <ButtonWithTooltip
-                                    tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                            <>
+                                <Link
+                                    href="/about"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                                 >
-                                    <AlertTriangle className="h-4 w-4" />
-                                </ButtonWithTooltip>
-                            </Link>
+                                    About
+                                </Link>
+                                <Link
+                                    href="/about"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <ButtonWithTooltip
+                                        tooltipContent="Due to high usage, I have changed the model to minimax-m2 and added some usage limits. See About page for details."
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                                    >
+                                        <AlertTriangle className="h-4 w-4" />
+                                    </ButtonWithTooltip>
+                                </Link>
+                            </>
                         )}
+                        */}
                     </div>
                     <div className="flex items-center gap-1">
-                        <a
+                        {/* <a
                             href="https://github.com/DayuanJiang/next-ai-draw-io"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -1059,7 +1061,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                             <Settings
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
-                        </ButtonWithTooltip>
+                        </ButtonWithTooltip> */}
                         {!isMobile && (
                             <ButtonWithTooltip
                                 tooltipContent="Hide chat panel (Ctrl+B)"
