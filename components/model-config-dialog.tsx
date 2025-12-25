@@ -551,6 +551,20 @@ export function ModelConfigDialog({
                                                     </span>
                                                 </div>
                                             )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setDeleteConfirmOpen(true)
+                                                }
+                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                            >
+                                                <Trash2 className="h-4 w-4 mr-1.5" />
+                                                {
+                                                    dict.modelConfig
+                                                        .deleteProvider
+                                                }
+                                            </Button>
                                         </div>
 
                                         {/* Configuration Section */}
@@ -1412,24 +1426,6 @@ export function ModelConfigDialog({
                                                 )}
                                             </div>
                                         </ConfigSection>
-
-                                        {/* Danger Zone */}
-                                        <div className="pt-4">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                    setDeleteConfirmOpen(true)
-                                                }
-                                                className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl"
-                                            >
-                                                <Trash2 className="h-4 w-4 mr-2" />
-                                                {
-                                                    dict.modelConfig
-                                                        .deleteProvider
-                                                }
-                                            </Button>
-                                        </div>
                                     </div>
                                 </ScrollArea>
                             </>
