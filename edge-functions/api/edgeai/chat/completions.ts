@@ -371,7 +371,11 @@ export async function onRequestPost({
         let contentBuffer = "" // Buffer for accumulated content
         let toolCallStarted = false // Whether we've detected <tool_call> and sent the start chunk
         let toolCallId = ""
-        let toolCallArgsBuffer = "" // Buffer for tool call arguments (JSON content inside <tool_call>)
+        let toolCallName = ""
+        let toolCallArgsBuffer = "" // Buffer for tool call JSON content inside <tool_call>
+        let argumentsStarted = false // Whether we've found "arguments": { and started streaming
+        let braceDepth = 0 // Track nested braces in arguments
+        let lastStreamedArgsLength = 0 // Track how much of arguments we've streamed
 
         const transformStream = new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
@@ -395,7 +399,7 @@ export async function onRequestPost({
                                 new TextEncoder().encode(
                                     createToolCallChunk(
                                         toolCallId,
-                                        "display_diagram",
+                                        toolCallName,
                                         "",
                                         0,
                                         false,
@@ -433,21 +437,51 @@ export async function onRequestPost({
                     if (!content) continue
 
                     if (toolCallStarted) {
-                        // We're inside a tool call - stream the arguments
+                        // We're inside a tool call - accumulate and parse
                         toolCallArgsBuffer += content
 
-                        // Check if tool call ended (handle split tags like </ + tool + _call + >)
+                        // Check if tool call ended
                         if (toolCallArgsBuffer.includes("</tool_call>")) {
+                            // Extract final arguments if not yet done
+                            if (!argumentsStarted) {
+                                // Try to parse the complete JSON and extract arguments
+                                const jsonContent = toolCallArgsBuffer
+                                    .replace("</tool_call>", "")
+                                    .trim()
+                                try {
+                                    const parsed = JSON.parse(jsonContent)
+                                    if (parsed.arguments) {
+                                        const argsStr = JSON.stringify(
+                                            parsed.arguments,
+                                        )
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                createToolCallChunk(
+                                                    toolCallId,
+                                                    toolCallName,
+                                                    argsStr,
+                                                    0,
+                                                    false,
+                                                    false,
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                } catch {
+                                    // JSON parse failed, skip
+                                }
+                            }
+
                             // Tool call complete - send finish chunk
                             controller.enqueue(
                                 new TextEncoder().encode(
                                     createToolCallChunk(
                                         toolCallId,
-                                        "display_diagram",
+                                        toolCallName,
                                         "",
                                         0,
                                         false,
-                                        true, // isLast = true, triggers finish_reason: "tool_calls"
+                                        true,
                                     ),
                                 ),
                             )
@@ -457,44 +491,185 @@ export async function onRequestPost({
                             return
                         }
 
-                        // Stream the new content as argument delta (raw content, not parsed)
-                        // Don't stream </tool_call> tag parts
-                        let streamContent = content
-                        // Check for partial </tool_call> at the end
-                        const partialEndTags = [
-                            "</tool_call>",
-                            "</tool_call",
-                            "</tool_cal",
-                            "</tool_ca",
-                            "</tool_c",
-                            "</tool_",
-                            "</tool",
-                            "</too",
-                            "</to",
-                            "</t",
-                            "</",
-                        ]
-                        for (const tag of partialEndTags) {
-                            if (toolCallArgsBuffer.endsWith(tag)) {
-                                // Don't stream this content yet, might be end tag
-                                streamContent = ""
-                                break
-                            }
-                        }
+                        // Try to extract and stream arguments incrementally
+                        if (!argumentsStarted) {
+                            // Look for "arguments": {
+                            const argsMatch =
+                                toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
+                            if (argsMatch && argsMatch.index !== undefined) {
+                                argumentsStarted = true
+                                // Find the position of the opening brace
+                                const argsStartPos =
+                                    argsMatch.index + argsMatch[0].length - 1 // Position of {
+                                braceDepth = 1
+                                lastStreamedArgsLength = 0
 
-                        if (streamContent) {
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createToolCallChunk(
-                                        toolCallId,
-                                        "",
-                                        streamContent,
-                                        0,
-                                        false,
-                                        false,
+                                // Stream the opening brace
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            toolCallName,
+                                            "{",
+                                            0,
+                                            false,
+                                            false,
+                                        ),
                                     ),
-                                ),
-                            )
+                                )
+                                lastStreamedArgsLength = 1
+
+                                // Process remaining content after {
+                                const argsContent = toolCallArgsBuffer.slice(
+                                    argsStartPos + 1,
+                                )
+                                if (argsContent.length > 0) {
+                                    // Stream incrementally, tracking brace depth
+                                    let safeToStream = ""
+                                    for (const char of argsContent) {
+                                        if (char === "{") braceDepth++
+                                        if (char === "}") {
+                                            braceDepth--
+                                            if (braceDepth === 0) {
+                                                // End of arguments object
+                                                safeToStream += char
+                                                break
+                                            }
+                                        }
+                                        safeToStream += char
+                                    }
+
+                                    if (safeToStream.length > 0) {
+                                        // Don't stream if it might be part of </tool_call>
+                                        const partialEndTags = [
+                                            "</tool_call>",
+                                            "</tool_call",
+                                            "</tool_cal",
+                                            "</tool_ca",
+                                            "</tool_c",
+                                            "</tool_",
+                                            "</tool",
+                                            "</too",
+                                            "</to",
+                                            "</t",
+                                            "</",
+                                        ]
+                                        let isSafe = true
+                                        for (const tag of partialEndTags) {
+                                            if (
+                                                toolCallArgsBuffer.endsWith(tag)
+                                            ) {
+                                                isSafe = false
+                                                break
+                                            }
+                                        }
+
+                                        if (isSafe && braceDepth > 0) {
+                                            controller.enqueue(
+                                                new TextEncoder().encode(
+                                                    createToolCallChunk(
+                                                        toolCallId,
+                                                        toolCallName,
+                                                        safeToStream,
+                                                        0,
+                                                        false,
+                                                        false,
+                                                    ),
+                                                ),
+                                            )
+                                            lastStreamedArgsLength +=
+                                                safeToStream.length
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Already streaming arguments - continue incrementally
+                            // Find where we are in the arguments
+                            const argsMatch =
+                                toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
+                            if (argsMatch && argsMatch.index !== undefined) {
+                                const argsStartPos =
+                                    argsMatch.index + argsMatch[0].length - 1
+                                const currentArgsContent =
+                                    toolCallArgsBuffer.slice(argsStartPos + 1)
+
+                                // Calculate what's new since last stream
+                                const newContent = currentArgsContent.slice(
+                                    lastStreamedArgsLength - 1,
+                                ) // -1 because we already streamed {
+
+                                if (newContent.length > 0) {
+                                    // Check for partial end tags
+                                    const partialEndTags = [
+                                        "</tool_call>",
+                                        "</tool_call",
+                                        "</tool_cal",
+                                        "</tool_ca",
+                                        "</tool_c",
+                                        "</tool_",
+                                        "</tool",
+                                        "</too",
+                                        "</to",
+                                        "</t",
+                                        "</",
+                                    ]
+                                    let isSafe = true
+                                    for (const tag of partialEndTags) {
+                                        if (toolCallArgsBuffer.endsWith(tag)) {
+                                            isSafe = false
+                                            break
+                                        }
+                                    }
+
+                                    // Also check if we're at the end of arguments (closing brace followed by })
+                                    // The pattern would be: ...}}\n</tool_call> or similar
+                                    const contentToStream = newContent
+
+                                    // Track braces in new content
+                                    let tempDepth = braceDepth
+                                    let safeLength = 0
+                                    for (
+                                        let i = 0;
+                                        i < contentToStream.length;
+                                        i++
+                                    ) {
+                                        const char = contentToStream[i]
+                                        if (char === "{") tempDepth++
+                                        if (char === "}") {
+                                            tempDepth--
+                                            if (tempDepth === 0) {
+                                                // Include this closing brace and stop
+                                                safeLength = i + 1
+                                                braceDepth = 0
+                                                break
+                                            }
+                                        }
+                                        safeLength = i + 1
+                                    }
+
+                                    if (safeLength > 0 && isSafe) {
+                                        const toStream = contentToStream.slice(
+                                            0,
+                                            safeLength,
+                                        )
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                createToolCallChunk(
+                                                    toolCallId,
+                                                    toolCallName,
+                                                    toStream,
+                                                    0,
+                                                    false,
+                                                    false,
+                                                ),
+                                            ),
+                                        )
+                                        lastStreamedArgsLength += safeLength
+                                        braceDepth = tempDepth
+                                    }
+                                }
+                            }
                         }
                         continue
                     }
@@ -523,12 +698,15 @@ export async function onRequestPost({
                         toolCallArgsBuffer = contentBuffer.slice(
                             idx + "<tool_call>".length,
                         )
+                        argumentsStarted = false
+                        braceDepth = 0
+                        lastStreamedArgsLength = 0
 
                         // Try to extract tool name for the start chunk
                         const nameMatch = toolCallArgsBuffer.match(
                             /"name"\s*:\s*"([^"]+)"/,
                         )
-                        const toolName = nameMatch
+                        toolCallName = nameMatch
                             ? nameMatch[1]
                             : "display_diagram"
 
@@ -537,7 +715,7 @@ export async function onRequestPost({
                             new TextEncoder().encode(
                                 createToolCallChunk(
                                     toolCallId,
-                                    toolName,
+                                    toolCallName,
                                     "",
                                     0,
                                     true,
@@ -546,23 +724,65 @@ export async function onRequestPost({
                             ),
                         )
 
-                        // If we already have some arguments content, stream it
-                        const argsMatch = toolCallArgsBuffer.match(
-                            /"arguments"\s*:\s*(\{[\s\S]*)/,
-                        )
-                        if (argsMatch && argsMatch[1].length > 1) {
+                        // Check if we already have arguments to stream
+                        const argsMatch =
+                            toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
+                        if (argsMatch && argsMatch.index !== undefined) {
+                            argumentsStarted = true
+                            const argsStartPos =
+                                argsMatch.index + argsMatch[0].length - 1
+                            braceDepth = 1
+
+                            // Stream opening brace
                             controller.enqueue(
                                 new TextEncoder().encode(
                                     createToolCallChunk(
                                         toolCallId,
-                                        toolName,
-                                        argsMatch[1],
+                                        toolCallName,
+                                        "{",
                                         0,
                                         false,
                                         false,
                                     ),
                                 ),
                             )
+                            lastStreamedArgsLength = 1
+
+                            // Stream any content after {
+                            const argsContent = toolCallArgsBuffer.slice(
+                                argsStartPos + 1,
+                            )
+                            if (argsContent.length > 0) {
+                                let safeToStream = ""
+                                for (const char of argsContent) {
+                                    if (char === "{") braceDepth++
+                                    if (char === "}") {
+                                        braceDepth--
+                                        if (braceDepth === 0) {
+                                            safeToStream += char
+                                            break
+                                        }
+                                    }
+                                    safeToStream += char
+                                }
+
+                                if (safeToStream.length > 0 && braceDepth > 0) {
+                                    controller.enqueue(
+                                        new TextEncoder().encode(
+                                            createToolCallChunk(
+                                                toolCallId,
+                                                toolCallName,
+                                                safeToStream,
+                                                0,
+                                                false,
+                                                false,
+                                            ),
+                                        ),
+                                    )
+                                    lastStreamedArgsLength +=
+                                        safeToStream.length
+                                }
+                            }
                         }
                         continue
                     }
