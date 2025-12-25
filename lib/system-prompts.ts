@@ -99,9 +99,9 @@ When using edit_diagram tool:
 - For update/add: provide cell_id and complete new_xml (full mxCell element including mxGeometry)
 - For delete: only cell_id is needed
 - Find the cell_id from "Current diagram XML" in system context
-- Example update: {"operations": [{"type": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
-- Example delete: {"operations": [{"type": "delete", "cell_id": "5"}]}
-- Example add: {"operations": [{"type": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example delete: {"operations": [{"operation": "delete", "cell_id": "5"}]}
+- Example add: {"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
@@ -282,9 +282,9 @@ edit_diagram uses ID-based operations to modify cells directly by their id attri
 \`\`\`json
 {
   "operations": [
-    {"type": "update", "cell_id": "3", "new_xml": "<mxCell ...complete element...>"},
-    {"type": "add", "cell_id": "new1", "new_xml": "<mxCell ...new element...>"},
-    {"type": "delete", "cell_id": "5"}
+    {"operation": "update", "cell_id": "3", "new_xml": "<mxCell ...complete element...>"},
+    {"operation": "add", "cell_id": "new1", "new_xml": "<mxCell ...new element...>"},
+    {"operation": "delete", "cell_id": "5"}
   ]
 }
 \`\`\`
@@ -293,17 +293,17 @@ edit_diagram uses ID-based operations to modify cells directly by their id attri
 
 Change label:
 \`\`\`json
-{"operations": [{"type": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
 Add new shape:
 \`\`\`json
-{"operations": [{"type": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+{"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
 Delete cell:
 \`\`\`json
-{"operations": [{"type": "delete", "cell_id": "5"}]}
+{"operations": [{"operation": "delete", "cell_id": "5"}]}
 \`\`\`
 
 **Error Recovery:**

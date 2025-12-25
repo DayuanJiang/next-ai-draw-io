@@ -40,7 +40,7 @@ import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
 
 interface DiagramOperation {
-    type: "update" | "add" | "delete"
+    operation: "update" | "add" | "delete"
     cell_id: string
     new_xml?: string
 }
@@ -53,12 +53,12 @@ function getCompleteOperations(
     return operations.filter(
         (op) =>
             op &&
-            typeof op.type === "string" &&
-            ["update", "add", "delete"].includes(op.type) &&
+            typeof op.operation === "string" &&
+            ["update", "add", "delete"].includes(op.operation) &&
             typeof op.cell_id === "string" &&
             op.cell_id.length > 0 &&
             // delete doesn't need new_xml, update/add do
-            (op.type === "delete" || typeof op.new_xml === "string"),
+            (op.operation === "delete" || typeof op.new_xml === "string"),
     )
 }
 
@@ -79,20 +79,20 @@ function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
         <div className="space-y-3">
             {operations.map((op, index) => (
                 <div
-                    key={`${op.type}-${op.cell_id}-${index}`}
+                    key={`${op.operation}-${op.cell_id}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
                         <span
                             className={`text-[10px] font-medium uppercase tracking-wide ${
-                                op.type === "delete"
+                                op.operation === "delete"
                                     ? "text-red-600"
-                                    : op.type === "add"
+                                    : op.operation === "add"
                                       ? "text-green-600"
                                       : "text-blue-600"
                             }`}
                         >
-                            {op.type}
+                            {op.operation}
                         </span>
                         <span className="text-xs text-muted-foreground">
                             cell_id: {op.cell_id}
