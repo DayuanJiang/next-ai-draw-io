@@ -151,6 +151,9 @@ function SettingsContent({
     }, [open])
 
     const changeLanguage = (lang: string) => {
+        // Save locale to localStorage for persistence across restarts
+        localStorage.setItem("next-ai-draw-io-locale", lang)
+
         const parts = pathname.split("/")
         if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
             parts[1] = lang

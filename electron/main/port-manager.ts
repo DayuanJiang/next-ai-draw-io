@@ -3,16 +3,16 @@ import { app } from "electron"
 
 /**
  * Port configuration
+ * Using fixed ports to preserve localStorage across restarts
+ * (localStorage is origin-specific, so changing ports loses all saved data)
  */
 const PORT_CONFIG = {
     // Development mode uses fixed port for hot reload compatibility
     development: 6002,
-    // Production mode port range (will find first available)
-    production: {
-        min: 10000,
-        max: 65535,
-    },
-    // Maximum attempts to find an available port
+    // Production mode uses fixed port (61337) to preserve localStorage
+    // Falls back to sequential ports if unavailable
+    production: 61337,
+    // Maximum attempts to find an available port (fallback)
     maxAttempts: 100,
 }
 
@@ -37,18 +37,10 @@ export function isPortAvailable(port: number): Promise<boolean> {
 }
 
 /**
- * Generate a random port within the production range
- */
-function getRandomPort(): number {
-    const { min, max } = PORT_CONFIG.production
-    return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-/**
  * Find an available port
  * - In development: uses fixed port (6002)
- * - In production: finds a random available port
- * - If a port was previously allocated, verifies it's still available
+ * - In production: uses fixed port (61337) to preserve localStorage
+ * - Falls back to sequential ports if preferred port is unavailable
  *
  * @param reuseExisting If true, try to reuse the previously allocated port
  * @returns Promise<number> The available port
@@ -56,6 +48,9 @@ function getRandomPort(): number {
  */
 export async function findAvailablePort(reuseExisting = true): Promise<number> {
     const isDev = !app.isPackaged
+    const preferredPort = isDev
+        ? PORT_CONFIG.development
+        : PORT_CONFIG.production
 
     // Try to reuse cached port if requested and available
     if (reuseExisting && allocatedPort !== null) {
@@ -69,29 +64,22 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
         allocatedPort = null
     }
 
-    if (isDev) {
-        // Development mode: use fixed port
-        const port = PORT_CONFIG.development
-        const available = await isPortAvailable(port)
-        if (available) {
-            allocatedPort = port
-            return port
-        }
-        console.warn(
-            `Development port ${port} is in use, finding alternative...`,
-        )
+    // Try preferred port first
+    if (await isPortAvailable(preferredPort)) {
+        allocatedPort = preferredPort
+        return preferredPort
     }
 
-    // Production mode or dev port unavailable: find random available port
-    for (let attempt = 0; attempt < PORT_CONFIG.maxAttempts; attempt++) {
-        const port = isDev
-            ? PORT_CONFIG.development + attempt + 1
-            : getRandomPort()
+    console.warn(
+        `Preferred port ${preferredPort} is in use, finding alternative...`,
+    )
 
-        const available = await isPortAvailable(port)
-        if (available) {
+    // Fallback: try sequential ports starting from preferred + 1
+    for (let attempt = 1; attempt <= PORT_CONFIG.maxAttempts; attempt++) {
+        const port = preferredPort + attempt
+        if (await isPortAvailable(port)) {
             allocatedPort = port
-            console.log(`Allocated port: ${port}`)
+            console.log(`Allocated fallback port: ${port}`)
             return port
         }
     }

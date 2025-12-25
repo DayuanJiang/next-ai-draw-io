@@ -1,4 +1,5 @@
 "use client"
+import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
@@ -10,6 +11,7 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { i18n, type Locale } from "@/lib/i18n/config"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
@@ -24,6 +26,8 @@ export default function Home() {
         showSaveDialog,
         setShowSaveDialog,
     } = useDiagram()
+    const router = useRouter()
+    const pathname = usePathname()
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
@@ -58,6 +62,18 @@ export default function Home() {
 
     // Load preferences from localStorage after mount
     useEffect(() => {
+        // Restore saved locale and redirect if needed
+        const savedLocale = localStorage.getItem("next-ai-draw-io-locale")
+        if (savedLocale && i18n.locales.includes(savedLocale as Locale)) {
+            const pathParts = pathname.split("/").filter(Boolean)
+            const currentLocale = pathParts[0]
+            if (currentLocale !== savedLocale) {
+                pathParts[0] = savedLocale
+                router.replace(`/${pathParts.join("/")}`)
+                return // Wait for redirect
+            }
+        }
+
         const savedUi = localStorage.getItem("drawio-theme")
         if (savedUi === "min" || savedUi === "sketch") {
             setDrawioUi(savedUi)
@@ -84,7 +100,7 @@ export default function Home() {
         }
 
         setIsLoaded(true)
-    }, [])
+    }, [pathname, router])
 
     const handleDarkModeChange = async () => {
         await saveDiagramToStorage()
