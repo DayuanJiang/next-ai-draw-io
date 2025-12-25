@@ -167,13 +167,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     const { messages, xml, previousXml, sessionId } = await req.json()
 
-    // Get user IP for Langfuse tracking (hashed for privacy)
+    // Get user IP for Langfuse tracking (base64 encoded for privacy)
     const forwardedFor = req.headers.get("x-forwarded-for")
     const rawIp = forwardedFor?.split(",")[0]?.trim() || "anonymous"
     const userId =
         rawIp === "anonymous"
             ? rawIp
-            : `user-${Buffer.from(rawIp).toString("base64url").slice(0, 8)}`
+            : `user-${Buffer.from(rawIp).toString("base64url")}`
 
     // Validate sessionId for Langfuse (must be string, max 200 chars)
     const validSessionId =

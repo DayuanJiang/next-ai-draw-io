@@ -32,13 +32,13 @@ export async function POST(req: Request) {
         return Response.json({ success: true, logged: false })
     }
 
-    // Get user IP for tracking (hashed for privacy)
+    // Get user IP for tracking (base64 encoded for privacy)
     const forwardedFor = req.headers.get("x-forwarded-for")
     const rawIp = forwardedFor?.split(",")[0]?.trim() || "anonymous"
     const userId =
         rawIp === "anonymous"
             ? rawIp
-            : `user-${Buffer.from(rawIp).toString("base64url").slice(0, 8)}`
+            : `user-${Buffer.from(rawIp).toString("base64url")}`
 
     try {
         // Find the most recent chat trace for this session to attach the score to
