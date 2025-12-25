@@ -79,32 +79,50 @@ function generateToolCallInstruction(tools: OpenAITool[]): string {
 You have access to the following tools:
 ${toolDescriptions}
 
+### TOOL SELECTION - CRITICAL!
+
+⚠️ Before calling any tool, check "Current diagram XML" in the system context:
+- If it contains mxCell elements with id="2" or higher → diagram EXISTS → use edit_diagram
+- If it's empty or only has root cells (id="0", id="1") → no diagram → use display_diagram
+
+NEVER use display_diagram to modify an existing diagram! Use edit_diagram instead.
+
 ### STRICT OUTPUT FORMAT
 
 When you need to use a tool, output EXACTLY this format:
 
 <tool_call>
-{"name": "TOOL_NAME", "arguments": {"param1": "value1", "param2": "value2"}}
+{"name": "TOOL_NAME", "arguments": {"param1": "value1"}}
 </tool_call>
 
-### EXAMPLE
+### EXAMPLES
 
-If you need to call display_diagram with XML content:
-
+Example 1 - Create NEW diagram (display_diagram):
 <tool_call>
-{"name": "display_diagram", "arguments": {"xml": "<mxGraphModel><root><mxCell id=\\"0\\"/></root></mxGraphModel>"}}
+{"name": "display_diagram", "arguments": {"xml": "<mxCell id=\\"2\\" value=\\"Hello\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}}
+</tool_call>
+
+Example 2 - MODIFY existing diagram (edit_diagram) - change color:
+<tool_call>
+{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" value=\\"\\" style=\\"ellipse;fillColor=#1E90FF;strokeColor=#000000;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"300\\" y=\\"200\\" width=\\"60\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}}
+</tool_call>
+
+Example 3 - Multiple updates (edit_diagram):
+<tool_call>
+{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" .../>"}, {"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" .../>"}]}}
 </tool_call>
 
 ### CRITICAL RULES - MUST FOLLOW
 
 1. The content between <tool_call> and </tool_call> MUST be valid JSON - nothing else
-2. DO NOT use XML tags inside <tool_call> - only JSON
+2. DO NOT use XML tags inside <tool_call> - only JSON with "name" and "arguments"
 3. DO NOT write: <tool_call><display_diagram>...</display_diagram></tool_call> ❌
-4. DO write: <tool_call>{"name": "display_diagram", "arguments": {...}}</tool_call> ✓
-5. Escape double quotes inside string values with backslash: \\"
-6. Escape newlines as \\n, tabs as \\t
-7. Output ONLY the <tool_call> block - no text before or after
-8. After the </tool_call> tag, STOP immediately
+4. DO NOT write: <tool_call>update\\ncell_id: 2\\n<mxCell.../></tool_call> ❌
+5. DO write: <tool_call>{"name": "edit_diagram", "arguments": {"operations": [...]}}</tool_call> ✓
+6. Escape double quotes inside string values with backslash: \\"
+7. Escape newlines as \\n, tabs as \\t
+8. Output ONLY the <tool_call> block - no text before or after
+9. After the </tool_call> tag, STOP immediately
 `
 }
 
