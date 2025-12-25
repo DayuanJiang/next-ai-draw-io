@@ -24,6 +24,39 @@
     }
 }
 
+.deprecation-notice {
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.deprecation-notice strong {
+    color: #856404;
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.deprecation-notice p {
+    color: #856404;
+    font-size: 13px;
+    margin: 4px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .deprecation-notice {
+        background-color: #332701;
+        border-color: #665200;
+    }
+
+    .deprecation-notice strong,
+    .deprecation-notice p {
+        color: #ffc107;
+    }
+}
+
 * {
     margin: 0;
     padding: 0;
