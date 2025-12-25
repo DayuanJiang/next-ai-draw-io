@@ -157,6 +157,10 @@ function simplifyMessages(
 }
 
 // Parse SSE data from EdgeOne response
+// EdgeOne returns AI SDK Data Stream format:
+// - data: {"type":"text-delta","textDelta":"..."}
+// - data: {"type":"finish","finishReason":"stop"}
+// NOT OpenAI format
 function parseSSEData(
     line: string,
 ): { content?: string; finish_reason?: string } | null {
@@ -166,12 +170,34 @@ function parseSSEData(
 
     try {
         const parsed = JSON.parse(data)
+
+        // Handle AI SDK Data Stream format
+        if (parsed.type === "text-delta") {
+            return { content: parsed.textDelta }
+        }
+        if (parsed.type === "finish") {
+            return { finish_reason: parsed.finishReason || "stop" }
+        }
+        if (
+            parsed.type === "start" ||
+            parsed.type === "start-step" ||
+            parsed.type === "finish-step"
+        ) {
+            // Ignore these control messages
+            return null
+        }
+
+        // Fallback: try OpenAI format (in case EdgeOne changes)
         const delta = parsed.choices?.[0]?.delta
         const finishReason = parsed.choices?.[0]?.finish_reason
-        return {
-            content: delta?.content,
-            finish_reason: finishReason,
+        if (delta?.content || finishReason) {
+            return {
+                content: delta?.content,
+                finish_reason: finishReason,
+            }
         }
+
+        return null
     } catch {
         return null
     }
