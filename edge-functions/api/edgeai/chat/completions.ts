@@ -157,15 +157,34 @@ function simplifyMessages(
 }
 
 // Parse SSE data from EdgeOne response
+// EdgeOne may return either OpenAI format or AI SDK UI Message Stream format
 function parseSSEData(
     line: string,
 ): { content?: string; finish_reason?: string } | null {
     if (!line.startsWith("data: ")) return null
-    const data = line.slice(6)
+    const data = line.slice(6).trim()
     if (data === "[DONE]") return { finish_reason: "stop" }
 
     try {
         const parsed = JSON.parse(data)
+
+        // Check for AI SDK UI Message Stream format first
+        // Format: {"type":"text-delta","id":"0","delta":"content"}
+        if (parsed.type === "text-delta" && parsed.delta !== undefined) {
+            return { content: parsed.delta }
+        }
+
+        // Check for AI SDK finish events
+        if (parsed.type === "finish" || parsed.type === "finish-step") {
+            return { finish_reason: "stop" }
+        }
+
+        // Skip other AI SDK event types (start, start-step, text-start, text-end, etc.)
+        if (parsed.type && !parsed.choices) {
+            return null
+        }
+
+        // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
         const delta = parsed.choices?.[0]?.delta
         const finishReason = parsed.choices?.[0]?.finish_reason
         return {
