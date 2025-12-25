@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import { z } from "zod"
 import { getLangfuseClient } from "@/lib/langfuse"
+import { getUserIdFromRequest } from "@/lib/user-id"
 
 const feedbackSchema = z.object({
     messageId: z.string().min(1).max(200),
@@ -32,13 +33,8 @@ export async function POST(req: Request) {
         return Response.json({ success: true, logged: false })
     }
 
-    // Get user IP for tracking (hashed for privacy)
-    const forwardedFor = req.headers.get("x-forwarded-for")
-    const rawIp = forwardedFor?.split(",")[0]?.trim() || "anonymous"
-    const userId =
-        rawIp === "anonymous"
-            ? rawIp
-            : `user-${Buffer.from(rawIp).toString("base64url").slice(0, 8)}`
+    // Get user ID for tracking
+    const userId = getUserIdFromRequest(req)
 
     try {
         // Find the most recent chat trace for this session to attach the score to

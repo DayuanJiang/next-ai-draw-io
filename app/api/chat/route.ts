@@ -26,6 +26,7 @@ import {
     wrapWithObserve,
 } from "@/lib/langfuse"
 import { getSystemPrompt } from "@/lib/system-prompts"
+import { getUserIdFromRequest } from "@/lib/user-id"
 
 export const maxDuration = 120
 
@@ -167,13 +168,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     const { messages, xml, previousXml, sessionId } = await req.json()
 
-    // Get user IP for Langfuse tracking (hashed for privacy)
-    const forwardedFor = req.headers.get("x-forwarded-for")
-    const rawIp = forwardedFor?.split(",")[0]?.trim() || "anonymous"
-    const userId =
-        rawIp === "anonymous"
-            ? rawIp
-            : `user-${Buffer.from(rawIp).toString("base64url").slice(0, 8)}`
+    // Get user ID for Langfuse tracking and quota
+    const userId = getUserIdFromRequest(req)
 
     // Validate sessionId for Langfuse (must be string, max 200 chars)
     const validSessionId =
