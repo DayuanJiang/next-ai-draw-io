@@ -412,11 +412,7 @@ export function ModelConfigDialog({
                                                 setSelectedProviderId(
                                                     provider.id,
                                                 )
-                                                setValidationStatus(
-                                                    provider.validated
-                                                        ? "success"
-                                                        : "idle",
-                                                )
+                                                setValidationStatus("idle")
                                                 setShowApiKey(false)
                                             }}
                                             className={cn(
