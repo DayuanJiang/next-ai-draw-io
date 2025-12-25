@@ -390,42 +390,19 @@ export async function onRequestPost({
 
                     if (parsed.finish_reason === "stop") {
                         if (toolCallStarted) {
-                            // Tool call in progress - try to parse and finish it
-                            // Remove </tool_call> if present
-                            const argsJson = toolCallArgsBuffer
-                                .replace(/<\/tool_call>[\s\S]*$/, "")
-                                .trim()
-
-                            try {
-                                const parsed = JSON.parse(argsJson)
-                                // Send final chunk with finish_reason
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            parsed.name,
-                                            "",
-                                            0,
-                                            false,
-                                            true,
-                                        ),
+                            // Tool call in progress - send finish chunk
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createToolCallChunk(
+                                        toolCallId,
+                                        "display_diagram",
+                                        "",
+                                        0,
+                                        false,
+                                        true, // isLast = true
                                     ),
-                                )
-                            } catch {
-                                // JSON incomplete, send empty finish
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            "display_diagram",
-                                            "",
-                                            0,
-                                            false,
-                                            true,
-                                        ),
-                                    ),
-                                )
-                            }
+                                ),
+                            )
                             controller.enqueue(
                                 new TextEncoder().encode("data: [DONE]\n\n"),
                             )
@@ -459,65 +436,59 @@ export async function onRequestPost({
                         // We're inside a tool call - stream the arguments
                         toolCallArgsBuffer += content
 
-                        // Check if tool call ended
+                        // Check if tool call ended (handle split tags like </ + tool + _call + >)
                         if (toolCallArgsBuffer.includes("</tool_call>")) {
-                            // Parse complete tool call
-                            const argsJson = toolCallArgsBuffer
-                                .replace(/<\/tool_call>[\s\S]*$/, "")
-                                .trim()
-
-                            try {
-                                const parsed = JSON.parse(argsJson)
-                                // Send the remaining arguments
-                                const remaining = JSON.stringify(
-                                    parsed.arguments,
-                                )
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            parsed.name,
-                                            remaining,
-                                            0,
-                                            false,
-                                            true,
-                                        ),
+                            // Tool call complete - send finish chunk
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createToolCallChunk(
+                                        toolCallId,
+                                        "display_diagram",
+                                        "",
+                                        0,
+                                        false,
+                                        true, // isLast = true, triggers finish_reason: "tool_calls"
                                     ),
-                                )
-                            } catch {
-                                // Fallback - send what we have
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            "display_diagram",
-                                            "",
-                                            0,
-                                            false,
-                                            true,
-                                        ),
-                                    ),
-                                )
-                            }
+                                ),
+                            )
                             controller.enqueue(
                                 new TextEncoder().encode("data: [DONE]\n\n"),
                             )
                             return
                         }
 
-                        // Stream partial arguments - extract what we can
-                        // Try to find "arguments": { and stream from there
-                        const argsMatch = toolCallArgsBuffer.match(
-                            /"arguments"\s*:\s*(\{[\s\S]*)/,
-                        )
-                        if (argsMatch) {
-                            // Stream the new content as argument delta
+                        // Stream the new content as argument delta (raw content, not parsed)
+                        // Don't stream </tool_call> tag parts
+                        let streamContent = content
+                        // Check for partial </tool_call> at the end
+                        const partialEndTags = [
+                            "</tool_call>",
+                            "</tool_call",
+                            "</tool_cal",
+                            "</tool_ca",
+                            "</tool_c",
+                            "</tool_",
+                            "</tool",
+                            "</too",
+                            "</to",
+                            "</t",
+                            "</",
+                        ]
+                        for (const tag of partialEndTags) {
+                            if (toolCallArgsBuffer.endsWith(tag)) {
+                                // Don't stream this content yet, might be end tag
+                                streamContent = ""
+                                break
+                            }
+                        }
+
+                        if (streamContent) {
                             controller.enqueue(
                                 new TextEncoder().encode(
                                     createToolCallChunk(
                                         toolCallId,
                                         "",
-                                        content,
+                                        streamContent,
                                         0,
                                         false,
                                         false,
