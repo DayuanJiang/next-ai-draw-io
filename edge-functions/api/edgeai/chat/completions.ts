@@ -222,25 +222,6 @@ function createToolCallChunk(
     return `data: ${JSON.stringify(chunk)}\n\n`
 }
 
-// Stream tool call arguments in chunks for better UX (shows loading progress)
-function* streamToolCallChunks(
-    toolCallId: string,
-    toolName: string,
-    args: object,
-    chunkSize: number = 100,
-): Generator<string> {
-    // First chunk: tool name (triggers loading state in UI)
-    yield createToolCallChunk(toolCallId, toolName, "", 0, true, false)
-
-    // Stream arguments in chunks
-    const argsStr = JSON.stringify(args)
-    for (let i = 0; i < argsStr.length; i += chunkSize) {
-        const chunk = argsStr.slice(i, i + chunkSize)
-        const isLast = i + chunkSize >= argsStr.length
-        yield createToolCallChunk(toolCallId, toolName, chunk, 0, false, isLast)
-    }
-}
-
 // Generate OpenAI-compatible SSE chunk for regular content
 function createContentChunk(
     content: string,
@@ -308,28 +289,6 @@ function getSafeOutput(content: string): string {
     }
 
     return content
-}
-
-// Try to parse and emit a tool call, returns parsed result or null
-function tryParseToolCall(
-    content: string,
-): { name: string; arguments: object } | null {
-    const toolCallMatch = content.match(
-        /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/,
-    )
-
-    if (!toolCallMatch) return null
-
-    try {
-        return JSON.parse(toolCallMatch[1].trim())
-    } catch (e) {
-        console.error(
-            "[EdgeOne] Failed to parse tool call:",
-            e,
-            toolCallMatch[1],
-        )
-        return null
-    }
 }
 
 // Handle CORS preflight requests
@@ -410,7 +369,9 @@ export async function onRequestPost({
         // With tools, we need to parse and potentially transform the response
         let lineBuffer = "" // Buffer for incomplete SSE lines
         let contentBuffer = "" // Buffer for accumulated content
-        let toolCallSent = false
+        let toolCallStarted = false // Whether we've detected <tool_call> and sent the start chunk
+        let toolCallId = ""
+        let toolCallArgsBuffer = "" // Buffer for tool call arguments (JSON content inside <tool_call>)
 
         const transformStream = new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
@@ -428,29 +389,50 @@ export async function onRequestPost({
                     if (!parsed) continue
 
                     if (parsed.finish_reason === "stop") {
-                        // Stream ended - check for tool call in accumulated content
-                        const toolCall = tryParseToolCall(contentBuffer)
+                        if (toolCallStarted) {
+                            // Tool call in progress - try to parse and finish it
+                            // Remove </tool_call> if present
+                            const argsJson = toolCallArgsBuffer
+                                .replace(/<\/tool_call>[\s\S]*$/, "")
+                                .trim()
 
-                        if (toolCall && !toolCallSent) {
-                            const toolCallId = `call_${Date.now()}`
-                            // Stream tool call chunks for better UX
-                            for (const chunk of streamToolCallChunks(
-                                toolCallId,
-                                toolCall.name,
-                                toolCall.arguments,
-                            )) {
+                            try {
+                                const parsed = JSON.parse(argsJson)
+                                // Send final chunk with finish_reason
                                 controller.enqueue(
-                                    new TextEncoder().encode(chunk),
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            parsed.name,
+                                            "",
+                                            0,
+                                            false,
+                                            true,
+                                        ),
+                                    ),
+                                )
+                            } catch {
+                                // JSON incomplete, send empty finish
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            "display_diagram",
+                                            "",
+                                            0,
+                                            false,
+                                            true,
+                                        ),
+                                    ),
                                 )
                             }
                             controller.enqueue(
                                 new TextEncoder().encode("data: [DONE]\n\n"),
                             )
-                            toolCallSent = true
                             return
                         }
 
-                        // No tool call found - output any buffered content and finish
+                        // No tool call - output any buffered content and finish
                         const safeOutput = getSafeOutput(contentBuffer)
                         if (safeOutput) {
                             controller.enqueue(
@@ -473,35 +455,153 @@ export async function onRequestPost({
                     const content = parsed.content || ""
                     if (!content) continue
 
-                    // Accumulate all content
-                    contentBuffer += content
+                    if (toolCallStarted) {
+                        // We're inside a tool call - stream the arguments
+                        toolCallArgsBuffer += content
 
-                    // Check if we have a complete tool call
-                    const toolCall = tryParseToolCall(contentBuffer)
-                    if (toolCall && !toolCallSent) {
-                        const toolCallId = `call_${Date.now()}`
-                        // Stream tool call chunks for better UX
-                        for (const chunk of streamToolCallChunks(
-                            toolCallId,
-                            toolCall.name,
-                            toolCall.arguments,
-                        )) {
-                            controller.enqueue(new TextEncoder().encode(chunk))
+                        // Check if tool call ended
+                        if (toolCallArgsBuffer.includes("</tool_call>")) {
+                            // Parse complete tool call
+                            const argsJson = toolCallArgsBuffer
+                                .replace(/<\/tool_call>[\s\S]*$/, "")
+                                .trim()
+
+                            try {
+                                const parsed = JSON.parse(argsJson)
+                                // Send the remaining arguments
+                                const remaining = JSON.stringify(
+                                    parsed.arguments,
+                                )
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            parsed.name,
+                                            remaining,
+                                            0,
+                                            false,
+                                            true,
+                                        ),
+                                    ),
+                                )
+                            } catch {
+                                // Fallback - send what we have
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            "display_diagram",
+                                            "",
+                                            0,
+                                            false,
+                                            true,
+                                        ),
+                                    ),
+                                )
+                            }
+                            controller.enqueue(
+                                new TextEncoder().encode("data: [DONE]\n\n"),
+                            )
+                            return
                         }
-                        controller.enqueue(
-                            new TextEncoder().encode("data: [DONE]\n\n"),
+
+                        // Stream partial arguments - extract what we can
+                        // Try to find "arguments": { and stream from there
+                        const argsMatch = toolCallArgsBuffer.match(
+                            /"arguments"\s*:\s*(\{[\s\S]*)/,
                         )
-                        toolCallSent = true
-                        return
+                        if (argsMatch) {
+                            // Stream the new content as argument delta
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createToolCallChunk(
+                                        toolCallId,
+                                        "",
+                                        content,
+                                        0,
+                                        false,
+                                        false,
+                                    ),
+                                ),
+                            )
+                        }
+                        continue
                     }
 
-                    // Check if content might contain a tool call (partial match)
-                    // If so, don't output anything yet
+                    // Not in tool call yet - accumulate and check for start
+                    contentBuffer += content
+
+                    // Check if tool call started
+                    if (contentBuffer.includes("<tool_call>")) {
+                        // Output any content before the tool call
+                        const idx = contentBuffer.indexOf("<tool_call>")
+                        const beforeToolCall = contentBuffer
+                            .slice(0, idx)
+                            .trim()
+                        if (beforeToolCall) {
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createContentChunk(beforeToolCall),
+                                ),
+                            )
+                        }
+
+                        // Start tool call streaming
+                        toolCallStarted = true
+                        toolCallId = `call_${Date.now()}`
+                        toolCallArgsBuffer = contentBuffer.slice(
+                            idx + "<tool_call>".length,
+                        )
+
+                        // Try to extract tool name for the start chunk
+                        const nameMatch = toolCallArgsBuffer.match(
+                            /"name"\s*:\s*"([^"]+)"/,
+                        )
+                        const toolName = nameMatch
+                            ? nameMatch[1]
+                            : "display_diagram"
+
+                        // Send tool call start chunk immediately
+                        controller.enqueue(
+                            new TextEncoder().encode(
+                                createToolCallChunk(
+                                    toolCallId,
+                                    toolName,
+                                    "",
+                                    0,
+                                    true,
+                                    false,
+                                ),
+                            ),
+                        )
+
+                        // If we already have some arguments content, stream it
+                        const argsMatch = toolCallArgsBuffer.match(
+                            /"arguments"\s*:\s*(\{[\s\S]*)/,
+                        )
+                        if (argsMatch && argsMatch[1].length > 1) {
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createToolCallChunk(
+                                        toolCallId,
+                                        toolName,
+                                        argsMatch[1],
+                                        0,
+                                        false,
+                                        false,
+                                    ),
+                                ),
+                            )
+                        }
+                        continue
+                    }
+
+                    // Check if content might contain a partial tool call tag
                     if (mightContainToolCall(contentBuffer)) {
                         continue
                     }
 
-                    // Safe to output - no tool call pattern detected
+                    // Safe to output
                     const safeOutput = getSafeOutput(contentBuffer)
                     if (safeOutput) {
                         controller.enqueue(
@@ -509,7 +609,6 @@ export async function onRequestPost({
                                 createContentChunk(safeOutput),
                             ),
                         )
-                        // Remove the output portion from buffer, keep only what wasn't output
                         contentBuffer = contentBuffer.slice(safeOutput.length)
                     }
                 }
