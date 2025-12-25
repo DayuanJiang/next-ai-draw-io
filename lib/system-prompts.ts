@@ -38,9 +38,13 @@ parameters: {
 }
 ---Tool2---
 tool name: edit_diagram
-description: Edit specific parts of the EXISTING diagram. Use this when making small targeted changes like adding/removing elements, changing labels, or adjusting properties. This is more efficient than regenerating the entire diagram.
+description: Edit specific parts of the EXISTING diagram by cell ID. Use this when making small targeted changes like adding/removing elements, changing labels, colors, or adjusting properties. This is more efficient than regenerating the entire diagram.
 parameters: {
-  edits: Array<{search: string, replace: string}>
+  operations: Array<{
+    operation: "update" | "add" | "delete",
+    cell_id: string,  // The id attribute of the mxCell to modify
+    new_xml?: string  // Complete mxCell XML (required for update/add)
+  }>
 }
 ---Tool3---
 tool name: append_diagram
