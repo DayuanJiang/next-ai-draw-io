@@ -4,11 +4,15 @@
  * This endpoint provides an OpenAI-compatible API that can be used with
  * AI SDK's createOpenAI({ baseURL: '/api/edgeai' })
  *
- * Since EdgeOne Edge AI doesn't support native function calling,
- * this function emulates it by:
- * 1. Injecting tool definitions into the system prompt
- * 2. Parsing the model output for tool call patterns
- * 3. Converting to OpenAI-compatible tool_calls streaming format
+ * EdgeOne Edge AI returns AI SDK UI Message Stream format (0:"text", e:{...})
+ * but AI SDK's createOpenAI expects OpenAI SSE format (data: {"choices":[...]})
+ *
+ * This function converts AI SDK format to OpenAI format.
+ *
+ * EdgeOne does NOT support native tool calling, so we use prompt engineering:
+ * - Inject tool instructions into system prompt
+ * - Parse <tool_call>JSON</tool_call> from model output
+ * - Convert to OpenAI tool_calls format
  *
  * Documentation: https://pages.edgeone.ai/document/edge-ai
  */
@@ -30,305 +34,12 @@ interface EdgeFunctionContext {
     next: () => Promise<Response>
 }
 
-interface OpenAITool {
+interface Tool {
     type: "function"
     function: {
         name: string
         description?: string
         parameters?: object
-    }
-}
-
-interface OpenAIMessage {
-    role: "system" | "user" | "assistant" | "tool"
-    content: string | object | null
-    tool_calls?: Array<{
-        id: string
-        type: "function"
-        function: { name: string; arguments: string }
-    }>
-    tool_call_id?: string
-}
-
-interface OpenAIRequest {
-    model: string
-    messages: OpenAIMessage[]
-    stream?: boolean
-    max_tokens?: number
-    temperature?: number
-    tools?: OpenAITool[]
-    tool_choice?: string | object
-}
-
-// Generate tool call instruction for system prompt
-function generateToolCallInstruction(tools: OpenAITool[]): string {
-    const toolDescriptions = tools
-        .map((tool) => {
-            const func = tool.function
-            const params = func.parameters
-                ? `\n    Parameters: ${JSON.stringify(func.parameters)}`
-                : ""
-            return `- ${func.name}: ${func.description || "No description"}${params}`
-        })
-        .join("\n")
-
-    return `
-
-## Tool Calling Instructions
-
-You have access to the following tools:
-${toolDescriptions}
-
-### STRICT OUTPUT FORMAT
-
-When you need to use a tool, output EXACTLY this format:
-
-<tool_call>
-{"name": "TOOL_NAME", "arguments": {"param1": "value1", "param2": "value2"}}
-</tool_call>
-
-### EXAMPLE
-
-If you need to call display_diagram with XML content:
-
-<tool_call>
-{"name": "display_diagram", "arguments": {"xml": "<mxGraphModel><root><mxCell id=\\"0\\"/></root></mxGraphModel>"}}
-</tool_call>
-
-### CRITICAL RULES - MUST FOLLOW
-
-1. The content between <tool_call> and </tool_call> MUST be valid JSON - nothing else
-2. DO NOT use XML tags inside <tool_call> - only JSON
-3. DO NOT write: <tool_call><display_diagram>...</display_diagram></tool_call> ❌
-4. DO write: <tool_call>{"name": "display_diagram", "arguments": {...}}</tool_call> ✓
-5. Escape double quotes inside string values with backslash: \\"
-6. Escape newlines as \\n, tabs as \\t
-7. Output ONLY the <tool_call> block - no text before or after
-8. After the </tool_call> tag, STOP immediately
-`
-}
-
-// Convert messages to simple text format for EdgeOne
-// EdgeOne may not support complex message content arrays
-function simplifyMessages(
-    messages: OpenAIMessage[],
-): Array<{ role: string; content: string }> {
-    return messages.map((msg) => {
-        let content: string
-
-        if (typeof msg.content === "string") {
-            content = msg.content
-        } else if (Array.isArray(msg.content)) {
-            // Handle content array (e.g., with text and image parts)
-            content = (msg.content as any[])
-                .map((part) => {
-                    if (part.type === "text") return part.text
-                    if (part.type === "image_url") return "[Image attached]"
-                    return ""
-                })
-                .filter(Boolean)
-                .join("\n")
-        } else if (msg.content === null) {
-            // Assistant message with tool_calls has null content
-            if (msg.tool_calls && msg.tool_calls.length > 0) {
-                content = msg.tool_calls
-                    .map(
-                        (tc) =>
-                            `<tool_call>\n${JSON.stringify({ name: tc.function.name, arguments: JSON.parse(tc.function.arguments) })}\n</tool_call>`,
-                    )
-                    .join("\n")
-            } else {
-                content = ""
-            }
-        } else {
-            content = JSON.stringify(msg.content)
-        }
-
-        // Handle tool role messages (tool results)
-        if (msg.role === "tool") {
-            return {
-                role: "user",
-                content: `Tool result for ${msg.tool_call_id}:\n${content}`,
-            }
-        }
-
-        return { role: msg.role, content }
-    })
-}
-
-// Parse SSE data from EdgeOne response
-// EdgeOne may return either OpenAI format or AI SDK UI Message Stream format
-function parseSSEData(
-    line: string,
-): { content?: string; finish_reason?: string } | null {
-    if (!line.startsWith("data: ")) return null
-    const data = line.slice(6).trim()
-    if (data === "[DONE]") return { finish_reason: "stop" }
-
-    try {
-        const parsed = JSON.parse(data)
-
-        // Check for AI SDK UI Message Stream format first
-        // Format: {"type":"text-delta","id":"0","delta":"content"}
-        if (parsed.type === "text-delta" && parsed.delta !== undefined) {
-            return { content: parsed.delta }
-        }
-
-        // Check for AI SDK finish events
-        if (parsed.type === "finish" || parsed.type === "finish-step") {
-            return { finish_reason: "stop" }
-        }
-
-        // Skip other AI SDK event types (start, start-step, text-start, text-end, etc.)
-        if (parsed.type && !parsed.choices) {
-            return null
-        }
-
-        // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
-        const delta = parsed.choices?.[0]?.delta
-        const finishReason = parsed.choices?.[0]?.finish_reason
-        return {
-            content: delta?.content,
-            finish_reason: finishReason,
-        }
-    } catch {
-        return null
-    }
-}
-
-// Generate OpenAI-compatible SSE chunk for tool calls
-function createToolCallChunk(
-    toolCallId: string,
-    toolName: string,
-    args: string,
-    index: number,
-    isFirst: boolean,
-    isLast: boolean,
-): string {
-    const chunk: any = {
-        id: `chatcmpl-${Date.now()}`,
-        object: "chat.completion.chunk",
-        created: Math.floor(Date.now() / 1000),
-        model: "edgeone",
-        choices: [
-            {
-                index: 0,
-                delta: isFirst
-                    ? {
-                          role: "assistant",
-                          content: null,
-                          tool_calls: [
-                              {
-                                  index,
-                                  id: toolCallId,
-                                  type: "function",
-                                  function: { name: toolName, arguments: "" },
-                              },
-                          ],
-                      }
-                    : {
-                          tool_calls: [
-                              {
-                                  index,
-                                  function: { arguments: args },
-                              },
-                          ],
-                      },
-                finish_reason: isLast ? "tool_calls" : null,
-            },
-        ],
-    }
-    return `data: ${JSON.stringify(chunk)}\n\n`
-}
-
-// Generate OpenAI-compatible SSE chunk for regular content
-function createContentChunk(
-    content: string,
-    finishReason: string | null = null,
-): string {
-    const chunk = {
-        id: `chatcmpl-${Date.now()}`,
-        object: "chat.completion.chunk",
-        created: Math.floor(Date.now() / 1000),
-        model: "edgeone",
-        choices: [
-            {
-                index: 0,
-                delta: content ? { content } : {},
-                finish_reason: finishReason,
-            },
-        ],
-    }
-    return `data: ${JSON.stringify(chunk)}\n\n`
-}
-
-// Check if content might contain a tool call (including partial tags)
-function mightContainToolCall(content: string): boolean {
-    // Check for partial <tool_call> tag at the end
-    const partialPatterns = [
-        "<tool_call>",
-        "<tool_call",
-        "<tool_cal",
-        "<tool_ca",
-        "<tool_c",
-        "<tool_",
-        "<tool",
-        "<too",
-        "<to",
-        "<t",
-    ]
-
-    for (const pattern of partialPatterns) {
-        if (content.endsWith(pattern)) return true
-    }
-
-    // Check if we're inside a tool call (started but not ended)
-    if (content.includes("<tool_call>") && !content.includes("</tool_call>")) {
-        return true
-    }
-
-    return false
-}
-
-// Get content that's safe to output (excluding potential tool call patterns)
-function getSafeOutput(content: string): string {
-    // If there's a tool call, don't output anything
-    if (content.includes("<tool_call>")) {
-        // Return content before the tool call tag
-        const idx = content.indexOf("<tool_call>")
-        return idx > 0 ? content.slice(0, idx).trim() : ""
-    }
-
-    // Check for partial tag at the end
-    for (let i = 1; i <= 11; i++) {
-        const suffix = content.slice(-i)
-        if ("<tool_call>".startsWith(suffix)) {
-            return content.slice(0, -i)
-        }
-    }
-
-    return content
-}
-
-// Try to parse and emit a tool call, returns parsed result or null
-function tryParseToolCall(
-    content: string,
-): { name: string; arguments: object } | null {
-    const toolCallMatch = content.match(
-        /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/,
-    )
-
-    if (!toolCallMatch) return null
-
-    try {
-        return JSON.parse(toolCallMatch[1].trim())
-    } catch (e) {
-        console.error(
-            "[EdgeOne] Failed to parse tool call:",
-            e,
-            toolCallMatch[1],
-        )
-        return null
     }
 }
 
@@ -345,7 +56,375 @@ export async function onRequestOptions(): Promise<Response> {
     })
 }
 
-// Main chat completions handler - OpenAI compatible with tool call emulation
+/**
+ * Generate tool calling instruction to inject into system prompt
+ */
+function generateToolCallInstruction(tools: Tool[]): string {
+    const toolDescriptions = tools
+        .map((tool) => {
+            const fn = tool.function
+            const paramsStr = fn.parameters
+                ? `\nParameters (JSON Schema): ${JSON.stringify(fn.parameters, null, 2)}`
+                : ""
+            return `- ${fn.name}: ${fn.description || "No description"}${paramsStr}`
+        })
+        .join("\n\n")
+
+    return `
+<tool_calling_instructions>
+You have access to the following tools. When you need to use a tool, output ONLY the tool call in this exact format - no other text before or after:
+
+<tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>
+
+Available tools:
+${toolDescriptions}
+
+CRITICAL RULES:
+1. Output ONLY the <tool_call> tag when calling a tool - NO explanation, NO text before/after
+2. The JSON inside must be valid - use double quotes for strings, escape special characters
+3. Do NOT wrap in markdown code blocks
+4. Do NOT add any text like "I'll help you" or "Let me" before the tool call
+5. If you need to call a tool, IMMEDIATELY output the <tool_call> tag
+
+Example correct output:
+<tool_call>{"name": "display_diagram", "arguments": {"xml": "<mxCell id=\\"2\\" value=\\"Hello\\" .../>"}}</tool_call>
+</tool_calling_instructions>
+`
+}
+
+/**
+ * Parse AI SDK UI Message Stream format and convert to OpenAI SSE format
+ *
+ * AI SDK format: 0:"text"\n, 9:{...}\n, a:{...}\n, c:{...}\n, e:{...}\n
+ * OpenAI format: data: {"choices":[{"delta":{"content":"text"}}]}\n\n
+ */
+function createAISDKToOpenAITransformer(
+    hasTools: boolean,
+): TransformStream<Uint8Array, Uint8Array> {
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
+    let buffer = ""
+    let fullContent = ""
+    let toolCallDetected = false
+    let toolCallBuffer = ""
+    const toolCallId = `call_${Date.now()}`
+
+    return new TransformStream({
+        transform(chunk, controller) {
+            buffer += decoder.decode(chunk, { stream: true })
+
+            // Process complete lines
+            const lines = buffer.split("\n")
+            buffer = lines.pop() || "" // Keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (!line.trim()) continue
+
+                // Parse AI SDK format: TYPE_CODE:JSON_OR_STRING
+                const colonIndex = line.indexOf(":")
+                if (colonIndex === -1) continue
+
+                const typeCode = line.substring(0, colonIndex)
+                const data = line.substring(colonIndex + 1)
+
+                switch (typeCode) {
+                    case "0": {
+                        // Text delta - data is a JSON string like "text"
+                        try {
+                            const text = JSON.parse(data) as string
+                            fullContent += text
+
+                            if (hasTools) {
+                                // Check for tool call pattern
+                                if (
+                                    !toolCallDetected &&
+                                    fullContent.includes("<tool_call>")
+                                ) {
+                                    toolCallDetected = true
+                                    const toolCallStart =
+                                        fullContent.indexOf("<tool_call>")
+                                    toolCallBuffer = fullContent.substring(
+                                        toolCallStart + 11,
+                                    ) // After <tool_call>
+                                } else if (toolCallDetected) {
+                                    toolCallBuffer += text
+                                } else {
+                                    // Buffer text until we know if there's a tool call
+                                    // Don't emit yet - wait to see if tool_call comes
+                                }
+                            } else {
+                                // No tools - emit text directly
+                                const openAIChunk = {
+                                    id: `chatcmpl-${Date.now()}`,
+                                    object: "chat.completion.chunk",
+                                    created: Math.floor(Date.now() / 1000),
+                                    model: "edgeone",
+                                    choices: [
+                                        {
+                                            index: 0,
+                                            delta: { content: text },
+                                            finish_reason: null,
+                                        },
+                                    ],
+                                }
+                                controller.enqueue(
+                                    encoder.encode(
+                                        `data: ${JSON.stringify(openAIChunk)}\n\n`,
+                                    ),
+                                )
+                            }
+                        } catch {
+                            // Ignore parse errors
+                        }
+                        break
+                    }
+
+                    case "e": {
+                        // Finish event
+                        try {
+                            const finishData = JSON.parse(data)
+
+                            if (hasTools && toolCallDetected) {
+                                // Extract tool call JSON
+                                const endTag =
+                                    toolCallBuffer.indexOf("</tool_call>")
+                                const toolCallJson =
+                                    endTag !== -1
+                                        ? toolCallBuffer.substring(0, endTag)
+                                        : toolCallBuffer
+
+                                try {
+                                    const toolCall = JSON.parse(toolCallJson)
+
+                                    // Emit tool call in OpenAI format
+                                    const toolCallChunk = {
+                                        id: `chatcmpl-${Date.now()}`,
+                                        object: "chat.completion.chunk",
+                                        created: Math.floor(Date.now() / 1000),
+                                        model: "edgeone",
+                                        choices: [
+                                            {
+                                                index: 0,
+                                                delta: {
+                                                    tool_calls: [
+                                                        {
+                                                            index: 0,
+                                                            id: toolCallId,
+                                                            type: "function",
+                                                            function: {
+                                                                name: toolCall.name,
+                                                                arguments:
+                                                                    JSON.stringify(
+                                                                        toolCall.arguments,
+                                                                    ),
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                                finish_reason: null,
+                                            },
+                                        ],
+                                    }
+                                    controller.enqueue(
+                                        encoder.encode(
+                                            `data: ${JSON.stringify(toolCallChunk)}\n\n`,
+                                        ),
+                                    )
+
+                                    // Emit finish with tool_calls reason
+                                    const finishChunk = {
+                                        id: `chatcmpl-${Date.now()}`,
+                                        object: "chat.completion.chunk",
+                                        created: Math.floor(Date.now() / 1000),
+                                        model: "edgeone",
+                                        choices: [
+                                            {
+                                                index: 0,
+                                                delta: {},
+                                                finish_reason: "tool_calls",
+                                            },
+                                        ],
+                                        usage: finishData.usage,
+                                    }
+                                    controller.enqueue(
+                                        encoder.encode(
+                                            `data: ${JSON.stringify(finishChunk)}\n\n`,
+                                        ),
+                                    )
+                                } catch {
+                                    // Failed to parse tool call - emit as text
+                                    if (fullContent) {
+                                        const textChunk = {
+                                            id: `chatcmpl-${Date.now()}`,
+                                            object: "chat.completion.chunk",
+                                            created: Math.floor(
+                                                Date.now() / 1000,
+                                            ),
+                                            model: "edgeone",
+                                            choices: [
+                                                {
+                                                    index: 0,
+                                                    delta: {
+                                                        content: fullContent,
+                                                    },
+                                                    finish_reason: null,
+                                                },
+                                            ],
+                                        }
+                                        controller.enqueue(
+                                            encoder.encode(
+                                                `data: ${JSON.stringify(textChunk)}\n\n`,
+                                            ),
+                                        )
+                                    }
+
+                                    const finishChunk = {
+                                        id: `chatcmpl-${Date.now()}`,
+                                        object: "chat.completion.chunk",
+                                        created: Math.floor(Date.now() / 1000),
+                                        model: "edgeone",
+                                        choices: [
+                                            {
+                                                index: 0,
+                                                delta: {},
+                                                finish_reason: "stop",
+                                            },
+                                        ],
+                                        usage: finishData.usage,
+                                    }
+                                    controller.enqueue(
+                                        encoder.encode(
+                                            `data: ${JSON.stringify(finishChunk)}\n\n`,
+                                        ),
+                                    )
+                                }
+                            } else if (hasTools && !toolCallDetected) {
+                                // Has tools but no tool call detected - emit buffered content
+                                if (fullContent) {
+                                    const textChunk = {
+                                        id: `chatcmpl-${Date.now()}`,
+                                        object: "chat.completion.chunk",
+                                        created: Math.floor(Date.now() / 1000),
+                                        model: "edgeone",
+                                        choices: [
+                                            {
+                                                index: 0,
+                                                delta: { content: fullContent },
+                                                finish_reason: null,
+                                            },
+                                        ],
+                                    }
+                                    controller.enqueue(
+                                        encoder.encode(
+                                            `data: ${JSON.stringify(textChunk)}\n\n`,
+                                        ),
+                                    )
+                                }
+
+                                const finishChunk = {
+                                    id: `chatcmpl-${Date.now()}`,
+                                    object: "chat.completion.chunk",
+                                    created: Math.floor(Date.now() / 1000),
+                                    model: "edgeone",
+                                    choices: [
+                                        {
+                                            index: 0,
+                                            delta: {},
+                                            finish_reason:
+                                                finishData.finishReason ||
+                                                "stop",
+                                        },
+                                    ],
+                                    usage: finishData.usage,
+                                }
+                                controller.enqueue(
+                                    encoder.encode(
+                                        `data: ${JSON.stringify(finishChunk)}\n\n`,
+                                    ),
+                                )
+                            } else {
+                                // No tools - just emit finish
+                                const finishChunk = {
+                                    id: `chatcmpl-${Date.now()}`,
+                                    object: "chat.completion.chunk",
+                                    created: Math.floor(Date.now() / 1000),
+                                    model: "edgeone",
+                                    choices: [
+                                        {
+                                            index: 0,
+                                            delta: {},
+                                            finish_reason:
+                                                finishData.finishReason ||
+                                                "stop",
+                                        },
+                                    ],
+                                    usage: finishData.usage,
+                                }
+                                controller.enqueue(
+                                    encoder.encode(
+                                        `data: ${JSON.stringify(finishChunk)}\n\n`,
+                                    ),
+                                )
+                            }
+
+                            // Send [DONE]
+                            controller.enqueue(
+                                encoder.encode("data: [DONE]\n\n"),
+                            )
+                        } catch {
+                            // Ignore parse errors
+                        }
+                        break
+                    }
+
+                    // Ignore other type codes (9, a, c, etc.) as EdgeOne doesn't support native tools
+                    default:
+                        break
+                }
+            }
+        },
+
+        flush(controller) {
+            // Handle any remaining buffer
+            if (buffer.trim()) {
+                // Try to process remaining data
+                const colonIndex = buffer.indexOf(":")
+                if (colonIndex !== -1) {
+                    const typeCode = buffer.substring(0, colonIndex)
+                    if (typeCode === "0") {
+                        try {
+                            const text = JSON.parse(
+                                buffer.substring(colonIndex + 1),
+                            ) as string
+                            const openAIChunk = {
+                                id: `chatcmpl-${Date.now()}`,
+                                object: "chat.completion.chunk",
+                                created: Math.floor(Date.now() / 1000),
+                                model: "edgeone",
+                                choices: [
+                                    {
+                                        index: 0,
+                                        delta: { content: text },
+                                        finish_reason: null,
+                                    },
+                                ],
+                            }
+                            controller.enqueue(
+                                encoder.encode(
+                                    `data: ${JSON.stringify(openAIChunk)}\n\n`,
+                                ),
+                            )
+                        } catch {
+                            // Ignore
+                        }
+                    }
+                }
+            }
+        },
+    })
+}
+
+// Main chat completions handler
 export async function onRequestPost({
     request,
     env,
@@ -359,200 +438,55 @@ export async function onRequestPost({
     }
 
     try {
-        const body = (await request.json()) as OpenAIRequest
+        const body = await request.json()
         const { model: requestModel, messages, stream = true, tools } = body
 
         // Use model from request or default
         const modelId =
             requestModel || env.AI_MODEL || "@tx/deepseek-ai/deepseek-v3-0324"
 
-        console.log(`[EdgeOne] Model: ${modelId}, Tools: ${tools?.length || 0}`)
+        const hasTools = tools && tools.length > 0
+
+        console.log(
+            `[EdgeOne] Model: ${modelId}, Tools: ${hasTools ? tools.length : 0}`,
+        )
 
         // Prepare messages - inject tool instructions if tools are provided
-        const processedMessages = simplifyMessages(messages)
+        const processedMessages = [...messages]
+        if (hasTools) {
+            const toolInstruction = generateToolCallInstruction(tools)
 
-        if (tools && tools.length > 0) {
             // Find system message and append tool instructions
             const systemIndex = processedMessages.findIndex(
-                (m) => m.role === "system",
+                (m: { role: string }) => m.role === "system",
             )
-            if (systemIndex >= 0) {
-                processedMessages[systemIndex].content +=
-                    generateToolCallInstruction(tools)
+            if (systemIndex !== -1) {
+                processedMessages[systemIndex] = {
+                    ...processedMessages[systemIndex],
+                    content:
+                        processedMessages[systemIndex].content +
+                        toolInstruction,
+                }
             } else {
                 // Add system message with tool instructions
                 processedMessages.unshift({
                     role: "system",
-                    content: generateToolCallInstruction(tools),
+                    content: toolInstruction,
                 })
             }
         }
 
-        // Call EdgeOne Edge AI
+        // Call EdgeOne Edge AI (without tools - not supported)
         const aiResponse = await AI.chatCompletions({
             model: modelId,
             messages: processedMessages,
             stream,
         })
 
-        // If no tools, return stream directly
-        if (!tools || tools.length === 0) {
-            return new Response(aiResponse, {
-                headers: {
-                    ...corsHeaders,
-                    "Content-Type": "text/event-stream; charset=utf-8",
-                    "Cache-Control": "no-cache, no-transform",
-                    Connection: "keep-alive",
-                },
-            })
-        }
-
-        // With tools, we need to parse and potentially transform the response
-        let lineBuffer = "" // Buffer for incomplete SSE lines
-        let contentBuffer = "" // Buffer for accumulated content
-        let toolCallSent = false
-
-        const transformStream = new TransformStream<Uint8Array, Uint8Array>({
-            transform(chunk, controller) {
-                const text = new TextDecoder().decode(chunk)
-                const buffer = lineBuffer + text
-                const lines = buffer.split("\n")
-
-                // Keep incomplete line in buffer
-                lineBuffer = lines.pop() || ""
-
-                for (const line of lines) {
-                    if (!line.trim()) continue
-
-                    const parsed = parseSSEData(line)
-                    if (!parsed) continue
-
-                    if (parsed.finish_reason === "stop") {
-                        // Stream ended - check for tool call in accumulated content
-                        const toolCall = tryParseToolCall(contentBuffer)
-
-                        if (toolCall && !toolCallSent) {
-                            const toolCallId = `call_${Date.now()}`
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createToolCallChunk(
-                                        toolCallId,
-                                        toolCall.name,
-                                        "",
-                                        0,
-                                        true,
-                                        false,
-                                    ),
-                                ),
-                            )
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createToolCallChunk(
-                                        toolCallId,
-                                        toolCall.name,
-                                        JSON.stringify(toolCall.arguments),
-                                        0,
-                                        false,
-                                        true,
-                                    ),
-                                ),
-                            )
-                            controller.enqueue(
-                                new TextEncoder().encode("data: [DONE]\n\n"),
-                            )
-                            toolCallSent = true
-                            return
-                        }
-
-                        // No tool call found - output any buffered content and finish
-                        const safeOutput = getSafeOutput(contentBuffer)
-                        if (safeOutput) {
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createContentChunk(safeOutput),
-                                ),
-                            )
-                        }
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createContentChunk("", "stop"),
-                            ),
-                        )
-                        controller.enqueue(
-                            new TextEncoder().encode("data: [DONE]\n\n"),
-                        )
-                        continue
-                    }
-
-                    const content = parsed.content || ""
-                    if (!content) continue
-
-                    // Accumulate all content
-                    contentBuffer += content
-
-                    // Check if we have a complete tool call
-                    const toolCall = tryParseToolCall(contentBuffer)
-                    if (toolCall && !toolCallSent) {
-                        const toolCallId = `call_${Date.now()}`
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createToolCallChunk(
-                                    toolCallId,
-                                    toolCall.name,
-                                    "",
-                                    0,
-                                    true,
-                                    false,
-                                ),
-                            ),
-                        )
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createToolCallChunk(
-                                    toolCallId,
-                                    toolCall.name,
-                                    JSON.stringify(toolCall.arguments),
-                                    0,
-                                    false,
-                                    true,
-                                ),
-                            ),
-                        )
-                        controller.enqueue(
-                            new TextEncoder().encode("data: [DONE]\n\n"),
-                        )
-                        toolCallSent = true
-                        return
-                    }
-
-                    // Check if content might contain a tool call (partial match)
-                    // If so, don't output anything yet
-                    if (mightContainToolCall(contentBuffer)) {
-                        continue
-                    }
-
-                    // Safe to output - no tool call pattern detected
-                    const safeOutput = getSafeOutput(contentBuffer)
-                    if (safeOutput) {
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createContentChunk(safeOutput),
-                            ),
-                        )
-                        // Keep only potential partial tag in buffer
-                        contentBuffer = contentBuffer.slice(
-                            contentBuffer.length - 15,
-                        )
-                    }
-                }
-            },
-
-            flush() {
-                // Nothing to do - handled in transform
-            },
-        })
-
-        const transformedStream = aiResponse.pipeThrough(transformStream)
+        // Transform AI SDK format to OpenAI format
+        const transformedStream = aiResponse.pipeThrough(
+            createAISDKToOpenAITransformer(hasTools),
+        )
 
         return new Response(transformedStream, {
             headers: {
