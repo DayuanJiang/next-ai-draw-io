@@ -1,6 +1,13 @@
 "use client"
 
-import { Bot, Check, ChevronDown, Server, Settings2 } from "lucide-react"
+import {
+    AlertTriangle,
+    Bot,
+    Check,
+    ChevronDown,
+    Server,
+    Settings2,
+} from "lucide-react"
 import { useMemo, useState } from "react"
 import {
     ModelSelectorContent,
@@ -26,6 +33,7 @@ interface ModelSelectorProps {
     onSelect: (modelId: string | undefined) => void
     onConfigure: () => void
     disabled?: boolean
+    showUnvalidatedModels?: boolean
 }
 
 // Map our provider names to models.dev logo names
@@ -67,17 +75,20 @@ export function ModelSelector({
     onSelect,
     onConfigure,
     disabled = false,
+    showUnvalidatedModels = false,
 }: ModelSelectorProps) {
     const dict = useDictionary()
     const [open, setOpen] = useState(false)
-    // Only show validated models in the selector
-    const validatedModels = useMemo(
-        () => models.filter((m) => m.validated === true),
-        [models],
-    )
+    // Filter models based on showUnvalidatedModels setting
+    const displayModels = useMemo(() => {
+        if (showUnvalidatedModels) {
+            return models
+        }
+        return models.filter((m) => m.validated === true)
+    }, [models, showUnvalidatedModels])
     const groupedModels = useMemo(
-        () => groupModelsByProvider(validatedModels),
-        [validatedModels],
+        () => groupModelsByProvider(displayModels),
+        [displayModels],
     )
 
     // Find selected model for display
@@ -126,7 +137,7 @@ export function ModelSelector({
                 />
                 <ModelSelectorList className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <ModelSelectorEmpty>
-                        {validatedModels.length === 0 && models.length > 0
+                        {displayModels.length === 0 && models.length > 0
                             ? dict.modelConfig.noVerifiedModels
                             : dict.modelConfig.noModelsFound}
                     </ModelSelectorEmpty>
@@ -191,6 +202,15 @@ export function ModelSelector({
                                         <ModelSelectorName>
                                             {model.modelId}
                                         </ModelSelectorName>
+                                        {model.validated !== true && (
+                                            <AlertTriangle
+                                                className="ml-auto h-3 w-3 text-warning"
+                                                title={
+                                                    dict.modelConfig
+                                                        .unvalidatedModelWarning
+                                                }
+                                            />
+                                        )}
                                     </ModelSelectorItem>
                                 ))}
                             </ModelSelectorGroup>
@@ -213,7 +233,9 @@ export function ModelSelector({
                     </ModelSelectorGroup>
                     {/* Info text */}
                     <div className="px-3 py-2 text-xs text-muted-foreground border-t">
-                        {dict.modelConfig.onlyVerifiedShown}
+                        {showUnvalidatedModels
+                            ? dict.modelConfig.allModelsShown
+                            : dict.modelConfig.onlyVerifiedShown}
                     </div>
                 </ModelSelectorList>
             </ModelSelectorContent>
