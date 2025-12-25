@@ -14,7 +14,7 @@
         "prepare": "husky",
         "electron:dev": "node scripts/electron-dev.mjs",
         "electron:build": "npm run build && npm run electron:compile",
-        "electron:compile": "npx esbuild electron/main/index.ts electron/preload/index.ts electron/preload/settings.ts --bundle --platform=node --outdir=dist-electron --external:electron --sourcemap --packages=external && npx shx cp -r electron/settings dist-electron/",
+        "electron:compile": "npx esbuild electron/main/index.ts electron/preload/index.ts --bundle --platform=node --outdir=dist-electron --external:electron --sourcemap --packages=external",
         "electron:start": "npx cross-env NODE_ENV=development npx electron .",
         "electron:prepare": "node scripts/prepare-electron-build.mjs",
         "dist": "npm run electron:build && npm run electron:prepare && npx electron-builder",
