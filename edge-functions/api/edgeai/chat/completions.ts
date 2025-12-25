@@ -592,8 +592,47 @@ export async function onRequestPost({
             )
         })
 
+        // Normalize messages - EdgeOne requires string content, not array format
+        // AI SDK sends: { role: "user", content: [{ type: "text", text: "..." }] }
+        // EdgeOne expects: { role: "user", content: "..." }
+        const normalizedMessages = messages.map((m: any) => {
+            if (typeof m.content === "string") {
+                return m
+            }
+            if (Array.isArray(m.content)) {
+                // Extract text from content array
+                const textParts = m.content
+                    .filter((part: any) => part.type === "text")
+                    .map((part: any) => part.text)
+                    .join("\n")
+
+                // Check for image parts - EdgeOne may not support multimodal
+                const hasImages = m.content.some(
+                    (part: any) => part.type === "image",
+                )
+                if (hasImages) {
+                    console.warn(
+                        `[EdgeOne] Warning: Message contains images which may not be supported`,
+                    )
+                }
+
+                return {
+                    role: m.role,
+                    content: textParts || "",
+                }
+            }
+            return m
+        })
+
+        console.log(`[EdgeOne] Normalized messages:`)
+        normalizedMessages.forEach((m: any, i: number) => {
+            console.log(
+                `[EdgeOne] Normalized ${i}: role=${m.role}, content length=${m.content?.length || 0}`,
+            )
+        })
+
         // Prepare messages - inject tool instructions if tools are provided
-        const processedMessages = [...messages]
+        const processedMessages = [...normalizedMessages]
         if (hasTools) {
             const toolInstruction = generateToolCallInstruction(tools)
 
