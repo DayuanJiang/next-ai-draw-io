@@ -65,7 +65,10 @@ function generateToolCallInstruction(tools: OpenAITool[]): string {
     const toolDescriptions = tools
         .map((tool) => {
             const func = tool.function
-            return `- ${func.name}: ${func.description || "No description"}`
+            const params = func.parameters
+                ? `\n    Parameters: ${JSON.stringify(func.parameters)}`
+                : ""
+            return `- ${func.name}: ${func.description || "No description"}${params}`
         })
         .join("\n")
 
@@ -76,17 +79,32 @@ function generateToolCallInstruction(tools: OpenAITool[]): string {
 You have access to the following tools:
 ${toolDescriptions}
 
-When you need to use a tool, you MUST output in this EXACT format (no other text before or after):
+### STRICT OUTPUT FORMAT
+
+When you need to use a tool, output EXACTLY this format:
+
 <tool_call>
-{"name": "tool_name", "arguments": {"arg1": "value1"}}
+{"name": "TOOL_NAME", "arguments": {"param1": "value1", "param2": "value2"}}
 </tool_call>
 
-CRITICAL RULES:
-1. Output ONLY the <tool_call> block when using a tool - no explanations before or after
-2. The JSON inside must be valid - properly escape special characters
-3. For XML content in arguments, escape quotes as \\"
-4. Do NOT wrap tool calls in markdown code blocks
-5. After outputting a tool call, STOP - do not continue with more text
+### EXAMPLE
+
+If you need to call display_diagram with XML content:
+
+<tool_call>
+{"name": "display_diagram", "arguments": {"xml": "<mxGraphModel><root><mxCell id=\\"0\\"/></root></mxGraphModel>"}}
+</tool_call>
+
+### CRITICAL RULES - MUST FOLLOW
+
+1. The content between <tool_call> and </tool_call> MUST be valid JSON - nothing else
+2. DO NOT use XML tags inside <tool_call> - only JSON
+3. DO NOT write: <tool_call><display_diagram>...</display_diagram></tool_call> ❌
+4. DO write: <tool_call>{"name": "display_diagram", "arguments": {...}}</tool_call> ✓
+5. Escape double quotes inside string values with backslash: \\"
+6. Escape newlines as \\n, tabs as \\t
+7. Output ONLY the <tool_call> block - no text before or after
+8. After the </tool_call> tag, STOP immediately
 `
 }
 
