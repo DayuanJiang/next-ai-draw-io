@@ -222,6 +222,25 @@ function createToolCallChunk(
     return `data: ${JSON.stringify(chunk)}\n\n`
 }
 
+// Stream tool call arguments in chunks for better UX (shows loading progress)
+function* streamToolCallChunks(
+    toolCallId: string,
+    toolName: string,
+    args: object,
+    chunkSize: number = 100,
+): Generator<string> {
+    // First chunk: tool name (triggers loading state in UI)
+    yield createToolCallChunk(toolCallId, toolName, "", 0, true, false)
+
+    // Stream arguments in chunks
+    const argsStr = JSON.stringify(args)
+    for (let i = 0; i < argsStr.length; i += chunkSize) {
+        const chunk = argsStr.slice(i, i + chunkSize)
+        const isLast = i + chunkSize >= argsStr.length
+        yield createToolCallChunk(toolCallId, toolName, chunk, 0, false, isLast)
+    }
+}
+
 // Generate OpenAI-compatible SSE chunk for regular content
 function createContentChunk(
     content: string,
@@ -414,30 +433,16 @@ export async function onRequestPost({
 
                         if (toolCall && !toolCallSent) {
                             const toolCallId = `call_${Date.now()}`
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createToolCallChunk(
-                                        toolCallId,
-                                        toolCall.name,
-                                        "",
-                                        0,
-                                        true,
-                                        false,
-                                    ),
-                                ),
-                            )
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createToolCallChunk(
-                                        toolCallId,
-                                        toolCall.name,
-                                        JSON.stringify(toolCall.arguments),
-                                        0,
-                                        false,
-                                        true,
-                                    ),
-                                ),
-                            )
+                            // Stream tool call chunks for better UX
+                            for (const chunk of streamToolCallChunks(
+                                toolCallId,
+                                toolCall.name,
+                                toolCall.arguments,
+                            )) {
+                                controller.enqueue(
+                                    new TextEncoder().encode(chunk),
+                                )
+                            }
                             controller.enqueue(
                                 new TextEncoder().encode("data: [DONE]\n\n"),
                             )
@@ -475,30 +480,14 @@ export async function onRequestPost({
                     const toolCall = tryParseToolCall(contentBuffer)
                     if (toolCall && !toolCallSent) {
                         const toolCallId = `call_${Date.now()}`
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createToolCallChunk(
-                                    toolCallId,
-                                    toolCall.name,
-                                    "",
-                                    0,
-                                    true,
-                                    false,
-                                ),
-                            ),
-                        )
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createToolCallChunk(
-                                    toolCallId,
-                                    toolCall.name,
-                                    JSON.stringify(toolCall.arguments),
-                                    0,
-                                    false,
-                                    true,
-                                ),
-                            ),
-                        )
+                        // Stream tool call chunks for better UX
+                        for (const chunk of streamToolCallChunks(
+                            toolCallId,
+                            toolCall.name,
+                            toolCall.arguments,
+                        )) {
+                            controller.enqueue(new TextEncoder().encode(chunk))
+                        }
                         controller.enqueue(
                             new TextEncoder().encode("data: [DONE]\n\n"),
                         )
