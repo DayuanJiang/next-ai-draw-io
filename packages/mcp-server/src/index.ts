@@ -265,14 +265,22 @@ server.registerTool(
             "- add: Add a new cell. Provide cell_id (new unique id) and new_xml.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
             "- delete: Remove a cell by its id. Only cell_id is needed.\n\n" +
-            "For add/update, new_xml must be a complete mxCell element including mxGeometry.",
+            "For add/update, new_xml must be a complete mxCell element including mxGeometry.\n\n" +
+            "Example - Add a rectangle:\n" +
+            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            "Example - Update a cell:\n" +
+            '{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            "Example - Delete a cell:\n" +
+            '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
             operations: z
                 .array(
                     z.object({
-                        type: z
+                        operation: z
                             .enum(["update", "add", "delete"])
-                            .describe("Operation type"),
+                            .describe(
+                                "Operation to perform: add, update, or delete",
+                            ),
                         cell_id: z.string().describe("The id of the mxCell"),
                         new_xml: z
                             .string()
@@ -356,13 +364,13 @@ server.registerTool(
                     )
                     if (fixed) {
                         log.info(
-                            `Operation ${op.type} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
+                            `Operation ${op.operation} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
                         )
                         return { ...op, new_xml: fixed }
                     }
                     if (!valid && error) {
                         log.warn(
-                            `Operation ${op.type} ${op.cell_id}: XML validation failed: ${error}`,
+                            `Operation ${op.operation} ${op.cell_id}: XML validation failed: ${error}`,
                         )
                     }
                 }

@@ -609,14 +609,22 @@ Operations:
 
 For update/add, new_xml must be a complete mxCell element including mxGeometry.
 
-⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"`,
+⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
+
+Example - Add a rectangle:
+{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
+
+Example - Delete a cell:
+{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}`,
                 inputSchema: z.object({
                     operations: z
                         .array(
                             z.object({
-                                type: z
+                                operation: z
                                     .enum(["update", "add", "delete"])
-                                    .describe("Operation type"),
+                                    .describe(
+                                        "Operation to perform: add, update, or delete",
+                                    ),
                                 cell_id: z
                                     .string()
                                     .describe(

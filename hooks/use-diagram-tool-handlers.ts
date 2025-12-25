@@ -30,7 +30,7 @@ type AddToolOutputParams = AddToolOutputSuccess | AddToolOutputError
 type AddToolOutputFn = (params: AddToolOutputParams) => void
 
 interface DiagramOperation {
-    type: "update" | "add" | "delete"
+    operation: "update" | "add" | "delete"
     cell_id: string
     new_xml?: string
 }
