@@ -21,6 +21,7 @@ export type ProviderName =
     | "siliconflow"
     | "sglang"
     | "gateway"
+    | "edgeone"
 
 interface ModelConfig {
     model: any
@@ -53,6 +54,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "siliconflow",
     "sglang",
     "gateway",
+    "edgeone",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -372,6 +374,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
     gateway: "AI_GATEWAY_API_KEY",
+    edgeone: null, // No credentials needed - uses EdgeOne Edge AI
 }
 
 /**
@@ -459,7 +462,12 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
-    if (overrides?.baseUrl && !overrides?.apiKey) {
+    // Exception: EdgeOne provider doesn't require API key (uses Edge AI runtime)
+    if (
+        overrides?.baseUrl &&
+        !overrides?.apiKey &&
+        overrides?.provider !== "edgeone"
+    ) {
         throw new Error(
             `API key is required when using a custom base URL. ` +
                 `Please provide your own API key in Settings.`,
@@ -836,9 +844,22 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "edgeone": {
+            // EdgeOne Pages Edge AI - uses OpenAI-compatible API
+            // AI SDK appends /chat/completions to baseURL
+            // /api/edgeai + /chat/completions = /api/edgeai/chat/completions
+            const baseURL = overrides?.baseUrl || "/api/edgeai"
+            const edgeoneProvider = createOpenAI({
+                apiKey: "edgeone", // Dummy key - EdgeOne doesn't require API key
+                baseURL,
+            })
+            model = edgeoneProvider.chat(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone`,
             )
     }
 

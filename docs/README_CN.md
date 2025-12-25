@@ -206,6 +206,19 @@ npm run dev
 
 ## 部署
 
+### 部署到腾讯云EdgeOne Pages
+
+您可以通过[腾讯云EdgeOne Pages](https://pages.edgeone.ai/zh)一键部署。
+
+直接点击此按钮一键部署：
+[![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+
+查看[腾讯云EdgeOne Pages文档](https://edgeone.cloud.tencent.com/pages/document/162936635171454976)了解更多详情。
+
+同时，通过腾讯云EdgeOne Pages部署，也会获得[每日免费的DeepSeek模型额度](https://edgeone.cloud.tencent.com/pages/document/169925463311781888)。
+
+### 部署到Vercel
+
 部署Next.js应用最简单的方式是使用Next.js创建者提供的[Vercel平台](https://vercel.com/new)。
 
 查看[Next.js部署文档](https://nextjs.org/docs/app/building-your-application/deploying)了解更多详情。

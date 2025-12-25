@@ -206,6 +206,20 @@ npm run dev
 
 ## デプロイ
 
+### EdgeOne Pagesへのデプロイ
+
+[Tencent EdgeOne Pages](https://pages.edgeone.ai/)を使用してワンクリックでデプロイできます。
+
+このボタンでデプロイ：
+
+[![Deploy to EdgeOne Pages](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+
+詳細は[Tencent EdgeOne Pagesドキュメント](https://pages.edgeone.ai/document/deployment-overview)をご覧ください。
+
+また、Tencent EdgeOne Pagesでデプロイすると、[DeepSeekモデルの毎日の無料クォータ](https://pages.edgeone.ai/document/edge-ai)が付与されます。
+
+### Vercelへのデプロイ
+
 Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成者による[Vercelプラットフォーム](https://vercel.com/new)を使用することです。
 
 詳細は[Next.jsデプロイメントドキュメント](https://nextjs.org/docs/app/building-your-application/deploying)をご覧ください。

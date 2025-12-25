@@ -76,6 +76,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     deepseek: "deepseek",
     siliconflow: "siliconflow",
     gateway: "vercel",
+    edgeone: "tencent-cloud",
 }
 
 // Provider logo component
@@ -268,6 +269,7 @@ export function ModelConfigDialog({
 
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
+        const isEdgeOne = selectedProvider.provider === "edgeone"
         if (isBedrock) {
             if (
                 !selectedProvider.awsAccessKeyId ||
@@ -276,7 +278,7 @@ export function ModelConfigDialog({
             ) {
                 return
             }
-        } else if (!selectedProvider.apiKey) {
+        } else if (!isEdgeOne && !selectedProvider.apiKey) {
             return
         }
 
@@ -299,22 +301,49 @@ export function ModelConfigDialog({
             setValidatingModelIndex(i)
 
             try {
-                const response = await fetch("/api/validate-model", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        provider: selectedProvider.provider,
-                        apiKey: selectedProvider.apiKey,
-                        baseUrl: selectedProvider.baseUrl,
-                        modelId: model.modelId,
-                        // AWS Bedrock credentials
-                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
-                        awsRegion: selectedProvider.awsRegion,
-                    }),
-                })
+                let data: { valid: boolean; error?: string }
 
-                const data = await response.json()
+                if (isEdgeOne) {
+                    // EdgeOne: call OpenAI-compatible /api/edgeai/chat/completions
+                    const response = await fetch(
+                        "/api/edgeai/chat/completions",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                model: model.modelId,
+                                messages: [{ role: "user", content: "Say OK" }],
+                                max_tokens: 10,
+                            }),
+                        },
+                    )
+                    data = response.ok
+                        ? { valid: true }
+                        : {
+                              valid: false,
+                              error: "EdgeOne Edge AI not available",
+                          }
+                } else {
+                    // Other providers: use validate-model API
+                    const response = await fetch("/api/validate-model", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            provider: selectedProvider.provider,
+                            apiKey: selectedProvider.apiKey,
+                            baseUrl: selectedProvider.baseUrl,
+                            modelId: model.modelId,
+                            // AWS Bedrock credentials
+                            awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                            awsSecretAccessKey:
+                                selectedProvider.awsSecretAccessKey,
+                            awsRegion: selectedProvider.awsRegion,
+                        }),
+                    })
+                    data = await response.json()
+                }
 
                 if (data.valid) {
                     updateModel(selectedProviderId!, model.id, {
@@ -867,6 +896,63 @@ export function ModelConfigDialog({
                                                                 )}
                                                         </div>
                                                     </>
+                                                ) : selectedProvider.provider ===
+                                                  "edgeone" ? (
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                variant={
+                                                                    validationStatus ===
+                                                                    "success"
+                                                                        ? "outline"
+                                                                        : "default"
+                                                                }
+                                                                size="sm"
+                                                                onClick={
+                                                                    handleValidate
+                                                                }
+                                                                disabled={
+                                                                    validationStatus ===
+                                                                    "validating"
+                                                                }
+                                                                className={cn(
+                                                                    "h-9 px-4",
+                                                                    validationStatus ===
+                                                                        "success" &&
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                                )}
+                                                            >
+                                                                {validationStatus ===
+                                                                "validating" ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : validationStatus ===
+                                                                  "success" ? (
+                                                                    <>
+                                                                        <Check className="h-4 w-4 mr-1.5" />
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .verified
+                                                                        }
+                                                                    </>
+                                                                ) : (
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .test
+                                                                )}
+                                                            </Button>
+                                                            {validationStatus ===
+                                                                "error" &&
+                                                                validationError && (
+                                                                    <p className="text-xs text-destructive flex items-center gap-1">
+                                                                        <X className="h-3 w-3" />
+                                                                        {
+                                                                            validationError
+                                                                        }
+                                                                    </p>
+                                                                )}
+                                                        </div>
+                                                    </div>
                                                 ) : (
                                                     <>
                                                         {/* API Key */}

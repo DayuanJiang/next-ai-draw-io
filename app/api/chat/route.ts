@@ -244,9 +244,19 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // === CACHE CHECK END ===
 
     // Read client AI provider overrides from headers
+    const provider = req.headers.get("x-ai-provider")
+    let baseUrl = req.headers.get("x-ai-base-url")
+
+    // For EdgeOne provider, construct full URL from request origin
+    // because createOpenAI needs absolute URL, not relative path
+    if (provider === "edgeone" && !baseUrl) {
+        const origin = req.headers.get("origin") || new URL(req.url).origin
+        baseUrl = `${origin}/api/edgeai`
+    }
+
     const clientOverrides = {
-        provider: req.headers.get("x-ai-provider"),
-        baseUrl: req.headers.get("x-ai-base-url"),
+        provider,
+        baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
         modelId: req.headers.get("x-ai-model"),
         // AWS Bedrock credentials
