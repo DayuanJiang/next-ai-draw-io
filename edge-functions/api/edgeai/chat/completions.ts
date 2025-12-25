@@ -243,6 +243,76 @@ function createContentChunk(
     return `data: ${JSON.stringify(chunk)}\n\n`
 }
 
+// Check if content might contain a tool call (including partial tags)
+function mightContainToolCall(content: string): boolean {
+    // Check for partial <tool_call> tag at the end
+    const partialPatterns = [
+        "<tool_call>",
+        "<tool_call",
+        "<tool_cal",
+        "<tool_ca",
+        "<tool_c",
+        "<tool_",
+        "<tool",
+        "<too",
+        "<to",
+        "<t",
+    ]
+
+    for (const pattern of partialPatterns) {
+        if (content.endsWith(pattern)) return true
+    }
+
+    // Check if we're inside a tool call (started but not ended)
+    if (content.includes("<tool_call>") && !content.includes("</tool_call>")) {
+        return true
+    }
+
+    return false
+}
+
+// Get content that's safe to output (excluding potential tool call patterns)
+function getSafeOutput(content: string): string {
+    // If there's a tool call, don't output anything
+    if (content.includes("<tool_call>")) {
+        // Return content before the tool call tag
+        const idx = content.indexOf("<tool_call>")
+        return idx > 0 ? content.slice(0, idx).trim() : ""
+    }
+
+    // Check for partial tag at the end
+    for (let i = 1; i <= 11; i++) {
+        const suffix = content.slice(-i)
+        if ("<tool_call>".startsWith(suffix)) {
+            return content.slice(0, -i)
+        }
+    }
+
+    return content
+}
+
+// Try to parse and emit a tool call, returns parsed result or null
+function tryParseToolCall(
+    content: string,
+): { name: string; arguments: object } | null {
+    const toolCallMatch = content.match(
+        /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/,
+    )
+
+    if (!toolCallMatch) return null
+
+    try {
+        return JSON.parse(toolCallMatch[1].trim())
+    } catch (e) {
+        console.error(
+            "[EdgeOne] Failed to parse tool call:",
+            e,
+            toolCallMatch[1],
+        )
+        return null
+    }
+}
+
 // Handle CORS preflight requests
 export async function onRequestOptions(): Promise<Response> {
     return new Response(null, {
@@ -319,94 +389,71 @@ export async function onRequestPost({
         }
 
         // With tools, we need to parse and potentially transform the response
-        const transformStream = new TransformStream<Uint8Array, Uint8Array>({
-            start(controller) {
-                ;(this as any).buffer = ""
-                ;(this as any).toolCallBuffer = ""
-                ;(this as any).inToolCall = false
-                ;(this as any).toolCallSent = false
-                ;(this as any).contentBuffer = ""
-            },
+        let lineBuffer = "" // Buffer for incomplete SSE lines
+        let contentBuffer = "" // Buffer for accumulated content
+        let toolCallSent = false
 
+        const transformStream = new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
                 const text = new TextDecoder().decode(chunk)
-                const buffer = (this as any).buffer + text
+                const buffer = lineBuffer + text
                 const lines = buffer.split("\n")
 
                 // Keep incomplete line in buffer
-                ;(this as any).buffer = lines.pop() || ""
+                lineBuffer = lines.pop() || ""
 
                 for (const line of lines) {
                     if (!line.trim()) continue
 
                     const parsed = parseSSEData(line)
-                    if (!parsed) {
-                        // Pass through non-data lines
-                        controller.enqueue(
-                            new TextEncoder().encode(line + "\n"),
-                        )
-                        continue
-                    }
+                    if (!parsed) continue
 
                     if (parsed.finish_reason === "stop") {
-                        // Check if we have a complete tool call in buffer
-                        const fullContent =
-                            (this as any).contentBuffer +
-                            (this as any).toolCallBuffer
-                        const toolCallMatch = fullContent.match(
-                            /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/,
-                        )
+                        // Stream ended - check for tool call in accumulated content
+                        const toolCall = tryParseToolCall(contentBuffer)
 
-                        if (toolCallMatch && !(this as any).toolCallSent) {
-                            try {
-                                const toolCallJson = JSON.parse(
-                                    toolCallMatch[1].trim(),
-                                )
-                                const toolCallId = `call_${Date.now()}`
-
-                                // Send tool call chunks
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            toolCallJson.name,
-                                            "",
-                                            0,
-                                            true,
-                                            false,
-                                        ),
+                        if (toolCall && !toolCallSent) {
+                            const toolCallId = `call_${Date.now()}`
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createToolCallChunk(
+                                        toolCallId,
+                                        toolCall.name,
+                                        "",
+                                        0,
+                                        true,
+                                        false,
                                     ),
-                                )
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            toolCallJson.name,
-                                            JSON.stringify(
-                                                toolCallJson.arguments,
-                                            ),
-                                            0,
-                                            false,
-                                            true,
-                                        ),
+                                ),
+                            )
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createToolCallChunk(
+                                        toolCallId,
+                                        toolCall.name,
+                                        JSON.stringify(toolCall.arguments),
+                                        0,
+                                        false,
+                                        true,
                                     ),
-                                )
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        "data: [DONE]\n\n",
-                                    ),
-                                )
-                                ;(this as any).toolCallSent = true
-                                return
-                            } catch (e) {
-                                console.error(
-                                    "[EdgeOne] Failed to parse tool call:",
-                                    e,
-                                )
-                            }
+                                ),
+                            )
+                            controller.enqueue(
+                                new TextEncoder().encode("data: [DONE]\n\n"),
+                            )
+                            toolCallSent = true
+                            return
                         }
 
-                        // Send finish chunk
+                        // No tool call found - output any buffered content and finish
+                        const safeOutput = getSafeOutput(contentBuffer)
+                        if (safeOutput) {
+                            controller.enqueue(
+                                new TextEncoder().encode(
+                                    createContentChunk(safeOutput),
+                                ),
+                            )
+                        }
                         controller.enqueue(
                             new TextEncoder().encode(
                                 createContentChunk("", "stop"),
@@ -421,101 +468,68 @@ export async function onRequestPost({
                     const content = parsed.content || ""
                     if (!content) continue
 
-                    // Accumulate content to detect tool calls
-                    ;(this as any).contentBuffer += content
+                    // Accumulate all content
+                    contentBuffer += content
 
-                    // Check for tool call start
-                    if (
-                        (this as any).contentBuffer.includes("<tool_call>") &&
-                        !(this as any).inToolCall
-                    ) {
-                        ;(this as any).inToolCall = true
-                        // Don't output anything yet - buffer until we see the end
-                        continue
-                    }
-
-                    if ((this as any).inToolCall) {
-                        // Check for complete tool call
-                        if (
-                            (this as any).contentBuffer.includes("</tool_call>")
-                        ) {
-                            const match = (this as any).contentBuffer.match(
-                                /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/,
-                            )
-                            if (match) {
-                                try {
-                                    const toolCallJson = JSON.parse(
-                                        match[1].trim(),
-                                    )
-                                    const toolCallId = `call_${Date.now()}`
-
-                                    // Send tool call chunks
-                                    controller.enqueue(
-                                        new TextEncoder().encode(
-                                            createToolCallChunk(
-                                                toolCallId,
-                                                toolCallJson.name,
-                                                "",
-                                                0,
-                                                true,
-                                                false,
-                                            ),
-                                        ),
-                                    )
-                                    controller.enqueue(
-                                        new TextEncoder().encode(
-                                            createToolCallChunk(
-                                                toolCallId,
-                                                toolCallJson.name,
-                                                JSON.stringify(
-                                                    toolCallJson.arguments,
-                                                ),
-                                                0,
-                                                false,
-                                                true,
-                                            ),
-                                        ),
-                                    )
-                                    controller.enqueue(
-                                        new TextEncoder().encode(
-                                            "data: [DONE]\n\n",
-                                        ),
-                                    )
-                                    ;(this as any).toolCallSent = true
-                                    return
-                                } catch (e) {
-                                    console.error(
-                                        "[EdgeOne] Failed to parse tool call:",
-                                        e,
-                                    )
-                                    // Fall through to output as regular content
-                                }
-                            }
-                        }
-                        // Still buffering tool call
-                        continue
-                    }
-
-                    // Regular content - pass through
-                    controller.enqueue(
-                        new TextEncoder().encode(createContentChunk(content)),
-                    )
-                }
-            },
-
-            flush(controller) {
-                // Handle any remaining buffer
-                const remaining = (this as any).buffer
-                if (remaining && remaining.trim()) {
-                    const parsed = parseSSEData(remaining)
-                    if (parsed?.content) {
+                    // Check if we have a complete tool call
+                    const toolCall = tryParseToolCall(contentBuffer)
+                    if (toolCall && !toolCallSent) {
+                        const toolCallId = `call_${Date.now()}`
                         controller.enqueue(
                             new TextEncoder().encode(
-                                createContentChunk(parsed.content),
+                                createToolCallChunk(
+                                    toolCallId,
+                                    toolCall.name,
+                                    "",
+                                    0,
+                                    true,
+                                    false,
+                                ),
                             ),
+                        )
+                        controller.enqueue(
+                            new TextEncoder().encode(
+                                createToolCallChunk(
+                                    toolCallId,
+                                    toolCall.name,
+                                    JSON.stringify(toolCall.arguments),
+                                    0,
+                                    false,
+                                    true,
+                                ),
+                            ),
+                        )
+                        controller.enqueue(
+                            new TextEncoder().encode("data: [DONE]\n\n"),
+                        )
+                        toolCallSent = true
+                        return
+                    }
+
+                    // Check if content might contain a tool call (partial match)
+                    // If so, don't output anything yet
+                    if (mightContainToolCall(contentBuffer)) {
+                        continue
+                    }
+
+                    // Safe to output - no tool call pattern detected
+                    const safeOutput = getSafeOutput(contentBuffer)
+                    if (safeOutput) {
+                        controller.enqueue(
+                            new TextEncoder().encode(
+                                createContentChunk(safeOutput),
+                            ),
+                        )
+                        // Keep only potential partial tag in buffer
+                        contentBuffer = contentBuffer.slice(
+                            contentBuffer.length - 15,
                         )
                     }
                 }
+            },
+
+            flush() {
+                // Nothing to do - handled in transform
             },
         })
 
