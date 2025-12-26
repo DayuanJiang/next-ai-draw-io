@@ -61,84 +61,37 @@ interface OpenAIRequest {
 }
 
 // Generate tool call instruction for system prompt
+// This should be minimal since tool descriptions are already in the system prompt from streamText
 function generateToolCallInstruction(tools: OpenAITool[]): string {
-    const toolDescriptions = tools
-        .map((tool) => {
-            const func = tool.function
-            const params = func.parameters
-                ? `\n    Parameters: ${JSON.stringify(func.parameters)}`
-                : ""
-            return `- ${func.name}: ${func.description || "No description"}${params}`
-        })
-        .join("\n")
+    const toolNames = tools.map((t) => t.function.name).join(", ")
 
     return `
 
-## Tool Calling Instructions
+## Tool Call Output Format
 
-You have access to the following tools:
-${toolDescriptions}
-
-### TOOL SELECTION - CRITICAL!
-
-⚠️ Before calling any tool, check "Current diagram XML" in the system context:
-- If it contains mxCell elements with id="2" or higher → diagram EXISTS → use edit_diagram
-- If it's empty or only has root cells (id="0", id="1") → no diagram → use display_diagram
-
-NEVER use display_diagram to modify an existing diagram! Use edit_diagram instead.
-
-### STRICT OUTPUT FORMAT - JSON ONLY!
-
-When you need to use a tool, output EXACTLY this format:
+When calling a tool, wrap your JSON in <tool_call> tags:
 
 <tool_call>
-{"name": "TOOL_NAME", "arguments": {...}}
+{"name": "TOOL_NAME", "arguments": {YOUR_ARGUMENTS}}
 </tool_call>
 
-⚠️ CRITICAL: The content inside <tool_call> tags MUST be a single-line or multi-line JSON object with exactly two keys: "name" and "arguments". NO other format is accepted!
+Available tools: ${toolNames}
 
-### CORRECT EXAMPLES
+RULES:
+1. "name" must be one of the available tools
+2. "arguments" must match the tool's parameter schema (see tool descriptions above)
+3. Escape quotes in XML strings: \\"
+4. Output ONLY the <tool_call> block when calling a tool - no extra text
 
-✅ Create NEW diagram:
+Example for display_diagram:
 <tool_call>
 {"name": "display_diagram", "arguments": {"xml": "<mxCell id=\\"2\\" value=\\"Hello\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}}
 </tool_call>
 
-✅ MODIFY existing diagram (change color to blue):
+Example for edit_diagram:
 <tool_call>
-{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" value=\\"\\" style=\\"ellipse;fillColor=#1E90FF;strokeColor=#000000;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"300\\" y=\\"200\\" width=\\"60\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}}
+{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" style=\\"fillColor=#FF0000;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"60\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}}
 </tool_call>
-
-✅ Multiple updates:
-<tool_call>
-{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" style=\\"fillColor=#1E90FF;\\" .../>"}, {"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" style=\\"fillColor=#87CEEB;\\" .../>"}]}}
-</tool_call>
-
-### WRONG EXAMPLES - NEVER DO THIS!
-
-❌ WRONG - Plain text format:
-<tool_call>
-update
-cell_id: 2
-<mxCell id="2" .../>
-</tool_call>
-
-❌ WRONG - XML tags instead of JSON:
-<tool_call>
-<edit_diagram><operations>...</operations></edit_diagram>
-</tool_call>
-
-❌ WRONG - Missing "name" key:
-<tool_call>
-{"arguments": {"operations": [...]}}
-</tool_call>
-
-### RULES
-
-1. Content between <tool_call> and </tool_call> MUST be valid JSON with "name" and "arguments" keys
-2. "name" must be one of: display_diagram, edit_diagram, append_diagram, get_shape_library
-3. Escape double quotes inside string values: \\"
-4. Output ONLY the <tool_call> block when calling a tool
 `
 }
 
@@ -618,17 +571,41 @@ export async function onRequestPost({
                                         finalArgs = rawContent
                                     }
                                 } catch {
-                                    // JSON parse failed, try to infer from content
+                                    // JSON parse failed - check for raw XML content
+                                    // Some models return raw XML like <xml>...</xml> or <mxCell>...</mxCell>
+                                    const trimmedContent = rawContent.trim()
                                     if (
+                                        trimmedContent.startsWith("<") &&
+                                        (trimmedContent.includes("<mxCell") ||
+                                            trimmedContent.includes("<xml"))
+                                    ) {
+                                        // Raw XML content - wrap it as display_diagram arguments
+                                        finalToolName = "display_diagram"
+                                        // Extract content from <xml>...</xml> wrapper if present
+                                        let xmlContent = trimmedContent
+                                        const xmlMatch = trimmedContent.match(
+                                            /<xml[^>]*>([\s\S]*?)<\/xml>/,
+                                        )
+                                        if (xmlMatch) {
+                                            xmlContent = xmlMatch[1].trim()
+                                        }
+                                        finalArgs = JSON.stringify({
+                                            xml: xmlContent,
+                                        })
+                                        console.log(
+                                            "[EdgeOne] Detected raw XML content, wrapped as display_diagram",
+                                        )
+                                    } else if (
                                         rawContent.includes('"operations"') ||
                                         rawContent.includes('"cell_id"')
                                     ) {
                                         finalToolName = "edit_diagram"
+                                        finalArgs = rawContent
                                     } else {
                                         finalToolName =
                                             finalToolName || "display_diagram"
+                                        finalArgs = rawContent
                                     }
-                                    finalArgs = rawContent
                                 }
                             }
 
@@ -648,8 +625,9 @@ export async function onRequestPost({
                                 )
                             }
 
-                            // Send arguments
-                            if (finalArgs) {
+                            // Send arguments ONLY if we haven't been streaming them
+                            // If argumentsStarted is true, we've already streamed the arguments incrementally
+                            if (finalArgs && !argumentsStarted) {
                                 controller.enqueue(
                                     new TextEncoder().encode(
                                         createToolCallChunk(
@@ -683,18 +661,30 @@ export async function onRequestPost({
                             return
                         }
 
-                        // Detect format early: XML vs JSON
+                        // Detect format early: XML vs JSON vs Raw XML content
                         // XML format: <name>...</name><arguments>...</arguments>
+                        // Raw XML: <xml>...</xml> or <mxCell>...</mxCell> (direct XML content)
                         // JSON format: {"name": "...", "arguments": {...}}
                         if (!isXmlFormat && !toolCallName) {
-                            // Check for XML format markers
+                            const trimmedBuffer = toolCallArgsBuffer.trim()
+                            // Check for XML tool call format markers
                             if (
                                 toolCallArgsBuffer.includes("<name>") ||
                                 toolCallArgsBuffer.includes("<arguments>")
                             ) {
                                 isXmlFormat = true
                                 console.log(
-                                    "[EdgeOne] Detected XML format - will wait for complete content",
+                                    "[EdgeOne] Detected XML tool call format - will wait for complete content",
+                                )
+                            }
+                            // Check for raw XML content (direct mxCell/xml tags)
+                            else if (
+                                trimmedBuffer.startsWith("<xml") ||
+                                trimmedBuffer.startsWith("<mxCell")
+                            ) {
+                                isXmlFormat = true // Reuse flag to disable streaming
+                                console.log(
+                                    "[EdgeOne] Detected raw XML content - will wait for complete content",
                                 )
                             }
                         }
