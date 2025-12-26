@@ -6,7 +6,7 @@
 ## Usage
 
 ```xml
-<mxCell value="label" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.{shape};fillColor=#ED7100;strokeColor=#ffffff;" vertex="1" parent="1">
+<mxCell value="label" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.{shape};fillColor=#ED7100;strokeColor=#ffffff;verticalLabelPosition=bottom;verticalAlign=top;align=center;" vertex="1" parent="1">
   <mxGeometry x="0" y="0" width="60" height="60" as="geometry" />
 </mxCell>
 ```
