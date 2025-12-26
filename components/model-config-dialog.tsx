@@ -50,6 +50,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { formatMessage } from "@/lib/i18n/utils"
@@ -1447,10 +1448,23 @@ export function ModelConfigDialog({
 
                 {/* Footer */}
                 <div className="px-6 py-3 border-t border-border-subtle bg-surface-1/30 shrink-0">
-                    <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1.5">
-                        <Key className="h-3 w-3" />
-                        {dict.modelConfig.apiKeyStored}
-                    </p>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                checked={modelConfig.showUnvalidatedModels}
+                                onCheckedChange={
+                                    modelConfig.setShowUnvalidatedModels
+                                }
+                            />
+                            <Label className="text-xs text-muted-foreground cursor-pointer">
+                                {dict.modelConfig.showUnvalidatedModels}
+                            </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Key className="h-3 w-3" />
+                            {dict.modelConfig.apiKeyStored}
+                        </p>
+                    </div>
                 </div>
             </DialogContent>
 

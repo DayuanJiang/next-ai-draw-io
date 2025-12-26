@@ -243,6 +243,9 @@
         "default": "デフォルト",
         "serverDefault": "サーバーデフォルト",
         "configureModels": "モデルを設定...",
-        "onlyVerifiedShown": "検証済みのモデルのみ表示"
+        "onlyVerifiedShown": "検証済みのモデルのみ表示",
+        "showUnvalidatedModels": "未検証のモデルを表示",
+        "allModelsShown": "すべてのモデルを表示（未検証を含む）",
+        "unvalidatedModelWarning": "このモデルは検証されていません"
     }
 }

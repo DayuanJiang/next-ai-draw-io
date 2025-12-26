@@ -243,6 +243,9 @@
         "default": "默认",
         "serverDefault": "服务器默认",
         "configureModels": "配置模型...",
-        "onlyVerifiedShown": "仅显示已验证的模型"
+        "onlyVerifiedShown": "仅显示已验证的模型",
+        "showUnvalidatedModels": "显示未验证的模型",
+        "allModelsShown": "显示所有模型（包括未验证的）",
+        "unvalidatedModelWarning": "此模型尚未验证"
     }
 }
