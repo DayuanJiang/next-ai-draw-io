@@ -442,6 +442,7 @@ export async function onRequestPost({
         let braceDepth = 0 // Track nested braces in arguments
         let lastStreamedArgsLength = 0 // Track how much of arguments we've streamed
         let isXmlFormat = false // Whether the tool call is in XML format (disable streaming for XML)
+        let isDirectFormat = false // Whether using direct format ({"operations":...} without "arguments" wrapper)
 
         const transformStream = new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
@@ -745,25 +746,27 @@ export async function onRequestPost({
                             // Try standard format: "arguments": {
                             const argsMatch =
                                 toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
-                            let argsStartPos = -1
 
+                            // Also support direct format: {"operations": [...]} or {"xml": "..."}
+                            // This happens when model outputs arguments directly without "name"/"arguments" wrapper
+                            const trimmedBuffer = toolCallArgsBuffer.trim()
+                            const detectedDirectFormat =
+                                !argsMatch &&
+                                trimmedBuffer.startsWith("{") &&
+                                (trimmedBuffer.includes('"operations"') ||
+                                    trimmedBuffer.includes('"xml"'))
+
+                            let argsStartPos = -1
                             if (argsMatch && argsMatch.index !== undefined) {
                                 argsStartPos =
                                     argsMatch.index + argsMatch[0].length - 1 // Position of {
-                            } else {
-                                // Try direct format: {"operations" or {"xml" (entire content is arguments)
-                                const trimmedBuffer = toolCallArgsBuffer.trim()
-                                if (
-                                    trimmedBuffer.startsWith("{") &&
-                                    (trimmedBuffer.includes('"operations"') ||
-                                        trimmedBuffer.includes('"xml"'))
-                                ) {
-                                    argsStartPos =
-                                        toolCallArgsBuffer.indexOf("{")
-                                    console.log(
-                                        "[EdgeOne] Detected direct format - streaming entire JSON as arguments",
-                                    )
-                                }
+                            } else if (detectedDirectFormat) {
+                                // For direct format, the entire content is the arguments
+                                argsStartPos = trimmedBuffer.indexOf("{")
+                                isDirectFormat = true // Save to state for continuation
+                                console.log(
+                                    "[EdgeOne] Using direct format streaming - entire content is arguments",
+                                )
                             }
 
                             if (argsStartPos !== -1) {
@@ -787,7 +790,11 @@ export async function onRequestPost({
                                 lastStreamedArgsLength = 1
 
                                 // Process remaining content after {
-                                const argsContent = toolCallArgsBuffer.slice(
+                                // For direct format, use trimmedBuffer; for standard format, use toolCallArgsBuffer
+                                const sourceBuffer = isDirectFormat
+                                    ? trimmedBuffer
+                                    : toolCallArgsBuffer
+                                const argsContent = sourceBuffer.slice(
                                     argsStartPos + 1,
                                 )
                                 if (argsContent.length > 0) {
@@ -852,25 +859,37 @@ export async function onRequestPost({
                             }
                         } else if (toolCallName && argumentsStarted) {
                             // Already streaming arguments - continue incrementally
-                            // Find where we are in the arguments (support both standard and direct format)
+                            // Find where we are in the arguments
                             let argsStartPos = -1
-                            const argsMatch =
-                                toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
-                            if (argsMatch && argsMatch.index !== undefined) {
-                                argsStartPos =
-                                    argsMatch.index + argsMatch[0].length - 1
-                            } else {
-                                // Direct format: find the first {
+
+                            if (isDirectFormat) {
+                                // For direct format, arguments start at the beginning
                                 const trimmedBuffer = toolCallArgsBuffer.trim()
-                                if (trimmedBuffer.startsWith("{")) {
+                                argsStartPos = trimmedBuffer.indexOf("{")
+                            } else {
+                                // For standard format, find "arguments": {
+                                const argsMatch =
+                                    toolCallArgsBuffer.match(
+                                        /"arguments"\s*:\s*\{/,
+                                    )
+                                if (
+                                    argsMatch &&
+                                    argsMatch.index !== undefined
+                                ) {
                                     argsStartPos =
-                                        toolCallArgsBuffer.indexOf("{")
+                                        argsMatch.index +
+                                        argsMatch[0].length -
+                                        1
                                 }
                             }
 
                             if (argsStartPos !== -1) {
-                                const currentArgsContent =
-                                    toolCallArgsBuffer.slice(argsStartPos + 1)
+                                const sourceBuffer = isDirectFormat
+                                    ? toolCallArgsBuffer.trim()
+                                    : toolCallArgsBuffer
+                                const currentArgsContent = sourceBuffer.slice(
+                                    argsStartPos + 1,
+                                )
 
                                 // Calculate what's new since last stream
                                 const newContent = currentArgsContent.slice(
@@ -987,6 +1006,7 @@ export async function onRequestPost({
                         argumentsStarted = false
                         braceDepth = 0
                         lastStreamedArgsLength = 0
+                        isDirectFormat = false // Reset direct format flag
                         // Don't send start chunk yet - wait for more content to determine tool name
                         continue
                     }
