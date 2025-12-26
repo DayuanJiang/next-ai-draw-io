@@ -82,6 +82,7 @@ RULES:
 2. "arguments" must match the tool's parameter schema (see tool descriptions above)
 3. Escape quotes in XML strings: \\"
 4. Output ONLY the <tool_call> block when calling a tool - no extra text
+5. CRITICAL: Always use the EXACT format {"name": "...", "arguments": {...}} - never output arguments directly without the "name" and "arguments" wrapper
 
 Example for display_diagram:
 <tool_call>
