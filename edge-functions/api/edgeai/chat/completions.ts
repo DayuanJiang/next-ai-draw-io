@@ -518,6 +518,310 @@ export async function onRequestPost({
                         // We're inside a tool call - accumulate and parse
                         toolCallArgsBuffer += content
 
+                        // IMPORTANT: Try to start streaming BEFORE checking for </tool_call>
+                        // This ensures we stream even if the entire content arrives quickly
+
+                        // Detect format early: XML vs JSON vs Raw XML content
+                        if (!isXmlFormat && !toolCallName) {
+                            const trimmedBuffer = toolCallArgsBuffer.trim()
+                            // Check for XML tool call format markers
+                            if (
+                                toolCallArgsBuffer.includes("<name>") ||
+                                toolCallArgsBuffer.includes("<arguments>")
+                            ) {
+                                isXmlFormat = true
+                                console.log(
+                                    "[EdgeOne] Detected XML tool call format - will wait for complete content",
+                                )
+                            }
+                            // Check for raw XML content (direct mxCell/xml tags)
+                            else if (
+                                trimmedBuffer.startsWith("<xml") ||
+                                trimmedBuffer.startsWith("<mxCell")
+                            ) {
+                                isXmlFormat = true // Reuse flag to disable streaming
+                                console.log(
+                                    "[EdgeOne] Detected raw XML content - will wait for complete content",
+                                )
+                            }
+                        }
+
+                        // JSON format: Try to determine tool name early for streaming
+                        if (!isXmlFormat && !toolCallName) {
+                            // Try JSON format: "name": "tool_name"
+                            const jsonNameMatch = toolCallArgsBuffer.match(
+                                /"name"\s*:\s*"([^"]+)"/,
+                            )
+                            if (jsonNameMatch) {
+                                toolCallName = jsonNameMatch[1]
+                            } else {
+                                // Infer from content patterns
+                                const lowerContent =
+                                    toolCallArgsBuffer.toLowerCase()
+                                if (
+                                    lowerContent.includes('"operations"') ||
+                                    lowerContent.includes('"cell_id"') ||
+                                    lowerContent.includes('"operation"')
+                                ) {
+                                    toolCallName = "edit_diagram"
+                                    console.log(
+                                        "[EdgeOne] Inferred edit_diagram from content pattern",
+                                    )
+                                } else if (lowerContent.includes('"xml"')) {
+                                    toolCallName = "display_diagram"
+                                }
+                            }
+
+                            // If tool name determined, send start chunk
+                            if (toolCallName) {
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            toolCallName,
+                                            "",
+                                            0,
+                                            true,
+                                            false,
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
+
+                        // Stream arguments incrementally if tool name is known (JSON format only)
+                        if (!isXmlFormat && toolCallName && !argumentsStarted) {
+                            // Try standard format: "arguments": {
+                            const argsMatch =
+                                toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
+
+                            // Also support direct format: {"operations": [...]} or {"xml": "..."}
+                            // This happens when model outputs arguments directly without "name"/"arguments" wrapper
+                            const trimmedBuffer = toolCallArgsBuffer.trim()
+                            const detectedDirectFormat =
+                                !argsMatch &&
+                                trimmedBuffer.startsWith("{") &&
+                                (trimmedBuffer.includes('"operations"') ||
+                                    trimmedBuffer.includes('"xml"'))
+
+                            let argsStartPos = -1
+                            if (argsMatch && argsMatch.index !== undefined) {
+                                argsStartPos =
+                                    argsMatch.index + argsMatch[0].length - 1 // Position of {
+                            } else if (detectedDirectFormat) {
+                                // For direct format, the entire content is the arguments
+                                argsStartPos = 0 // Start from the beginning of trimmedBuffer
+                                isDirectFormat = true // Save to state for continuation
+                                console.log(
+                                    "[EdgeOne] Using direct format streaming - entire content is arguments",
+                                )
+                            }
+
+                            if (argsStartPos !== -1) {
+                                argumentsStarted = true
+                                braceDepth = 1
+                                lastStreamedArgsLength = 0
+
+                                // Stream the opening brace
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            toolCallName,
+                                            "{",
+                                            0,
+                                            false,
+                                            false,
+                                        ),
+                                    ),
+                                )
+                                lastStreamedArgsLength = 1
+
+                                // Process remaining content after {
+                                // For direct format, use trimmedBuffer; for standard format, use toolCallArgsBuffer
+                                const sourceBuffer = isDirectFormat
+                                    ? trimmedBuffer
+                                    : toolCallArgsBuffer
+                                const argsContent = sourceBuffer.slice(
+                                    argsStartPos + 1,
+                                )
+                                if (argsContent.length > 0) {
+                                    // Stream incrementally, tracking brace depth
+                                    // Note: We only track {} for JSON object boundaries
+                                    // Arrays [] are part of the content and don't affect object depth
+                                    let safeToStream = ""
+                                    let localBraceDepth = 1 // We've already seen the opening {
+                                    for (const char of argsContent) {
+                                        if (char === "{") localBraceDepth++
+                                        if (char === "}") {
+                                            localBraceDepth--
+                                            if (localBraceDepth === 0) {
+                                                // End of arguments object
+                                                safeToStream += char
+                                                break
+                                            }
+                                        }
+                                        safeToStream += char
+                                    }
+                                    braceDepth = localBraceDepth
+
+                                    if (safeToStream.length > 0) {
+                                        // Don't stream if it might be part of </tool_call>
+                                        const partialEndTags = [
+                                            "</tool_call>",
+                                            "</tool_call",
+                                            "</tool_cal",
+                                            "</tool_ca",
+                                            "</tool_c",
+                                            "</tool_",
+                                            "</tool",
+                                            "</too",
+                                            "</to",
+                                            "</t",
+                                            "</",
+                                        ]
+                                        let isSafe = true
+                                        for (const tag of partialEndTags) {
+                                            if (
+                                                toolCallArgsBuffer.endsWith(tag)
+                                            ) {
+                                                isSafe = false
+                                                break
+                                            }
+                                        }
+
+                                        if (isSafe && braceDepth > 0) {
+                                            controller.enqueue(
+                                                new TextEncoder().encode(
+                                                    createToolCallChunk(
+                                                        toolCallId,
+                                                        toolCallName,
+                                                        safeToStream,
+                                                        0,
+                                                        false,
+                                                        false,
+                                                    ),
+                                                ),
+                                            )
+                                            lastStreamedArgsLength +=
+                                                safeToStream.length
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (
+                            !isXmlFormat &&
+                            toolCallName &&
+                            argumentsStarted
+                        ) {
+                            // Already streaming arguments - continue incrementally
+                            // Find where we are in the arguments
+                            let argsStartPos = -1
+
+                            if (isDirectFormat) {
+                                // For direct format, arguments start at the beginning
+                                argsStartPos = 0
+                            } else {
+                                // For standard format, find "arguments": {
+                                const argsMatch =
+                                    toolCallArgsBuffer.match(
+                                        /"arguments"\s*:\s*\{/,
+                                    )
+                                if (
+                                    argsMatch &&
+                                    argsMatch.index !== undefined
+                                ) {
+                                    argsStartPos =
+                                        argsMatch.index +
+                                        argsMatch[0].length -
+                                        1
+                                }
+                            }
+
+                            if (argsStartPos !== -1) {
+                                const sourceBuffer = isDirectFormat
+                                    ? toolCallArgsBuffer.trim()
+                                    : toolCallArgsBuffer
+                                const currentArgsContent = sourceBuffer.slice(
+                                    argsStartPos + 1,
+                                )
+
+                                // Calculate what's new since last stream
+                                const newContent = currentArgsContent.slice(
+                                    lastStreamedArgsLength - 1,
+                                ) // -1 because we already streamed {
+
+                                if (newContent.length > 0) {
+                                    // Check for partial end tags
+                                    const partialEndTags = [
+                                        "</tool_call>",
+                                        "</tool_call",
+                                        "</tool_cal",
+                                        "</tool_ca",
+                                        "</tool_c",
+                                        "</tool_",
+                                        "</tool",
+                                        "</too",
+                                        "</to",
+                                        "</t",
+                                        "</",
+                                    ]
+                                    let isSafe = true
+                                    for (const tag of partialEndTags) {
+                                        if (toolCallArgsBuffer.endsWith(tag)) {
+                                            isSafe = false
+                                            break
+                                        }
+                                    }
+
+                                    // Track braces in new content
+                                    // Note: We only track {} for JSON object boundaries
+                                    const contentToStream = newContent
+                                    let tempDepth = braceDepth
+                                    let safeLength = 0
+                                    for (
+                                        let i = 0;
+                                        i < contentToStream.length;
+                                        i++
+                                    ) {
+                                        const char = contentToStream[i]
+                                        if (char === "{") tempDepth++
+                                        if (char === "}") {
+                                            tempDepth--
+                                            if (tempDepth === 0) {
+                                                // Include this closing brace and stop
+                                                safeLength = i + 1
+                                                braceDepth = 0
+                                                break
+                                            }
+                                        }
+                                        safeLength = i + 1
+                                    }
+
+                                    if (safeLength > 0 && isSafe) {
+                                        const toStream = contentToStream.slice(
+                                            0,
+                                            safeLength,
+                                        )
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                createToolCallChunk(
+                                                    toolCallId,
+                                                    toolCallName,
+                                                    toStream,
+                                                    0,
+                                                    false,
+                                                    false,
+                                                ),
+                                            ),
+                                        )
+                                        lastStreamedArgsLength += safeLength
+                                        braceDepth = tempDepth
+                                    }
+                                }
+                            }
+                        }
+
                         // Check if tool call ended
                         if (toolCallArgsBuffer.includes("</tool_call>")) {
                             const rawContent = toolCallArgsBuffer
@@ -663,311 +967,6 @@ export async function onRequestPost({
                             return
                         }
 
-                        // Detect format early: XML vs JSON vs Raw XML content
-                        // XML format: <name>...</name><arguments>...</arguments>
-                        // Raw XML: <xml>...</xml> or <mxCell>...</mxCell> (direct XML content)
-                        // JSON format: {"name": "...", "arguments": {...}}
-                        if (!isXmlFormat && !toolCallName) {
-                            const trimmedBuffer = toolCallArgsBuffer.trim()
-                            // Check for XML tool call format markers
-                            if (
-                                toolCallArgsBuffer.includes("<name>") ||
-                                toolCallArgsBuffer.includes("<arguments>")
-                            ) {
-                                isXmlFormat = true
-                                console.log(
-                                    "[EdgeOne] Detected XML tool call format - will wait for complete content",
-                                )
-                            }
-                            // Check for raw XML content (direct mxCell/xml tags)
-                            else if (
-                                trimmedBuffer.startsWith("<xml") ||
-                                trimmedBuffer.startsWith("<mxCell")
-                            ) {
-                                isXmlFormat = true // Reuse flag to disable streaming
-                                console.log(
-                                    "[EdgeOne] Detected raw XML content - will wait for complete content",
-                                )
-                            }
-                        }
-
-                        // For XML format, wait for complete content before processing
-                        // This ensures we don't stream partial/malformed data
-                        if (isXmlFormat) {
-                            // Just accumulate - processing happens when </tool_call> is detected
-                            continue
-                        }
-
-                        // JSON format: Try to determine tool name early for streaming
-                        if (!toolCallName) {
-                            // Try JSON format: "name": "tool_name"
-                            const jsonNameMatch = toolCallArgsBuffer.match(
-                                /"name"\s*:\s*"([^"]+)"/,
-                            )
-                            if (jsonNameMatch) {
-                                toolCallName = jsonNameMatch[1]
-                            } else {
-                                // Infer from content patterns
-                                const lowerContent =
-                                    toolCallArgsBuffer.toLowerCase()
-                                if (
-                                    lowerContent.includes('"operations"') ||
-                                    lowerContent.includes('"cell_id"') ||
-                                    lowerContent.includes('"operation"')
-                                ) {
-                                    toolCallName = "edit_diagram"
-                                    console.log(
-                                        "[EdgeOne] Inferred edit_diagram from content pattern",
-                                    )
-                                } else if (lowerContent.includes('"xml"')) {
-                                    toolCallName = "display_diagram"
-                                }
-                            }
-
-                            // If tool name determined, send start chunk
-                            if (toolCallName) {
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            toolCallName,
-                                            "",
-                                            0,
-                                            true,
-                                            false,
-                                        ),
-                                    ),
-                                )
-                            }
-                        }
-
-                        // Stream arguments incrementally if tool name is known (JSON format only)
-                        if (toolCallName && !argumentsStarted) {
-                            // Try standard format: "arguments": {
-                            const argsMatch =
-                                toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
-
-                            // Also support direct format: {"operations": [...]} or {"xml": "..."}
-                            // This happens when model outputs arguments directly without "name"/"arguments" wrapper
-                            const trimmedBuffer = toolCallArgsBuffer.trim()
-                            const detectedDirectFormat =
-                                !argsMatch &&
-                                trimmedBuffer.startsWith("{") &&
-                                (trimmedBuffer.includes('"operations"') ||
-                                    trimmedBuffer.includes('"xml"'))
-
-                            let argsStartPos = -1
-                            if (argsMatch && argsMatch.index !== undefined) {
-                                argsStartPos =
-                                    argsMatch.index + argsMatch[0].length - 1 // Position of {
-                            } else if (detectedDirectFormat) {
-                                // For direct format, the entire content is the arguments
-                                argsStartPos = trimmedBuffer.indexOf("{")
-                                isDirectFormat = true // Save to state for continuation
-                                console.log(
-                                    "[EdgeOne] Using direct format streaming - entire content is arguments",
-                                )
-                            }
-
-                            if (argsStartPos !== -1) {
-                                argumentsStarted = true
-                                braceDepth = 1
-                                lastStreamedArgsLength = 0
-
-                                // Stream the opening brace
-                                controller.enqueue(
-                                    new TextEncoder().encode(
-                                        createToolCallChunk(
-                                            toolCallId,
-                                            toolCallName,
-                                            "{",
-                                            0,
-                                            false,
-                                            false,
-                                        ),
-                                    ),
-                                )
-                                lastStreamedArgsLength = 1
-
-                                // Process remaining content after {
-                                // For direct format, use trimmedBuffer; for standard format, use toolCallArgsBuffer
-                                const sourceBuffer = isDirectFormat
-                                    ? trimmedBuffer
-                                    : toolCallArgsBuffer
-                                const argsContent = sourceBuffer.slice(
-                                    argsStartPos + 1,
-                                )
-                                if (argsContent.length > 0) {
-                                    // Stream incrementally, tracking brace depth
-                                    let safeToStream = ""
-                                    for (const char of argsContent) {
-                                        if (char === "{") braceDepth++
-                                        if (char === "}") {
-                                            braceDepth--
-                                            if (braceDepth === 0) {
-                                                // End of arguments object
-                                                safeToStream += char
-                                                break
-                                            }
-                                        }
-                                        safeToStream += char
-                                    }
-
-                                    if (safeToStream.length > 0) {
-                                        // Don't stream if it might be part of </tool_call>
-                                        const partialEndTags = [
-                                            "</tool_call>",
-                                            "</tool_call",
-                                            "</tool_cal",
-                                            "</tool_ca",
-                                            "</tool_c",
-                                            "</tool_",
-                                            "</tool",
-                                            "</too",
-                                            "</to",
-                                            "</t",
-                                            "</",
-                                        ]
-                                        let isSafe = true
-                                        for (const tag of partialEndTags) {
-                                            if (
-                                                toolCallArgsBuffer.endsWith(tag)
-                                            ) {
-                                                isSafe = false
-                                                break
-                                            }
-                                        }
-
-                                        if (isSafe && braceDepth > 0) {
-                                            controller.enqueue(
-                                                new TextEncoder().encode(
-                                                    createToolCallChunk(
-                                                        toolCallId,
-                                                        toolCallName,
-                                                        safeToStream,
-                                                        0,
-                                                        false,
-                                                        false,
-                                                    ),
-                                                ),
-                                            )
-                                            lastStreamedArgsLength +=
-                                                safeToStream.length
-                                        }
-                                    }
-                                }
-                            }
-                        } else if (toolCallName && argumentsStarted) {
-                            // Already streaming arguments - continue incrementally
-                            // Find where we are in the arguments
-                            let argsStartPos = -1
-
-                            if (isDirectFormat) {
-                                // For direct format, arguments start at the beginning
-                                const trimmedBuffer = toolCallArgsBuffer.trim()
-                                argsStartPos = trimmedBuffer.indexOf("{")
-                            } else {
-                                // For standard format, find "arguments": {
-                                const argsMatch =
-                                    toolCallArgsBuffer.match(
-                                        /"arguments"\s*:\s*\{/,
-                                    )
-                                if (
-                                    argsMatch &&
-                                    argsMatch.index !== undefined
-                                ) {
-                                    argsStartPos =
-                                        argsMatch.index +
-                                        argsMatch[0].length -
-                                        1
-                                }
-                            }
-
-                            if (argsStartPos !== -1) {
-                                const sourceBuffer = isDirectFormat
-                                    ? toolCallArgsBuffer.trim()
-                                    : toolCallArgsBuffer
-                                const currentArgsContent = sourceBuffer.slice(
-                                    argsStartPos + 1,
-                                )
-
-                                // Calculate what's new since last stream
-                                const newContent = currentArgsContent.slice(
-                                    lastStreamedArgsLength - 1,
-                                ) // -1 because we already streamed {
-
-                                if (newContent.length > 0) {
-                                    // Check for partial end tags
-                                    const partialEndTags = [
-                                        "</tool_call>",
-                                        "</tool_call",
-                                        "</tool_cal",
-                                        "</tool_ca",
-                                        "</tool_c",
-                                        "</tool_",
-                                        "</tool",
-                                        "</too",
-                                        "</to",
-                                        "</t",
-                                        "</",
-                                    ]
-                                    let isSafe = true
-                                    for (const tag of partialEndTags) {
-                                        if (toolCallArgsBuffer.endsWith(tag)) {
-                                            isSafe = false
-                                            break
-                                        }
-                                    }
-
-                                    // Also check if we're at the end of arguments (closing brace followed by })
-                                    // The pattern would be: ...}}\n</tool_call> or similar
-                                    const contentToStream = newContent
-
-                                    // Track braces in new content
-                                    let tempDepth = braceDepth
-                                    let safeLength = 0
-                                    for (
-                                        let i = 0;
-                                        i < contentToStream.length;
-                                        i++
-                                    ) {
-                                        const char = contentToStream[i]
-                                        if (char === "{") tempDepth++
-                                        if (char === "}") {
-                                            tempDepth--
-                                            if (tempDepth === 0) {
-                                                // Include this closing brace and stop
-                                                safeLength = i + 1
-                                                braceDepth = 0
-                                                break
-                                            }
-                                        }
-                                        safeLength = i + 1
-                                    }
-
-                                    if (safeLength > 0 && isSafe) {
-                                        const toStream = contentToStream.slice(
-                                            0,
-                                            safeLength,
-                                        )
-                                        controller.enqueue(
-                                            new TextEncoder().encode(
-                                                createToolCallChunk(
-                                                    toolCallId,
-                                                    toolCallName,
-                                                    toStream,
-                                                    0,
-                                                    false,
-                                                    false,
-                                                ),
-                                            ),
-                                        )
-                                        lastStreamedArgsLength += safeLength
-                                        braceDepth = tempDepth
-                                    }
-                                }
-                            }
-                        }
                         continue
                     }
 
