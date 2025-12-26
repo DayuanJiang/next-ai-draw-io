@@ -277,8 +277,66 @@ function createContentChunk(
     return `data: ${JSON.stringify(chunk)}\n\n`
 }
 
+// Parse XML-style tool call format (used by R3 and some other models)
+// Format: <name>tool_name</name>\n<arguments>\n{...}\n</arguments>
+function parseXmlToolCall(
+    content: string,
+): { name: string; arguments: string } | null {
+    // Try to extract <name>...</name>
+    const nameMatch = content.match(/<name>\s*([^<]+)\s*<\/name>/)
+    if (!nameMatch) return null
+
+    const toolName = nameMatch[1].trim()
+
+    // Try to extract <arguments>...</arguments>
+    const argsMatch = content.match(/<arguments>\s*([\s\S]*?)\s*<\/arguments>/)
+    if (!argsMatch) {
+        // Arguments might not be closed yet, try to get partial
+        const argsStart = content.indexOf("<arguments>")
+        if (argsStart !== -1) {
+            const argsContent = content
+                .slice(argsStart + "<arguments>".length)
+                .trim()
+            return { name: toolName, arguments: argsContent }
+        }
+        return { name: toolName, arguments: "" }
+    }
+
+    return { name: toolName, arguments: argsMatch[1].trim() }
+}
+
+// Check if content is XML-style tool call format
+function isXmlToolCallFormat(content: string): boolean {
+    return (
+        content.includes("<name>") &&
+        (content.includes("<arguments>") || content.includes("</name>"))
+    )
+}
+
+// Strip <think>...</think> blocks from content (DeepSeek R1 reasoning)
+function stripThinkBlocks(content: string): string {
+    // Remove complete <think>...</think> blocks
+    let result = content.replace(/<think>[\s\S]*?<\/think>/g, "")
+    // Also handle unclosed <think> at the end (still thinking)
+    const thinkStart = result.lastIndexOf("<think>")
+    if (thinkStart !== -1 && !result.slice(thinkStart).includes("</think>")) {
+        result = result.slice(0, thinkStart)
+    }
+    return result
+}
+
+// Check if we're inside a <think> block (R1 reasoning in progress)
+function isInsideThinkBlock(content: string): boolean {
+    const lastThinkOpen = content.lastIndexOf("<think>")
+    const lastThinkClose = content.lastIndexOf("</think>")
+    return lastThinkOpen !== -1 && lastThinkOpen > lastThinkClose
+}
+
 // Check if content might contain a tool call (including partial tags)
 function mightContainToolCall(content: string): boolean {
+    // Strip think blocks first - tool calls inside <think> are not real
+    const strippedContent = stripThinkBlocks(content)
+
     // Check for partial <tool_call> tag at the end
     const partialPatterns = [
         "<tool_call>",
@@ -294,11 +352,14 @@ function mightContainToolCall(content: string): boolean {
     ]
 
     for (const pattern of partialPatterns) {
-        if (content.endsWith(pattern)) return true
+        if (strippedContent.endsWith(pattern)) return true
     }
 
     // Check if we're inside a tool call (started but not ended)
-    if (content.includes("<tool_call>") && !content.includes("</tool_call>")) {
+    if (
+        strippedContent.includes("<tool_call>") &&
+        !strippedContent.includes("</tool_call>")
+    ) {
         return true
     }
 
@@ -307,22 +368,30 @@ function mightContainToolCall(content: string): boolean {
 
 // Get content that's safe to output (excluding potential tool call patterns)
 function getSafeOutput(content: string): string {
+    // Strip think blocks first
+    const strippedContent = stripThinkBlocks(content)
+
+    // If we're still inside a think block, don't output anything yet
+    if (isInsideThinkBlock(content)) {
+        return ""
+    }
+
     // If there's a tool call, don't output anything
-    if (content.includes("<tool_call>")) {
+    if (strippedContent.includes("<tool_call>")) {
         // Return content before the tool call tag
-        const idx = content.indexOf("<tool_call>")
-        return idx > 0 ? content.slice(0, idx).trim() : ""
+        const idx = strippedContent.indexOf("<tool_call>")
+        return idx > 0 ? strippedContent.slice(0, idx).trim() : ""
     }
 
     // Check for partial tag at the end
     for (let i = 1; i <= 11; i++) {
-        const suffix = content.slice(-i)
+        const suffix = strippedContent.slice(-i)
         if ("<tool_call>".startsWith(suffix)) {
-            return content.slice(0, -i)
+            return strippedContent.slice(0, -i)
         }
     }
 
-    return content
+    return strippedContent
 }
 
 // Handle CORS preflight requests
@@ -360,6 +429,14 @@ export async function onRequestPost({
             requestModel || env.AI_MODEL || "@tx/deepseek-ai/deepseek-v3-0324"
 
         console.log(`[EdgeOne] Model: ${modelId}, Tools: ${tools?.length || 0}`)
+
+        // Log if this is a reasoning model (R1, R3, etc. - has <think> blocks)
+        const isReasoningModel = /r\d/i.test(modelId) // Matches r1, R1, r3, R3, etc.
+        if (isReasoningModel) {
+            console.log(
+                `[EdgeOne] Reasoning model detected - will handle <think> blocks`,
+            )
+        }
 
         // Prepare messages - inject tool instructions if tools are provided
         const processedMessages = simplifyMessages(messages)
@@ -410,6 +487,7 @@ export async function onRequestPost({
         let argumentsStarted = false // Whether we've found "arguments": { and started streaming
         let braceDepth = 0 // Track nested braces in arguments
         let lastStreamedArgsLength = 0 // Track how much of arguments we've streamed
+        let isXmlFormat = false // Whether the tool call is in XML format (disable streaming for XML)
 
         const transformStream = new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
@@ -470,13 +548,24 @@ export async function onRequestPost({
                     const content = parsed.content || ""
                     if (!content) continue
 
+                    // Debug: Log content chunks for R1 models
+                    if (
+                        content.includes("<think") ||
+                        content.includes("</think") ||
+                        content.includes("<tool")
+                    ) {
+                        console.log(
+                            `[EdgeOne] Special tag detected in chunk: ${content.slice(0, 100)}...`,
+                        )
+                    }
+
                     if (toolCallStarted) {
                         // We're inside a tool call - accumulate and parse
                         toolCallArgsBuffer += content
 
                         // Check if tool call ended
                         if (toolCallArgsBuffer.includes("</tool_call>")) {
-                            const jsonContent = toolCallArgsBuffer
+                            const rawContent = toolCallArgsBuffer
                                 .replace("</tool_call>", "")
                                 .trim()
 
@@ -484,45 +573,63 @@ export async function onRequestPost({
                             let finalToolName = toolCallName
                             let finalArgs = ""
 
-                            try {
-                                const parsed = JSON.parse(jsonContent)
-
-                                // Check if it's standard format: {"name": "xxx", "arguments": {...}}
-                                if (parsed.name && parsed.arguments) {
-                                    finalToolName = parsed.name
-                                    finalArgs = JSON.stringify(parsed.arguments)
-                                }
-                                // Check if it's edit_diagram format: {"operations": [...]}
-                                else if (parsed.operations) {
-                                    finalToolName = "edit_diagram"
-                                    finalArgs = jsonContent // Use entire JSON as arguments
+                            // First, check if it's XML-style format: <name>...</name><arguments>...</arguments>
+                            if (isXmlToolCallFormat(rawContent)) {
+                                console.log(
+                                    "[EdgeOne] Detected XML-style tool call format",
+                                )
+                                const xmlParsed = parseXmlToolCall(rawContent)
+                                if (xmlParsed) {
+                                    finalToolName = xmlParsed.name
+                                    finalArgs = xmlParsed.arguments
                                     console.log(
-                                        "[EdgeOne] Detected edit_diagram from operations field",
+                                        `[EdgeOne] XML parsed - name: ${finalToolName}, args length: ${finalArgs.length}`,
                                     )
                                 }
-                                // Check if it's display_diagram format: {"xml": "..."}
-                                else if (parsed.xml) {
-                                    finalToolName = "display_diagram"
-                                    finalArgs = jsonContent
+                            } else {
+                                // Try JSON format
+                                try {
+                                    const parsed = JSON.parse(rawContent)
+
+                                    // Check if it's standard format: {"name": "xxx", "arguments": {...}}
+                                    if (parsed.name && parsed.arguments) {
+                                        finalToolName = parsed.name
+                                        finalArgs = JSON.stringify(
+                                            parsed.arguments,
+                                        )
+                                    }
+                                    // Check if it's edit_diagram format: {"operations": [...]}
+                                    else if (parsed.operations) {
+                                        finalToolName = "edit_diagram"
+                                        finalArgs = rawContent // Use entire JSON as arguments
+                                        console.log(
+                                            "[EdgeOne] Detected edit_diagram from operations field",
+                                        )
+                                    }
+                                    // Check if it's display_diagram format: {"xml": "..."}
+                                    else if (parsed.xml) {
+                                        finalToolName = "display_diagram"
+                                        finalArgs = rawContent
+                                    }
+                                    // Fallback: use entire JSON as arguments
+                                    else {
+                                        finalToolName =
+                                            finalToolName || "display_diagram"
+                                        finalArgs = rawContent
+                                    }
+                                } catch {
+                                    // JSON parse failed, try to infer from content
+                                    if (
+                                        rawContent.includes('"operations"') ||
+                                        rawContent.includes('"cell_id"')
+                                    ) {
+                                        finalToolName = "edit_diagram"
+                                    } else {
+                                        finalToolName =
+                                            finalToolName || "display_diagram"
+                                    }
+                                    finalArgs = rawContent
                                 }
-                                // Fallback: use entire JSON as arguments
-                                else {
-                                    finalToolName =
-                                        finalToolName || "display_diagram"
-                                    finalArgs = jsonContent
-                                }
-                            } catch {
-                                // JSON parse failed, try to infer from content
-                                if (
-                                    jsonContent.includes('"operations"') ||
-                                    jsonContent.includes('"cell_id"')
-                                ) {
-                                    finalToolName = "edit_diagram"
-                                } else {
-                                    finalToolName =
-                                        finalToolName || "display_diagram"
-                                }
-                                finalArgs = jsonContent
                             }
 
                             // Send tool call start chunk (if not sent yet)
@@ -576,14 +683,37 @@ export async function onRequestPost({
                             return
                         }
 
-                        // Try to determine tool name early for streaming
+                        // Detect format early: XML vs JSON
+                        // XML format: <name>...</name><arguments>...</arguments>
+                        // JSON format: {"name": "...", "arguments": {...}}
+                        if (!isXmlFormat && !toolCallName) {
+                            // Check for XML format markers
+                            if (
+                                toolCallArgsBuffer.includes("<name>") ||
+                                toolCallArgsBuffer.includes("<arguments>")
+                            ) {
+                                isXmlFormat = true
+                                console.log(
+                                    "[EdgeOne] Detected XML format - will wait for complete content",
+                                )
+                            }
+                        }
+
+                        // For XML format, wait for complete content before processing
+                        // This ensures we don't stream partial/malformed data
+                        if (isXmlFormat) {
+                            // Just accumulate - processing happens when </tool_call> is detected
+                            continue
+                        }
+
+                        // JSON format: Try to determine tool name early for streaming
                         if (!toolCallName) {
-                            // Try to extract tool name from accumulated content
-                            const nameMatch = toolCallArgsBuffer.match(
+                            // Try JSON format: "name": "tool_name"
+                            const jsonNameMatch = toolCallArgsBuffer.match(
                                 /"name"\s*:\s*"([^"]+)"/,
                             )
-                            if (nameMatch) {
-                                toolCallName = nameMatch[1]
+                            if (jsonNameMatch) {
+                                toolCallName = jsonNameMatch[1]
                             } else {
                                 // Infer from content patterns
                                 const lowerContent =
@@ -619,9 +749,9 @@ export async function onRequestPost({
                             }
                         }
 
-                        // Stream arguments incrementally if tool name is known
+                        // Stream arguments incrementally if tool name is known (JSON format only)
                         if (toolCallName && !argumentsStarted) {
-                            // Look for "arguments": {
+                            // Try JSON format: "arguments": {
                             const argsMatch =
                                 toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
                             if (argsMatch && argsMatch.index !== undefined) {
@@ -805,11 +935,19 @@ export async function onRequestPost({
                     // Not in tool call yet - accumulate and check for start
                     contentBuffer += content
 
+                    // Skip if we're inside a <think> block (R1 reasoning)
+                    if (isInsideThinkBlock(contentBuffer)) {
+                        continue
+                    }
+
+                    // Strip think blocks before checking for tool call
+                    const strippedBuffer = stripThinkBlocks(contentBuffer)
+
                     // Check if tool call started
-                    if (contentBuffer.includes("<tool_call>")) {
-                        // Output any content before the tool call
-                        const idx = contentBuffer.indexOf("<tool_call>")
-                        const beforeToolCall = contentBuffer
+                    if (strippedBuffer.includes("<tool_call>")) {
+                        // Output any content before the tool call (excluding think blocks)
+                        const idx = strippedBuffer.indexOf("<tool_call>")
+                        const beforeToolCall = strippedBuffer
                             .slice(0, idx)
                             .trim()
                         if (beforeToolCall) {
@@ -823,7 +961,7 @@ export async function onRequestPost({
                         // Start tool call streaming
                         toolCallStarted = true
                         toolCallId = `call_${Date.now()}`
-                        toolCallArgsBuffer = contentBuffer.slice(
+                        toolCallArgsBuffer = strippedBuffer.slice(
                             idx + "<tool_call>".length,
                         )
                         argumentsStarted = false
