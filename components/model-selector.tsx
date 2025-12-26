@@ -203,13 +203,14 @@ export function ModelSelector({
                                             {model.modelId}
                                         </ModelSelectorName>
                                         {model.validated !== true && (
-                                            <AlertTriangle
-                                                className="ml-auto h-3 w-3 text-warning"
+                                            <span
                                                 title={
                                                     dict.modelConfig
                                                         .unvalidatedModelWarning
                                                 }
-                                            />
+                                            >
+                                                <AlertTriangle className="ml-auto h-3 w-3 text-warning" />
+                                            </span>
                                         )}
                                     </ModelSelectorItem>
                                 ))}
