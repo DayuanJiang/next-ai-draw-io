@@ -742,14 +742,32 @@ export async function onRequestPost({
 
                         // Stream arguments incrementally if tool name is known (JSON format only)
                         if (toolCallName && !argumentsStarted) {
-                            // Try JSON format: "arguments": {
+                            // Try standard format: "arguments": {
                             const argsMatch =
                                 toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
+                            let argsStartPos = -1
+
                             if (argsMatch && argsMatch.index !== undefined) {
-                                argumentsStarted = true
-                                // Find the position of the opening brace
-                                const argsStartPos =
+                                argsStartPos =
                                     argsMatch.index + argsMatch[0].length - 1 // Position of {
+                            } else {
+                                // Try direct format: {"operations" or {"xml" (entire content is arguments)
+                                const trimmedBuffer = toolCallArgsBuffer.trim()
+                                if (
+                                    trimmedBuffer.startsWith("{") &&
+                                    (trimmedBuffer.includes('"operations"') ||
+                                        trimmedBuffer.includes('"xml"'))
+                                ) {
+                                    argsStartPos =
+                                        toolCallArgsBuffer.indexOf("{")
+                                    console.log(
+                                        "[EdgeOne] Detected direct format - streaming entire JSON as arguments",
+                                    )
+                                }
+                            }
+
+                            if (argsStartPos !== -1) {
+                                argumentsStarted = true
                                 braceDepth = 1
                                 lastStreamedArgsLength = 0
 
@@ -834,12 +852,23 @@ export async function onRequestPost({
                             }
                         } else if (toolCallName && argumentsStarted) {
                             // Already streaming arguments - continue incrementally
-                            // Find where we are in the arguments
+                            // Find where we are in the arguments (support both standard and direct format)
+                            let argsStartPos = -1
                             const argsMatch =
                                 toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
                             if (argsMatch && argsMatch.index !== undefined) {
-                                const argsStartPos =
+                                argsStartPos =
                                     argsMatch.index + argsMatch[0].length - 1
+                            } else {
+                                // Direct format: find the first {
+                                const trimmedBuffer = toolCallArgsBuffer.trim()
+                                if (trimmedBuffer.startsWith("{")) {
+                                    argsStartPos =
+                                        toolCallArgsBuffer.indexOf("{")
+                                }
+                            }
+
+                            if (argsStartPos !== -1) {
                                 const currentArgsContent =
                                     toolCallArgsBuffer.slice(argsStartPos + 1)
 
