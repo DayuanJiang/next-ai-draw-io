@@ -443,6 +443,8 @@ export async function onRequestPost({
         let lastStreamedArgsLength = 0 // Track how much of arguments we've streamed
         let isXmlFormat = false // Whether the tool call is in XML format (disable streaming for XML)
         let isDirectFormat = false // Whether using direct format ({"operations":...} without "arguments" wrapper)
+        let isRawXmlContent = false // Whether the content is raw XML (<xml> or <mxCell> tags)
+        let lastStreamedRawXmlLength = 0 // Track how much raw XML we've streamed
 
         const transformStream = new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
@@ -521,10 +523,10 @@ export async function onRequestPost({
                         // IMPORTANT: Try to start streaming BEFORE checking for </tool_call>
                         // This ensures we stream even if the entire content arrives quickly
 
-                        // Detect format early: XML vs JSON vs Raw XML content
+                        // Detect format early: XML tool call format (<name>...<arguments>)
+                        // Note: Raw XML content (<xml>, <mxCell>) is handled separately and CAN be streamed
                         if (!isXmlFormat && !toolCallName) {
-                            const trimmedBuffer = toolCallArgsBuffer.trim()
-                            // Check for XML tool call format markers
+                            // Check for XML tool call format markers (NOT raw XML content)
                             if (
                                 toolCallArgsBuffer.includes("<name>") ||
                                 toolCallArgsBuffer.includes("<arguments>")
@@ -534,28 +536,32 @@ export async function onRequestPost({
                                     "[EdgeOne] Detected XML tool call format - will wait for complete content",
                                 )
                             }
-                            // Check for raw XML content (direct mxCell/xml tags)
-                            else if (
-                                trimmedBuffer.startsWith("<xml") ||
-                                trimmedBuffer.startsWith("<mxCell")
-                            ) {
-                                isXmlFormat = true // Reuse flag to disable streaming
-                                console.log(
-                                    "[EdgeOne] Detected raw XML content - will wait for complete content",
-                                )
-                            }
                         }
 
-                        // JSON format: Try to determine tool name early for streaming
+                        // Determine tool name early for streaming
                         if (!isXmlFormat && !toolCallName) {
+                            const trimmedBuffer = toolCallArgsBuffer.trim()
+
                             // Try JSON format: "name": "tool_name"
                             const jsonNameMatch = toolCallArgsBuffer.match(
                                 /"name"\s*:\s*"([^"]+)"/,
                             )
                             if (jsonNameMatch) {
                                 toolCallName = jsonNameMatch[1]
-                            } else {
-                                // Infer from content patterns
+                            }
+                            // Check for raw XML content (direct mxCell/xml tags)
+                            else if (
+                                trimmedBuffer.startsWith("<xml") ||
+                                trimmedBuffer.startsWith("<mxCell")
+                            ) {
+                                toolCallName = "display_diagram"
+                                isRawXmlContent = true
+                                console.log(
+                                    "[EdgeOne] Detected raw XML content - using display_diagram",
+                                )
+                            }
+                            // Infer from JSON content patterns
+                            else {
                                 const lowerContent =
                                     toolCallArgsBuffer.toLowerCase()
                                 if (
@@ -586,11 +592,58 @@ export async function onRequestPost({
                                         ),
                                     ),
                                 )
+
+                                // For raw XML content, start streaming immediately with {"xml": " prefix
+                                if (isRawXmlContent) {
+                                    argumentsStarted = true // Mark as started to skip JSON streaming logic
+                                    const prefix = '{"xml":"'
+                                    controller.enqueue(
+                                        new TextEncoder().encode(
+                                            createToolCallChunk(
+                                                toolCallId,
+                                                toolCallName,
+                                                prefix,
+                                                0,
+                                                false,
+                                                false,
+                                            ),
+                                        ),
+                                    )
+                                    // Stream the current XML content (escaped)
+                                    const trimmedXml = toolCallArgsBuffer.trim()
+                                    const escapedXml = trimmedXml
+                                        .replace(/\\/g, "\\\\")
+                                        .replace(/"/g, '\\"')
+                                        .replace(/\n/g, "\\n")
+                                        .replace(/\r/g, "\\r")
+                                        .replace(/\t/g, "\\t")
+                                    if (escapedXml.length > 0) {
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                createToolCallChunk(
+                                                    toolCallId,
+                                                    toolCallName,
+                                                    escapedXml,
+                                                    0,
+                                                    false,
+                                                    false,
+                                                ),
+                                            ),
+                                        )
+                                        lastStreamedRawXmlLength =
+                                            trimmedXml.length
+                                    }
+                                }
                             }
                         }
 
-                        // Stream arguments incrementally if tool name is known (JSON format only)
-                        if (!isXmlFormat && toolCallName && !argumentsStarted) {
+                        // Stream arguments incrementally if tool name is known (JSON format only, not raw XML)
+                        if (
+                            !isXmlFormat &&
+                            !isRawXmlContent &&
+                            toolCallName &&
+                            !argumentsStarted
+                        ) {
                             // Try standard format: "arguments": {
                             const argsMatch =
                                 toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
@@ -711,10 +764,11 @@ export async function onRequestPost({
                             }
                         } else if (
                             !isXmlFormat &&
+                            !isRawXmlContent &&
                             toolCallName &&
                             argumentsStarted
                         ) {
-                            // Already streaming arguments - continue incrementally
+                            // Already streaming JSON arguments - continue incrementally
                             // Find where we are in the arguments
                             let argsStartPos = -1
 
@@ -818,6 +872,65 @@ export async function onRequestPost({
                                         lastStreamedArgsLength += safeLength
                                         braceDepth = tempDepth
                                     }
+                                }
+                            }
+                        } else if (
+                            isRawXmlContent &&
+                            toolCallName &&
+                            argumentsStarted
+                        ) {
+                            // Already streaming raw XML content - continue incrementally
+                            const trimmedXml = toolCallArgsBuffer.trim()
+
+                            // Check for partial end tags before streaming
+                            const partialEndTags = [
+                                "</tool_call>",
+                                "</tool_call",
+                                "</tool_cal",
+                                "</tool_ca",
+                                "</tool_c",
+                                "</tool_",
+                                "</tool",
+                                "</too",
+                                "</to",
+                                "</t",
+                            ]
+                            let endsWithPartialTag = false
+                            for (const tag of partialEndTags) {
+                                if (toolCallArgsBuffer.endsWith(tag)) {
+                                    endsWithPartialTag = true
+                                    break
+                                }
+                            }
+
+                            // Calculate new content since last stream
+                            if (
+                                trimmedXml.length > lastStreamedRawXmlLength &&
+                                !endsWithPartialTag
+                            ) {
+                                const newXmlContent = trimmedXml.slice(
+                                    lastStreamedRawXmlLength,
+                                )
+                                const escapedNewXml = newXmlContent
+                                    .replace(/\\/g, "\\\\")
+                                    .replace(/"/g, '\\"')
+                                    .replace(/\n/g, "\\n")
+                                    .replace(/\r/g, "\\r")
+                                    .replace(/\t/g, "\\t")
+                                if (escapedNewXml.length > 0) {
+                                    controller.enqueue(
+                                        new TextEncoder().encode(
+                                            createToolCallChunk(
+                                                toolCallId,
+                                                toolCallName,
+                                                escapedNewXml,
+                                                0,
+                                                false,
+                                                false,
+                                            ),
+                                        ),
+                                    )
+                                    lastStreamedRawXmlLength = trimmedXml.length
                                 }
                             }
                         }
@@ -931,9 +1044,54 @@ export async function onRequestPost({
                                 )
                             }
 
+                            // Handle raw XML content completion - send closing "}
+                            if (isRawXmlContent && argumentsStarted) {
+                                // Stream any remaining XML content
+                                const trimmedXml = rawContent.trim()
+                                if (
+                                    trimmedXml.length > lastStreamedRawXmlLength
+                                ) {
+                                    const remainingXml = trimmedXml.slice(
+                                        lastStreamedRawXmlLength,
+                                    )
+                                    const escapedRemaining = remainingXml
+                                        .replace(/\\/g, "\\\\")
+                                        .replace(/"/g, '\\"')
+                                        .replace(/\n/g, "\\n")
+                                        .replace(/\r/g, "\\r")
+                                        .replace(/\t/g, "\\t")
+                                    if (escapedRemaining.length > 0) {
+                                        controller.enqueue(
+                                            new TextEncoder().encode(
+                                                createToolCallChunk(
+                                                    toolCallId,
+                                                    finalToolName,
+                                                    escapedRemaining,
+                                                    0,
+                                                    false,
+                                                    false,
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                }
+                                // Send closing "}
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            finalToolName,
+                                            '"}',
+                                            0,
+                                            false,
+                                            false,
+                                        ),
+                                    ),
+                                )
+                            }
                             // Send arguments ONLY if we haven't been streaming them
                             // If argumentsStarted is true, we've already streamed the arguments incrementally
-                            if (finalArgs && !argumentsStarted) {
+                            else if (finalArgs && !argumentsStarted) {
                                 controller.enqueue(
                                     new TextEncoder().encode(
                                         createToolCallChunk(
@@ -1006,6 +1164,8 @@ export async function onRequestPost({
                         braceDepth = 0
                         lastStreamedArgsLength = 0
                         isDirectFormat = false // Reset direct format flag
+                        isRawXmlContent = false // Reset raw XML flag
+                        lastStreamedRawXmlLength = 0 // Reset raw XML stream position
                         // Don't send start chunk yet - wait for more content to determine tool name
                         continue
                     }
