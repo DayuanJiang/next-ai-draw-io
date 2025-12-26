@@ -87,42 +87,58 @@ ${toolDescriptions}
 
 NEVER use display_diagram to modify an existing diagram! Use edit_diagram instead.
 
-### STRICT OUTPUT FORMAT
+### STRICT OUTPUT FORMAT - JSON ONLY!
 
 When you need to use a tool, output EXACTLY this format:
 
 <tool_call>
-{"name": "TOOL_NAME", "arguments": {"param1": "value1"}}
+{"name": "TOOL_NAME", "arguments": {...}}
 </tool_call>
 
-### EXAMPLES
+⚠️ CRITICAL: The content inside <tool_call> tags MUST be a single-line or multi-line JSON object with exactly two keys: "name" and "arguments". NO other format is accepted!
 
-Example 1 - Create NEW diagram (display_diagram):
+### CORRECT EXAMPLES
+
+✅ Create NEW diagram:
 <tool_call>
 {"name": "display_diagram", "arguments": {"xml": "<mxCell id=\\"2\\" value=\\"Hello\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}}
 </tool_call>
 
-Example 2 - MODIFY existing diagram (edit_diagram) - change color:
+✅ MODIFY existing diagram (change color to blue):
 <tool_call>
 {"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" value=\\"\\" style=\\"ellipse;fillColor=#1E90FF;strokeColor=#000000;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"300\\" y=\\"200\\" width=\\"60\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}}
 </tool_call>
 
-Example 3 - Multiple updates (edit_diagram):
+✅ Multiple updates:
 <tool_call>
-{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" .../>"}, {"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" .../>"}]}}
+{"name": "edit_diagram", "arguments": {"operations": [{"operation": "update", "cell_id": "2", "new_xml": "<mxCell id=\\"2\\" style=\\"fillColor=#1E90FF;\\" .../>"}, {"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" style=\\"fillColor=#87CEEB;\\" .../>"}]}}
 </tool_call>
 
-### CRITICAL RULES - MUST FOLLOW
+### WRONG EXAMPLES - NEVER DO THIS!
 
-1. The content between <tool_call> and </tool_call> MUST be valid JSON - nothing else
-2. DO NOT use XML tags inside <tool_call> - only JSON with "name" and "arguments"
-3. DO NOT write: <tool_call><display_diagram>...</display_diagram></tool_call> ❌
-4. DO NOT write: <tool_call>update\\ncell_id: 2\\n<mxCell.../></tool_call> ❌
-5. DO write: <tool_call>{"name": "edit_diagram", "arguments": {"operations": [...]}}</tool_call> ✓
-6. Escape double quotes inside string values with backslash: \\"
-7. Escape newlines as \\n, tabs as \\t
-8. Output ONLY the <tool_call> block - no text before or after
-9. After the </tool_call> tag, STOP immediately
+❌ WRONG - Plain text format:
+<tool_call>
+update
+cell_id: 2
+<mxCell id="2" .../>
+</tool_call>
+
+❌ WRONG - XML tags instead of JSON:
+<tool_call>
+<edit_diagram><operations>...</operations></edit_diagram>
+</tool_call>
+
+❌ WRONG - Missing "name" key:
+<tool_call>
+{"arguments": {"operations": [...]}}
+</tool_call>
+
+### RULES
+
+1. Content between <tool_call> and </tool_call> MUST be valid JSON with "name" and "arguments" keys
+2. "name" must be one of: display_diagram, edit_diagram, append_diagram, get_shape_library
+3. Escape double quotes inside string values: \\"
+4. Output ONLY the <tool_call> block when calling a tool
 `
 }
 
@@ -724,9 +740,28 @@ export async function onRequestPost({
                         const nameMatch = toolCallArgsBuffer.match(
                             /"name"\s*:\s*"([^"]+)"/,
                         )
-                        toolCallName = nameMatch
-                            ? nameMatch[1]
-                            : "display_diagram"
+
+                        if (nameMatch) {
+                            toolCallName = nameMatch[1]
+                        } else {
+                            // No valid JSON name found - try to infer from content
+                            // If content contains "update" or "cell_id" or "operation", it's likely edit_diagram
+                            const lowerContent =
+                                toolCallArgsBuffer.toLowerCase()
+                            if (
+                                lowerContent.includes("update") ||
+                                lowerContent.includes("cell_id") ||
+                                lowerContent.includes("operation") ||
+                                lowerContent.includes('"operations"')
+                            ) {
+                                toolCallName = "edit_diagram"
+                                console.warn(
+                                    "[EdgeOne] Detected edit_diagram intent from malformed tool call",
+                                )
+                            } else {
+                                toolCallName = "display_diagram"
+                            }
+                        }
 
                         // Send tool call start chunk immediately
                         controller.enqueue(
