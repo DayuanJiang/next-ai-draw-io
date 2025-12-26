@@ -121,7 +121,7 @@ export async function POST(req: Request) {
                     { status: 400 },
                 )
             }
-        } else if (provider !== "ollama" && !apiKey) {
+        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -222,6 +222,23 @@ export async function POST(req: Request) {
                     ...(baseUrl && { baseURL: baseUrl }),
                 })
                 model = gw(modelId)
+                break
+            }
+
+            case "edgeone": {
+                // EdgeOne uses OpenAI-compatible API
+                // baseUrl should be the full URL to the EdgeOne endpoint
+                if (!baseUrl) {
+                    return NextResponse.json(
+                        { valid: false, error: "EdgeOne requires a base URL" },
+                        { status: 400 },
+                    )
+                }
+                const edgeone = createOpenAI({
+                    apiKey: apiKey || "edgeone", // EdgeOne may not require API key
+                    baseURL: baseUrl,
+                })
+                model = edgeone.chat(modelId)
                 break
             }
 

@@ -302,49 +302,26 @@ export function ModelConfigDialog({
             setValidatingModelIndex(i)
 
             try {
-                let data: { valid: boolean; error?: string }
+                // For EdgeOne, construct baseUrl from current origin
+                const baseUrl = isEdgeOne
+                    ? `${window.location.origin}/api/edgeai`
+                    : selectedProvider.baseUrl
 
-                if (isEdgeOne) {
-                    // EdgeOne: call OpenAI-compatible /api/edgeai/chat/completions
-                    const response = await fetch(
-                        "/api/edgeai/chat/completions",
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                                model: model.modelId,
-                                messages: [{ role: "user", content: "Say OK" }],
-                                max_tokens: 10,
-                            }),
-                        },
-                    )
-                    data = response.ok
-                        ? { valid: true }
-                        : {
-                              valid: false,
-                              error: "EdgeOne Edge AI not available",
-                          }
-                } else {
-                    // Other providers: use validate-model API
-                    const response = await fetch("/api/validate-model", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            provider: selectedProvider.provider,
-                            apiKey: selectedProvider.apiKey,
-                            baseUrl: selectedProvider.baseUrl,
-                            modelId: model.modelId,
-                            // AWS Bedrock credentials
-                            awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                            awsSecretAccessKey:
-                                selectedProvider.awsSecretAccessKey,
-                            awsRegion: selectedProvider.awsRegion,
-                        }),
-                    })
-                    data = await response.json()
-                }
+                const response = await fetch("/api/validate-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: selectedProvider.provider,
+                        apiKey: selectedProvider.apiKey,
+                        baseUrl,
+                        modelId: model.modelId,
+                        // AWS Bedrock credentials
+                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
+                        awsRegion: selectedProvider.awsRegion,
+                    }),
+                })
+                const data = await response.json()
 
                 if (data.valid) {
                     updateModel(selectedProviderId!, model.id, {
