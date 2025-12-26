@@ -19,6 +19,8 @@ export const STORAGE_KEYS = {
     // Settings
     accessCode: "next-ai-draw-io-access-code",
     closeProtection: "next-ai-draw-io-close-protection",
+    exportModal: "next-ai-draw-io-export-modal",
+    importModal: "next-ai-draw-io-import-modal",
     accessCodeRequired: "next-ai-draw-io-access-code-required",
     aiProvider: "next-ai-draw-io-ai-provider",
     aiBaseUrl: "next-ai-draw-io-ai-base-url",

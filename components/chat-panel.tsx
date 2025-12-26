@@ -166,6 +166,7 @@ export default function ChatPanel({
     const [tpmLimit, setTpmLimit] = useState(0)
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
     const [minimalStyle, setMinimalStyle] = useState(false)
+    const [entrySend, setEntrySend] = useState(false)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
     useEffect(() => {
@@ -952,7 +953,7 @@ export default function ChatPanel({
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
                             >
-                                Next AI Drawio
+                                Next AI Drawio by Nas
                             </h1>
                         </div>
                         {!isMobile &&
@@ -1068,6 +1069,8 @@ export default function ChatPanel({
                     error={error}
                     minimalStyle={minimalStyle}
                     onMinimalStyleChange={setMinimalStyle}
+                    entrySend={entrySend}
+                    onEntrySendChange={setEntrySend}
                     models={modelConfig.models}
                     selectedModelId={modelConfig.selectedModelId}
                     onModelSelect={modelConfig.setSelectedModelId}
