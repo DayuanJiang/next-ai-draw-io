@@ -162,6 +162,7 @@ interface ChatInputProps {
     models?: FlattenedModel[]
     selectedModelId?: string
     onModelSelect?: (modelId: string | undefined) => void
+    showUnvalidatedModels?: boolean
     onConfigureModels?: () => void
 }
 
@@ -183,6 +184,7 @@ export function ChatInput({
     models = [],
     selectedModelId,
     onModelSelect = () => {},
+    showUnvalidatedModels = false,
     onConfigureModels = () => {},
 }: ChatInputProps) {
     const dict = useDictionary()
@@ -482,6 +484,7 @@ export function ChatInput({
                             onSelect={onModelSelect}
                             onConfigure={onConfigureModels}
                             disabled={isDisabled}
+                            showUnvalidatedModels={showUnvalidatedModels}
                         />
 
                         <div className="w-px h-5 bg-border mx-1" />

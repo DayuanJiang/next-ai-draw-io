@@ -243,6 +243,9 @@
         "default": "Default",
         "serverDefault": "Server Default",
         "configureModels": "Configure Models...",
-        "onlyVerifiedShown": "Only verified models are shown"
+        "onlyVerifiedShown": "Only verified models are shown",
+        "showUnvalidatedModels": "Show unvalidated models",
+        "allModelsShown": "All models are shown (including unvalidated)",
+        "unvalidatedModelWarning": "This model has not been validated"
     }
 }
