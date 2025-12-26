@@ -476,34 +476,85 @@ export async function onRequestPost({
 
                         // Check if tool call ended
                         if (toolCallArgsBuffer.includes("</tool_call>")) {
-                            // Extract final arguments if not yet done
-                            if (!argumentsStarted) {
-                                // Try to parse the complete JSON and extract arguments
-                                const jsonContent = toolCallArgsBuffer
-                                    .replace("</tool_call>", "")
-                                    .trim()
-                                try {
-                                    const parsed = JSON.parse(jsonContent)
-                                    if (parsed.arguments) {
-                                        const argsStr = JSON.stringify(
-                                            parsed.arguments,
-                                        )
-                                        controller.enqueue(
-                                            new TextEncoder().encode(
-                                                createToolCallChunk(
-                                                    toolCallId,
-                                                    toolCallName,
-                                                    argsStr,
-                                                    0,
-                                                    false,
-                                                    false,
-                                                ),
-                                            ),
-                                        )
-                                    }
-                                } catch {
-                                    // JSON parse failed, skip
+                            const jsonContent = toolCallArgsBuffer
+                                .replace("</tool_call>", "")
+                                .trim()
+
+                            // Determine tool name and arguments
+                            let finalToolName = toolCallName
+                            let finalArgs = ""
+
+                            try {
+                                const parsed = JSON.parse(jsonContent)
+
+                                // Check if it's standard format: {"name": "xxx", "arguments": {...}}
+                                if (parsed.name && parsed.arguments) {
+                                    finalToolName = parsed.name
+                                    finalArgs = JSON.stringify(parsed.arguments)
                                 }
+                                // Check if it's edit_diagram format: {"operations": [...]}
+                                else if (parsed.operations) {
+                                    finalToolName = "edit_diagram"
+                                    finalArgs = jsonContent // Use entire JSON as arguments
+                                    console.log(
+                                        "[EdgeOne] Detected edit_diagram from operations field",
+                                    )
+                                }
+                                // Check if it's display_diagram format: {"xml": "..."}
+                                else if (parsed.xml) {
+                                    finalToolName = "display_diagram"
+                                    finalArgs = jsonContent
+                                }
+                                // Fallback: use entire JSON as arguments
+                                else {
+                                    finalToolName =
+                                        finalToolName || "display_diagram"
+                                    finalArgs = jsonContent
+                                }
+                            } catch {
+                                // JSON parse failed, try to infer from content
+                                if (
+                                    jsonContent.includes('"operations"') ||
+                                    jsonContent.includes('"cell_id"')
+                                ) {
+                                    finalToolName = "edit_diagram"
+                                } else {
+                                    finalToolName =
+                                        finalToolName || "display_diagram"
+                                }
+                                finalArgs = jsonContent
+                            }
+
+                            // Send tool call start chunk (if not sent yet)
+                            if (!toolCallName) {
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            finalToolName,
+                                            "",
+                                            0,
+                                            true,
+                                            false,
+                                        ),
+                                    ),
+                                )
+                            }
+
+                            // Send arguments
+                            if (finalArgs) {
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            finalToolName,
+                                            finalArgs,
+                                            0,
+                                            false,
+                                            false,
+                                        ),
+                                    ),
+                                )
                             }
 
                             // Tool call complete - send finish chunk
@@ -511,7 +562,7 @@ export async function onRequestPost({
                                 new TextEncoder().encode(
                                     createToolCallChunk(
                                         toolCallId,
-                                        toolCallName,
+                                        finalToolName,
                                         "",
                                         0,
                                         false,
@@ -525,8 +576,51 @@ export async function onRequestPost({
                             return
                         }
 
-                        // Try to extract and stream arguments incrementally
-                        if (!argumentsStarted) {
+                        // Try to determine tool name early for streaming
+                        if (!toolCallName) {
+                            // Try to extract tool name from accumulated content
+                            const nameMatch = toolCallArgsBuffer.match(
+                                /"name"\s*:\s*"([^"]+)"/,
+                            )
+                            if (nameMatch) {
+                                toolCallName = nameMatch[1]
+                            } else {
+                                // Infer from content patterns
+                                const lowerContent =
+                                    toolCallArgsBuffer.toLowerCase()
+                                if (
+                                    lowerContent.includes('"operations"') ||
+                                    lowerContent.includes('"cell_id"') ||
+                                    lowerContent.includes('"operation"')
+                                ) {
+                                    toolCallName = "edit_diagram"
+                                    console.log(
+                                        "[EdgeOne] Inferred edit_diagram from content pattern",
+                                    )
+                                } else if (lowerContent.includes('"xml"')) {
+                                    toolCallName = "display_diagram"
+                                }
+                            }
+
+                            // If tool name determined, send start chunk
+                            if (toolCallName) {
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        createToolCallChunk(
+                                            toolCallId,
+                                            toolCallName,
+                                            "",
+                                            0,
+                                            true,
+                                            false,
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
+
+                        // Stream arguments incrementally if tool name is known
+                        if (toolCallName && !argumentsStarted) {
                             // Look for "arguments": {
                             const argsMatch =
                                 toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
@@ -617,7 +711,7 @@ export async function onRequestPost({
                                     }
                                 }
                             }
-                        } else {
+                        } else if (toolCallName && argumentsStarted) {
                             // Already streaming arguments - continue incrementally
                             // Find where we are in the arguments
                             const argsMatch =
@@ -735,108 +829,7 @@ export async function onRequestPost({
                         argumentsStarted = false
                         braceDepth = 0
                         lastStreamedArgsLength = 0
-
-                        // Try to extract tool name for the start chunk
-                        const nameMatch = toolCallArgsBuffer.match(
-                            /"name"\s*:\s*"([^"]+)"/,
-                        )
-
-                        if (nameMatch) {
-                            toolCallName = nameMatch[1]
-                        } else {
-                            // No valid JSON name found - try to infer from content
-                            // If content contains "update" or "cell_id" or "operation", it's likely edit_diagram
-                            const lowerContent =
-                                toolCallArgsBuffer.toLowerCase()
-                            if (
-                                lowerContent.includes("update") ||
-                                lowerContent.includes("cell_id") ||
-                                lowerContent.includes("operation") ||
-                                lowerContent.includes('"operations"')
-                            ) {
-                                toolCallName = "edit_diagram"
-                                console.warn(
-                                    "[EdgeOne] Detected edit_diagram intent from malformed tool call",
-                                )
-                            } else {
-                                toolCallName = "display_diagram"
-                            }
-                        }
-
-                        // Send tool call start chunk immediately
-                        controller.enqueue(
-                            new TextEncoder().encode(
-                                createToolCallChunk(
-                                    toolCallId,
-                                    toolCallName,
-                                    "",
-                                    0,
-                                    true,
-                                    false,
-                                ),
-                            ),
-                        )
-
-                        // Check if we already have arguments to stream
-                        const argsMatch =
-                            toolCallArgsBuffer.match(/"arguments"\s*:\s*\{/)
-                        if (argsMatch && argsMatch.index !== undefined) {
-                            argumentsStarted = true
-                            const argsStartPos =
-                                argsMatch.index + argsMatch[0].length - 1
-                            braceDepth = 1
-
-                            // Stream opening brace
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    createToolCallChunk(
-                                        toolCallId,
-                                        toolCallName,
-                                        "{",
-                                        0,
-                                        false,
-                                        false,
-                                    ),
-                                ),
-                            )
-                            lastStreamedArgsLength = 1
-
-                            // Stream any content after {
-                            const argsContent = toolCallArgsBuffer.slice(
-                                argsStartPos + 1,
-                            )
-                            if (argsContent.length > 0) {
-                                let safeToStream = ""
-                                for (const char of argsContent) {
-                                    if (char === "{") braceDepth++
-                                    if (char === "}") {
-                                        braceDepth--
-                                        if (braceDepth === 0) {
-                                            safeToStream += char
-                                            break
-                                        }
-                                    }
-                                    safeToStream += char
-                                }
-
-                                if (safeToStream.length > 0 && braceDepth > 0) {
-                                    controller.enqueue(
-                                        new TextEncoder().encode(
-                                            createToolCallChunk(
-                                                toolCallId,
-                                                toolCallName,
-                                                safeToStream,
-                                                0,
-                                                false,
-                                                false,
-                                            ),
-                                        ),
-                                    )
-                                    lastStreamedArgsLength +=
-                                        safeToStream.length
-                                }
-                            }
-                        }
+                        // Don't send start chunk yet - wait for more content to determine tool name
                         continue
                     }
 
