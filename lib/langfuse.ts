@@ -21,9 +21,11 @@ export function getLangfuseClient(): LangfuseClient | null {
     return langfuseClient
 }
 
-// Check if Langfuse is configured
+// Check if Langfuse is configured (both keys required)
 export function isLangfuseEnabled(): boolean {
-    return !!process.env.LANGFUSE_PUBLIC_KEY
+    return !!(
+        process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY
+    )
 }
 
 // Update trace with input data at the start of request
@@ -43,34 +45,16 @@ export function setTraceInput(params: {
 }
 
 // Update trace with output and end the span
-export function setTraceOutput(
-    output: string,
-    usage?: { promptTokens?: number; completionTokens?: number },
-) {
+// Note: AI SDK 6 telemetry automatically reports token usage on its spans,
+// so we only need to set the output text and close our wrapper span
+export function setTraceOutput(output: string) {
     if (!isLangfuseEnabled()) return
 
     updateActiveTrace({ output })
 
+    // End the observe() wrapper span (AI SDK creates its own child spans with usage)
     const activeSpan = api.trace.getActiveSpan()
     if (activeSpan) {
-        // Manually set usage attributes since AI SDK Bedrock streaming doesn't provide them
-        if (usage?.promptTokens) {
-            activeSpan.setAttribute("ai.usage.promptTokens", usage.promptTokens)
-            activeSpan.setAttribute(
-                "gen_ai.usage.input_tokens",
-                usage.promptTokens,
-            )
-        }
-        if (usage?.completionTokens) {
-            activeSpan.setAttribute(
-                "ai.usage.completionTokens",
-                usage.completionTokens,
-            )
-            activeSpan.setAttribute(
-                "gen_ai.usage.output_tokens",
-                usage.completionTokens,
-            )
-        }
         activeSpan.end()
     }
 }

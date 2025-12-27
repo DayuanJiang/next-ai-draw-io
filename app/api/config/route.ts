@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server"
 
 export async function GET() {
-    const accessCodes =
-        process.env.ACCESS_CODE_LIST?.split(",")
-            .map((code) => code.trim())
-            .filter(Boolean) || []
-
     return NextResponse.json({
-        accessCodeRequired: accessCodes.length > 0,
-        dailyRequestLimit: parseInt(process.env.DAILY_REQUEST_LIMIT || "0", 10),
+        accessCodeRequired: !!process.env.ACCESS_CODE_LIST,
+        dailyRequestLimit: Number(process.env.DAILY_REQUEST_LIMIT) || 0,
+        dailyTokenLimit: Number(process.env.DAILY_TOKEN_LIMIT) || 0,
+        tpmLimit: Number(process.env.TPM_LIMIT) || 0,
     })
 }

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';">
+    <title>Settings - Next AI Draw.io</title>
+    <link rel="stylesheet" href="./settings.css">
+</head>
+<body>
+    <div class="container">
+        <div class="deprecation-notice">
+            <strong>⚠️ Deprecation Notice</strong>
+            <p>This settings panel will be removed in a future update.</p>
+            <p>Please use the <strong>AI Model Configuration</strong> button (left of the Send button in the chat panel) to configure your AI providers. Your settings there will persist across updates.</p>
+        </div>
+
+        <h1>Configuration Presets</h1>
+
+        <div class="section">
+            <h2>Presets</h2>
+            <div id="preset-list" class="preset-list">
+                <!-- Presets will be loaded here -->
+            </div>
+            <button id="add-preset-btn" class="btn btn-primary">
+                + Add New Preset
+            </button>
+        </div>
+    </div>
+
+    <!-- Add/Edit Preset Modal -->
+    <div id="preset-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Add Preset</h3>
+            </div>
+            <div class="modal-body">
+                <form id="preset-form">
+                    <input type="hidden" id="preset-id">
+
+                    <div class="form-group">
+                        <label for="preset-name">Preset Name *</label>
+                        <input type="text" id="preset-name" required placeholder="e.g., Work, Personal, Testing">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ai-provider">AI Provider</label>
+                        <select id="ai-provider">
+                            <option value="">-- Select Provider --</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic (Claude)</option>
+                            <option value="google">Google AI (Gemini)</option>
+                            <option value="azure">Azure OpenAI</option>
+                            <option value="bedrock">AWS Bedrock</option>
+                            <option value="openrouter">OpenRouter</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="siliconflow">SiliconFlow</option>
+                            <option value="ollama">Ollama (Local)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ai-model">Model ID</label>
+                        <input type="text" id="ai-model" placeholder="e.g., gpt-4o, claude-sonnet-4-5">
+                        <div class="hint">The model identifier to use with the selected provider</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ai-api-key">API Key</label>
+                        <input type="password" id="ai-api-key" placeholder="Your API key">
+                        <div class="hint">This will be stored locally on your device</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ai-base-url">Base URL (Optional)</label>
+                        <input type="text" id="ai-base-url" placeholder="https://api.example.com/v1">
+                        <div class="hint">Custom API endpoint URL</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="temperature">Temperature (Optional)</label>
+                        <input type="text" id="temperature" placeholder="0.7">
+                        <div class="hint">Controls randomness (0.0 - 2.0)</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button type="button" id="save-btn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Delete Preset</h3>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete "<span id="delete-preset-name"></span>"?</p>
+                <p class="delete-warning">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="delete-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button type="button" id="delete-confirm-btn" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="./settings.js"></script>
+</body>
+</html>

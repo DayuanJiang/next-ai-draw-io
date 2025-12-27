@@ -19,15 +19,21 @@ English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
-https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+
+
+https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
+
+
 
 ## Table of Contents
 - [Next AI Draw.io ](#next-ai-drawio-)
   - [Table of Contents](#table-of-contents)
   - [Examples](#examples)
   - [Features](#features)
+  - [MCP Server (Preview)](#mcp-server-preview)
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
+    - [Desktop Application](#desktop-application)
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
     - [Installation](#installation)
   - [Deployment](#deployment)
@@ -81,10 +87,42 @@ Here are some example prompts and their generated diagrams:
 
 -   **LLM-Powered Diagram Creation**: Leverage Large Language Models to create and manipulate draw.io diagrams directly through natural language commands
 -   **Image-Based Diagram Replication**: Upload existing diagrams or images and have the AI replicate and enhance them automatically
+-   **PDF & Text File Upload**: Upload PDF documents and text files to extract content and generate diagrams from existing documents
+-   **AI Reasoning Display**: View the AI's thinking process for supported models (OpenAI o1/o3, Gemini, Claude, etc.)
 -   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
--   **AWS Architecture Diagram Support**: Specialized support for generating AWS architecture diagrams
+-   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
+
+## MCP Server (Preview)
+
+> **Preview Feature**: This feature is experimental and may not stable.
+
+Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"]
+    }
+  }
+}
+```
+
+### Claude Code CLI
+
+```bash
+claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+```
+
+Then ask Claude to create diagrams:
+> "Create a flowchart showing user authentication with login, MFA, and session management"
+
+The diagram appears in your browser in real-time!
+
+See the [MCP Server README](./packages/mcp-server/README.md) for VS Code, Cursor, and other client configurations.
 
 ## Getting Started
 
@@ -94,7 +132,31 @@ No installation needed! Try the app directly on our demo site:
 
 [![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> Note: Due to high traffic, the demo site currently uses Claude Haiku 4.5. For best results, we recommend self-hosting with Claude Opus 4.5.
+> Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
+
+> **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
+
+### Desktop Application
+
+Download the native desktop app for your platform from the [Releases page](https://github.com/DayuanJiang/next-ai-draw-io/releases):
+
+| Platform | Download |
+|----------|----------|
+| macOS | `.dmg` (Intel & Apple Silicon) |
+| Windows | `.exe` installer (x64 & ARM64) |
+| Linux | `.AppImage` or `.deb` (x64 & ARM64) |
+
+**Features:**
+- **Secure API key storage**: Credentials encrypted using OS keychain
+- **Configuration presets**: Save and switch between AI providers via menu
+- **Native file dialogs**: Open/save `.drawio` files directly
+- **Offline capable**: Works without internet after first launch
+
+**Quick Setup:**
+1. Download and install for your platform
+2. Open the app → **Menu → Configuration → Manage Presets**
+3. Add your AI provider credentials
+4. Start creating diagrams!
 
 ### Run with Docker (Recommended)
 
@@ -112,7 +174,7 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-Or use an env file (create one from `env.example`):
+Or use an env file:
 
 ```bash
 cp env.example .env
@@ -123,6 +185,8 @@ docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:l
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
+
+> **Offline Deployment:** If `embed.diagrams.net` is blocked, see [Offline Deployment](./docs/offline-deployment.md) for configuration options.
 
 ### Installation
 
@@ -200,9 +264,9 @@ All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
 📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
 
-**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-4o, Gemini 2.0, and DeepSeek V3/R1.
+**Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-5.1, Gemini 3 Pro, and DeepSeek V3.2/R1.
 
-Note that `claude-sonnet-4-5` has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.
+Note that `claude` series has trained on draw.io diagrams with cloud architecture logos like AWS, Azure, GCP. So if you want to create cloud architecture diagrams, this is the best choice.
 
 
 ## How It Works
