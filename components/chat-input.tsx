@@ -1,22 +1,15 @@
 "use client"
 
-import {
-    Download,
-    History,
-    Image as ImageIcon,
-    Loader2,
-    Send,
-    Trash2,
-} from "lucide-react"
+import { Image as ImageIcon, Loader2, Send, Trash2 } from "lucide-react"
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ErrorToast } from "@/components/error-toast"
-import { HistoryDialog } from "@/components/history-dialog"
+
 import { ModelSelector } from "@/components/model-selector"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
-import { SaveDialog } from "@/components/save-dialog"
+
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -25,7 +18,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useDiagram } from "@/contexts/diagram-context"
+
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -152,8 +145,7 @@ interface ChatInputProps {
         File,
         { text: string; charCount: number; isExtracting: boolean }
     >
-    showHistory?: boolean
-    onToggleHistory?: (show: boolean) => void
+
     sessionId?: string
     error?: Error | null
     minimalStyle?: boolean
@@ -175,9 +167,7 @@ export function ChatInput({
     files = [],
     onFileChange = () => {},
     pdfData = new Map(),
-    showHistory = false,
-    onToggleHistory = () => {},
-    sessionId,
+
     error = null,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
@@ -188,12 +178,7 @@ export function ChatInput({
     onConfigureModels = () => {},
 }: ChatInputProps) {
     const dict = useDictionary()
-    const {
-        diagramHistory,
-        saveDiagramToFile,
-        showSaveDialog,
-        setShowSaveDialog,
-    } = useDiagram()
+
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -386,11 +371,6 @@ export function ChatInput({
                             onClear={handleClear}
                         />
 
-                        <HistoryDialog
-                            showHistory={showHistory}
-                            onToggleHistory={onToggleHistory}
-                        />
-
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div className="flex items-center gap-1.5">
@@ -421,63 +401,29 @@ export function ChatInput({
                     </div>
 
                     <div className="flex items-center gap-1 overflow-hidden justify-end">
-                        <ButtonWithTooltip
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onToggleHistory(true)}
-                            disabled={isDisabled || diagramHistory.length === 0}
-                            tooltipContent={dict.chat.diagramHistory}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                        >
-                            <History className="h-4 w-4" />
-                        </ButtonWithTooltip>
+                        <div className="flex items-center gap-1 overflow-x-hidden">
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={triggerFileInput}
+                                disabled={isDisabled}
+                                tooltipContent={dict.chat.uploadFile}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <ImageIcon className="h-4 w-4" />
+                            </ButtonWithTooltip>
 
-                        <ButtonWithTooltip
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowSaveDialog(true)}
-                            disabled={isDisabled}
-                            tooltipContent={dict.chat.saveDiagram}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                        >
-                            <Download className="h-4 w-4" />
-                        </ButtonWithTooltip>
-
-                        <SaveDialog
-                            open={showSaveDialog}
-                            onOpenChange={setShowSaveDialog}
-                            onSave={(filename, format) =>
-                                saveDiagramToFile(filename, format, sessionId)
-                            }
-                            defaultFilename={`diagram-${new Date()
-                                .toISOString()
-                                .slice(0, 10)}`}
-                        />
-
-                        <ButtonWithTooltip
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={triggerFileInput}
-                            disabled={isDisabled}
-                            tooltipContent={dict.chat.uploadFile}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                        >
-                            <ImageIcon className="h-4 w-4" />
-                        </ButtonWithTooltip>
-
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileChange}
-                            accept="image/*,.pdf,application/pdf,text/*,.md,.markdown,.json,.csv,.xml,.yaml,.yml,.toml"
-                            multiple
-                            disabled={isDisabled}
-                        />
-
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleFileChange}
+                                accept="image/*,.pdf,application/pdf,text/*,.md,.markdown,.json,.csv,.xml,.yaml,.yml,.toml"
+                                multiple
+                                disabled={isDisabled}
+                            />
+                        </div>
                         <ModelSelector
                             models={models}
                             selectedModelId={selectedModelId}
@@ -486,9 +432,7 @@ export function ChatInput({
                             disabled={isDisabled}
                             showUnvalidatedModels={showUnvalidatedModels}
                         />
-
                         <div className="w-px h-5 bg-border mx-1" />
-
                         <Button
                             type="submit"
                             disabled={isDisabled || !input.trim()}

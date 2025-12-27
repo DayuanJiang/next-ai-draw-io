@@ -98,7 +98,11 @@
         "minimal": "简约",
         "sketch": "草图",
         "closeProtection": "关闭确认",
-        "closeProtectionDescription": "离开页面时显示确认。"
+        "closeProtectionDescription": "离开页面时显示确认。",
+        "diagramActions": "图表操作",
+        "diagramActionsDescription": "管理图表历史记录和导出",
+        "history": "历史记录",
+        "download": "下载"
     },
     "save": {
         "title": "保存图表",
