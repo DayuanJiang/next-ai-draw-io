@@ -43,7 +43,7 @@
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
-        "@opennextjs/cloudflare": "^1.14.4",
+        "@opennextjs/cloudflare": "1.14.7",
         "@openrouter/ai-sdk-provider": "^1.5.4",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
@@ -117,7 +117,7 @@
         "tailwindcss": "^4",
         "typescript": "^5",
         "wait-on": "^9.0.3",
-        "wrangler": "^4.53.0"
+        "wrangler": "4.54.0"
     },
     "overrides": {
         "@openrouter/ai-sdk-provider": {
