@@ -41,6 +41,8 @@
         "uploadFile": "ファイルをアップロード（画像、PDF、テキスト）",
         "minimalStyle": "ミニマル",
         "styledMode": "スタイル付き",
+        "entrySend": "Enterで送信",
+        "clickSend": "クリックして送信します",
         "minimalTooltip": "高速生成のためミニマルを使用（色なし）",
         "regenerate": "応答を再生成",
         "copyResponse": "応答をコピー",
@@ -98,7 +100,13 @@
         "minimal": "ミニマル",
         "sketch": "スケッチ",
         "closeProtection": "ページ離脱確認",
-        "closeProtectionDescription": "ページを離れる際に確認を表示します。"
+        "closeProtectionDescription": "ページを離れる際に確認を表示します。",
+        "modelOpt": "モデル設定",
+        "modelOptDescription": "ブラウザのローカルに保存されたモデル関連の設定をエクスポートまたはインポートできます",
+        "exportModelBtn": "エクスポート",
+        "importModelBtn": "上書き",
+        "exportModalDescription": "モデル設定をエクスポート",
+        "importModalDescription": "モデル設定をインポート"
     },
     "save": {
         "title": "ダイアグラムを保存",

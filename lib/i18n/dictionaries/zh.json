@@ -41,6 +41,8 @@
         "uploadFile": "上传文件（图片、PDF、文本）",
         "minimalStyle": "简约",
         "styledMode": "精致",
+        "entrySend": "回车发送",
+        "clickSend": "点击发送",
         "minimalTooltip": "使用简约模式以加快生成速度（无颜色）",
         "regenerate": "重新生成响应",
         "copyResponse": "复制响应",
@@ -98,6 +100,12 @@
         "minimal": "简约",
         "sketch": "草图",
         "closeProtection": "关闭确认",
+        "modelOpt": "模型操作",
+        "modelOptDescription": "从浏览器本地导出或导入模型相关配置",
+        "exportModelBtn": "导出",
+        "importModelBtn": "覆盖",
+        "exportModalDescription": "导出模型配置说明",
+        "importModalDescription": "导入模型配置说明",
         "closeProtectionDescription": "离开页面时显示确认。"
     },
     "save": {

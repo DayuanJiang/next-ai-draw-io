@@ -658,11 +658,11 @@ export function ChatMessageDisplay({
         const getToolDisplayName = (name: string) => {
             switch (name) {
                 case "display_diagram":
-                    return "Generate Diagram"
+                    return "生成图形"
                 case "edit_diagram":
-                    return "Edit Diagram"
+                    return "编辑图形"
                 case "get_shape_library":
-                    return "Get Shape Library"
+                    return "获取图形库"
                 default:
                     return name
             }

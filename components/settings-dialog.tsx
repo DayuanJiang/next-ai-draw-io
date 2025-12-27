@@ -24,6 +24,7 @@ import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { STORAGE_KEYS } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 
 // Reusable setting item component for consistent layout
@@ -52,8 +53,8 @@ function SettingItem({
 }
 
 const LANGUAGE_LABELS: Record<Locale, string> = {
-    en: "English",
     zh: "中文",
+    en: "English",
     ja: "日本語",
 }
 
@@ -76,6 +77,58 @@ function getStoredAccessCodeRequired(): boolean | null {
     const stored = localStorage.getItem(STORAGE_ACCESS_CODE_REQUIRED_KEY)
     if (stored === null) return null
     return stored === "true"
+}
+
+const STORAGE_KEY = "next-ai-draw-io-model-configs"
+
+function isValidJson(text: string) {
+    try {
+        JSON.parse(text)
+        return true
+    } catch {
+        return false
+    }
+}
+
+async function handleExport() {
+    const value = localStorage.getItem(STORAGE_KEY)
+
+    if (!value) {
+        alert("未找到可导出的配置")
+        return
+    }
+
+    try {
+        await navigator.clipboard.writeText(value)
+        alert("配置已复制到剪贴板")
+    } catch (err) {
+        console.error(err)
+        alert("复制失败，请检查浏览器权限")
+    }
+}
+
+async function handleImport() {
+    try {
+        const text = await navigator.clipboard.readText()
+
+        if (!text) {
+            alert("剪贴板内容为空")
+            return
+        }
+
+        if (!isValidJson(text)) {
+            alert("剪贴板内容不是合法的 JSON")
+            return
+        }
+
+        localStorage.setItem(STORAGE_KEY, text)
+        alert("配置已成功导入，页面即将刷新")
+
+        window.location.reload()
+    } catch (err) {
+        console.error(err)
+        alert("读取剪贴板失败，请检查浏览器权限")
+    }
 }
 
 function SettingsContent({
@@ -348,6 +401,80 @@ function SettingsContent({
                             }}
                         />
                     </SettingItem>
+
+                    <SettingItem
+                        label={dict.settings.modelOpt}
+                        description={dict.settings.modelOptDescription}
+                    >
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={handleExport}
+                                className="h-9 rounded-xl border-border-subtle hover:bg-interactive-hover px-4"
+                            >
+                                {dict.settings.exportModelBtn}
+                            </Button>
+
+                            <Button
+                                variant="outline"
+                                onClick={handleImport}
+                                className="h-9 rounded-xl border-border-subtle hover:bg-interactive-hover px-4"
+                            >
+                                {dict.settings.importModelBtn}
+                            </Button>
+                        </div>
+                    </SettingItem>
+
+                    {/* Logout Button */}
+                    <div className="mt-4 pt-4 border-border-subtle">
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                try {
+                                    // 清除访问码
+                                    localStorage.removeItem(
+                                        STORAGE_KEYS.accessCode,
+                                    )
+
+                                    // 清除 cookie（令期过期）
+                                    document.cookie =
+                                        "next-ai-draw-io-access-code=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+
+                                    // 获取当前语言并重定向到登录页
+                                    // 尝试从 localStorage 获取保存的登录语言
+                                    const savedLang = localStorage.getItem(
+                                        "next-ai-draw-io-login-lang",
+                                    )
+                                    const url = new URL(window.location.href)
+                                    const pathParts = url.pathname
+                                        .split("/")
+                                        .filter(Boolean)
+                                    const currentLang = pathParts[0] || "en"
+
+                                    // 优先使用保存的语言，否则使用当前语言
+                                    const lang =
+                                        savedLang &&
+                                        i18n.locales.includes(savedLang as any)
+                                            ? savedLang
+                                            : i18n.locales.includes(
+                                                    currentLang as any,
+                                                )
+                                              ? currentLang
+                                              : "en"
+
+                                    // 立即重定向 - 保持相同的语言
+                                    window.location.href = `/${lang}/login`
+                                } catch (error) {
+                                    console.error("Logout failed:", error)
+                                    // Fallback redirect
+                                    window.location.href = "/login"
+                                }
+                            }}
+                            className="w-full"
+                        >
+                            退出登录
+                        </Button>
+                    </div>
                 </div>
             </div>
 

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { STORAGE_KEYS } from "@/lib/storage"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
@@ -180,6 +181,15 @@ export default function Home() {
         return () =>
             window.removeEventListener("beforeunload", handleBeforeUnload)
     }, [closeProtection])
+
+    // If not loaded, show loading state
+    if (!isLoaded) {
+        return (
+            <div className="h-screen w-full flex items-center justify-center bg-background">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+            </div>
+        )
+    }
 
     return (
         <div className="h-screen bg-background relative overflow-hidden">

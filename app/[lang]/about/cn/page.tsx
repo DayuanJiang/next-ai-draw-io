@@ -86,13 +86,6 @@ export default function AboutCN() {
                             >
                                 中文
                             </Link>
-                            <span className="text-gray-400">|</span>
-                            <Link
-                                href="/about/ja"
-                                className="text-gray-600 hover:text-blue-600"
-                            >
-                                日本語
-                            </Link>
                         </div>
                     </div>
 
