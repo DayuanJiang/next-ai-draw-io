@@ -12,6 +12,10 @@
         "format": "biome check --write .",
         "check": "biome ci",
         "prepare": "husky",
+        "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+        "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+        "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+        "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
         "electron:dev": "node scripts/electron-dev.mjs",
         "electron:build": "npm run build && npm run electron:compile",
         "electron:compile": "npx esbuild electron/main/index.ts electron/preload/index.ts electron/preload/settings.ts --bundle --platform=node --outdir=dist-electron --external:electron --sourcemap --packages=external && npx shx cp -r electron/settings dist-electron/",
@@ -39,6 +43,7 @@
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
+        "@opennextjs/cloudflare": "1.14.7",
         "@openrouter/ai-sdk-provider": "^1.5.4",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
@@ -111,7 +116,8 @@
         "shx": "^0.4.0",
         "tailwindcss": "^4",
         "typescript": "^5",
-        "wait-on": "^9.0.3"
+        "wait-on": "^9.0.3",
+        "wrangler": "4.54.0"
     },
     "overrides": {
         "@openrouter/ai-sdk-provider": {
