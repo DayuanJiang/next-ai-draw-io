@@ -180,7 +180,7 @@ Be sure to **set the environment variables** in the Vercel dashboard as you did 
 
 ## Deploy on Cloudflare Workers
 
-[Go to Cloudflare Deploy Guide](./Cloudflare_Deploy.md)
+[Go to Cloudflare Deploy Guide](./docs/Cloudflare_Deploy.md)
 
 
 
