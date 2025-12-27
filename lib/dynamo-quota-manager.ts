@@ -27,6 +27,7 @@ try {
 
 /**
  * Get today's date string in the configured timezone (YYYY-MM-DD format)
+ * This is used as the Sort Key (SK) for per-day tracking
  */
 function getTodayInTimezone(): string {
     return new Intl.DateTimeFormat("en-CA", {
@@ -61,8 +62,8 @@ interface QuotaCheckResult {
 
 /**
  * Check all quotas and increment request count atomically.
- * Uses ConditionExpression to prevent race conditions.
- * Returns which limit was exceeded if any.
+ * Uses composite key (PK=user, SK=date) for per-day tracking.
+ * Each day automatically gets a new item - no explicit reset needed.
  */
 export async function checkAndIncrementRequest(
     ip: string,
@@ -73,77 +74,33 @@ export async function checkAndIncrementRequest(
         return { allowed: true }
     }
 
-    const today = getTodayInTimezone()
+    const pk = ip // User identifier (base64 IP)
+    const sk = getTodayInTimezone() // Date as sort key (YYYY-MM-DD)
     const currentMinute = Math.floor(Date.now() / 60000).toString()
-    const ttl = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
 
     try {
-        // First, try to reset counts if it's a new day (atomic day reset)
-        // This will succeed only if lastResetDate < today or doesn't exist
-        try {
-            await client.send(
-                new UpdateItemCommand({
-                    TableName: TABLE,
-                    Key: { PK: { S: `IP#${ip}` } },
-                    // Reset all counts to 1/0 for the new day
-                    UpdateExpression: `
-                        SET lastResetDate = :today,
-                            dailyReqCount = :one,
-                            dailyTokenCount = :zero,
-                            lastMinute = :minute,
-                            tpmCount = :zero,
-                            #ttl = :ttl
-                    `,
-                    // Only succeed if it's a new day (or new item)
-                    ConditionExpression: `
-                        attribute_not_exists(lastResetDate) OR lastResetDate < :today
-                    `,
-                    ExpressionAttributeNames: { "#ttl": "ttl" },
-                    ExpressionAttributeValues: {
-                        ":today": { S: today },
-                        ":zero": { N: "0" },
-                        ":one": { N: "1" },
-                        ":minute": { S: currentMinute },
-                        ":ttl": { N: String(ttl) },
-                    },
-                }),
-            )
-            // New day reset successful
-            return { allowed: true }
-        } catch (resetError: any) {
-            // If condition failed, it's the same day - continue to increment logic
-            if (!(resetError instanceof ConditionalCheckFailedException)) {
-                throw resetError // Re-throw unexpected errors
-            }
-        }
-
-        // Same day - increment request count with limit checks
+        // Single atomic update - handles creation AND increment
+        // New day automatically creates new item (different SK)
+        // Note: lastMinute/tpmCount are managed by recordTokenUsage only
         await client.send(
             new UpdateItemCommand({
                 TableName: TABLE,
-                Key: { PK: { S: `IP#${ip}` } },
-                // Increment request count, handle minute boundary for TPM
-                UpdateExpression: `
-                    SET lastMinute = :minute,
-                        tpmCount = if_not_exists(tpmCount, :zero),
-                        #ttl = :ttl
-                    ADD dailyReqCount :one
-                `,
+                Key: {
+                    PK: { S: pk },
+                    SK: { S: sk },
+                },
+                UpdateExpression: "ADD reqCount :one",
                 // Check all limits before allowing increment
+                // TPM check: allow if new minute OR under limit
                 ConditionExpression: `
-                    lastResetDate = :today AND
-                    (attribute_not_exists(dailyReqCount) OR dailyReqCount < :reqLimit) AND
-                    (attribute_not_exists(dailyTokenCount) OR dailyTokenCount < :tokenLimit) AND
+                    (attribute_not_exists(reqCount) OR reqCount < :reqLimit) AND
+                    (attribute_not_exists(tokenCount) OR tokenCount < :tokenLimit) AND
                     (attribute_not_exists(lastMinute) OR lastMinute <> :minute OR
                      attribute_not_exists(tpmCount) OR tpmCount < :tpmLimit)
                 `,
-                ExpressionAttributeNames: { "#ttl": "ttl" },
                 ExpressionAttributeValues: {
-                    ":today": { S: today },
-                    ":zero": { N: "0" },
                     ":one": { N: "1" },
                     ":minute": { S: currentMinute },
-                    ":ttl": { N: String(ttl) },
                     ":reqLimit": { N: String(limits.requests || 999999) },
                     ":tokenLimit": { N: String(limits.tokens || 999999) },
                     ":tpmLimit": { N: String(limits.tpm || 999999) },
@@ -160,42 +117,39 @@ export async function checkAndIncrementRequest(
                 const getResult = await client.send(
                     new GetItemCommand({
                         TableName: TABLE,
-                        Key: { PK: { S: `IP#${ip}` } },
+                        Key: {
+                            PK: { S: pk },
+                            SK: { S: sk },
+                        },
                     }),
                 )
 
                 const item = getResult.Item
-                const storedDate = item?.lastResetDate?.S
                 const storedMinute = item?.lastMinute?.S
-                const isNewDay = !storedDate || storedDate < today
 
-                const dailyReqCount = isNewDay
-                    ? 0
-                    : Number(item?.dailyReqCount?.N || 0)
-                const dailyTokenCount = isNewDay
-                    ? 0
-                    : Number(item?.dailyTokenCount?.N || 0)
+                const reqCount = Number(item?.reqCount?.N || 0)
+                const tokenCount = Number(item?.tokenCount?.N || 0)
                 const tpmCount =
                     storedMinute !== currentMinute
                         ? 0
                         : Number(item?.tpmCount?.N || 0)
 
                 // Determine which limit was exceeded
-                if (limits.requests > 0 && dailyReqCount >= limits.requests) {
+                if (limits.requests > 0 && reqCount >= limits.requests) {
                     return {
                         allowed: false,
                         type: "request",
                         error: "Daily request limit exceeded",
-                        used: dailyReqCount,
+                        used: reqCount,
                         limit: limits.requests,
                     }
                 }
-                if (limits.tokens > 0 && dailyTokenCount >= limits.tokens) {
+                if (limits.tokens > 0 && tokenCount >= limits.tokens) {
                     return {
                         allowed: false,
                         type: "token",
                         error: "Daily token limit exceeded",
-                        used: dailyTokenCount,
+                        used: tokenCount,
                         limit: limits.tokens,
                     }
                 }
@@ -210,7 +164,7 @@ export async function checkAndIncrementRequest(
                 }
 
                 // Condition failed but no limit clearly exceeded - race condition edge case
-                // Fail safe by allowing (could be a reset race)
+                // Fail safe by allowing (could be a TPM reset race)
                 console.warn(
                     `[quota] Condition failed but no limit exceeded for IP prefix: ${ip.slice(0, 8)}...`,
                 )
@@ -233,7 +187,7 @@ export async function checkAndIncrementRequest(
 
 /**
  * Record token usage after response completes.
- * Uses atomic operations to update both daily token count and TPM count.
+ * Uses composite key (PK=user, SK=date) for per-day tracking.
  * Handles minute boundaries atomically to prevent race conditions.
  */
 export async function recordTokenUsage(
@@ -244,24 +198,27 @@ export async function recordTokenUsage(
     if (!client || !TABLE) return
     if (!Number.isFinite(tokens) || tokens <= 0) return
 
+    const pk = ip // User identifier (base64 IP)
+    const sk = getTodayInTimezone() // Date as sort key (YYYY-MM-DD)
     const currentMinute = Math.floor(Date.now() / 60000).toString()
-    const ttl = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
 
     try {
-        // Try to update assuming same minute (most common case)
-        // Uses condition to ensure we're in the same minute
+        // Try to update for same minute OR new item (most common cases)
+        // Handles: 1) new item (no lastMinute), 2) same minute (lastMinute matches)
         await client.send(
             new UpdateItemCommand({
                 TableName: TABLE,
-                Key: { PK: { S: `IP#${ip}` } },
+                Key: {
+                    PK: { S: pk },
+                    SK: { S: sk },
+                },
                 UpdateExpression:
-                    "SET #ttl = :ttl ADD dailyTokenCount :tokens, tpmCount :tokens",
-                ConditionExpression: "lastMinute = :minute",
-                ExpressionAttributeNames: { "#ttl": "ttl" },
+                    "SET lastMinute = if_not_exists(lastMinute, :minute) ADD tokenCount :tokens, tpmCount :tokens",
+                ConditionExpression:
+                    "attribute_not_exists(lastMinute) OR lastMinute = :minute",
                 ExpressionAttributeValues: {
                     ":minute": { S: currentMinute },
                     ":tokens": { N: String(tokens) },
-                    ":ttl": { N: String(ttl) },
                 },
             }),
         )
@@ -272,14 +229,15 @@ export async function recordTokenUsage(
                 await client.send(
                     new UpdateItemCommand({
                         TableName: TABLE,
-                        Key: { PK: { S: `IP#${ip}` } },
+                        Key: {
+                            PK: { S: pk },
+                            SK: { S: sk },
+                        },
                         UpdateExpression:
-                            "SET lastMinute = :minute, tpmCount = :tokens, #ttl = :ttl ADD dailyTokenCount :tokens",
-                        ExpressionAttributeNames: { "#ttl": "ttl" },
+                            "SET lastMinute = :minute, tpmCount = :tokens ADD tokenCount :tokens",
                         ExpressionAttributeValues: {
                             ":minute": { S: currentMinute },
                             ":tokens": { N: String(tokens) },
-                            ":ttl": { N: String(ttl) },
                         },
                     }),
                 )
