@@ -943,7 +943,11 @@ export default function ChatPanel({
                     <div className="flex items-center gap-2 overflow-x-hidden">
                         <div className="flex items-center gap-2">
                             <Image
-                                src="/favicon.ico"
+                                src={
+                                    darkMode
+                                        ? "/favicon-white.svg"
+                                        : "/favicon.ico"
+                                }
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
