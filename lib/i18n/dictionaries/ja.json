@@ -98,7 +98,11 @@
         "minimal": "ミニマル",
         "sketch": "スケッチ",
         "closeProtection": "ページ離脱確認",
-        "closeProtectionDescription": "ページを離れる際に確認を表示します。"
+        "closeProtectionDescription": "ページを離れる際に確認を表示します。",
+        "diagramActions": "ダイアグラム操作",
+        "diagramActionsDescription": "ダイアグラムの履歴とエクスポートを管理",
+        "history": "履歴",
+        "download": "ダウンロード"
     },
     "save": {
         "title": "ダイアグラムを保存",

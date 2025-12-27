@@ -154,7 +154,6 @@ export default function ChatPanel({
     // File processing using extracted hook
     const { files, pdfData, handleFileChange, setFiles } = useFileProcessor()
 
-    const [showHistory, setShowHistory] = useState(false)
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [showModelConfigDialog, setShowModelConfigDialog] = useState(false)
 
@@ -1066,8 +1065,6 @@ export default function ChatPanel({
                     files={files}
                     onFileChange={handleFileChange}
                     pdfData={pdfData}
-                    showHistory={showHistory}
-                    onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
                     minimalStyle={minimalStyle}
@@ -1088,6 +1085,7 @@ export default function ChatPanel({
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
+                sessionId={sessionId}
             />
 
             <ModelConfigDialog
