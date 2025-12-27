@@ -1,19 +1,4 @@
-import {
-    app,
-    BrowserWindow,
-    dialog,
-    Menu,
-    type MenuItemConstructorOptions,
-    shell,
-} from "electron"
-import {
-    applyPresetToEnv,
-    getAllPresets,
-    getCurrentPresetId,
-    setCurrentPreset,
-} from "./config-manager"
-import { restartNextServer } from "./next-server"
-import { showSettingsWindow } from "./settings-window"
+import { app, Menu, type MenuItemConstructorOptions, shell } from "electron"
 
 /**
  * Build and set the application menu
@@ -22,13 +7,6 @@ export function buildAppMenu(): void {
     const template = getMenuTemplate()
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
-}
-
-/**
- * Rebuild the menu (call this when presets change)
- */
-export function rebuildAppMenu(): void {
-    buildAppMenu()
 }
 
 /**
@@ -46,15 +24,6 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
             submenu: [
                 { role: "about" },
                 { type: "separator" },
-                {
-                    label: "Settings...",
-                    accelerator: "CmdOrCtrl+,",
-                    click: () => {
-                        const win = BrowserWindow.getFocusedWindow()
-                        showSettingsWindow(win || undefined)
-                    },
-                },
-                { type: "separator" },
                 { role: "services" },
                 { type: "separator" },
                 { role: "hide" },
@@ -69,22 +38,7 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     // File menu
     template.push({
         label: "File",
-        submenu: [
-            ...(isMac
-                ? []
-                : [
-                      {
-                          label: "Settings",
-                          accelerator: "CmdOrCtrl+,",
-                          click: () => {
-                              const win = BrowserWindow.getFocusedWindow()
-                              showSettingsWindow(win || undefined)
-                          },
-                      },
-                      { type: "separator" } as MenuItemConstructorOptions,
-                  ]),
-            isMac ? { role: "close" } : { role: "quit" },
-        ],
+        submenu: [isMac ? { role: "close" } : { role: "quit" }],
     })
 
     // Edit menu
@@ -129,9 +83,6 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
         ],
     })
 
-    // Configuration menu with presets
-    template.push(buildConfigMenu())
-
     // Window menu
     template.push({
         label: "Window",
@@ -171,71 +122,4 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     })
 
     return template
-}
-
-/**
- * Build the Configuration menu with presets
- */
-function buildConfigMenu(): MenuItemConstructorOptions {
-    const presets = getAllPresets()
-    const currentPresetId = getCurrentPresetId()
-
-    const presetItems: MenuItemConstructorOptions[] = presets.map((preset) => ({
-        label: preset.name,
-        type: "radio",
-        checked: preset.id === currentPresetId,
-        click: async () => {
-            const previousPresetId = getCurrentPresetId()
-            const env = applyPresetToEnv(preset.id)
-
-            if (env) {
-                try {
-                    await restartNextServer()
-                    rebuildAppMenu() // Rebuild menu to update checkmarks
-                } catch (error) {
-                    console.error("Failed to restart server:", error)
-
-                    // Revert to previous preset on failure
-                    if (previousPresetId) {
-                        applyPresetToEnv(previousPresetId)
-                    } else {
-                        setCurrentPreset(null)
-                    }
-
-                    // Rebuild menu to restore previous checkmark state
-                    rebuildAppMenu()
-
-                    // Show error dialog to notify user
-                    dialog.showErrorBox(
-                        "Configuration Error",
-                        `Failed to apply preset "${preset.name}". The server could not be restarted.\n\nThe previous configuration has been restored.\n\nError: ${error instanceof Error ? error.message : String(error)}`,
-                    )
-                }
-            }
-        },
-    }))
-
-    return {
-        label: "Configuration",
-        submenu: [
-            ...(presetItems.length > 0
-                ? [
-                      { label: "Switch Preset", enabled: false },
-                      { type: "separator" } as MenuItemConstructorOptions,
-                      ...presetItems,
-                      { type: "separator" } as MenuItemConstructorOptions,
-                  ]
-                : []),
-            {
-                label:
-                    presetItems.length > 0
-                        ? "Manage Presets..."
-                        : "Add Configuration Preset...",
-                click: () => {
-                    const win = BrowserWindow.getFocusedWindow()
-                    showSettingsWindow(win || undefined)
-                },
-            },
-        ],
-    }
 }
