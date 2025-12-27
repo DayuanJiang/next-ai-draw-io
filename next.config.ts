@@ -18,6 +18,12 @@ const nextConfig: NextConfig = {
 
 export default nextConfig
 
-import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare"
-
-initOpenNextCloudflareForDev()
+// Initialize OpenNext Cloudflare for local development only
+// This must be a dynamic import to avoid loading workerd binary during builds
+if (process.env.NODE_ENV === "development") {
+    import("@opennextjs/cloudflare").then(
+        ({ initOpenNextCloudflareForDev }) => {
+            initOpenNextCloudflareForDev()
+        },
+    )
+}
