@@ -242,6 +242,11 @@ Or you can deploy by this button.
 
 Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
 
+## Deploy on Cloudflare Workers
+
+[Go to Cloudflare Deploy Guide](./docs/Cloudflare_Deploy.md)
+
+
 
 ## Multi-Provider Support
 
