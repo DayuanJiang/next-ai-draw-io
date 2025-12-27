@@ -105,7 +105,7 @@
         "electron-builder": "^26.0.12",
         "esbuild": "^0.27.2",
         "eslint": "9.39.1",
-        "eslint-config-next": "16.0.5",
+        "eslint-config-next": "16.1.1",
         "husky": "^9.1.7",
         "lint-staged": "^16.2.7",
         "shx": "^0.4.0",
