@@ -3,6 +3,7 @@ import {
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    generateText,
     InvalidToolInputError,
     LoadAPIKeyError,
     stepCountIs,
@@ -184,6 +185,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
         .find((m: any) => m.role === "user")
     const userInputText =
         lastUserMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+
+    ;(globalThis as any).lastUserInputText = userInputText
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -708,8 +711,51 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                     }
 
                     try {
+                        const userPrompt =
+                            (globalThis as any).lastUserInputText || ""
+
                         const content = await fs.readFile(filePath, "utf-8")
-                        return content
+
+                        const [headerPart, shapesPart] =
+                            content.split("## Shapes")
+
+                        const shapes =
+                            shapesPart
+                                ?.split("\n")
+                                .filter((l) => l.startsWith("- "))
+                                .map((l) => l.replace("- ", "").trim()) || []
+
+                        if (shapes.length < 100) return content
+
+                        const { text } = await generateText({
+                            model,
+                            temperature: 0,
+                            prompt: `
+                    User request: "${userPrompt}"
+
+                    Pick only the 15 most relevant shapes.
+                    Return ONLY JSON array.
+
+                    ${shapes.join("\n")}
+                     `,
+                        })
+
+                        let selected: string[] = []
+
+                        try {
+                            selected = JSON.parse(text)
+                        } catch {
+                            const match = text.match(/\[[\s\S]*\]/)
+                            if (match) {
+                                selected = JSON.parse(match[0])
+                            }
+                        }
+
+                        return `
+                    ${headerPart}
+
+                    ## Shapes
+                    ${(selected as string[]).map((s: string) => `- ${s}`).join("\n")}   `
                     } catch (error) {
                         if (
                             (error as NodeJS.ErrnoException).code === "ENOENT"
