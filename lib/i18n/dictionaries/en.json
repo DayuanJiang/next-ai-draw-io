@@ -98,7 +98,13 @@
         "minimal": "Minimal",
         "sketch": "Sketch",
         "closeProtection": "Close Protection",
-        "closeProtectionDescription": "Show confirmation when leaving the page."
+        "closeProtectionDescription": "Show confirmation when leaving the page.",
+        "diagramStyle": "Diagram Style",
+        "diagramStyleDescription": "Toggle between minimal and styled diagram output.",
+        "diagramActions": "Diagram Actions",
+        "diagramActionsDescription": "Manage diagram history and exports",
+        "history": "History",
+        "download": "Download"
     },
     "save": {
         "title": "Save Diagram",
