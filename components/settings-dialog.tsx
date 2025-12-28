@@ -1,10 +1,8 @@
 "use client"
 
-import { Download, History, Moon, Sun } from "lucide-react"
+import { Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
-import { HistoryDialog } from "@/components/history-dialog"
-import { type ExportFormat, SaveDialog } from "@/components/save-dialog"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -23,11 +21,9 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
-import { cn } from "@/lib/utils"
 
 // Reusable setting item component for consistent layout
 function SettingItem({
@@ -68,7 +64,8 @@ interface SettingsDialogProps {
     onToggleDrawioUi: () => void
     darkMode: boolean
     onToggleDarkMode: () => void
-    sessionId?: string
+    minimalStyle?: boolean
+    onMinimalStyleChange?: (value: boolean) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -90,7 +87,8 @@ function SettingsContent({
     onToggleDrawioUi,
     darkMode,
     onToggleDarkMode,
-    sessionId,
+    minimalStyle = false,
+    onMinimalStyleChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -100,20 +98,10 @@ function SettingsContent({
     const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
     const [error, setError] = useState("")
-    const [showHistory, setShowHistory] = useState(false)
-    const [showSaveDialog, setShowSaveDialog] = useState(false)
     const [accessCodeRequired, setAccessCodeRequired] = useState(
         () => getStoredAccessCodeRequired() ?? false,
     )
     const [currentLang, setCurrentLang] = useState("en")
-
-    // Get diagram context
-    const { diagramHistory, saveDiagramToFile } = useDiagram()
-
-    // Handler for saving diagram (RENAMED to avoid conflict)
-    const handleDiagramSave = (filename: string, format: ExportFormat) => {
-        saveDiagramToFile(filename, format, sessionId)
-    }
 
     useEffect(() => {
         // Only fetch if not cached in localStorage
@@ -221,211 +209,205 @@ function SettingsContent({
     }
 
     return (
-        <>
-            <DialogContent className="sm:max-w-lg p-0 gap-0">
-                {/* Header */}
-                <DialogHeader className="px-6 pt-6 pb-4">
-                    <DialogTitle>{dict.settings.title}</DialogTitle>
-                    <DialogDescription className="mt-1">
-                        {dict.settings.description}
-                    </DialogDescription>
-                </DialogHeader>
+        <DialogContent className="sm:max-w-lg p-0 gap-0">
+            {/* Header */}
+            <DialogHeader className="px-6 pt-6 pb-4">
+                <DialogTitle>{dict.settings.title}</DialogTitle>
+                <DialogDescription className="mt-1">
+                    {dict.settings.description}
+                </DialogDescription>
+            </DialogHeader>
 
-                {/* Content */}
-                <div className="px-6 pb-6">
-                    <div className="divide-y divide-border-subtle">
-                        {/* Access Code (conditional) */}
-                        {accessCodeRequired && (
-                            <div className="py-4 first:pt-0 space-y-3">
-                                <div className="space-y-0.5">
-                                    <Label
-                                        htmlFor="access-code"
-                                        className="text-sm font-medium"
-                                    >
-                                        {dict.settings.accessCode}
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        {dict.settings.accessCodeDescription}
-                                    </p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Input
-                                        id="access-code"
-                                        type="password"
-                                        value={accessCode}
-                                        onChange={(e) =>
-                                            setAccessCode(e.target.value)
-                                        }
-                                        onKeyDown={handleKeyDown}
-                                        placeholder={
-                                            dict.settings.accessCodePlaceholder
-                                        }
-                                        autoComplete="off"
-                                        className="h-9"
-                                    />
-                                    <Button
-                                        onClick={handleSave}
-                                        disabled={
-                                            isVerifying || !accessCode.trim()
-                                        }
-                                        className="h-9 px-4 rounded-xl"
-                                    >
-                                        {isVerifying ? "..." : dict.common.save}
-                                    </Button>
-                                </div>
-                                {error && (
-                                    <p className="text-xs text-destructive">
-                                        {error}
-                                    </p>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Language */}
-                        <SettingItem
-                            label={dict.settings.language}
-                            description={dict.settings.languageDescription}
-                        >
-                            <Select
-                                value={currentLang}
-                                onValueChange={changeLanguage}
-                            >
-                                <SelectTrigger
-                                    id="language-select"
-                                    className="w-[120px] h-9 rounded-xl"
+            {/* Content */}
+            <div className="px-6 pb-6">
+                <div className="divide-y divide-border-subtle">
+                    {/* Access Code (conditional) */}
+                    {accessCodeRequired && (
+                        <div className="py-4 first:pt-0 space-y-3">
+                            <div className="space-y-0.5">
+                                <Label
+                                    htmlFor="access-code"
+                                    className="text-sm font-medium"
                                 >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {i18n.locales.map((locale) => (
-                                        <SelectItem key={locale} value={locale}>
-                                            {LANGUAGE_LABELS[locale]}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </SettingItem>
-
-                        {/* Theme */}
-                        <SettingItem
-                            label={dict.settings.theme}
-                            description={dict.settings.themeDescription}
-                        >
-                            <Button
-                                id="theme-toggle"
-                                variant="outline"
-                                size="icon"
-                                onClick={onToggleDarkMode}
-                                className="h-9 w-9 rounded-xl border-border-subtle hover:bg-interactive-hover"
-                            >
-                                {darkMode ? (
-                                    <Sun className="h-4 w-4" />
-                                ) : (
-                                    <Moon className="h-4 w-4" />
-                                )}
-                            </Button>
-                        </SettingItem>
-
-                        {/* Draw.io Style */}
-                        <SettingItem
-                            label={dict.settings.drawioStyle}
-                            description={`${dict.settings.drawioStyleDescription} ${
-                                drawioUi === "min"
-                                    ? dict.settings.minimal
-                                    : dict.settings.sketch
-                            }`}
-                        >
-                            <Button
-                                id="drawio-ui"
-                                variant="outline"
-                                onClick={onToggleDrawioUi}
-                                className="h-9 w-[120px] rounded-xl border-border-subtle hover:bg-interactive-hover font-normal"
-                            >
-                                {dict.settings.switchTo}{" "}
-                                {drawioUi === "min"
-                                    ? dict.settings.sketch
-                                    : dict.settings.minimal}
-                            </Button>
-                        </SettingItem>
-
-                        {/* Close Protection */}
-                        <SettingItem
-                            label={dict.settings.closeProtection}
-                            description={
-                                dict.settings.closeProtectionDescription
-                            }
-                        >
-                            <Switch
-                                id="close-protection"
-                                checked={closeProtection}
-                                onCheckedChange={(checked) => {
-                                    setCloseProtection(checked)
-                                    localStorage.setItem(
-                                        STORAGE_CLOSE_PROTECTION_KEY,
-                                        checked.toString(),
-                                    )
-                                    onCloseProtectionChange?.(checked)
-                                }}
-                            />
-                        </SettingItem>
-
-                        {/* Diagram Actions */}
-                        <SettingItem
-                            label={dict.settings.diagramActions}
-                            description={
-                                dict.settings.diagramActionsDescription
-                            }
-                        >
+                                    {dict.settings.accessCode}
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    {dict.settings.accessCodeDescription}
+                                </p>
+                            </div>
                             <div className="flex gap-2">
+                                <Input
+                                    id="access-code"
+                                    type="password"
+                                    value={accessCode}
+                                    onChange={(e) =>
+                                        setAccessCode(e.target.value)
+                                    }
+                                    onKeyDown={handleKeyDown}
+                                    placeholder={
+                                        dict.settings.accessCodePlaceholder
+                                    }
+                                    autoComplete="off"
+                                    className="h-9"
+                                />
                                 <Button
-                                    id="history-button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setShowHistory(true)}
-                                    disabled={diagramHistory.length === 0}
-                                    className="h-9 rounded-xl border-border-subtle hover:bg-interactive-hover"
+                                    onClick={handleSave}
+                                    disabled={isVerifying || !accessCode.trim()}
+                                    className="h-9 px-4 rounded-xl"
                                 >
-                                    <History className="h-4 w-4 mr-1.5" />
-                                    {dict.settings.history}
-                                </Button>
-                                <Button
-                                    id="download-button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setShowSaveDialog(true)}
-                                    className="h-9 rounded-xl border-border-subtle hover:bg-interactive-hover"
-                                >
-                                    <Download className="h-4 w-4 mr-1.5" />
-                                    {dict.settings.download}
+                                    {isVerifying ? "..." : dict.common.save}
                                 </Button>
                             </div>
-                        </SettingItem>
-                    </div>
-                </div>
+                            {error && (
+                                <p className="text-xs text-destructive">
+                                    {error}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
-                {/* Footer */}
-                <div className="px-6 py-4 border-t border-border-subtle bg-surface-1/50 rounded-b-2xl">
-                    <p className="text-xs text-muted-foreground text-center">
-                        Version {process.env.APP_VERSION}
-                    </p>
+                    {/* Language */}
+                    <SettingItem
+                        label={dict.settings.language}
+                        description={dict.settings.languageDescription}
+                    >
+                        <Select
+                            value={currentLang}
+                            onValueChange={changeLanguage}
+                        >
+                            <SelectTrigger
+                                id="language-select"
+                                className="w-[120px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {i18n.locales.map((locale) => (
+                                    <SelectItem key={locale} value={locale}>
+                                        {LANGUAGE_LABELS[locale]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </SettingItem>
+
+                    {/* Theme */}
+                    <SettingItem
+                        label={dict.settings.theme}
+                        description={dict.settings.themeDescription}
+                    >
+                        <Button
+                            id="theme-toggle"
+                            variant="outline"
+                            size="icon"
+                            onClick={onToggleDarkMode}
+                            className="h-9 w-9 rounded-xl border-border-subtle hover:bg-interactive-hover"
+                        >
+                            {darkMode ? (
+                                <Sun className="h-4 w-4" />
+                            ) : (
+                                <Moon className="h-4 w-4" />
+                            )}
+                        </Button>
+                    </SettingItem>
+
+                    {/* Draw.io Style */}
+                    <SettingItem
+                        label={dict.settings.drawioStyle}
+                        description={`${dict.settings.drawioStyleDescription} ${
+                            drawioUi === "min"
+                                ? dict.settings.minimal
+                                : dict.settings.sketch
+                        }`}
+                    >
+                        <Button
+                            id="drawio-ui"
+                            variant="outline"
+                            onClick={onToggleDrawioUi}
+                            className="h-9 w-[120px] rounded-xl border-border-subtle hover:bg-interactive-hover font-normal"
+                        >
+                            {dict.settings.switchTo}{" "}
+                            {drawioUi === "min"
+                                ? dict.settings.sketch
+                                : dict.settings.minimal}
+                        </Button>
+                    </SettingItem>
+
+                    {/* Close Protection */}
+                    <SettingItem
+                        label={dict.settings.closeProtection}
+                        description={dict.settings.closeProtectionDescription}
+                    >
+                        <Switch
+                            id="close-protection"
+                            checked={closeProtection}
+                            onCheckedChange={(checked) => {
+                                setCloseProtection(checked)
+                                localStorage.setItem(
+                                    STORAGE_CLOSE_PROTECTION_KEY,
+                                    checked.toString(),
+                                )
+                                onCloseProtectionChange?.(checked)
+                            }}
+                        />
+                    </SettingItem>
+
+                    {/* Diagram Style */}
+                    <SettingItem
+                        label={dict.settings.diagramStyle}
+                        description={dict.settings.diagramStyleDescription}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id="minimal-style"
+                                checked={minimalStyle}
+                                onCheckedChange={onMinimalStyleChange}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                                {minimalStyle
+                                    ? dict.chat.minimalStyle
+                                    : dict.chat.styledMode}
+                            </span>
+                        </div>
+                    </SettingItem>
                 </div>
-            </DialogContent>
-            ;(
-            <HistoryDialog
-                showHistory={showHistory}
-                onToggleHistory={setShowHistory}
-            />
-            )
-            <SaveDialog
-                open={showSaveDialog}
-                onOpenChange={setShowSaveDialog}
-                onSave={handleDiagramSave}
-                defaultFilename={`diagram-${new Date()
-                    .toISOString()
-                    .slice(0, 10)}
-`}
-            />
-        </>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-border-subtle bg-surface-1/50 rounded-b-2xl">
+                <div className="flex items-center justify-center gap-3">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Tag className="h-3 w-3" />
+                        {process.env.APP_VERSION}
+                    </span>
+                    <span className="text-muted-foreground">·</span>
+                    <a
+                        href="https://github.com/DayuanJiang/next-ai-draw-io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                    >
+                        <Github className="h-3 w-3" />
+                        GitHub
+                    </a>
+                    {process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE ===
+                        "true" && (
+                        <>
+                            <span className="text-muted-foreground">·</span>
+                            <a
+                                href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                            >
+                                <Info className="h-3 w-3" />
+                                About
+                            </a>
+                        </>
+                    )}
+                </div>
+            </div>
+        </DialogContent>
     )
 }
 

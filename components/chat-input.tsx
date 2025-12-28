@@ -1,24 +1,26 @@
 "use client"
 
-import { Image as ImageIcon, Loader2, Send, Trash2 } from "lucide-react"
+import {
+    Download,
+    History,
+    Image as ImageIcon,
+    Loader2,
+    Send,
+    Trash2,
+} from "lucide-react"
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ErrorToast } from "@/components/error-toast"
-
+import { HistoryDialog } from "@/components/history-dialog"
 import { ModelSelector } from "@/components/model-selector"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
+import { SaveDialog } from "@/components/save-dialog"
 
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-
+import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -148,8 +150,6 @@ interface ChatInputProps {
 
     sessionId?: string
     error?: Error | null
-    minimalStyle?: boolean
-    onMinimalStyleChange?: (value: boolean) => void
     // Model selector props
     models?: FlattenedModel[]
     selectedModelId?: string
@@ -167,10 +167,8 @@ export function ChatInput({
     files = [],
     onFileChange = () => {},
     pdfData = new Map(),
-
+    sessionId,
     error = null,
-    minimalStyle = false,
-    onMinimalStyleChange = () => {},
     models = [],
     selectedModelId,
     onModelSelect = () => {},
@@ -178,11 +176,14 @@ export function ChatInput({
     onConfigureModels = () => {},
 }: ChatInputProps) {
     const dict = useDictionary()
+    const { diagramHistory, saveDiagramToFile } = useDiagram()
 
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [showClearDialog, setShowClearDialog] = useState(false)
+    const [showHistory, setShowHistory] = useState(false)
+    const [showSaveDialog, setShowSaveDialog] = useState(false)
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -370,38 +371,36 @@ export function ChatInput({
                             onOpenChange={setShowClearDialog}
                             onClear={handleClear}
                         />
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5">
-                                    <Switch
-                                        id="minimal-style"
-                                        checked={minimalStyle}
-                                        onCheckedChange={onMinimalStyleChange}
-                                        className="scale-75"
-                                    />
-                                    <label
-                                        htmlFor="minimal-style"
-                                        className={`text-xs cursor-pointer select-none ${
-                                            minimalStyle
-                                                ? "text-primary font-medium"
-                                                : "text-muted-foreground"
-                                        }`}
-                                    >
-                                        {minimalStyle
-                                            ? dict.chat.minimalStyle
-                                            : dict.chat.styledMode}
-                                    </label>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                                {dict.chat.minimalTooltip}
-                            </TooltipContent>
-                        </Tooltip>
                     </div>
 
                     <div className="flex items-center gap-1 overflow-hidden justify-end">
                         <div className="flex items-center gap-1 overflow-x-hidden">
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowHistory(true)}
+                                disabled={
+                                    isDisabled || diagramHistory.length === 0
+                                }
+                                tooltipContent={dict.chat.diagramHistory}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <History className="h-4 w-4" />
+                            </ButtonWithTooltip>
+
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowSaveDialog(true)}
+                                disabled={isDisabled}
+                                tooltipContent={dict.chat.saveDiagram}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <Download className="h-4 w-4" />
+                            </ButtonWithTooltip>
+
                             <ButtonWithTooltip
                                 type="button"
                                 variant="ghost"
@@ -454,6 +453,20 @@ export function ChatInput({
                     </div>
                 </div>
             </div>
+            <HistoryDialog
+                showHistory={showHistory}
+                onToggleHistory={setShowHistory}
+            />
+            <SaveDialog
+                open={showSaveDialog}
+                onOpenChange={setShowSaveDialog}
+                onSave={(filename, format) =>
+                    saveDiagramToFile(filename, format, sessionId)
+                }
+                defaultFilename={`diagram-${new Date()
+                    .toISOString()
+                    .slice(0, 10)}`}
+            />
         </form>
     )
 }
