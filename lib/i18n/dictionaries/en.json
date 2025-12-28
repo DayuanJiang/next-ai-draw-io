@@ -41,6 +41,8 @@
         "uploadFile": "Upload file (image, PDF, text)",
         "minimalStyle": "Minimal",
         "styledMode": "Styled",
+        "entrySend": "Press Enter to send",
+        "clickSend": "Click to send",
         "minimalTooltip": "Use minimal for faster generation (no colors)",
         "regenerate": "Regenerate response",
         "copyResponse": "Copy response",
@@ -98,7 +100,13 @@
         "minimal": "Minimal",
         "sketch": "Sketch",
         "closeProtection": "Close Protection",
-        "closeProtectionDescription": "Show confirmation when leaving the page."
+        "closeProtectionDescription": "Show confirmation when leaving the page.",
+        "modelOpt": "Model Operations",
+        "modelOptDescription": "Export or import model-related configurations from the browser's local storage",
+        "exportModelBtn": "Export",
+        "importModelBtn": "Coverage",
+        "exportModalDescription": "Export model configuration",
+        "importModalDescription": "Import model configuration"
     },
     "save": {
         "title": "Save Diagram",

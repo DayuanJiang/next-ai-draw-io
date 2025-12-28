@@ -1,5 +1,5 @@
 {
-    "name": "next-ai-draw-io",
+    "name": "next-ai-draw-nas",
     "version": "0.4.7",
     "license": "Apache-2.0",
     "private": true,
@@ -45,6 +45,7 @@
         "@next/third-parties": "^16.0.6",
         "@opennextjs/cloudflare": "1.14.7",
         "@openrouter/ai-sdk-provider": "^1.5.4",
+        "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -123,5 +124,6 @@
         "@openrouter/ai-sdk-provider": {
             "ai": "^6.0.1"
         }
-    }
+    },
+    "packageManager": "pnpm@10.15.1+sha512.34e538c329b5553014ca8e8f4535997f96180a1d0f614339357449935350d924e22f8614682191264ec33d1462ac21561aff97f6bb18065351c162c7e8f6de67"
 }

@@ -158,6 +158,8 @@ interface ChatInputProps {
     error?: Error | null
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    entrySend?: boolean
+    onEntrySendChange?: (value: boolean) => void
     // Model selector props
     models?: FlattenedModel[]
     selectedModelId?: string
@@ -181,6 +183,8 @@ export function ChatInput({
     error = null,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    entrySend = false,
+    onEntrySendChange = () => {},
     models = [],
     selectedModelId,
     onModelSelect = () => {},
@@ -220,7 +224,14 @@ export function ChatInput({
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        // if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        //     e.preventDefault()
+        //     const form = e.currentTarget.closest("form")
+        //     if (form && input.trim() && !isDisabled) {
+        //         form.requestSubmit()
+        //     }
+        // }
+        if (entrySend && e.key === "Enter") {
             e.preventDefault()
             const form = e.currentTarget.closest("form")
             if (form && input.trim() && !isDisabled) {
@@ -418,6 +429,26 @@ export function ChatInput({
                                 {dict.chat.minimalTooltip}
                             </TooltipContent>
                         </Tooltip>
+                        <div className="flex items-center gap-1.5">
+                            <Switch
+                                id="minimal-style"
+                                checked={entrySend}
+                                onCheckedChange={onEntrySendChange}
+                                className="scale-75"
+                            />
+                            <label
+                                htmlFor="minimal-style"
+                                className={`text-xs cursor-pointer select-none ${
+                                    entrySend
+                                        ? "text-primary font-medium"
+                                        : "text-muted-foreground"
+                                }`}
+                            >
+                                {entrySend
+                                    ? dict.chat.entrySend
+                                    : dict.chat.clickSend}
+                            </label>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-1 overflow-hidden justify-end">
