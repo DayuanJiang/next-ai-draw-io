@@ -22,11 +22,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Biome
-        run: npm install --save-dev @biomejs/biome
-
       - name: Run Biome format
-        run: npx @biomejs/biome check --write --no-errors-on-unmatched .
+        run: npx @biomejs/biome@latest check --write --no-errors-on-unmatched .
 
       - name: Check for changes
         id: changes
