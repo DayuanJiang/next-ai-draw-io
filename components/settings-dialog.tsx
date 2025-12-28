@@ -1,6 +1,6 @@
 "use client"
 
-import { Moon, Sun } from "lucide-react"
+import { Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,6 @@ import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
-import { cn } from "@/lib/utils"
 
 // Reusable setting item component for consistent layout
 function SettingItem({
@@ -65,6 +64,8 @@ interface SettingsDialogProps {
     onToggleDrawioUi: () => void
     darkMode: boolean
     onToggleDarkMode: () => void
+    minimalStyle?: boolean
+    onMinimalStyleChange?: (value: boolean) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -86,6 +87,8 @@ function SettingsContent({
     onToggleDrawioUi,
     darkMode,
     onToggleDarkMode,
+    minimalStyle = false,
+    onMinimalStyleChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -348,14 +351,61 @@ function SettingsContent({
                             }}
                         />
                     </SettingItem>
+
+                    {/* Diagram Style */}
+                    <SettingItem
+                        label={dict.settings.diagramStyle}
+                        description={dict.settings.diagramStyleDescription}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id="minimal-style"
+                                checked={minimalStyle}
+                                onCheckedChange={onMinimalStyleChange}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                                {minimalStyle
+                                    ? dict.chat.minimalStyle
+                                    : dict.chat.styledMode}
+                            </span>
+                        </div>
+                    </SettingItem>
                 </div>
             </div>
 
             {/* Footer */}
             <div className="px-6 py-4 border-t border-border-subtle bg-surface-1/50 rounded-b-2xl">
-                <p className="text-xs text-muted-foreground text-center">
-                    Version {process.env.APP_VERSION}
-                </p>
+                <div className="flex items-center justify-center gap-3">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Tag className="h-3 w-3" />
+                        {process.env.APP_VERSION}
+                    </span>
+                    <span className="text-muted-foreground">·</span>
+                    <a
+                        href="https://github.com/DayuanJiang/next-ai-draw-io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                    >
+                        <Github className="h-3 w-3" />
+                        GitHub
+                    </a>
+                    {process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE ===
+                        "true" && (
+                        <>
+                            <span className="text-muted-foreground">·</span>
+                            <a
+                                href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                            >
+                                <Info className="h-3 w-3" />
+                                About
+                            </a>
+                        </>
+                    )}
+                </div>
             </div>
         </DialogContent>
     )
