@@ -116,8 +116,8 @@ export function ModelSelector({
     const [showLabel, setShowLabel] = useState(true)
 
     // Threshold (px) under which we hide the label (tweak as needed)
-    const HIDE_THRESHOLD = 250
-    const SHOW_THRESHOLD = 250
+    const HIDE_THRESHOLD = 240
+    const SHOW_THRESHOLD = 260
     useEffect(() => {
         const el = wrapperRef.current
         if (!el) return
