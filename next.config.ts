@@ -21,7 +21,6 @@ export default nextConfig
 // Initialize OpenNext Cloudflare for local development only
 // This must be a dynamic import to avoid loading workerd binary during builds
 if (process.env.NODE_ENV === "development") {
-    // @ts-expect-error - @opennextjs/cloudflare types may not be available during build
     import("@opennextjs/cloudflare").then(
         ({ initOpenNextCloudflareForDev }) => {
             initOpenNextCloudflareForDev()
