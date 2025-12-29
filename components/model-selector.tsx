@@ -46,7 +46,9 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     openrouter: "openrouter",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
+    sglang: "openai", // SGLang is OpenAI-compatible, use OpenAI logo
     gateway: "vercel",
+    doubao: "bytedance",
 }
 
 // Group models by providerLabel (handles duplicate providers)

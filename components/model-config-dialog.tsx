@@ -76,7 +76,9 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     openrouter: "openrouter",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
+    sglang: "openai", // SGLang is OpenAI-compatible
     gateway: "vercel",
+    doubao: "bytedance",
 }
 
 // Provider logo component
@@ -87,9 +89,15 @@ function ProviderLogo({
     provider: ProviderName
     className?: string
 }) {
-    // Use Lucide icon for bedrock since models.dev doesn't have a good AWS icon
+    // Use Lucide icons for providers without models.dev logos
     if (provider === "bedrock") {
         return <Cloud className={cn("size-4", className)} />
+    }
+    if (provider === "sglang") {
+        return <Server className={cn("size-4", className)} />
+    }
+    if (provider === "doubao") {
+        return <Sparkles className={cn("size-4", className)} />
     }
 
     const logoName = PROVIDER_LOGO_MAP[provider] || provider
