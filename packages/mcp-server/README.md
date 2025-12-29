@@ -97,7 +97,7 @@ Use the standard MCP configuration with:
 | Tool | Description |
 |------|-------------|
 | `start_session` | Opens browser with real-time diagram preview |
-| `display_diagram` | Create a new diagram from XML |
+| `create_new_diagram` | Create a new diagram from XML (requires `xml` argument) |
 | `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells) |
 | `get_diagram` | Get the current diagram XML |
 | `export_diagram` | Save diagram to a `.drawio` file |
