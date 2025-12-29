@@ -22,7 +22,7 @@ function applyDiagramOperations(xmlContent, operations) {
             result: xmlContent,
             errors: [
                 {
-                    type: "update",
+                    operation: "update",
                     cellId: "",
                     message: `XML parse error: ${parseError.textContent}`,
                 },
@@ -36,7 +36,7 @@ function applyDiagramOperations(xmlContent, operations) {
             result: xmlContent,
             errors: [
                 {
-                    type: "update",
+                    operation: "update",
                     cellId: "",
                     message: "Could not find <root> element in XML",
                 },
@@ -51,11 +51,11 @@ function applyDiagramOperations(xmlContent, operations) {
     })
 
     for (const op of operations) {
-        if (op.type === "update") {
+        if (op.operation === "update") {
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
                 errors.push({
-                    type: "update",
+                    operation: "update",
                     cellId: op.cell_id,
                     message: `Cell with id="${op.cell_id}" not found`,
                 })
@@ -63,7 +63,7 @@ function applyDiagramOperations(xmlContent, operations) {
             }
             if (!op.new_xml) {
                 errors.push({
-                    type: "update",
+                    operation: "update",
                     cellId: op.cell_id,
                     message: "new_xml is required for update operation",
                 })
@@ -76,7 +76,7 @@ function applyDiagramOperations(xmlContent, operations) {
             const newCell = newDoc.querySelector("mxCell")
             if (!newCell) {
                 errors.push({
-                    type: "update",
+                    operation: "update",
                     cellId: op.cell_id,
                     message: "new_xml must contain an mxCell element",
                 })
@@ -85,7 +85,7 @@ function applyDiagramOperations(xmlContent, operations) {
             const newCellId = newCell.getAttribute("id")
             if (newCellId !== op.cell_id) {
                 errors.push({
-                    type: "update",
+                    operation: "update",
                     cellId: op.cell_id,
                     message: `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`,
                 })
@@ -94,10 +94,10 @@ function applyDiagramOperations(xmlContent, operations) {
             const importedNode = doc.importNode(newCell, true)
             existingCell.parentNode?.replaceChild(importedNode, existingCell)
             cellMap.set(op.cell_id, importedNode)
-        } else if (op.type === "add") {
+        } else if (op.operation === "add") {
             if (cellMap.has(op.cell_id)) {
                 errors.push({
-                    type: "add",
+                    operation: "add",
                     cellId: op.cell_id,
                     message: `Cell with id="${op.cell_id}" already exists`,
                 })
@@ -105,7 +105,7 @@ function applyDiagramOperations(xmlContent, operations) {
             }
             if (!op.new_xml) {
                 errors.push({
-                    type: "add",
+                    operation: "add",
                     cellId: op.cell_id,
                     message: "new_xml is required for add operation",
                 })
@@ -118,7 +118,7 @@ function applyDiagramOperations(xmlContent, operations) {
             const newCell = newDoc.querySelector("mxCell")
             if (!newCell) {
                 errors.push({
-                    type: "add",
+                    operation: "add",
                     cellId: op.cell_id,
                     message: "new_xml must contain an mxCell element",
                 })
@@ -127,7 +127,7 @@ function applyDiagramOperations(xmlContent, operations) {
             const newCellId = newCell.getAttribute("id")
             if (newCellId !== op.cell_id) {
                 errors.push({
-                    type: "add",
+                    operation: "add",
                     cellId: op.cell_id,
                     message: `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`,
                 })
@@ -136,11 +136,11 @@ function applyDiagramOperations(xmlContent, operations) {
             const importedNode = doc.importNode(newCell, true)
             root.appendChild(importedNode)
             cellMap.set(op.cell_id, importedNode)
-        } else if (op.type === "delete") {
+        } else if (op.operation === "delete") {
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
                 errors.push({
-                    type: "delete",
+                    operation: "delete",
                     cellId: op.cell_id,
                     message: `Cell with id="${op.cell_id}" not found`,
                 })
@@ -201,7 +201,7 @@ function assert(condition, message) {
 test("Update operation changes cell value", () => {
     const { result, errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "update",
+            operation: "update",
             cell_id: "2",
             new_xml:
                 '<mxCell id="2" value="Updated Box A" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="120" height="60" as="geometry"/></mxCell>',
@@ -224,7 +224,7 @@ test("Update operation changes cell value", () => {
 test("Update operation fails for non-existent cell", () => {
     const { errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "update",
+            operation: "update",
             cell_id: "999",
             new_xml: '<mxCell id="999" value="Test"/>',
         },
@@ -239,7 +239,7 @@ test("Update operation fails for non-existent cell", () => {
 test("Update operation fails on ID mismatch", () => {
     const { errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "update",
+            operation: "update",
             cell_id: "2",
             new_xml: '<mxCell id="WRONG" value="Test"/>',
         },
@@ -254,7 +254,7 @@ test("Update operation fails on ID mismatch", () => {
 test("Add operation creates new cell", () => {
     const { result, errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "add",
+            operation: "add",
             cell_id: "new1",
             new_xml:
                 '<mxCell id="new1" value="New Box" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="500" y="100" width="120" height="60" as="geometry"/></mxCell>',
@@ -274,7 +274,7 @@ test("Add operation creates new cell", () => {
 test("Add operation fails for duplicate ID", () => {
     const { errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "add",
+            operation: "add",
             cell_id: "2",
             new_xml: '<mxCell id="2" value="Duplicate"/>',
         },
@@ -289,7 +289,7 @@ test("Add operation fails for duplicate ID", () => {
 test("Add operation fails on ID mismatch", () => {
     const { errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "add",
+            operation: "add",
             cell_id: "new1",
             new_xml: '<mxCell id="WRONG" value="Test"/>',
         },
@@ -303,7 +303,7 @@ test("Add operation fails on ID mismatch", () => {
 
 test("Delete operation removes cell", () => {
     const { result, errors } = applyDiagramOperations(sampleXml, [
-        { type: "delete", cell_id: "3" },
+        { operation: "delete", cell_id: "3" },
     ])
     assert(
         errors.length === 0,
@@ -315,7 +315,7 @@ test("Delete operation removes cell", () => {
 
 test("Delete operation fails for non-existent cell", () => {
     const { errors } = applyDiagramOperations(sampleXml, [
-        { type: "delete", cell_id: "999" },
+        { operation: "delete", cell_id: "999" },
     ])
     assert(errors.length === 1, "Should have one error")
     assert(
@@ -327,18 +327,18 @@ test("Delete operation fails for non-existent cell", () => {
 test("Multiple operations in sequence", () => {
     const { result, errors } = applyDiagramOperations(sampleXml, [
         {
-            type: "update",
+            operation: "update",
             cell_id: "2",
             new_xml:
                 '<mxCell id="2" value="Updated" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="120" height="60" as="geometry"/></mxCell>',
         },
         {
-            type: "add",
+            operation: "add",
             cell_id: "new1",
             new_xml:
                 '<mxCell id="new1" value="Added" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="500" y="100" width="120" height="60" as="geometry"/></mxCell>',
         },
-        { type: "delete", cell_id: "3" },
+        { operation: "delete", cell_id: "3" },
     ])
     assert(
         errors.length === 0,
@@ -354,14 +354,14 @@ test("Multiple operations in sequence", () => {
 
 test("Invalid XML returns parse error", () => {
     const { errors } = applyDiagramOperations("<not valid xml", [
-        { type: "delete", cell_id: "1" },
+        { operation: "delete", cell_id: "1" },
     ])
     assert(errors.length === 1, "Should have one error")
 })
 
 test("Missing root element returns error", () => {
     const { errors } = applyDiagramOperations("<mxfile></mxfile>", [
-        { type: "delete", cell_id: "1" },
+        { operation: "delete", cell_id: "1" },
     ])
     assert(errors.length === 1, "Should have one error")
     assert(

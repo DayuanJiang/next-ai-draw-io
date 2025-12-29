@@ -12,21 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
-
-      - name: Install Biome
-        run: npm install --save-dev @biomejs/biome
+          node-version: '24'
 
       - name: Run Biome format
-        run: npx @biomejs/biome check --write --no-errors-on-unmatched .
+        run: npx @biomejs/biome@latest check --write --no-errors-on-unmatched .
 
       - name: Check for changes
         id: changes
@@ -37,11 +34,21 @@ jobs:
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
 
+      # For fork PRs, just fail if formatting is needed (can't push to forks)
+      - name: Fail if fork PR needs formatting
+        if: steps.changes.outputs.has_changes == 'true' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::This PR has formatting issues. Please run 'npx @biomejs/biome check --write .' locally and push the changes."
+          git diff --stat
+          exit 1
+
+      # For same-repo PRs, commit and push the changes
       - name: Commit changes
-        if: steps.changes.outputs.has_changes == 'true'
+        if: steps.changes.outputs.has_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git add .
           git commit -m "style: auto-format with Biome"
-          git push
+          git push origin HEAD:${{ github.head_ref }}

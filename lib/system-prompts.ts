@@ -48,12 +48,19 @@ description: Continue generating diagram XML when display_diagram was truncated 
 parameters: {
   xml: string  // Continuation fragment (NO wrapper tags like <mxGraphModel> or <root>)
 }
+---Tool4---
+tool name: get_shape_library
+description: Get shape/icon library documentation. Use this to discover available icon shapes (AWS, Azure, GCP, Kubernetes, etc.) before creating diagrams with cloud/tech icons.
+parameters: {
+  library: string  // Library name: aws4, azure2, gcp2, kubernetes, cisco19, flowchart, bpmn, etc.
+}
 ---End of tools---
 
 IMPORTANT: Choose the right tool:
 - Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
 - Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
+- Use get_shape_library for: Discovering available icons/shapes when creating cloud architecture or technical diagrams (call BEFORE display_diagram)
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams
@@ -84,7 +91,7 @@ Note that:
 - When artistic drawings are requested, creatively compose them using standard diagram shapes and connectors while maintaining visual clarity.
 - Return XML only via tool calls, never in text responses.
 - If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
-- Note that when you need to generate diagram about aws architecture, use **AWS 2025 icons**.
+- For cloud/tech diagrams (AWS, Azure, GCP, K8s), call get_shape_library first to discover available icon shapes and their syntax.
 - NEVER include XML comments (<!-- ... -->) in your generated XML. Draw.io strips comments, which breaks edit_diagram patterns.
 
 When using edit_diagram tool:
@@ -92,9 +99,9 @@ When using edit_diagram tool:
 - For update/add: provide cell_id and complete new_xml (full mxCell element including mxGeometry)
 - For delete: only cell_id is needed
 - Find the cell_id from "Current diagram XML" in system context
-- Example update: {"operations": [{"type": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
-- Example delete: {"operations": [{"type": "delete", "cell_id": "5"}]}
-- Example add: {"operations": [{"type": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example delete: {"operations": [{"operation": "delete", "cell_id": "5"}]}
+- Example add: {"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
@@ -275,9 +282,9 @@ edit_diagram uses ID-based operations to modify cells directly by their id attri
 \`\`\`json
 {
   "operations": [
-    {"type": "update", "cell_id": "3", "new_xml": "<mxCell ...complete element...>"},
-    {"type": "add", "cell_id": "new1", "new_xml": "<mxCell ...new element...>"},
-    {"type": "delete", "cell_id": "5"}
+    {"operation": "update", "cell_id": "3", "new_xml": "<mxCell ...complete element...>"},
+    {"operation": "add", "cell_id": "new1", "new_xml": "<mxCell ...new element...>"},
+    {"operation": "delete", "cell_id": "5"}
   ]
 }
 \`\`\`
@@ -286,17 +293,17 @@ edit_diagram uses ID-based operations to modify cells directly by their id attri
 
 Change label:
 \`\`\`json
-{"operations": [{"type": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
 Add new shape:
 \`\`\`json
-{"operations": [{"type": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+{"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
 Delete cell:
 \`\`\`json
-{"operations": [{"type": "delete", "cell_id": "5"}]}
+{"operations": [{"operation": "delete", "cell_id": "5"}]}
 \`\`\`
 
 **Error Recovery:**

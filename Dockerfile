@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Next.js
 
 # Stage 1: Install dependencies
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Stage 2: Build application
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Copy node_modules from deps stage
@@ -26,11 +26,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net
 ENV NEXT_PUBLIC_DRAWIO_BASE_URL=${NEXT_PUBLIC_DRAWIO_BASE_URL}
 
+# Build-time argument to show About link and Notice icon
+ARG NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=false
+ENV NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=${NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE}
+
 # Build Next.js application (standalone mode)
 RUN npm run build
 
 # Stage 3: Production runtime
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

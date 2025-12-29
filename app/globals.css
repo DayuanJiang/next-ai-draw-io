@@ -144,6 +144,68 @@
     --sidebar-ring: oklch(0.7 0.16 265);
 }
 
+/* ============================================
+   REFINED MINIMAL DESIGN SYSTEM
+   ============================================ */
+
+:root {
+    /* Surface layers for depth */
+    --surface-0: oklch(1 0 0);
+    --surface-1: oklch(0.985 0.002 240);
+    --surface-2: oklch(0.97 0.004 240);
+    --surface-elevated: oklch(1 0 0);
+
+    /* Subtle borders */
+    --border-subtle: oklch(0.94 0.008 260);
+    --border-default: oklch(0.91 0.012 260);
+
+    /* Interactive states */
+    --interactive-hover: oklch(0.96 0.015 260);
+    --interactive-active: oklch(0.93 0.02 265);
+
+    /* Success state */
+    --success: oklch(0.65 0.18 145);
+    --success-muted: oklch(0.95 0.03 145);
+
+    /* Animation timing */
+    --duration-fast: 120ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dark {
+    --surface-0: oklch(0.15 0.015 260);
+    --surface-1: oklch(0.18 0.015 260);
+    --surface-2: oklch(0.22 0.015 260);
+    --surface-elevated: oklch(0.25 0.015 260);
+
+    --border-subtle: oklch(0.25 0.012 260);
+    --border-default: oklch(0.3 0.015 260);
+
+    --interactive-hover: oklch(0.25 0.02 265);
+    --interactive-active: oklch(0.3 0.025 270);
+
+    --success: oklch(0.7 0.16 145);
+    --success-muted: oklch(0.25 0.04 145);
+}
+
+/* Expose surface colors to Tailwind */
+@theme inline {
+    --color-surface-0: var(--surface-0);
+    --color-surface-1: var(--surface-1);
+    --color-surface-2: var(--surface-2);
+    --color-surface-elevated: var(--surface-elevated);
+    --color-border-subtle: var(--border-subtle);
+    --color-border-default: var(--border-default);
+    --color-interactive-hover: var(--interactive-hover);
+    --color-interactive-active: var(--interactive-active);
+    --color-success: var(--success);
+    --color-success-muted: var(--success-muted);
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
@@ -256,4 +318,84 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+/* ============================================
+   REFINED DIALOG STYLES
+   ============================================ */
+
+/* Refined dialog shadow - multi-layer soft shadow */
+.shadow-dialog {
+    box-shadow:
+        0 0 0 1px oklch(0 0 0 / 0.03),
+        0 2px 4px oklch(0 0 0 / 0.02),
+        0 12px 24px oklch(0 0 0 / 0.06),
+        0 24px 48px oklch(0 0 0 / 0.04);
+}
+
+.dark .shadow-dialog {
+    box-shadow:
+        0 0 0 1px oklch(1 0 0 / 0.05),
+        0 2px 4px oklch(0 0 0 / 0.2),
+        0 12px 24px oklch(0 0 0 / 0.3),
+        0 24px 48px oklch(0 0 0 / 0.2);
+}
+
+/* Dialog animations */
+@keyframes dialog-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -48%) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes dialog-out {
+    from {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translate(-50%, -48%) scale(0.96);
+    }
+}
+
+.animate-dialog-in {
+    animation: dialog-in var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-dialog-out {
+    animation: dialog-out 150ms var(--ease-out) forwards;
+}
+
+/* Check pop animation for validation success */
+@keyframes check-pop {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.animate-check-pop {
+    animation: check-pop 0.25s var(--ease-spring) forwards;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .animate-dialog-in,
+    .animate-dialog-out,
+    .animate-check-pop {
+        animation: none;
+    }
 }

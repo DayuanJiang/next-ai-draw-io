@@ -4,7 +4,7 @@
  */
 
 export interface DiagramOperation {
-    type: "update" | "add" | "delete"
+    operation: "update" | "add" | "delete"
     cell_id: string
     new_xml?: string
 }
@@ -77,7 +77,7 @@ export function applyDiagramOperations(
 
     // Process each operation
     for (const op of operations) {
-        if (op.type === "update") {
+        if (op.operation === "update") {
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
                 errors.push({
@@ -129,7 +129,7 @@ export function applyDiagramOperations(
 
             // Update the map with the new element
             cellMap.set(op.cell_id, importedNode)
-        } else if (op.type === "add") {
+        } else if (op.operation === "add") {
             // Check if ID already exists
             if (cellMap.has(op.cell_id)) {
                 errors.push({
@@ -181,7 +181,7 @@ export function applyDiagramOperations(
 
             // Add to map
             cellMap.set(op.cell_id, importedNode)
-        } else if (op.type === "delete") {
+        } else if (op.operation === "delete") {
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
                 errors.push({

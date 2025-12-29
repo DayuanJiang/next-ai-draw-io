@@ -8,10 +8,17 @@ import {
     stepCountIs,
     streamText,
 } from "ai"
+import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
+import path from "path"
 import { z } from "zod"
 import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
+import {
+    checkAndIncrementRequest,
+    isQuotaEnabled,
+    recordTokenUsage,
+} from "@/lib/dynamo-quota-manager"
 import {
     getTelemetryConfig,
     setTraceInput,
@@ -19,6 +26,7 @@ import {
     wrapWithObserve,
 } from "@/lib/langfuse"
 import { getSystemPrompt } from "@/lib/system-prompts"
+import { getUserIdFromRequest } from "@/lib/user-id"
 
 export const maxDuration = 120
 
@@ -160,9 +168,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     const { messages, xml, previousXml, sessionId } = await req.json()
 
-    // Get user IP for Langfuse tracking
-    const forwardedFor = req.headers.get("x-forwarded-for")
-    const userId = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+    // Get user ID for Langfuse tracking and quota
+    const userId = getUserIdFromRequest(req)
 
     // Validate sessionId for Langfuse (must be string, max 200 chars)
     const validSessionId =
@@ -171,9 +178,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
             : undefined
 
     // Extract user input text for Langfuse trace
-    const lastMessage = messages[messages.length - 1]
+    // Find the last USER message, not just the last message (which could be assistant in multi-step tool flows)
+    const lastUserMessage = [...messages]
+        .reverse()
+        .find((m: any) => m.role === "user")
     const userInputText =
-        lastMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+        lastUserMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -181,6 +191,33 @@ async function handleChatRequest(req: Request): Promise<Response> {
         sessionId: validSessionId,
         userId: userId,
     })
+
+    // === SERVER-SIDE QUOTA CHECK START ===
+    // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
+    const hasOwnApiKey = !!(
+        req.headers.get("x-ai-provider") && req.headers.get("x-ai-api-key")
+    )
+
+    // Skip quota check if: quota disabled, user has own API key, or is anonymous
+    if (isQuotaEnabled() && !hasOwnApiKey && userId !== "anonymous") {
+        const quotaCheck = await checkAndIncrementRequest(userId, {
+            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+            tpm: Number(process.env.TPM_LIMIT) || 20000,
+        })
+        if (!quotaCheck.allowed) {
+            return Response.json(
+                {
+                    error: quotaCheck.error,
+                    type: quotaCheck.type,
+                    used: quotaCheck.used,
+                    limit: quotaCheck.limit,
+                },
+                { status: 429 },
+            )
+        }
+    }
+    // === SERVER-SIDE QUOTA CHECK END ===
 
     // === FILE VALIDATION START ===
     const fileValidation = validateFileParts(messages)
@@ -212,6 +249,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         baseUrl: req.headers.get("x-ai-base-url"),
         apiKey: req.headers.get("x-ai-api-key"),
         modelId: req.headers.get("x-ai-model"),
+        // AWS Bedrock credentials
+        awsAccessKeyId: req.headers.get("x-aws-access-key-id"),
+        awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
+        awsRegion: req.headers.get("x-aws-region"),
+        awsSessionToken: req.headers.get("x-aws-session-token"),
     }
 
     // Read minimal style preference from header
@@ -230,9 +272,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId, minimalStyle)
 
-    // Extract file parts (images) from the last message
+    // Extract file parts (images) from the last user message
     const fileParts =
-        lastMessage.parts?.filter((part: any) => part.type === "file") || []
+        lastUserMessage?.parts?.filter((part: any) => part.type === "file") ||
+        []
 
     // User input only - XML is now in a separate cached system message
     const formattedUserInput = `User input:
@@ -241,7 +284,7 @@ ${userInputText}
 """`
 
     // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = convertToModelMessages(messages)
+    const modelMessages = await convertToModelMessages(messages)
 
     // DEBUG: Log incoming messages structure
     console.log("[route.ts] Incoming messages count:", messages.length)
@@ -495,12 +538,26 @@ ${userInputText}
                 userId,
             }),
         }),
-        onFinish: ({ text, usage }) => {
-            // Pass usage to Langfuse (Bedrock streaming doesn't auto-report tokens to telemetry)
-            setTraceOutput(text, {
-                promptTokens: usage?.inputTokens,
-                completionTokens: usage?.outputTokens,
-            })
+        onFinish: ({ text, totalUsage }) => {
+            // AI SDK 6 telemetry auto-reports token usage on its spans
+            setTraceOutput(text)
+
+            // Record token usage for server-side quota tracking (if enabled)
+            // Use totalUsage (cumulative across all steps) instead of usage (final step only)
+            // Include all 4 token types: input, output, cache read, cache write
+            if (
+                isQuotaEnabled() &&
+                !hasOwnApiKey &&
+                userId !== "anonymous" &&
+                totalUsage
+            ) {
+                const totalTokens =
+                    (totalUsage.inputTokens || 0) +
+                    (totalUsage.outputTokens || 0) +
+                    (totalUsage.cachedInputTokens || 0) +
+                    (totalUsage.inputTokenDetails?.cacheWriteTokens || 0)
+                recordTokenUsage(userId, totalTokens)
+            }
         },
         tools: {
             // Client-side tool that will be executed on the client
@@ -552,14 +609,22 @@ Operations:
 
 For update/add, new_xml must be a complete mxCell element including mxGeometry.
 
-⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"`,
+⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
+
+Example - Add a rectangle:
+{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
+
+Example - Delete a cell:
+{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}`,
                 inputSchema: z.object({
                     operations: z
                         .array(
                             z.object({
-                                type: z
+                                operation: z
                                     .enum(["update", "add", "delete"])
-                                    .describe("Operation type"),
+                                    .describe(
+                                        "Operation to perform: add, update, or delete",
+                                    ),
                                 cell_id: z
                                     .string()
                                     .describe(
@@ -596,6 +661,69 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
                         ),
                 }),
             },
+            get_shape_library: {
+                description: `Get draw.io shape/icon library documentation with style syntax and shape names.
+
+Available libraries:
+- Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
+- Networking: cisco19, network, kubernetes, vvd, rack
+- Business: bpmn, lean_mapping
+- General: flowchart, basic, arrows2, infographic, sitemap
+- UI/Mockups: android
+- Enterprise: citrix, sap, mscae, atlassian
+- Engineering: fluidpower, electrical, pid, cabinets, floorplan
+- Icons: webicons
+
+Call this tool to get shape names and usage syntax for a specific library.`,
+                inputSchema: z.object({
+                    library: z
+                        .string()
+                        .describe(
+                            "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
+                        ),
+                }),
+                execute: async ({ library }) => {
+                    // Sanitize input - prevent path traversal attacks
+                    const sanitizedLibrary = library
+                        .toLowerCase()
+                        .replace(/[^a-z0-9_-]/g, "")
+
+                    if (sanitizedLibrary !== library.toLowerCase()) {
+                        return `Invalid library name "${library}". Use only letters, numbers, underscores, and hyphens.`
+                    }
+
+                    const baseDir = path.join(
+                        process.cwd(),
+                        "docs/shape-libraries",
+                    )
+                    const filePath = path.join(
+                        baseDir,
+                        `${sanitizedLibrary}.md`,
+                    )
+
+                    // Verify path stays within expected directory
+                    const resolvedPath = path.resolve(filePath)
+                    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
+                        return `Invalid library path.`
+                    }
+
+                    try {
+                        const content = await fs.readFile(filePath, "utf-8")
+                        return content
+                    } catch (error) {
+                        if (
+                            (error as NodeJS.ErrnoException).code === "ENOENT"
+                        ) {
+                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, lean_mapping, openstack, rack`
+                        }
+                        console.error(
+                            `[get_shape_library] Error loading "${library}":`,
+                            error,
+                        )
+                        return `Error loading library "${library}". Please try again.`
+                    }
+                },
+            },
         },
         ...(process.env.TEMPERATURE !== undefined && {
             temperature: parseFloat(process.env.TEMPERATURE),
@@ -607,19 +735,9 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage
-                if (!usage) {
-                    console.warn(
-                        "[messageMetadata] No usage data in finish part",
-                    )
-                    return undefined
-                }
-                // Total input = non-cached + cached (these are separate counts)
-                // Note: cacheWriteInputTokens is not available on finish part
-                const totalInputTokens =
-                    (usage.inputTokens ?? 0) + (usage.cachedInputTokens ?? 0)
+                // AI SDK 6 provides totalTokens directly
                 return {
-                    inputTokens: totalInputTokens,
-                    outputTokens: usage.outputTokens ?? 0,
+                    totalTokens: usage?.totalTokens ?? 0,
                     finishReason: (part as any).finishReason,
                 }
             }

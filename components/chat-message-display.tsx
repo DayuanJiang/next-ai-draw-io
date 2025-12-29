@@ -27,9 +27,11 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { getApiEndpoint } from "@/lib/base-path"
 import {
     applyDiagramOperations,
     convertToLegalXml,
+    extractCompleteMxCells,
     isMxCellXmlComplete,
     replaceNodes,
     validateAndFixXml,
@@ -38,7 +40,7 @@ import ExamplePanel from "./chat-example-panel"
 import { CodeBlock } from "./code-block"
 
 interface DiagramOperation {
-    type: "update" | "add" | "delete"
+    operation: "update" | "add" | "delete"
     cell_id: string
     new_xml?: string
 }
@@ -51,12 +53,12 @@ function getCompleteOperations(
     return operations.filter(
         (op) =>
             op &&
-            typeof op.type === "string" &&
-            ["update", "add", "delete"].includes(op.type) &&
+            typeof op.operation === "string" &&
+            ["update", "add", "delete"].includes(op.operation) &&
             typeof op.cell_id === "string" &&
             op.cell_id.length > 0 &&
             // delete doesn't need new_xml, update/add do
-            (op.type === "delete" || typeof op.new_xml === "string"),
+            (op.operation === "delete" || typeof op.new_xml === "string"),
     )
 }
 
@@ -77,20 +79,20 @@ function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
         <div className="space-y-3">
             {operations.map((op, index) => (
                 <div
-                    key={`${op.type}-${op.cell_id}-${index}`}
+                    key={`${op.operation}-${op.cell_id}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
                         <span
                             className={`text-[10px] font-medium uppercase tracking-wide ${
-                                op.type === "delete"
+                                op.operation === "delete"
                                     ? "text-red-600"
-                                    : op.type === "add"
+                                    : op.operation === "add"
                                       ? "text-green-600"
                                       : "text-blue-600"
                             }`}
                         >
-                            {op.type}
+                            {op.operation}
                         </span>
                         <span className="text-xs text-muted-foreground">
                             cell_id: {op.cell_id}
@@ -291,7 +293,7 @@ export function ChatMessageDisplay({
         setFeedback((prev) => ({ ...prev, [messageId]: value }))
 
         try {
-            await fetch("/api/log-feedback", {
+            await fetch(getApiEndpoint("/api/log-feedback"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -314,12 +316,28 @@ export function ChatMessageDisplay({
 
     const handleDisplayChart = useCallback(
         (xml: string, showToast = false) => {
-            const currentXml = xml || ""
+            let currentXml = xml || ""
+            const startTime = performance.now()
+
+            // During streaming (showToast=false), extract only complete mxCell elements
+            // This allows progressive rendering even with partial/incomplete trailing XML
+            if (!showToast) {
+                const completeCells = extractCompleteMxCells(currentXml)
+                if (!completeCells) {
+                    return
+                }
+                currentXml = completeCells
+            }
+
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
                 // Parse and validate XML BEFORE calling replaceNodes
                 const parser = new DOMParser()
-                const testDoc = parser.parseFromString(convertedXml, "text/xml")
+                // Wrap in root element for parsing multiple mxCell elements
+                const testDoc = parser.parseFromString(
+                    `<root>${convertedXml}</root>`,
+                    "text/xml",
+                )
                 const parseError = testDoc.querySelector("parsererror")
 
                 if (parseError) {
@@ -346,7 +364,22 @@ export function ChatMessageDisplay({
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
                     const replacedXML = replaceNodes(baseXML, convertedXml)
 
-                    // Validate and auto-fix the XML
+                    const xmlProcessTime = performance.now() - startTime
+
+                    // During streaming (showToast=false), skip heavy validation for lower latency
+                    // The quick DOM parse check above catches malformed XML
+                    // Full validation runs on final output (showToast=true)
+                    if (!showToast) {
+                        previousXML.current = convertedXml
+                        const loadStartTime = performance.now()
+                        onDisplayChart(replacedXML, true)
+                        console.log(
+                            `[Streaming] XML processing: ${xmlProcessTime.toFixed(1)}ms, drawio load: ${(performance.now() - loadStartTime).toFixed(1)}ms`,
+                        )
+                        return
+                    }
+
+                    // Final output: run full validation and auto-fix
                     const validation = validateAndFixXml(replacedXML)
                     if (validation.valid) {
                         previousXML.current = convertedXml
@@ -359,18 +392,19 @@ export function ChatMessageDisplay({
                             )
                         }
                         // Skip validation in loadDiagram since we already validated above
+                        const loadStartTime = performance.now()
                         onDisplayChart(xmlToLoad, true)
+                        console.log(
+                            `[Final] XML processing: ${xmlProcessTime.toFixed(1)}ms, validation+load: ${(performance.now() - loadStartTime).toFixed(1)}ms`,
+                        )
                     } else {
                         console.error(
                             "[ChatMessageDisplay] XML validation failed:",
                             validation.error,
                         )
-                        // Only show toast if this is the final XML (not during streaming)
-                        if (showToast) {
-                            toast.error(
-                                "Diagram validation failed. Please try regenerating.",
-                            )
-                        }
+                        toast.error(
+                            "Diagram validation failed. Please try regenerating.",
+                        )
                     }
                 } catch (error) {
                     console.error(
@@ -602,17 +636,10 @@ export function ChatMessageDisplay({
             }
         })
 
-        // Cleanup: clear any pending debounce timeout on unmount
-        return () => {
-            if (debounceTimeoutRef.current) {
-                clearTimeout(debounceTimeoutRef.current)
-                debounceTimeoutRef.current = null
-            }
-            if (editDebounceTimeoutRef.current) {
-                clearTimeout(editDebounceTimeoutRef.current)
-                editDebounceTimeoutRef.current = null
-            }
-        }
+        // NOTE: Don't cleanup debounce timeouts here!
+        // The cleanup runs on every re-render (when messages changes),
+        // which would cancel the timeout before it fires.
+        // Let the timeouts complete naturally - they're harmless if component unmounts.
     }, [messages, handleDisplayChart, chartXML])
 
     const renderToolPart = (part: ToolPartLike) => {
@@ -634,6 +661,8 @@ export function ChatMessageDisplay({
                     return "Generate Diagram"
                 case "edit_diagram":
                     return "Edit Diagram"
+                case "get_shape_library":
+                    return "Get Shape Library"
                 default:
                     return name
             }
@@ -728,6 +757,25 @@ export function ChatMessageDisplay({
                             </div>
                         )
                     })()}
+                {/* Show get_shape_library output on success */}
+                {output &&
+                    toolName === "get_shape_library" &&
+                    state === "output-available" &&
+                    isExpanded && (
+                        <div className="px-4 py-3 border-t border-border/40">
+                            <div className="text-xs text-muted-foreground mb-2">
+                                Library loaded (
+                                {typeof output === "string" ? output.length : 0}{" "}
+                                chars)
+                            </div>
+                            <pre className="text-xs bg-muted/50 p-2 rounded-md overflow-auto max-h-32 whitespace-pre-wrap">
+                                {typeof output === "string"
+                                    ? output.substring(0, 800) +
+                                      (output.length > 800 ? "\n..." : "")
+                                    : String(output)}
+                            </pre>
+                        </div>
+                    )}
             </div>
         )
     }

@@ -1,6 +1,6 @@
 {
     "name": "@next-ai-drawio/mcp-server",
-    "version": "0.1.2",
+    "version": "0.1.6",
     "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
     "type": "module",
     "main": "dist/index.js",
@@ -38,11 +38,11 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.0.4",
         "linkedom": "^0.18.0",
-        "open": "^10.1.0",
+        "open": "^11.0.0",
         "zod": "^3.24.0"
     },
     "devDependencies": {
-        "@types/node": "^20",
+        "@types/node": "^24.0.0",
         "tsx": "^4.19.0",
         "typescript": "^5"
     },

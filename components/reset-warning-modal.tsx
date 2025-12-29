@@ -9,6 +9,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import { useDictionary } from "@/hooks/use-dictionary"
 
 interface ResetWarningModalProps {
     open: boolean
@@ -21,14 +22,15 @@ export function ResetWarningModal({
     onOpenChange,
     onClear,
 }: ResetWarningModalProps) {
+    const dict = useDictionary()
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Clear Everything?</DialogTitle>
+                    <DialogTitle>{dict.dialogs.clearTitle}</DialogTitle>
                     <DialogDescription>
-                        This will clear the current conversation and reset the
-                        diagram. This action cannot be undone.
+                        {dict.dialogs.clearDescription}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -36,10 +38,10 @@ export function ResetWarningModal({
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                     >
-                        Cancel
+                        {dict.common.cancel}
                     </Button>
                     <Button variant="destructive" onClick={onClear}>
-                        Clear Everything
+                        {dict.dialogs.clearEverything}
                     </Button>
                 </DialogFooter>
             </DialogContent>
