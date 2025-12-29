@@ -12,21 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
-
-      - name: Install Biome
-        run: npm install --save-dev @biomejs/biome
+          node-version: '24'
 
       - name: Run Biome format
-        run: npx @biomejs/biome check --write --no-errors-on-unmatched .
+        run: npx @biomejs/biome@latest check --write --no-errors-on-unmatched .
 
       - name: Check for changes
         id: changes

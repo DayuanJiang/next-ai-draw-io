@@ -242,6 +242,27 @@ export async function POST(req: Request) {
                 break
             }
 
+            case "sglang": {
+                // SGLang is OpenAI-compatible
+                const sglang = createOpenAI({
+                    apiKey: apiKey || "not-needed",
+                    baseURL: baseUrl || "http://127.0.0.1:8000/v1",
+                })
+                model = sglang.chat(modelId)
+                break
+            }
+
+            case "doubao": {
+                // ByteDance Doubao uses DeepSeek-compatible API
+                const doubao = createDeepSeek({
+                    apiKey,
+                    baseURL:
+                        baseUrl || "https://ark.cn-beijing.volces.com/api/v3",
+                })
+                model = doubao(modelId)
+                break
+            }
+
             default:
                 return NextResponse.json(
                     { valid: false, error: `Unknown provider: ${provider}` },

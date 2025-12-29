@@ -1,7 +1,6 @@
 "use client"
 
-import { Coffee, X } from "lucide-react"
-import Link from "next/link"
+import { Coffee, Settings, X } from "lucide-react"
 import type React from "react"
 import { FaGithub } from "react-icons/fa"
 import { useDictionary } from "@/hooks/use-dictionary"
@@ -12,6 +11,7 @@ interface QuotaLimitToastProps {
     used: number
     limit: number
     onDismiss: () => void
+    onConfigModel?: () => void
 }
 
 export function QuotaLimitToast({
@@ -19,6 +19,7 @@ export function QuotaLimitToast({
     used,
     limit,
     onDismiss,
+    onConfigModel,
 }: QuotaLimitToastProps) {
     const dict = useDictionary()
     const isTokenLimit = type === "token"
@@ -75,16 +76,36 @@ export function QuotaLimitToast({
                         ? dict.quota.messageToken
                         : dict.quota.messageApi}
                 </p>
+                <p
+                    dangerouslySetInnerHTML={{
+                        __html: formatMessage(dict.quota.doubaoSponsorship, {
+                            link: "https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project",
+                        }),
+                    }}
+                />
                 <p dangerouslySetInnerHTML={{ __html: dict.quota.tip }} />
                 <p>{dict.quota.reset}</p>
             </div>{" "}
             {/* Action buttons */}
             <div className="flex items-center gap-2">
+                {onConfigModel && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            onConfigModel()
+                            onDismiss()
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                        <Settings className="w-3.5 h-3.5" />
+                        {dict.quota.configModel}
+                    </button>
+                )}
                 <a
                     href="https://github.com/DayuanJiang/next-ai-draw-io"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
                 >
                     <FaGithub className="w-3.5 h-3.5" />
                     {dict.quota.selfHost}
