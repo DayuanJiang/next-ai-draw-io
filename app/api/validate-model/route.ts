@@ -226,27 +226,12 @@ export async function POST(req: Request) {
             }
 
             case "edgeone": {
-                // EdgeOne uses OpenAI-compatible API with cookie-based auth
-                // Need to forward cookies for EdgeOne Pages access control
-                if (!baseUrl) {
-                    return NextResponse.json(
-                        { valid: false, error: "EdgeOne requires a base URL" },
-                        { status: 400 },
-                    )
-                }
-
-                // Forward cookies from the original request
-                const cookies = req.headers.get("cookie") || ""
-
-                const edgeone = createOpenAI({
-                    apiKey: apiKey || "edgeone",
-                    baseURL: baseUrl,
-                    headers: {
-                        Cookie: cookies,
-                    },
+                // EdgeOne is a built-in provider running on EdgeOne Pages edge functions
+                // Skip validation - it's always available when deployed to EdgeOne Pages
+                return NextResponse.json({
+                    valid: true,
+                    responseTime: 0,
                 })
-                model = edgeone.chat(modelId)
-                break
             }
 
             case "sglang": {
