@@ -185,6 +185,7 @@ export default function ChatPanel({
         dailyRequestLimit,
         dailyTokenLimit,
         tpmLimit,
+        onConfigModel: () => setShowModelConfigDialog(true),
     })
 
     // Generate a unique session ID for Langfuse tracing (restore from localStorage if available)
@@ -1036,6 +1037,9 @@ export default function ChatPanel({
                 <DevXmlSimulator
                     setMessages={setMessages}
                     onDisplayChart={onDisplayChart}
+                    onShowQuotaToast={() =>
+                        quotaManager.showQuotaLimitToast(50, 50)
+                    }
                 />
             )}
 
