@@ -10,6 +10,7 @@ export interface QuotaConfig {
     dailyRequestLimit: number
     dailyTokenLimit: number
     tpmLimit: number
+    onConfigModel?: () => void
 }
 
 /**
@@ -22,7 +23,8 @@ export function useQuotaManager(config: QuotaConfig): {
     showTokenLimitToast: (used?: number, limit?: number) => void
     showTPMLimitToast: (limit?: number) => void
 } {
-    const { dailyRequestLimit, dailyTokenLimit, tpmLimit } = config
+    const { dailyRequestLimit, dailyTokenLimit, tpmLimit, onConfigModel } =
+        config
     const dict = useDictionary()
 
     // Show quota limit toast (request-based)
@@ -34,12 +36,13 @@ export function useQuotaManager(config: QuotaConfig): {
                         used={used ?? dailyRequestLimit}
                         limit={limit ?? dailyRequestLimit}
                         onDismiss={() => toast.dismiss(t)}
+                        onConfigModel={onConfigModel}
                     />
                 ),
                 { duration: 15000 },
             )
         },
-        [dailyRequestLimit],
+        [dailyRequestLimit, onConfigModel],
     )
 
     // Show token limit toast
@@ -52,12 +55,13 @@ export function useQuotaManager(config: QuotaConfig): {
                         used={used ?? dailyTokenLimit}
                         limit={limit ?? dailyTokenLimit}
                         onDismiss={() => toast.dismiss(t)}
+                        onConfigModel={onConfigModel}
                     />
                 ),
                 { duration: 15000 },
             )
         },
-        [dailyTokenLimit],
+        [dailyTokenLimit, onConfigModel],
     )
 
     // Show TPM limit toast
