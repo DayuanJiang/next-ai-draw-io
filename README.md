@@ -19,6 +19,7 @@ English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
+> Note: Thanks to <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) sponsorship, the demo site now uses the powerful K2-thinking model!
 
 
 https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
@@ -26,17 +27,20 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
 
 
 ## Table of Contents
-- [Next AI Draw.io ](#next-ai-drawio-)
+- [Next AI Draw.io](#next-ai-drawio)
   - [Table of Contents](#table-of-contents)
   - [Examples](#examples)
   - [Features](#features)
   - [MCP Server (Preview)](#mcp-server-preview)
+    - [Claude Code CLI](#claude-code-cli)
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
     - [Desktop Application](#desktop-application)
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
     - [Installation](#installation)
   - [Deployment](#deployment)
+    - [Deploy on Vercel (Recommended)](#deploy-on-vercel-recommended)
+    - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
   - [Multi-Provider Support](#multi-provider-support)
   - [How It Works](#how-it-works)
   - [Project Structure](#project-structure)
@@ -132,7 +136,7 @@ No installation needed! Try the app directly on our demo site:
 
 [![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
+
 
 > **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
 
@@ -213,7 +217,7 @@ cp env.example .env.local
 
 Edit `.env.local` and configure your chosen provider:
 
--   Set `AI_PROVIDER` to your chosen provider (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
+-   Set `AI_PROVIDER` to your chosen provider (doubao,bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
 -   Set `AI_MODEL` to the specific model you want to use
 -   Add the required API keys for your provider
 -   `TEMPERATURE`: Optional temperature setting (e.g., `0` for deterministic output). Leave unset for models that don't support it (e.g., reasoning models).
@@ -233,16 +237,15 @@ npm run dev
 
 ## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new) from the creators of Next.js.
+### Deploy on Vercel (Recommended)
 
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-Or you can deploy by this button.
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 
-Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
+The easiest way to deploy is using [Vercel](https://vercel.com/new), the creators of Next.js. Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
 
-## Deploy on Cloudflare Workers
+See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### Deploy on Cloudflare Workers
 
 [Go to Cloudflare Deploy Guide](./docs/Cloudflare_Deploy.md)
 
@@ -250,6 +253,7 @@ Be sure to **set the environment variables** in the Vercel dashboard as you did 
 
 ## Multi-Provider Support
 
+-   [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
 -   AWS Bedrock (default)
 -   OpenAI
 -   Anthropic
@@ -259,6 +263,7 @@ Be sure to **set the environment variables** in the Vercel dashboard as you did 
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+
 
 All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
@@ -299,6 +304,8 @@ public/               # Static assets including example images
 ```
 
 ## Support & Contact
+
+**Special thanks to [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) for sponsoring the API token usage of the demo site!** Register on the ARK platform to get 500K free tokens for all models!
 
 If you find this project useful, please consider [sponsoring](https://github.com/sponsors/DayuanJiang) to help me host the live demo site!
 

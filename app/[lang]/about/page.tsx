@@ -104,79 +104,70 @@ export default function About() {
                         </div>
                     </div>
 
-                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-[1px] shadow-lg">
-                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 opacity-20" />
+                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
                         <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    Model Change & Usage Limits{" "}
-                                    <span className="text-sm text-amber-600 font-medium italic font-normal">
-                                        (Or: Why My Wallet is Crying)
-                                    </span>
+                                    Sponsored by ByteDance Doubao
                                 </h3>
                             </div>
 
                             {/* Story */}
                             <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
                                 <p>
-                                    The response to this project has been
-                                    incredible—you all love making diagrams!
-                                    However, this enthusiasm means we are
-                                    frequently hitting the AI API rate limits
-                                    (TPS/TPM). When this happens, the system
-                                    pauses, leading to failed requests.
-                                </p>
-                                <p>
-                                    Due to the high usage, I have changed the
-                                    model from Opus 4.5 to{" "}
+                                    Great news! Thanks to the generous
+                                    sponsorship from{" "}
+                                    <a
+                                        href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-blue-600 hover:underline"
+                                    >
+                                        ByteDance Doubao
+                                    </a>
+                                    , the demo site now uses the powerful{" "}
                                     <span className="font-semibold text-amber-700">
-                                        Haiku 4.5
-                                    </span>
-                                    , which is more cost-effective.
-                                </p>
-                                <p>
-                                    As an{" "}
+                                        K2-thinking
+                                    </span>{" "}
+                                    model for better diagram generation! Sign up
+                                    via the link to get{" "}
                                     <span className="font-semibold text-amber-700">
-                                        indie developer
-                                    </span>
-                                    , I am currently footing the entire API
-                                    bill. To keep the lights on and ensure the
-                                    service remains available to everyone
-                                    without sending me into debt, I have also
-                                    implemented the following temporary caps:
+                                        500K free tokens
+                                    </span>{" "}
+                                    for all models!
                                 </p>
                             </div>
 
-                            {/* Limits Cards */}
-                            <div className="grid grid-cols-2 gap-3 mb-5">
-                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
-                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
-                                        Token Usage
-                                    </div>
-                                    <div className="text-lg font-bold text-gray-900">
-                                        {formatNumber(tpmLimit)}
-                                        <span className="text-sm font-normal text-gray-600">
-                                            /min
-                                        </span>
-                                    </div>
-                                    <div className="text-lg font-bold text-gray-900">
-                                        {formatNumber(dailyTokenLimit)}
-                                        <span className="text-sm font-normal text-gray-600">
-                                            /day
-                                        </span>
-                                    </div>
+                            {/* Usage Limits */}
+                            <p className="text-sm text-gray-600 mb-3">
+                                Please note the current usage limits:
+                            </p>
+                            <div className="grid grid-cols-3 gap-3 mb-5">
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(dailyRequestLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        requests/day
+                                    </p>
                                 </div>
-                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
-                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
-                                        Daily Requests
-                                    </div>
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {dailyRequestLimit}
-                                    </div>
-                                    <div className="text-sm text-gray-600">
-                                        requests
-                                    </div>
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(dailyTokenLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        tokens/day
+                                    </p>
+                                </div>
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(tpmLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        tokens/min
+                                    </p>
                                 </div>
                             </div>
 
@@ -186,50 +177,20 @@ export default function About() {
                             </div>
 
                             {/* Bring Your Own Key */}
-                            <div className="text-center mb-5">
+                            <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">
                                     Bring Your Own API Key
                                 </h4>
                                 <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
-                                    You can use your own API key to bypass these
-                                    limits. Click the Settings icon in the chat
-                                    panel to configure your provider and API
-                                    key.
+                                    You can also use your own API key with any
+                                    supported provider. Click the Settings icon
+                                    in the chat panel to configure your provider
+                                    and API key.
                                 </p>
                                 <p className="text-xs text-gray-500 max-w-md mx-auto">
                                     Your key is stored locally in your browser
                                     and is never stored on the server.
                                 </p>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="flex items-center gap-3 mb-5">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
-                            </div>
-
-                            {/* Sponsorship CTA */}
-                            <div className="text-center">
-                                <h4 className="text-base font-bold text-gray-900 mb-2">
-                                    Call for Sponsorship
-                                </h4>
-                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
-                                    Scaling the backend is the only way to
-                                    remove these limits. I am actively seeking
-                                    sponsorship from AI API providers or Cloud
-                                    Platforms.
-                                </p>
-                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
-                                    In return for support (credits or funding),
-                                    I will prominently feature your company as a
-                                    platform sponsor on both the GitHub
-                                    repository and the live demo site.
-                                </p>
-                                <a
-                                    href="mailto:me@jiang.jp"
-                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
-                                >
-                                    Contact Me
-                                </a>
                             </div>
                         </div>
                     </div>
@@ -417,6 +378,16 @@ export default function About() {
                         Multi-Provider Support
                     </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                        <li>
+                            <a
+                                href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                            >
+                                ByteDance Doubao
+                            </a>
+                        </li>
                         <li>AWS Bedrock (default)</li>
                         <li>
                             OpenAI / OpenAI-compatible APIs (via{" "}
@@ -428,6 +399,7 @@ export default function About() {
                         <li>Ollama</li>
                         <li>OpenRouter</li>
                         <li>DeepSeek</li>
+                        <li>SiliconFlow</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         Note that <code>claude-sonnet-4-5</code> has trained on
@@ -437,18 +409,21 @@ export default function About() {
                     </p>
 
                     {/* Support */}
-                    <div className="flex items-center gap-4 mt-10 mb-4">
-                        <h2 className="text-2xl font-semibold text-gray-900">
-                            Support &amp; Contact
-                        </h2>
-                        <iframe
-                            src="https://github.com/sponsors/DayuanJiang/button"
-                            title="Sponsor DayuanJiang"
-                            height="32"
-                            width="114"
-                            style={{ border: 0, borderRadius: 6 }}
-                        />
-                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        Support &amp; Contact
+                    </h2>
+                    <p className="text-gray-700 mb-4 font-semibold">
+                        Special thanks to{" "}
+                        <a
+                            href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            ByteDance Doubao
+                        </a>{" "}
+                        for sponsoring the API token usage of the demo site!
+                    </p>
                     <p className="text-gray-700">
                         If you find this project useful, please consider{" "}
                         <a

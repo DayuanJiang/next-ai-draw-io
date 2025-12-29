@@ -19,6 +19,8 @@
 
 一个集成了AI功能的Next.js网页应用，与draw.io图表无缝结合。通过自然语言命令和AI辅助可视化来创建、修改和增强图表。
 
+> 注：感谢 <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [字节跳动豆包](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) 的赞助支持，本项目的 Demo 现已接入强大的 K2-thinking 模型！
+
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## 目录
@@ -127,8 +129,6 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 
 [![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> 注意：由于访问量较大，演示站点目前使用 minimax-m2 模型。如需获得最佳效果，建议使用 Claude Sonnet 4.5 或 Claude Opus 4.5 自行部署。
-
 > **使用自己的 API Key**：您可以使用自己的 API Key 来绕过演示站点的用量限制。点击聊天面板中的设置图标即可配置您的 Provider 和 API Key。您的 Key 仅保存在浏览器本地，不会被存储在服务器上。
 
 ### 使用Docker运行（推荐）
@@ -186,7 +186,7 @@ cp env.example .env.local
 
 编辑 `.env.local` 并配置您选择的提供商：
 
--   将 `AI_PROVIDER` 设置为您选择的提供商（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow）
+-   将 `AI_PROVIDER` 设置为您选择的提供商（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, doubao）
 -   将 `AI_MODEL` 设置为您要使用的特定模型
 -   添加您的提供商所需的API密钥
 -   `TEMPERATURE`：可选的温度设置（例如 `0` 表示确定性输出）。对于不支持此参数的模型（如推理模型），请不要设置。
@@ -218,6 +218,7 @@ npm run dev
 
 ## 多提供商支持
 
+-   [字节跳动豆包](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
 -   AWS Bedrock（默认）
 -   OpenAI
 -   Anthropic
@@ -267,6 +268,8 @@ public/               # 静态资源包括示例图片
 ```
 
 ## 支持与联系
+
+**特别感谢[字节跳动豆包](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)赞助演示站点的 API Token 使用！** 注册火山引擎 ARK 平台即可获得50万免费Token！
 
 如果您觉得这个项目有用，请考虑[赞助](https://github.com/sponsors/DayuanJiang)来帮助我托管在线演示站点！
 
