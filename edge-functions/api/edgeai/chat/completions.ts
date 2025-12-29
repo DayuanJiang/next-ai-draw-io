@@ -74,9 +74,9 @@ const CORS_HEADERS = {
 }
 
 /**
- * Create standardized response with CORS headers
+ * Create standardized JSON response with CORS headers
  */
-function createResponse(body: any, status = 200, extraHeaders = {}): Response {
+function jsonResponse(body: any, status = 200, extraHeaders = {}): Response {
     return new Response(JSON.stringify(body), {
         status,
         headers: {
@@ -85,6 +85,37 @@ function createResponse(body: any, status = 200, extraHeaders = {}): Response {
             ...extraHeaders,
         },
     })
+}
+
+/**
+ * Create standardized error response with proper HTTP status code
+ */
+function errorResponse(
+    message: string,
+    type:
+        | "invalid_request_error"
+        | "rate_limit_error"
+        | "api_error"
+        | "server_error" = "api_error",
+    details?: string,
+): Response {
+    // Map error type to HTTP status code
+    const statusMap: Record<string, number> = {
+        invalid_request_error: 400,
+        rate_limit_error: 429,
+        api_error: 500,
+        server_error: 500,
+    }
+    return jsonResponse(
+        {
+            error: {
+                message,
+                type,
+                ...(details && { details }),
+            },
+        },
+        statusMap[type] || 500,
+    )
 }
 
 /**
@@ -111,34 +142,24 @@ export async function onRequest({ request, env }: any) {
         const parseResult = messageSchema.safeParse(json)
 
         if (!parseResult.success) {
-            return createResponse(
-                {
-                    error: {
-                        message: parseResult.error.message,
-                        type: "invalid_request_error",
-                    },
-                },
-                400,
+            return errorResponse(
+                parseResult.error.message,
+                "invalid_request_error",
             )
         }
 
-        const { messages, model, tools, tool_choice, ...extraParams } =
+        const { messages, model, stream, tools, tool_choice, ...extraParams } =
             parseResult.data
-        const stream = true
+        const isStream = stream ?? true
 
         // Validate messages
         const userMessages = messages.filter(
             (message) => message.role === "user",
         )
         if (!userMessages.length) {
-            return createResponse(
-                {
-                    error: {
-                        message: "No user message found",
-                        type: "invalid_request_error",
-                    },
-                },
-                400,
+            return errorResponse(
+                "No user message found",
+                "invalid_request_error",
             )
         }
 
@@ -151,30 +172,24 @@ export async function onRequest({ request, env }: any) {
                 ...ALLOWED_MODELS,
                 ...Object.keys(MODEL_ALIASES),
             ]
-            return createResponse(
-                {
-                    error: {
-                        message: `Invalid model: ${requestedModel}. Allowed models: ${allowedModelList.join(", ")}`,
-                        type: "invalid_request_error",
-                    },
-                },
-                400,
+            return errorResponse(
+                `Invalid model: ${requestedModel}. Allowed models: ${allowedModelList.join(", ")}`,
+                "invalid_request_error",
             )
         }
 
         console.log(
-            `[EdgeOne] Model: ${selectedModel}, Tools: ${tools?.length || 0}, Stream: ${stream ?? true}`,
+            `[EdgeOne] Model: ${selectedModel}, Tools: ${tools?.length || 0}, Stream: ${isStream}`,
         )
 
         try {
-            const isStream = stream ?? true
-
             // Build AI.chatCompletions options
+            // Always use streaming internally (EdgeOne AI only supports stream properly)
             const aiOptions: any = {
                 ...extraParams,
                 model: selectedModel,
                 messages,
-                stream: isStream,
+                stream: true,
             }
 
             // Add tools if provided
@@ -187,18 +202,59 @@ export async function onRequest({ request, env }: any) {
 
             const aiResponse = await AI.chatCompletions(aiOptions)
 
-            // Non-streaming response
-            if (!isStream) {
-                return createResponse(aiResponse)
+            // Streaming response - return directly
+            if (isStream) {
+                return new Response(aiResponse, {
+                    headers: {
+                        "Content-Type": "text/event-stream; charset=utf-8",
+                        "Cache-Control": "no-cache",
+                        Connection: "keep-alive",
+                        ...CORS_HEADERS,
+                    },
+                })
             }
 
-            // Streaming response
-            return new Response(aiResponse, {
-                headers: {
-                    "Content-Type": "text/event-stream; charset=utf-8",
-                    "Cache-Control": "no-cache",
-                    Connection: "keep-alive",
-                    ...CORS_HEADERS,
+            // Non-streaming: collect stream and convert to standard format
+            const reader = aiResponse.getReader()
+            const decoder = new TextDecoder()
+            let content = ""
+            let lastChunk: any = null
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                const lines = decoder
+                    .decode(value, { stream: true })
+                    .split("\n")
+                for (const line of lines) {
+                    if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                        try {
+                            const data = JSON.parse(line.slice(6))
+                            lastChunk = data
+                            if (data.choices?.[0]?.delta?.content) {
+                                content += data.choices[0].delta.content
+                            }
+                        } catch {}
+                    }
+                }
+            }
+
+            return jsonResponse({
+                id: lastChunk?.id || `chatcmpl-${Date.now()}`,
+                object: "chat.completion",
+                created: lastChunk?.created || Math.floor(Date.now() / 1000),
+                model: lastChunk?.model || selectedModel,
+                choices: [
+                    {
+                        index: 0,
+                        message: { role: "assistant", content },
+                        finish_reason: "stop",
+                    },
+                ],
+                usage: lastChunk?.usage || {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
                 },
             })
         } catch (error: any) {
@@ -206,47 +262,27 @@ export async function onRequest({ request, env }: any) {
             try {
                 const message = JSON.parse(error.message)
                 if (message.code === 14020) {
-                    return createResponse(
-                        {
-                            error: {
-                                message:
-                                    "The daily public quota has been exhausted. After deployment, you can enjoy a personal daily exclusive quota.",
-                                type: "rate_limit_error",
-                            },
-                        },
-                        429,
+                    return errorResponse(
+                        "The daily public quota has been exhausted. After deployment, you can enjoy a personal daily exclusive quota.",
+                        "rate_limit_error",
                     )
                 }
-                return createResponse(
-                    { error: { message: error.message, type: "api_error" } },
-                    500,
-                )
             } catch {
                 // Not a JSON error message
             }
 
             console.error("[EdgeOne] AI error:", error.message)
-            return createResponse(
-                {
-                    error: {
-                        message: error.message || "AI service error",
-                        type: "api_error",
-                    },
-                },
-                500,
+            return errorResponse(
+                error.message || "AI service error",
+                "api_error",
             )
         }
     } catch (error: any) {
         console.error("[EdgeOne] Request error:", error.message)
-        return createResponse(
-            {
-                error: {
-                    message: "Request processing failed",
-                    type: "server_error",
-                    details: error.message,
-                },
-            },
-            500,
+        return errorResponse(
+            "Request processing failed",
+            "server_error",
+            error.message,
         )
     }
 }
