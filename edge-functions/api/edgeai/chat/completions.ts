@@ -212,7 +212,7 @@ export async function onRequest({ request, env }: any) {
             return new Response(aiResponse, {
                 headers: {
                     "Content-Type": "text/event-stream; charset=utf-8",
-                    "Cache-Control": "no-cache",
+                    "Cache-Control": "no-cache, no-transform",
                     "Content-Encoding": "identity",
                     Connection: "keep-alive",
                     ...CORS_HEADERS,

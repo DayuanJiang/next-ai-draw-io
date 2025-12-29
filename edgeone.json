@@ -1,5 +1,16 @@
 {
     "nodeFunctionsConfig": {
         "maxDuration": 120
-    }
+    },
+    "headers": [
+        {
+            "source": "/api/chat",
+            "headers": [
+                {
+                    "key": "Content-Encoding",
+                    "value": "identity"
+                }
+            ]
+        }
+    ]
 }
