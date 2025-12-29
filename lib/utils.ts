@@ -674,13 +674,18 @@ export function applyDiagramOperations(
             collectDescendants(op.cell_id)
 
             // Find edges referencing any of the cells to be deleted
+            // Also recursively collect children of those edges (e.g., edge labels)
             for (const cellId of cellsToDelete) {
                 const referencingEdges = root.querySelectorAll(
                     `mxCell[source="${cellId}"], mxCell[target="${cellId}"]`,
                 )
                 referencingEdges.forEach((edge) => {
                     const edgeId = edge.getAttribute("id")
-                    if (edgeId) cellsToDelete.add(edgeId)
+                    // Protect root cells from being added via edge references
+                    if (edgeId && edgeId !== "0" && edgeId !== "1") {
+                        // Recurse to collect edge's children (like labels)
+                        collectDescendants(edgeId)
+                    }
                 })
             }
 
