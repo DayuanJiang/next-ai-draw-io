@@ -19,7 +19,7 @@ English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
-> Note: Thanks to <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/feat/doubao-provider-sponsorship/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) sponsorship, the demo site now uses the powerful K2-thinking model!
+> Note: Thanks to <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) sponsorship, the demo site now uses the powerful K2-thinking model!
 
 
 https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
@@ -39,7 +39,8 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
     - [Installation](#installation)
   - [Deployment](#deployment)
-  - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
+    - [Deploy on Vercel (Recommended)](#deploy-on-vercel-recommended)
+    - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
   - [Multi-Provider Support](#multi-provider-support)
   - [How It Works](#how-it-works)
   - [Project Structure](#project-structure)
@@ -236,16 +237,15 @@ npm run dev
 
 ## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new) from the creators of Next.js.
+### Deploy on Vercel (Recommended)
 
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-Or you can deploy by this button.
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 
-Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
+The easiest way to deploy is using [Vercel](https://vercel.com/new), the creators of Next.js. Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
 
-## Deploy on Cloudflare Workers
+See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### Deploy on Cloudflare Workers
 
 [Go to Cloudflare Deploy Guide](./docs/Cloudflare_Deploy.md)
 
