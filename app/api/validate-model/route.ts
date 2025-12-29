@@ -226,19 +226,9 @@ export async function POST(req: Request) {
             }
 
             case "edgeone": {
-                if (!baseUrl) {
-                    return NextResponse.json(
-                        { valid: false, error: "EdgeOne requires a base URL" },
-                        { status: 400 },
-                    )
-                }
-
-                const edgeone = createOpenAI({
-                    apiKey: apiKey || "edgeone",
-                    baseURL: baseUrl,
+                return NextResponse.json({
+                    valid: true,
                 })
-                model = edgeone.chat(modelId)
-                break
             }
 
             case "sglang": {
