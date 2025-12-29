@@ -1,10 +1,8 @@
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { buildAppMenu } from "./app-menu"
-import { getCurrentPresetEnv } from "./config-manager"
 import { loadEnvFile } from "./env-loader"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { startNextServer, stopNextServer } from "./next-server"
-import { registerSettingsWindowHandlers } from "./settings-window"
 import { createWindow, getMainWindow } from "./window-manager"
 
 // Single instance lock
@@ -24,19 +22,12 @@ if (!gotTheLock) {
     // Load environment variables from .env files
     loadEnvFile()
 
-    // Apply saved preset environment variables (overrides .env)
-    const presetEnv = getCurrentPresetEnv()
-    for (const [key, value] of Object.entries(presetEnv)) {
-        process.env[key] = value
-    }
-
     const isDev = process.env.NODE_ENV === "development"
     let serverUrl: string | null = null
 
     app.whenReady().then(async () => {
         // Register IPC handlers
         registerIpcHandlers()
-        registerSettingsWindowHandlers()
 
         // Build application menu
         buildAppMenu()

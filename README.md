@@ -151,14 +151,13 @@ Download the native desktop app for your platform from the [Releases page](https
 | Linux | `.AppImage` or `.deb` (x64 & ARM64) |
 
 **Features:**
-- **Secure API key storage**: Credentials encrypted using OS keychain
-- **Configuration presets**: Save and switch between AI providers via menu
 - **Native file dialogs**: Open/save `.drawio` files directly
 - **Offline capable**: Works without internet after first launch
+- **Built-in settings**: Configure AI providers directly in the app
 
 **Quick Setup:**
 1. Download and install for your platform
-2. Open the app → **Menu → Configuration → Manage Presets**
+2. Click the settings icon in the chat panel
 3. Add your AI provider credentials
 4. Start creating diagrams!
 
