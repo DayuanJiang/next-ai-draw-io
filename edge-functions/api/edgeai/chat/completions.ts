@@ -240,7 +240,7 @@ export async function onRequest({ request, env }: any) {
                 })
             }
 
-            return jsonResponse(aiResponse)
+            return jsonResponse({})
         } catch (error: any) {
             // Handle EdgeOne specific errors
             try {
