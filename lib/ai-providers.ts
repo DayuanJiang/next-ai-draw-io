@@ -21,6 +21,7 @@ export type ProviderName =
     | "siliconflow"
     | "sglang"
     | "gateway"
+    | "doubao"
 
 interface ModelConfig {
     model: any
@@ -53,6 +54,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "siliconflow",
     "sglang",
     "gateway",
+    "doubao",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -346,7 +348,8 @@ function buildProviderOptions(
         case "openrouter":
         case "siliconflow":
         case "sglang":
-        case "gateway": {
+        case "gateway":
+        case "doubao": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
@@ -372,6 +375,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
     gateway: "AI_GATEWAY_API_KEY",
+    doubao: "DOUBAO_API_KEY",
 }
 
 /**
@@ -836,9 +840,23 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "doubao": {
+            const apiKey = overrides?.apiKey || process.env.DOUBAO_API_KEY
+            const baseURL =
+                overrides?.baseUrl ||
+                process.env.DOUBAO_BASE_URL ||
+                "https://ark.cn-beijing.volces.com/api/v3"
+            const doubaoProvider = createDeepSeek({
+                apiKey,
+                baseURL,
+            })
+            model = doubaoProvider(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, doubao`,
             )
     }
 

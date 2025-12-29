@@ -3,12 +3,14 @@
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import {
+    AlertTriangle,
     MessageSquarePlus,
     PanelRightClose,
     PanelRightOpen,
     Settings,
 } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
@@ -946,6 +948,32 @@ export default function ChatPanel({
                                 Next AI Drawio
                             </h1>
                         </div>
+                        {!isMobile && (
+                            <Link
+                                href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
+                            >
+                                About
+                            </Link>
+                        )}
+                        {!isMobile && (
+                            <Link
+                                href="/about"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <ButtonWithTooltip
+                                    tooltipContent="Sponsored by ByteDance Doubao K2-thinking. See About page for details."
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-amber-500 hover:text-amber-600"
+                                >
+                                    <AlertTriangle className="h-4 w-4" />
+                                </ButtonWithTooltip>
+                            </Link>
+                        )}
                     </div>
                     <div className="flex items-center gap-1 justify-end overflow-visible">
                         <ButtonWithTooltip

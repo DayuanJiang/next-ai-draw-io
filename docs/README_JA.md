@@ -19,6 +19,8 @@
 
 AI機能とdraw.ioダイアグラムを統合したNext.jsウェブアプリケーションです。自然言語コマンドとAI支援の可視化により、ダイアグラムを作成、修正、強化できます。
 
+> 注：<img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) のご支援により、デモサイトに強力な K2-thinking モデルを導入しました！
+
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## 目次
@@ -127,8 +129,6 @@ Claudeにダイアグラムの作成を依頼：
 
 [![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> 注意：アクセス数が多いため、デモサイトでは現在 minimax-m2 モデルを使用しています。最高の結果を得るには、Claude Sonnet 4.5 または Claude Opus 4.5 でのセルフホスティングをお勧めします。
-
 > **自分のAPIキーを使用**：自分のAPIキーを使用することで、デモサイトの利用制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。キーはブラウザのローカルに保存され、サーバーには保存されません。
 
 ### Dockerで実行（推奨）
@@ -186,7 +186,7 @@ cp env.example .env.local
 
 `.env.local`を編集して選択したプロバイダーを設定：
 
--   `AI_PROVIDER`を選択したプロバイダーに設定（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow）
+-   `AI_PROVIDER`を選択したプロバイダーに設定（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, doubao）
 -   `AI_MODEL`を使用する特定のモデルに設定
 -   プロバイダーに必要なAPIキーを追加
 -   `TEMPERATURE`：オプションの温度設定（例：`0`で決定論的な出力）。温度をサポートしないモデル（推論モデルなど）では設定しないでください。
@@ -218,6 +218,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 
 ## マルチプロバイダーサポート
 
+-   [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
 -   AWS Bedrock（デフォルト）
 -   OpenAI
 -   Anthropic
@@ -267,6 +268,8 @@ public/               # サンプル画像を含む静的アセット
 ```
 
 ## サポート＆お問い合わせ
+
+**デモサイトのAPIトークン使用を支援してくださった[ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)に特別な感謝を申し上げます！** ARKプラットフォームに登録すると、50万トークンが無料でもらえます！
 
 このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために[スポンサー](https://github.com/sponsors/DayuanJiang)をご検討ください！
 
