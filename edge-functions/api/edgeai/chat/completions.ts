@@ -196,7 +196,6 @@ export async function onRequest({ request, env }: any) {
         )
 
         try {
-            // @ts-expect-error-next-line
             const aiResponse = await AI.chatCompletions({
                 ...extraParams,
                 model: selectedModel,
@@ -214,6 +213,7 @@ export async function onRequest({ request, env }: any) {
                 headers: {
                     "Content-Type": "text/event-stream; charset=utf-8",
                     "Cache-Control": "no-cache",
+                    "Content-Encoding": "identity",
                     Connection: "keep-alive",
                     ...CORS_HEADERS,
                 },

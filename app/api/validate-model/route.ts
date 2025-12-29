@@ -226,6 +226,8 @@ export async function POST(req: Request) {
             }
 
             case "edgeone": {
+                // EdgeOne uses EdgeOne Pages Edge AI which doesn't require API key validation.
+                // The service is available directly through edge functions without authentication.
                 return NextResponse.json({
                     valid: true,
                 })
