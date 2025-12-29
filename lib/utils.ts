@@ -633,6 +633,16 @@ export function applyDiagramOperations(
             // Add to map
             cellMap.set(op.cell_id, importedNode)
         } else if (op.operation === "delete") {
+            // Protect root cells from deletion
+            if (op.cell_id === "0" || op.cell_id === "1") {
+                errors.push({
+                    type: "delete",
+                    cellId: op.cell_id,
+                    message: `Cannot delete root cell "${op.cell_id}"`,
+                })
+                continue
+            }
+
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
                 // Cell not found - might have been cascade-deleted by a previous operation
