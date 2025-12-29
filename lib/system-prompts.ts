@@ -276,7 +276,7 @@ edit_diagram uses ID-based operations to modify cells directly by their id attri
 **Operations:**
 - **update**: Replace an existing cell. Provide cell_id and new_xml.
 - **add**: Add a new cell. Provide cell_id (new unique id) and new_xml.
-- **delete**: Remove a cell. Only cell_id is needed.
+- **delete**: Remove a cell. **Cascade is automatic**: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
 
 **Input Format:**
 \`\`\`json
@@ -301,9 +301,9 @@ Add new shape:
 {"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 \`\`\`
 
-Delete cell:
+Delete container (children & edges auto-deleted):
 \`\`\`json
-{"operations": [{"operation": "delete", "cell_id": "5"}]}
+{"operations": [{"operation": "delete", "cell_id": "2"}]}
 \`\`\`
 
 **Error Recovery:**
