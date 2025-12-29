@@ -226,10 +226,9 @@ export async function onRequest({ request, env }: any) {
                 aiOptions.tool_choice = tool_choice
             }
 
-            const aiResponse = await AI.chatCompletions(aiOptions)
-
             // Streaming response - return directly
             if (isStream) {
+                const aiResponse = await AI.chatCompletions(aiOptions)
                 return new Response(aiResponse, {
                     headers: {
                         "Content-Type": "text/event-stream; charset=utf-8",
