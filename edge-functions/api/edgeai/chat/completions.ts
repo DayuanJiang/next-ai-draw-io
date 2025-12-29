@@ -150,7 +150,21 @@ export async function onRequest({ request, env }: any) {
     request.headers.delete("accept-encoding")
 
     try {
-        const json = await request.clone().json()
+        const text = await request.clone().text()
+        if (!text || text.trim() === "") {
+            return errorResponse("Empty request body", "invalid_request_error")
+        }
+
+        let json: any
+        try {
+            json = JSON.parse(text)
+        } catch (e) {
+            return errorResponse(
+                `Invalid JSON: ${(e as Error).message}`,
+                "invalid_request_error",
+            )
+        }
+
         const parseResult = messageSchema.safeParse(json)
 
         if (!parseResult.success) {
