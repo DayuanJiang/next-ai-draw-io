@@ -226,29 +226,70 @@ export async function onRequest({ request, env }: any) {
                 })
             }
 
-            // Non-streaming: collect stream and convert to standard format
+            // Non-streaming: collect stream and convert to standard JSON format
             const reader = aiResponse.getReader()
             const decoder = new TextDecoder()
             let content = ""
+            const toolCalls: any[] = []
             let lastChunk: any = null
+            let buffer = ""
 
             while (true) {
                 const { done, value } = await reader.read()
                 if (done) break
-                const lines = decoder
-                    .decode(value, { stream: true })
-                    .split("\n")
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split("\n")
+                // Keep the last incomplete line in buffer
+                buffer = lines.pop() || ""
+
                 for (const line of lines) {
-                    if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                    const trimmed = line.trim()
+                    if (
+                        trimmed.startsWith("data: ") &&
+                        trimmed !== "data: [DONE]"
+                    ) {
                         try {
-                            const data = JSON.parse(line.slice(6))
+                            const data = JSON.parse(trimmed.slice(6))
                             lastChunk = data
-                            if (data.choices?.[0]?.delta?.content) {
-                                content += data.choices[0].delta.content
+                            const delta = data.choices?.[0]?.delta
+                            if (delta?.content) {
+                                content += delta.content
                             }
-                        } catch {}
+                            // Collect tool calls
+                            if (delta?.tool_calls) {
+                                for (const tc of delta.tool_calls) {
+                                    const idx = tc.index ?? 0
+                                    if (!toolCalls[idx]) {
+                                        toolCalls[idx] = {
+                                            id: tc.id || "",
+                                            type: "function",
+                                            function: {
+                                                name: "",
+                                                arguments: "",
+                                            },
+                                        }
+                                    }
+                                    if (tc.id) toolCalls[idx].id = tc.id
+                                    if (tc.function?.name)
+                                        toolCalls[idx].function.name +=
+                                            tc.function.name
+                                    if (tc.function?.arguments)
+                                        toolCalls[idx].function.arguments +=
+                                            tc.function.arguments
+                                }
+                            }
+                        } catch {
+                            // Ignore parse errors for incomplete chunks
+                        }
                     }
                 }
+            }
+
+            // Build standard OpenAI response
+            const message: any = { role: "assistant", content: content || null }
+            if (toolCalls.length > 0) {
+                message.tool_calls = toolCalls
             }
 
             return jsonResponse({
@@ -259,8 +300,9 @@ export async function onRequest({ request, env }: any) {
                 choices: [
                     {
                         index: 0,
-                        message: { role: "assistant", content },
-                        finish_reason: "stop",
+                        message,
+                        finish_reason:
+                            lastChunk?.choices?.[0]?.finish_reason || "stop",
                     },
                 ],
                 usage: lastChunk?.usage || {
