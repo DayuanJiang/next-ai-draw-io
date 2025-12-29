@@ -240,7 +240,27 @@ export async function onRequest({ request, env }: any) {
                 })
             }
 
-            return jsonResponse({})
+            return jsonResponse({
+                id: `chatcmpl-${Date.now()}`,
+                object: "chat.completion",
+                created: Math.floor(Date.now() / 1000),
+                model: selectedModel,
+                choices: [
+                    {
+                        index: 0,
+                        message: {
+                            role: "assistant",
+                            content: "OK",
+                        },
+                        finish_reason: "stop",
+                    },
+                ],
+                usage: {
+                    prompt_tokens: 0,
+                    completion_tokens: 1,
+                    total_tokens: 1,
+                },
+            })
         } catch (error: any) {
             // Handle EdgeOne specific errors
             try {
