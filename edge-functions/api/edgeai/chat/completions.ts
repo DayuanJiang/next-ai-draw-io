@@ -150,20 +150,7 @@ export async function onRequest({ request, env }: any) {
     request.headers.delete("accept-encoding")
 
     try {
-        const text = await request.clone().text()
-        if (!text || text.trim() === "") {
-            return errorResponse("Empty request body", "invalid_request_error")
-        }
-
-        let json: any
-        try {
-            json = JSON.parse(text)
-        } catch (e) {
-            return errorResponse(
-                `Invalid JSON: ${(e as Error).message}`,
-                "invalid_request_error",
-            )
-        }
+        const json = await request.clone().json()
 
         const parseResult = messageSchema.safeParse(json)
 
@@ -209,55 +196,26 @@ export async function onRequest({ request, env }: any) {
         )
 
         try {
-            // Build AI.chatCompletions options
-            // Always use streaming internally (EdgeOne AI only supports stream properly)
-            const aiOptions: any = {
+            // @ts-expect-error-next-line
+            const aiResponse = await AI.chatCompletions({
                 ...extraParams,
                 model: selectedModel,
                 messages,
                 stream: isStream,
+                ...(tools && tools.length > 0 && { tools }),
+                ...(tool_choice !== undefined && { tool_choice }),
+            })
+
+            if (!isStream) {
+                return jsonResponse(aiResponse)
             }
 
-            // Add tools if provided
-            if (tools && tools.length > 0) {
-                aiOptions.tools = tools
-            }
-            if (tool_choice !== undefined) {
-                aiOptions.tool_choice = tool_choice
-            }
-
-            // Streaming response - return directly
-            if (isStream) {
-                const aiResponse = await AI.chatCompletions(aiOptions)
-                return new Response(aiResponse, {
-                    headers: {
-                        "Content-Type": "text/event-stream; charset=utf-8",
-                        "Cache-Control": "no-cache",
-                        Connection: "keep-alive",
-                        ...CORS_HEADERS,
-                    },
-                })
-            }
-
-            return jsonResponse({
-                id: `chatcmpl-${Date.now()}`,
-                object: "chat.completion",
-                created: Math.floor(Date.now() / 1000),
-                model: selectedModel,
-                choices: [
-                    {
-                        index: 0,
-                        message: {
-                            role: "assistant",
-                            content: "OK",
-                        },
-                        finish_reason: "stop",
-                    },
-                ],
-                usage: {
-                    prompt_tokens: 0,
-                    completion_tokens: 1,
-                    total_tokens: 1,
+            return new Response(aiResponse, {
+                headers: {
+                    "Content-Type": "text/event-stream; charset=utf-8",
+                    "Cache-Control": "no-cache",
+                    Connection: "keep-alive",
+                    ...CORS_HEADERS,
                 },
             })
         } catch (error: any) {
