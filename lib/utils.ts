@@ -635,30 +635,60 @@ export function applyDiagramOperations(
         } else if (op.operation === "delete") {
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
-                errors.push({
-                    type: "delete",
-                    cellId: op.cell_id,
-                    message: `Cell with id="${op.cell_id}" not found`,
-                })
+                // Cell not found - might have been cascade-deleted by a previous operation
+                // Skip silently instead of erroring (AI may redundantly list children/edges)
                 continue
             }
 
-            // Check for edges referencing this cell (warning only, still delete)
-            const referencingEdges = root.querySelectorAll(
-                `mxCell[source="${op.cell_id}"], mxCell[target="${op.cell_id}"]`,
-            )
-            if (referencingEdges.length > 0) {
-                const edgeIds = Array.from(referencingEdges)
-                    .map((e) => e.getAttribute("id"))
-                    .join(", ")
-                console.warn(
-                    `[applyDiagramOperations] Deleting cell "${op.cell_id}" which is referenced by edges: ${edgeIds}`,
+            // Cascade delete: collect all cells to delete (children + edges + self)
+            const cellsToDelete = new Set<string>()
+
+            // Recursive function to find all descendants
+            const collectDescendants = (cellId: string) => {
+                if (cellsToDelete.has(cellId)) return
+                cellsToDelete.add(cellId)
+
+                // Find children (cells where parent === cellId)
+                const children = root.querySelectorAll(
+                    `mxCell[parent="${cellId}"]`,
+                )
+                children.forEach((child) => {
+                    const childId = child.getAttribute("id")
+                    if (childId && childId !== "0" && childId !== "1") {
+                        collectDescendants(childId)
+                    }
+                })
+            }
+
+            // Collect the target cell and all its descendants
+            collectDescendants(op.cell_id)
+
+            // Find edges referencing any of the cells to be deleted
+            for (const cellId of cellsToDelete) {
+                const referencingEdges = root.querySelectorAll(
+                    `mxCell[source="${cellId}"], mxCell[target="${cellId}"]`,
+                )
+                referencingEdges.forEach((edge) => {
+                    const edgeId = edge.getAttribute("id")
+                    if (edgeId) cellsToDelete.add(edgeId)
+                })
+            }
+
+            // Log what will be deleted
+            if (cellsToDelete.size > 1) {
+                console.log(
+                    `[applyDiagramOperations] Cascade delete "${op.cell_id}" → deleting ${cellsToDelete.size} cells: ${Array.from(cellsToDelete).join(", ")}`,
                 )
             }
 
-            // Remove the node
-            existingCell.parentNode?.removeChild(existingCell)
-            cellMap.delete(op.cell_id)
+            // Delete all collected cells
+            for (const cellId of cellsToDelete) {
+                const cell = cellMap.get(cellId)
+                if (cell) {
+                    cell.parentNode?.removeChild(cell)
+                    cellMap.delete(cellId)
+                }
+            }
         }
     }
 
