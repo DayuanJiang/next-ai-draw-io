@@ -122,8 +122,9 @@ export async function onRequest({ request, env }: any) {
             )
         }
 
-        const { messages, model, stream, tools, tool_choice, ...extraParams } =
+        const { messages, model, tools, tool_choice, ...extraParams } =
             parseResult.data
+        const stream = true
 
         // Validate messages
         const userMessages = messages.filter(
