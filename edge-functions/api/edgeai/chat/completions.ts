@@ -89,6 +89,7 @@ function jsonResponse(body: any, status = 200, extraHeaders = {}): Response {
 
 /**
  * Create standardized error response with proper HTTP status code
+ * For AI SDK compatibility, we throw the error in OpenAI format
  */
 function errorResponse(
     message: string,
@@ -106,15 +107,26 @@ function errorResponse(
         api_error: 500,
         server_error: 500,
     }
-    return jsonResponse(
-        {
+    const status = statusMap[type] || 500
+
+    // Return OpenAI-compatible error format
+    return new Response(
+        JSON.stringify({
             error: {
                 message,
                 type,
+                param: null,
+                code: type,
                 ...(details && { details }),
             },
+        }),
+        {
+            status,
+            headers: {
+                "Content-Type": "application/json",
+                ...CORS_HEADERS,
+            },
         },
-        statusMap[type] || 500,
     )
 }
 
