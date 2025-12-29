@@ -605,7 +605,7 @@ Notes:
 Operations:
 - update: Replace an existing cell by its id. Provide cell_id and complete new_xml.
 - add: Add a new cell. Provide cell_id (new unique id) and new_xml.
-- delete: Remove a cell by its id. Only cell_id is needed.
+- delete: Remove a cell. Cascade is automatic: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
 
 For update/add, new_xml must be a complete mxCell element including mxGeometry.
 
@@ -614,8 +614,8 @@ For update/add, new_xml must be a complete mxCell element including mxGeometry.
 Example - Add a rectangle:
 {"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
 
-Example - Delete a cell:
-{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}`,
+Example - Delete container (children & edges auto-deleted):
+{"operations": [{"operation": "delete", "cell_id": "2"}]}`,
                 inputSchema: z.object({
                     operations: z
                         .array(
