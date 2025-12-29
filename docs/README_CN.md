@@ -19,7 +19,7 @@
 
 一个集成了AI功能的Next.js网页应用，与draw.io图表无缝结合。通过自然语言命令和AI辅助可视化来创建、修改和增强图表。
 
-> 注：感谢 [字节跳动豆包](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.svg" alt="" height="20" /> 的赞助支持，本项目的 Demo 现已接入强大的 K2-thinking 模型！
+> 注：感谢 [字节跳动豆包](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> 的赞助支持，本项目的 Demo 现已接入强大的 K2-thinking 模型！
 
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
