@@ -87,7 +87,8 @@
         "tailwindcss-animate": "^1.0.7",
         "unpdf": "^1.4.0",
         "zod": "^4.1.12",
-        "lightningcss": "^1.30.2"
+        "lightningcss": "^1.30.2",
+        "lightningcss-linux-x64-gnu": "^1.30.2"
     },
     "lint-staged": {
         "*.{js,ts,jsx,tsx,json,css}": [
