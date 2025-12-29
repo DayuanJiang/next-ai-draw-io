@@ -74,9 +74,9 @@ const CORS_HEADERS = {
 }
 
 /**
- * Create standardized JSON response with CORS headers
+ * Create standardized response with CORS headers
  */
-function jsonResponse(body: any, status = 200, extraHeaders = {}): Response {
+function createResponse(body: any, status = 200, extraHeaders = {}): Response {
     return new Response(JSON.stringify(body), {
         status,
         headers: {
@@ -85,49 +85,6 @@ function jsonResponse(body: any, status = 200, extraHeaders = {}): Response {
             ...extraHeaders,
         },
     })
-}
-
-/**
- * Create standardized error response with proper HTTP status code
- * For AI SDK compatibility, we throw the error in OpenAI format
- */
-function errorResponse(
-    message: string,
-    type:
-        | "invalid_request_error"
-        | "rate_limit_error"
-        | "api_error"
-        | "server_error" = "api_error",
-    details?: string,
-): Response {
-    // Map error type to HTTP status code
-    const statusMap: Record<string, number> = {
-        invalid_request_error: 400,
-        rate_limit_error: 429,
-        api_error: 500,
-        server_error: 500,
-    }
-    const status = statusMap[type] || 500
-
-    // Return OpenAI-compatible error format
-    return new Response(
-        JSON.stringify({
-            error: {
-                message,
-                type,
-                param: null,
-                code: type,
-                ...(details && { details }),
-            },
-        }),
-        {
-            status,
-            headers: {
-                "Content-Type": "application/json",
-                ...CORS_HEADERS,
-            },
-        },
-    )
 }
 
 /**
@@ -151,28 +108,36 @@ export async function onRequest({ request, env }: any) {
 
     try {
         const json = await request.clone().json()
-
         const parseResult = messageSchema.safeParse(json)
 
         if (!parseResult.success) {
-            return errorResponse(
-                parseResult.error.message,
-                "invalid_request_error",
+            return createResponse(
+                {
+                    error: {
+                        message: parseResult.error.message,
+                        type: "invalid_request_error",
+                    },
+                },
+                400,
             )
         }
 
         const { messages, model, stream, tools, tool_choice, ...extraParams } =
             parseResult.data
-        const isStream = stream ?? true
 
         // Validate messages
         const userMessages = messages.filter(
             (message) => message.role === "user",
         )
         if (!userMessages.length) {
-            return errorResponse(
-                "No user message found",
-                "invalid_request_error",
+            return createResponse(
+                {
+                    error: {
+                        message: "No user message found",
+                        type: "invalid_request_error",
+                    },
+                },
+                400,
             )
         }
 
@@ -185,35 +150,52 @@ export async function onRequest({ request, env }: any) {
                 ...ALLOWED_MODELS,
                 ...Object.keys(MODEL_ALIASES),
             ]
-            return errorResponse(
-                `Invalid model: ${requestedModel}. Allowed models: ${allowedModelList.join(", ")}`,
-                "invalid_request_error",
+            return createResponse(
+                {
+                    error: {
+                        message: `Invalid model: ${requestedModel}. Allowed models: ${allowedModelList.join(", ")}`,
+                        type: "invalid_request_error",
+                    },
+                },
+                400,
             )
         }
 
         console.log(
-            `[EdgeOne] Model: ${selectedModel}, Tools: ${tools?.length || 0}, Stream: ${isStream}`,
+            `[EdgeOne] Model: ${selectedModel}, Tools: ${tools?.length || 0}, Stream: ${stream ?? true}`,
         )
 
         try {
-            const aiResponse = await AI.chatCompletions({
+            const isStream = stream ?? true
+
+            // Build AI.chatCompletions options
+            const aiOptions: any = {
                 ...extraParams,
                 model: selectedModel,
                 messages,
                 stream: isStream,
-                ...(tools && tools.length > 0 && { tools }),
-                ...(tool_choice !== undefined && { tool_choice }),
-            })
-
-            if (!isStream) {
-                return jsonResponse(aiResponse)
             }
 
+            // Add tools if provided
+            if (tools && tools.length > 0) {
+                aiOptions.tools = tools
+            }
+            if (tool_choice !== undefined) {
+                aiOptions.tool_choice = tool_choice
+            }
+
+            const aiResponse = await AI.chatCompletions(aiOptions)
+
+            // Non-streaming response
+            if (!isStream) {
+                return createResponse(aiResponse)
+            }
+
+            // Streaming response
             return new Response(aiResponse, {
                 headers: {
                     "Content-Type": "text/event-stream; charset=utf-8",
-                    "Cache-Control": "no-cache, no-transform",
-                    "Content-Encoding": "identity",
+                    "Cache-Control": "no-cache",
                     Connection: "keep-alive",
                     ...CORS_HEADERS,
                 },
@@ -223,27 +205,47 @@ export async function onRequest({ request, env }: any) {
             try {
                 const message = JSON.parse(error.message)
                 if (message.code === 14020) {
-                    return errorResponse(
-                        "The daily public quota has been exhausted. After deployment, you can enjoy a personal daily exclusive quota.",
-                        "rate_limit_error",
+                    return createResponse(
+                        {
+                            error: {
+                                message:
+                                    "The daily public quota has been exhausted. After deployment, you can enjoy a personal daily exclusive quota.",
+                                type: "rate_limit_error",
+                            },
+                        },
+                        429,
                     )
                 }
+                return createResponse(
+                    { error: { message: error.message, type: "api_error" } },
+                    500,
+                )
             } catch {
                 // Not a JSON error message
             }
 
             console.error("[EdgeOne] AI error:", error.message)
-            return errorResponse(
-                error.message || "AI service error",
-                "api_error",
+            return createResponse(
+                {
+                    error: {
+                        message: error.message || "AI service error",
+                        type: "api_error",
+                    },
+                },
+                500,
             )
         }
     } catch (error: any) {
         console.error("[EdgeOne] Request error:", error.message)
-        return errorResponse(
-            "Request processing failed",
-            "server_error",
-            error.message,
+        return createResponse(
+            {
+                error: {
+                    message: "Request processing failed",
+                    type: "server_error",
+                    details: error.message,
+                },
+            },
+            500,
         )
     }
 }
