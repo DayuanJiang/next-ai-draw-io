@@ -9,7 +9,9 @@ export type ProviderName =
     | "openrouter"
     | "deepseek"
     | "siliconflow"
+    | "sglang"
     | "gateway"
+    | "doubao"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -78,7 +80,15 @@ export const PROVIDER_INFO: Record<
         label: "SiliconFlow",
         defaultBaseUrl: "https://api.siliconflow.com/v1",
     },
+    sglang: {
+        label: "SGLang",
+        defaultBaseUrl: "http://127.0.0.1:8000/v1",
+    },
     gateway: { label: "AI Gateway" },
+    doubao: {
+        label: "Doubao (ByteDance)",
+        defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    },
 }
 
 // Suggested models per provider for quick add
@@ -198,12 +208,25 @@ export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
         "Qwen/Qwen2.5-7B-Instruct",
         "Qwen/Qwen2-VL-72B-Instruct",
     ],
+    sglang: [
+        // SGLang is OpenAI-compatible, models depend on deployment
+        "default",
+    ],
     gateway: [
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
         "anthropic/claude-sonnet-4-5",
         "anthropic/claude-3-5-sonnet",
         "google/gemini-2.0-flash",
+    ],
+    doubao: [
+        // ByteDance Doubao models
+        "doubao-1.5-thinking-pro-250415",
+        "doubao-1.5-thinking-pro-m-250428",
+        "doubao-1.5-pro-32k-250115",
+        "doubao-1.5-pro-256k-250115",
+        "doubao-pro-32k-241215",
+        "doubao-pro-256k-241215",
     ],
 }
 
