@@ -195,7 +195,8 @@ export async function onRequest({ request, env }: any) {
             return new Response(aiResponse, {
                 headers: {
                     "Content-Type": "text/event-stream; charset=utf-8",
-                    "Cache-Control": "no-cache",
+                    "Cache-Control": "no-cache, no-store, no-transform",
+                    "X-Accel-Buffering": "no",
                     Connection: "keep-alive",
                     ...CORS_HEADERS,
                 },

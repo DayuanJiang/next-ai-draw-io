@@ -719,10 +719,6 @@ export default function ChatPanel({
             {
                 body: { xml, previousXml, sessionId },
                 headers: {
-                    // Disable compression for EdgeOne SSE streaming (CDN adds br compression otherwise)
-                    ...(config.aiProvider === "edgeone" && {
-                        "Accept-Encoding": "identity",
-                    }),
                     "x-access-code": config.accessCode,
                     ...(config.aiProvider && {
                         "x-ai-provider": config.aiProvider,
