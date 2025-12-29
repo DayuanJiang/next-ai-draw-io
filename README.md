@@ -19,6 +19,7 @@ English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
+> Note: Thanks to [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) sponsorship, the demo site now uses the powerful K2-thinking model!
 
 
 https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
@@ -38,6 +39,7 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
     - [Run with Docker (Recommended)](#run-with-docker-recommended)
     - [Installation](#installation)
   - [Deployment](#deployment)
+  - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
   - [Multi-Provider Support](#multi-provider-support)
   - [How It Works](#how-it-works)
   - [Project Structure](#project-structure)
@@ -133,7 +135,7 @@ No installation needed! Try the app directly on our demo site:
 
 [![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> Note: Thanks to [ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) sponsorship, the demo site now uses the powerful K2-thinking model! For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
+
 
 > **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
 

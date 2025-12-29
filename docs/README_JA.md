@@ -19,6 +19,8 @@
 
 AI機能とdraw.ioダイアグラムを統合したNext.jsウェブアプリケーションです。自然言語コマンドとAI支援の可視化により、ダイアグラムを作成、修正、強化できます。
 
+> 注：[ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) のご支援により、デモサイトに強力な K2-thinking モデルを導入しました！
+
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## 目次
@@ -126,8 +128,6 @@ Claudeにダイアグラムの作成を依頼：
 インストール不要！デモサイトで直接お試しください：
 
 [![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
-
-> 注意：[ByteDance Doubao](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)のスポンサーシップにより、デモサイトでは強力なK2-thinkingモデルを使用しています！最高の結果を得るには、Claude Sonnet 4.5 または Claude Opus 4.5 でのセルフホスティングをお勧めします。
 
 > **自分のAPIキーを使用**：自分のAPIキーを使用することで、デモサイトの利用制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。キーはブラウザのローカルに保存され、サーバーには保存されません。
 
