@@ -226,12 +226,19 @@ export async function POST(req: Request) {
             }
 
             case "edgeone": {
-                // EdgeOne is a built-in provider running on EdgeOne Pages edge functions
-                // Skip validation - it's always available when deployed to EdgeOne Pages
-                return NextResponse.json({
-                    valid: true,
-                    responseTime: 0,
+                if (!baseUrl) {
+                    return NextResponse.json(
+                        { valid: false, error: "EdgeOne requires a base URL" },
+                        { status: 400 },
+                    )
+                }
+
+                const edgeone = createOpenAI({
+                    apiKey: apiKey || "edgeone",
+                    baseURL: baseUrl,
                 })
+                model = edgeone.chat(modelId)
+                break
             }
 
             case "sglang": {
