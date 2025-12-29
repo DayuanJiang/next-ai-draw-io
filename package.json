@@ -86,10 +86,12 @@
         "tailwind-merge": "^3.0.2",
         "tailwindcss-animate": "^1.0.7",
         "unpdf": "^1.4.0",
-        "zod": "^4.1.12",
+        "zod": "^4.1.12"
+    },
+    "optionalDependencies": {
         "lightningcss": "^1.30.2",
         "lightningcss-linux-x64-gnu": "^1.30.2",
-        "@tailwindcss/oxide-linux-x64-gnu": "^4.1.11"
+        "@tailwindcss/oxide-linux-x64-gnu": "^4.1.18"
     },
     "lint-staged": {
         "*.{js,ts,jsx,tsx,json,css}": [
