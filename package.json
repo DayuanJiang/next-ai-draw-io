@@ -86,7 +86,8 @@
         "tailwind-merge": "^3.0.2",
         "tailwindcss-animate": "^1.0.7",
         "unpdf": "^1.4.0",
-        "zod": "^4.1.12"
+        "zod": "^4.1.12",
+        "lightningcss": "^1.30.2"
     },
     "lint-staged": {
         "*.{js,ts,jsx,tsx,json,css}": [
@@ -112,7 +113,6 @@
         "eslint": "9.39.2",
         "eslint-config-next": "16.1.1",
         "husky": "^9.1.7",
-        "lightningcss": "^1.30.2",
         "lint-staged": "^16.2.7",
         "shx": "^0.4.0",
         "tailwindcss": "^4",
