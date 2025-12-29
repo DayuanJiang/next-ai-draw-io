@@ -134,11 +134,13 @@ const DEV_XML_PRESETS: Record<string, string> = {
 interface DevXmlSimulatorProps {
     setMessages: React.Dispatch<React.SetStateAction<any[]>>
     onDisplayChart: (xml: string) => void
+    onShowQuotaToast?: () => void
 }
 
 export function DevXmlSimulator({
     setMessages,
     onDisplayChart,
+    onShowQuotaToast,
 }: DevXmlSimulatorProps) {
     const [devXml, setDevXml] = useState("")
     const [isSimulating, setIsSimulating] = useState(false)
@@ -340,6 +342,15 @@ export function DevXmlSimulator({
                                 className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
                             >
                                 Stop
+                            </button>
+                        )}
+                        {onShowQuotaToast && (
+                            <button
+                                type="button"
+                                onClick={onShowQuotaToast}
+                                className="px-3 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
+                            >
+                                Test Quota Toast
                             </button>
                         )}
                     </div>
