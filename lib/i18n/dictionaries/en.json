@@ -18,8 +18,7 @@
         "settings": "Settings",
         "hidePanel": "Hide chat panel (Ctrl+B)",
         "showPanel": "Show chat panel (Ctrl+B)",
-        "aiChat": "AI Chat",
-        "sponsorTooltip": "Sponsored by ByteDance Doubao K2-thinking. See About page for details."
+        "aiChat": "AI Chat"
     },
     "providers": {
         "useServerDefault": "Use Server Default",

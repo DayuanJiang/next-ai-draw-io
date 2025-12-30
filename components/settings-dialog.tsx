@@ -395,13 +395,13 @@ function SettingsContent({
                         <>
                             <span className="text-muted-foreground">·</span>
                             <a
-                                href="/about"
+                                href={`/${currentLang}/about${currentLang === "zh" ? "/cn" : currentLang === "ja" ? "/ja" : ""}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                             >
                                 <Info className="h-3 w-3" />
-                                About
+                                {dict.nav.about}
                             </a>
                         </>
                     )}

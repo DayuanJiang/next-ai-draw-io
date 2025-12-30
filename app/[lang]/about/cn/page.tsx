@@ -72,28 +72,6 @@ export default function AboutCN() {
                         <p className="text-xl text-gray-600 font-medium">
                             AI驱动的图表创建工具 - 对话、绘制、可视化
                         </p>
-                        <div className="flex justify-center gap-4 mt-4 text-sm">
-                            <Link
-                                href="/about"
-                                className="text-gray-600 hover:text-blue-600"
-                            >
-                                English
-                            </Link>
-                            <span className="text-gray-400">|</span>
-                            <Link
-                                href="/about/cn"
-                                className="text-blue-600 font-semibold"
-                            >
-                                中文
-                            </Link>
-                            <span className="text-gray-400">|</span>
-                            <Link
-                                href="/about/ja"
-                                className="text-gray-600 hover:text-blue-600"
-                            >
-                                日本語
-                            </Link>
-                        </div>
                     </div>
 
                     <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">

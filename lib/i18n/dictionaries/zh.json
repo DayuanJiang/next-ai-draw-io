@@ -18,8 +18,7 @@
         "settings": "设置",
         "hidePanel": "隐藏聊天面板 (Ctrl+B)",
         "showPanel": "显示聊天面板 (Ctrl+B)",
-        "aiChat": "AI 聊天",
-        "sponsorTooltip": "由字节跳动豆包 K2-thinking 赞助。详情请参阅关于页面。"
+        "aiChat": "AI 聊天"
     },
     "providers": {
         "useServerDefault": "使用服务器默认值",
