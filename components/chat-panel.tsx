@@ -1261,17 +1261,17 @@ Continue from EXACTLY where you stopped.`,
                                 alt="Next AI Drawio"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
-                                className="rounded flex-shrink-0"
-                            />
+                                className="rounded"
+                            />*/}
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
                             >
                                 Designer Agent
                             </h1>
                         </div>
-                        {!isMobile &&
-                            process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE ===
-                                "true" && (
+                        {/* Hidden for now
+                        {!isMobile && (
+                            <>
                                 <Link
                                     href="/about"
                                     target="_blank"
@@ -1299,9 +1299,10 @@ Continue from EXACTLY where you stopped.`,
                                     </ButtonWithTooltip>
                                 </Link>
                             )}
+                        */}
                     </div>
-                    <div className="flex items-center gap-1 justify-end overflow-visible">
-                        <ButtonWithTooltip
+                    <div className="flex items-center gap-1">
+                        {/* <ButtonWithTooltip
                             tooltipContent={dict.nav.newChat}
                             variant="ghost"
                             size="icon"
@@ -1329,7 +1330,6 @@ Continue from EXACTLY where you stopped.`,
                             </TooltipTrigger>
                             <TooltipContent>{dict.nav.github}</TooltipContent>
                         </Tooltip>
-
                         <ButtonWithTooltip
                             tooltipContent={dict.nav.settings}
                             variant="ghost"
@@ -1340,7 +1340,7 @@ Continue from EXACTLY where you stopped.`,
                             <Settings
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
-                        </ButtonWithTooltip>
+                        </ButtonWithTooltip> */}
                         <div className="hidden sm:flex items-center gap-2">
                             {!isMobile && (
                                 <ButtonWithTooltip

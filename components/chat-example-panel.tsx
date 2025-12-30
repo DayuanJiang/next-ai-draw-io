@@ -122,7 +122,7 @@ export default function ExamplePanel({
     return (
         <div className="py-6 px-2 animate-fade-in">
             {/* MCP Server Notice */}
-            <a
+            {/*<a
                 href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -146,7 +146,7 @@ export default function ExamplePanel({
                         </p>
                     </div>
                 </div>
-            </a>
+            </a> */}
 
             {/* Welcome section */}
             <div className="text-center mb-6">
