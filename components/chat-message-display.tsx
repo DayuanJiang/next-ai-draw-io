@@ -230,6 +230,12 @@ export function ChatMessageDisplay({
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {},
     )
+    const [copiedToolCallId, setCopiedToolCallId] = useState<string | null>(
+        null,
+    )
+    const [copyFailedToolCallId, setCopyFailedToolCallId] = useState<
+        string | null
+    >(null)
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
     const [copyFailedMessageId, setCopyFailedMessageId] = useState<
         string | null
@@ -245,12 +251,38 @@ export function ChatMessageDisplay({
         Record<string, boolean>
     >({})
 
-    const copyMessageToClipboard = async (messageId: string, text: string) => {
+    const setCopyState = (
+        messageId: string,
+        isToolCall: boolean,
+        isSuccess: boolean,
+    ) => {
+        if (isSuccess) {
+            if (isToolCall) {
+                setCopiedToolCallId(messageId)
+                setTimeout(() => setCopiedToolCallId(null), 2000)
+            } else {
+                setCopiedMessageId(messageId)
+                setTimeout(() => setCopiedMessageId(null), 2000)
+            }
+        } else {
+            if (isToolCall) {
+                setCopyFailedToolCallId(messageId)
+                setTimeout(() => setCopyFailedToolCallId(null), 2000)
+            } else {
+                setCopyFailedMessageId(messageId)
+                setTimeout(() => setCopyFailedMessageId(null), 2000)
+            }
+        }
+    }
+
+    const copyMessageToClipboard = async (
+        messageId: string,
+        text: string,
+        isToolCall = false,
+    ) => {
         try {
             await navigator.clipboard.writeText(text)
-
-            setCopiedMessageId(messageId)
-            setTimeout(() => setCopiedMessageId(null), 2000)
+            setCopyState(messageId, isToolCall, true)
         } catch (err) {
             // Fallback for non-secure contexts (HTTP) or permission denied
             const textarea = document.createElement("textarea")
@@ -266,13 +298,11 @@ export function ChatMessageDisplay({
                 if (!success) {
                     throw new Error("Copy command failed")
                 }
-                setCopiedMessageId(messageId)
-                setTimeout(() => setCopiedMessageId(null), 2000)
+                setCopyState(messageId, isToolCall, true)
             } catch (fallbackErr) {
                 console.error("Failed to copy message:", fallbackErr)
                 toast.error(dict.chat.failedToCopyDetail)
-                setCopyFailedMessageId(messageId)
-                setTimeout(() => setCopyFailedMessageId(null), 2000)
+                setCopyState(messageId, isToolCall, false)
             } finally {
                 document.body.removeChild(textarea)
             }
@@ -641,6 +671,7 @@ export function ChatMessageDisplay({
         const { state, input, output } = part
         const isExpanded = expandedTools[callId] ?? true
         const toolName = part.type?.replace("tool-", "")
+        const isCopied = copiedToolCallId === callId
 
         const toggleExpanded = () => {
             setExpandedTools((prev) => ({
@@ -659,6 +690,35 @@ export function ChatMessageDisplay({
                     return "Get Shape Library"
                 default:
                     return name
+            }
+        }
+
+        const handleCopy = () => {
+            let textToCopy = ""
+
+            if (input && typeof input === "object") {
+                if (input.xml) {
+                    textToCopy = input.xml
+                } else if (
+                    input.operations &&
+                    Array.isArray(input.operations)
+                ) {
+                    textToCopy = JSON.stringify(input.operations, null, 2)
+                } else if (Object.keys(input).length > 0) {
+                    textToCopy = JSON.stringify(input, null, 2)
+                }
+            }
+
+            if (
+                output &&
+                toolName === "get_shape_library" &&
+                typeof output === "string"
+            ) {
+                textToCopy = output
+            }
+
+            if (textToCopy) {
+                copyMessageToClipboard(callId, textToCopy, true)
             }
         }
 
@@ -681,9 +741,32 @@ export function ChatMessageDisplay({
                             <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         )}
                         {state === "output-available" && (
-                            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                Complete
-                            </span>
+                            <>
+                                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                    {dict.tools.complete}
+                                </span>
+                                {isExpanded && (
+                                    <button
+                                        type="button"
+                                        onClick={handleCopy}
+                                        className="p-1 rounded hover:bg-muted transition-colors"
+                                        title={
+                                            copiedToolCallId === callId
+                                                ? dict.chat.copied
+                                                : copyFailedToolCallId ===
+                                                    callId
+                                                  ? dict.chat.failedToCopy
+                                                  : dict.chat.copyResponse
+                                        }
+                                    >
+                                        {isCopied ? (
+                                            <Check className="w-4 h-4 text-green-600" />
+                                        ) : (
+                                            <Copy className="w-4 h-4 text-muted-foreground" />
+                                        )}
+                                    </button>
+                                )}
+                            </>
                         )}
                         {state === "output-error" &&
                             (() => {
