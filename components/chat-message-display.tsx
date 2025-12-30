@@ -251,14 +251,12 @@ export function ChatMessageDisplay({
         Record<string, boolean>
     >({})
 
-    const copyMessageToClipboard = async (
+    const setCopyState = (
         messageId: string,
-        text: string,
-        isToolCall = false,
+        isToolCall: boolean,
+        isSuccess: boolean,
     ) => {
-        try {
-            await navigator.clipboard.writeText(text)
-
+        if (isSuccess) {
             if (isToolCall) {
                 setCopiedToolCallId(messageId)
                 setTimeout(() => setCopiedToolCallId(null), 2000)
@@ -266,6 +264,25 @@ export function ChatMessageDisplay({
                 setCopiedMessageId(messageId)
                 setTimeout(() => setCopiedMessageId(null), 2000)
             }
+        } else {
+            if (isToolCall) {
+                setCopyFailedToolCallId(messageId)
+                setTimeout(() => setCopyFailedToolCallId(null), 2000)
+            } else {
+                setCopyFailedMessageId(messageId)
+                setTimeout(() => setCopyFailedMessageId(null), 2000)
+            }
+        }
+    }
+
+    const copyMessageToClipboard = async (
+        messageId: string,
+        text: string,
+        isToolCall = false,
+    ) => {
+        try {
+            await navigator.clipboard.writeText(text)
+            setCopyState(messageId, isToolCall, true)
         } catch (err) {
             // Fallback for non-secure contexts (HTTP) or permission denied
             const textarea = document.createElement("textarea")
@@ -281,23 +298,11 @@ export function ChatMessageDisplay({
                 if (!success) {
                     throw new Error("Copy command failed")
                 }
-                if (isToolCall) {
-                    setCopiedToolCallId(messageId)
-                    setTimeout(() => setCopiedToolCallId(null), 2000)
-                } else {
-                    setCopiedMessageId(messageId)
-                    setTimeout(() => setCopiedMessageId(null), 2000)
-                }
+                setCopyState(messageId, isToolCall, true)
             } catch (fallbackErr) {
                 console.error("Failed to copy message:", fallbackErr)
                 toast.error(dict.chat.failedToCopyDetail)
-                if (isToolCall) {
-                    setCopyFailedToolCallId(messageId)
-                    setTimeout(() => setCopyFailedToolCallId(null), 2000)
-                } else {
-                    setCopyFailedMessageId(messageId)
-                    setTimeout(() => setCopyFailedMessageId(null), 2000)
-                }
+                setCopyState(messageId, isToolCall, false)
             } finally {
                 document.body.removeChild(textarea)
             }
