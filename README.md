@@ -4,7 +4,7 @@
 
 **AI-Powered Diagram Creation Tool - Chat, Draw, Visualize**
 
-English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
+English | [中文](./docs/cn/README_CN.md) | [日本語](./docs/ja/README_JA.md)
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
@@ -161,7 +161,7 @@ npm install
 cp env.example .env.local
 ```
 
-See the [Provider Configuration Guide](./docs/ai-providers.md) for detailed setup instructions for each provider.
+See the [Provider Configuration Guide](./docs/en/ai-providers.md) for detailed setup instructions for each provider.
 
 2. Run the development server:
 
@@ -195,7 +195,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 
 ### Deploy on Cloudflare Workers
 
-[Go to Cloudflare Deploy Guide](./docs/Cloudflare_Deploy.md)
+[Go to Cloudflare Deploy Guide](./docs/en/cloudflare-deploy.md)
 
 
 
@@ -215,7 +215,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 
 All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
-📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
+📖 **[Detailed Provider Configuration Guide](./docs/en/ai-providers.md)** - See setup instructions for each provider.
 
 **Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-5.1, Gemini 3 Pro, and DeepSeek V3.2/R1.
 
