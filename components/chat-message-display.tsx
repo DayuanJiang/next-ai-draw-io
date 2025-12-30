@@ -234,7 +234,27 @@ export function ChatMessageDisplay({
     const [copyFailedMessageId, setCopyFailedMessageId] = useState<
         string | null
     >(null)
-    const [feedback, setFeedback] = useState<Record<string, "good" | "bad">>({})
+    const STORAGE_FEEDBACK_KEY = "next-ai-draw-io-feedback"
+    const [feedback, setFeedback] = useState<Record<string, "good" | "bad">>(
+        () => {
+            if (typeof window !== "undefined") {
+                const saved = localStorage.getItem(STORAGE_FEEDBACK_KEY)
+                if (saved) {
+                    try {
+                        return JSON.parse(saved)
+                    } catch {
+                        return {}
+                    }
+                }
+            }
+            return {}
+        },
+    )
+    useEffect(() => {
+        if (Object.keys(feedback).length > 0) {
+            localStorage.setItem(STORAGE_FEEDBACK_KEY, JSON.stringify(feedback))
+        }
+    }, [feedback])
     const [editingMessageId, setEditingMessageId] = useState<string | null>(
         null,
     )
