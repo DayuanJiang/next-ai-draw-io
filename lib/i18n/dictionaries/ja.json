@@ -18,8 +18,7 @@
         "settings": "設定",
         "hidePanel": "チャットパネルを非表示 (Ctrl+B)",
         "showPanel": "チャットパネルを表示 (Ctrl+B)",
-        "aiChat": "AI チャット",
-        "sponsorTooltip": "ByteDance Doubao K2-thinking によるスポンサー。詳細は概要ページをご覧ください。"
+        "aiChat": "AI チャット"
     },
     "providers": {
         "useServerDefault": "サーバーデフォルトを使用",
