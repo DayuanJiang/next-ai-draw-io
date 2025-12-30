@@ -90,7 +90,7 @@ Use the standard MCP configuration with:
 - **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
 - **Edit Support**: Modify existing diagrams with natural language instructions
 - **Export**: Save diagrams as `.drawio` files
-- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from embed.diagrams.net)
+- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from `embed.diagrams.net` by default, configurable via `DRAWIO_BASE_URL`)
 
 ## Available Tools
 
@@ -130,6 +130,33 @@ Use the standard MCP configuration with:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `6002` | Port for the embedded HTTP server |
+| `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for the draw.io embed. Set this to use a self-hosted draw.io instance for private deployments. |
+
+### Private Deployment (Self-hosted draw.io)
+
+For security-sensitive environments that require private deployment of draw.io:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"],
+      "env": { 
+        "DRAWIO_BASE_URL": "https://drawio.your-company.com"
+      }
+    }
+  }
+}
+```
+
+You can deploy your own draw.io instance using the official Docker image:
+
+```bash
+docker run -d -p 8080:8080 jgraph/drawio
+```
+
+Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL).
 
 ## Troubleshooting
 

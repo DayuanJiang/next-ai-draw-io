@@ -13,6 +13,10 @@ import {
 } from "./history.js"
 import { log } from "./logger.js"
 
+// Configurable draw.io embed URL for private deployments
+const DRAWIO_BASE_URL =
+    process.env.DRAWIO_BASE_URL || "https://embed.diagrams.net"
+
 interface SessionState {
     xml: string
     version: number
@@ -398,7 +402,7 @@ function getHtmlPage(sessionId: string): string {
             </div>
             <div id="status" class="status disconnected">Connecting...</div>
         </div>
-        <iframe id="drawio" src="https://embed.diagrams.net/?embed=1&proto=json&spin=1&libraries=1"></iframe>
+        <iframe id="drawio" src="${DRAWIO_BASE_URL}/?embed=1&proto=json&spin=1&libraries=1"></iframe>
     </div>
     <button id="history-btn" title="History" ${sessionId ? "" : "disabled"}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -428,7 +432,7 @@ function getHtmlPage(sessionId: string): string {
         let pendingAiSvg = false;
 
         window.addEventListener('message', (e) => {
-            if (e.origin !== 'https://embed.diagrams.net') return;
+            if (e.origin !== '${DRAWIO_BASE_URL}') return;
             try {
                 const msg = JSON.parse(e.data);
                 if (msg.event === 'init') {
