@@ -36,14 +36,14 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
     - [Desktop Application](#desktop-application)
-    - [Run with Docker (Recommended)](#run-with-docker-recommended)
+    - [Run with Docker](#run-with-docker)
     - [Installation](#installation)
   - [Deployment](#deployment)
+    - [Deploy to EdgeOne Pages](#deploy-to-edgeone-pages)
     - [Deploy on Vercel (Recommended)](#deploy-on-vercel-recommended)
     - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
   - [Multi-Provider Support](#multi-provider-support)
   - [How It Works](#how-it-works)
-  - [Project Structure](#project-structure)
   - [Support \& Contact](#support--contact)
   - [Star History](#star-history)
 
@@ -144,53 +144,11 @@ No installation needed! Try the app directly on our demo site:
 
 Download the native desktop app for your platform from the [Releases page](https://github.com/DayuanJiang/next-ai-draw-io/releases):
 
-| Platform | Download |
-|----------|----------|
-| macOS | `.dmg` (Intel & Apple Silicon) |
-| Windows | `.exe` installer (x64 & ARM64) |
-| Linux | `.AppImage` or `.deb` (x64 & ARM64) |
+Supported platforms: Windows, macOS, Linux.
 
-**Features:**
-- **Secure API key storage**: Credentials encrypted using OS keychain
-- **Configuration presets**: Save and switch between AI providers via menu
-- **Native file dialogs**: Open/save `.drawio` files directly
-- **Offline capable**: Works without internet after first launch
+### Run with Docker
 
-**Quick Setup:**
-1. Download and install for your platform
-2. Open the app → **Menu → Configuration → Manage Presets**
-3. Add your AI provider credentials
-4. Start creating diagrams!
-
-### Run with Docker (Recommended)
-
-If you just want to run it locally, the best way is to use Docker.
-
-First, install Docker if you haven't already: [Get Docker](https://docs.docker.com/get-docker/)
-
-Then run:
-
-```bash
-docker run -d -p 3000:3000 \
-  -e AI_PROVIDER=openai \
-  -e AI_MODEL=gpt-4o \
-  -e OPENAI_API_KEY=your_api_key \
-  ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-Or use an env file:
-
-```bash
-cp env.example .env
-# Edit .env with your configuration
-docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
-
-> **Offline Deployment:** If `embed.diagrams.net` is blocked, see [Offline Deployment](./docs/offline-deployment.md) for configuration options.
+[Go to Docker Guide](./docs/en/docker.md)
 
 ### Installation
 
@@ -199,41 +157,19 @@ Replace the environment variables with your preferred AI provider configuration.
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-```
-
-2. Install dependencies:
-
-```bash
 npm install
-```
-
-3. Configure your AI provider:
-
-Create a `.env.local` file in the root directory:
-
-```bash
 cp env.example .env.local
 ```
 
-Edit `.env.local` and configure your chosen provider:
-
--   Set `AI_PROVIDER` to your chosen provider (doubao,bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
--   Set `AI_MODEL` to the specific model you want to use
--   Add the required API keys for your provider
--   `TEMPERATURE`: Optional temperature setting (e.g., `0` for deterministic output). Leave unset for models that don't support it (e.g., reasoning models).
--   `ACCESS_CODE_LIST`: Optional access password(s), can be comma-separated for multiple passwords.
-
-> Warning: If you do not set `ACCESS_CODE_LIST`, anyone can access your deployed site directly, which may lead to rapid depletion of your token. It is recommended to set this option.
-
 See the [Provider Configuration Guide](./docs/ai-providers.md) for detailed setup instructions for each provider.
 
-4. Run the development server:
+2. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+3. Open [http://localhost:6002](http://localhost:6002) in your browser to see the application.
 
 ## Deployment
 
@@ -296,24 +232,6 @@ The application uses the following technologies:
 
 Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
 
-## Project Structure
-
-```
-app/                  # Next.js App Router
-  api/chat/           # Chat API endpoint with AI tools
-  page.tsx            # Main page with DrawIO embed
-components/           # React components
-  chat-panel.tsx      # Chat interface with diagram control
-  chat-input.tsx      # User input component with file upload
-  history-dialog.tsx  # Diagram version history viewer
-  ui/                 # UI components (buttons, cards, etc.)
-contexts/             # React context providers
-  diagram-context.tsx # Global diagram state management
-lib/                  # Utility functions and helpers
-  ai-providers.ts     # Multi-provider AI configuration
-  utils.ts            # XML processing and conversion utilities
-public/               # Static assets including example images
-```
 
 ## Support & Contact
 
