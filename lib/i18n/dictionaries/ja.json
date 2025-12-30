@@ -18,7 +18,8 @@
         "settings": "設定",
         "hidePanel": "チャットパネルを非表示 (Ctrl+B)",
         "showPanel": "チャットパネルを表示 (Ctrl+B)",
-        "aiChat": "AI チャット"
+        "aiChat": "AI チャット",
+        "sponsorTooltip": "ByteDance Doubao K2-thinking によるスポンサー。詳細は概要ページをご覧ください。"
     },
     "providers": {
         "useServerDefault": "サーバーデフォルトを使用",
@@ -46,6 +47,7 @@
         "copyResponse": "応答をコピー",
         "copied": "コピーしました！",
         "failedToCopy": "コピーに失敗しました",
+        "failedToCopyDetail": "メッセージのコピーに失敗しました。手動でコピーするか、クリップボードの権限を確認してください。",
         "goodResponse": "良い応答",
         "badResponse": "悪い応答",
         "clickToEdit": "クリックして編集",
@@ -141,6 +143,7 @@
         "invalidAccessCode": "無効または欠落したアクセスコード。設定で入力してください。",
         "networkError": "ネットワークエラー。接続を確認してください。",
         "retryLimit": "自動再試行制限に達しました（{max}）。手動で再試行してください。",
+        "continuationRetryLimit": "継続再試行制限に達しました（{max}）。ダイアグラムが複雑すぎる可能性があります。",
         "validationFailed": "ダイアグラムの検証に失敗しました。再生成してみてください。",
         "malformedXml": "AI が無効なダイアグラム XML を生成しました。再生成してみてください。",
         "failedToProcess": "ダイアグラムの処理に失敗しました。再生成してみてください。",
@@ -149,7 +152,9 @@
         "failedToRestore": "localStorage からの復元に失敗しました",
         "failedToPersist": "アンロード前の状態の永続化に失敗しました",
         "failedToExport": "チャートデータの取得エラー",
-        "failedToLoadExample": "例の画像の読み込みエラー"
+        "failedToLoadExample": "例の画像の読み込みエラー",
+        "failedToRecordFeedback": "フィードバックの記録に失敗しました。もう一度お試しください。",
+        "storageUpdateFailed": "チャットはクリアされましたが、ブラウザストレージを更新できませんでした"
     },
     "quota": {
         "dailyLimit": "1日の割当量に達しました",
@@ -185,6 +190,21 @@
         "thinking": "考え中...",
         "thoughtFor": "{duration} 秒考えました",
         "thoughtBrief": "数秒考えました"
+    },
+    "dev": {
+        "title": "開発：XMLストリーミングシミュレーター",
+        "preset": "プリセット：",
+        "selectPreset": "プリセットを選択...",
+        "clear": "クリア",
+        "placeholder": "ここに mxCell XML を貼り付けるか、プリセットを選択...",
+        "interval": "間隔：",
+        "chars": "文字：",
+        "streaming": "ストリーミング中...",
+        "simulate": "シミュレート",
+        "stop": "停止",
+        "testQuotaToast": "クォータトーストをテスト",
+        "simulatingMessage": "[開発] XMLストリーミングをシミュレート中",
+        "successMessage": "ダイアグラムの表示に成功しました。"
     },
     "about": {
         "modelChange": "モデル変更と利用制限について",
