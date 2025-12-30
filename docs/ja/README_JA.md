@@ -4,7 +4,7 @@
 
 **AI搭載のダイアグラム作成ツール - チャット、描画、可視化**
 
-[English](../README.md) | [中文](./README_CN.md) | 日本語
+[English](../../README.md) | [中文](../cn/README_CN.md) | 日本語
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
@@ -13,7 +13,7 @@
 [![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
 </div>
 
@@ -29,14 +29,18 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [例](#例)
   - [機能](#機能)
   - [MCPサーバー（プレビュー）](#mcpサーバープレビュー)
+    - [Claude Code CLI](#claude-code-cli)
   - [はじめに](#はじめに)
     - [オンラインで試す](#オンラインで試す)
-    - [Dockerで実行（推奨）](#dockerで実行推奨)
+    - [デスクトップアプリケーション](#デスクトップアプリケーション)
+    - [Dockerで実行](#dockerで実行)
     - [インストール](#インストール)
   - [デプロイ](#デプロイ)
+    - [EdgeOne Pagesへのデプロイ](#edgeone-pagesへのデプロイ)
+    - [Vercelへのデプロイ（推奨）](#vercelへのデプロイ推奨)
+    - [Cloudflare Workersへのデプロイ](#cloudflare-workersへのデプロイ)
   - [マルチプロバイダーサポート](#マルチプロバイダーサポート)
   - [仕組み](#仕組み)
-  - [プロジェクト構造](#プロジェクト構造)
   - [サポート＆お問い合わせ](#サポートお問い合わせ)
   - [スター履歴](#スター履歴)
 
@@ -50,31 +54,31 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
     <td colspan="2" valign="top" align="center">
       <strong>アニメーションTransformerコネクタ</strong><br />
       <p><strong>プロンプト：</strong> **アニメーションコネクタ**付きのTransformerアーキテクチャ図を作成してください。</p>
-      <img src="../public/animated_connectors.svg" alt="アニメーションコネクタ付きTransformerアーキテクチャ" width="480" />
+      <img src="../../public/animated_connectors.svg" alt="アニメーションコネクタ付きTransformerアーキテクチャ" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>GCPアーキテクチャ図</strong><br />
       <p><strong>プロンプト：</strong> **GCPアイコン**を使用してGCPアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../public/gcp_demo.svg" alt="GCPアーキテクチャ図" width="480" />
+      <img src="../../public/gcp_demo.svg" alt="GCPアーキテクチャ図" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>AWSアーキテクチャ図</strong><br />
       <p><strong>プロンプト：</strong> **AWSアイコン**を使用してAWSアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../public/aws_demo.svg" alt="AWSアーキテクチャ図" width="480" />
+      <img src="../../public/aws_demo.svg" alt="AWSアーキテクチャ図" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>Azureアーキテクチャ図</strong><br />
       <p><strong>プロンプト：</strong> **Azureアイコン**を使用してAzureアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../public/azure_demo.svg" alt="Azureアーキテクチャ図" width="480" />
+      <img src="../../public/azure_demo.svg" alt="Azureアーキテクチャ図" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>猫のスケッチ</strong><br />
       <p><strong>プロンプト：</strong> かわいい猫を描いてください。</p>
-      <img src="../public/cat_demo.svg" alt="猫の絵" width="240" />
+      <img src="../../public/cat_demo.svg" alt="猫の絵" width="240" />
     </td>
   </tr>
 </table>
@@ -93,7 +97,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## MCPサーバー（プレビュー）
 
-> **プレビュー機能**：この機能は実験的であり、変更される可能性があります。
+> **プレビュー機能**：この機能は実験的であり、安定しない可能性があります。
 
 MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 
@@ -119,7 +123,7 @@ Claudeにダイアグラムの作成を依頼：
 
 ダイアグラムがリアルタイムでブラウザに表示されます！
 
-詳細は[MCPサーバーREADME](../packages/mcp-server/README.md)をご覧ください（VS Code、Cursorなどのクライアント設定も含む）。
+詳細は[MCPサーバーREADME](../../packages/mcp-server/README.md)をご覧ください（VS Code、Cursorなどのクライアント設定も含む）。
 
 ## はじめに
 
@@ -127,39 +131,19 @@ Claudeにダイアグラムの作成を依頼：
 
 インストール不要！デモサイトで直接お試しください：
 
-[![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
 > **自分のAPIキーを使用**：自分のAPIキーを使用することで、デモサイトの利用制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。キーはブラウザのローカルに保存され、サーバーには保存されません。
 
-### Dockerで実行（推奨）
+### デスクトップアプリケーション
 
-ローカルで実行したいだけなら、Dockerを使用するのが最も簡単です。
+[Releases ページ](https://github.com/DayuanJiang/next-ai-draw-io/releases)からお使いのプラットフォーム用のネイティブデスクトップアプリをダウンロードしてください：
 
-まず、Dockerをインストールしていない場合はインストールしてください：[Dockerを入手](https://docs.docker.com/get-docker/)
+対応プラットフォーム：Windows、macOS、Linux。
 
-次に実行：
+### Dockerで実行
 
-```bash
-docker run -d -p 3000:3000 \
-  -e AI_PROVIDER=openai \
-  -e AI_MODEL=gpt-4o \
-  -e OPENAI_API_KEY=your_api_key \
-  ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-または env ファイルを使用：
-
-```bash
-cp env.example .env
-# .env を編集して設定を入力
-docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-ブラウザで [http://localhost:3000](http://localhost:3000) を開いてください。
-
-環境変数はお好みのAIプロバイダー設定に置き換えてください。利用可能なオプションについては[マルチプロバイダーサポート](#マルチプロバイダーサポート)を参照してください。
-
-> **オフラインデプロイ：** `embed.diagrams.net` がブロックされている場合は、[オフラインデプロイガイド](./offline-deployment.md) で設定オプションをご確認ください。
+[Docker ガイドを参照](./docker.md)
 
 ### インストール
 
@@ -168,41 +152,19 @@ docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:l
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-```
-
-2. 依存関係をインストール：
-
-```bash
 npm install
-```
-
-3. AIプロバイダーを設定：
-
-ルートディレクトリに`.env.local`ファイルを作成：
-
-```bash
 cp env.example .env.local
 ```
 
-`.env.local`を編集して選択したプロバイダーを設定：
-
--   `AI_PROVIDER`を選択したプロバイダーに設定（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, doubao）
--   `AI_MODEL`を使用する特定のモデルに設定
--   プロバイダーに必要なAPIキーを追加
--   `TEMPERATURE`：オプションの温度設定（例：`0`で決定論的な出力）。温度をサポートしないモデル（推論モデルなど）では設定しないでください。
--   `ACCESS_CODE_LIST` アクセスパスワード（オプション）。カンマ区切りで複数のパスワードを指定できます。
-
-> 警告：`ACCESS_CODE_LIST`を設定しない場合、誰でもデプロイされたサイトに直接アクセスできるため、トークンが急速に消費される可能性があります。このオプションを設定することをお勧めします。
-
 詳細な設定手順については[プロバイダー設定ガイド](./ai-providers.md)を参照してください。
 
-4. 開発サーバーを起動：
+2. 開発サーバーを起動：
 
 ```bash
 npm run dev
 ```
 
-5. ブラウザで[http://localhost:3000](http://localhost:3000)を開いてアプリケーションを確認。
+3. ブラウザで[http://localhost:6002](http://localhost:6002)を開いてアプリケーションを確認。
 
 ## デプロイ
 
@@ -218,16 +180,17 @@ npm run dev
 
 また、Tencent EdgeOne Pagesでデプロイすると、[DeepSeekモデルの毎日の無料クォータ](https://pages.edgeone.ai/document/edge-ai)が付与されます。
 
-### Vercelへのデプロイ
+### Vercelへのデプロイ（推奨）
 
-Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成者による[Vercelプラットフォーム](https://vercel.com/new)を使用することです。
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+
+Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成者による[Vercelプラットフォーム](https://vercel.com/new)を使用することです。ローカルの`.env.local`ファイルと同様に、Vercelダッシュボードで**環境変数を設定**してください。
 
 詳細は[Next.jsデプロイメントドキュメント](https://nextjs.org/docs/app/building-your-application/deploying)をご覧ください。
 
-または、このボタンでデプロイできます：
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+### Cloudflare Workersへのデプロイ
 
-ローカルの`.env.local`ファイルと同様に、Vercelダッシュボードで**環境変数を設定**してください。
+[Cloudflare デプロイガイドを参照](./cloudflare-deploy.md)
 
 
 ## マルチプロバイダーサポート
@@ -242,14 +205,16 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   SGLang
+-   Vercel AI Gateway
 
 AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタムエンドポイントをサポートしています。
 
 📖 **[詳細なプロバイダー設定ガイド](./ai-providers.md)** - 各プロバイダーの設定手順をご覧ください。
 
-**モデル要件**：このタスクは厳密なフォーマット制約（draw.io XML）を持つ長文テキスト生成を伴うため、強力なモデル機能が必要です。Claude Sonnet 4.5、GPT-4o、Gemini 2.0、DeepSeek V3/R1を推奨します。
+**モデル要件**：このタスクは厳密なフォーマット制約（draw.io XML）を持つ長文テキスト生成を伴うため、強力なモデル機能が必要です。Claude Sonnet 4.5、GPT-5.1、Gemini 3 Pro、DeepSeek V3.2/R1を推奨します。
 
-注：`claude-sonnet-4-5`はAWSロゴ付きのdraw.ioダイアグラムで学習されているため、AWSアーキテクチャダイアグラムを作成したい場合は最適な選択です。
+注：`claude`シリーズはAWS、Azure、GCPなどのクラウドアーキテクチャロゴ付きのdraw.ioダイアグラムで学習されているため、クラウドアーキテクチャダイアグラムを作成したい場合は最適な選択です。
 
 
 ## 仕組み
@@ -262,24 +227,6 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 ダイアグラムはdraw.ioでレンダリングできるXMLとして表現されます。AIがコマンドを処理し、それに応じてこのXMLを生成または変更します。
 
-## プロジェクト構造
-
-```
-app/                  # Next.js App Router
-  api/chat/           # AIツール付きチャットAPIエンドポイント
-  page.tsx            # DrawIO埋め込み付きメインページ
-components/           # Reactコンポーネント
-  chat-panel.tsx      # ダイアグラム制御付きチャットインターフェース
-  chat-input.tsx      # ファイルアップロード付きユーザー入力コンポーネント
-  history-dialog.tsx  # ダイアグラムバージョン履歴ビューア
-  ui/                 # UIコンポーネント（ボタン、カードなど）
-contexts/             # Reactコンテキストプロバイダー
-  diagram-context.tsx # グローバルダイアグラム状態管理
-lib/                  # ユーティリティ関数とヘルパー
-  ai-providers.ts     # マルチプロバイダーAI設定
-  utils.ts            # XML処理と変換ユーティリティ
-public/               # サンプル画像を含む静的アセット
-```
 
 ## サポート＆お問い合わせ
 

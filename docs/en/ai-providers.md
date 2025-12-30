@@ -85,7 +85,18 @@ Optional custom endpoint (defaults to the recommended domain):
 SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflow.cn/v1
 ```
 
+### SGLang
 
+```bash
+SGLANG_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+Optional custom endpoint:
+
+```bash
+SGLANG_BASE_URL=https://your-custom-endpoint/v1
+```
 
 ### Azure OpenAI
 
@@ -190,7 +201,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
 ```
 
 ## Model Capability Requirements
