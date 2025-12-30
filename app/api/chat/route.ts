@@ -244,9 +244,22 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // === CACHE CHECK END ===
 
     // Read client AI provider overrides from headers
+    const provider = req.headers.get("x-ai-provider")
+    let baseUrl = req.headers.get("x-ai-base-url")
+
+    // For EdgeOne provider, construct full URL from request origin
+    // because createOpenAI needs absolute URL, not relative path
+    if (provider === "edgeone" && !baseUrl) {
+        const origin = req.headers.get("origin") || new URL(req.url).origin
+        baseUrl = `${origin}/api/edgeai`
+    }
+
+    // Get cookie header for EdgeOne authentication (eo_token, eo_time)
+    const cookieHeader = req.headers.get("cookie")
+
     const clientOverrides = {
-        provider: req.headers.get("x-ai-provider"),
-        baseUrl: req.headers.get("x-ai-base-url"),
+        provider,
+        baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
         modelId: req.headers.get("x-ai-model"),
         // AWS Bedrock credentials
@@ -254,6 +267,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
         awsRegion: req.headers.get("x-aws-region"),
         awsSessionToken: req.headers.get("x-aws-session-token"),
+        // Pass cookies for EdgeOne Pages authentication
+        ...(provider === "edgeone" &&
+            cookieHeader && {
+                headers: { cookie: cookieHeader },
+            }),
     }
 
     // Read minimal style preference from header

@@ -48,6 +48,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     siliconflow: "siliconflow",
     sglang: "openai", // SGLang is OpenAI-compatible, use OpenAI logo
     gateway: "vercel",
+    edgeone: "tencent-cloud",
     doubao: "bytedance",
 }
 
