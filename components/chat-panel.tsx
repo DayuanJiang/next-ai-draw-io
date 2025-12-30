@@ -889,7 +889,7 @@ export default function ChatPanel({
         return (
             <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
                 <ButtonWithTooltip
-                    tooltipContent="Show chat panel (Ctrl+B)"
+                    tooltipContent={dict.nav.showPanel}
                     variant="ghost"
                     size="icon"
                     onClick={onToggleVisibility}
@@ -904,7 +904,7 @@ export default function ChatPanel({
                         transform: "rotate(180deg)",
                     }}
                 >
-                    AI Chat
+                    {dict.nav.aiChat}
                 </div>
             </div>
         )
@@ -956,7 +956,7 @@ export default function ChatPanel({
                                 rel="noopener noreferrer"
                                 className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                             >
-                                About
+                                {dict.nav.about}
                             </Link>
                         )}
                         {!isMobile && (
@@ -966,7 +966,7 @@ export default function ChatPanel({
                                 rel="noopener noreferrer"
                             >
                                 <ButtonWithTooltip
-                                    tooltipContent="Sponsored by ByteDance Doubao K2-thinking. See About page for details."
+                                    tooltipContent={dict.nav.sponsorTooltip}
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-amber-500 hover:text-amber-600"

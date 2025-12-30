@@ -18,7 +18,8 @@
         "settings": "Settings",
         "hidePanel": "Hide chat panel (Ctrl+B)",
         "showPanel": "Show chat panel (Ctrl+B)",
-        "aiChat": "AI Chat"
+        "aiChat": "AI Chat",
+        "sponsorTooltip": "Sponsored by ByteDance Doubao K2-thinking. See About page for details."
     },
     "providers": {
         "useServerDefault": "Use Server Default",
@@ -46,6 +47,7 @@
         "copyResponse": "Copy response",
         "copied": "Copied!",
         "failedToCopy": "Failed to copy",
+        "failedToCopyDetail": "Failed to copy message. Please copy manually or check clipboard permissions.",
         "goodResponse": "Good response",
         "badResponse": "Bad response",
         "clickToEdit": "Click to edit",
@@ -185,6 +187,21 @@
         "thinking": "Thinking...",
         "thoughtFor": "Thought for {duration} seconds",
         "thoughtBrief": "Thought for a few seconds"
+    },
+    "dev": {
+        "title": "Dev: XML Streaming Simulator",
+        "preset": "Preset:",
+        "selectPreset": "Select a preset...",
+        "clear": "Clear",
+        "placeholder": "Paste mxCell XML here or select a preset...",
+        "interval": "Interval:",
+        "chars": "Chars:",
+        "streaming": "Streaming...",
+        "simulate": "Simulate",
+        "stop": "Stop",
+        "testQuotaToast": "Test Quota Toast",
+        "simulatingMessage": "[Dev] Simulating XML streaming",
+        "successMessage": "Successfully displayed the diagram."
     },
     "about": {
         "modelChange": "Model Change & Usage Limits",

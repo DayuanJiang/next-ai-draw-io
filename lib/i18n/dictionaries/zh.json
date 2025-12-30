@@ -18,7 +18,8 @@
         "settings": "设置",
         "hidePanel": "隐藏聊天面板 (Ctrl+B)",
         "showPanel": "显示聊天面板 (Ctrl+B)",
-        "aiChat": "AI 聊天"
+        "aiChat": "AI 聊天",
+        "sponsorTooltip": "由字节跳动豆包 K2-thinking 赞助。详情请参阅关于页面。"
     },
     "providers": {
         "useServerDefault": "使用服务器默认值",
@@ -46,6 +47,7 @@
         "copyResponse": "复制响应",
         "copied": "已复制！",
         "failedToCopy": "复制失败",
+        "failedToCopyDetail": "复制消息失败。请手动复制或检查剪贴板权限。",
         "goodResponse": "有帮助",
         "badResponse": "无帮助",
         "clickToEdit": "点击编辑",
@@ -185,6 +187,21 @@
         "thinking": "思考中...",
         "thoughtFor": "思考了 {duration} 秒",
         "thoughtBrief": "思考了几秒钟"
+    },
+    "dev": {
+        "title": "开发：XML 流式模拟器",
+        "preset": "预设：",
+        "selectPreset": "选择预设...",
+        "clear": "清除",
+        "placeholder": "在此粘贴 mxCell XML 或选择预设...",
+        "interval": "间隔：",
+        "chars": "字符：",
+        "streaming": "流式传输中...",
+        "simulate": "模拟",
+        "stop": "停止",
+        "testQuotaToast": "测试配额提示",
+        "simulatingMessage": "[开发] 模拟 XML 流式传输",
+        "successMessage": "成功显示图表。"
     },
     "about": {
         "modelChange": "模型变更与用量限制",

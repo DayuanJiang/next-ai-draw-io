@@ -27,6 +27,7 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
     applyDiagramOperations,
@@ -205,6 +206,7 @@ export function ChatMessageDisplay({
     onEditMessage,
     status = "idle",
 }: ChatMessageDisplayProps) {
+    const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
@@ -268,9 +270,7 @@ export function ChatMessageDisplay({
                 setTimeout(() => setCopiedMessageId(null), 2000)
             } catch (fallbackErr) {
                 console.error("Failed to copy message:", fallbackErr)
-                toast.error(
-                    "Failed to copy message. Please copy manually or check clipboard permissions.",
-                )
+                toast.error(dict.chat.failedToCopyDetail)
                 setCopyFailedMessageId(messageId)
                 setTimeout(() => setCopyFailedMessageId(null), 2000)
             } finally {
@@ -832,7 +832,10 @@ export function ChatMessageDisplay({
                                                             )
                                                         }}
                                                         className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
-                                                        title="Edit message"
+                                                        title={
+                                                            dict.chat
+                                                                .editMessage
+                                                        }
                                                     >
                                                         <Pencil className="h-3.5 w-3.5" />
                                                     </button>
@@ -849,11 +852,13 @@ export function ChatMessageDisplay({
                                                 title={
                                                     copiedMessageId ===
                                                     message.id
-                                                        ? "Copied!"
+                                                        ? dict.chat.copied
                                                         : copyFailedMessageId ===
                                                             message.id
-                                                          ? "Failed to copy"
-                                                          : "Copy message"
+                                                          ? dict.chat
+                                                                .failedToCopy
+                                                          : dict.chat
+                                                                .copyResponse
                                                 }
                                             >
                                                 {copiedMessageId ===
@@ -1325,8 +1330,8 @@ export function ChatMessageDisplay({
                                                 title={
                                                     copiedMessageId ===
                                                     message.id
-                                                        ? "Copied!"
-                                                        : "Copy response"
+                                                        ? dict.chat.copied
+                                                        : dict.chat.copyResponse
                                                 }
                                             >
                                                 {copiedMessageId ===
@@ -1352,7 +1357,9 @@ export function ChatMessageDisplay({
                                                             )
                                                         }
                                                         className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
-                                                        title="Regenerate response"
+                                                        title={
+                                                            dict.chat.regenerate
+                                                        }
                                                     >
                                                         <RotateCcw className="h-3.5 w-3.5" />
                                                     </button>
@@ -1374,7 +1381,7 @@ export function ChatMessageDisplay({
                                                         ? "text-green-600 bg-green-100"
                                                         : "text-muted-foreground/60 hover:text-green-600 hover:bg-green-50"
                                                 }`}
-                                                title="Good response"
+                                                title={dict.chat.goodResponse}
                                             >
                                                 <ThumbsUp className="h-3.5 w-3.5" />
                                             </button>
@@ -1393,7 +1400,7 @@ export function ChatMessageDisplay({
                                                         ? "text-red-600 bg-red-100"
                                                         : "text-muted-foreground/60 hover:text-red-600 hover:bg-red-50"
                                                 }`}
-                                                title="Bad response"
+                                                title={dict.chat.badResponse}
                                             >
                                                 <ThumbsDown className="h-3.5 w-3.5" />
                                             </button>

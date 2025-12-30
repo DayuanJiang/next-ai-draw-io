@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { wrapWithMxFile } from "@/lib/utils"
 
 // Dev XML presets for streaming simulator
@@ -142,6 +143,7 @@ export function DevXmlSimulator({
     onDisplayChart,
     onShowQuotaToast,
 }: DevXmlSimulatorProps) {
+    const dict = useDictionary()
     const [devXml, setDevXml] = useState("")
     const [isSimulating, setIsSimulating] = useState(false)
     const [devIntervalMs, setDevIntervalMs] = useState(1)
@@ -178,7 +180,7 @@ export function DevXmlSimulator({
             parts: [
                 {
                     type: "text" as const,
-                    text: "[Dev] Simulating XML streaming",
+                    text: dict.dev.simulatingMessage,
                 },
             ],
         }
@@ -228,7 +230,7 @@ export function DevXmlSimulator({
             const lastMsg = updated[updated.length - 1] as any
             if (lastMsg?.role === "assistant" && lastMsg.parts?.[0]) {
                 lastMsg.parts[0].state = "output-available"
-                lastMsg.parts[0].output = "Successfully displayed the diagram."
+                lastMsg.parts[0].output = dict.dev.successMessage
                 lastMsg.parts[0].input = { xml }
             }
             return updated
@@ -245,12 +247,12 @@ export function DevXmlSimulator({
         <div className="border-t border-dashed border-orange-500/50 px-4 py-2 bg-orange-50/50 dark:bg-orange-950/30">
             <details>
                 <summary className="text-xs text-orange-600 dark:text-orange-400 cursor-pointer font-medium">
-                    Dev: XML Streaming Simulator
+                    {dict.dev.title}
                 </summary>
                 <div className="mt-2 space-y-2">
                     <div className="flex items-center gap-2">
                         <label className="text-xs text-muted-foreground whitespace-nowrap">
-                            Preset:
+                            {dict.dev.preset}
                         </label>
                         <select
                             onChange={(e) => {
@@ -262,7 +264,7 @@ export function DevXmlSimulator({
                             defaultValue=""
                         >
                             <option value="" disabled>
-                                Select a preset...
+                                {dict.dev.selectPreset}
                             </option>
                             {Object.keys(DEV_XML_PRESETS).map((name) => (
                                 <option key={name} value={name}>
@@ -275,19 +277,19 @@ export function DevXmlSimulator({
                             onClick={() => setDevXml("")}
                             className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground border rounded"
                         >
-                            Clear
+                            {dict.dev.clear}
                         </button>
                     </div>
                     <textarea
                         value={devXml}
                         onChange={(e) => setDevXml(e.target.value)}
-                        placeholder="Paste mxCell XML here or select a preset..."
+                        placeholder={dict.dev.placeholder}
                         className="w-full h-24 text-xs font-mono p-2 border rounded bg-background"
                     />
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2 flex-1">
                             <label className="text-xs text-muted-foreground whitespace-nowrap">
-                                Interval:
+                                {dict.dev.interval}
                             </label>
                             <input
                                 type="range"
@@ -306,7 +308,7 @@ export function DevXmlSimulator({
                         </div>
                         <div className="flex items-center gap-2">
                             <label className="text-xs text-muted-foreground whitespace-nowrap">
-                                Chars:
+                                {dict.dev.chars}
                             </label>
                             <input
                                 type="number"
@@ -330,8 +332,8 @@ export function DevXmlSimulator({
                             className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSimulating
-                                ? "Streaming..."
-                                : `Simulate (${devChunkSize} chars/${devIntervalMs}ms)`}
+                                ? dict.dev.streaming
+                                : `${dict.dev.simulate} (${devChunkSize} chars/${devIntervalMs}ms)`}
                         </button>
                         {isSimulating && (
                             <button
@@ -341,7 +343,7 @@ export function DevXmlSimulator({
                                 }}
                                 className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
                             >
-                                Stop
+                                {dict.dev.stop}
                             </button>
                         )}
                         {onShowQuotaToast && (
@@ -350,7 +352,7 @@ export function DevXmlSimulator({
                                 onClick={onShowQuotaToast}
                                 className="px-3 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
                             >
-                                Test Quota Toast
+                                {dict.dev.testQuotaToast}
                             </button>
                         )}
                     </div>

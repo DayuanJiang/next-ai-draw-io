@@ -18,7 +18,8 @@
         "settings": "設定",
         "hidePanel": "チャットパネルを非表示 (Ctrl+B)",
         "showPanel": "チャットパネルを表示 (Ctrl+B)",
-        "aiChat": "AI チャット"
+        "aiChat": "AI チャット",
+        "sponsorTooltip": "ByteDance Doubao K2-thinking によるスポンサー。詳細は概要ページをご覧ください。"
     },
     "providers": {
         "useServerDefault": "サーバーデフォルトを使用",
@@ -46,6 +47,7 @@
         "copyResponse": "応答をコピー",
         "copied": "コピーしました！",
         "failedToCopy": "コピーに失敗しました",
+        "failedToCopyDetail": "メッセージのコピーに失敗しました。手動でコピーするか、クリップボードの権限を確認してください。",
         "goodResponse": "良い応答",
         "badResponse": "悪い応答",
         "clickToEdit": "クリックして編集",
@@ -185,6 +187,21 @@
         "thinking": "考え中...",
         "thoughtFor": "{duration} 秒考えました",
         "thoughtBrief": "数秒考えました"
+    },
+    "dev": {
+        "title": "開発：XMLストリーミングシミュレーター",
+        "preset": "プリセット：",
+        "selectPreset": "プリセットを選択...",
+        "clear": "クリア",
+        "placeholder": "ここに mxCell XML を貼り付けるか、プリセットを選択...",
+        "interval": "間隔：",
+        "chars": "文字：",
+        "streaming": "ストリーミング中...",
+        "simulate": "シミュレート",
+        "stop": "停止",
+        "testQuotaToast": "クォータトーストをテスト",
+        "simulatingMessage": "[開発] XMLストリーミングをシミュレート中",
+        "successMessage": "ダイアグラムの表示に成功しました。"
     },
     "about": {
         "modelChange": "モデル変更と利用制限について",
