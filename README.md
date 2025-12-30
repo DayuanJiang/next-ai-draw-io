@@ -100,7 +100,7 @@ Here are some example prompts and their generated diagrams:
 
 ## MCP Server (Preview)
 
-> **Preview Feature**: This feature is experimental and may not stable.
+> **Preview Feature**: This feature is experimental and may not be stable.
 
 Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
 
@@ -211,6 +211,8 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   SGLang
+-   Vercel AI Gateway
 
 
 All providers except AWS Bedrock and OpenRouter support custom endpoints.
@@ -219,7 +221,7 @@ All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
 **Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-5.1, Gemini 3 Pro, and DeepSeek V3.2/R1.
 
-Note that `claude` series has trained on draw.io diagrams with cloud architecture logos like AWS, Azure, GCP. So if you want to create cloud architecture diagrams, this is the best choice.
+Note that the `claude` series has been trained on draw.io diagrams with cloud architecture logos like AWS, Azure, GCP. So if you want to create cloud architecture diagrams, this is the best choice.
 
 
 ## How It Works

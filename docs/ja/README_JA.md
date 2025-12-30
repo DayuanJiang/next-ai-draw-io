@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## MCPサーバー（プレビュー）
 
-> **プレビュー機能**：この機能は実験的であり、変更される可能性があります。
+> **プレビュー機能**：この機能は実験的であり、安定しない可能性があります。
 
 MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 
@@ -242,6 +242,8 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   SGLang
+-   Vercel AI Gateway
 
 AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタムエンドポイントをサポートしています。
 

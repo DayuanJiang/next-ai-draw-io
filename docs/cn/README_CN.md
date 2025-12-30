@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## MCP服务器（预览）
 
-> **预览功能**：此功能为实验性功能，可能会有变化。
+> **预览功能**：此功能为实验性功能，可能不稳定。
 
 通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
 
@@ -241,6 +241,8 @@ npm run dev
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   SGLang
+-   Vercel AI Gateway
 
 除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
 

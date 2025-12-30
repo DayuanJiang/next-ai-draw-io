@@ -85,6 +85,19 @@ AI_MODEL=deepseek-ai/DeepSeek-V3  # 示例；使用任何 SiliconFlow 模型 ID
 SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # 或 https://api.siliconflow.cn/v1
 ```
 
+### SGLang
+
+```bash
+SGLANG_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+可选的自定义端点：
+
+```bash
+SGLANG_BASE_URL=https://your-custom-endpoint/v1
+```
+
 ### Azure OpenAI
 
 ```bash
@@ -188,7 +201,7 @@ AI_MODEL=openai/gpt-4o
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway
+AI_PROVIDER=google  # 或：openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
 ```
 
 ## 模型能力要求
