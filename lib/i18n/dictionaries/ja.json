@@ -143,6 +143,7 @@
         "invalidAccessCode": "無効または欠落したアクセスコード。設定で入力してください。",
         "networkError": "ネットワークエラー。接続を確認してください。",
         "retryLimit": "自動再試行制限に達しました（{max}）。手動で再試行してください。",
+        "continuationRetryLimit": "継続再試行制限に達しました（{max}）。ダイアグラムが複雑すぎる可能性があります。",
         "validationFailed": "ダイアグラムの検証に失敗しました。再生成してみてください。",
         "malformedXml": "AI が無効なダイアグラム XML を生成しました。再生成してみてください。",
         "failedToProcess": "ダイアグラムの処理に失敗しました。再生成してみてください。",
@@ -151,7 +152,9 @@
         "failedToRestore": "localStorage からの復元に失敗しました",
         "failedToPersist": "アンロード前の状態の永続化に失敗しました",
         "failedToExport": "チャートデータの取得エラー",
-        "failedToLoadExample": "例の画像の読み込みエラー"
+        "failedToLoadExample": "例の画像の読み込みエラー",
+        "failedToRecordFeedback": "フィードバックの記録に失敗しました。もう一度お試しください。",
+        "storageUpdateFailed": "チャットはクリアされましたが、ブラウザストレージを更新できませんでした"
     },
     "quota": {
         "dailyLimit": "1日の割当量に達しました",

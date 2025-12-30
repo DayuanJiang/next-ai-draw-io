@@ -143,6 +143,7 @@
         "invalidAccessCode": "无效或缺少访问码。请在设置中配置。",
         "networkError": "网络错误。请检查您的连接。",
         "retryLimit": "已达到自动重试限制（{max}）。请手动重试。",
+        "continuationRetryLimit": "已达到继续重试限制（{max}）。图表可能过于复杂。",
         "validationFailed": "图表验证失败。请尝试重新生成。",
         "malformedXml": "AI 生成的图表 XML 无效。请尝试重新生成。",
         "failedToProcess": "无法处理图表。请尝试重新生成。",
@@ -151,7 +152,9 @@
         "failedToRestore": "无法从 localStorage 恢复",
         "failedToPersist": "卸载前无法持久化状态",
         "failedToExport": "获取图表数据时出错",
-        "failedToLoadExample": "加载示例图片时出错"
+        "failedToLoadExample": "加载示例图片时出错",
+        "failedToRecordFeedback": "记录您的反馈失败。请重试。",
+        "storageUpdateFailed": "聊天已清除，但无法更新浏览器存储"
     },
     "quota": {
         "dailyLimit": "已达每日配额",

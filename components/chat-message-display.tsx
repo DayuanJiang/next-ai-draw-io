@@ -304,7 +304,7 @@ export function ChatMessageDisplay({
             })
         } catch (error) {
             console.error("Failed to log feedback:", error)
-            toast.error("Failed to record your feedback. Please try again.")
+            toast.error(dict.errors.failedToRecordFeedback)
             // Revert optimistic UI update
             setFeedback((prev) => {
                 const next = { ...prev }
@@ -349,9 +349,7 @@ export function ChatMessageDisplay({
                         console.error(
                             "[ChatMessageDisplay] Malformed XML detected in final output",
                         )
-                        toast.error(
-                            "AI generated invalid diagram XML. Please try regenerating.",
-                        )
+                        toast.error(dict.errors.malformedXml)
                     }
                     return // Skip this update
                 }
@@ -402,9 +400,7 @@ export function ChatMessageDisplay({
                             "[ChatMessageDisplay] XML validation failed:",
                             validation.error,
                         )
-                        toast.error(
-                            "Diagram validation failed. Please try regenerating.",
-                        )
+                        toast.error(dict.errors.validationFailed)
                     }
                 } catch (error) {
                     console.error(
@@ -413,9 +409,7 @@ export function ChatMessageDisplay({
                     )
                     // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
-                        toast.error(
-                            "Failed to process diagram. Please try regenerating.",
-                        )
+                        toast.error(dict.errors.failedToProcess)
                     }
                 }
             }
@@ -973,7 +967,7 @@ export function ChatMessageDisplay({
                                                     }}
                                                     className="px-3 py-1.5 text-xs rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                                                 >
-                                                    Cancel
+                                                    {dict.common.cancel}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -995,7 +989,7 @@ export function ChatMessageDisplay({
                                                     disabled={!editText.trim()}
                                                     className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
                                                 >
-                                                    Save & Submit
+                                                    {dict.chat.saveAndSubmit}
                                                 </button>
                                             </div>
                                         </div>
@@ -1128,7 +1122,8 @@ export function ChatMessageDisplay({
                                                                     "user" &&
                                                                 isLastUserMessage &&
                                                                 onEditMessage
-                                                                    ? "Click to edit"
+                                                                    ? dict.chat
+                                                                          .clickToEdit
                                                                     : undefined
                                                             }
                                                         >

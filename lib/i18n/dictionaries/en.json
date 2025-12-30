@@ -143,6 +143,7 @@
         "invalidAccessCode": "Invalid or missing access code. Please configure it in Settings.",
         "networkError": "Network error. Please check your connection.",
         "retryLimit": "Auto-retry limit reached ({max}). Please try again manually.",
+        "continuationRetryLimit": "Continuation retry limit reached ({max}). The diagram may be too complex.",
         "validationFailed": "Diagram validation failed. Please try regenerating.",
         "malformedXml": "AI generated invalid diagram XML. Please try regenerating.",
         "failedToProcess": "Failed to process diagram. Please try regenerating.",
@@ -151,7 +152,9 @@
         "failedToRestore": "Failed to restore from localStorage",
         "failedToPersist": "Failed to persist state before unload",
         "failedToExport": "Error fetching chart data",
-        "failedToLoadExample": "Error loading example image"
+        "failedToLoadExample": "Error loading example image",
+        "failedToRecordFeedback": "Failed to record your feedback. Please try again.",
+        "storageUpdateFailed": "Chat cleared but browser storage could not be updated"
     },
     "quota": {
         "dailyLimit": "Daily Quota Reached",
