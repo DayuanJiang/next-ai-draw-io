@@ -41,6 +41,8 @@ export interface ClientOverrides {
     awsSecretAccessKey?: string | null
     awsRegion?: string | null
     awsSessionToken?: string | null
+    // Custom headers (e.g., for EdgeOne cookie auth)
+    headers?: Record<string, string>
 }
 
 // Providers that can be used with client-provided API keys
@@ -856,6 +858,8 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const edgeoneProvider = createOpenAI({
                 apiKey: "edgeone", // Dummy key - EdgeOne doesn't require API key
                 baseURL,
+                // Pass cookies for EdgeOne Pages authentication (eo_token, eo_time)
+                ...(overrides?.headers && { headers: overrides.headers }),
             })
             model = edgeoneProvider.chat(modelId)
             break

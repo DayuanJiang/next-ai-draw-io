@@ -254,6 +254,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
         baseUrl = `${origin}/api/edgeai`
     }
 
+    // Get cookie header for EdgeOne authentication (eo_token, eo_time)
+    const cookieHeader = req.headers.get("cookie")
+
     const clientOverrides = {
         provider,
         baseUrl,
@@ -264,6 +267,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
         awsRegion: req.headers.get("x-aws-region"),
         awsSessionToken: req.headers.get("x-aws-session-token"),
+        // Pass cookies for EdgeOne Pages authentication
+        ...(provider === "edgeone" &&
+            cookieHeader && {
+                headers: { cookie: cookieHeader },
+            }),
     }
 
     // Read minimal style preference from header

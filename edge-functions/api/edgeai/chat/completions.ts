@@ -146,18 +146,14 @@ export async function onRequest({ request, env }: any) {
         const selectedModel = MODEL_ALIASES[requestedModel] || requestedModel
 
         if (!ALLOWED_MODELS.includes(selectedModel)) {
-            const allowedModelList = [
-                ...ALLOWED_MODELS,
-                ...Object.keys(MODEL_ALIASES),
-            ]
             return createResponse(
                 {
                     error: {
-                        message: `Invalid model: ${requestedModel}. Allowed models: ${allowedModelList.join(", ")}`,
+                        message: `Invalid model: ${requestedModel}.`,
                         type: "invalid_request_error",
                     },
                 },
-                400,
+                429,
             )
         }
 
@@ -166,14 +162,41 @@ export async function onRequest({ request, env }: any) {
         )
 
         try {
-            const isStream = stream ?? true
+            const isStream = !!stream
 
-            // Build AI.chatCompletions options
+            // Non-streaming: return mock response for validation
+            // AI.chatCompletions doesn't support non-streaming mode
+            if (!isStream) {
+                const mockResponse = {
+                    id: `chatcmpl-${Date.now()}`,
+                    object: "chat.completion",
+                    created: Math.floor(Date.now() / 1000),
+                    model: selectedModel,
+                    choices: [
+                        {
+                            index: 0,
+                            message: {
+                                role: "assistant",
+                                content: "OK",
+                            },
+                            finish_reason: "stop",
+                        },
+                    ],
+                    usage: {
+                        prompt_tokens: 10,
+                        completion_tokens: 1,
+                        total_tokens: 11,
+                    },
+                }
+                return createResponse(mockResponse)
+            }
+
+            // Build AI.chatCompletions options for streaming
             const aiOptions: any = {
                 ...extraParams,
                 model: selectedModel,
                 messages,
-                stream: isStream,
+                stream: true,
             }
 
             // Add tools if provided
@@ -185,11 +208,6 @@ export async function onRequest({ request, env }: any) {
             }
 
             const aiResponse = await AI.chatCompletions(aiOptions)
-
-            // Non-streaming response
-            if (!isStream) {
-                return createResponse(aiResponse)
-            }
 
             // Streaming response
             return new Response(aiResponse, {

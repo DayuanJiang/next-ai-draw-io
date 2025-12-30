@@ -226,11 +226,18 @@ export async function POST(req: Request) {
             }
 
             case "edgeone": {
-                // EdgeOne uses EdgeOne Pages Edge AI which doesn't require API key validation.
-                // The service is available directly through edge functions without authentication.
-                return NextResponse.json({
-                    valid: true,
+                // EdgeOne uses OpenAI-compatible API via Edge Functions
+                // Need to pass cookies for EdgeOne Pages authentication
+                const cookieHeader = req.headers.get("cookie") || ""
+                const edgeone = createOpenAI({
+                    apiKey: "edgeone", // EdgeOne doesn't require API key
+                    baseURL: baseUrl || "/api/edgeai",
+                    headers: {
+                        cookie: cookieHeader,
+                    },
                 })
+                model = edgeone.chat(modelId)
+                break
             }
 
             case "sglang": {
