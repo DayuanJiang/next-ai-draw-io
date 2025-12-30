@@ -75,7 +75,7 @@ cp env.example .env.local
 **1. 使用简单的 `open-next.config.ts`：**
 
 ```ts
-import { defineCloudflareConfig } from " @opennextjs/cloudflare/config"
+import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
 
 export default defineCloudflareConfig({})
 ```
@@ -119,8 +119,8 @@ R2 开启了 **增量静态再生 (ISR)** 缓存功能。需要在您的 Cloudfl
 **2. 配置 `open-next.config.ts`：**
 
 ```ts
-import { defineCloudflareConfig } from " @opennextjs/cloudflare/config"
-import r2IncrementalCache from " @opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache"
+import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
+import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache"
 
 export default defineCloudflareConfig({
   incrementalCache: r2IncrementalCache,

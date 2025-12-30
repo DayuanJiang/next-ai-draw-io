@@ -75,7 +75,7 @@ ISR キャッシュが不要な場合は、R2 なしでデプロイできます�
 **1. シンプルな `open-next.config.ts` を使用:**
 
 ```ts
-import { defineCloudflareConfig } from " @opennextjs/cloudflare/config"
+import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
 
 export default defineCloudflareConfig({})
 ```
@@ -119,8 +119,8 @@ R2 を使用すると **Incremental Static Regeneration (ISR)** キャッシュ�
 **2. `open-next.config.ts` の設定:**
 
 ```ts
-import { defineCloudflareConfig } from " @opennextjs/cloudflare/config"
-import r2IncrementalCache from " @opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache"
+import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
+import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache"
 
 export default defineCloudflareConfig({
   incrementalCache: r2IncrementalCache,
