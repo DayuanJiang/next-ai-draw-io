@@ -78,6 +78,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     siliconflow: "siliconflow",
     sglang: "openai", // SGLang is OpenAI-compatible
     gateway: "vercel",
+    edgeone: "tencent-cloud",
     doubao: "bytedance",
 }
 
@@ -277,6 +278,7 @@ export function ModelConfigDialog({
 
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
+        const isEdgeOne = selectedProvider.provider === "edgeone"
         if (isBedrock) {
             if (
                 !selectedProvider.awsAccessKeyId ||
@@ -285,7 +287,7 @@ export function ModelConfigDialog({
             ) {
                 return
             }
-        } else if (!selectedProvider.apiKey) {
+        } else if (!isEdgeOne && !selectedProvider.apiKey) {
             return
         }
 
@@ -308,13 +310,18 @@ export function ModelConfigDialog({
             setValidatingModelIndex(i)
 
             try {
+                // For EdgeOne, construct baseUrl from current origin
+                const baseUrl = isEdgeOne
+                    ? `${window.location.origin}/api/edgeai`
+                    : selectedProvider.baseUrl
+
                 const response = await fetch("/api/validate-model", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         provider: selectedProvider.provider,
                         apiKey: selectedProvider.apiKey,
-                        baseUrl: selectedProvider.baseUrl,
+                        baseUrl,
                         modelId: model.modelId,
                         // AWS Bedrock credentials
                         awsAccessKeyId: selectedProvider.awsAccessKeyId,
@@ -322,7 +329,6 @@ export function ModelConfigDialog({
                         awsRegion: selectedProvider.awsRegion,
                     }),
                 })
-
                 const data = await response.json()
 
                 if (data.valid) {
@@ -876,6 +882,63 @@ export function ModelConfigDialog({
                                                                 )}
                                                         </div>
                                                     </>
+                                                ) : selectedProvider.provider ===
+                                                  "edgeone" ? (
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                variant={
+                                                                    validationStatus ===
+                                                                    "success"
+                                                                        ? "outline"
+                                                                        : "default"
+                                                                }
+                                                                size="sm"
+                                                                onClick={
+                                                                    handleValidate
+                                                                }
+                                                                disabled={
+                                                                    validationStatus ===
+                                                                    "validating"
+                                                                }
+                                                                className={cn(
+                                                                    "h-9 px-4",
+                                                                    validationStatus ===
+                                                                        "success" &&
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                                )}
+                                                            >
+                                                                {validationStatus ===
+                                                                "validating" ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : validationStatus ===
+                                                                  "success" ? (
+                                                                    <>
+                                                                        <Check className="h-4 w-4 mr-1.5" />
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .verified
+                                                                        }
+                                                                    </>
+                                                                ) : (
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .test
+                                                                )}
+                                                            </Button>
+                                                            {validationStatus ===
+                                                                "error" &&
+                                                                validationError && (
+                                                                    <p className="text-xs text-destructive flex items-center gap-1">
+                                                                        <X className="h-3 w-3" />
+                                                                        {
+                                                                            validationError
+                                                                        }
+                                                                    </p>
+                                                                )}
+                                                        </div>
+                                                    </div>
                                                 ) : (
                                                     <>
                                                         {/* API Key */}

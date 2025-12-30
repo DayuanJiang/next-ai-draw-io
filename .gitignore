@@ -63,3 +63,6 @@ push-via-ec2.sh
 
 CLAUDE.md
 .spec-workflow
+
+# edgeone
+.edgeone

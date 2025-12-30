@@ -11,6 +11,7 @@ export type ProviderName =
     | "siliconflow"
     | "sglang"
     | "gateway"
+    | "edgeone"
     | "doubao"
 
 // Individual model configuration
@@ -85,6 +86,7 @@ export const PROVIDER_INFO: Record<
         defaultBaseUrl: "http://127.0.0.1:8000/v1",
     },
     gateway: { label: "AI Gateway" },
+    edgeone: { label: "EdgeOne Pages" },
     doubao: {
         label: "Doubao (ByteDance)",
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
@@ -219,6 +221,7 @@ export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
         "anthropic/claude-3-5-sonnet",
         "google/gemini-2.0-flash",
     ],
+    edgeone: ["@tx/deepseek-ai/deepseek-v32"],
     doubao: [
         // ByteDance Doubao models
         "doubao-1.5-thinking-pro-250415",
