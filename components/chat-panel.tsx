@@ -26,6 +26,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
+import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
@@ -389,7 +390,9 @@ export default function ChatPanel({
                         MAX_CONTINUATION_RETRY_COUNT
                     ) {
                         toast.error(
-                            `Continuation retry limit reached (${MAX_CONTINUATION_RETRY_COUNT}). The diagram may be too complex.`,
+                            formatMessage(dict.errors.continuationRetryLimit, {
+                                max: MAX_CONTINUATION_RETRY_COUNT,
+                            }),
                         )
                         continuationRetryCountRef.current = 0
                         partialXmlRef.current = ""
@@ -400,7 +403,9 @@ export default function ChatPanel({
                     // Regular error: check retry count limit
                     if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
                         toast.error(
-                            `Auto-retry limit reached (${MAX_AUTO_RETRY_COUNT}). Please try again manually.`,
+                            formatMessage(dict.errors.retryLimit, {
+                                max: MAX_AUTO_RETRY_COUNT,
+                            }),
                         )
                         autoRetryCountRef.current = 0
                         partialXmlRef.current = ""
@@ -450,7 +455,7 @@ export default function ChatPanel({
             // On complete failure, clear storage to allow recovery
             localStorage.removeItem(STORAGE_MESSAGES_KEY)
             localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
-            toast.error("Session data was corrupted. Starting fresh.")
+            toast.error(dict.errors.sessionCorrupted)
         }
     }, [setMessages])
 
@@ -651,12 +656,10 @@ export default function ChatPanel({
             localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
             localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
             sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
-            toast.success("Started a fresh chat")
+            toast.success(dict.dialogs.clearSuccess)
         } catch (error) {
             console.error("Failed to clear localStorage:", error)
-            toast.warning(
-                "Chat cleared but browser storage could not be updated",
-            )
+            toast.warning(dict.errors.storageUpdateFailed)
         }
 
         setShowNewChatDialog(false)
@@ -889,7 +892,7 @@ export default function ChatPanel({
         return (
             <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
                 <ButtonWithTooltip
-                    tooltipContent="Show chat panel (Ctrl+B)"
+                    tooltipContent={dict.nav.showPanel}
                     variant="ghost"
                     size="icon"
                     onClick={onToggleVisibility}
@@ -904,7 +907,7 @@ export default function ChatPanel({
                         transform: "rotate(180deg)",
                     }}
                 >
-                    AI Chat
+                    {dict.nav.aiChat}
                 </div>
             </div>
         )
@@ -956,7 +959,7 @@ export default function ChatPanel({
                                 rel="noopener noreferrer"
                                 className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
                             >
-                                About
+                                {dict.nav.about}
                             </Link>
                         )}
                         {!isMobile && (
@@ -966,7 +969,7 @@ export default function ChatPanel({
                                 rel="noopener noreferrer"
                             >
                                 <ButtonWithTooltip
-                                    tooltipContent="Sponsored by ByteDance Doubao K2-thinking. See About page for details."
+                                    tooltipContent={dict.nav.sponsorTooltip}
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-amber-500 hover:text-amber-600"
