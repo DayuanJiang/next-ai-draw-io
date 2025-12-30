@@ -4,7 +4,7 @@
 
 **AI驱动的图表创建工具 - 对话、绘制、可视化**
 
-[English](../README.md) | 中文 | [日本語](./README_JA.md)
+[English](../../README.md) | 中文 | [日本語](../ja/README_JA.md)
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
@@ -13,7 +13,7 @@
 [![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
 </div>
 
@@ -29,14 +29,18 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [示例](#示例)
   - [功能特性](#功能特性)
   - [MCP服务器（预览）](#mcp服务器预览)
+    - [Claude Code CLI](#claude-code-cli)
   - [快速开始](#快速开始)
     - [在线试用](#在线试用)
-    - [使用Docker运行（推荐）](#使用docker运行推荐)
+    - [桌面应用](#桌面应用)
+    - [使用Docker运行](#使用docker运行)
     - [安装](#安装)
   - [部署](#部署)
+    - [部署到腾讯云EdgeOne Pages](#部署到腾讯云edgeone-pages)
+    - [部署到Vercel（推荐）](#部署到vercel推荐)
+    - [部署到Cloudflare Workers](#部署到cloudflare-workers)
   - [多提供商支持](#多提供商支持)
   - [工作原理](#工作原理)
-  - [项目结构](#项目结构)
   - [支持与联系](#支持与联系)
   - [Star历史](#star历史)
 
@@ -50,31 +54,31 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
     <td colspan="2" valign="top" align="center">
       <strong>动画Transformer连接器</strong><br />
       <p><strong>提示词：</strong> 给我一个带有**动画连接器**的Transformer架构图。</p>
-      <img src="../public/animated_connectors.svg" alt="带动画连接器的Transformer架构" width="480" />
+      <img src="../../public/animated_connectors.svg" alt="带动画连接器的Transformer架构" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>GCP架构图</strong><br />
       <p><strong>提示词：</strong> 使用**GCP图标**生成一个GCP架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="../public/gcp_demo.svg" alt="GCP架构图" width="480" />
+      <img src="../../public/gcp_demo.svg" alt="GCP架构图" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>AWS架构图</strong><br />
       <p><strong>提示词：</strong> 使用**AWS图标**生成一个AWS架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="../public/aws_demo.svg" alt="AWS架构图" width="480" />
+      <img src="../../public/aws_demo.svg" alt="AWS架构图" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>Azure架构图</strong><br />
       <p><strong>提示词：</strong> 使用**Azure图标**生成一个Azure架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="../public/azure_demo.svg" alt="Azure架构图" width="480" />
+      <img src="../../public/azure_demo.svg" alt="Azure架构图" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>猫咪素描</strong><br />
       <p><strong>提示词：</strong> 给我画一只可爱的猫。</p>
-      <img src="../public/cat_demo.svg" alt="猫咪绘图" width="240" />
+      <img src="../../public/cat_demo.svg" alt="猫咪绘图" width="240" />
     </td>
   </tr>
 </table>
@@ -119,7 +123,7 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 
 图表会实时显示在浏览器中！
 
-详情请参阅[MCP服务器README](../packages/mcp-server/README.md)，了解VS Code、Cursor等客户端配置。
+详情请参阅[MCP服务器README](../../packages/mcp-server/README.md)，了解VS Code、Cursor等客户端配置。
 
 ## 快速开始
 
@@ -127,39 +131,19 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 
 无需安装！直接在我们的演示站点试用：
 
-[![Live Demo](../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
 > **使用自己的 API Key**：您可以使用自己的 API Key 来绕过演示站点的用量限制。点击聊天面板中的设置图标即可配置您的 Provider 和 API Key。您的 Key 仅保存在浏览器本地，不会被存储在服务器上。
 
-### 使用Docker运行（推荐）
+### 桌面应用
 
-如果您只想在本地运行，最好的方式是使用Docker。
+从 [Releases 页面](https://github.com/DayuanJiang/next-ai-draw-io/releases) 下载适用于您平台的原生桌面应用：
 
-首先，如果您还没有安装Docker，请先安装：[获取Docker](https://docs.docker.com/get-docker/)
+支持的平台：Windows、macOS、Linux。
 
-然后运行：
+### 使用Docker运行
 
-```bash
-docker run -d -p 3000:3000 \
-  -e AI_PROVIDER=openai \
-  -e AI_MODEL=gpt-4o \
-  -e OPENAI_API_KEY=your_api_key \
-  ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-或者使用 env 文件：
-
-```bash
-cp env.example .env
-# 编辑 .env 填写您的配置
-docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-在浏览器中打开 [http://localhost:3000](http://localhost:3000)。
-
-请根据您首选的AI提供商配置替换环境变量。可用选项请参阅[多提供商支持](#多提供商支持)。
-
-> **离线部署：** 如果 `embed.diagrams.net` 被屏蔽，请参阅 [离线部署指南](./offline-deployment.md) 了解配置选项。
+[查看 Docker 指南](./docker.md)
 
 ### 安装
 
@@ -168,41 +152,19 @@ docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:l
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-```
-
-2. 安装依赖：
-
-```bash
 npm install
-```
-
-3. 配置您的AI提供商：
-
-在根目录创建 `.env.local` 文件：
-
-```bash
 cp env.example .env.local
 ```
 
-编辑 `.env.local` 并配置您选择的提供商：
-
--   将 `AI_PROVIDER` 设置为您选择的提供商（bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, doubao）
--   将 `AI_MODEL` 设置为您要使用的特定模型
--   添加您的提供商所需的API密钥
--   `TEMPERATURE`：可选的温度设置（例如 `0` 表示确定性输出）。对于不支持此参数的模型（如推理模型），请不要设置。
--   `ACCESS_CODE_LIST` 访问密码，可选，可以使用逗号隔开多个密码。
-
-> 警告：如果不填写 `ACCESS_CODE_LIST`，则任何人都可以直接使用你部署后的网站，可能会导致你的 token 被急速消耗完毕，建议填写此选项。
-
 详细设置说明请参阅[提供商配置指南](./ai-providers.md)。
 
-4. 运行开发服务器：
+2. 运行开发服务器：
 
 ```bash
 npm run dev
 ```
 
-5. 在浏览器中打开 [http://localhost:3000](http://localhost:3000) 查看应用。
+3. 在浏览器中打开 [http://localhost:6002](http://localhost:6002) 查看应用。
 
 ## 部署
 
@@ -217,16 +179,17 @@ npm run dev
 
 同时，通过腾讯云EdgeOne Pages部署，也会获得[每日免费的DeepSeek模型额度](https://edgeone.cloud.tencent.com/pages/document/169925463311781888)。
 
-### 部署到Vercel
+### 部署到Vercel（推荐）
 
-部署Next.js应用最简单的方式是使用Next.js创建者提供的[Vercel平台](https://vercel.com/new)。
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+
+部署Next.js应用最简单的方式是使用Next.js创建者提供的[Vercel平台](https://vercel.com/new)。请确保在Vercel控制台中**设置环境变量**，就像您在本地 `.env.local` 文件中所做的那样。
 
 查看[Next.js部署文档](https://nextjs.org/docs/app/building-your-application/deploying)了解更多详情。
 
-或者您可以通过此按钮部署：
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+### 部署到Cloudflare Workers
 
-请确保在Vercel控制台中**设置环境变量**，就像您在本地 `.env.local` 文件中所做的那样。
+[查看 Cloudflare 部署指南](./cloudflare-deploy.md)
 
 
 ## 多提供商支持
@@ -248,9 +211,9 @@ npm run dev
 
 📖 **[详细的提供商配置指南](./ai-providers.md)** - 查看各提供商的设置说明。
 
-**模型要求**：此任务需要强大的模型能力，因为它涉及生成具有严格格式约束的长文本（draw.io XML）。推荐使用Claude Sonnet 4.5、GPT-4o、Gemini 2.0和DeepSeek V3/R1。
+**模型要求**：此任务需要强大的模型能力，因为它涉及生成具有严格格式约束的长文本（draw.io XML）。推荐使用 Claude Sonnet 4.5、GPT-5.1、Gemini 3 Pro 和 DeepSeek V3.2/R1。
 
-注意：`claude-sonnet-4-5` 已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。
+注意：`claude` 系列已在带有 AWS、Azure、GCP 等云架构 Logo 的 draw.io 图表上进行训练，因此如果您想创建云架构图，这是最佳选择。
 
 
 ## 工作原理
@@ -263,24 +226,6 @@ npm run dev
 
 图表以XML格式表示，可在draw.io中渲染。AI处理您的命令并相应地生成或修改此XML。
 
-## 项目结构
-
-```
-app/                  # Next.js App Router
-  api/chat/           # 带AI工具的聊天API端点
-  page.tsx            # 带DrawIO嵌入的主页面
-components/           # React组件
-  chat-panel.tsx      # 带图表控制的聊天界面
-  chat-input.tsx      # 带文件上传的用户输入组件
-  history-dialog.tsx  # 图表版本历史查看器
-  ui/                 # UI组件（按钮、卡片等）
-contexts/             # React上下文提供者
-  diagram-context.tsx # 全局图表状态管理
-lib/                  # 工具函数和辅助程序
-  ai-providers.ts     # 多提供商AI配置
-  utils.ts            # XML处理和转换工具
-public/               # 静态资源包括示例图片
-```
 
 ## 支持与联系
 
