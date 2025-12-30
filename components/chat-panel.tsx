@@ -335,7 +335,10 @@ export default function ChatPanel({
                 }
 
                 // Translate image not supported error
-                if (friendlyMessage.includes("image content block")) {
+                if (
+                    friendlyMessage.includes("image content block") ||
+                    friendlyMessage.toLowerCase().includes("image_url")
+                ) {
                     friendlyMessage = "This model doesn't support image input."
                 }
 
