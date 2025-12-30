@@ -4,13 +4,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { i18n } from "./lib/i18n/config"
 
-function getLocale(request: NextRequest): string {
-    // Check for saved locale in cookie first
-    const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value
-    if (cookieLocale && i18n.locales.includes(cookieLocale as any)) {
-        return cookieLocale
-    }
-
+function getLocale(request: NextRequest): string | undefined {
     // Negotiator expects plain object so we need to transform headers
     const negotiatorHeaders: Record<string, string> = {}
     request.headers.forEach((value, key) => {
@@ -26,10 +20,11 @@ function getLocale(request: NextRequest): string {
     )
 
     const locale = matchLocale(languages, locales, i18n.defaultLocale)
+
     return locale
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
     // Skip API routes, static files, and Next.js internals
@@ -53,20 +48,12 @@ export function middleware(request: NextRequest) {
         const locale = getLocale(request)
 
         // Redirect to localized path
-        const response = NextResponse.redirect(
+        return NextResponse.redirect(
             new URL(
                 `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`,
                 request.url,
             ),
         )
-
-        // Set locale cookie for future visits
-        response.cookies.set("NEXT_LOCALE", locale, {
-            maxAge: 60 * 60 * 24 * 365, // 1 year
-            path: "/",
-        })
-
-        return response
     }
 }
 
