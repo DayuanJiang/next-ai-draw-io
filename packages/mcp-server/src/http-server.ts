@@ -17,6 +17,24 @@ import { log } from "./logger.js"
 const DRAWIO_BASE_URL =
     process.env.DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
+// Extract origin (scheme + host + port) from URL for postMessage security check
+function getOrigin(url: string): string {
+    try {
+        const parsed = new URL(url)
+        return `${parsed.protocol}//${parsed.host}`
+    } catch {
+        return url // Fallback if parsing fails
+    }
+}
+
+const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
+
+// Normalize URL for iframe src - ensure no double slashes
+function normalizeUrl(url: string): string {
+    // Remove trailing slash to avoid double slashes
+    return url.replace(/\/$/, '')
+}
+
 interface SessionState {
     xml: string
     version: number
@@ -402,7 +420,7 @@ function getHtmlPage(sessionId: string): string {
             </div>
             <div id="status" class="status disconnected">Connecting...</div>
         </div>
-        <iframe id="drawio" src="${DRAWIO_BASE_URL}/?embed=1&proto=json&spin=1&libraries=1"></iframe>
+        <iframe id="drawio" src="${normalizeUrl(DRAWIO_BASE_URL)}/?embed=1&proto=json&spin=1&libraries=1"></iframe>
     </div>
     <button id="history-btn" title="History" ${sessionId ? "" : "disabled"}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -432,7 +450,7 @@ function getHtmlPage(sessionId: string): string {
         let pendingAiSvg = false;
 
         window.addEventListener('message', (e) => {
-            if (e.origin !== '${DRAWIO_BASE_URL}') return;
+            if (e.origin !== '${DRAWIO_ORIGIN}') return;
             try {
                 const msg = JSON.parse(e.data);
                 if (msg.event === 'init') {
