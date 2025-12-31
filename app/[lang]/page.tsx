@@ -28,6 +28,8 @@ export default function Home() {
     } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
+    // Extract current language from pathname (e.g., "/zh/about" → "zh")
+    const currentLang = (pathname.split("/")[1] || i18n.defaultLocale) as Locale
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
@@ -207,7 +209,7 @@ export default function Home() {
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30">
                             {isLoaded ? (
                                 <DrawIoEmbed
-                                    key={`${drawioUi}-${darkMode}`}
+                                    key={`${drawioUi}-${darkMode}-${currentLang}`}
                                     ref={drawioRef}
                                     onExport={handleDiagramExport}
                                     onLoad={onDrawioLoad}
@@ -220,6 +222,7 @@ export default function Home() {
                                         saveAndExit: false,
                                         noExitBtn: true,
                                         dark: darkMode,
+                                        lang: currentLang,
                                     }}
                                 />
                             ) : (
