@@ -906,3 +906,34 @@ export function supportsPromptCaching(modelId: string): boolean {
         modelId.startsWith("eu.anthropic")
     )
 }
+
+/**
+ * Check if a model supports image/vision input.
+ * Some models silently drop image parts without error (AI SDK warning only).
+ */
+export function supportsImageInput(modelId: string): boolean {
+    const lowerModelId = modelId.toLowerCase()
+
+    // Helper to check if model has vision capability indicator
+    const hasVisionIndicator =
+        lowerModelId.includes("vision") || lowerModelId.includes("vl")
+
+    // Models that DON'T support image/vision input (unless vision variant)
+    // Kimi K2 models don't support images
+    if (lowerModelId.includes("kimi") && !hasVisionIndicator) {
+        return false
+    }
+
+    // DeepSeek text models (not vision variants)
+    if (lowerModelId.includes("deepseek") && !hasVisionIndicator) {
+        return false
+    }
+
+    // Qwen text models (not vision variants like qwen-vl)
+    if (lowerModelId.includes("qwen") && !hasVisionIndicator) {
+        return false
+    }
+
+    // Default: assume model supports images
+    return true
+}
