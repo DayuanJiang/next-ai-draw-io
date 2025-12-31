@@ -905,7 +905,6 @@ export default function ChatPanel({
                     className="text-sm font-medium text-muted-foreground mt-8 tracking-wide"
                     style={{
                         writingMode: "vertical-rl",
-                        transform: "rotate(180deg)",
                     }}
                 >
                     {dict.nav.aiChat}
