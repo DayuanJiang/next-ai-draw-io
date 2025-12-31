@@ -127,7 +127,12 @@ function cleanupExpiredSessions(): void {
     }
 }
 
-setInterval(cleanupExpiredSessions, 5 * 60 * 1000)
+const cleanupIntervalId = setInterval(cleanupExpiredSessions, 5 * 60 * 1000)
+
+export function shutdown(): void {
+    clearInterval(cleanupIntervalId)
+    stopHttpServer()
+}
 
 export function getServerPort(): number {
     return serverPort
