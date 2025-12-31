@@ -12,7 +12,11 @@ import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
 import path from "path"
 import { z } from "zod"
-import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
+import {
+    getAIModel,
+    supportsImageInput,
+    supportsPromptCaching,
+} from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
     checkAndIncrementRequest,
@@ -294,6 +298,17 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const fileParts =
         lastUserMessage?.parts?.filter((part: any) => part.type === "file") ||
         []
+
+    // Check if user is sending images to a model that doesn't support them
+    // AI SDK silently drops unsupported parts, so we need to catch this early
+    if (fileParts.length > 0 && !supportsImageInput(modelId)) {
+        return Response.json(
+            {
+                error: `The model "${modelId}" does not support image input. Please use a vision-capable model (e.g., GPT-4o, Claude, Gemini) or remove the image.`,
+            },
+            { status: 400 },
+        )
+    }
 
     // User input only - XML is now in a separate cached system message
     const formattedUserInput = `User input:
