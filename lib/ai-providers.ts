@@ -786,7 +786,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                                                 `data: ${JSON.stringify(data)}\n\n`,
                                             ),
                                         )
-                                    } catch (e) {
+                                    } catch (_e) {
                                         // If parsing fails, forward the original message to avoid breaking the stream.
                                         controller.enqueue(
                                             new TextEncoder().encode(

@@ -11,7 +11,6 @@ import {
     flattenModels,
     type ModelConfig,
     type MultiModelConfig,
-    PROVIDER_INFO,
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
