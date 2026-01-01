@@ -32,7 +32,7 @@ const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
 // Normalize URL for iframe src - ensure no double slashes
 function normalizeUrl(url: string): string {
     // Remove trailing slash to avoid double slashes
-    return url.replace(/\/$/, '')
+    return url.replace(/\/$/, "")
 }
 
 interface SessionState {
