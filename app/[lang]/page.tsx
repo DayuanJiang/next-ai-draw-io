@@ -35,6 +35,7 @@ export default function Home() {
     const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
+    const [isDrawioReady, setIsDrawioReady] = useState(false)
     const [closeProtection, setCloseProtection] = useState(false)
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
@@ -104,12 +105,18 @@ export default function Home() {
         setIsLoaded(true)
     }, [pathname, router])
 
+    const handleDrawioLoad = useCallback(() => {
+        setIsDrawioReady(true)
+        onDrawioLoad()
+    }, [onDrawioLoad])
+
     const handleDarkModeChange = async () => {
         await saveDiagramToStorage()
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
         document.documentElement.classList.toggle("dark", newValue)
+        setIsDrawioReady(false)
         resetDrawioReady()
     }
 
@@ -118,6 +125,7 @@ export default function Home() {
         const newUi = drawioUi === "min" ? "sketch" : "min"
         localStorage.setItem("drawio-theme", newUi)
         setDrawioUi(newUi)
+        setIsDrawioReady(false)
         resetDrawioReady()
     }
 
@@ -131,6 +139,7 @@ export default function Home() {
                 newIsMobile !== isMobileRef.current
             ) {
                 saveDiagramToStorage().catch(() => {})
+                setIsDrawioReady(false)
                 resetDrawioReady()
             }
             isMobileRef.current = newIsMobile
@@ -206,28 +215,35 @@ export default function Home() {
                             mouseOverDrawioRef.current = false
                         }}
                     >
-                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30">
-                            {isLoaded ? (
-                                <DrawIoEmbed
-                                    key={`${drawioUi}-${darkMode}-${currentLang}`}
-                                    ref={drawioRef}
-                                    onExport={handleDiagramExport}
-                                    onLoad={onDrawioLoad}
-                                    onSave={handleDrawioSave}
-                                    baseUrl={drawioBaseUrl}
-                                    urlParameters={{
-                                        ui: drawioUi,
-                                        spin: true,
-                                        libraries: false,
-                                        saveAndExit: false,
-                                        noExitBtn: true,
-                                        dark: darkMode,
-                                        lang: currentLang,
-                                    }}
-                                />
-                            ) : (
-                                <div className="h-full w-full flex items-center justify-center bg-background">
-                                    <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+                        <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 relative">
+                            {isLoaded && (
+                                <div
+                                    className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
+                                >
+                                    <DrawIoEmbed
+                                        key={`${drawioUi}-${darkMode}-${currentLang}`}
+                                        ref={drawioRef}
+                                        onExport={handleDiagramExport}
+                                        onLoad={handleDrawioLoad}
+                                        onSave={handleDrawioSave}
+                                        baseUrl={drawioBaseUrl}
+                                        urlParameters={{
+                                            ui: drawioUi,
+                                            spin: false,
+                                            libraries: false,
+                                            saveAndExit: false,
+                                            noExitBtn: true,
+                                            dark: darkMode,
+                                            lang: currentLang,
+                                        }}
+                                    />
+                                </div>
+                            )}
+                            {(!isLoaded || !isDrawioReady) && (
+                                <div className="h-full w-full bg-background flex items-center justify-center">
+                                    <span className="text-muted-foreground">
+                                        Draw.io panel is loading...
+                                    </span>
                                 </div>
                             )}
                         </div>
