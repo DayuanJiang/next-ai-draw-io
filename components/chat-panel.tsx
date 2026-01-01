@@ -10,7 +10,13 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import type React from "react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react"
 import { flushSync } from "react-dom"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
@@ -28,7 +34,7 @@ import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { formatXML } from "@/lib/utils"
+import { cn, formatXML } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 import { DevXmlSimulator } from "./dev-xml-simulator"
 
@@ -202,6 +208,17 @@ export default function ChatPanel({
     // Flag to track if we've restored from localStorage
     const hasRestoredRef = useRef(false)
     const [isRestored, setIsRestored] = useState(false)
+
+    // Track previous isVisible to only animate when toggling (not on page load)
+    const prevIsVisibleRef = useRef(isVisible)
+    const [shouldAnimatePanel, setShouldAnimatePanel] = useState(false)
+    useEffect(() => {
+        // Only animate when visibility changes from false to true (not on initial load)
+        if (!prevIsVisibleRef.current && isVisible) {
+            setShouldAnimatePanel(true)
+        }
+        prevIsVisibleRef.current = isVisible
+    }, [isVisible])
 
     // Ref to track latest chartXML for use in callbacks (avoids stale closure)
     const chartXMLRef = useRef(chartXML)
@@ -430,7 +447,8 @@ export default function ChatPanel({
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
     // Restore messages and XML snapshots from localStorage on mount
-    useEffect(() => {
+    // useLayoutEffect runs synchronously before browser paint, so messages appear immediately
+    useLayoutEffect(() => {
         if (hasRestoredRef.current) return
         hasRestoredRef.current = true
 
@@ -461,7 +479,7 @@ export default function ChatPanel({
         } finally {
             setIsRestored(true)
         }
-    }, [setMessages])
+    }, [setMessages, dict.errors.sessionCorrupted])
 
     // Save messages to localStorage whenever they change (debounced to prevent blocking during streaming)
     useEffect(() => {
@@ -918,7 +936,12 @@ export default function ChatPanel({
 
     // Full view
     return (
-        <div className="h-full flex flex-col bg-card shadow-soft animate-slide-in-right rounded-xl border border-border/30 relative">
+        <div
+            className={cn(
+                "h-full flex flex-col bg-card shadow-soft rounded-xl border border-border/30 relative",
+                shouldAnimatePanel && "animate-slide-in-right",
+            )}
+        >
             <Toaster
                 position="bottom-center"
                 richColors
