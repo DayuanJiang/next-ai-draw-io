@@ -201,6 +201,7 @@ export default function ChatPanel({
 
     // Flag to track if we've restored from localStorage
     const hasRestoredRef = useRef(false)
+    const [isRestored, setIsRestored] = useState(false)
 
     // Ref to track latest chartXML for use in callbacks (avoids stale closure)
     const chartXMLRef = useRef(chartXML)
@@ -457,6 +458,8 @@ export default function ChatPanel({
             localStorage.removeItem(STORAGE_MESSAGES_KEY)
             localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
             toast.error(dict.errors.sessionCorrupted)
+        } finally {
+            setIsRestored(true)
         }
     }, [setMessages])
 
@@ -1006,6 +1009,7 @@ export default function ChatPanel({
                     onRegenerate={handleRegenerate}
                     status={status}
                     onEditMessage={handleEditMessage}
+                    isRestored={isRestored}
                 />
             </main>
 
