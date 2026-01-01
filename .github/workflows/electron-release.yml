@@ -38,7 +38,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build and publish Electron app
         run: npm run dist:${{ matrix.platform }}
