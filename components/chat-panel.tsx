@@ -943,10 +943,9 @@ export default function ChatPanel({
             )}
         >
             <Toaster
-                position="bottom-center"
+                position="bottom-left"
                 richColors
                 expand
-                style={{ position: "absolute" }}
                 toastOptions={{
                     style: {
                         maxWidth: "480px",
