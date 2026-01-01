@@ -48,7 +48,7 @@ import { validateAndFixXml } from "./xml-validation.js"
 
 // Server configuration
 const config = {
-    port: parseInt(process.env.PORT || "6002"),
+    port: parseInt(process.env.PORT || "6002", 10),
 }
 
 // Session state (single session for simplicity)
