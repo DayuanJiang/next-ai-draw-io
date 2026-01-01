@@ -47,20 +47,68 @@ export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 // sessionStorage keys
 const SESSION_STORAGE_INPUT_KEY = "next-ai-draw-io-input"
 
-// Type for message parts (tool calls and their states)
-interface MessagePart {
+// Type definitions for message parts and chat messages
+type MessageRole = "user" | "assistant" | "system"
+type ToolState =
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-error"
+    | "partial-call"
+
+// Base interface for common message part properties
+interface BaseMessagePart {
     type: string
-    state?: string
-    toolName?: string
-    input?: { xml?: string; [key: string]: unknown }
     [key: string]: unknown
 }
 
+// Text part in a message
+interface TextPart extends BaseMessagePart {
+    type: "text"
+    text: string
+}
+
+// File part in a message
+interface FilePart extends BaseMessagePart {
+    type: "file"
+    data: string
+    mimeType: string
+}
+
+// Tool call part with state tracking
+interface ToolPart extends BaseMessagePart {
+    type: `tool-${string}`
+    toolCallId: string
+    toolName?: string
+    state?: ToolState
+    input?: {
+        xml?: string
+        operations?: Array<{
+            operation: "update" | "add" | "delete"
+            cell_id: string
+            new_xml?: string
+        }>
+        [key: string]: unknown
+    }
+    output?: string
+}
+
+// Union type for all message parts
+type MessagePart = TextPart | FilePart | ToolPart | BaseMessagePart
+
 interface ChatMessage {
-    role: string
+    id: string
+    role: MessageRole
     parts?: MessagePart[]
     [key: string]: unknown
 }
+
+// Part types for building messages to send via the AI SDK
+// Note: The AI SDK's UIMessagePart has many variants (text, file, tool, reasoning, etc.)
+// We use specific types for what we build, but cast to the SDK's type when sending
+type SendableTextPart = { type: "text"; text: string }
+type SendableFilePart = { type: "file"; url: string; mediaType: string }
+type SendablePart = SendableTextPart | SendableFilePart
 
 interface ChatPanelProps {
     isVisible: boolean
@@ -79,6 +127,10 @@ const DEBUG = process.env.NODE_ENV === "development"
 const MAX_AUTO_RETRY_COUNT = 1
 
 const MAX_CONTINUATION_RETRY_COUNT = 2 // Limit for truncation continuation retries
+
+// Maximum messages to persist in localStorage to prevent storage overflow
+// Browser localStorage limit is typically 5-10MB per origin
+const MAX_PERSISTED_MESSAGES = 100
 
 /**
  * Check if auto-resubmit should happen based on tool errors.
@@ -182,7 +234,9 @@ export default function ChatPanel({
                 setDailyTokenLimit(data.dailyTokenLimit || 0)
                 setTpmLimit(data.tpmLimit || 0)
             })
-            .catch(() => {})
+            .catch((error) => {
+                console.warn("Failed to fetch config, using defaults:", error)
+            })
     }, [])
 
     // Quota management using extracted hook
@@ -315,22 +369,24 @@ export default function ChatPanel({
                             partsCount: msg.parts?.length,
                         })
                         if (msg.parts) {
-                            msg.parts.forEach((part: any, partIdx: number) => {
-                                console.log(
-                                    `[onError]   Part ${partIdx}:`,
-                                    JSON.stringify({
-                                        type: part.type,
-                                        toolName: part.toolName,
-                                        hasInput: !!part.input,
-                                        inputType: typeof part.input,
-                                        inputKeys:
-                                            part.input &&
-                                            typeof part.input === "object"
-                                                ? Object.keys(part.input)
-                                                : null,
-                                    }),
-                                )
-                            })
+                            msg.parts.forEach(
+                                (part: MessagePart, partIdx: number) => {
+                                    console.log(
+                                        `[onError]   Part ${partIdx}:`,
+                                        JSON.stringify({
+                                            type: part.type,
+                                            toolName: part.toolName,
+                                            hasInput: !!part.input,
+                                            inputType: typeof part.input,
+                                            inputKeys:
+                                                part.input &&
+                                                typeof part.input === "object"
+                                                    ? Object.keys(part.input)
+                                                    : null,
+                                        }),
+                                    )
+                                },
+                            )
                         }
                     })
                 }
@@ -438,11 +494,15 @@ export default function ChatPanel({
             },
         })
 
-    // Ref to track latest messages for unload persistence
+    // Refs to track latest values for unload persistence (avoids re-registering listener)
     const messagesRef = useRef(messages)
+    const sessionIdRef = useRef(sessionId)
     useEffect(() => {
         messagesRef.current = messages
     }, [messages])
+    useEffect(() => {
+        sessionIdRef.current = sessionId
+    }, [sessionId])
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -493,9 +553,11 @@ export default function ChatPanel({
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(() => {
             try {
+                // Limit messages to prevent localStorage overflow
+                const messagesToSave = messages.slice(-MAX_PERSISTED_MESSAGES)
                 localStorage.setItem(
                     STORAGE_MESSAGES_KEY,
-                    JSON.stringify(messages),
+                    JSON.stringify(messagesToSave),
                 )
             } catch (error) {
                 console.error("Failed to save messages to localStorage:", error)
@@ -538,12 +600,17 @@ export default function ChatPanel({
     }, [messages])
 
     // Save state right before page unload (refresh/close)
+    // Only register listener once - uses refs for latest values to avoid re-registration
     useEffect(() => {
         const handleBeforeUnload = () => {
             try {
+                // Limit messages to prevent localStorage overflow
+                const messagesToSave = messagesRef.current.slice(
+                    -MAX_PERSISTED_MESSAGES,
+                )
                 localStorage.setItem(
                     STORAGE_MESSAGES_KEY,
-                    JSON.stringify(messagesRef.current),
+                    JSON.stringify(messagesToSave),
                 )
                 localStorage.setItem(
                     STORAGE_XML_SNAPSHOTS_KEY,
@@ -555,7 +622,11 @@ export default function ChatPanel({
                 if (xml && xml.length > 300) {
                     localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, xml)
                 }
-                localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
+                // Use ref to get latest sessionId without re-registering listener
+                localStorage.setItem(
+                    STORAGE_SESSION_ID_KEY,
+                    sessionIdRef.current,
+                )
             } catch (error) {
                 console.error("Failed to persist state before unload:", error)
             }
@@ -564,7 +635,8 @@ export default function ChatPanel({
         window.addEventListener("beforeunload", handleBeforeUnload)
         return () =>
             window.removeEventListener("beforeunload", handleBeforeUnload)
-    }, [sessionId])
+        // Empty dependency array - listener registered once on mount
+    }, [])
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -625,7 +697,8 @@ export default function ChatPanel({
 
                 // Build user text by concatenating input with pre-extracted text
                 // (Backend only reads first text part, so we must combine them)
-                const parts: any[] = []
+                const parts: Array<{ type: string; [key: string]: unknown }> =
+                    []
                 const userText = await processFilesAndAppendContent(
                     input,
                     files,
@@ -726,8 +799,9 @@ export default function ChatPanel({
     }
 
     // Send chat message with headers
+    // Uses generic array type for SDK compatibility - our internal types are checked at construction
     const sendChatMessage = (
-        parts: any,
+        parts: Array<{ type: string; [key: string]: unknown }>,
         xml: string,
         previousXml: string,
         sessionId: string,
@@ -739,42 +813,39 @@ export default function ChatPanel({
 
         const config = getSelectedAIConfig()
 
-        sendMessage(
-            { parts },
-            {
-                body: { xml, previousXml, sessionId },
-                headers: {
-                    "x-access-code": config.accessCode,
-                    ...(config.aiProvider && {
-                        "x-ai-provider": config.aiProvider,
-                        ...(config.aiBaseUrl && {
-                            "x-ai-base-url": config.aiBaseUrl,
-                        }),
-                        ...(config.aiApiKey && {
-                            "x-ai-api-key": config.aiApiKey,
-                        }),
-                        ...(config.aiModel && { "x-ai-model": config.aiModel }),
-                        // AWS Bedrock credentials
-                        ...(config.awsAccessKeyId && {
-                            "x-aws-access-key-id": config.awsAccessKeyId,
-                        }),
-                        ...(config.awsSecretAccessKey && {
-                            "x-aws-secret-access-key":
-                                config.awsSecretAccessKey,
-                        }),
-                        ...(config.awsRegion && {
-                            "x-aws-region": config.awsRegion,
-                        }),
-                        ...(config.awsSessionToken && {
-                            "x-aws-session-token": config.awsSessionToken,
-                        }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI SDK's UIMessagePart type is complex; we validate our parts at construction
+        sendMessage({ parts } as any, {
+            body: { xml, previousXml, sessionId },
+            headers: {
+                "x-access-code": config.accessCode,
+                ...(config.aiProvider && {
+                    "x-ai-provider": config.aiProvider,
+                    ...(config.aiBaseUrl && {
+                        "x-ai-base-url": config.aiBaseUrl,
                     }),
-                    ...(minimalStyle && {
-                        "x-minimal-style": "true",
+                    ...(config.aiApiKey && {
+                        "x-ai-api-key": config.aiApiKey,
                     }),
-                },
+                    ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                    // AWS Bedrock credentials
+                    ...(config.awsAccessKeyId && {
+                        "x-aws-access-key-id": config.awsAccessKeyId,
+                    }),
+                    ...(config.awsSecretAccessKey && {
+                        "x-aws-secret-access-key": config.awsSecretAccessKey,
+                    }),
+                    ...(config.awsRegion && {
+                        "x-aws-region": config.awsRegion,
+                    }),
+                    ...(config.awsSessionToken && {
+                        "x-aws-session-token": config.awsSessionToken,
+                    }),
+                }),
+                ...(minimalStyle && {
+                    "x-minimal-style": "true",
+                }),
             },
-        )
+        })
     }
 
     // Process files and append content to user text (handles PDF, text, and optionally images)
@@ -782,7 +853,7 @@ export default function ChatPanel({
         baseText: string,
         files: File[],
         pdfData: Map<File, FileData>,
-        imageParts?: any[],
+        imageParts?: Array<{ type: string; [key: string]: unknown }>,
     ): Promise<string> => {
         let userText = baseText
 
@@ -835,7 +906,9 @@ export default function ChatPanel({
         const userParts = userMessage.parts
 
         // Get the text from the user message
-        const textPart = userParts?.find((p: any) => p.type === "text")
+        const textPart = userParts?.find(
+            (p): p is TextPart => p.type === "text",
+        )
         if (!textPart) return
 
         // Get the saved XML snapshot for this user message
@@ -891,12 +964,12 @@ export default function ChatPanel({
         cleanupSnapshotsAfter(messageIndex)
 
         // Create new parts with updated text
-        const newParts = message.parts?.map((part: any) => {
+        const newParts = message.parts?.map((part: MessagePart) => {
             if (part.type === "text") {
                 return { ...part, text: newText }
             }
             return part
-        }) || [{ type: "text", text: newText }]
+        }) || [{ type: "text" as const, text: newText }]
 
         // Remove the user message AND assistant message onwards (sendMessage will re-add the user message)
         // Use flushSync to ensure state update is processed synchronously before sending

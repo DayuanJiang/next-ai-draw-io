@@ -14,6 +14,7 @@ import {
     Plus,
     Server,
     Settings2,
+    Shield,
     Sparkles,
     Tag,
     Trash2,
@@ -1037,6 +1038,25 @@ export function ModelConfigDialog({
                                                                     }
                                                                 </p>
                                                             )}
+                                                        {/* Security warning for localStorage storage */}
+                                                        {selectedProvider.apiKey && (
+                                                            <p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                                                                <Shield className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                                                                <span>
+                                                                    API keys are
+                                                                    stored in
+                                                                    your
+                                                                    browser&apos;s
+                                                                    localStorage.
+                                                                    For enhanced
+                                                                    security,
+                                                                    avoid using
+                                                                    this on
+                                                                    shared
+                                                                    devices.
+                                                                </span>
+                                                            </p>
+                                                        )}
                                                     </div>
 
                                                     {/* Base URL */}

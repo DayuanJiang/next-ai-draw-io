@@ -466,7 +466,7 @@ function getHtmlPage(sessionId: string): string {
                 } else if ((msg.event === 'save' || msg.event === 'autosave') && msg.xml && msg.xml !== lastXml) {
                     // Request SVG export, then push state with SVG
                     pendingSvgExport = msg.xml;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '${DRAWIO_ORIGIN}');
                     // Fallback if export doesn't respond
                     setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
                 } else if (msg.event === 'export' && msg.data) {
@@ -489,7 +489,7 @@ function getHtmlPage(sessionId: string): string {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ sessionId, svg })
-                        }).catch(() => {});
+                        }).catch((err) => console.warn('Failed to save history SVG:', err));
                     }
                 }
             } catch {}
@@ -498,11 +498,11 @@ function getHtmlPage(sessionId: string): string {
         function loadDiagram(xml, capturePreview = false) {
             if (!isReady) { pendingXml = xml; return; }
             lastXml = xml;
-            iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml, autosave: 1 }), '*');
+            iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml, autosave: 1 }), '${DRAWIO_ORIGIN}');
             if (capturePreview) {
                 setTimeout(() => {
                     pendingAiSvg = true;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '${DRAWIO_ORIGIN}');
                 }, 500);
             }
         }
@@ -530,7 +530,7 @@ function getHtmlPage(sessionId: string): string {
                 // Handle sync request - server needs fresh state
                 if (s.syncRequested && !pendingSyncExport) {
                     pendingSyncExport = true;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '${DRAWIO_ORIGIN}');
                 }
                 // Load new diagram from server
                 if (s.version > currentVersion && s.xml) {
