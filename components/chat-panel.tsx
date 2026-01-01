@@ -216,9 +216,6 @@ export default function ChatPanel({
         // Only animate when visibility changes from false to true (not on initial load)
         if (!prevIsVisibleRef.current && isVisible) {
             setShouldAnimatePanel(true)
-            // Reset after animation completes to allow re-animation on next toggle
-            const timer = setTimeout(() => setShouldAnimatePanel(false), 300)
-            return () => clearTimeout(timer)
         }
         prevIsVisibleRef.current = isVisible
     }, [isVisible])
