@@ -212,6 +212,8 @@ export function ChatMessageDisplay({
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
+    // Ref to track chartXML to avoid re-running useEffect on every chartXML change during streaming
+    const chartXMLRef = useRef(chartXML)
     const processedToolCalls = processedToolCallsRef
     // Track the last processed XML per toolCallId to skip redundant processing during streaming
     const lastProcessedXmlRef = useRef<Map<string, string>>(new Map())
@@ -261,6 +263,11 @@ export function ChatMessageDisplay({
             restoredMessageIdsRef.current = new Set(messages.map((m) => m.id))
         }
     }, [isRestored, messages])
+
+    // Keep chartXMLRef in sync with chartXML (avoids re-running main effect on every chartXML change)
+    useEffect(() => {
+        chartXMLRef.current = chartXML
+    }, [chartXML])
 
     const setCopyState = (
         messageId: string,
@@ -398,8 +405,10 @@ export function ChatMessageDisplay({
                 try {
                     // If chartXML is empty, create a default mxfile structure to use with replaceNodes
                     // This ensures the XML is properly wrapped in mxfile/diagram/mxGraphModel format
+                    // Use ref to avoid recreating this callback on every chartXML change
+                    const currentChartXML = chartXMLRef.current
                     const baseXML =
-                        chartXML ||
+                        currentChartXML ||
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
                     const replacedXML = replaceNodes(baseXML, convertedXml)
 
@@ -455,7 +464,8 @@ export function ChatMessageDisplay({
                 }
             }
         },
-        [chartXML, onDisplayChart],
+        // NOTE: chartXML is accessed via chartXMLRef to avoid recreating this callback during streaming
+        [onDisplayChart],
     )
 
     useEffect(() => {
@@ -568,7 +578,9 @@ export function ChatMessageDisplay({
                                     toolCallId,
                                 )
                             ) {
-                                if (!chartXML) {
+                                // Use ref to get current chartXML without adding it to effect dependencies
+                                const currentChartXML = chartXMLRef.current
+                                if (!currentChartXML) {
                                     console.warn(
                                         "[edit_diagram streaming] No chart XML available",
                                     )
@@ -576,7 +588,7 @@ export function ChatMessageDisplay({
                                 }
                                 editDiagramOriginalXmlRef.current.set(
                                     toolCallId,
-                                    chartXML,
+                                    currentChartXML,
                                 )
                             }
 
@@ -675,7 +687,8 @@ export function ChatMessageDisplay({
         // The cleanup runs on every re-render (when messages changes),
         // which would cancel the timeout before it fires.
         // Let the timeouts complete naturally - they're harmless if component unmounts.
-    }, [messages, handleDisplayChart, chartXML])
+        // NOTE: chartXML is accessed via chartXMLRef to avoid re-running this effect during streaming
+    }, [messages, handleDisplayChart])
 
     const renderToolPart = (part: ToolPartLike) => {
         const callId = part.toolCallId

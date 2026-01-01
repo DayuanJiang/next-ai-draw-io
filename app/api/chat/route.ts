@@ -8,6 +8,7 @@ import {
     stepCountIs,
     streamText,
 } from "ai"
+import { timingSafeEqual } from "crypto"
 import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
 import path from "path"
@@ -37,6 +38,43 @@ export const maxDuration = 120
 // File upload limits (must match client-side)
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 const MAX_FILES = 5
+
+// Timing-safe string comparison to prevent timing attacks on access codes
+function timingSafeCompare(a: string, b: string): boolean {
+    try {
+        // Ensure both strings are same length to use timingSafeEqual
+        const bufA = Buffer.from(a, "utf8")
+        const bufB = Buffer.from(b, "utf8")
+
+        // If lengths differ, compare against a dummy buffer to maintain constant time
+        if (bufA.length !== bufB.length) {
+            const dummy = Buffer.alloc(bufA.length)
+            timingSafeEqual(bufA, dummy)
+            return false
+        }
+
+        return timingSafeEqual(bufA, bufB)
+    } catch {
+        return false
+    }
+}
+
+// Zod schema for request body validation
+// Note: Messages use passthrough() to be compatible with AI SDK's complex UIMessage types
+const MessageSchema = z
+    .object({
+        role: z.enum(["user", "assistant", "system"]),
+        parts: z.array(z.record(z.string(), z.unknown())).optional(),
+        content: z.string().optional(),
+    })
+    .passthrough()
+
+const ChatRequestSchema = z.object({
+    messages: z.array(MessageSchema).min(1, "At least one message is required"),
+    xml: z.string().optional(),
+    previousXml: z.string().optional(),
+    sessionId: z.string().max(200).optional(),
+})
 
 // Helper function to validate file parts in messages
 function validateFileParts(messages: any[]): {
@@ -160,7 +198,14 @@ async function handleChatRequest(req: Request): Promise<Response> {
             .filter(Boolean) || []
     if (accessCodes.length > 0) {
         const accessCodeHeader = req.headers.get("x-access-code")
-        if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
+        // Use timing-safe comparison to prevent timing attacks
+        const isValid =
+            accessCodeHeader &&
+            accessCodes.some((code) =>
+                timingSafeCompare(code, accessCodeHeader),
+            )
+
+        if (!isValid) {
             return Response.json(
                 {
                     error: "Invalid or missing access code. Please configure it in Settings.",
@@ -170,24 +215,35 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
-    const { messages, xml, previousXml, sessionId } = await req.json()
+    // Parse and validate request body with Zod
+    const body = await req.json()
+    const parseResult = ChatRequestSchema.safeParse(body)
+
+    if (!parseResult.success) {
+        return Response.json(
+            {
+                error: "Invalid request body",
+                details: parseResult.error.flatten().fieldErrors,
+            },
+            { status: 400 },
+        )
+    }
+
+    const { messages, xml, previousXml, sessionId } = parseResult.data
 
     // Get user ID for Langfuse tracking and quota
     const userId = getUserIdFromRequest(req)
 
-    // Validate sessionId for Langfuse (must be string, max 200 chars)
-    const validSessionId =
-        sessionId && typeof sessionId === "string" && sessionId.length <= 200
-            ? sessionId
-            : undefined
+    // sessionId is already validated by Zod schema (max 200 chars)
+    const validSessionId = sessionId
 
     // Extract user input text for Langfuse trace
     // Find the last USER message, not just the last message (which could be assistant in multi-step tool flows)
     const lastUserMessage = [...messages]
         .reverse()
-        .find((m: any) => m.role === "user")
-    const userInputText =
-        lastUserMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+        .find((m) => m.role === "user")
+    const textPart = lastUserMessage?.parts?.find((p) => p.type === "text")
+    const userInputText = (textPart?.text as string) || ""
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -236,10 +292,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]
-        const textPart = lastMessage.parts?.find((p: any) => p.type === "text")
-        const filePart = lastMessage.parts?.find((p: any) => p.type === "file")
+        const textPart = lastMessage.parts?.find((p) => p.type === "text")
+        const filePart = lastMessage.parts?.find((p) => p.type === "file")
 
-        const cached = findCachedResponse(textPart?.text || "", !!filePart)
+        const cached = findCachedResponse(
+            (textPart?.text as string) || "",
+            !!filePart,
+        )
 
         if (cached) {
             return createCachedStreamResponse(cached.xml)
@@ -317,7 +376,8 @@ ${userInputText}
 """`
 
     // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = await convertToModelMessages(messages)
+    // Cast messages to any for AI SDK compatibility - validation is done above
+    const modelMessages = await convertToModelMessages(messages as any)
 
     // DEBUG: Log incoming messages structure
     console.log("[route.ts] Incoming messages count:", messages.length)

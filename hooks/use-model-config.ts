@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { STORAGE_KEYS } from "@/lib/storage"
 import {
     createEmptyConfig,
@@ -147,11 +147,15 @@ export function useModelConfig(): UseModelConfigReturn {
         }
     }, [config, isLoaded])
 
-    // Derived state
-    const models = flattenModels(config)
-    const selectedModel = config.selectedModelId
-        ? findModelById(config, config.selectedModelId)
-        : undefined
+    // Derived state (memoized to prevent recalculation on every render)
+    const models = useMemo(() => flattenModels(config), [config])
+    const selectedModel = useMemo(
+        () =>
+            config.selectedModelId
+                ? findModelById(config, config.selectedModelId)
+                : undefined,
+        [config],
+    )
 
     // Actions
     const setSelectedModelId = useCallback((modelId: string | undefined) => {

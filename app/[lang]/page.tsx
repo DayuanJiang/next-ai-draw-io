@@ -138,7 +138,12 @@ export default function Home() {
                 !isInitialRenderRef.current &&
                 newIsMobile !== isMobileRef.current
             ) {
-                saveDiagramToStorage().catch(() => {})
+                saveDiagramToStorage().catch((error) => {
+                    console.warn(
+                        "Failed to save diagram on viewport change:",
+                        error,
+                    )
+                })
                 setIsDrawioReady(false)
                 resetDrawioReady()
             }
