@@ -64,6 +64,24 @@ Add to Cursor MCP config (`~/.cursor/mcp.json`):
 }
 ```
 
+### Cline (VS Code Extension)
+
+1. Click the **MCP Servers** icon in Cline's top menu bar
+2. Select the **Configure** tab
+3. Click **Configure MCP Servers** to edit `cline_mcp_settings.json`
+4. Add the drawio server:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"]
+    }
+  }
+}
+```
+
 ### Claude Code CLI
 
 ```bash
