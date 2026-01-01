@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
+import toast from "react-hot-toast"
 import { STORAGE_DIAGRAM_XML_KEY } from "@/components/chat-panel"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -315,6 +316,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 if (!url.startsWith("data:")) {
                     setTimeout(() => URL.revokeObjectURL(url), 100)
                 }
+                toast.success("Saved successfully!", { duration: 2500 })
             },
             format,
         }
