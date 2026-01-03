@@ -90,16 +90,33 @@ export async function getAllSessions(): Promise<ChatSession[]> {
 }
 
 export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
-    const sessions = await getAllSessions()
-    return sessions.map((s) => ({
-        id: s.id,
-        title: s.title,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-        messageCount: s.messages.length,
-        hasDiagram: !!s.diagramXml && s.diagramXml.trim().length > 0,
-        thumbnailDataUrl: s.thumbnailDataUrl,
-    }))
+    if (!isIndexedDBAvailable()) return []
+    try {
+        const db = await getDB()
+        const tx = db.transaction(STORE_NAME, "readonly")
+        const index = tx.store.index("by-updated")
+        const metadata: SessionMetadata[] = []
+
+        // Use cursor to read only metadata fields (avoids loading full messages/XML)
+        let cursor = await index.openCursor(null, "prev") // newest first
+        while (cursor) {
+            const s = cursor.value
+            metadata.push({
+                id: s.id,
+                title: s.title,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt,
+                messageCount: s.messages.length,
+                hasDiagram: !!s.diagramXml && s.diagramXml.trim().length > 0,
+                thumbnailDataUrl: s.thumbnailDataUrl,
+            })
+            cursor = await cursor.continue()
+        }
+        return metadata
+    } catch (error) {
+        console.error("Failed to get session metadata:", error)
+        return []
+    }
 }
 
 export async function getSession(id: string): Promise<ChatSession | null> {
@@ -207,7 +224,9 @@ export function createEmptySession(): ChatSession {
     }
 }
 
-// Helper: Extract title from first user message
+// Helper: Extract title from first user message (truncated to reasonable length)
+const MAX_TITLE_LENGTH = 100
+
 export function extractTitle(messages: StoredMessage[]): string {
     const firstUserMessage = messages.find((m) => m.role === "user")
     if (!firstUserMessage) return "New Chat"
@@ -218,6 +237,10 @@ export function extractTitle(messages: StoredMessage[]): string {
     const text = textPart.text.trim()
     if (!text) return "New Chat"
 
+    // Truncate long titles
+    if (text.length > MAX_TITLE_LENGTH) {
+        return text.slice(0, MAX_TITLE_LENGTH).trim() + "..."
+    }
     return text
 }
 
@@ -298,6 +321,9 @@ export async function migrateFromLocalStorage(): Promise<string | null> {
                         migrationSucceeded = true
                     }
                 }
+            } else {
+                // Empty array or invalid data - nothing to migrate, mark as success
+                migrationSucceeded = true
             }
         } else {
             // No data to migrate - mark as success
