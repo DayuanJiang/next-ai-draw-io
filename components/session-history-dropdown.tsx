@@ -165,8 +165,10 @@ export function SessionHistoryDropdown({
 
                 <PopoverContent
                     className="w-72 p-0 overflow-hidden"
-                    align="start"
+                    align="end"
+                    side="bottom"
                     sideOffset={8}
+                    collisionPadding={16}
                 >
                     {/* New Chat Button */}
                     <div className="border-b p-2">
@@ -181,7 +183,7 @@ export function SessionHistoryDropdown({
                     </div>
 
                     {/* Sessions List */}
-                    <div className="max-h-80 overflow-y-auto">
+                    <div className="h-[400px] overflow-y-auto">
                         {sessions.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 px-4">
                                 <MessagesSquare className="h-10 w-10 text-muted-foreground/50 mb-3" />
@@ -306,7 +308,7 @@ export function SessionHistoryDropdown({
                 open={deleteDialogOpen}
                 onOpenChange={setDeleteDialogOpen}
             >
-                <AlertDialogContent>
+                <AlertDialogContent className="max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {dict.sessionHistory?.deleteTitle ||
@@ -323,7 +325,7 @@ export function SessionHistoryDropdown({
                         </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleConfirmDelete}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400"
                         >
                             {dict.common.delete}
                         </AlertDialogAction>
