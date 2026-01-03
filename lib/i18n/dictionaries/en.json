@@ -224,7 +224,9 @@
         "deleteTitle": "Delete this chat?",
         "deleteDescription": "This will permanently delete this chat session and its diagram. This action cannot be undone.",
         "recentChats": "Recent Chats",
-        "justNow": "Just now"
+        "justNow": "Just now",
+        "searchPlaceholder": "Search chats...",
+        "noResults": "No chats found"
     },
     "modelConfig": {
         "title": "AI Model Configuration",

@@ -224,7 +224,9 @@
         "deleteTitle": "このチャットを削除しますか？",
         "deleteDescription": "このチャットセッションとダイアグラムは完全に削除されます。この操作は取り消せません。",
         "recentChats": "最近のチャット",
-        "justNow": "たった今"
+        "justNow": "たった今",
+        "searchPlaceholder": "チャットを検索...",
+        "noResults": "チャットが見つかりません"
     },
     "modelConfig": {
         "title": "AIモデル設定",

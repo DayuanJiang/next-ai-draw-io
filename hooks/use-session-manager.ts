@@ -149,12 +149,6 @@ export function useSessionManager(
                 // Check if this request is still the latest (sequence guard)
                 // If not, a newer URL change happened while we were loading
                 if (currentSequence !== urlChangeSequenceRef.current) {
-                    console.log(
-                        "[handleSessionIdChange] Skipping stale request, sequence:",
-                        currentSequence,
-                        "current:",
-                        urlChangeSequenceRef.current,
-                    )
                     return
                 }
 
@@ -290,12 +284,6 @@ export function useSessionManager(
                 forSessionId !== undefined &&
                 forSessionId !== currentSessionId
             ) {
-                console.log(
-                    "[saveCurrentSession] Skipping stale save for session:",
-                    forSessionId,
-                    "current:",
-                    currentSessionId,
-                )
                 return
             }
 
@@ -342,21 +330,8 @@ export function useSessionManager(
             setCurrentSession(updatedSession)
 
             // Update sessions list metadata
-            console.log(
-                "[saveCurrentSession] Updating sessions list for:",
-                updatedSession.id.slice(-8),
-                "thumbnail:",
-                updatedSession.thumbnailDataUrl ? "yes" : "no",
-            )
-            setSessions((prev) => {
-                console.log(
-                    "[saveCurrentSession] setSessions callback - prev sessions:",
-                    prev.map((s) => ({
-                        id: s.id.slice(-8),
-                        hasThumbnail: !!s.thumbnailDataUrl,
-                    })),
-                )
-                return prev.map((s) =>
+            setSessions((prev) =>
+                prev.map((s) =>
                     s.id === updatedSession.id
                         ? {
                               ...s,
@@ -369,8 +344,8 @@ export function useSessionManager(
                               thumbnailDataUrl: updatedSession.thumbnailDataUrl,
                           }
                         : s,
-                )
-            })
+                ),
+            )
         },
         [currentSession, currentSessionId, refreshSessions],
     )

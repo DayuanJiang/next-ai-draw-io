@@ -13,8 +13,10 @@ import {
     MessageSquare,
     Pencil,
     RotateCcw,
+    Search,
     ThumbsDown,
     ThumbsUp,
+    Trash2,
     X,
 } from "lucide-react"
 import Image from "next/image"
@@ -27,6 +29,16 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -204,6 +216,7 @@ interface ChatMessageDisplayProps {
     isRestored?: boolean
     sessions?: SessionMetadata[]
     onSelectSession?: (id: string) => void
+    onDeleteSession?: (id: string) => void
     loadedMessageIdsRef?: MutableRefObject<Set<string>>
 }
 
@@ -220,11 +233,13 @@ export function ChatMessageDisplay({
     isRestored = false,
     sessions = [],
     onSelectSession,
+    onDeleteSession,
     loadedMessageIdsRef,
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const scrollTopRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
     const processedToolCalls = processedToolCallsRef
     // Track the last processed XML per toolCallId to skip redundant processing during streaming
@@ -234,11 +249,12 @@ export function ChatMessageDisplay({
     // This ensures cached examples work correctly after starting a new session
     useEffect(() => {
         if (messages.length === 0) {
-            console.log("[ChatMessageDisplay] Resetting refs (messages empty)")
             previousXML.current = ""
             lastProcessedXmlRef.current.clear()
             // Note: processedToolCalls is passed from parent, so we clear it too
             processedToolCalls.current.clear()
+            // Scroll to top to show newest history items
+            scrollTopRef.current?.scrollIntoView({ behavior: "instant" })
         }
     }, [messages.length, processedToolCalls])
     // Debounce streaming diagram updates - store pending XML and timeout
@@ -280,6 +296,11 @@ export function ChatMessageDisplay({
     >({})
     // Track whether examples section is expanded (collapsed by default when there's history)
     const [examplesExpanded, setExamplesExpanded] = useState(false)
+    // Delete confirmation dialog state
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+    // Search filter for history
+    const [searchQuery, setSearchQuery] = useState("")
     // Track message IDs from initial load (for skipping animations)
     const restoredMessageIdsRef = useRef<Set<string>>(new Set())
 
@@ -379,17 +400,6 @@ export function ChatMessageDisplay({
     const handleDisplayChart = useCallback(
         (xml: string, showToast = false) => {
             let currentXml = xml || ""
-            const startTime = performance.now()
-            console.log(
-                "[handleDisplayChart] Called with xml length:",
-                currentXml.length,
-                "showToast:",
-                showToast,
-                "previousXML length:",
-                previousXML.current.length,
-                "chartXML length:",
-                chartXML?.length || 0,
-            )
 
             // During streaming (showToast=false), extract only complete mxCell elements
             // This allows progressive rendering even with partial/incomplete trailing XML
@@ -402,12 +412,6 @@ export function ChatMessageDisplay({
             }
 
             const convertedXml = convertToLegalXml(currentXml)
-            console.log(
-                "[handleDisplayChart] convertedXml length:",
-                convertedXml.length,
-                "equals previousXML:",
-                convertedXml === previousXML.current,
-            )
             if (convertedXml !== previousXML.current) {
                 // Parse and validate XML BEFORE calling replaceNodes
                 const parser = new DOMParser()
@@ -419,14 +423,8 @@ export function ChatMessageDisplay({
                 const parseError = testDoc.querySelector("parsererror")
 
                 if (parseError) {
-                    // Use console.warn instead of console.error to avoid triggering
-                    // Next.js dev mode error overlay for expected streaming states
-                    // (partial XML during streaming is normal and will be fixed by subsequent updates)
+                    // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
-                        // Only log as error and show toast if this is the final XML
-                        console.error(
-                            "[ChatMessageDisplay] Malformed XML detected in final output",
-                        )
                         toast.error(dict.errors.malformedXml)
                     }
                     return // Skip this update
@@ -440,18 +438,12 @@ export function ChatMessageDisplay({
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
                     const replacedXML = replaceNodes(baseXML, convertedXml)
 
-                    const xmlProcessTime = performance.now() - startTime
-
                     // During streaming (showToast=false), skip heavy validation for lower latency
                     // The quick DOM parse check above catches malformed XML
                     // Full validation runs on final output (showToast=true)
                     if (!showToast) {
                         previousXML.current = convertedXml
-                        const loadStartTime = performance.now()
                         onDisplayChart(replacedXML, true)
-                        console.log(
-                            `[Streaming] XML processing: ${xmlProcessTime.toFixed(1)}ms, drawio load: ${(performance.now() - loadStartTime).toFixed(1)}ms`,
-                        )
                         return
                     }
 
@@ -461,30 +453,12 @@ export function ChatMessageDisplay({
                         previousXML.current = convertedXml
                         // Use fixed XML if available, otherwise use original
                         const xmlToLoad = validation.fixed || replacedXML
-                        if (validation.fixes.length > 0) {
-                            console.log(
-                                "[ChatMessageDisplay] Auto-fixed XML issues:",
-                                validation.fixes,
-                            )
-                        }
-                        // Skip validation in loadDiagram since we already validated above
-                        const loadStartTime = performance.now()
                         onDisplayChart(xmlToLoad, true)
-                        console.log(
-                            `[Final] XML processing: ${xmlProcessTime.toFixed(1)}ms, validation+load: ${(performance.now() - loadStartTime).toFixed(1)}ms`,
-                        )
                     } else {
-                        console.error(
-                            "[ChatMessageDisplay] XML validation failed:",
-                            validation.error,
-                        )
                         toast.error(dict.errors.validationFailed)
                     }
                 } catch (error) {
-                    console.error(
-                        "[ChatMessageDisplay] Error processing XML:",
-                        error,
-                    )
+                    console.error("Error processing XML:", error)
                     // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
                         toast.error(dict.errors.failedToProcess)
@@ -526,12 +500,6 @@ export function ChatMessageDisplay({
         // Previous messages are already processed and won't change
         const messagesToProcess =
             messages.length > 0 ? [messages[messages.length - 1]] : []
-        console.log(
-            "[ChatMessageDisplay] useEffect - messagesToProcess:",
-            messagesToProcess.length,
-            "parts:",
-            messagesToProcess[0]?.parts?.length || 0,
-        )
 
         messagesToProcess.forEach((message) => {
             if (message.parts) {
@@ -539,18 +507,6 @@ export function ChatMessageDisplay({
                     if (part.type?.startsWith("tool-")) {
                         const toolPart = part as ToolPartLike
                         const { toolCallId, state, input } = toolPart
-                        console.log(
-                            "[ChatMessageDisplay] Found tool part:",
-                            part.type,
-                            "state:",
-                            state,
-                            "toolCallId:",
-                            toolCallId,
-                            "hasXml:",
-                            !!input?.xml,
-                            "processedAlready:",
-                            processedToolCalls.current.has(toolCallId),
-                        )
 
                         if (state === "output-available") {
                             setExpandedTools((prev) => ({
@@ -606,10 +562,6 @@ export function ChatMessageDisplay({
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
                                 // Final output - process immediately (clear any pending debounce)
-                                console.log(
-                                    "[ChatMessageDisplay] Processing output-available tool, xml length:",
-                                    xml.length,
-                                )
                                 if (debounceTimeoutRef.current) {
                                     clearTimeout(debounceTimeoutRef.current)
                                     debounceTimeoutRef.current = null
@@ -947,9 +899,11 @@ export function ChatMessageDisplay({
         const date = new Date(timestamp)
         const now = new Date()
         const diffMs = now.getTime() - date.getTime()
+        const diffMins = Math.floor(diffMs / (1000 * 60))
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
 
-        if (diffHours < 1) return dict.sessionHistory?.justNow || "Just now"
+        if (diffMins < 1) return dict.sessionHistory?.justNow || "Just now"
+        if (diffMins < 60) return `${diffMins}m ago`
         if (diffHours < 24) return `${diffHours}h ago`
 
         return date.toLocaleDateString(undefined, {
@@ -962,6 +916,7 @@ export function ChatMessageDisplay({
 
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
+            <div ref={scrollTopRef} />
             {messages.length === 0 && isRestored ? (
                 hasHistory ? (
                     // Show history + collapsible examples when there are sessions
@@ -972,45 +927,108 @@ export function ChatMessageDisplay({
                                 {dict.sessionHistory?.recentChats ||
                                     "Recent Chats"}
                             </p>
-                            <div className="space-y-2">
-                                {sessions.slice(0, 5).map((session) => (
+                            {/* Search Bar */}
+                            <div className="relative mb-3">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    placeholder={
+                                        dict.sessionHistory
+                                            ?.searchPlaceholder ||
+                                        "Search chats..."
+                                    }
+                                    value={searchQuery}
+                                    onChange={(e) =>
+                                        setSearchQuery(e.target.value)
+                                    }
+                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+                                />
+                                {searchQuery && (
                                     <button
-                                        key={session.id}
                                         type="button"
-                                        onClick={() =>
-                                            onSelectSession?.(session.id)
-                                        }
-                                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 text-left"
+                                        onClick={() => setSearchQuery("")}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors"
                                     >
-                                        {session.thumbnailDataUrl ? (
-                                            <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
-                                                <Image
-                                                    src={
-                                                        session.thumbnailDataUrl
-                                                    }
-                                                    alt=""
-                                                    width={48}
-                                                    height={48}
-                                                    className="object-contain w-full h-full"
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                <MessageSquare className="w-5 h-5 text-primary" />
-                                            </div>
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-sm font-medium truncate">
-                                                {session.title}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {formatSessionDate(
-                                                    session.updatedAt,
-                                                )}
-                                            </div>
-                                        </div>
+                                        <X className="w-3 h-3 text-muted-foreground" />
                                     </button>
-                                ))}
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                {sessions
+                                    .filter((session) =>
+                                        session.title
+                                            .toLowerCase()
+                                            .includes(
+                                                searchQuery.toLowerCase(),
+                                            ),
+                                    )
+                                    .map((session) => (
+                                        <button
+                                            type="button"
+                                            key={session.id}
+                                            className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
+                                            onClick={() =>
+                                                onSelectSession?.(session.id)
+                                            }
+                                        >
+                                            {session.thumbnailDataUrl ? (
+                                                <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
+                                                    <Image
+                                                        src={
+                                                            session.thumbnailDataUrl
+                                                        }
+                                                        alt=""
+                                                        width={48}
+                                                        height={48}
+                                                        className="object-contain w-full h-full"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                    <MessageSquare className="w-5 h-5 text-primary" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm font-medium truncate">
+                                                    {session.title}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {formatSessionDate(
+                                                        session.updatedAt,
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {onDeleteSession && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setSessionToDelete(
+                                                            session.id,
+                                                        )
+                                                        setDeleteDialogOpen(
+                                                            true,
+                                                        )
+                                                    }}
+                                                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                                    title={dict.common.delete}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </button>
+                                    ))}
+                                {sessions.filter((s) =>
+                                    s.title
+                                        .toLowerCase()
+                                        .includes(searchQuery.toLowerCase()),
+                                ).length === 0 &&
+                                    searchQuery && (
+                                        <p className="text-sm text-muted-foreground text-center py-4">
+                                            {dict.sessionHistory?.noResults ||
+                                                "No chats found"}
+                                        </p>
+                                    )}
                             </div>
                         </div>
 
@@ -1690,6 +1708,42 @@ export function ChatMessageDisplay({
                 </div>
             )}
             <div ref={messagesEndRef} />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+            >
+                <AlertDialogContent className="max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {dict.sessionHistory?.deleteTitle ||
+                                "Delete this chat?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {dict.sessionHistory?.deleteDescription ||
+                                "This will permanently delete this chat session and its diagram. This action cannot be undone."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>
+                            {dict.common.cancel}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (sessionToDelete && onDeleteSession) {
+                                    onDeleteSession(sessionToDelete)
+                                }
+                                setDeleteDialogOpen(false)
+                                setSessionToDelete(null)
+                            }}
+                            className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400"
+                        >
+                            {dict.common.delete}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </ScrollArea>
     )
 }

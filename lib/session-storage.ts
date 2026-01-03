@@ -218,8 +218,7 @@ export function extractTitle(messages: StoredMessage[]): string {
     const text = textPart.text.trim()
     if (!text) return "New Chat"
 
-    // Truncate to 50 chars
-    return text.length > 50 ? text.slice(0, 50) + "..." : text
+    return text
 }
 
 // Helper: Sanitize UIMessage to StoredMessage

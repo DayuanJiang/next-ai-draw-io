@@ -224,7 +224,9 @@
         "deleteTitle": "删除此对话？",
         "deleteDescription": "这将永久删除此聊天会话及其图表。此操作无法撤消。",
         "recentChats": "最近对话",
-        "justNow": "刚刚"
+        "justNow": "刚刚",
+        "searchPlaceholder": "搜索对话...",
+        "noResults": "未找到对话"
     },
     "modelConfig": {
         "title": "AI 模型配置",
