@@ -31,8 +31,7 @@ const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
 
 // Minimal blank diagram used to bootstrap new sessions.
 // This avoids the draw.io embed spinner (spin=1) getting stuck when no `load(xml)` is ever sent.
-const DEFAULT_DIAGRAM_XML =
-    `<mxfile host="app.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+const DEFAULT_DIAGRAM_XML = `<mxfile host="app.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
 
 // Normalize URL for iframe src - ensure no double slashes
 function normalizeUrl(url: string): string {
