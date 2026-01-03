@@ -29,10 +29,27 @@ function getOrigin(url: string): string {
 
 const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
 
+// Minimal blank diagram used to bootstrap new sessions.
+// This avoids the draw.io embed spinner (spin=1) getting stuck when no `load(xml)` is ever sent.
+const DEFAULT_DIAGRAM_XML = `<mxfile host="app.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+
 // Normalize URL for iframe src - ensure no double slashes
 function normalizeUrl(url: string): string {
     // Remove trailing slash to avoid double slashes
     return url.replace(/\/$/, "")
+}
+
+function isLikelyMcpSessionId(sessionId: string): boolean {
+    // Keep this cheap and conservative to avoid creating state for arbitrary IDs.
+    return sessionId.startsWith("mcp-") && sessionId.length <= 128
+}
+
+function ensureSessionStateInitialized(sessionId: string): void {
+    if (!sessionId) return
+    if (!isLikelyMcpSessionId(sessionId)) return
+    if (stateStore.has(sessionId)) return
+
+    setState(sessionId, DEFAULT_DIAGRAM_XML)
 }
 
 interface SessionState {
@@ -177,8 +194,11 @@ function handleRequest(
     }
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
+        const sessionId = url.searchParams.get("mcp") || ""
+        ensureSessionStateInitialized(sessionId)
+
         res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(getHtmlPage(url.searchParams.get("mcp") || ""))
+        res.end(getHtmlPage(sessionId))
     } else if (url.pathname === "/api/state") {
         handleStateApi(req, res, url)
     } else if (url.pathname === "/api/history") {
@@ -205,6 +225,7 @@ function handleStateApi(
             res.end(JSON.stringify({ error: "sessionId required" }))
             return
         }
+        ensureSessionStateInitialized(sessionId)
         const state = stateStore.get(sessionId)
         res.writeHead(200, { "Content-Type": "application/json" })
         res.end(
