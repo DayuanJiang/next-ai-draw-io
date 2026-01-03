@@ -113,11 +113,12 @@ export async function getSession(id: string): Promise<ChatSession | null> {
     }
 }
 
-export async function saveSession(session: ChatSession): Promise<void> {
-    if (!isIndexedDBAvailable()) return
+export async function saveSession(session: ChatSession): Promise<boolean> {
+    if (!isIndexedDBAvailable()) return false
     try {
         const db = await getDB()
         await db.put(STORE_NAME, session)
+        return true
     } catch (error) {
         // Handle quota exceeded
         if (
@@ -130,14 +131,17 @@ export async function saveSession(session: ChatSession): Promise<void> {
             try {
                 const db = await getDB()
                 await db.put(STORE_NAME, session)
+                return true
             } catch (retryError) {
                 console.error(
                     "Failed to save session after cleanup:",
                     retryError,
                 )
+                return false
             }
         } else {
             console.error("Failed to save session:", error)
+            return false
         }
     }
 }
@@ -269,6 +273,7 @@ export async function migrateFromLocalStorage(): Promise<string | null> {
         const savedXml = localStorage.getItem("next-ai-draw-io-diagram-xml")
 
         let newSessionId: string | null = null
+        let migrationSucceeded = false
 
         if (savedMessages) {
             const messages = JSON.parse(savedMessages)
@@ -285,24 +290,37 @@ export async function migrateFromLocalStorage(): Promise<string | null> {
                         : [],
                     diagramXml: savedXml || "",
                 }
-                await saveSession(session)
-                newSessionId = session.id
+                const saved = await saveSession(session)
+                if (saved) {
+                    // Verify the session was actually written
+                    const verified = await getSession(session.id)
+                    if (verified) {
+                        newSessionId = session.id
+                        migrationSucceeded = true
+                    }
+                }
             }
+        } else {
+            // No data to migrate - mark as success
+            migrationSucceeded = true
         }
 
-        // Mark migration complete
-        localStorage.setItem(MIGRATION_FLAG, "true")
-
-        // Clean up old keys
-        localStorage.removeItem("next-ai-draw-io-messages")
-        localStorage.removeItem("next-ai-draw-io-xml-snapshots")
-        localStorage.removeItem("next-ai-draw-io-diagram-xml")
+        // Only clean up old data if migration succeeded
+        if (migrationSucceeded) {
+            localStorage.setItem(MIGRATION_FLAG, "true")
+            localStorage.removeItem("next-ai-draw-io-messages")
+            localStorage.removeItem("next-ai-draw-io-xml-snapshots")
+            localStorage.removeItem("next-ai-draw-io-diagram-xml")
+        } else {
+            console.warn(
+                "Migration to IndexedDB failed - keeping localStorage data for retry",
+            )
+        }
 
         return newSessionId
     } catch (error) {
         console.error("Migration failed:", error)
-        // Don't block app - mark as migrated to prevent retry
-        localStorage.setItem(MIGRATION_FLAG, "true")
+        // Don't mark as migrated - allow retry on next load
         return null
     }
 }

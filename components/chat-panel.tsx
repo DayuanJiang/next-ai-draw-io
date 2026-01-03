@@ -550,9 +550,16 @@ export default function ChatPanel({
     ])
 
     // Save messages to session manager (debounced, only when not streaming)
+    // Destructure stable values to avoid effect re-running on every render
+    const {
+        isAvailable: sessionIsAvailable,
+        currentSessionId,
+        saveCurrentSession,
+    } = sessionManager
+
     useEffect(() => {
         if (!hasRestoredRef.current) return
-        if (!sessionManager.isAvailable) return
+        if (!sessionIsAvailable) return
         // Only save when not actively streaming to avoid write storms
         if (status === "streaming" || status === "submitted") return
 
@@ -562,32 +569,36 @@ export default function ChatPanel({
         }
 
         // Capture current session ID at schedule time to verify at save time
-        const scheduledForSessionId = sessionManager.currentSessionId
+        const scheduledForSessionId = currentSessionId
 
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(async () => {
-            // Save to session manager (IndexedDB)
-            // Pass scheduledForSessionId to verify we're saving to the correct session
-            // (prevents stale saves if user switched sessions within debounce window)
-            if (messages.length > 0) {
-                // Capture current thumbnail SVG (async export from draw.io)
-                const thumbnailSvg = await getThumbnailSvg()
-                if (thumbnailSvg) {
-                    latestSvgRef.current = thumbnailSvg
-                }
+            try {
+                // Save to session manager (IndexedDB)
+                // Pass scheduledForSessionId to verify we're saving to the correct session
+                // (prevents stale saves if user switched sessions within debounce window)
+                if (messages.length > 0) {
+                    // Capture current thumbnail SVG (async export from draw.io)
+                    const thumbnailSvg = await getThumbnailSvg()
+                    if (thumbnailSvg) {
+                        latestSvgRef.current = thumbnailSvg
+                    }
 
-                sessionManager.saveCurrentSession(
-                    {
-                        messages: sanitizeMessages(messages),
-                        xmlSnapshots: Array.from(
-                            xmlSnapshotsRef.current.entries(),
-                        ),
-                        diagramXml: chartXMLRef.current || "",
-                        thumbnailDataUrl: latestSvgRef.current || undefined,
-                        diagramHistory: diagramHistory,
-                    },
-                    scheduledForSessionId,
-                )
+                    await saveCurrentSession(
+                        {
+                            messages: sanitizeMessages(messages),
+                            xmlSnapshots: Array.from(
+                                xmlSnapshotsRef.current.entries(),
+                            ),
+                            diagramXml: chartXMLRef.current || "",
+                            thumbnailDataUrl: latestSvgRef.current || undefined,
+                            diagramHistory: diagramHistory,
+                        },
+                        scheduledForSessionId,
+                    )
+                }
+            } catch (error) {
+                console.error("Failed to save session:", error)
             }
         }, LOCAL_STORAGE_DEBOUNCE_MS)
 
@@ -597,7 +608,14 @@ export default function ChatPanel({
                 clearTimeout(localStorageDebounceRef.current)
             }
         }
-    }, [messages, status, sessionManager])
+    }, [
+        messages,
+        status,
+        diagramHistory,
+        sessionIsAvailable,
+        currentSessionId,
+        saveCurrentSession,
+    ])
 
     // Update URL when a new session is created (first message sent)
     useEffect(() => {
