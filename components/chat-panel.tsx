@@ -9,6 +9,7 @@ import {
     Settings,
 } from "lucide-react"
 import Image from "next/image"
+import { useRouter, useSearchParams } from "next/navigation"
 import type React from "react"
 import {
     useCallback,
@@ -22,16 +23,18 @@ import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
-import { ResetWarningModal } from "@/components/reset-warning-modal"
+import { SessionHistoryDropdown } from "@/components/session-history-dropdown"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDiagramToolHandlers } from "@/hooks/use-diagram-tool-handlers"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
+import { useSessionManager } from "@/hooks/use-session-manager"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+import { sanitizeMessages } from "@/lib/session-storage"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { cn, formatXML } from "@/lib/utils"
@@ -39,8 +42,6 @@ import { ChatMessageDisplay } from "./chat-message-display"
 import { DevXmlSimulator } from "./dev-xml-simulator"
 
 // localStorage keys for persistence
-const STORAGE_MESSAGES_KEY = "next-ai-draw-io-messages"
-const STORAGE_XML_SNAPSHOTS_KEY = "next-ai-draw-io-xml-snapshots"
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 
@@ -123,6 +124,9 @@ export default function ChatPanel({
     } = useDiagram()
 
     const dict = useDictionary()
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const urlSessionId = searchParams.get("session")
 
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
@@ -158,11 +162,14 @@ export default function ChatPanel({
 
     // Model configuration hook
     const modelConfig = useModelConfig()
+
+    // Session manager for chat history (pass URL session ID for restoration)
+    const sessionManager = useSessionManager({ initialSessionId: urlSessionId })
+
     const [input, setInput] = useState("")
     const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
-    const [showNewChatDialog, setShowNewChatDialog] = useState(false)
     const [minimalStyle, setMinimalStyle] = useState(false)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
@@ -446,59 +453,115 @@ export default function ChatPanel({
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
-    // Restore messages and XML snapshots from localStorage on mount
-    // useLayoutEffect runs synchronously before browser paint, so messages appear immediately
+    // Track last synced session ID to detect external changes (e.g., URL back/forward)
+    const lastSyncedSessionIdRef = useRef<string | null>(null)
+
+    // Restore messages and XML snapshots from session manager on mount
+    // This effect syncs with the session manager's loaded session
     useLayoutEffect(() => {
         if (hasRestoredRef.current) return
+        if (sessionManager.isLoading) return // Wait for session manager to load
+
         hasRestoredRef.current = true
 
         try {
-            // Restore messages
-            const savedMessages = localStorage.getItem(STORAGE_MESSAGES_KEY)
-            if (savedMessages) {
-                const parsed = JSON.parse(savedMessages)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setMessages(parsed)
+            const currentSession = sessionManager.currentSession
+            if (currentSession && currentSession.messages.length > 0) {
+                // Restore from session manager (IndexedDB)
+                setMessages(currentSession.messages as any)
+                xmlSnapshotsRef.current = new Map(currentSession.xmlSnapshots)
+                if (currentSession.diagramXml) {
+                    onDisplayChart(currentSession.diagramXml, true)
                 }
             }
-
-            // Restore XML snapshots
-            const savedSnapshots = localStorage.getItem(
-                STORAGE_XML_SNAPSHOTS_KEY,
-            )
-            if (savedSnapshots) {
-                const parsed = JSON.parse(savedSnapshots)
-                xmlSnapshotsRef.current = new Map(parsed)
-            }
+            // Initialize lastSyncedSessionIdRef to prevent sync effect from firing immediately
+            lastSyncedSessionIdRef.current = sessionManager.currentSessionId
+            // Note: Migration from old localStorage format is handled by session-storage.ts
         } catch (error) {
-            console.error("Failed to restore from localStorage:", error)
-            // On complete failure, clear storage to allow recovery
-            localStorage.removeItem(STORAGE_MESSAGES_KEY)
-            localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
+            console.error("Failed to restore session:", error)
             toast.error(dict.errors.sessionCorrupted)
         } finally {
             setIsRestored(true)
         }
-    }, [setMessages, dict.errors.sessionCorrupted])
+    }, [
+        sessionManager.isLoading,
+        sessionManager.currentSession,
+        setMessages,
+        dict.errors.sessionCorrupted,
+        onDisplayChart,
+    ])
 
-    // Save messages to localStorage whenever they change (debounced to prevent blocking during streaming)
+    // Sync UI when session changes externally (e.g., URL navigation via back/forward)
+    // This handles changes AFTER initial restore
+    useEffect(() => {
+        if (!isRestored) return // Wait for initial restore to complete
+        if (!sessionManager.isAvailable) return
+
+        const newSessionId = sessionManager.currentSessionId
+        const newSession = sessionManager.currentSession
+
+        // Skip if session ID hasn't changed (our own saves don't change the ID)
+        if (newSessionId === lastSyncedSessionIdRef.current) return
+
+        // Update last synced ID
+        lastSyncedSessionIdRef.current = newSessionId
+
+        // Sync UI with new session
+        if (newSession && newSession.messages.length > 0) {
+            setMessages(newSession.messages as any)
+            xmlSnapshotsRef.current = new Map(newSession.xmlSnapshots)
+            if (newSession.diagramXml) {
+                onDisplayChart(newSession.diagramXml, true)
+            } else {
+                clearDiagram()
+            }
+        } else if (!newSession) {
+            // Session cleared (new chat or no sessions)
+            setMessages([])
+            xmlSnapshotsRef.current.clear()
+            clearDiagram()
+        }
+    }, [
+        isRestored,
+        sessionManager.isAvailable,
+        sessionManager.currentSessionId,
+        sessionManager.currentSession,
+        setMessages,
+        onDisplayChart,
+        clearDiagram,
+    ])
+
+    // Save messages to session manager (debounced, only when not streaming)
     useEffect(() => {
         if (!hasRestoredRef.current) return
+        if (!sessionManager.isAvailable) return
+        // Only save when not actively streaming to avoid write storms
+        if (status === "streaming" || status === "submitted") return
 
         // Clear any pending save
         if (localStorageDebounceRef.current) {
             clearTimeout(localStorageDebounceRef.current)
         }
 
+        // Capture current session ID at schedule time to verify at save time
+        const scheduledForSessionId = sessionManager.currentSessionId
+
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(() => {
-            try {
-                localStorage.setItem(
-                    STORAGE_MESSAGES_KEY,
-                    JSON.stringify(messages),
+            // Save to session manager (IndexedDB)
+            // Pass scheduledForSessionId to verify we're saving to the correct session
+            // (prevents stale saves if user switched sessions within debounce window)
+            if (messages.length > 0) {
+                sessionManager.saveCurrentSession(
+                    {
+                        messages: sanitizeMessages(messages),
+                        xmlSnapshots: Array.from(
+                            xmlSnapshotsRef.current.entries(),
+                        ),
+                        diagramXml: chartXMLRef.current || "",
+                    },
+                    scheduledForSessionId,
                 )
-            } catch (error) {
-                console.error("Failed to save messages to localStorage:", error)
             }
         }, LOCAL_STORAGE_DEBOUNCE_MS)
 
@@ -508,23 +571,17 @@ export default function ChatPanel({
                 clearTimeout(localStorageDebounceRef.current)
             }
         }
-    }, [messages])
+    }, [messages, status, sessionManager])
 
-    // Save XML snapshots to localStorage whenever they change
-    const saveXmlSnapshots = useCallback(() => {
-        try {
-            const snapshotsArray = Array.from(xmlSnapshotsRef.current.entries())
-            localStorage.setItem(
-                STORAGE_XML_SNAPSHOTS_KEY,
-                JSON.stringify(snapshotsArray),
-            )
-        } catch (error) {
-            console.error(
-                "Failed to save XML snapshots to localStorage:",
-                error,
-            )
+    // Update URL when a new session is created (first message sent)
+    useEffect(() => {
+        if (sessionManager.currentSessionId && !urlSessionId) {
+            // A session was created but URL doesn't have the session param yet
+            router.replace(`?session=${sessionManager.currentSessionId}`, {
+                scroll: false,
+            })
         }
-    }, [])
+    }, [sessionManager.currentSessionId, urlSessionId, router])
 
     // Save session ID to localStorage
     useEffect(() => {
@@ -536,35 +593,6 @@ export default function ChatPanel({
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
         }
     }, [messages])
-
-    // Save state right before page unload (refresh/close)
-    useEffect(() => {
-        const handleBeforeUnload = () => {
-            try {
-                localStorage.setItem(
-                    STORAGE_MESSAGES_KEY,
-                    JSON.stringify(messagesRef.current),
-                )
-                localStorage.setItem(
-                    STORAGE_XML_SNAPSHOTS_KEY,
-                    JSON.stringify(
-                        Array.from(xmlSnapshotsRef.current.entries()),
-                    ),
-                )
-                const xml = chartXMLRef.current
-                if (xml && xml.length > 300) {
-                    localStorage.setItem(STORAGE_DIAGRAM_XML_KEY, xml)
-                }
-                localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
-            } catch (error) {
-                console.error("Failed to persist state before unload:", error)
-            }
-        }
-
-        window.addEventListener("beforeunload", handleBeforeUnload)
-        return () =>
-            window.removeEventListener("beforeunload", handleBeforeUnload)
-    }, [sessionId])
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -648,7 +676,6 @@ export default function ChatPanel({
                 // Save XML snapshot for this message (will be at index = current messages.length)
                 const messageIndex = messages.length
                 xmlSnapshotsRef.current.set(messageIndex, chartXml)
-                saveXmlSnapshots()
 
                 sendChatMessage(parts, chartXml, previousXml, sessionId)
 
@@ -662,7 +689,94 @@ export default function ChatPanel({
         }
     }
 
-    const handleNewChat = useCallback(() => {
+    // Handle session switching from history dropdown
+    const handleSelectSession = useCallback(
+        async (sessionId: string) => {
+            if (!sessionManager.isAvailable) return
+
+            // Save current session before switching
+            if (messages.length > 0) {
+                await sessionManager.saveCurrentSession({
+                    messages: sanitizeMessages(messages),
+                    xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
+                    diagramXml: chartXMLRef.current || "",
+                })
+            }
+
+            // Switch to selected session
+            const sessionData = await sessionManager.switchSession(sessionId)
+            if (sessionData) {
+                setMessages(sessionData.messages as any)
+                xmlSnapshotsRef.current = new Map(sessionData.xmlSnapshots)
+                if (sessionData.diagramXml) {
+                    onDisplayChart(sessionData.diagramXml, true)
+                } else {
+                    clearDiagram()
+                }
+                // Update URL with new session ID
+                router.replace(`?session=${sessionId}`, { scroll: false })
+            }
+        },
+        [
+            sessionManager,
+            messages,
+            setMessages,
+            onDisplayChart,
+            clearDiagram,
+            router,
+        ],
+    )
+
+    // Handle session deletion from history dropdown
+    const handleDeleteSession = useCallback(
+        async (sessionId: string) => {
+            if (!sessionManager.isAvailable) return
+            const result = await sessionManager.deleteSession(sessionId)
+
+            if (result.wasCurrentSession) {
+                if (result.switchedTo) {
+                    // Switched to another session - update UI and URL
+                    setMessages(result.switchedTo.data.messages as any)
+                    xmlSnapshotsRef.current = new Map(
+                        result.switchedTo.data.xmlSnapshots,
+                    )
+                    if (result.switchedTo.data.diagramXml) {
+                        onDisplayChart(result.switchedTo.data.diagramXml, true)
+                    } else {
+                        clearDiagram()
+                    }
+                    router.replace(`?session=${result.switchedTo.id}`, {
+                        scroll: false,
+                    })
+                } else {
+                    // No sessions left - clear UI and URL
+                    setMessages([])
+                    xmlSnapshotsRef.current.clear()
+                    clearDiagram()
+                    router.replace(window.location.pathname, { scroll: false })
+                }
+            }
+        },
+        [sessionManager, setMessages, clearDiagram, onDisplayChart, router],
+    )
+
+    const handleNewChat = useCallback(async () => {
+        // Save current session before creating new one
+        if (sessionManager.isAvailable && messages.length > 0) {
+            await sessionManager.saveCurrentSession({
+                messages: sanitizeMessages(messages),
+                xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
+                diagramXml: chartXMLRef.current || "",
+            })
+            // Refresh sessions list to ensure dropdown shows the saved session
+            await sessionManager.refreshSessions()
+        }
+
+        // Clear session manager state BEFORE clearing URL to prevent race condition
+        // (otherwise the URL update effect would restore the old session URL)
+        sessionManager.clearCurrentSession()
+
+        // Clear UI state
         setMessages([])
         clearDiagram()
         handleFileChange([]) // Use handleFileChange to also clear pdfData
@@ -671,21 +785,21 @@ export default function ChatPanel({
             .slice(2, 9)}`
         setSessionId(newSessionId)
         xmlSnapshotsRef.current.clear()
-        // Clear localStorage with error handling
-        try {
-            localStorage.removeItem(STORAGE_MESSAGES_KEY)
-            localStorage.removeItem(STORAGE_XML_SNAPSHOTS_KEY)
-            localStorage.removeItem(STORAGE_DIAGRAM_XML_KEY)
-            localStorage.setItem(STORAGE_SESSION_ID_KEY, newSessionId)
-            sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
-            toast.success(dict.dialogs.clearSuccess)
-        } catch (error) {
-            console.error("Failed to clear localStorage:", error)
-            toast.warning(dict.errors.storageUpdateFailed)
-        }
+        sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
+        toast.success(dict.dialogs.clearSuccess)
 
-        setShowNewChatDialog(false)
-    }, [clearDiagram, handleFileChange, setMessages, setSessionId])
+        // Clear URL param to show blank state
+        router.replace(window.location.pathname, { scroll: false })
+    }, [
+        clearDiagram,
+        handleFileChange,
+        setMessages,
+        setSessionId,
+        sessionManager,
+        messages,
+        router,
+        dict.dialogs.clearSuccess,
+    ])
 
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -722,7 +836,6 @@ export default function ChatPanel({
                 xmlSnapshotsRef.current.delete(key)
             }
         }
-        saveXmlSnapshots()
     }
 
     // Send chat message with headers
@@ -958,7 +1071,12 @@ export default function ChatPanel({
                 className={`${isMobile ? "px-3 py-2" : "px-5 py-4"} border-b border-border/50`}
             >
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 overflow-x-hidden">
+                    <button
+                        type="button"
+                        onClick={handleNewChat}
+                        className="flex items-center gap-2 overflow-x-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                        title={dict.nav.newChat}
+                    >
                         <div className="flex items-center gap-2">
                             <Image
                                 src={
@@ -977,13 +1095,27 @@ export default function ChatPanel({
                                 Next AI Drawio
                             </h1>
                         </div>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-1 justify-end overflow-visible">
+                        {/* Session History Dropdown */}
+                        {sessionManager.isAvailable && (
+                            <SessionHistoryDropdown
+                                sessions={sessionManager.sessions}
+                                currentSessionId={
+                                    sessionManager.currentSessionId
+                                }
+                                isLoading={sessionManager.isLoading}
+                                onNewChat={handleNewChat}
+                                onSelectSession={handleSelectSession}
+                                onDeleteSession={handleDeleteSession}
+                            />
+                        )}
+
                         <ButtonWithTooltip
                             tooltipContent={dict.nav.newChat}
                             variant="ghost"
                             size="icon"
-                            onClick={() => setShowNewChatDialog(true)}
+                            onClick={handleNewChat}
                             className="hover:bg-accent"
                         >
                             <MessageSquarePlus
@@ -1055,7 +1187,6 @@ export default function ChatPanel({
                     status={status}
                     onSubmit={onFormSubmit}
                     onChange={handleInputChange}
-                    onClearChat={handleNewChat}
                     files={files}
                     onFileChange={handleFileChange}
                     pdfData={pdfData}
@@ -1085,12 +1216,6 @@ export default function ChatPanel({
                 open={showModelConfigDialog}
                 onOpenChange={setShowModelConfigDialog}
                 modelConfig={modelConfig}
-            />
-
-            <ResetWarningModal
-                open={showNewChatDialog}
-                onOpenChange={setShowNewChatDialog}
-                onClear={handleNewChat}
             />
         </div>
     )

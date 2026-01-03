@@ -64,6 +64,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
+        "idb": "^8.0.3",
         "js-tiktoken": "^1.0.21",
         "jsdom": "^27.0.0",
         "jsonrepair": "^3.13.1",
@@ -89,9 +90,9 @@
         "zod": "^4.1.12"
     },
     "optionalDependencies": {
+        "@tailwindcss/oxide-linux-x64-gnu": "^4.1.18",
         "lightningcss": "^1.30.2",
-        "lightningcss-linux-x64-gnu": "^1.30.2",
-        "@tailwindcss/oxide-linux-x64-gnu": "^4.1.18"
+        "lightningcss-linux-x64-gnu": "^1.30.2"
     },
     "lint-staged": {
         "*.{js,ts,jsx,tsx,json,css}": [

@@ -1,6 +1,6 @@
 "use client"
 import { usePathname, useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
@@ -266,16 +266,24 @@ export default function Home() {
                     onExpand={() => setIsChatVisible(true)}
                 >
                     <div className={`h-full ${isMobile ? "p-1" : "py-2 pr-2"}`}>
-                        <ChatPanel
-                            isVisible={isChatVisible}
-                            onToggleVisibility={toggleChatPanel}
-                            drawioUi={drawioUi}
-                            onToggleDrawioUi={handleDrawioUiChange}
-                            darkMode={darkMode}
-                            onToggleDarkMode={handleDarkModeChange}
-                            isMobile={isMobile}
-                            onCloseProtectionChange={setCloseProtection}
-                        />
+                        <Suspense
+                            fallback={
+                                <div className="h-full bg-card rounded-xl border border-border/30 flex items-center justify-center text-muted-foreground">
+                                    Loading chat...
+                                </div>
+                            }
+                        >
+                            <ChatPanel
+                                isVisible={isChatVisible}
+                                onToggleVisibility={toggleChatPanel}
+                                drawioUi={drawioUi}
+                                onToggleDrawioUi={handleDrawioUiChange}
+                                darkMode={darkMode}
+                                onToggleDarkMode={handleDarkModeChange}
+                                isMobile={isMobile}
+                                onCloseProtectionChange={setCloseProtection}
+                            />
+                        </Suspense>
                     </div>
                 </ResizablePanel>
             </ResizablePanelGroup>
