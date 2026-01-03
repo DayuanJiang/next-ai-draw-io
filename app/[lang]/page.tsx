@@ -12,12 +12,14 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
+    const dict = useDictionary()
     const {
         drawioRef,
         handleDiagramExport,
@@ -59,14 +61,17 @@ export default function Home() {
     // We use mouse position to determine if the user is interacting with draw.io
     const handleDrawioSave = useCallback(() => {
         if (!mouseOverDrawioRef.current) return
-        if (isSavingRef.current) return
+
         isSavingRef.current = true
         setShowSaveDialog(true)
-        toast.success("Saved successfully!", {
+        toast.success(dict.save.savedSuccessfully, {
             position: "bottom-left",
             duration: 2500,
         })
-    }, [setShowSaveDialog])
+        if (!showSaveDialog) {
+            setShowSaveDialog(true)
+        }
+    }, [dict.save.savedSuccessfully, setShowSaveDialog, showSaveDialog])
 
     // Load preferences from localStorage after mount
     useEffect(() => {

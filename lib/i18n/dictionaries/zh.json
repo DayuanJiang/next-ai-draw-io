@@ -117,7 +117,8 @@
             "drawio": "Draw.io XML",
             "png": "PNG 图片",
             "svg": "SVG 图片"
-        }
+        },
+        "savedSuccessfully": "保存成功！"
     },
     "history": {
         "title": "图表历史",
