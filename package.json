@@ -77,7 +77,6 @@
         "react": "^19.1.2",
         "react-dom": "^19.1.2",
         "react-drawio": "^1.0.3",
-        "react-hot-toast": "^2.6.0",
         "react-icons": "^5.5.0",
         "react-markdown": "^10.1.0",
         "react-resizable-panels": "^3.0.6",

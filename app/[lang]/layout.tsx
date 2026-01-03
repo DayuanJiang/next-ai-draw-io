@@ -2,7 +2,6 @@ import { GoogleAnalytics } from "@next/third-parties/google"
 import type { Metadata, Viewport } from "next"
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
 import { notFound } from "next/navigation"
-import { Toaster } from "react-hot-toast"
 import { DiagramProvider } from "@/contexts/diagram-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Locale } from "@/lib/i18n/config"
@@ -164,7 +163,6 @@ export default async function RootLayout({
                 <DictionaryProvider dictionary={dictionary}>
                     <DiagramProvider>{children}</DiagramProvider>
                 </DictionaryProvider>
-                <Toaster position="bottom-right" />
             </body>
             {process.env.NEXT_PUBLIC_GA_ID && (
                 <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />

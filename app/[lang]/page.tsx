@@ -3,6 +3,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
+import { toast } from "sonner"
 import ChatPanel from "@/components/chat-panel"
 import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
@@ -61,6 +62,10 @@ export default function Home() {
         if (isSavingRef.current) return
         isSavingRef.current = true
         setShowSaveDialog(true)
+        toast.success("Saved successfully!", {
+            position: "bottom-left",
+            duration: 2500,
+        })
     }, [setShowSaveDialog])
 
     // Load preferences from localStorage after mount
