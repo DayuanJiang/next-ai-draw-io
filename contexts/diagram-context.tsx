@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -47,6 +47,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const resolverRef = useRef<((value: string) => void) | null>(null)
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false)
+    // Track if diagram has been restored after DrawIO remount (e.g., theme change)
+    const hasDiagramRestoredRef = useRef<boolean>(false)
+    // Track latest chartXML for restoration after remount
+    const chartXMLRef = useRef<string>("")
 
     const onDrawioLoad = () => {
         // Only set ready state once to prevent infinite loops
@@ -59,6 +63,29 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         hasCalledOnLoadRef.current = false
         setIsDrawioReady(false)
     }
+
+    // Keep chartXMLRef in sync with state for restoration after remount
+    useEffect(() => {
+        chartXMLRef.current = chartXML
+    }, [chartXML])
+
+    // Restore diagram when DrawIO becomes ready after remount (e.g., theme/UI change)
+    useEffect(() => {
+        // Reset restore flag when DrawIO is not ready (preparing for next restore cycle)
+        if (!isDrawioReady) {
+            hasDiagramRestoredRef.current = false
+            return
+        }
+        // Only restore once per ready cycle
+        if (hasDiagramRestoredRef.current) return
+        hasDiagramRestoredRef.current = true
+
+        // Restore diagram from ref if we have one
+        const xmlToRestore = chartXMLRef.current
+        if (xmlToRestore && xmlToRestore.length > 300 && drawioRef.current) {
+            drawioRef.current.load({ xml: xmlToRestore })
+        }
+    }, [isDrawioReady])
 
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
@@ -103,7 +130,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             ])
 
             // Update latestSvg so it's available for future saves
-            if (svgData && svgData.includes("<svg")) {
+            if (svgData?.includes("<svg")) {
                 setLatestSvg(svgData)
                 return svgData
             }

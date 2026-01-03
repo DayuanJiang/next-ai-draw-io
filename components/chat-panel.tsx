@@ -620,6 +620,44 @@ export default function ChatPanel({
         }
     }, [messages])
 
+    // Save session when page becomes hidden (tab switch, close, navigate away)
+    // This is more reliable than beforeunload for async IndexedDB operations
+    useEffect(() => {
+        if (!sessionManager.isAvailable) return
+
+        const handleVisibilityChange = async () => {
+            if (
+                document.visibilityState === "hidden" &&
+                messagesRef.current.length > 0
+            ) {
+                try {
+                    // Attempt to save session - browser may not wait for completion
+                    // but this gives us the best chance to persist data
+                    await sessionManager.saveCurrentSession({
+                        messages: sanitizeMessages(messagesRef.current),
+                        xmlSnapshots: Array.from(
+                            xmlSnapshotsRef.current.entries(),
+                        ),
+                        diagramXml: chartXMLRef.current || "",
+                        diagramHistory: diagramHistory,
+                    })
+                } catch (error) {
+                    console.error(
+                        "Failed to save session on visibility change:",
+                        error,
+                    )
+                }
+            }
+        }
+
+        document.addEventListener("visibilitychange", handleVisibilityChange)
+        return () =>
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange,
+            )
+    }, [sessionManager, diagramHistory])
+
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         const isProcessing = status === "streaming" || status === "submitted"

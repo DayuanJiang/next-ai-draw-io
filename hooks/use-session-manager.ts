@@ -13,7 +13,6 @@ import {
     migrateFromLocalStorage,
     type SessionMetadata,
     type StoredMessage,
-    sanitizeMessages,
     saveSession,
 } from "@/lib/session-storage"
 
@@ -384,7 +383,7 @@ export function useSessionManager(
                 ),
             )
         },
-        [currentSession, refreshSessions],
+        [currentSession, currentSessionId, refreshSessions],
     )
 
     // Update session title manually
