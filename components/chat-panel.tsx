@@ -839,18 +839,9 @@ export default function ChatPanel({
             const result = await sessionManager.deleteSession(sessionId)
 
             if (result.wasCurrentSession) {
-                if (result.switchedTo) {
-                    // Switched to another session - update UI and URL
-                    justLoadedSessionRef.current = true
-                    syncUIWithSession(result.switchedTo.data)
-                    router.replace(`?session=${result.switchedTo.id}`, {
-                        scroll: false,
-                    })
-                } else {
-                    // No sessions left - clear UI and URL
-                    syncUIWithSession(null)
-                    router.replace(window.location.pathname, { scroll: false })
-                }
+                // Deleted current session - clear UI and URL
+                syncUIWithSession(null)
+                router.replace(window.location.pathname, { scroll: false })
             }
         },
         [sessionManager, syncUIWithSession, router],

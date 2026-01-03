@@ -35,10 +35,7 @@ export interface UseSessionManagerReturn {
     // Actions
     createNewSession: () => Promise<string>
     switchSession: (id: string) => Promise<SessionData | null>
-    deleteSession: (id: string) => Promise<{
-        wasCurrentSession: boolean
-        switchedTo?: { id: string; data: SessionData }
-    }>
+    deleteSession: (id: string) => Promise<{ wasCurrentSession: boolean }>
     // forSessionId: optional session ID to verify save targets correct session (prevents stale debounce writes)
     saveCurrentSession: (
         data: SessionData,
@@ -242,33 +239,23 @@ export function useSessionManager(
     )
 
     // Delete a session
-    // Returns: { wasCurrentSession, switchedTo?: { id, data } } to let caller update UI/URL
     const deleteSession = useCallback(
-        async (
-            id: string,
-        ): Promise<{
-            wasCurrentSession: boolean
-            switchedTo?: { id: string; data: SessionData }
-        }> => {
+        async (id: string): Promise<{ wasCurrentSession: boolean }> => {
             const wasCurrentSession = id === currentSessionId
             await deleteSessionFromDB(id)
-
-            let switchedTo: { id: string; data: SessionData } | undefined
 
             // If deleting current session, clear state (caller will show new empty session)
             if (wasCurrentSession) {
                 setCurrentSession(null)
                 setCurrentSessionId(null)
                 localStorage.removeItem(CURRENT_SESSION_KEY)
-                // Don't switch to another session - always go to new empty session
             }
 
-            // Refresh list
             await refreshSessions()
 
-            return { wasCurrentSession, switchedTo }
+            return { wasCurrentSession }
         },
-        [currentSessionId, sessions, refreshSessions],
+        [currentSessionId, refreshSessions],
     )
 
     // Save current session data (debounced externally by caller)

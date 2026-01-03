@@ -301,8 +301,6 @@ export function ChatMessageDisplay({
     const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
     // Search filter for history
     const [searchQuery, setSearchQuery] = useState("")
-    // Track message IDs from initial load (for skipping animations)
-    const restoredMessageIdsRef = useRef<Set<string>>(new Set())
 
     const setCopyState = (
         messageId: string,
@@ -963,13 +961,26 @@ export function ChatMessageDisplay({
                                             ),
                                     )
                                     .map((session) => (
-                                        <button
-                                            type="button"
+                                        // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested delete button which causes hydration error
+                                        <div
                                             key={session.id}
+                                            role="button"
+                                            tabIndex={0}
                                             className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
                                             onClick={() =>
                                                 onSelectSession?.(session.id)
                                             }
+                                            onKeyDown={(e) => {
+                                                if (
+                                                    e.key === "Enter" ||
+                                                    e.key === " "
+                                                ) {
+                                                    e.preventDefault()
+                                                    onSelectSession?.(
+                                                        session.id,
+                                                    )
+                                                }
+                                            }}
                                         >
                                             {session.thumbnailDataUrl ? (
                                                 <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
@@ -1016,7 +1027,7 @@ export function ChatMessageDisplay({
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             )}
-                                        </button>
+                                        </div>
                                     ))}
                                 {sessions.filter((s) =>
                                     s.title
@@ -1086,11 +1097,10 @@ export function ChatMessageDisplay({
                                     .slice(messageIndex + 1)
                                     .every((m) => m.role !== "user"))
                         const isEditing = editingMessageId === message.id
-                        // Skip animation for restored/loaded messages
+                        // Skip animation for loaded messages (from session restore)
                         const isRestoredMessage =
-                            restoredMessageIdsRef.current.has(message.id) ||
-                            (loadedMessageIdsRef?.current.has(message.id) ??
-                                false)
+                            loadedMessageIdsRef?.current.has(message.id) ??
+                            false
                         return (
                             <div
                                 key={message.id}
