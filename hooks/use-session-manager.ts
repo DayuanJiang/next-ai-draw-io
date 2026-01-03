@@ -261,35 +261,12 @@ export function useSessionManager(
 
             let switchedTo: { id: string; data: SessionData } | undefined
 
-            // If deleting current session, switch to another or clear state
+            // If deleting current session, clear state (caller will show new empty session)
             if (wasCurrentSession) {
-                // Clear current session FIRST to prevent switchSession from re-saving it
                 setCurrentSession(null)
                 setCurrentSessionId(null)
                 localStorage.removeItem(CURRENT_SESSION_KEY)
-
-                const remaining = sessions.filter((s) => s.id !== id)
-                if (remaining.length > 0) {
-                    // Load the next session directly without going through switchSession
-                    // (switchSession would try to save null session which is harmless but wasteful)
-                    const session = await getSession(remaining[0].id)
-                    if (session) {
-                        setCurrentSession(session)
-                        setCurrentSessionId(session.id)
-                        localStorage.setItem(CURRENT_SESSION_KEY, session.id)
-                        switchedTo = {
-                            id: session.id,
-                            data: {
-                                messages: session.messages,
-                                xmlSnapshots: session.xmlSnapshots,
-                                diagramXml: session.diagramXml,
-                                thumbnailDataUrl: session.thumbnailDataUrl,
-                                diagramHistory: session.diagramHistory,
-                            },
-                        }
-                    }
-                }
-                // If no remaining sessions, state is already cleared above
+                // Don't switch to another session - always go to new empty session
             }
 
             // Refresh list
@@ -365,8 +342,21 @@ export function useSessionManager(
             setCurrentSession(updatedSession)
 
             // Update sessions list metadata
-            setSessions((prev) =>
-                prev.map((s) =>
+            console.log(
+                "[saveCurrentSession] Updating sessions list for:",
+                updatedSession.id.slice(-8),
+                "thumbnail:",
+                updatedSession.thumbnailDataUrl ? "yes" : "no",
+            )
+            setSessions((prev) => {
+                console.log(
+                    "[saveCurrentSession] setSessions callback - prev sessions:",
+                    prev.map((s) => ({
+                        id: s.id.slice(-8),
+                        hasThumbnail: !!s.thumbnailDataUrl,
+                    })),
+                )
+                return prev.map((s) =>
                     s.id === updatedSession.id
                         ? {
                               ...s,
@@ -379,8 +369,8 @@ export function useSessionManager(
                               thumbnailDataUrl: updatedSession.thumbnailDataUrl,
                           }
                         : s,
-                ),
-            )
+                )
+            })
         },
         [currentSession, currentSessionId, refreshSessions],
     )

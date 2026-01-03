@@ -222,7 +222,9 @@
         "thisWeek": "今週",
         "earlier": "それ以前",
         "deleteTitle": "このチャットを削除しますか？",
-        "deleteDescription": "このチャットセッションとダイアグラムは完全に削除されます。この操作は取り消せません。"
+        "deleteDescription": "このチャットセッションとダイアグラムは完全に削除されます。この操作は取り消せません。",
+        "recentChats": "最近のチャット",
+        "justNow": "たった今"
     },
     "modelConfig": {
         "title": "AIモデル設定",

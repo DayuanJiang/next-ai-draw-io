@@ -10,6 +10,7 @@ import {
     Cpu,
     FileCode,
     FileText,
+    MessageSquare,
     Pencil,
     RotateCcw,
     ThumbsDown,
@@ -183,6 +184,13 @@ const getUserOriginalText = (message: UIMessage): string => {
     return fullText.replace(filePattern, "").trim()
 }
 
+interface SessionMetadata {
+    id: string
+    title: string
+    updatedAt: number
+    thumbnailDataUrl?: string
+}
+
 interface ChatMessageDisplayProps {
     messages: UIMessage[]
     setInput: (input: string) => void
@@ -194,6 +202,9 @@ interface ChatMessageDisplayProps {
     onEditMessage?: (messageIndex: number, newText: string) => void
     status?: "streaming" | "submitted" | "idle" | "error" | "ready"
     isRestored?: boolean
+    sessions?: SessionMetadata[]
+    onSelectSession?: (id: string) => void
+    loadedMessageIdsRef?: MutableRefObject<Set<string>>
 }
 
 export function ChatMessageDisplay({
@@ -207,6 +218,9 @@ export function ChatMessageDisplay({
     onEditMessage,
     status = "idle",
     isRestored = false,
+    sessions = [],
+    onSelectSession,
+    loadedMessageIdsRef,
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
@@ -215,6 +229,18 @@ export function ChatMessageDisplay({
     const processedToolCalls = processedToolCallsRef
     // Track the last processed XML per toolCallId to skip redundant processing during streaming
     const lastProcessedXmlRef = useRef<Map<string, string>>(new Map())
+
+    // Reset refs when messages become empty (new chat or session switch)
+    // This ensures cached examples work correctly after starting a new session
+    useEffect(() => {
+        if (messages.length === 0) {
+            console.log("[ChatMessageDisplay] Resetting refs (messages empty)")
+            previousXML.current = ""
+            lastProcessedXmlRef.current.clear()
+            // Note: processedToolCalls is passed from parent, so we clear it too
+            processedToolCalls.current.clear()
+        }
+    }, [messages.length, processedToolCalls])
     // Debounce streaming diagram updates - store pending XML and timeout
     const pendingXmlRef = useRef<string | null>(null)
     const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -252,15 +278,10 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
-    // Track message IDs that were restored from localStorage (skip animation for these)
-    const restoredMessageIdsRef = useRef<Set<string> | null>(null)
-
-    // Capture restored message IDs once when isRestored becomes true
-    useEffect(() => {
-        if (isRestored && restoredMessageIdsRef.current === null) {
-            restoredMessageIdsRef.current = new Set(messages.map((m) => m.id))
-        }
-    }, [isRestored, messages])
+    // Track whether examples section is expanded (collapsed by default when there's history)
+    const [examplesExpanded, setExamplesExpanded] = useState(false)
+    // Track message IDs from initial load (for skipping animations)
+    const restoredMessageIdsRef = useRef<Set<string>>(new Set())
 
     const setCopyState = (
         messageId: string,
@@ -359,6 +380,16 @@ export function ChatMessageDisplay({
         (xml: string, showToast = false) => {
             let currentXml = xml || ""
             const startTime = performance.now()
+            console.log(
+                "[handleDisplayChart] Called with xml length:",
+                currentXml.length,
+                "showToast:",
+                showToast,
+                "previousXML length:",
+                previousXML.current.length,
+                "chartXML length:",
+                chartXML?.length || 0,
+            )
 
             // During streaming (showToast=false), extract only complete mxCell elements
             // This allows progressive rendering even with partial/incomplete trailing XML
@@ -371,6 +402,12 @@ export function ChatMessageDisplay({
             }
 
             const convertedXml = convertToLegalXml(currentXml)
+            console.log(
+                "[handleDisplayChart] convertedXml length:",
+                convertedXml.length,
+                "equals previousXML:",
+                convertedXml === previousXML.current,
+            )
             if (convertedXml !== previousXML.current) {
                 // Parse and validate XML BEFORE calling replaceNodes
                 const parser = new DOMParser()
@@ -458,8 +495,22 @@ export function ChatMessageDisplay({
         [chartXML, onDisplayChart],
     )
 
+    // Track previous message count to detect bulk loads vs streaming
+    const prevMessageCountRef = useRef(0)
+
     useEffect(() => {
-        if (messagesEndRef.current) {
+        if (messagesEndRef.current && messages.length > 0) {
+            const prevCount = prevMessageCountRef.current
+            const currentCount = messages.length
+            prevMessageCountRef.current = currentCount
+
+            // Bulk load (session restore) - instant scroll, no animation
+            if (prevCount === 0 || currentCount - prevCount > 1) {
+                messagesEndRef.current.scrollIntoView({ behavior: "instant" })
+                return
+            }
+
+            // Single message added - smooth scroll
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
         }
     }, [messages])
@@ -475,6 +526,12 @@ export function ChatMessageDisplay({
         // Previous messages are already processed and won't change
         const messagesToProcess =
             messages.length > 0 ? [messages[messages.length - 1]] : []
+        console.log(
+            "[ChatMessageDisplay] useEffect - messagesToProcess:",
+            messagesToProcess.length,
+            "parts:",
+            messagesToProcess[0]?.parts?.length || 0,
+        )
 
         messagesToProcess.forEach((message) => {
             if (message.parts) {
@@ -482,6 +539,18 @@ export function ChatMessageDisplay({
                     if (part.type?.startsWith("tool-")) {
                         const toolPart = part as ToolPartLike
                         const { toolCallId, state, input } = toolPart
+                        console.log(
+                            "[ChatMessageDisplay] Found tool part:",
+                            part.type,
+                            "state:",
+                            state,
+                            "toolCallId:",
+                            toolCallId,
+                            "hasXml:",
+                            !!input?.xml,
+                            "processedAlready:",
+                            processedToolCalls.current.has(toolCallId),
+                        )
 
                         if (state === "output-available") {
                             setExpandedTools((prev) => ({
@@ -537,6 +606,10 @@ export function ChatMessageDisplay({
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
                                 // Final output - process immediately (clear any pending debounce)
+                                console.log(
+                                    "[ChatMessageDisplay] Processing output-available tool, xml length:",
+                                    xml.length,
+                                )
                                 if (debounceTimeoutRef.current) {
                                     clearTimeout(debounceTimeoutRef.current)
                                     debounceTimeoutRef.current = null
@@ -869,10 +942,112 @@ export function ChatMessageDisplay({
         )
     }
 
+    // Helper to format session date
+    const formatSessionDate = (timestamp: number): string => {
+        const date = new Date(timestamp)
+        const now = new Date()
+        const diffMs = now.getTime() - date.getTime()
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+
+        if (diffHours < 1) return dict.sessionHistory?.justNow || "Just now"
+        if (diffHours < 24) return `${diffHours}h ago`
+
+        return date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+        })
+    }
+
+    const hasHistory = sessions.length > 0
+
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
             {messages.length === 0 && isRestored ? (
-                <ExamplePanel setInput={setInput} setFiles={setFiles} />
+                hasHistory ? (
+                    // Show history + collapsible examples when there are sessions
+                    <div className="py-6 px-2 animate-fade-in">
+                        {/* Recent Chats Section */}
+                        <div className="mb-6">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
+                                {dict.sessionHistory?.recentChats ||
+                                    "Recent Chats"}
+                            </p>
+                            <div className="space-y-2">
+                                {sessions.slice(0, 5).map((session) => (
+                                    <button
+                                        key={session.id}
+                                        type="button"
+                                        onClick={() =>
+                                            onSelectSession?.(session.id)
+                                        }
+                                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 text-left"
+                                    >
+                                        {session.thumbnailDataUrl ? (
+                                            <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
+                                                <Image
+                                                    src={
+                                                        session.thumbnailDataUrl
+                                                    }
+                                                    alt=""
+                                                    width={48}
+                                                    height={48}
+                                                    className="object-contain w-full h-full"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                <MessageSquare className="w-5 h-5 text-primary" />
+                                            </div>
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-sm font-medium truncate">
+                                                {session.title}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {formatSessionDate(
+                                                    session.updatedAt,
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Collapsible Examples Section */}
+                        <div className="border-t border-border/50 pt-4">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setExamplesExpanded(!examplesExpanded)
+                                }
+                                className="w-full flex items-center justify-between px-1 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                            >
+                                <span>
+                                    {dict.examples?.quickExamples ||
+                                        "Quick Examples"}
+                                </span>
+                                {examplesExpanded ? (
+                                    <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                    <ChevronDown className="w-4 h-4" />
+                                )}
+                            </button>
+                            {examplesExpanded && (
+                                <div className="mt-2">
+                                    <ExamplePanel
+                                        setInput={setInput}
+                                        setFiles={setFiles}
+                                        minimal
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    // Show full examples when no history
+                    <ExamplePanel setInput={setInput} setFiles={setFiles} />
+                )
             ) : messages.length === 0 ? null : (
                 <div className="py-4 px-4 space-y-4">
                     {messages.map((message, messageIndex) => {
@@ -893,12 +1068,11 @@ export function ChatMessageDisplay({
                                     .slice(messageIndex + 1)
                                     .every((m) => m.role !== "user"))
                         const isEditing = editingMessageId === message.id
-                        // Skip animation for restored messages
-                        // If isRestored but ref not set yet, we're in first render after restoration - treat all as restored
+                        // Skip animation for restored/loaded messages
                         const isRestoredMessage =
-                            isRestored &&
-                            (restoredMessageIdsRef.current === null ||
-                                restoredMessageIdsRef.current.has(message.id))
+                            restoredMessageIdsRef.current.has(message.id) ||
+                            (loadedMessageIdsRef?.current.has(message.id) ??
+                                false)
                         return (
                             <div
                                 key={message.id}

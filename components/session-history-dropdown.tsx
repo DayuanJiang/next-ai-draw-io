@@ -114,13 +114,23 @@ export function SessionHistoryDropdown({
     }
 
     const handleSelectSession = (id: string) => {
-        onSelectSession(id)
+        console.log("[dropdown] handleSelectSession called, id:", id)
+        // Close dropdown FIRST to avoid visual flash during session save/switch
         setOpen(false)
+        // Small delay to ensure dropdown is closed before state updates
+        requestAnimationFrame(() => {
+            console.log(
+                "[dropdown] requestAnimationFrame firing, calling onSelectSession",
+            )
+            onSelectSession(id)
+        })
     }
 
     const handleNewChat = () => {
-        onNewChat()
         setOpen(false)
+        requestAnimationFrame(() => {
+            onNewChat()
+        })
     }
 
     const handleDeleteClick = (e: React.MouseEvent, id: string) => {
@@ -129,9 +139,9 @@ export function SessionHistoryDropdown({
         setDeleteDialogOpen(true)
     }
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (sessionToDelete) {
-            onDeleteSession(sessionToDelete)
+            await onDeleteSession(sessionToDelete)
         }
         setDeleteDialogOpen(false)
         setSessionToDelete(null)
@@ -212,6 +222,17 @@ export function SessionHistoryDropdown({
                                                 const isActive =
                                                     session.id ===
                                                     currentSessionId
+                                                console.log(
+                                                    "[dropdown render] session:",
+                                                    session.id.slice(-8),
+                                                    "title:",
+                                                    session.title.slice(0, 20),
+                                                    "hasThumbnail:",
+                                                    !!session.thumbnailDataUrl,
+                                                    "thumbnailLen:",
+                                                    session.thumbnailDataUrl
+                                                        ?.length || 0,
+                                                )
                                                 return (
                                                     <div
                                                         key={session.id}

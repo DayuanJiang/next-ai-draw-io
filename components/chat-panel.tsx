@@ -232,8 +232,23 @@ export default function ChatPanel({
 
     // Ref to track latest chartXML for use in callbacks (avoids stale closure)
     const chartXMLRef = useRef(chartXML)
+    // Track session ID that was loaded without a diagram (to prevent thumbnail contamination)
+    const justLoadedSessionIdRef = useRef<string | null>(null)
     useEffect(() => {
+        console.log(
+            "[chartXML sync] chartXML changed, length:",
+            chartXML?.length || 0,
+            "prev ref length:",
+            chartXMLRef.current?.length || 0,
+        )
         chartXMLRef.current = chartXML
+        // Clear the no-diagram flag when a diagram is generated
+        if (chartXML) {
+            console.log(
+                "[chartXML sync] Clearing justLoadedSessionIdRef because chartXML is non-empty",
+            )
+            justLoadedSessionIdRef.current = null
+        }
     }, [chartXML])
 
     // Ref to track latest SVG for thumbnail generation
@@ -466,6 +481,11 @@ export default function ChatPanel({
     const lastSyncedSessionIdRef = useRef<string | null>(null)
 
     // Helper: Sync UI state with session data (eliminates duplication)
+    // Track message IDs that are being loaded from session (to skip animations/scroll)
+    const loadedMessageIdsRef = useRef<Set<string>>(new Set())
+    // Track when session was just loaded (to skip auto-save on load)
+    const justLoadedSessionRef = useRef(false)
+
     const syncUIWithSession = useCallback(
         (
             data: {
@@ -475,19 +495,45 @@ export default function ChatPanel({
                 diagramHistory?: { svg: string; xml: string }[]
             } | null,
         ) => {
+            const diagramLength = data?.diagramXml?.length || 0
+            const hasRealDiagram = diagramLength > 300
+            console.log(
+                "[syncUIWithSession] Called with diagramXml length:",
+                diagramLength,
+                "hasRealDiagram:",
+                hasRealDiagram,
+            )
             if (data) {
+                // Mark all message IDs as loaded from session
+                const messageIds = (data.messages as any[]).map(
+                    (m: any) => m.id,
+                )
+                loadedMessageIdsRef.current = new Set(messageIds)
                 setMessages(data.messages as any)
                 xmlSnapshotsRef.current = new Map(data.xmlSnapshots)
-                if (data.diagramXml) {
+                if (hasRealDiagram) {
+                    console.log("[syncUIWithSession] Loading real diagram")
                     onDisplayChart(data.diagramXml, true)
+                    chartXMLRef.current = data.diagramXml
                 } else {
+                    console.log(
+                        "[syncUIWithSession] No real diagram, clearing refs. chartXMLRef was:",
+                        chartXMLRef.current?.length || 0,
+                    )
                     clearDiagram()
+                    // Clear refs to prevent stale data from being saved
+                    chartXMLRef.current = ""
+                    latestSvgRef.current = ""
                 }
                 setDiagramHistory(data.diagramHistory || [])
             } else {
+                loadedMessageIdsRef.current = new Set()
                 setMessages([])
                 xmlSnapshotsRef.current.clear()
                 clearDiagram()
+                // Clear refs to prevent stale data from being saved
+                chartXMLRef.current = ""
+                latestSvgRef.current = ""
                 setDiagramHistory([])
             }
         },
@@ -497,18 +543,43 @@ export default function ChatPanel({
     // Helper: Build session data object for saving (eliminates duplication)
     const buildSessionData = useCallback(
         async (options: { withThumbnail?: boolean } = {}) => {
-            let thumbnailDataUrl = latestSvgRef.current || undefined
-            if (options.withThumbnail) {
+            const currentDiagramXml = chartXMLRef.current || ""
+            console.log(
+                "[buildSessionData] Called with withThumbnail:",
+                options.withThumbnail,
+                "currentDiagramXml length:",
+                currentDiagramXml.length,
+            )
+            // Only capture thumbnail if there's a meaningful diagram (not just empty default ~147-300 chars)
+            const hasRealDiagram = currentDiagramXml.length > 300
+            let thumbnailDataUrl: string | undefined
+            if (hasRealDiagram && options.withThumbnail) {
+                console.log("[buildSessionData] Capturing thumbnail...")
                 const freshThumb = await getThumbnailSvg()
                 if (freshThumb) {
                     latestSvgRef.current = freshThumb
                     thumbnailDataUrl = freshThumb
+                    console.log(
+                        "[buildSessionData] Got fresh thumbnail, length:",
+                        freshThumb.length,
+                    )
+                } else if (latestSvgRef.current) {
+                    // Use cached thumbnail only if we have a real diagram
+                    thumbnailDataUrl = latestSvgRef.current
+                    console.log(
+                        "[buildSessionData] Using cached thumbnail, length:",
+                        thumbnailDataUrl.length,
+                    )
                 }
+            } else {
+                console.log(
+                    "[buildSessionData] NOT capturing thumbnail (no real diagram or withThumbnail=false)",
+                )
             }
             return {
                 messages: sanitizeMessages(messagesRef.current),
                 xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
-                diagramXml: chartXMLRef.current || "",
+                diagramXml: currentDiagramXml,
                 thumbnailDataUrl,
                 diagramHistory,
             }
@@ -528,6 +599,7 @@ export default function ChatPanel({
             const currentSession = sessionManager.currentSession
             if (currentSession && currentSession.messages.length > 0) {
                 // Restore from session manager (IndexedDB)
+                justLoadedSessionRef.current = true
                 syncUIWithSession(currentSession)
             }
             // Initialize lastSyncedSessionIdRef to prevent sync effect from firing immediately
@@ -563,6 +635,7 @@ export default function ChatPanel({
 
         // Sync UI with new session
         if (newSession && newSession.messages.length > 0) {
+            justLoadedSessionRef.current = true
             syncUIWithSession(newSession)
         } else if (!newSession) {
             syncUIWithSession(null)
@@ -583,11 +656,28 @@ export default function ChatPanel({
         saveCurrentSession,
     } = sessionManager
 
+    // Use ref for saveCurrentSession to avoid infinite loop
+    // (saveCurrentSession changes after each save, which would re-trigger the effect)
+    const saveCurrentSessionRef = useRef(saveCurrentSession)
+    saveCurrentSessionRef.current = saveCurrentSession
+
     useEffect(() => {
         if (!hasRestoredRef.current) return
         if (!sessionIsAvailable) return
         // Only save when not actively streaming to avoid write storms
         if (status === "streaming" || status === "submitted") return
+
+        // Skip auto-save if session was just loaded (to prevent re-ordering)
+        if (justLoadedSessionRef.current) {
+            console.log("[auto-save] Skipping - session just loaded")
+            justLoadedSessionRef.current = false
+            return
+        }
+
+        console.log("[auto-save] Scheduling save", {
+            messagesLength: messages.length,
+            currentSessionId,
+        })
 
         // Clear any pending save
         if (localStorageDebounceRef.current) {
@@ -596,15 +686,42 @@ export default function ChatPanel({
 
         // Capture current session ID at schedule time to verify at save time
         const scheduledForSessionId = currentSessionId
+        // Capture whether there's a REAL diagram NOW (not just empty default structure)
+        // Empty default mxfile is ~147-300 chars, real diagrams are larger
+        const hasDiagramNow = (chartXMLRef.current?.length || 0) > 300
+        // Check if this session was just loaded without a diagram
+        const isNodiagramSession =
+            justLoadedSessionIdRef.current === scheduledForSessionId
 
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(async () => {
+            console.log(
+                "[auto-save] Debounce triggered, saving session",
+                scheduledForSessionId,
+                "hasDiagram:",
+                hasDiagramNow,
+                "noDiagramSession:",
+                isNodiagramSession,
+                "justLoadedSessionIdRef:",
+                justLoadedSessionIdRef.current,
+            )
             try {
                 if (messages.length > 0) {
                     const sessionData = await buildSessionData({
-                        withThumbnail: true,
+                        // Only capture thumbnail if there was a diagram AND this isn't a no-diagram session
+                        withThumbnail: hasDiagramNow && !isNodiagramSession,
                     })
-                    await saveCurrentSession(sessionData, scheduledForSessionId)
+                    console.log(
+                        "[auto-save] Saving sessionData - diagramXml length:",
+                        sessionData.diagramXml?.length || 0,
+                        "thumbnailDataUrl:",
+                        sessionData.thumbnailDataUrl ? "yes" : "no",
+                    )
+                    await saveCurrentSessionRef.current(
+                        sessionData,
+                        scheduledForSessionId,
+                    )
+                    console.log("[auto-save] Session saved")
                 }
             } catch (error) {
                 console.error("Failed to save session:", error)
@@ -622,7 +739,6 @@ export default function ChatPanel({
         status,
         sessionIsAvailable,
         currentSessionId,
-        saveCurrentSession,
         buildSessionData,
     ])
 
@@ -686,10 +802,23 @@ export default function ChatPanel({
         const isProcessing = status === "streaming" || status === "submitted"
         if (input.trim() && !isProcessing) {
             // Check if input matches a cached example (only when no messages yet)
+            console.log(
+                "[onFormSubmit] Checking cached response, messages.length:",
+                messages.length,
+                "input:",
+                input.trim().slice(0, 30),
+                "hasFiles:",
+                files.length > 0,
+            )
             if (messages.length === 0) {
                 const cached = findCachedResponse(
                     input.trim(),
                     files.length > 0,
+                )
+                console.log(
+                    "[onFormSubmit] Cached response found:",
+                    !!cached,
+                    cached ? "xml length:" + cached.xml.length : "",
                 )
                 if (cached) {
                     // Add user message and fake assistant response to messages
@@ -779,19 +908,63 @@ export default function ChatPanel({
     // Handle session switching from history dropdown
     const handleSelectSession = useCallback(
         async (sessionId: string) => {
+            console.log(
+                "[handleSelectSession] START - switching to:",
+                sessionId,
+                "from:",
+                sessionManager.currentSessionId,
+            )
             if (!sessionManager.isAvailable) return
 
             // Save current session before switching
             if (messages.length > 0) {
+                console.log(
+                    "[handleSelectSession] Saving current session before switch...",
+                )
                 const sessionData = await buildSessionData({
                     withThumbnail: true,
                 })
+                console.log(
+                    "[handleSelectSession] Built session data, thumbnail:",
+                    sessionData.thumbnailDataUrl ? "yes" : "no",
+                )
                 await sessionManager.saveCurrentSession(sessionData)
+                console.log("[handleSelectSession] Current session saved")
             }
 
             // Switch to selected session
+            console.log("[handleSelectSession] Calling switchSession...")
             const sessionData = await sessionManager.switchSession(sessionId)
             if (sessionData) {
+                const diagramLength = sessionData.diagramXml?.length || 0
+                const hasRealDiagram = diagramLength > 300
+                console.log(
+                    "[handleSelectSession] Switching to session:",
+                    sessionId,
+                    "hasRealDiagram:",
+                    hasRealDiagram,
+                    "diagramLength:",
+                    diagramLength,
+                )
+                justLoadedSessionRef.current = true
+
+                // CRITICAL: Update latestSvgRef with the NEW session's thumbnail
+                // This prevents stale thumbnail from previous session being used by auto-save
+                latestSvgRef.current = sessionData.thumbnailDataUrl || ""
+                console.log(
+                    "[handleSelectSession] Set latestSvgRef to new session thumbnail, length:",
+                    latestSvgRef.current.length,
+                )
+
+                // Track if this session has no real diagram - to prevent thumbnail contamination
+                if (!hasRealDiagram) {
+                    console.log(
+                        "[handleSelectSession] No real diagram, setting justLoadedSessionIdRef",
+                    )
+                    justLoadedSessionIdRef.current = sessionId
+                } else {
+                    justLoadedSessionIdRef.current = null
+                }
                 syncUIWithSession(sessionData)
                 router.replace(`?session=${sessionId}`, { scroll: false })
             }
@@ -808,6 +981,7 @@ export default function ChatPanel({
             if (result.wasCurrentSession) {
                 if (result.switchedTo) {
                     // Switched to another session - update UI and URL
+                    justLoadedSessionRef.current = true
                     syncUIWithSession(result.switchedTo.data)
                     router.replace(`?session=${result.switchedTo.id}`, {
                         scroll: false,
@@ -1226,6 +1400,9 @@ export default function ChatPanel({
                     status={status}
                     onEditMessage={handleEditMessage}
                     isRestored={isRestored}
+                    sessions={sessionManager.sessions}
+                    onSelectSession={handleSelectSession}
+                    loadedMessageIdsRef={loadedMessageIdsRef}
                 />
             </main>
 
