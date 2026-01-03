@@ -71,7 +71,6 @@ export function useSessionManager(
     const [isAvailable, setIsAvailable] = useState(false)
 
     const isInitializedRef = useRef(false)
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     // Sequence guard for URL changes - prevents out-of-order async resolution
     const urlChangeSequenceRef = useRef(0)
 
@@ -400,15 +399,6 @@ export function useSessionManager(
         setCurrentSession(null)
         setCurrentSessionId(null)
         localStorage.removeItem(CURRENT_SESSION_KEY)
-    }, [])
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current)
-            }
-        }
     }, [])
 
     return {

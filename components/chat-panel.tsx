@@ -465,6 +465,57 @@ export default function ChatPanel({
     // Track last synced session ID to detect external changes (e.g., URL back/forward)
     const lastSyncedSessionIdRef = useRef<string | null>(null)
 
+    // Helper: Sync UI state with session data (eliminates duplication)
+    const syncUIWithSession = useCallback(
+        (
+            data: {
+                messages: unknown[]
+                xmlSnapshots: [number, string][]
+                diagramXml: string
+                diagramHistory?: { svg: string; xml: string }[]
+            } | null,
+        ) => {
+            if (data) {
+                setMessages(data.messages as any)
+                xmlSnapshotsRef.current = new Map(data.xmlSnapshots)
+                if (data.diagramXml) {
+                    onDisplayChart(data.diagramXml, true)
+                } else {
+                    clearDiagram()
+                }
+                setDiagramHistory(data.diagramHistory || [])
+            } else {
+                setMessages([])
+                xmlSnapshotsRef.current.clear()
+                clearDiagram()
+                setDiagramHistory([])
+            }
+        },
+        [setMessages, onDisplayChart, clearDiagram, setDiagramHistory],
+    )
+
+    // Helper: Build session data object for saving (eliminates duplication)
+    const buildSessionData = useCallback(
+        async (options: { withThumbnail?: boolean } = {}) => {
+            let thumbnailDataUrl = latestSvgRef.current || undefined
+            if (options.withThumbnail) {
+                const freshThumb = await getThumbnailSvg()
+                if (freshThumb) {
+                    latestSvgRef.current = freshThumb
+                    thumbnailDataUrl = freshThumb
+                }
+            }
+            return {
+                messages: sanitizeMessages(messagesRef.current),
+                xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
+                diagramXml: chartXMLRef.current || "",
+                thumbnailDataUrl,
+                diagramHistory,
+            }
+        },
+        [diagramHistory, getThumbnailSvg],
+    )
+
     // Restore messages and XML snapshots from session manager on mount
     // This effect syncs with the session manager's loaded session
     useLayoutEffect(() => {
@@ -477,14 +528,7 @@ export default function ChatPanel({
             const currentSession = sessionManager.currentSession
             if (currentSession && currentSession.messages.length > 0) {
                 // Restore from session manager (IndexedDB)
-                setMessages(currentSession.messages as any)
-                xmlSnapshotsRef.current = new Map(currentSession.xmlSnapshots)
-                if (currentSession.diagramXml) {
-                    onDisplayChart(currentSession.diagramXml, true)
-                }
-                if (currentSession.diagramHistory) {
-                    setDiagramHistory(currentSession.diagramHistory)
-                }
+                syncUIWithSession(currentSession)
             }
             // Initialize lastSyncedSessionIdRef to prevent sync effect from firing immediately
             lastSyncedSessionIdRef.current = sessionManager.currentSessionId
@@ -498,9 +542,8 @@ export default function ChatPanel({
     }, [
         sessionManager.isLoading,
         sessionManager.currentSession,
-        setMessages,
+        syncUIWithSession,
         dict.errors.sessionCorrupted,
-        onDisplayChart,
     ])
 
     // Sync UI when session changes externally (e.g., URL navigation via back/forward)
@@ -520,33 +563,16 @@ export default function ChatPanel({
 
         // Sync UI with new session
         if (newSession && newSession.messages.length > 0) {
-            setMessages(newSession.messages as any)
-            xmlSnapshotsRef.current = new Map(newSession.xmlSnapshots)
-            if (newSession.diagramXml) {
-                onDisplayChart(newSession.diagramXml, true)
-            } else {
-                clearDiagram()
-            }
-            if (newSession.diagramHistory) {
-                setDiagramHistory(newSession.diagramHistory)
-            } else {
-                setDiagramHistory([])
-            }
+            syncUIWithSession(newSession)
         } else if (!newSession) {
-            // Session cleared (new chat or no sessions)
-            setMessages([])
-            xmlSnapshotsRef.current.clear()
-            clearDiagram()
-            setDiagramHistory([])
+            syncUIWithSession(null)
         }
     }, [
         isRestored,
         sessionManager.isAvailable,
         sessionManager.currentSessionId,
         sessionManager.currentSession,
-        setMessages,
-        onDisplayChart,
-        clearDiagram,
+        syncUIWithSession,
     ])
 
     // Save messages to session manager (debounced, only when not streaming)
@@ -574,28 +600,11 @@ export default function ChatPanel({
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(async () => {
             try {
-                // Save to session manager (IndexedDB)
-                // Pass scheduledForSessionId to verify we're saving to the correct session
-                // (prevents stale saves if user switched sessions within debounce window)
                 if (messages.length > 0) {
-                    // Capture current thumbnail SVG (async export from draw.io)
-                    const thumbnailSvg = await getThumbnailSvg()
-                    if (thumbnailSvg) {
-                        latestSvgRef.current = thumbnailSvg
-                    }
-
-                    await saveCurrentSession(
-                        {
-                            messages: sanitizeMessages(messages),
-                            xmlSnapshots: Array.from(
-                                xmlSnapshotsRef.current.entries(),
-                            ),
-                            diagramXml: chartXMLRef.current || "",
-                            thumbnailDataUrl: latestSvgRef.current || undefined,
-                            diagramHistory: diagramHistory,
-                        },
-                        scheduledForSessionId,
-                    )
+                    const sessionData = await buildSessionData({
+                        withThumbnail: true,
+                    })
+                    await saveCurrentSession(sessionData, scheduledForSessionId)
                 }
             } catch (error) {
                 console.error("Failed to save session:", error)
@@ -611,10 +620,10 @@ export default function ChatPanel({
     }, [
         messages,
         status,
-        diagramHistory,
         sessionIsAvailable,
         currentSessionId,
         saveCurrentSession,
+        buildSessionData,
     ])
 
     // Update URL when a new session is created (first message sent)
@@ -650,15 +659,11 @@ export default function ChatPanel({
             ) {
                 try {
                     // Attempt to save session - browser may not wait for completion
-                    // but this gives us the best chance to persist data
-                    await sessionManager.saveCurrentSession({
-                        messages: sanitizeMessages(messagesRef.current),
-                        xmlSnapshots: Array.from(
-                            xmlSnapshotsRef.current.entries(),
-                        ),
-                        diagramXml: chartXMLRef.current || "",
-                        diagramHistory: diagramHistory,
+                    // Skip thumbnail capture as it may not complete in time
+                    const sessionData = await buildSessionData({
+                        withThumbnail: false,
                     })
+                    await sessionManager.saveCurrentSession(sessionData)
                 } catch (error) {
                     console.error(
                         "Failed to save session on visibility change:",
@@ -674,7 +679,7 @@ export default function ChatPanel({
                 "visibilitychange",
                 handleVisibilityChange,
             )
-    }, [sessionManager, diagramHistory])
+    }, [sessionManager, buildSessionData])
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -778,50 +783,20 @@ export default function ChatPanel({
 
             // Save current session before switching
             if (messages.length > 0) {
-                // Capture thumbnail before saving
-                const thumbnailSvg = await getThumbnailSvg()
-                if (thumbnailSvg) {
-                    latestSvgRef.current = thumbnailSvg
-                }
-
-                await sessionManager.saveCurrentSession({
-                    messages: sanitizeMessages(messages),
-                    xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
-                    diagramXml: chartXMLRef.current || "",
-                    thumbnailDataUrl: latestSvgRef.current || undefined,
-                    diagramHistory: diagramHistory,
+                const sessionData = await buildSessionData({
+                    withThumbnail: true,
                 })
+                await sessionManager.saveCurrentSession(sessionData)
             }
 
             // Switch to selected session
             const sessionData = await sessionManager.switchSession(sessionId)
             if (sessionData) {
-                setMessages(sessionData.messages as any)
-                xmlSnapshotsRef.current = new Map(sessionData.xmlSnapshots)
-                if (sessionData.diagramXml) {
-                    onDisplayChart(sessionData.diagramXml, true)
-                } else {
-                    clearDiagram()
-                }
-                if (sessionData.diagramHistory) {
-                    setDiagramHistory(sessionData.diagramHistory)
-                } else {
-                    setDiagramHistory([])
-                }
-                // Update URL with new session ID
+                syncUIWithSession(sessionData)
                 router.replace(`?session=${sessionId}`, { scroll: false })
             }
         },
-        [
-            sessionManager,
-            messages,
-            setMessages,
-            onDisplayChart,
-            clearDiagram,
-            router,
-            diagramHistory,
-            setDiagramHistory,
-        ],
+        [sessionManager, messages, buildSessionData, syncUIWithSession, router],
     )
 
     // Handle session deletion from history dropdown
@@ -833,60 +808,25 @@ export default function ChatPanel({
             if (result.wasCurrentSession) {
                 if (result.switchedTo) {
                     // Switched to another session - update UI and URL
-                    setMessages(result.switchedTo.data.messages as any)
-                    xmlSnapshotsRef.current = new Map(
-                        result.switchedTo.data.xmlSnapshots,
-                    )
-                    if (result.switchedTo.data.diagramXml) {
-                        onDisplayChart(result.switchedTo.data.diagramXml, true)
-                    } else {
-                        clearDiagram()
-                    }
-                    if (result.switchedTo.data.diagramHistory) {
-                        setDiagramHistory(result.switchedTo.data.diagramHistory)
-                    } else {
-                        setDiagramHistory([])
-                    }
+                    syncUIWithSession(result.switchedTo.data)
                     router.replace(`?session=${result.switchedTo.id}`, {
                         scroll: false,
                     })
                 } else {
                     // No sessions left - clear UI and URL
-                    setMessages([])
-                    xmlSnapshotsRef.current.clear()
-                    clearDiagram()
-                    setDiagramHistory([])
+                    syncUIWithSession(null)
                     router.replace(window.location.pathname, { scroll: false })
                 }
             }
         },
-        [
-            sessionManager,
-            setMessages,
-            clearDiagram,
-            onDisplayChart,
-            router,
-            getThumbnailSvg,
-            setDiagramHistory,
-        ],
+        [sessionManager, syncUIWithSession, router],
     )
 
     const handleNewChat = useCallback(async () => {
         // Save current session before creating new one
         if (sessionManager.isAvailable && messages.length > 0) {
-            // Capture thumbnail before saving
-            const thumbnailSvg = await getThumbnailSvg()
-            if (thumbnailSvg) {
-                latestSvgRef.current = thumbnailSvg
-            }
-
-            await sessionManager.saveCurrentSession({
-                messages: sanitizeMessages(messages),
-                xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
-                diagramXml: chartXMLRef.current || "",
-                thumbnailDataUrl: latestSvgRef.current || undefined,
-                diagramHistory: diagramHistory,
-            })
+            const sessionData = await buildSessionData({ withThumbnail: true })
+            await sessionManager.saveCurrentSession(sessionData)
             // Refresh sessions list to ensure dropdown shows the saved session
             await sessionManager.refreshSessions()
         }
@@ -895,7 +835,7 @@ export default function ChatPanel({
         // (otherwise the URL update effect would restore the old session URL)
         sessionManager.clearCurrentSession()
 
-        // Clear UI state
+        // Clear UI state (can't use syncUIWithSession here because we also need to clear files)
         setMessages([])
         clearDiagram()
         setDiagramHistory([])
@@ -919,8 +859,7 @@ export default function ChatPanel({
         messages,
         router,
         dict.dialogs.clearSuccess,
-        getThumbnailSvg,
-        diagramHistory,
+        buildSessionData,
         setDiagramHistory,
     ])
 
