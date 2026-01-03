@@ -216,6 +216,11 @@
         "tooltip": "聊天历史",
         "newChat": "新对话",
         "empty": "暂无聊天记录",
+        "emptyHint": "开始对话吧",
+        "today": "今天",
+        "yesterday": "昨天",
+        "thisWeek": "本周",
+        "earlier": "更早",
         "deleteTitle": "删除此对话？",
         "deleteDescription": "这将永久删除此聊天会话及其图表。此操作无法撤消。"
     },

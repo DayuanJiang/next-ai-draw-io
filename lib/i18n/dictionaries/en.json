@@ -216,6 +216,11 @@
         "tooltip": "Chat History",
         "newChat": "New Chat",
         "empty": "No chat history yet",
+        "emptyHint": "Start a conversation to begin",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This Week",
+        "earlier": "Earlier",
         "deleteTitle": "Delete this chat?",
         "deleteDescription": "This will permanently delete this chat session and its diagram. This action cannot be undone."
     },

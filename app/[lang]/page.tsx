@@ -22,7 +22,6 @@ export default function Home() {
         handleDiagramExport,
         onDrawioLoad,
         resetDrawioReady,
-        saveDiagramToStorage,
         showSaveDialog,
         setShowSaveDialog,
     } = useDiagram()
@@ -110,8 +109,7 @@ export default function Home() {
         onDrawioLoad()
     }, [onDrawioLoad])
 
-    const handleDarkModeChange = async () => {
-        await saveDiagramToStorage()
+    const handleDarkModeChange = () => {
         const newValue = !darkMode
         setDarkMode(newValue)
         localStorage.setItem("next-ai-draw-io-dark-mode", String(newValue))
@@ -120,8 +118,7 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    const handleDrawioUiChange = async () => {
-        await saveDiagramToStorage()
+    const handleDrawioUiChange = () => {
         const newUi = drawioUi === "min" ? "sketch" : "min"
         localStorage.setItem("drawio-theme", newUi)
         setDrawioUi(newUi)
@@ -129,7 +126,7 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile - save diagram and reset draw.io before crossing breakpoint
+    // Check mobile - reset draw.io before crossing breakpoint
     const isInitialRenderRef = useRef(true)
     useEffect(() => {
         const checkMobile = () => {
@@ -138,7 +135,6 @@ export default function Home() {
                 !isInitialRenderRef.current &&
                 newIsMobile !== isMobileRef.current
             ) {
-                saveDiagramToStorage().catch(() => {})
                 setIsDrawioReady(false)
                 resetDrawioReady()
             }
@@ -150,7 +146,7 @@ export default function Home() {
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [saveDiagramToStorage, resetDrawioReady])
+    }, [resetDrawioReady])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current

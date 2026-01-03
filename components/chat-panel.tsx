@@ -43,7 +43,6 @@ import { DevXmlSimulator } from "./dev-xml-simulator"
 
 // localStorage keys for persistence
 const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
-export const STORAGE_DIAGRAM_XML_KEY = "next-ai-draw-io-diagram-xml"
 
 // sessionStorage keys
 const SESSION_STORAGE_INPUT_KEY = "next-ai-draw-io-input"
@@ -120,7 +119,11 @@ export default function ChatPanel({
         handleExportWithoutHistory,
         resolverRef,
         chartXML,
+        latestSvg,
         clearDiagram,
+        getThumbnailSvg,
+        diagramHistory,
+        setDiagramHistory,
     } = useDiagram()
 
     const dict = useDictionary()
@@ -232,6 +235,12 @@ export default function ChatPanel({
     useEffect(() => {
         chartXMLRef.current = chartXML
     }, [chartXML])
+
+    // Ref to track latest SVG for thumbnail generation
+    const latestSvgRef = useRef(latestSvg)
+    useEffect(() => {
+        latestSvgRef.current = latestSvg
+    }, [latestSvg])
 
     // Ref to track consecutive auto-retry count (reset on user action)
     const autoRetryCountRef = useRef(0)
@@ -473,6 +482,9 @@ export default function ChatPanel({
                 if (currentSession.diagramXml) {
                     onDisplayChart(currentSession.diagramXml, true)
                 }
+                if (currentSession.diagramHistory) {
+                    setDiagramHistory(currentSession.diagramHistory)
+                }
             }
             // Initialize lastSyncedSessionIdRef to prevent sync effect from firing immediately
             lastSyncedSessionIdRef.current = sessionManager.currentSessionId
@@ -515,11 +527,17 @@ export default function ChatPanel({
             } else {
                 clearDiagram()
             }
+            if (newSession.diagramHistory) {
+                setDiagramHistory(newSession.diagramHistory)
+            } else {
+                setDiagramHistory([])
+            }
         } else if (!newSession) {
             // Session cleared (new chat or no sessions)
             setMessages([])
             xmlSnapshotsRef.current.clear()
             clearDiagram()
+            setDiagramHistory([])
         }
     }, [
         isRestored,
@@ -547,11 +565,17 @@ export default function ChatPanel({
         const scheduledForSessionId = sessionManager.currentSessionId
 
         // Debounce: save after 1 second of no changes
-        localStorageDebounceRef.current = setTimeout(() => {
+        localStorageDebounceRef.current = setTimeout(async () => {
             // Save to session manager (IndexedDB)
             // Pass scheduledForSessionId to verify we're saving to the correct session
             // (prevents stale saves if user switched sessions within debounce window)
             if (messages.length > 0) {
+                // Capture current thumbnail SVG (async export from draw.io)
+                const thumbnailSvg = await getThumbnailSvg()
+                if (thumbnailSvg) {
+                    latestSvgRef.current = thumbnailSvg
+                }
+
                 sessionManager.saveCurrentSession(
                     {
                         messages: sanitizeMessages(messages),
@@ -559,6 +583,8 @@ export default function ChatPanel({
                             xmlSnapshotsRef.current.entries(),
                         ),
                         diagramXml: chartXMLRef.current || "",
+                        thumbnailDataUrl: latestSvgRef.current || undefined,
+                        diagramHistory: diagramHistory,
                     },
                     scheduledForSessionId,
                 )
@@ -696,10 +722,18 @@ export default function ChatPanel({
 
             // Save current session before switching
             if (messages.length > 0) {
+                // Capture thumbnail before saving
+                const thumbnailSvg = await getThumbnailSvg()
+                if (thumbnailSvg) {
+                    latestSvgRef.current = thumbnailSvg
+                }
+
                 await sessionManager.saveCurrentSession({
                     messages: sanitizeMessages(messages),
                     xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
                     diagramXml: chartXMLRef.current || "",
+                    thumbnailDataUrl: latestSvgRef.current || undefined,
+                    diagramHistory: diagramHistory,
                 })
             }
 
@@ -713,6 +747,11 @@ export default function ChatPanel({
                 } else {
                     clearDiagram()
                 }
+                if (sessionData.diagramHistory) {
+                    setDiagramHistory(sessionData.diagramHistory)
+                } else {
+                    setDiagramHistory([])
+                }
                 // Update URL with new session ID
                 router.replace(`?session=${sessionId}`, { scroll: false })
             }
@@ -724,6 +763,8 @@ export default function ChatPanel({
             onDisplayChart,
             clearDiagram,
             router,
+            diagramHistory,
+            setDiagramHistory,
         ],
     )
 
@@ -745,6 +786,11 @@ export default function ChatPanel({
                     } else {
                         clearDiagram()
                     }
+                    if (result.switchedTo.data.diagramHistory) {
+                        setDiagramHistory(result.switchedTo.data.diagramHistory)
+                    } else {
+                        setDiagramHistory([])
+                    }
                     router.replace(`?session=${result.switchedTo.id}`, {
                         scroll: false,
                     })
@@ -753,20 +799,37 @@ export default function ChatPanel({
                     setMessages([])
                     xmlSnapshotsRef.current.clear()
                     clearDiagram()
+                    setDiagramHistory([])
                     router.replace(window.location.pathname, { scroll: false })
                 }
             }
         },
-        [sessionManager, setMessages, clearDiagram, onDisplayChart, router],
+        [
+            sessionManager,
+            setMessages,
+            clearDiagram,
+            onDisplayChart,
+            router,
+            getThumbnailSvg,
+            setDiagramHistory,
+        ],
     )
 
     const handleNewChat = useCallback(async () => {
         // Save current session before creating new one
         if (sessionManager.isAvailable && messages.length > 0) {
+            // Capture thumbnail before saving
+            const thumbnailSvg = await getThumbnailSvg()
+            if (thumbnailSvg) {
+                latestSvgRef.current = thumbnailSvg
+            }
+
             await sessionManager.saveCurrentSession({
                 messages: sanitizeMessages(messages),
                 xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
                 diagramXml: chartXMLRef.current || "",
+                thumbnailDataUrl: latestSvgRef.current || undefined,
+                diagramHistory: diagramHistory,
             })
             // Refresh sessions list to ensure dropdown shows the saved session
             await sessionManager.refreshSessions()
@@ -779,6 +842,7 @@ export default function ChatPanel({
         // Clear UI state
         setMessages([])
         clearDiagram()
+        setDiagramHistory([])
         handleFileChange([]) // Use handleFileChange to also clear pdfData
         const newSessionId = `session-${Date.now()}-${Math.random()
             .toString(36)
@@ -799,6 +863,9 @@ export default function ChatPanel({
         messages,
         router,
         dict.dialogs.clearSuccess,
+        getThumbnailSvg,
+        diagramHistory,
+        setDiagramHistory,
     ])
 
     const handleInputChange = (

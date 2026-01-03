@@ -216,6 +216,11 @@
         "tooltip": "チャット履歴",
         "newChat": "新しいチャット",
         "empty": "チャット履歴はまだありません",
+        "emptyHint": "会話を始めてください",
+        "today": "今日",
+        "yesterday": "昨日",
+        "thisWeek": "今週",
+        "earlier": "それ以前",
         "deleteTitle": "このチャットを削除しますか？",
         "deleteDescription": "このチャットセッションとダイアグラムは完全に削除されます。この操作は取り消せません。"
     },

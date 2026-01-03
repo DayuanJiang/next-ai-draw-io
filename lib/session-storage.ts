@@ -17,6 +17,8 @@ export interface ChatSession {
     messages: StoredMessage[]
     xmlSnapshots: [number, string][]
     diagramXml: string
+    thumbnailDataUrl?: string // Small PNG preview of the diagram
+    diagramHistory?: { svg: string; xml: string }[] // Version history of diagram edits
 }
 
 export interface StoredMessage {
@@ -31,6 +33,8 @@ export interface SessionMetadata {
     createdAt: number
     updatedAt: number
     messageCount: number
+    hasDiagram: boolean
+    thumbnailDataUrl?: string
 }
 
 interface ChatSessionDB extends DBSchema {
@@ -93,6 +97,8 @@ export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
         messageCount: s.messages.length,
+        hasDiagram: !!s.diagramXml && s.diagramXml.trim().length > 0,
+        thumbnailDataUrl: s.thumbnailDataUrl,
     }))
 }
 

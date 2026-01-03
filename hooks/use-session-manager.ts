@@ -21,6 +21,8 @@ export interface SessionData {
     messages: StoredMessage[]
     xmlSnapshots: [number, string][]
     diagramXml: string
+    thumbnailDataUrl?: string
+    diagramHistory?: { svg: string; xml: string }[]
 }
 
 export interface UseSessionManagerReturn {
@@ -240,6 +242,8 @@ export function useSessionManager(
                 messages: session.messages,
                 xmlSnapshots: session.xmlSnapshots,
                 diagramXml: session.diagramXml,
+                thumbnailDataUrl: session.thumbnailDataUrl,
+                diagramHistory: session.diagramHistory,
             }
         },
         [currentSessionId, currentSession],
@@ -281,6 +285,8 @@ export function useSessionManager(
                                 messages: session.messages,
                                 xmlSnapshots: session.xmlSnapshots,
                                 diagramXml: session.diagramXml,
+                                thumbnailDataUrl: session.thumbnailDataUrl,
+                                diagramHistory: session.diagramHistory,
                             },
                         }
                     }
@@ -325,6 +331,8 @@ export function useSessionManager(
                     messages: data.messages,
                     xmlSnapshots: data.xmlSnapshots,
                     diagramXml: data.diagramXml,
+                    thumbnailDataUrl: data.thumbnailDataUrl,
+                    diagramHistory: data.diagramHistory,
                     title: extractTitle(data.messages),
                 }
                 await saveSession(newSession)
@@ -342,6 +350,10 @@ export function useSessionManager(
                 messages: data.messages,
                 xmlSnapshots: data.xmlSnapshots,
                 diagramXml: data.diagramXml,
+                thumbnailDataUrl:
+                    data.thumbnailDataUrl ?? currentSession.thumbnailDataUrl,
+                diagramHistory:
+                    data.diagramHistory ?? currentSession.diagramHistory,
                 updatedAt: Date.now(),
                 // Update title if it's still default and we have messages
                 title:
@@ -363,6 +375,10 @@ export function useSessionManager(
                               title: updatedSession.title,
                               updatedAt: updatedSession.updatedAt,
                               messageCount: updatedSession.messages.length,
+                              hasDiagram:
+                                  !!updatedSession.diagramXml &&
+                                  updatedSession.diagramXml.trim().length > 0,
+                              thumbnailDataUrl: updatedSession.thumbnailDataUrl,
                           }
                         : s,
                 ),
