@@ -39,7 +39,7 @@
         "@modelcontextprotocol/sdk": "^1.0.4",
         "linkedom": "^0.18.0",
         "open": "^11.0.0",
-        "zod": "^3.24.0"
+        "zod": "^4.0.0"
     },
     "devDependencies": {
         "@types/node": "^24.0.0",
