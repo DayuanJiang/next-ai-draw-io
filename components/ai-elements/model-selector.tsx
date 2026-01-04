@@ -134,6 +134,7 @@ export const ModelSelectorLogo = ({
     }
 
     return (
+        // biome-ignore lint/performance/noImgElement: External URL from models.dev
         <img
             {...props}
             alt={`${provider} logo`}
