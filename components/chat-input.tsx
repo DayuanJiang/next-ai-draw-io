@@ -461,7 +461,12 @@ export function ChatInput({
                 open={showSaveDialog}
                 onOpenChange={setShowSaveDialog}
                 onSave={(filename, format) =>
-                    saveDiagramToFile(filename, format, sessionId)
+                    saveDiagramToFile(
+                        filename,
+                        format,
+                        sessionId,
+                        dict.save.savedSuccessfully,
+                    )
                 }
                 defaultFilename={`diagram-${new Date()
                     .toISOString()

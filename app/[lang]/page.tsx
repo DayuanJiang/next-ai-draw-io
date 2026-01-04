@@ -3,7 +3,6 @@ import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
-import { toast } from "sonner"
 import ChatPanel from "@/components/chat-panel"
 import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
@@ -12,14 +11,12 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
-import { useDictionary } from "@/hooks/use-dictionary"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const dict = useDictionary()
     const {
         drawioRef,
         handleDiagramExport,
@@ -61,17 +58,10 @@ export default function Home() {
     // We use mouse position to determine if the user is interacting with draw.io
     const handleDrawioSave = useCallback(() => {
         if (!mouseOverDrawioRef.current) return
-
+        if (isSavingRef.current) return
         isSavingRef.current = true
         setShowSaveDialog(true)
-        toast.success(dict.save.savedSuccessfully, {
-            position: "bottom-left",
-            duration: 2500,
-        })
-        if (!showSaveDialog) {
-            setShowSaveDialog(true)
-        }
-    }, [dict.save.savedSuccessfully, setShowSaveDialog, showSaveDialog])
+    }, [setShowSaveDialog])
 
     // Load preferences from localStorage after mount
     useEffect(() => {
