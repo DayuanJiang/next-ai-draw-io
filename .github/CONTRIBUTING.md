@@ -49,7 +49,7 @@ npx playwright test --ui
 
 1. Create a feature branch
 2. Make changes and ensure `npm run check` passes
-3. Run tests with `npm run test:e2e`
+3. Run tests with `npm run test && npm run test:e2e`
 4. Submit PR against `main` with a clear description
 
 ## Issues
