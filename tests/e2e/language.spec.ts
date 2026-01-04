@@ -1,113 +1,90 @@
-import { expect, test } from "@playwright/test"
+import {
+    expect,
+    expectBeforeAndAfterReload,
+    getChatInput,
+    getIframe,
+    openSettings,
+    sleep,
+    test,
+} from "./lib/fixtures"
 
 test.describe("Language Switching", () => {
     test("loads English by default", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // Check for English UI text
-        const chatInput = page.locator('textarea[aria-label="Chat input"]')
+        const chatInput = getChatInput(page)
         await expect(chatInput).toBeVisible({ timeout: 10000 })
 
-        // Send button should say "Send"
         await expect(page.locator('button:has-text("Send")')).toBeVisible()
     })
 
     test("can switch to Japanese", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // Open settings
-        const settingsButton = page.locator(
-            'button[aria-label*="Settings"], button:has(svg.lucide-settings)',
-        )
-        await settingsButton.first().click()
+        await test.step("open settings and select Japanese", async () => {
+            await openSettings(page)
+            const languageSelector = page.locator('button:has-text("English")')
+            await languageSelector.first().click()
+            await page.locator('text="日本語"').click()
+        })
 
-        // Find language selector
-        const languageSelector = page.locator('button:has-text("English")')
-        await languageSelector.first().click()
-
-        // Select Japanese
-        await page.locator('text="日本語"').click()
-
-        // UI should update to Japanese
-        await expect(page.locator('button:has-text("送信")')).toBeVisible({
-            timeout: 5000,
+        await test.step("verify UI is in Japanese", async () => {
+            await expect(page.locator('button:has-text("送信")')).toBeVisible({
+                timeout: 5000,
+            })
         })
     })
 
     test("can switch to Chinese", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // Open settings
-        const settingsButton = page.locator(
-            'button[aria-label*="Settings"], button:has(svg.lucide-settings)',
-        )
-        await settingsButton.first().click()
+        await test.step("open settings and select Chinese", async () => {
+            await openSettings(page)
+            const languageSelector = page.locator('button:has-text("English")')
+            await languageSelector.first().click()
+            await page.locator('text="中文"').click()
+        })
 
-        // Find language selector and switch to Chinese
-        const languageSelector = page.locator('button:has-text("English")')
-        await languageSelector.first().click()
-
-        await page.locator('text="中文"').click()
-
-        // UI should update to Chinese
-        await expect(page.locator('button:has-text("发送")')).toBeVisible({
-            timeout: 5000,
+        await test.step("verify UI is in Chinese", async () => {
+            await expect(page.locator('button:has-text("发送")')).toBeVisible({
+                timeout: 5000,
+            })
         })
     })
 
     test("language persists after reload", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // Open settings and switch to Japanese
-        const settingsButton = page.locator(
-            'button[aria-label*="Settings"], button:has(svg.lucide-settings)',
+        await test.step("switch to Japanese", async () => {
+            await openSettings(page)
+            const languageSelector = page.locator('button:has-text("English")')
+            await languageSelector.first().click()
+            await page.locator('text="日本語"').click()
+            await page.keyboard.press("Escape")
+            await sleep(500)
+        })
+
+        await expectBeforeAndAfterReload(
+            page,
+            "Japanese language setting",
+            async () => {
+                await expect(
+                    page.locator('button:has-text("送信")'),
+                ).toBeVisible({
+                    timeout: 10000,
+                })
+            },
         )
-        await settingsButton.first().click()
-
-        const languageSelector = page.locator('button:has-text("English")')
-        await languageSelector.first().click()
-        await page.locator('text="日本語"').click()
-
-        // Verify Japanese UI
-        await expect(page.locator('button:has-text("送信")')).toBeVisible({
-            timeout: 5000,
-        })
-
-        // Close dialog and reload
-        await page.keyboard.press("Escape")
-        await page.waitForTimeout(500)
-
-        // Use domcontentloaded to avoid networkidle timeout
-        await page.reload({ waitUntil: "domcontentloaded" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
-
-        // Japanese should persist
-        await expect(page.locator('button:has-text("送信")')).toBeVisible({
-            timeout: 10000,
-        })
     })
 
     test("Japanese locale URL works", async ({ page }) => {
         await page.goto("/ja", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // Should show Japanese UI
         await expect(page.locator('button:has-text("送信")')).toBeVisible({
             timeout: 10000,
         })
@@ -115,11 +92,8 @@ test.describe("Language Switching", () => {
 
     test("Chinese locale URL works", async ({ page }) => {
         await page.goto("/zh", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // Should show Chinese UI
         await expect(page.locator('button:has-text("发送")')).toBeVisible({
             timeout: 10000,
         })

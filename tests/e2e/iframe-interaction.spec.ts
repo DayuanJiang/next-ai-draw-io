@@ -1,15 +1,24 @@
-import { expect, test } from "@playwright/test"
+import { TEST_NODE_XML } from "./fixtures/diagrams"
+import {
+    expect,
+    getChatInput,
+    getIframe,
+    getIframeContent,
+    sendMessage,
+    test,
+    waitForComplete,
+} from "./lib/fixtures"
 import { createMockSSEResponse } from "./lib/helpers"
 
 test.describe("Iframe Interaction", () => {
     test("draw.io iframe loads successfully", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
 
-        const iframe = page.locator("iframe")
+        const iframe = getIframe(page)
         await expect(iframe).toBeVisible({ timeout: 30000 })
 
         // iframe should have loaded draw.io content
-        const frame = page.frameLocator("iframe")
+        const frame = getIframeContent(page)
         await expect(
             frame
                 .locator(".geMenubarContainer, .geDiagramContainer, canvas")
@@ -19,11 +28,9 @@ test.describe("Iframe Interaction", () => {
 
     test("can interact with draw.io toolbar", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const frame = page.frameLocator("iframe")
+        const frame = getIframeContent(page)
 
         // Draw.io menu items should be accessible
         await expect(
@@ -36,62 +43,42 @@ test.describe("Iframe Interaction", () => {
     test("diagram XML is rendered in iframe after generation", async ({
         page,
     }) => {
-        const testXml = `<mxCell id="test-node-123" value="Test Node" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
-  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-</mxCell>`
-
         await page.route("**/api/chat", async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
-                body: createMockSSEResponse(testXml, "Here is your diagram:"),
+                body: createMockSSEResponse(
+                    TEST_NODE_XML,
+                    "Here is your diagram:",
+                ),
             })
         })
 
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const chatInput = page.locator('textarea[aria-label="Chat input"]')
-        await expect(chatInput).toBeVisible({ timeout: 10000 })
+        await sendMessage(page, "Create a test node")
+        await waitForComplete(page)
 
-        await chatInput.fill("Create a test node")
-        await chatInput.press("ControlOrMeta+Enter")
-
-        // Wait for completion
-        await expect(page.locator('text="Complete"')).toBeVisible({
-            timeout: 15000,
-        })
-
-        // The diagram should now be in the iframe
-        // We can check the iframe's internal state via postMessage or visible elements
-        // At minimum, verify no error state
-        await page.waitForTimeout(1000) // Give draw.io time to render
+        // Give draw.io time to render
+        await page.waitForTimeout(1000)
     })
 
     test("zoom controls work in draw.io", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const frame = page.frameLocator("iframe")
+        const frame = getIframeContent(page)
 
         // draw.io should be loaded and functional - check for diagram container
         await expect(
             frame.locator(".geDiagramContainer, canvas").first(),
         ).toBeVisible({ timeout: 10000 })
-
-        // Zoom controls may or may not be visible depending on UI mode
-        // Just verify iframe is interactive
     })
 
     test("can resize the panel divider", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
         // Find the resizer/divider between panels
         const resizer = page.locator(
@@ -99,10 +86,8 @@ test.describe("Iframe Interaction", () => {
         )
 
         if ((await resizer.count()) > 0) {
-            // Resizer should be draggable
             await expect(resizer.first()).toBeVisible()
 
-            // Try to drag it
             const box = await resizer.first().boundingBox()
             if (box) {
                 await page.mouse.move(
@@ -118,11 +103,9 @@ test.describe("Iframe Interaction", () => {
 
     test("iframe responds to window resize", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const iframe = page.locator("iframe")
+        const iframe = getIframe(page)
         const initialBox = await iframe.boundingBox()
 
         // Resize window
@@ -131,9 +114,7 @@ test.describe("Iframe Interaction", () => {
 
         const newBox = await iframe.boundingBox()
 
-        // iframe should have adjusted
         expect(newBox).toBeDefined()
-        // Size should be different or at least still valid
         if (initialBox && newBox) {
             expect(newBox.width).toBeLessThanOrEqual(800)
         }

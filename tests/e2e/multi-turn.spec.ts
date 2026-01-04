@@ -1,46 +1,44 @@
-import { expect, test } from "@playwright/test"
-import { createMockSSEResponse, createTextOnlyResponse } from "./lib/helpers"
+import { ARCHITECTURE_XML, createBoxXml } from "./fixtures/diagrams"
+import {
+    createMixedMock,
+    createMultiTurnMock,
+    expect,
+    getChatInput,
+    sendMessage,
+    test,
+    waitForComplete,
+    waitForText,
+} from "./lib/fixtures"
+import { createTextOnlyResponse } from "./lib/helpers"
 
 test.describe("Multi-turn Conversation", () => {
     test("handles multiple diagram requests in sequence", async ({ page }) => {
-        let requestCount = 0
-        await page.route("**/api/chat", async (route) => {
-            requestCount++
-            const xml =
-                requestCount === 1
-                    ? `<mxCell id="box1" value="First" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="100" height="40" as="geometry"/></mxCell>`
-                    : `<mxCell id="box2" value="Second" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100" y="200" width="100" height="40" as="geometry"/></mxCell>`
-            await route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(
-                    xml,
-                    `Creating diagram ${requestCount}...`,
-                ),
-            })
-        })
+        await page.route(
+            "**/api/chat",
+            createMultiTurnMock([
+                {
+                    xml: createBoxXml("box1", "First"),
+                    text: "Creating diagram 1...",
+                },
+                {
+                    xml: createBoxXml("box2", "Second", 200),
+                    text: "Creating diagram 2...",
+                },
+            ]),
+        )
 
         await page.goto("/", { waitUntil: "networkidle" })
         await page
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })
 
-        const chatInput = page.locator('textarea[aria-label="Chat input"]')
-        await expect(chatInput).toBeVisible({ timeout: 10000 })
-
         // First request
-        await chatInput.fill("Draw first box")
-        await chatInput.press("ControlOrMeta+Enter")
-        await expect(page.locator('text="Creating diagram 1..."')).toBeVisible({
-            timeout: 15000,
-        })
+        await sendMessage(page, "Draw first box")
+        await waitForText(page, "Creating diagram 1...")
 
         // Second request
-        await chatInput.fill("Draw second box")
-        await chatInput.press("ControlOrMeta+Enter")
-        await expect(page.locator('text="Creating diagram 2..."')).toBeVisible({
-            timeout: 15000,
-        })
+        await sendMessage(page, "Draw second box")
+        await waitForText(page, "Creating diagram 2...")
 
         // Both messages should be visible
         await expect(page.locator('text="Draw first box"')).toBeVisible()
@@ -56,7 +54,6 @@ test.describe("Multi-turn Conversation", () => {
 
             // Verify messages array grows with each request
             if (requestCount === 2) {
-                // Second request should have previous messages
                 expect(body.messages?.length).toBeGreaterThan(1)
             }
 
@@ -72,70 +69,45 @@ test.describe("Multi-turn Conversation", () => {
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })
 
-        const chatInput = page.locator('textarea[aria-label="Chat input"]')
-        await expect(chatInput).toBeVisible({ timeout: 10000 })
-
         // First message
-        await chatInput.fill("Hello")
-        await chatInput.press("ControlOrMeta+Enter")
-        await expect(page.locator('text="Response 1"')).toBeVisible({
-            timeout: 15000,
-        })
+        await sendMessage(page, "Hello")
+        await waitForText(page, "Response 1")
 
         // Second message (should include history)
-        await chatInput.fill("Follow up question")
-        await chatInput.press("ControlOrMeta+Enter")
-        await expect(page.locator('text="Response 2"')).toBeVisible({
-            timeout: 15000,
-        })
+        await sendMessage(page, "Follow up question")
+        await waitForText(page, "Response 2")
     })
 
     test("can continue after a text-only response", async ({ page }) => {
-        let requestCount = 0
-        await page.route("**/api/chat", async (route) => {
-            requestCount++
-            if (requestCount === 1) {
-                // First: text-only explanation
-                await route.fulfill({
-                    status: 200,
-                    contentType: "text/event-stream",
-                    body: createTextOnlyResponse(
-                        "I understand. Let me explain the architecture first.",
-                    ),
-                })
-            } else {
-                // Second: diagram generation
-                const xml = `<mxCell id="arch" value="Architecture" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="120" height="50" as="geometry"/></mxCell>`
-                await route.fulfill({
-                    status: 200,
-                    contentType: "text/event-stream",
-                    body: createMockSSEResponse(xml, "Here is the diagram:"),
-                })
-            }
-        })
+        await page.route(
+            "**/api/chat",
+            createMixedMock([
+                {
+                    type: "text",
+                    text: "I understand. Let me explain the architecture first.",
+                },
+                {
+                    type: "diagram",
+                    xml: ARCHITECTURE_XML,
+                    text: "Here is the diagram:",
+                },
+            ]),
+        )
 
         await page.goto("/", { waitUntil: "networkidle" })
         await page
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })
 
-        const chatInput = page.locator('textarea[aria-label="Chat input"]')
-        await expect(chatInput).toBeVisible({ timeout: 10000 })
-
         // Ask for explanation first
-        await chatInput.fill("Explain the architecture")
-        await chatInput.press("ControlOrMeta+Enter")
-        await expect(
-            page.locator(
-                'text="I understand. Let me explain the architecture first."',
-            ),
-        ).toBeVisible({ timeout: 15000 })
+        await sendMessage(page, "Explain the architecture")
+        await waitForText(
+            page,
+            "I understand. Let me explain the architecture first.",
+        )
 
         // Then ask for diagram
-        await chatInput.fill("Now show it as a diagram")
-        await chatInput.press("ControlOrMeta+Enter")
-        await expect(page.locator('text="Complete"')).toBeVisible({
-            timeout: 15000,
-        })
+        await sendMessage(page, "Now show it as a diagram")
+        await waitForComplete(page)
     })
 })
