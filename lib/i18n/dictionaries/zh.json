@@ -212,6 +212,22 @@
         "contactMe": "联系我",
         "usageNotice": "由于使用量过高，我已将模型从 Claude 更换为 minimax-m2，并设置了一些用量限制。详情请查看关于页面。"
     },
+    "sessionHistory": {
+        "tooltip": "聊天历史",
+        "newChat": "新对话",
+        "empty": "暂无聊天记录",
+        "emptyHint": "开始对话吧",
+        "today": "今天",
+        "yesterday": "昨天",
+        "thisWeek": "本周",
+        "earlier": "更早",
+        "deleteTitle": "删除此对话？",
+        "deleteDescription": "这将永久删除此聊天会话及其图表。此操作无法撤消。",
+        "recentChats": "最近对话",
+        "justNow": "刚刚",
+        "searchPlaceholder": "搜索对话...",
+        "noResults": "未找到对话"
+    },
     "modelConfig": {
         "title": "AI 模型配置",
         "description": "配置多个 AI 提供商和模型",

@@ -212,6 +212,22 @@
         "contactMe": "Contact Me",
         "usageNotice": "Due to high usage, I have changed the model from Claude to minimax-m2 and added some usage limits. See About page for details."
     },
+    "sessionHistory": {
+        "tooltip": "Chat History",
+        "newChat": "New Chat",
+        "empty": "No chat history yet",
+        "emptyHint": "Start a conversation to begin",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This Week",
+        "earlier": "Earlier",
+        "deleteTitle": "Delete this chat?",
+        "deleteDescription": "This will permanently delete this chat session and its diagram. This action cannot be undone.",
+        "recentChats": "Recent Chats",
+        "justNow": "Just now",
+        "searchPlaceholder": "Search chats...",
+        "noResults": "No chats found"
+    },
     "modelConfig": {
         "title": "AI Model Configuration",
         "description": "Configure multiple AI providers and models",

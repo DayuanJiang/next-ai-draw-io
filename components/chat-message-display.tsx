@@ -10,10 +10,13 @@ import {
     Cpu,
     FileCode,
     FileText,
+    MessageSquare,
     Pencil,
     RotateCcw,
+    Search,
     ThumbsDown,
     ThumbsUp,
+    Trash2,
     X,
 } from "lucide-react"
 import Image from "next/image"
@@ -26,6 +29,16 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -183,6 +196,13 @@ const getUserOriginalText = (message: UIMessage): string => {
     return fullText.replace(filePattern, "").trim()
 }
 
+interface SessionMetadata {
+    id: string
+    title: string
+    updatedAt: number
+    thumbnailDataUrl?: string
+}
+
 interface ChatMessageDisplayProps {
     messages: UIMessage[]
     setInput: (input: string) => void
@@ -194,6 +214,10 @@ interface ChatMessageDisplayProps {
     onEditMessage?: (messageIndex: number, newText: string) => void
     status?: "streaming" | "submitted" | "idle" | "error" | "ready"
     isRestored?: boolean
+    sessions?: SessionMetadata[]
+    onSelectSession?: (id: string) => void
+    onDeleteSession?: (id: string) => void
+    loadedMessageIdsRef?: MutableRefObject<Set<string>>
 }
 
 export function ChatMessageDisplay({
@@ -207,14 +231,32 @@ export function ChatMessageDisplay({
     onEditMessage,
     status = "idle",
     isRestored = false,
+    sessions = [],
+    onSelectSession,
+    onDeleteSession,
+    loadedMessageIdsRef,
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const scrollTopRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
     const processedToolCalls = processedToolCallsRef
     // Track the last processed XML per toolCallId to skip redundant processing during streaming
     const lastProcessedXmlRef = useRef<Map<string, string>>(new Map())
+
+    // Reset refs when messages become empty (new chat or session switch)
+    // This ensures cached examples work correctly after starting a new session
+    useEffect(() => {
+        if (messages.length === 0) {
+            previousXML.current = ""
+            lastProcessedXmlRef.current.clear()
+            // Note: processedToolCalls is passed from parent, so we clear it too
+            processedToolCalls.current.clear()
+            // Scroll to top to show newest history items
+            scrollTopRef.current?.scrollIntoView({ behavior: "instant" })
+        }
+    }, [messages.length, processedToolCalls])
     // Debounce streaming diagram updates - store pending XML and timeout
     const pendingXmlRef = useRef<string | null>(null)
     const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -252,15 +294,13 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
-    // Track message IDs that were restored from localStorage (skip animation for these)
-    const restoredMessageIdsRef = useRef<Set<string> | null>(null)
-
-    // Capture restored message IDs once when isRestored becomes true
-    useEffect(() => {
-        if (isRestored && restoredMessageIdsRef.current === null) {
-            restoredMessageIdsRef.current = new Set(messages.map((m) => m.id))
-        }
-    }, [isRestored, messages])
+    // Track whether examples section is expanded (collapsed by default when there's history)
+    const [examplesExpanded, setExamplesExpanded] = useState(false)
+    // Delete confirmation dialog state
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+    // Search filter for history
+    const [searchQuery, setSearchQuery] = useState("")
 
     const setCopyState = (
         messageId: string,
@@ -358,7 +398,6 @@ export function ChatMessageDisplay({
     const handleDisplayChart = useCallback(
         (xml: string, showToast = false) => {
             let currentXml = xml || ""
-            const startTime = performance.now()
 
             // During streaming (showToast=false), extract only complete mxCell elements
             // This allows progressive rendering even with partial/incomplete trailing XML
@@ -382,14 +421,8 @@ export function ChatMessageDisplay({
                 const parseError = testDoc.querySelector("parsererror")
 
                 if (parseError) {
-                    // Use console.warn instead of console.error to avoid triggering
-                    // Next.js dev mode error overlay for expected streaming states
-                    // (partial XML during streaming is normal and will be fixed by subsequent updates)
+                    // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
-                        // Only log as error and show toast if this is the final XML
-                        console.error(
-                            "[ChatMessageDisplay] Malformed XML detected in final output",
-                        )
                         toast.error(dict.errors.malformedXml)
                     }
                     return // Skip this update
@@ -403,18 +436,12 @@ export function ChatMessageDisplay({
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
                     const replacedXML = replaceNodes(baseXML, convertedXml)
 
-                    const xmlProcessTime = performance.now() - startTime
-
                     // During streaming (showToast=false), skip heavy validation for lower latency
                     // The quick DOM parse check above catches malformed XML
                     // Full validation runs on final output (showToast=true)
                     if (!showToast) {
                         previousXML.current = convertedXml
-                        const loadStartTime = performance.now()
                         onDisplayChart(replacedXML, true)
-                        console.log(
-                            `[Streaming] XML processing: ${xmlProcessTime.toFixed(1)}ms, drawio load: ${(performance.now() - loadStartTime).toFixed(1)}ms`,
-                        )
                         return
                     }
 
@@ -424,30 +451,12 @@ export function ChatMessageDisplay({
                         previousXML.current = convertedXml
                         // Use fixed XML if available, otherwise use original
                         const xmlToLoad = validation.fixed || replacedXML
-                        if (validation.fixes.length > 0) {
-                            console.log(
-                                "[ChatMessageDisplay] Auto-fixed XML issues:",
-                                validation.fixes,
-                            )
-                        }
-                        // Skip validation in loadDiagram since we already validated above
-                        const loadStartTime = performance.now()
                         onDisplayChart(xmlToLoad, true)
-                        console.log(
-                            `[Final] XML processing: ${xmlProcessTime.toFixed(1)}ms, validation+load: ${(performance.now() - loadStartTime).toFixed(1)}ms`,
-                        )
                     } else {
-                        console.error(
-                            "[ChatMessageDisplay] XML validation failed:",
-                            validation.error,
-                        )
                         toast.error(dict.errors.validationFailed)
                     }
                 } catch (error) {
-                    console.error(
-                        "[ChatMessageDisplay] Error processing XML:",
-                        error,
-                    )
+                    console.error("Error processing XML:", error)
                     // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
                         toast.error(dict.errors.failedToProcess)
@@ -458,8 +467,22 @@ export function ChatMessageDisplay({
         [chartXML, onDisplayChart],
     )
 
+    // Track previous message count to detect bulk loads vs streaming
+    const prevMessageCountRef = useRef(0)
+
     useEffect(() => {
-        if (messagesEndRef.current) {
+        if (messagesEndRef.current && messages.length > 0) {
+            const prevCount = prevMessageCountRef.current
+            const currentCount = messages.length
+            prevMessageCountRef.current = currentCount
+
+            // Bulk load (session restore) - instant scroll, no animation
+            if (prevCount === 0 || currentCount - prevCount > 1) {
+                messagesEndRef.current.scrollIntoView({ behavior: "instant" })
+                return
+            }
+
+            // Single message added - smooth scroll
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
         }
     }, [messages])
@@ -869,10 +892,191 @@ export function ChatMessageDisplay({
         )
     }
 
+    // Helper to format session date
+    const formatSessionDate = (timestamp: number): string => {
+        const date = new Date(timestamp)
+        const now = new Date()
+        const diffMs = now.getTime() - date.getTime()
+        const diffMins = Math.floor(diffMs / (1000 * 60))
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+
+        if (diffMins < 1) return dict.sessionHistory?.justNow || "Just now"
+        if (diffMins < 60) return `${diffMins}m ago`
+        if (diffHours < 24) return `${diffHours}h ago`
+
+        return date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+        })
+    }
+
+    const hasHistory = sessions.length > 0
+
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
+            <div ref={scrollTopRef} />
             {messages.length === 0 && isRestored ? (
-                <ExamplePanel setInput={setInput} setFiles={setFiles} />
+                hasHistory ? (
+                    // Show history + collapsible examples when there are sessions
+                    <div className="py-6 px-2 animate-fade-in">
+                        {/* Recent Chats Section */}
+                        <div className="mb-6">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
+                                {dict.sessionHistory?.recentChats ||
+                                    "Recent Chats"}
+                            </p>
+                            {/* Search Bar */}
+                            <div className="relative mb-3">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    placeholder={
+                                        dict.sessionHistory
+                                            ?.searchPlaceholder ||
+                                        "Search chats..."
+                                    }
+                                    value={searchQuery}
+                                    onChange={(e) =>
+                                        setSearchQuery(e.target.value)
+                                    }
+                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery("")}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors"
+                                    >
+                                        <X className="w-3 h-3 text-muted-foreground" />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                {sessions
+                                    .filter((session) =>
+                                        session.title
+                                            .toLowerCase()
+                                            .includes(
+                                                searchQuery.toLowerCase(),
+                                            ),
+                                    )
+                                    .map((session) => (
+                                        // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested delete button which causes hydration error
+                                        <div
+                                            key={session.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
+                                            onClick={() =>
+                                                onSelectSession?.(session.id)
+                                            }
+                                            onKeyDown={(e) => {
+                                                if (
+                                                    e.key === "Enter" ||
+                                                    e.key === " "
+                                                ) {
+                                                    e.preventDefault()
+                                                    onSelectSession?.(
+                                                        session.id,
+                                                    )
+                                                }
+                                            }}
+                                        >
+                                            {session.thumbnailDataUrl ? (
+                                                <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
+                                                    <Image
+                                                        src={
+                                                            session.thumbnailDataUrl
+                                                        }
+                                                        alt=""
+                                                        width={48}
+                                                        height={48}
+                                                        className="object-contain w-full h-full"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                    <MessageSquare className="w-5 h-5 text-primary" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm font-medium truncate">
+                                                    {session.title}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {formatSessionDate(
+                                                        session.updatedAt,
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {onDeleteSession && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setSessionToDelete(
+                                                            session.id,
+                                                        )
+                                                        setDeleteDialogOpen(
+                                                            true,
+                                                        )
+                                                    }}
+                                                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                                    title={dict.common.delete}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                {sessions.filter((s) =>
+                                    s.title
+                                        .toLowerCase()
+                                        .includes(searchQuery.toLowerCase()),
+                                ).length === 0 &&
+                                    searchQuery && (
+                                        <p className="text-sm text-muted-foreground text-center py-4">
+                                            {dict.sessionHistory?.noResults ||
+                                                "No chats found"}
+                                        </p>
+                                    )}
+                            </div>
+                        </div>
+
+                        {/* Collapsible Examples Section */}
+                        <div className="border-t border-border/50 pt-4">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setExamplesExpanded(!examplesExpanded)
+                                }
+                                className="w-full flex items-center justify-between px-1 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                            >
+                                <span>
+                                    {dict.examples?.quickExamples ||
+                                        "Quick Examples"}
+                                </span>
+                                {examplesExpanded ? (
+                                    <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                    <ChevronDown className="w-4 h-4" />
+                                )}
+                            </button>
+                            {examplesExpanded && (
+                                <div className="mt-2">
+                                    <ExamplePanel
+                                        setInput={setInput}
+                                        setFiles={setFiles}
+                                        minimal
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    // Show full examples when no history
+                    <ExamplePanel setInput={setInput} setFiles={setFiles} />
+                )
             ) : messages.length === 0 ? null : (
                 <div className="py-4 px-4 space-y-4">
                     {messages.map((message, messageIndex) => {
@@ -893,12 +1097,10 @@ export function ChatMessageDisplay({
                                     .slice(messageIndex + 1)
                                     .every((m) => m.role !== "user"))
                         const isEditing = editingMessageId === message.id
-                        // Skip animation for restored messages
-                        // If isRestored but ref not set yet, we're in first render after restoration - treat all as restored
+                        // Skip animation for loaded messages (from session restore)
                         const isRestoredMessage =
-                            isRestored &&
-                            (restoredMessageIdsRef.current === null ||
-                                restoredMessageIdsRef.current.has(message.id))
+                            loadedMessageIdsRef?.current.has(message.id) ??
+                            false
                         return (
                             <div
                                 key={message.id}
@@ -1516,6 +1718,42 @@ export function ChatMessageDisplay({
                 </div>
             )}
             <div ref={messagesEndRef} />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+            >
+                <AlertDialogContent className="max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {dict.sessionHistory?.deleteTitle ||
+                                "Delete this chat?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {dict.sessionHistory?.deleteDescription ||
+                                "This will permanently delete this chat session and its diagram. This action cannot be undone."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>
+                            {dict.common.cancel}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (sessionToDelete && onDeleteSession) {
+                                    onDeleteSession(sessionToDelete)
+                                }
+                                setDeleteDialogOpen(false)
+                                setSessionToDelete(null)
+                            }}
+                            className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400"
+                        >
+                            {dict.common.delete}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </ScrollArea>
     )
 }
