@@ -21,8 +21,14 @@ test.describe("Error Handling", () => {
         await chatInput.fill("Draw a cat")
         await chatInput.press("ControlOrMeta+Enter")
 
-        // After error, user should be able to type again (input still functional)
-        await page.waitForTimeout(2000) // Wait for error response
+        // Should show error indication (toast, alert, or error text)
+        const errorIndicator = page
+            .locator('[role="alert"]')
+            .or(page.locator("[data-sonner-toast]"))
+            .or(page.locator("text=/error|failed|something went wrong/i"))
+        await expect(errorIndicator.first()).toBeVisible({ timeout: 10000 })
+
+        // User should be able to type again (input still functional)
         await chatInput.fill("Retry message")
         await expect(chatInput).toHaveValue("Retry message")
     })
@@ -49,8 +55,14 @@ test.describe("Error Handling", () => {
         await chatInput.fill("Draw a cat")
         await chatInput.press("ControlOrMeta+Enter")
 
-        // After rate limit error, user should be able to type again
-        await page.waitForTimeout(2000) // Wait for error response
+        // Should show error indication for rate limit
+        const errorIndicator = page
+            .locator('[role="alert"]')
+            .or(page.locator("[data-sonner-toast]"))
+            .or(page.locator("text=/rate limit|too many|try again/i"))
+        await expect(errorIndicator.first()).toBeVisible({ timeout: 10000 })
+
+        // User should be able to type again
         await chatInput.fill("Retry after rate limit")
         await expect(chatInput).toHaveValue("Retry after rate limit")
     })
@@ -73,8 +85,12 @@ test.describe("Error Handling", () => {
         await chatInput.fill("Draw a cat")
         await chatInput.press("ControlOrMeta+Enter")
 
-        // Wait for timeout error to occur
-        await page.waitForTimeout(3000)
+        // Should show error indication for network failure
+        const errorIndicator = page
+            .locator('[role="alert"]')
+            .or(page.locator("[data-sonner-toast]"))
+            .or(page.locator("text=/error|failed|network|timeout/i"))
+        await expect(errorIndicator.first()).toBeVisible({ timeout: 10000 })
 
         // After timeout, user should be able to type again
         await chatInput.fill("Try again after timeout")

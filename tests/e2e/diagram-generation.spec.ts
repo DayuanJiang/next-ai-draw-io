@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { createMockSSEResponse } from "./lib/helpers"
 
 // Simple cat diagram XML for testing (mxCell elements only, no wrapper)
 const CAT_DIAGRAM_XML = `<mxCell id="cat-head" value="Cat Head" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFE4B5;" vertex="1" parent="1">
@@ -19,52 +20,14 @@ const FLOWCHART_XML = `<mxCell id="start" value="Start" style="rounded=1;whiteSp
   <mxGeometry x="200" y="210" width="100" height="40" as="geometry"/>
 </mxCell>`
 
-// Helper to create SSE-formatted UI message stream response
-function createMockSSEResponse(xml: string, toolName = "display_diagram") {
-    const messageId = `msg_${Date.now()}`
-    const toolCallId = `call_${Date.now()}`
-    const textId = `text_${Date.now()}`
-
-    // SSE format: each event is "data: <json>\n\n"
-    const events = [
-        // Message start
-        { type: "start", messageId },
-        // Text content
-        { type: "text-start", id: textId },
-        {
-            type: "text-delta",
-            id: textId,
-            delta: "I'll create a diagram for you.",
-        },
-        { type: "text-end", id: textId },
-        // Tool call
-        { type: "tool-input-start", toolCallId, toolName },
-        {
-            type: "tool-input-available",
-            toolCallId,
-            toolName,
-            input: { xml },
-        },
-        {
-            type: "tool-output-available",
-            toolCallId,
-            output: "Successfully displayed the diagram",
-        },
-        // Finish
-        { type: "finish" },
-    ]
-
-    return (
-        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
-        "data: [DONE]\n\n"
-    )
-}
-
 test.describe("Diagram Generation", () => {
     test.beforeEach(async ({ page }) => {
         // Mock the chat API to return our test XML
         await page.route("**/api/chat", async (route) => {
-            const response = createMockSSEResponse(CAT_DIAGRAM_XML)
+            const response = createMockSSEResponse(
+                CAT_DIAGRAM_XML,
+                "I'll create a diagram for you.",
+            )
             await route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
@@ -147,7 +110,10 @@ test.describe("Diagram Edit", () => {
                 await route.fulfill({
                     status: 200,
                     contentType: "text/event-stream",
-                    body: createMockSSEResponse(FLOWCHART_XML),
+                    body: createMockSSEResponse(
+                        FLOWCHART_XML,
+                        "I'll create a diagram for you.",
+                    ),
                 })
             } else {
                 // Edit response - replaces the diagram
@@ -158,7 +124,10 @@ test.describe("Diagram Edit", () => {
                 await route.fulfill({
                     status: 200,
                     contentType: "text/event-stream",
-                    body: createMockSSEResponse(editedXml),
+                    body: createMockSSEResponse(
+                        editedXml,
+                        "I'll create a diagram for you.",
+                    ),
                 })
             }
         })
@@ -200,7 +169,10 @@ test.describe("Diagram Append", () => {
                 await route.fulfill({
                     status: 200,
                     contentType: "text/event-stream",
-                    body: createMockSSEResponse(FLOWCHART_XML),
+                    body: createMockSSEResponse(
+                        FLOWCHART_XML,
+                        "I'll create a diagram for you.",
+                    ),
                 })
             } else {
                 // Append response - adds new element
@@ -210,7 +182,11 @@ test.describe("Diagram Append", () => {
                 await route.fulfill({
                     status: 200,
                     contentType: "text/event-stream",
-                    body: createMockSSEResponse(appendXml, "append_diagram"),
+                    body: createMockSSEResponse(
+                        appendXml,
+                        "I'll create a diagram for you.",
+                        "append_diagram",
+                    ),
                 })
             }
         })

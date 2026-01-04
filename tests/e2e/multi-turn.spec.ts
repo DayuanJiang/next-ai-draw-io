@@ -1,54 +1,5 @@
 import { expect, test } from "@playwright/test"
-
-// Helper to create SSE response
-function createMockSSEResponse(
-    xml: string,
-    text: string,
-    toolName = "display_diagram",
-) {
-    const messageId = `msg_${Date.now()}`
-    const toolCallId = `call_${Date.now()}`
-    const textId = `text_${Date.now()}`
-
-    const events = [
-        { type: "start", messageId },
-        { type: "text-start", id: textId },
-        { type: "text-delta", id: textId, delta: text },
-        { type: "text-end", id: textId },
-        { type: "tool-input-start", toolCallId, toolName },
-        { type: "tool-input-available", toolCallId, toolName, input: { xml } },
-        {
-            type: "tool-output-available",
-            toolCallId,
-            output: "Successfully displayed the diagram",
-        },
-        { type: "finish" },
-    ]
-
-    return (
-        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
-        "data: [DONE]\n\n"
-    )
-}
-
-// Helper for text-only response
-function createTextOnlyResponse(text: string) {
-    const messageId = `msg_${Date.now()}`
-    const textId = `text_${Date.now()}`
-
-    const events = [
-        { type: "start", messageId },
-        { type: "text-start", id: textId },
-        { type: "text-delta", id: textId, delta: text },
-        { type: "text-end", id: textId },
-        { type: "finish" },
-    ]
-
-    return (
-        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
-        "data: [DONE]\n\n"
-    )
-}
+import { createMockSSEResponse, createTextOnlyResponse } from "./lib/helpers"
 
 test.describe("Multi-turn Conversation", () => {
     test("handles multiple diagram requests in sequence", async ({ page }) => {

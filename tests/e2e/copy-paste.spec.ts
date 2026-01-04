@@ -1,36 +1,5 @@
 import { expect, test } from "@playwright/test"
-
-// Helper to create SSE response
-function createMockSSEResponse(xml: string, text: string) {
-    const messageId = `msg_${Date.now()}`
-    const toolCallId = `call_${Date.now()}`
-    const textId = `text_${Date.now()}`
-
-    const events = [
-        { type: "start", messageId },
-        { type: "text-start", id: textId },
-        { type: "text-delta", id: textId, delta: text },
-        { type: "text-end", id: textId },
-        { type: "tool-input-start", toolCallId, toolName: "display_diagram" },
-        {
-            type: "tool-input-available",
-            toolCallId,
-            toolName: "display_diagram",
-            input: { xml },
-        },
-        {
-            type: "tool-output-available",
-            toolCallId,
-            output: "Successfully displayed the diagram",
-        },
-        { type: "finish" },
-    ]
-
-    return (
-        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
-        "data: [DONE]\n\n"
-    )
-}
+import { createMockSSEResponse } from "./lib/helpers"
 
 test.describe("Copy/Paste Functionality", () => {
     test("can paste text into chat input", async ({ page }) => {
