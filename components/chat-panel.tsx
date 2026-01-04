@@ -36,7 +36,7 @@ import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { sanitizeMessages } from "@/lib/session-storage"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { cn, formatXML } from "@/lib/utils"
+import { cn, formatXML, isRealDiagram } from "@/lib/utils"
 import { ChatMessageDisplay } from "./chat-message-display"
 import { DevXmlSimulator } from "./dev-xml-simulator"
 
@@ -431,8 +431,6 @@ export default function ChatPanel({
         messagesRef.current = messages
     }, [messages])
 
-    const messagesEndRef = useRef<HTMLDivElement>(null)
-
     // Track last synced session ID to detect external changes (e.g., URL back/forward)
     const lastSyncedSessionIdRef = useRef<string | null>(null)
 
@@ -451,8 +449,7 @@ export default function ChatPanel({
                 diagramHistory?: { svg: string; xml: string }[]
             } | null,
         ) => {
-            const diagramLength = data?.diagramXml?.length || 0
-            const hasRealDiagram = diagramLength > 300
+            const hasRealDiagram = isRealDiagram(data?.diagramXml)
             if (data) {
                 // Mark all message IDs as loaded from session
                 const messageIds = (data.messages as any[]).map(
@@ -489,8 +486,8 @@ export default function ChatPanel({
     const buildSessionData = useCallback(
         async (options: { withThumbnail?: boolean } = {}) => {
             const currentDiagramXml = chartXMLRef.current || ""
-            // Only capture thumbnail if there's a meaningful diagram (not just empty default ~147-300 chars)
-            const hasRealDiagram = currentDiagramXml.length > 300
+            // Only capture thumbnail if there's a meaningful diagram (not just empty template)
+            const hasRealDiagram = isRealDiagram(currentDiagramXml)
             let thumbnailDataUrl: string | undefined
             if (hasRealDiagram && options.withThumbnail) {
                 const freshThumb = await getThumbnailSvg()
@@ -606,9 +603,8 @@ export default function ChatPanel({
 
         // Capture current session ID at schedule time to verify at save time
         const scheduledForSessionId = currentSessionId
-        // Capture whether there's a REAL diagram NOW (not just empty default structure)
-        // Empty default mxfile is ~147-300 chars, real diagrams are larger
-        const hasDiagramNow = (chartXMLRef.current?.length || 0) > 300
+        // Capture whether there's a REAL diagram NOW (not just empty template)
+        const hasDiagramNow = isRealDiagram(chartXMLRef.current)
         // Check if this session was just loaded without a diagram
         const isNodiagramSession =
             justLoadedSessionIdRef.current === scheduledForSessionId
@@ -659,12 +655,6 @@ export default function ChatPanel({
     useEffect(() => {
         localStorage.setItem(STORAGE_SESSION_ID_KEY, sessionId)
     }, [sessionId])
-
-    useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-        }
-    }, [messages])
 
     // Save session when page becomes hidden (tab switch, close, navigate away)
     // This is more reliable than beforeunload for async IndexedDB operations
@@ -811,8 +801,7 @@ export default function ChatPanel({
             // Switch to selected session
             const sessionData = await sessionManager.switchSession(sessionId)
             if (sessionData) {
-                const diagramLength = sessionData.diagramXml?.length || 0
-                const hasRealDiagram = diagramLength > 300
+                const hasRealDiagram = isRealDiagram(sessionData.diagramXml)
                 justLoadedSessionRef.current = true
 
                 // CRITICAL: Update latestSvgRef with the NEW session's thumbnail

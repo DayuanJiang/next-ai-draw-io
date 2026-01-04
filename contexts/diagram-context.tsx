@@ -5,7 +5,11 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
-import { extractDiagramXML, validateAndFixXml } from "../lib/utils"
+import {
+    extractDiagramXML,
+    isRealDiagram,
+    validateAndFixXml,
+} from "../lib/utils"
 
 interface DiagramContextType {
     chartXML: string
@@ -82,7 +86,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
         // Restore diagram from ref if we have one
         const xmlToRestore = chartXMLRef.current
-        if (xmlToRestore && xmlToRestore.length > 300 && drawioRef.current) {
+        if (isRealDiagram(xmlToRestore) && drawioRef.current) {
             drawioRef.current.load({ xml: xmlToRestore })
         }
     }, [isDrawioReady])
@@ -116,7 +120,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const getThumbnailSvg = async (): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
-        if (!chartXML || chartXML.length < 300) return null
+        if (!isRealDiagram(chartXML)) return null
 
         try {
             const svgData = await Promise.race([

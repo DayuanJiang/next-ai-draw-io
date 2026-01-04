@@ -33,7 +33,6 @@ export interface UseSessionManagerReturn {
     isAvailable: boolean
 
     // Actions
-    createNewSession: () => Promise<string>
     switchSession: (id: string) => Promise<SessionData | null>
     deleteSession: (id: string) => Promise<{ wasCurrentSession: boolean }>
     // forSessionId: optional session ID to verify save targets correct session (prevents stale debounce writes)
@@ -41,12 +40,9 @@ export interface UseSessionManagerReturn {
         data: SessionData,
         forSessionId?: string | null,
     ) => Promise<void>
-    updateSessionTitle: (title: string) => void
     refreshSessions: () => Promise<void>
     clearCurrentSession: () => void
 }
-
-const CURRENT_SESSION_KEY = "next-ai-drawio-current-session-id"
 
 interface UseSessionManagerOptions {
     /** Session ID from URL param - if provided, load this session; if null, start blank */
@@ -112,7 +108,6 @@ export function useSessionManager(
                     if (session) {
                         setCurrentSession(session)
                         setCurrentSessionId(session.id)
-                        localStorage.setItem(CURRENT_SESSION_KEY, session.id)
                     }
                     // If session not found, stay in blank state (URL has invalid session ID)
                 }
@@ -154,10 +149,6 @@ export function useSessionManager(
                     setCurrentSessionId((current) => {
                         if (current !== session.id) {
                             setCurrentSession(session)
-                            localStorage.setItem(
-                                CURRENT_SESSION_KEY,
-                                session.id,
-                            )
                             return session.id
                         }
                         return current
@@ -181,30 +172,6 @@ export function useSessionManager(
         return () => window.removeEventListener("focus", handleFocus)
     }, [refreshSessions])
 
-    // Create a new session
-    const createNewSession = useCallback(async (): Promise<string> => {
-        const newSession = createEmptySession()
-
-        // Save current session first if it has messages
-        if (currentSession && currentSession.messages.length > 0) {
-            await saveSession(currentSession)
-        }
-
-        // Save new session
-        await saveSession(newSession)
-        await enforceSessionLimit()
-
-        // Update state
-        setCurrentSession(newSession)
-        setCurrentSessionId(newSession.id)
-        localStorage.setItem(CURRENT_SESSION_KEY, newSession.id)
-
-        // Refresh list
-        await refreshSessions()
-
-        return newSession.id
-    }, [currentSession, refreshSessions])
-
     // Switch to a different session
     const switchSession = useCallback(
         async (id: string): Promise<SessionData | null> => {
@@ -225,7 +192,6 @@ export function useSessionManager(
             // Update state
             setCurrentSession(session)
             setCurrentSessionId(session.id)
-            localStorage.setItem(CURRENT_SESSION_KEY, session.id)
 
             return {
                 messages: session.messages,
@@ -248,7 +214,6 @@ export function useSessionManager(
             if (wasCurrentSession) {
                 setCurrentSession(null)
                 setCurrentSessionId(null)
-                localStorage.removeItem(CURRENT_SESSION_KEY)
             }
 
             await refreshSessions()
@@ -289,7 +254,6 @@ export function useSessionManager(
                 await enforceSessionLimit()
                 setCurrentSession(newSession)
                 setCurrentSessionId(newSession.id)
-                localStorage.setItem(CURRENT_SESSION_KEY, newSession.id)
                 await refreshSessions()
                 return
             }
@@ -337,20 +301,10 @@ export function useSessionManager(
         [currentSession, currentSessionId, refreshSessions],
     )
 
-    // Update session title manually
-    const updateSessionTitle = useCallback(
-        (title: string) => {
-            if (!currentSession) return
-            setCurrentSession((prev) => (prev ? { ...prev, title } : null))
-        },
-        [currentSession],
-    )
-
     // Clear current session state (for starting fresh without loading another session)
     const clearCurrentSession = useCallback(() => {
         setCurrentSession(null)
         setCurrentSessionId(null)
-        localStorage.removeItem(CURRENT_SESSION_KEY)
     }, [])
 
     return {
@@ -359,11 +313,9 @@ export function useSessionManager(
         currentSession,
         isLoading,
         isAvailable,
-        createNewSession,
         switchSession,
         deleteSession,
         saveCurrentSession,
-        updateSessionTitle,
         refreshSessions,
         clearCurrentSession,
     }

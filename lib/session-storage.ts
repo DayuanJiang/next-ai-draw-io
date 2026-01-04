@@ -76,19 +76,6 @@ export function isIndexedDBAvailable(): boolean {
 }
 
 // CRUD Operations
-export async function getAllSessions(): Promise<ChatSession[]> {
-    if (!isIndexedDBAvailable()) return []
-    try {
-        const db = await getDB()
-        const sessions = await db.getAllFromIndex(STORE_NAME, "by-updated")
-        // Return sorted by updatedAt descending (newest first)
-        return sessions.reverse()
-    } catch (error) {
-        console.error("Failed to get all sessions:", error)
-        return []
-    }
-}
-
 export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
     if (!isIndexedDBAvailable()) return []
     try {
