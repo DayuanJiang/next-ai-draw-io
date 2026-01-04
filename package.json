@@ -38,6 +38,7 @@
         "@ai-sdk/react": "^3.0.1",
         "@aws-sdk/client-dynamodb": "^3.957.0",
         "@aws-sdk/credential-providers": "^3.943.0",
+        "@extractus/article-extractor": "^8.0.18",
         "@formatjs/intl-localematcher": "^0.7.2",
         "@langfuse/client": "^4.4.9",
         "@langfuse/otel": "^4.4.4",
@@ -86,6 +87,7 @@
         "sonner": "^2.0.7",
         "tailwind-merge": "^3.0.2",
         "tailwindcss-animate": "^1.0.7",
+        "turndown": "^7.2.0",
         "unpdf": "^1.4.0",
         "zod": "^4.1.12"
     },
@@ -110,6 +112,7 @@
         "@types/pako": "^2.0.3",
         "@types/react": "^19",
         "@types/react-dom": "^19",
+        "@types/turndown": "^5.0.6",
         "concurrently": "^9.2.1",
         "cross-env": "^10.1.0",
         "electron": "^39.2.7",

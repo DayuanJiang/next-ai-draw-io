@@ -51,7 +51,8 @@
         "badResponse": "悪い応答",
         "clickToEdit": "クリックして編集",
         "editMessage": "メッセージを編集",
-        "saveAndSubmit": "保存して送信"
+        "saveAndSubmit": "保存して送信",
+        "ExtractURL": "URLから抽出"
     },
     "examples": {
         "title": "AI でダイアグラムを作成",
@@ -185,6 +186,13 @@
         "reading": "読み込み中...",
         "chars": "文字",
         "removeFile": "ファイルを削除"
+    },
+    "pdf": {
+        "title": "URLからコンテンツを抽出",
+        "description": "URLを貼り付けてそのコンテンツを抽出および分析します",
+        "Extracting": "抽出中...",
+        "extract": "抽出",
+        "Cancel": "キャンセル"
     },
     "reasoning": {
         "thinking": "考え中...",
