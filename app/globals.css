@@ -74,8 +74,8 @@
     --accent: oklch(0.94 0.03 280);
     --accent-foreground: oklch(0.35 0.08 270);
 
-    /* Coral destructive */
-    --destructive: oklch(0.6 0.2 25);
+    /* Muted rose destructive */
+    --destructive: oklch(0.45 0.12 10);
 
     /* Subtle borders */
     --border: oklch(0.92 0.01 260);
@@ -122,7 +122,7 @@
     --accent: oklch(0.3 0.04 280);
     --accent-foreground: oklch(0.9 0.03 270);
 
-    --destructive: oklch(0.65 0.22 25);
+    --destructive: oklch(0.55 0.12 10);
 
     --border: oklch(0.28 0.015 260);
     --input: oklch(0.25 0.015 260);

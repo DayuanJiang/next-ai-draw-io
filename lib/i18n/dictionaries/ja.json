@@ -212,6 +212,22 @@
         "contactMe": "お問い合わせ",
         "usageNotice": "利用量の増加に伴い、コスト削減のためモデルを Claude から minimax-m2 に変更し、いくつかの利用制限を設けました。詳細は概要ページをご覧ください。"
     },
+    "sessionHistory": {
+        "tooltip": "チャット履歴",
+        "newChat": "新しいチャット",
+        "empty": "チャット履歴はまだありません",
+        "emptyHint": "会話を始めてください",
+        "today": "今日",
+        "yesterday": "昨日",
+        "thisWeek": "今週",
+        "earlier": "それ以前",
+        "deleteTitle": "このチャットを削除しますか？",
+        "deleteDescription": "このチャットセッションとダイアグラムは完全に削除されます。この操作は取り消せません。",
+        "recentChats": "最近のチャット",
+        "justNow": "たった今",
+        "searchPlaceholder": "チャットを検索...",
+        "noResults": "チャットが見つかりません"
+    },
     "modelConfig": {
         "title": "AIモデル設定",
         "description": "複数のAIプロバイダーとモデルを設定",

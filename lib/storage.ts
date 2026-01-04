@@ -1,13 +1,7 @@
-// Centralized localStorage keys
-// Consolidates all storage keys from chat-panel.tsx and settings-dialog.tsx
+// Centralized localStorage keys for quota tracking and settings
+// Chat data is now stored in IndexedDB via session-storage.ts
 
 export const STORAGE_KEYS = {
-    // Chat data
-    messages: "next-ai-draw-io-messages",
-    xmlSnapshots: "next-ai-draw-io-xml-snapshots",
-    diagramXml: "next-ai-draw-io-diagram-xml",
-    sessionId: "next-ai-draw-io-session-id",
-
     // Quota tracking
     requestCount: "next-ai-draw-io-request-count",
     requestDate: "next-ai-draw-io-request-date",
