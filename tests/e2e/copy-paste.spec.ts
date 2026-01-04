@@ -68,9 +68,12 @@ test.describe("Copy/Paste Functionality", () => {
             '[data-testid="copy-button"], button[aria-label*="Copy"], button:has(svg.lucide-copy), button:has(svg.lucide-clipboard)',
         )
 
-        // Skip test if copy button doesn't exist
+        // Copy button feature may not exist in all versions - skip if not available
         const buttonCount = await copyButton.count()
-        test.skip(buttonCount === 0, "Copy button not available")
+        if (buttonCount === 0) {
+            test.skip()
+            return
+        }
 
         await copyButton.first().click()
         // Should show copied confirmation (toast or button state change)
@@ -98,11 +101,14 @@ test.describe("Copy/Paste Functionality", () => {
             await xmlToggle.first().click()
         }
 
-        // Skip test if XML input feature doesn't exist
+        // XML input feature may not exist in all versions - skip if not available
         const xmlInputCount = await xmlInput.count()
         const isXmlVisible =
             xmlInputCount > 0 && (await xmlInput.first().isVisible())
-        test.skip(!isXmlVisible, "XML input feature not available")
+        if (!isXmlVisible) {
+            test.skip()
+            return
+        }
 
         const testXml = `<mxCell id="pasted" value="Pasted Node" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
   <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>

@@ -73,8 +73,13 @@ test.describe("File Upload", () => {
         const removeButton = page.locator(
             '[data-testid="remove-file-button"], button[aria-label*="Remove"], button:has(svg.lucide-x)',
         )
+
+        // Remove button feature may not exist in all versions - skip if not available
         const removeButtonCount = await removeButton.count()
-        test.skip(removeButtonCount === 0, "Remove file button not available")
+        if (removeButtonCount === 0) {
+            test.skip()
+            return
+        }
 
         await removeButton.first().click()
         // Verify button is gone or file preview is removed

@@ -34,15 +34,10 @@ test.describe("History and Session Restore", () => {
         })
 
         // Find and click new chat button
-        const newChatButton = page.locator(
-            '[data-testid="new-chat-button"], button[aria-label*="New"], button:has(svg.lucide-plus), button:has-text("New Chat")',
-        )
+        const newChatButton = page.locator('[data-testid="new-chat-button"]')
+        await expect(newChatButton).toBeVisible({ timeout: 5000 })
 
-        // Skip test if new chat button doesn't exist
-        const buttonCount = await newChatButton.count()
-        test.skip(buttonCount === 0, "New chat button not available")
-
-        await newChatButton.first().click()
+        await newChatButton.click()
 
         // Conversation should be cleared
         await expect(
@@ -61,9 +56,12 @@ test.describe("History and Session Restore", () => {
             'button[aria-label*="History"]:not([disabled]), button:has(svg.lucide-history):not([disabled]), button:has(svg.lucide-menu):not([disabled]), button:has(svg.lucide-sidebar):not([disabled]), button:has(svg.lucide-panel-left):not([disabled])',
         )
 
-        // Skip test if history button doesn't exist
+        // History feature may not exist in all versions - skip if not available
         const buttonCount = await historyButton.count()
-        test.skip(buttonCount === 0, "History button not available")
+        if (buttonCount === 0) {
+            test.skip()
+            return
+        }
 
         await historyButton.first().click()
         // Wait for sidebar/panel to appear or verify page still works
@@ -110,6 +108,11 @@ test.describe("History and Session Restore", () => {
         // Verify page is functional after reload
         await expect(
             page.locator('textarea[aria-label="Chat input"]'),
+        ).toBeVisible({ timeout: 10000 })
+
+        // Verify the message persisted after reload
+        await expect(
+            page.locator('text="This message should persist."'),
         ).toBeVisible({ timeout: 10000 })
     })
 
@@ -243,9 +246,12 @@ test.describe("History and Session Restore", () => {
             'button[aria-label*="Model"], [data-testid="model-selector"], button:has-text("Claude")',
         )
 
-        // Skip test if model selector doesn't exist
+        // Model selector feature may not exist in all versions - skip if not available
         const selectorCount = await modelSelector.count()
-        test.skip(selectorCount === 0, "Model selector not available")
+        if (selectorCount === 0) {
+            test.skip()
+            return
+        }
 
         const initialModel = await modelSelector.first().textContent()
 
