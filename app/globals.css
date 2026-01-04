@@ -399,3 +399,8 @@
         animation: none;
     }
 }
+
+/* Fix for iframe touch events in Chrome */
+.diagrams-iframe {
+    touch-action: auto;
+}
