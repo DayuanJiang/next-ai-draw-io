@@ -4,23 +4,7 @@ import { Check, ChevronDown, ChevronUp, Copy, Cpu } from "lucide-react"
 import type { Dispatch, SetStateAction } from "react"
 import { CodeBlock } from "@/components/code-block"
 import { isMxCellXmlComplete } from "@/lib/utils"
-
-interface DiagramOperation {
-    operation: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
-
-interface ToolPartLike {
-    type: string
-    toolCallId: string
-    state?: string
-    input?: {
-        xml?: string
-        operations?: DiagramOperation[]
-    } & Record<string, unknown>
-    output?: string
-}
+import type { DiagramOperation, ToolPartLike } from "./types"
 
 interface ToolCallCardProps {
     part: ToolPartLike
@@ -135,10 +119,7 @@ export function ToolCallCard({
     }
 
     return (
-        <div
-            key={callId}
-            className="my-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden"
-        >
+        <div className="my-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 bg-muted/50">
                 <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">

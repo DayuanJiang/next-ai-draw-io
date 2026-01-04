@@ -32,7 +32,7 @@ interface SessionMetadata {
 interface ChatLobbyProps {
     sessions: SessionMetadata[]
     onSelectSession: (id: string) => void
-    onDeleteSession: (id: string) => void
+    onDeleteSession?: (id: string) => void
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
     dict: {
@@ -177,18 +177,20 @@ export function ChatLobby({
                                         )}
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation()
-                                        setSessionToDelete(session.id)
-                                        setDeleteDialogOpen(true)
-                                    }}
-                                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                                    title={dict.common.delete}
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                {onDeleteSession && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            setSessionToDelete(session.id)
+                                            setDeleteDialogOpen(true)
+                                        }}
+                                        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                        title={dict.common.delete}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
                         ))}
                     {sessions.filter((s) =>
@@ -254,7 +256,7 @@ export function ChatLobby({
                         </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={() => {
-                                if (sessionToDelete) {
+                                if (sessionToDelete && onDeleteSession) {
                                     onDeleteSession(sessionToDelete)
                                 }
                                 setDeleteDialogOpen(false)

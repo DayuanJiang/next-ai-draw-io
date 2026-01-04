@@ -27,6 +27,7 @@ import {
 } from "@/components/ai-elements/reasoning"
 import { ChatLobby } from "@/components/chat/ChatLobby"
 import { ToolCallCard } from "@/components/chat/ToolCallCard"
+import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -38,24 +39,6 @@ import {
     validateAndFixXml,
 } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
-
-// Types for streaming preview
-interface DiagramOperation {
-    operation: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
-
-interface ToolPartLike {
-    type: string
-    toolCallId: string
-    state?: string
-    input?: {
-        xml?: string
-        operations?: DiagramOperation[]
-    } & Record<string, unknown>
-    output?: string
-}
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -648,7 +631,7 @@ export function ChatMessageDisplay({
                 <ChatLobby
                     sessions={sessions}
                     onSelectSession={onSelectSession || (() => {})}
-                    onDeleteSession={onDeleteSession || (() => {})}
+                    onDeleteSession={onDeleteSession}
                     setInput={setInput}
                     setFiles={setFiles}
                     dict={dict}
