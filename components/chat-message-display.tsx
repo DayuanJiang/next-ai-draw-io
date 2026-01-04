@@ -38,7 +38,6 @@ import {
     replaceNodes,
     validateAndFixXml,
 } from "@/lib/utils"
-import ExamplePanel from "./chat-example-panel"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
