@@ -7,16 +7,12 @@ import {
     ChevronDown,
     ChevronUp,
     Copy,
-    Cpu,
     FileCode,
     FileText,
-    MessageSquare,
     Pencil,
     RotateCcw,
-    Search,
     ThumbsDown,
     ThumbsUp,
-    Trash2,
     X,
 } from "lucide-react"
 import Image from "next/image"
@@ -29,16 +25,8 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { ChatLobby } from "@/components/chat/ChatLobby"
+import { ToolCallCard } from "@/components/chat/ToolCallCard"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -46,17 +34,27 @@ import {
     applyDiagramOperations,
     convertToLegalXml,
     extractCompleteMxCells,
-    isMxCellXmlComplete,
     replaceNodes,
     validateAndFixXml,
 } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
-import { CodeBlock } from "./code-block"
 
+// Types for streaming preview
 interface DiagramOperation {
     operation: "update" | "add" | "delete"
     cell_id: string
     new_xml?: string
+}
+
+interface ToolPartLike {
+    type: string
+    toolCallId: string
+    state?: string
+    input?: {
+        xml?: string
+        operations?: DiagramOperation[]
+    } & Record<string, unknown>
+    output?: string
 }
 
 // Helper to extract complete operations from streaming input
@@ -71,57 +69,7 @@ function getCompleteOperations(
             ["update", "add", "delete"].includes(op.operation) &&
             typeof op.cell_id === "string" &&
             op.cell_id.length > 0 &&
-            // delete doesn't need new_xml, update/add do
             (op.operation === "delete" || typeof op.new_xml === "string"),
-    )
-}
-
-// Tool part interface for type safety
-interface ToolPartLike {
-    type: string
-    toolCallId: string
-    state?: string
-    input?: {
-        xml?: string
-        operations?: DiagramOperation[]
-    } & Record<string, unknown>
-    output?: string
-}
-
-function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
-    return (
-        <div className="space-y-3">
-            {operations.map((op, index) => (
-                <div
-                    key={`${op.operation}-${op.cell_id}-${index}`}
-                    className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
-                >
-                    <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
-                        <span
-                            className={`text-[10px] font-medium uppercase tracking-wide ${
-                                op.operation === "delete"
-                                    ? "text-red-600"
-                                    : op.operation === "add"
-                                      ? "text-green-600"
-                                      : "text-blue-600"
-                            }`}
-                        >
-                            {op.operation}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                            cell_id: {op.cell_id}
-                        </span>
-                    </div>
-                    {op.new_xml && (
-                        <div className="px-3 py-2">
-                            <pre className="text-[11px] font-mono text-foreground/80 bg-muted/30 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
-                                {op.new_xml}
-                            </pre>
-                        </div>
-                    )}
-                </div>
-            ))}
-        </div>
     )
 }
 
@@ -294,13 +242,6 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
-    // Track whether examples section is expanded (collapsed by default when there's history)
-    const [examplesExpanded, setExamplesExpanded] = useState(false)
-    // Delete confirmation dialog state
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-    const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
-    // Search filter for history
-    const [searchQuery, setSearchQuery] = useState("")
 
     const setCopyState = (
         messageId: string,
@@ -700,383 +641,18 @@ export function ChatMessageDisplay({
         // Let the timeouts complete naturally - they're harmless if component unmounts.
     }, [messages, handleDisplayChart, chartXML])
 
-    const renderToolPart = (part: ToolPartLike) => {
-        const callId = part.toolCallId
-        const { state, input, output } = part
-        // Default to collapsed if tool is complete, expanded if still streaming
-        const isExpanded = expandedTools[callId] ?? state !== "output-available"
-        const toolName = part.type?.replace("tool-", "")
-        const isCopied = copiedToolCallId === callId
-
-        const toggleExpanded = () => {
-            setExpandedTools((prev) => ({
-                ...prev,
-                [callId]: !isExpanded,
-            }))
-        }
-
-        const getToolDisplayName = (name: string) => {
-            switch (name) {
-                case "display_diagram":
-                    return "Generate Diagram"
-                case "edit_diagram":
-                    return "Edit Diagram"
-                case "get_shape_library":
-                    return "Get Shape Library"
-                default:
-                    return name
-            }
-        }
-
-        const handleCopy = () => {
-            let textToCopy = ""
-
-            if (input && typeof input === "object") {
-                if (input.xml) {
-                    textToCopy = input.xml
-                } else if (
-                    input.operations &&
-                    Array.isArray(input.operations)
-                ) {
-                    textToCopy = JSON.stringify(input.operations, null, 2)
-                } else if (Object.keys(input).length > 0) {
-                    textToCopy = JSON.stringify(input, null, 2)
-                }
-            }
-
-            if (
-                output &&
-                toolName === "get_shape_library" &&
-                typeof output === "string"
-            ) {
-                textToCopy = output
-            }
-
-            if (textToCopy) {
-                copyMessageToClipboard(callId, textToCopy, true)
-            }
-        }
-
-        return (
-            <div
-                key={callId}
-                className="my-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden"
-            >
-                <div className="flex items-center justify-between px-4 py-3 bg-muted/50">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
-                            <Cpu className="w-3.5 h-3.5 text-primary" />
-                        </div>
-                        <span className="text-sm font-medium text-foreground/80">
-                            {getToolDisplayName(toolName)}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {state === "input-streaming" && (
-                            <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        )}
-                        {state === "output-available" && (
-                            <>
-                                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                    {dict.tools.complete}
-                                </span>
-                                {isExpanded && (
-                                    <button
-                                        type="button"
-                                        onClick={handleCopy}
-                                        className="p-1 rounded hover:bg-muted transition-colors"
-                                        title={
-                                            copiedToolCallId === callId
-                                                ? dict.chat.copied
-                                                : copyFailedToolCallId ===
-                                                    callId
-                                                  ? dict.chat.failedToCopy
-                                                  : dict.chat.copyResponse
-                                        }
-                                    >
-                                        {isCopied ? (
-                                            <Check className="w-4 h-4 text-green-600" />
-                                        ) : (
-                                            <Copy className="w-4 h-4 text-muted-foreground" />
-                                        )}
-                                    </button>
-                                )}
-                            </>
-                        )}
-                        {state === "output-error" &&
-                            (() => {
-                                // Check if this is a truncation (incomplete XML) vs real error
-                                const isTruncated =
-                                    (toolName === "display_diagram" ||
-                                        toolName === "append_diagram") &&
-                                    !isMxCellXmlComplete(input?.xml)
-                                return isTruncated ? (
-                                    <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
-                                        Truncated
-                                    </span>
-                                ) : (
-                                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                                        Error
-                                    </span>
-                                )
-                            })()}
-                        {input && Object.keys(input).length > 0 && (
-                            <button
-                                type="button"
-                                onClick={toggleExpanded}
-                                className="p-1 rounded hover:bg-muted transition-colors"
-                            >
-                                {isExpanded ? (
-                                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                ) : (
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                )}
-                            </button>
-                        )}
-                    </div>
-                </div>
-                {input && isExpanded && (
-                    <div className="px-4 py-3 border-t border-border/40 bg-muted/20">
-                        {typeof input === "object" && input.xml ? (
-                            <CodeBlock code={input.xml} language="xml" />
-                        ) : typeof input === "object" &&
-                          input.operations &&
-                          Array.isArray(input.operations) ? (
-                            <OperationsDisplay operations={input.operations} />
-                        ) : typeof input === "object" &&
-                          Object.keys(input).length > 0 ? (
-                            <CodeBlock
-                                code={JSON.stringify(input, null, 2)}
-                                language="json"
-                            />
-                        ) : null}
-                    </div>
-                )}
-                {output &&
-                    state === "output-error" &&
-                    (() => {
-                        const isTruncated =
-                            (toolName === "display_diagram" ||
-                                toolName === "append_diagram") &&
-                            !isMxCellXmlComplete(input?.xml)
-                        return (
-                            <div
-                                className={`px-4 py-3 border-t border-border/40 text-sm ${isTruncated ? "text-yellow-600" : "text-red-600"}`}
-                            >
-                                {isTruncated
-                                    ? "Output truncated due to length limits. Try a simpler request or increase the maxOutputLength."
-                                    : output}
-                            </div>
-                        )
-                    })()}
-                {/* Show get_shape_library output on success */}
-                {output &&
-                    toolName === "get_shape_library" &&
-                    state === "output-available" &&
-                    isExpanded && (
-                        <div className="px-4 py-3 border-t border-border/40">
-                            <div className="text-xs text-muted-foreground mb-2">
-                                Library loaded (
-                                {typeof output === "string" ? output.length : 0}{" "}
-                                chars)
-                            </div>
-                            <pre className="text-xs bg-muted/50 p-2 rounded-md overflow-auto max-h-32 whitespace-pre-wrap">
-                                {typeof output === "string"
-                                    ? output.substring(0, 800) +
-                                      (output.length > 800 ? "\n..." : "")
-                                    : String(output)}
-                            </pre>
-                        </div>
-                    )}
-            </div>
-        )
-    }
-
-    // Helper to format session date
-    const formatSessionDate = (timestamp: number): string => {
-        const date = new Date(timestamp)
-        const now = new Date()
-        const diffMs = now.getTime() - date.getTime()
-        const diffMins = Math.floor(diffMs / (1000 * 60))
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-
-        if (diffMins < 1) return dict.sessionHistory?.justNow || "Just now"
-        if (diffMins < 60) return `${diffMins}m ago`
-        if (diffHours < 24) return `${diffHours}h ago`
-
-        return date.toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-        })
-    }
-
-    const hasHistory = sessions.length > 0
-
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
             <div ref={scrollTopRef} />
             {messages.length === 0 && isRestored ? (
-                hasHistory ? (
-                    // Show history + collapsible examples when there are sessions
-                    <div className="py-6 px-2 animate-fade-in">
-                        {/* Recent Chats Section */}
-                        <div className="mb-6">
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
-                                {dict.sessionHistory?.recentChats ||
-                                    "Recent Chats"}
-                            </p>
-                            {/* Search Bar */}
-                            <div className="relative mb-3">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <input
-                                    type="text"
-                                    placeholder={
-                                        dict.sessionHistory
-                                            ?.searchPlaceholder ||
-                                        "Search chats..."
-                                    }
-                                    value={searchQuery}
-                                    onChange={(e) =>
-                                        setSearchQuery(e.target.value)
-                                    }
-                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
-                                />
-                                {searchQuery && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearchQuery("")}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors"
-                                    >
-                                        <X className="w-3 h-3 text-muted-foreground" />
-                                    </button>
-                                )}
-                            </div>
-                            <div className="space-y-2">
-                                {sessions
-                                    .filter((session) =>
-                                        session.title
-                                            .toLowerCase()
-                                            .includes(
-                                                searchQuery.toLowerCase(),
-                                            ),
-                                    )
-                                    .map((session) => (
-                                        // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested delete button which causes hydration error
-                                        <div
-                                            key={session.id}
-                                            role="button"
-                                            tabIndex={0}
-                                            className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
-                                            onClick={() =>
-                                                onSelectSession?.(session.id)
-                                            }
-                                            onKeyDown={(e) => {
-                                                if (
-                                                    e.key === "Enter" ||
-                                                    e.key === " "
-                                                ) {
-                                                    e.preventDefault()
-                                                    onSelectSession?.(
-                                                        session.id,
-                                                    )
-                                                }
-                                            }}
-                                        >
-                                            {session.thumbnailDataUrl ? (
-                                                <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
-                                                    <Image
-                                                        src={
-                                                            session.thumbnailDataUrl
-                                                        }
-                                                        alt=""
-                                                        width={48}
-                                                        height={48}
-                                                        className="object-contain w-full h-full"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                    <MessageSquare className="w-5 h-5 text-primary" />
-                                                </div>
-                                            )}
-                                            <div className="min-w-0 flex-1">
-                                                <div className="text-sm font-medium truncate">
-                                                    {session.title}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {formatSessionDate(
-                                                        session.updatedAt,
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {onDeleteSession && (
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        setSessionToDelete(
-                                                            session.id,
-                                                        )
-                                                        setDeleteDialogOpen(
-                                                            true,
-                                                        )
-                                                    }}
-                                                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                                                    title={dict.common.delete}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                {sessions.filter((s) =>
-                                    s.title
-                                        .toLowerCase()
-                                        .includes(searchQuery.toLowerCase()),
-                                ).length === 0 &&
-                                    searchQuery && (
-                                        <p className="text-sm text-muted-foreground text-center py-4">
-                                            {dict.sessionHistory?.noResults ||
-                                                "No chats found"}
-                                        </p>
-                                    )}
-                            </div>
-                        </div>
-
-                        {/* Collapsible Examples Section */}
-                        <div className="border-t border-border/50 pt-4">
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setExamplesExpanded(!examplesExpanded)
-                                }
-                                className="w-full flex items-center justify-between px-1 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                            >
-                                <span>
-                                    {dict.examples?.quickExamples ||
-                                        "Quick Examples"}
-                                </span>
-                                {examplesExpanded ? (
-                                    <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                    <ChevronDown className="w-4 h-4" />
-                                )}
-                            </button>
-                            {examplesExpanded && (
-                                <div className="mt-2">
-                                    <ExamplePanel
-                                        setInput={setInput}
-                                        setFiles={setFiles}
-                                        minimal
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ) : (
-                    // Show full examples when no history
-                    <ExamplePanel setInput={setInput} setFiles={setFiles} />
-                )
+                <ChatLobby
+                    sessions={sessions}
+                    onSelectSession={onSelectSession || (() => {})}
+                    onDeleteSession={onDeleteSession || (() => {})}
+                    setInput={setInput}
+                    setFiles={setFiles}
+                    dict={dict}
+                />
             ) : messages.length === 0 ? null : (
                 <div className="py-4 px-4 space-y-4">
                     {messages.map((message, messageIndex) => {
@@ -1353,9 +929,30 @@ export function ChatMessageDisplay({
                                             return groups.map(
                                                 (group, groupIndex) => {
                                                     if (group.type === "tool") {
-                                                        return renderToolPart(
-                                                            group
-                                                                .parts[0] as ToolPartLike,
+                                                        return (
+                                                            <ToolCallCard
+                                                                key={`${message.id}-tool-${group.startIndex}`}
+                                                                part={
+                                                                    group
+                                                                        .parts[0] as ToolPartLike
+                                                                }
+                                                                expandedTools={
+                                                                    expandedTools
+                                                                }
+                                                                setExpandedTools={
+                                                                    setExpandedTools
+                                                                }
+                                                                onCopy={
+                                                                    copyMessageToClipboard
+                                                                }
+                                                                copiedToolCallId={
+                                                                    copiedToolCallId
+                                                                }
+                                                                copyFailedToolCallId={
+                                                                    copyFailedToolCallId
+                                                                }
+                                                                dict={dict}
+                                                            />
                                                         )
                                                     }
 
@@ -1718,42 +1315,6 @@ export function ChatMessageDisplay({
                 </div>
             )}
             <div ref={messagesEndRef} />
-
-            {/* Delete Confirmation Dialog */}
-            <AlertDialog
-                open={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-            >
-                <AlertDialogContent className="max-w-sm">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            {dict.sessionHistory?.deleteTitle ||
-                                "Delete this chat?"}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {dict.sessionHistory?.deleteDescription ||
-                                "This will permanently delete this chat session and its diagram. This action cannot be undone."}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>
-                            {dict.common.cancel}
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => {
-                                if (sessionToDelete && onDeleteSession) {
-                                    onDeleteSession(sessionToDelete)
-                                }
-                                setDeleteDialogOpen(false)
-                                setSessionToDelete(null)
-                            }}
-                            className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400"
-                        >
-                            {dict.common.delete}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </ScrollArea>
     )
 }
