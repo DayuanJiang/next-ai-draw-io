@@ -1150,7 +1150,10 @@ export default function ChatPanel({
                     <button
                         type="button"
                         onClick={handleNewChat}
-                        className="flex items-center gap-2 overflow-x-hidden hover:opacity-80 transition-opacity cursor-pointer"
+                        disabled={
+                            status === "streaming" || status === "submitted"
+                        }
+                        className="flex items-center gap-2 overflow-x-hidden hover:opacity-80 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         title={dict.nav.newChat}
                     >
                         <div className="flex items-center gap-2">
@@ -1178,7 +1181,10 @@ export default function ChatPanel({
                             variant="ghost"
                             size="icon"
                             onClick={handleNewChat}
-                            className="hover:bg-accent"
+                            disabled={
+                                status === "streaming" || status === "submitted"
+                            }
+                            className="hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <MessageSquarePlus
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
