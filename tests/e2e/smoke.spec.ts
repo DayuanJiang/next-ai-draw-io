@@ -29,7 +29,7 @@ test.describe("Smoke Tests", () => {
     })
 
     test("settings dialog opens", async ({ page }) => {
-        await page.goto("/")
+        await page.goto("/", { waitUntil: "networkidle" })
 
         // Wait for page to load
         await page
@@ -38,14 +38,14 @@ test.describe("Smoke Tests", () => {
 
         // Click settings button (gear icon)
         const settingsButton = page.locator(
-            'button[aria-label*="settings"], button:has(svg[class*="lucide-settings"])',
+            'button[aria-label*="settings"], button:has(svg[class*="settings"])',
         )
-        if (await settingsButton.isVisible()) {
-            await settingsButton.click()
-            // Check if settings dialog appears
-            await expect(page.locator('[role="dialog"]')).toBeVisible({
-                timeout: 5000,
-            })
-        }
+        await expect(settingsButton).toBeVisible()
+        await settingsButton.click()
+
+        // Check if settings dialog appears
+        await expect(page.locator('[role="dialog"]')).toBeVisible({
+            timeout: 5000,
+        })
     })
 })

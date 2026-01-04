@@ -9,27 +9,28 @@ test.describe("Keyboard Interactions", () => {
     })
 
     test("Escape closes settings dialog", async ({ page }) => {
-        // Find and click settings button
-        const buttons = page
-            .locator("button")
-            .filter({ has: page.locator("svg") })
-        const settingsBtn = buttons.nth(1) // Usually second button is settings
+        // Find settings button using aria-label or icon
+        const settingsButton = page.locator(
+            'button[aria-label*="settings"], button:has(svg[class*="settings"])',
+        )
+        await expect(settingsButton).toBeVisible()
+        await settingsButton.click()
 
-        if (await settingsBtn.isVisible()) {
-            await settingsBtn.click()
-            await page.waitForTimeout(500)
+        // Wait for dialog to appear
+        const dialog = page.locator('[role="dialog"]')
+        await expect(dialog).toBeVisible({ timeout: 5000 })
 
-            const dialog = page.locator('[role="dialog"]')
-            if (await dialog.isVisible()) {
-                await page.keyboard.press("Escape")
-                await expect(dialog).not.toBeVisible({ timeout: 2000 })
-            }
-        }
+        // Press Escape and verify dialog closes
+        await page.keyboard.press("Escape")
+        await expect(dialog).not.toBeVisible({ timeout: 2000 })
     })
 
-    test("page responds to keyboard events", async ({ page }) => {
-        // Just verify the page is interactive
-        await page.keyboard.press("Tab")
-        // No error means success
+    test("page is keyboard accessible", async ({ page }) => {
+        // Verify page has focusable elements
+        const focusableElements = page.locator(
+            'button, [tabindex="0"], input, textarea, a[href]',
+        )
+        const count = await focusableElements.count()
+        expect(count).toBeGreaterThan(0)
     })
 })
