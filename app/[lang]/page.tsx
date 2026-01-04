@@ -11,18 +11,12 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import {
+    DEFAULT_DRAWIO_THEME,
+    DRAWIO_THEMES,
+    type DrawioTheme,
+} from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
-
-// Draw.io UI themes
-export type DrawioTheme = "kennedy" | "simple" | "min" | "sketch" | "atlas"
-export const DRAWIO_THEMES: DrawioTheme[] = [
-    "kennedy",
-    "simple",
-    "min",
-    "sketch",
-    "atlas",
-]
-const DEFAULT_DRAWIO_THEME: DrawioTheme = "min"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"

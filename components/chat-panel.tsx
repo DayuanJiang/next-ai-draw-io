@@ -64,8 +64,8 @@ interface ChatMessage {
 interface ChatPanelProps {
     isVisible: boolean
     onToggleVisibility: () => void
-    drawioUi: import("@/app/[lang]/page").DrawioTheme
-    onDrawioUiChange: (theme: import("@/app/[lang]/page").DrawioTheme) => void
+    drawioUi: import("@/lib/drawio-themes").DrawioTheme
+    onDrawioUiChange: (theme: import("@/lib/drawio-themes").DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     isMobile?: boolean

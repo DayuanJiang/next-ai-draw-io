@@ -3,7 +3,6 @@
 import { Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
-import { DRAWIO_THEMES, type DrawioTheme } from "@/app/[lang]/page"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -24,6 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import type { DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 // Reusable setting item component for consistent layout
@@ -55,6 +55,18 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
     en: "English",
     zh: "中文",
     ja: "日本語",
+}
+
+// Mapping of Draw.io theme values to their translation dictionary keys
+const DRAWIO_THEME_LABELS: Record<
+    DrawioTheme,
+    keyof typeof DRAWIO_THEMES | string
+> = {
+    kennedy: "classic",
+    simple: "simple",
+    min: "minimal",
+    sketch: "sketch",
+    atlas: "atlas",
 }
 
 interface SettingsDialogProps {
@@ -330,21 +342,17 @@ function SettingsContent({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="kennedy">
-                                    {dict.settings.themes.classic}
-                                </SelectItem>
-                                <SelectItem value="simple">
-                                    {dict.settings.themes.simple}
-                                </SelectItem>
-                                <SelectItem value="min">
-                                    {dict.settings.themes.minimal}
-                                </SelectItem>
-                                <SelectItem value="sketch">
-                                    {dict.settings.themes.sketch}
-                                </SelectItem>
-                                <SelectItem value="atlas">
-                                    {dict.settings.themes.atlas}
-                                </SelectItem>
+                                {DRAWIO_THEMES.map((theme) => (
+                                    <SelectItem key={theme} value={theme}>
+                                        {
+                                            dict.settings.themes[
+                                                DRAWIO_THEME_LABELS[
+                                                    theme
+                                                ] as keyof typeof dict.settings.themes
+                                            ]
+                                        }
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </SettingItem>
