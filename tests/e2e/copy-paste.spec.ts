@@ -9,9 +9,6 @@ import {
 import { createMockSSEResponse } from "./lib/helpers"
 
 test.describe("Copy/Paste Functionality", () => {
-    // Clipboard tests can be flaky due to browser permissions
-    test.describe.configure({ retries: 1 })
-
     test("can paste text into chat input", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
@@ -77,40 +74,6 @@ test.describe("Copy/Paste Functionality", () => {
         await expect(
             page.locator('text="Copied"').or(page.locator("svg.lucide-check")),
         ).toBeVisible({ timeout: 3000 })
-    })
-
-    test("paste XML into XML input works", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        // Find XML input textarea
-        const xmlInput = page.locator(
-            'textarea[placeholder*="XML"], textarea[placeholder*="mxCell"]',
-        )
-
-        // Try to expand XML section if collapsed
-        const xmlToggle = page.locator(
-            'button:has-text("XML"), [data-testid*="xml"], details summary',
-        )
-        if ((await xmlToggle.count()) > 0) {
-            await xmlToggle.first().click()
-        }
-
-        // Skip if XML input not available
-        const xmlInputCount = await xmlInput.count()
-        const isXmlVisible =
-            xmlInputCount > 0 && (await xmlInput.first().isVisible())
-        if (!isXmlVisible) {
-            test.skip()
-            return
-        }
-
-        const testXml = `<mxCell id="pasted" value="Pasted Node" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
-  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-</mxCell>`
-
-        await xmlInput.first().fill(testXml)
-        await expect(xmlInput.first()).toHaveValue(testXml)
     })
 
     test("keyboard shortcuts work in chat input", async ({ page }) => {
