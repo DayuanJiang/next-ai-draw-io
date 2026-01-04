@@ -20,7 +20,9 @@ npm run lint     # Check lint errors
 npm run check    # Run all checks (CI)
 ```
 
-Pre-commit hooks via Husky will run Biome automatically on staged files.
+Git hooks via Husky run automatically:
+- **Pre-commit**: Biome (format/lint) + TypeScript type check
+- **Pre-push**: Unit tests
 
 For a better experience, install the [Biome VS Code extension](https://marketplace.visualstudio.com/items?itemName=biomejs.biome) for real-time linting and format-on-save.
 
@@ -48,9 +50,12 @@ npx playwright test --ui
 ## Pull Requests
 
 1. Create a feature branch
-2. Make changes and ensure `npm run check` passes
-3. Run tests with `npm run test && npm run test:e2e`
-4. Submit PR against `main` with a clear description
+2. Make changes (pre-commit runs lint + type check automatically)
+3. Run E2E tests with `npm run test:e2e`
+4. Push (pre-push runs unit tests automatically)
+5. Submit PR against `main` with a clear description
+
+CI will run the full test suite on your PR.
 
 ## Issues
 
