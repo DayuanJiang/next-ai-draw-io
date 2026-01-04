@@ -172,13 +172,17 @@ export function ChatInput({
     onConfigureModels = () => {},
 }: ChatInputProps) {
     const dict = useDictionary()
-    const { diagramHistory, saveDiagramToFile } = useDiagram()
+    const {
+        diagramHistory,
+        saveDiagramToFile,
+        showSaveDialog,
+        setShowSaveDialog,
+    } = useDiagram()
 
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [showHistory, setShowHistory] = useState(false)
-    const [showSaveDialog, setShowSaveDialog] = useState(false)
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
