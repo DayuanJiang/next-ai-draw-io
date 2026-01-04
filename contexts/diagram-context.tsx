@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import type { DrawIoEmbedRef } from "react-drawio"
+import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
@@ -27,6 +28,7 @@ interface DiagramContextType {
         filename: string,
         format: ExportFormat,
         sessionId?: string,
+        successMessage?: string,
     ) => void
     getThumbnailSvg: () => Promise<string | null>
     isDrawioReady: boolean
@@ -236,6 +238,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         filename: string,
         format: ExportFormat,
         sessionId?: string,
+        successMessage?: string,
     ) => {
         if (!drawioRef.current) {
             console.warn("Draw.io editor not ready")
@@ -296,6 +299,14 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 document.body.appendChild(a)
                 a.click()
                 document.body.removeChild(a)
+
+                // Show success toast after download is initiated
+                if (successMessage) {
+                    toast.success(successMessage, {
+                        position: "bottom-left",
+                        duration: 2500,
+                    })
+                }
 
                 // Delay URL revocation to ensure download completes
                 if (!url.startsWith("data:")) {

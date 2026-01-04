@@ -117,7 +117,8 @@
             "drawio": "Draw.io XML",
             "png": "PNG Image",
             "svg": "SVG Image"
-        }
+        },
+        "savedSuccessfully": "Saved successfully!"
     },
     "history": {
         "title": "Diagram History",

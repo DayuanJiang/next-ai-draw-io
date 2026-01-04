@@ -117,7 +117,8 @@
             "drawio": "Draw.io XML",
             "png": "PNG 画像",
             "svg": "SVG 画像"
-        }
+        },
+        "savedSuccessfully": "保存完了！"
     },
     "history": {
         "title": "ダイアグラム履歴",
