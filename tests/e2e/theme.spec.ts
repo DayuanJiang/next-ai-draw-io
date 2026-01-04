@@ -87,16 +87,6 @@ test.describe("Theme Switching", () => {
         )
         await settingsButton.first().click()
 
-        // Settings dialog should be visible
-        await page.waitForTimeout(500)
-
-        // Find any theme-related section - various possible labels
-        const themeSection = page
-            .locator('text="Draw.io Theme"')
-            .or(page.locator('text="draw.io"'))
-            .or(page.locator('text="Theme"'))
-            .or(page.locator('[aria-label*="theme"]'))
-
         // At least some settings content should be visible
         await expect(
             page.locator('[role="dialog"], [role="menu"], form').first(),

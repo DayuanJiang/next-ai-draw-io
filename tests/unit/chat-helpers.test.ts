@@ -1,85 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-
-// Test the helper functions from chat route
-// These are re-implemented here for testing since they're not exported
-
-const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
-const MAX_FILES = 5
-
-function validateFileParts(messages: any[]): {
-    valid: boolean
-    error?: string
-} {
-    const lastMessage = messages[messages.length - 1]
-    const fileParts =
-        lastMessage?.parts?.filter((p: any) => p.type === "file") || []
-
-    if (fileParts.length > MAX_FILES) {
-        return {
-            valid: false,
-            error: `Too many files. Maximum ${MAX_FILES} allowed.`,
-        }
-    }
-
-    for (const filePart of fileParts) {
-        if (filePart.url?.startsWith("data:")) {
-            const base64Data = filePart.url.split(",")[1]
-            if (base64Data) {
-                const sizeInBytes = Math.ceil((base64Data.length * 3) / 4)
-                if (sizeInBytes > MAX_FILE_SIZE) {
-                    return {
-                        valid: false,
-                        error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.`,
-                    }
-                }
-            }
-        }
-    }
-
-    return { valid: true }
-}
-
-function isMinimalDiagram(xml: string): boolean {
-    const stripped = xml.replace(/\s/g, "")
-    return !stripped.includes('id="2"')
-}
-
-function replaceHistoricalToolInputs(messages: any[]): any[] {
-    return messages.map((msg) => {
-        if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
-            return msg
-        }
-        const replacedContent = msg.content
-            .map((part: any) => {
-                if (part.type === "tool-call") {
-                    const toolName = part.toolName
-                    if (
-                        !part.input ||
-                        typeof part.input !== "object" ||
-                        Object.keys(part.input).length === 0
-                    ) {
-                        return null
-                    }
-                    if (
-                        toolName === "display_diagram" ||
-                        toolName === "edit_diagram"
-                    ) {
-                        return {
-                            ...part,
-                            input: {
-                                placeholder:
-                                    "[XML content replaced - see current diagram XML in system context]",
-                            },
-                        }
-                    }
-                }
-                return part
-            })
-            .filter(Boolean)
-        return { ...msg, content: replacedContent }
-    })
-}
+import {
+    isMinimalDiagram,
+    replaceHistoricalToolInputs,
+    validateFileParts,
+} from "@/lib/chat-helpers"
 
 describe("validateFileParts", () => {
     it("returns valid for no files", () => {

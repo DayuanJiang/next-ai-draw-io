@@ -37,9 +37,7 @@ test.describe("Smoke Tests", () => {
             .waitFor({ state: "visible", timeout: 30000 })
 
         // Click settings button (gear icon)
-        const settingsButton = page.locator(
-            'button[aria-label*="settings"], button:has(svg[class*="settings"])',
-        )
+        const settingsButton = page.locator('[data-testid="settings-button"]')
         await expect(settingsButton).toBeVisible()
         await settingsButton.click()
 

@@ -6,11 +6,9 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : undefined,
-    reporter: "html",
+    reporter: process.env.CI ? [["list"], ["html"]] : "html",
     webServer: {
-        command: process.env.CI
-            ? "npm run build && npm run start"
-            : "npm run dev",
+        command: process.env.CI ? "npm run start" : "npm run dev",
         port: process.env.CI ? 6001 : 6002,
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,

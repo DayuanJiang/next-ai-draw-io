@@ -65,18 +65,18 @@ test.describe("Copy/Paste Functionality", () => {
 
         // Find copy button in message
         const copyButton = page.locator(
-            'button[aria-label*="Copy"], button:has(svg.lucide-copy), button:has(svg.lucide-clipboard)',
+            '[data-testid="copy-button"], button[aria-label*="Copy"], button:has(svg.lucide-copy), button:has(svg.lucide-clipboard)',
         )
 
-        if ((await copyButton.count()) > 0) {
-            await copyButton.first().click()
-            // Should show copied confirmation (toast or button state change)
-            await expect(
-                page
-                    .locator('text="Copied"')
-                    .or(page.locator("svg.lucide-check")),
-            ).toBeVisible({ timeout: 3000 })
-        }
+        // Skip test if copy button doesn't exist
+        const buttonCount = await copyButton.count()
+        test.skip(buttonCount === 0, "Copy button not available")
+
+        await copyButton.first().click()
+        // Should show copied confirmation (toast or button state change)
+        await expect(
+            page.locator('text="Copied"').or(page.locator("svg.lucide-check")),
+        ).toBeVisible({ timeout: 3000 })
     })
 
     test("paste XML into XML input works", async ({ page }) => {
@@ -96,22 +96,20 @@ test.describe("Copy/Paste Functionality", () => {
         )
         if ((await xmlToggle.count()) > 0) {
             await xmlToggle.first().click()
-            await page.waitForTimeout(500)
         }
 
-        // Check if XML input is now visible
-        if (
-            (await xmlInput.count()) > 0 &&
-            (await xmlInput.first().isVisible())
-        ) {
-            const testXml = `<mxCell id="pasted" value="Pasted Node" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+        // Skip test if XML input feature doesn't exist
+        const xmlInputCount = await xmlInput.count()
+        const isXmlVisible =
+            xmlInputCount > 0 && (await xmlInput.first().isVisible())
+        test.skip(!isXmlVisible, "XML input feature not available")
+
+        const testXml = `<mxCell id="pasted" value="Pasted Node" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
   <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
 </mxCell>`
 
-            await xmlInput.first().fill(testXml)
-            await expect(xmlInput.first()).toHaveValue(testXml)
-        }
-        // Test passes if XML input doesn't exist or isn't accessible
+        await xmlInput.first().fill(testXml)
+        await expect(xmlInput.first()).toHaveValue(testXml)
     })
 
     test("keyboard shortcuts work in chat input", async ({ page }) => {
@@ -154,9 +152,8 @@ test.describe("Copy/Paste Functionality", () => {
         // Undo with Ctrl+Z
         await chatInput.press("ControlOrMeta+z")
 
-        // Value might revert (depends on browser/implementation)
-        // At minimum, shouldn't crash
-        await page.waitForTimeout(500)
+        // Verify page is still functional after undo
+        await expect(chatInput).toBeVisible()
     })
 
     test("chat input handles special characters", async ({ page }) => {

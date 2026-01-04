@@ -9,9 +9,7 @@ test.describe("Settings", () => {
     })
 
     test("settings dialog opens", async ({ page }) => {
-        const settingsButton = page.locator(
-            'button[aria-label*="settings"], button:has(svg[class*="settings"])',
-        )
+        const settingsButton = page.locator('[data-testid="settings-button"]')
         await expect(settingsButton).toBeVisible()
         await settingsButton.click()
 
@@ -20,9 +18,7 @@ test.describe("Settings", () => {
     })
 
     test("language selection is available", async ({ page }) => {
-        const settingsButton = page.locator(
-            'button[aria-label*="settings"], button:has(svg[class*="settings"])',
-        )
+        const settingsButton = page.locator('[data-testid="settings-button"]')
         await settingsButton.click()
 
         const dialog = page.locator('[role="dialog"]')
@@ -33,9 +29,7 @@ test.describe("Settings", () => {
     })
 
     test("draw.io theme toggle exists", async ({ page }) => {
-        const settingsButton = page.locator(
-            'button[aria-label*="settings"], button:has(svg[class*="settings"])',
-        )
+        const settingsButton = page.locator('[data-testid="settings-button"]')
         await settingsButton.click()
 
         const dialog = page.locator('[role="dialog"]')

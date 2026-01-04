@@ -39,11 +39,11 @@ test.describe("File Upload", () => {
             ),
         })
 
-        // Wait for file to be processed
-        await page.waitForTimeout(1000)
-
-        // File input should have processed the file - check any indicator
-        // This test passes if no error occurs during file selection
+        // File input should have processed the file
+        // Check that no error toast appeared
+        await expect(
+            page.locator('[role="alert"][data-type="error"]'),
+        ).not.toBeVisible({ timeout: 2000 })
     })
 
     test("can remove uploaded file", async ({ page }) => {
@@ -64,18 +64,21 @@ test.describe("File Upload", () => {
             ),
         })
 
-        // Wait for file to be processed
-        await page.waitForTimeout(1000)
+        // Wait for file preview or no error
+        await expect(
+            page.locator('[role="alert"][data-type="error"]'),
+        ).not.toBeVisible({ timeout: 2000 })
 
         // Find and click remove button if it exists (X icon)
         const removeButton = page.locator(
-            'button[aria-label*="Remove"], button:has(svg.lucide-x)',
+            '[data-testid="remove-file-button"], button[aria-label*="Remove"], button:has(svg.lucide-x)',
         )
-        if ((await removeButton.count()) > 0) {
-            await removeButton.first().click()
-            await page.waitForTimeout(500)
-        }
-        // Test passes if no errors during upload and potential removal
+        const removeButtonCount = await removeButton.count()
+        test.skip(removeButtonCount === 0, "Remove file button not available")
+
+        await removeButton.first().click()
+        // Verify button is gone or file preview is removed
+        await expect(removeButton.first()).not.toBeVisible({ timeout: 2000 })
     })
 
     test("sends file with message to API", async ({ page }) => {
@@ -170,8 +173,9 @@ test.describe("File Upload", () => {
         await chatForm.dispatchEvent("dragover", { dataTransfer })
         await chatForm.dispatchEvent("drop", { dataTransfer })
 
-        // Should show file preview (or at least not crash)
-        // File might be rejected due to not being a real image, but UI should handle it
-        await page.waitForTimeout(1000) // Give UI time to process
+        // Should not crash - verify page is still functional
+        await expect(
+            page.locator('textarea[aria-label="Chat input"]'),
+        ).toBeVisible({ timeout: 3000 })
     })
 })

@@ -35,17 +35,19 @@ test.describe("History and Session Restore", () => {
 
         // Find and click new chat button
         const newChatButton = page.locator(
-            'button[aria-label*="New"], button:has(svg.lucide-plus), button:has-text("New Chat")',
+            '[data-testid="new-chat-button"], button[aria-label*="New"], button:has(svg.lucide-plus), button:has-text("New Chat")',
         )
 
-        if ((await newChatButton.count()) > 0) {
-            await newChatButton.first().click()
+        // Skip test if new chat button doesn't exist
+        const buttonCount = await newChatButton.count()
+        test.skip(buttonCount === 0, "New chat button not available")
 
-            // Conversation should be cleared
-            await expect(
-                page.locator('text="Created your test diagram."'),
-            ).not.toBeVisible({ timeout: 5000 })
-        }
+        await newChatButton.first().click()
+
+        // Conversation should be cleared
+        await expect(
+            page.locator('text="Created your test diagram."'),
+        ).not.toBeVisible({ timeout: 5000 })
     })
 
     test("chat history sidebar shows past conversations", async ({ page }) => {
@@ -59,17 +61,19 @@ test.describe("History and Session Restore", () => {
             'button[aria-label*="History"]:not([disabled]), button:has(svg.lucide-history):not([disabled]), button:has(svg.lucide-menu):not([disabled]), button:has(svg.lucide-sidebar):not([disabled]), button:has(svg.lucide-panel-left):not([disabled])',
         )
 
-        if ((await historyButton.count()) > 0) {
-            await historyButton.first().click()
-            await page.waitForTimeout(500)
-        }
-        // Test passes if no error - history feature may or may not be available
+        // Skip test if history button doesn't exist
+        const buttonCount = await historyButton.count()
+        test.skip(buttonCount === 0, "History button not available")
+
+        await historyButton.first().click()
+        // Wait for sidebar/panel to appear or verify page still works
+        await expect(
+            page.locator('textarea[aria-label="Chat input"]'),
+        ).toBeVisible({ timeout: 3000 })
     })
 
     test("conversation persists after page reload", async ({ page }) => {
-        let requestCount = 0
         await page.route("**/api/chat", async (route) => {
-            requestCount++
             await route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
@@ -103,9 +107,10 @@ test.describe("History and Session Restore", () => {
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })
 
-        // Check if conversation persisted (depends on implementation)
-        // The message might or might not be there depending on local storage usage
-        await page.waitForTimeout(1000)
+        // Verify page is functional after reload
+        await expect(
+            page.locator('textarea[aria-label="Chat input"]'),
+        ).toBeVisible({ timeout: 10000 })
     })
 
     test("diagram state persists after reload", async ({ page }) => {
@@ -135,9 +140,6 @@ test.describe("History and Session Restore", () => {
         await expect(page.locator('text="Complete"')).toBeVisible({
             timeout: 15000,
         })
-
-        // Wait for diagram to render
-        await page.waitForTimeout(1000)
 
         // Reload
         await page.reload({ waitUntil: "networkidle" })
@@ -204,13 +206,10 @@ test.describe("History and Session Restore", () => {
             .waitFor({ state: "visible", timeout: 30000 })
 
         // Open settings
-        const settingsButton = page.locator(
-            'button[aria-label*="Settings"], button:has(svg.lucide-settings)',
-        )
-        await settingsButton.first().click()
+        const settingsButton = page.locator('[data-testid="settings-button"]')
+        await settingsButton.click()
 
         // Settings dialog should open
-        await page.waitForTimeout(500)
         await expect(
             page.locator('[role="dialog"], [role="menu"], form').first(),
         ).toBeVisible({ timeout: 5000 })
@@ -225,10 +224,9 @@ test.describe("History and Session Restore", () => {
             .waitFor({ state: "visible", timeout: 30000 })
 
         // Open settings again
-        await settingsButton.first().click()
+        await settingsButton.click()
 
         // Settings should still be accessible
-        await page.waitForTimeout(500)
         await expect(
             page.locator('[role="dialog"], [role="menu"], form').first(),
         ).toBeVisible({ timeout: 5000 })
@@ -245,19 +243,21 @@ test.describe("History and Session Restore", () => {
             'button[aria-label*="Model"], [data-testid="model-selector"], button:has-text("Claude")',
         )
 
-        if ((await modelSelector.count()) > 0) {
-            const initialModel = await modelSelector.first().textContent()
+        // Skip test if model selector doesn't exist
+        const selectorCount = await modelSelector.count()
+        test.skip(selectorCount === 0, "Model selector not available")
 
-            // Reload page
-            await page.reload({ waitUntil: "networkidle" })
-            await page
-                .locator("iframe")
-                .waitFor({ state: "visible", timeout: 30000 })
+        const initialModel = await modelSelector.first().textContent()
 
-            // Check model is still selected
-            const modelAfterReload = await modelSelector.first().textContent()
-            expect(modelAfterReload).toBe(initialModel)
-        }
+        // Reload page
+        await page.reload({ waitUntil: "networkidle" })
+        await page
+            .locator("iframe")
+            .waitFor({ state: "visible", timeout: 30000 })
+
+        // Check model is still selected
+        const modelAfterReload = await modelSelector.first().textContent()
+        expect(modelAfterReload).toBe(initialModel)
     })
 
     test("handles localStorage quota exceeded gracefully", async ({ page }) => {
