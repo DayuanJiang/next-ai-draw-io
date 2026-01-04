@@ -99,7 +99,7 @@ function handleOptionsRequest(): Response {
     })
 }
 
-export async function onRequest({ request, env }: any) {
+export async function onRequest({ request, env: _env }: any) {
     if (request.method === "OPTIONS") {
         return handleOptionsRequest()
     }

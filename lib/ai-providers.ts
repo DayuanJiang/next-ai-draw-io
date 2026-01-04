@@ -573,8 +573,8 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const bedrockProvider = hasClientCredentials
                 ? createAmazonBedrock({
                       region: bedrockRegion,
-                      accessKeyId: overrides.awsAccessKeyId!,
-                      secretAccessKey: overrides.awsSecretAccessKey!,
+                      accessKeyId: overrides.awsAccessKeyId as string,
+                      secretAccessKey: overrides.awsSecretAccessKey as string,
                       ...(overrides?.awsSessionToken && {
                           sessionToken: overrides.awsSessionToken,
                       }),
