@@ -68,17 +68,21 @@ test.describe("Language Switching", () => {
             await sleep(500)
         })
 
-        await expectBeforeAndAfterReload(
-            page,
-            "Japanese language setting",
-            async () => {
-                await expect(
-                    page.locator('button:has-text("送信")'),
-                ).toBeVisible({
-                    timeout: 10000,
-                })
-            },
-        )
+        await test.step("verify Japanese before reload", async () => {
+            await expect(page.locator('button:has-text("送信")')).toBeVisible({
+                timeout: 10000,
+            })
+        })
+
+        await test.step("reload and verify Japanese persists", async () => {
+            await page.reload({ waitUntil: "networkidle" })
+            await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+            // Wait for hydration and localStorage to be read
+            await sleep(1000)
+            await expect(page.locator('button:has-text("送信")')).toBeVisible({
+                timeout: 10000,
+            })
+        })
     })
 
     test("Japanese locale URL works", async ({ page }) => {

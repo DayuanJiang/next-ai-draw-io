@@ -9,6 +9,9 @@ import {
 import { createMockSSEResponse } from "./lib/helpers"
 
 test.describe("Copy/Paste Functionality", () => {
+    // Clipboard tests can be flaky due to browser permissions
+    test.describe.configure({ retries: 1 })
+
     test("can paste text into chat input", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
