@@ -30,6 +30,10 @@ ENV NEXT_PUBLIC_DRAWIO_BASE_URL=${NEXT_PUBLIC_DRAWIO_BASE_URL}
 ARG NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=false
 ENV NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=${NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE}
 
+# Build-time argument for subdirectory deployment (e.g., /nextaidrawio)
+ARG NEXT_PUBLIC_BASE_PATH=""
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+
 # Build Next.js application (standalone mode)
 RUN npm run build
 
