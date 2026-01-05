@@ -35,14 +35,14 @@ export function UrlInputDialog({
         setError("")
 
         if (!url.trim()) {
-            setError("Please enter a URL")
+            setError(dict.url.enterUrl)
             return
         }
 
         try {
             new URL(url)
         } catch {
-            setError("Invalid URL format")
+            setError(dict.url.invalidFormat)
             return
         }
 

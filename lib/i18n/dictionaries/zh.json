@@ -192,7 +192,9 @@
         "description": "粘贴 URL 以提取和分析其内容",
         "Extracting": "提取中...",
         "extract": "提取",
-        "Cancel": "取消"
+        "Cancel": "取消",
+        "enterUrl": "请输入 URL",
+        "invalidFormat": "URL 格式无效"
     },
     "reasoning": {
         "thinking": "思考中...",

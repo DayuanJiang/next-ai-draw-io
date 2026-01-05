@@ -192,7 +192,9 @@
         "description": "URLを貼り付けてそのコンテンツを抽出および分析します",
         "Extracting": "抽出中...",
         "extract": "抽出",
-        "Cancel": "キャンセル"
+        "Cancel": "キャンセル",
+        "enterUrl": "URLを入力してください",
+        "invalidFormat": "無効なURL形式です"
     },
     "reasoning": {
         "thinking": "考え中...",

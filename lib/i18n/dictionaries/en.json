@@ -192,7 +192,9 @@
         "description": "Paste a URL to extract and analyze its content",
         "Extracting": "Extracting...",
         "extract": "Extract",
-        "Cancel": "Cancel"
+        "Cancel": "Cancel",
+        "enterUrl": "Please enter a URL",
+        "invalidFormat": "Invalid URL format"
     },
     "reasoning": {
         "thinking": "Thinking...",
