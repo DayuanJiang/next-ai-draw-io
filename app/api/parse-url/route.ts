@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import TurndownService from "turndown"
 
 const MAX_CONTENT_LENGTH = 150000 // Match PDF limit
+const EXTRACT_TIMEOUT_MS = 15000
 
 // SSRF protection - block private/internal addresses
 function isPrivateUrl(urlString: string): boolean {
@@ -84,12 +85,31 @@ export async function POST(req: Request) {
             )
         }
 
-        // Extract article content
-        const article = await extract(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (compatible; NextAIDrawio/1.0)",
-            },
-        })
+        // Extract article content with timeout to avoid tying up server resources
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+            controller.abort()
+        }, EXTRACT_TIMEOUT_MS)
+
+        let article
+        try {
+            article = await extract(url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; NextAIDrawio/1.0)",
+                },
+                signal: controller.signal,
+            })
+        } catch (err: any) {
+            if (err?.name === "AbortError") {
+                return NextResponse.json(
+                    { error: "Timed out while fetching URL content" },
+                    { status: 504 },
+                )
+            }
+            throw err
+        } finally {
+            clearTimeout(timeoutId)
+        }
 
         if (!article || !article.content) {
             return NextResponse.json(

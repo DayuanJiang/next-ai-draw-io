@@ -60,9 +60,9 @@ export function UrlInputDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>{dict.pdf.title}</DialogTitle>
+                    <DialogTitle>{dict.url.title}</DialogTitle>
                     <DialogDescription>
-                        {dict.pdf.description}
+                        {dict.url.description}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -91,7 +91,7 @@ export function UrlInputDialog({
                         onClick={() => onOpenChange(false)}
                         disabled={isExtracting}
                     >
-                        {dict.pdf.Cancel}
+                        {dict.url.Cancel}
                     </Button>
                     <Button
                         onClick={handleSubmit}
@@ -100,12 +100,12 @@ export function UrlInputDialog({
                         {isExtracting ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                {dict.pdf.Extracting}
+                                {dict.url.Extracting}
                             </>
                         ) : (
                             <>
                                 <Link className="mr-2 h-4 w-4" />
-                                {dict.pdf.extract}
+                                {dict.url.extract}
                             </>
                         )}
                     </Button>

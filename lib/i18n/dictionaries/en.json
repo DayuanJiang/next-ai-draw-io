@@ -187,7 +187,7 @@
         "chars": "chars",
         "removeFile": "Remove file"
     },
-    "pdf": {
+    "url": {
         "title": "Extract Content from URL",
         "description": "Paste a URL to extract and analyze its content",
         "Extracting": "Extracting...",

@@ -1,3 +1,5 @@
+import { z } from "zod"
+
 export interface UrlData {
     url: string
     title: string
@@ -6,6 +8,12 @@ export interface UrlData {
     isExtracting: boolean
 }
 
+const UrlResponseSchema = z.object({
+    title: z.string().default("Untitled"),
+    content: z.string(),
+    charCount: z.number().int().nonnegative(),
+})
+
 export async function extractUrlContent(url: string): Promise<UrlData> {
     const response = await fetch("/api/parse-url", {
         method: "POST",
@@ -13,17 +21,29 @@ export async function extractUrlContent(url: string): Promise<UrlData> {
         body: JSON.stringify({ url }),
     })
 
+    // Try to parse JSON once
+    const raw = await response
+        .json()
+        .catch(() => ({ error: "Unexpected non-JSON response" }))
+
     if (!response.ok) {
-        const error = await response.json().catch(() => null)
-        throw new Error(error?.error || "Failed to extract URL content")
+        const message =
+            typeof raw === "object" && raw && "error" in raw
+                ? String((raw as any).error)
+                : "Failed to extract URL content"
+        throw new Error(message)
     }
 
-    const data = await response.json()
+    const parsed = UrlResponseSchema.safeParse(raw)
+    if (!parsed.success) {
+        throw new Error("Malformed response from URL extraction API")
+    }
+
     return {
         url,
-        title: data.title,
-        content: data.content,
-        charCount: data.charCount,
+        title: parsed.data.title,
+        content: parsed.data.content,
+        charCount: parsed.data.charCount,
         isExtracting: false,
     }
 }

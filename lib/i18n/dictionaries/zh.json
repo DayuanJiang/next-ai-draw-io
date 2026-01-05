@@ -187,7 +187,7 @@
         "chars": "字符",
         "removeFile": "移除文件"
     },
-    "pdf": {
+    "url": {
         "title": "从 URL 提取内容",
         "description": "粘贴 URL 以提取和分析其内容",
         "Extracting": "提取中...",

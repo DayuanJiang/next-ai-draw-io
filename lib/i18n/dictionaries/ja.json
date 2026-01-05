@@ -187,7 +187,7 @@
         "chars": "文字",
         "removeFile": "ファイルを削除"
     },
-    "pdf": {
+    "url": {
         "title": "URLからコンテンツを抽出",
         "description": "URLを貼り付けてそのコンテンツを抽出および分析します",
         "Extracting": "抽出中...",
