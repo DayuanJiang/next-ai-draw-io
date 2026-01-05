@@ -93,7 +93,7 @@ export async function POST(req: Request) {
 
         let article
         try {
-            article = await extract(url, {
+            article = await extract(url, undefined, {
                 headers: {
                     "User-Agent": "Mozilla/5.0 (compatible; NextAIDrawio/1.0)",
                 },

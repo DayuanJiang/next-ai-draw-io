@@ -1202,6 +1202,7 @@ export default function ChatPanel({
                                 status === "streaming" || status === "submitted"
                             }
                             className="hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid="new-chat-button"
                         >
                             <MessageSquarePlus
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
@@ -1214,6 +1215,7 @@ export default function ChatPanel({
                             size="icon"
                             onClick={() => setShowSettingsDialog(true)}
                             className="hover:bg-accent"
+                            data-testid="settings-button"
                         >
                             <Settings
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}

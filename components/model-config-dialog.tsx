@@ -102,6 +102,7 @@ function ProviderLogo({
 
     const logoName = PROVIDER_LOGO_MAP[provider] || provider
     return (
+        // biome-ignore lint/performance/noImgElement: External URL from models.dev
         <img
             alt={`${provider} logo`}
             className={cn("size-4 dark:invert", className)}
@@ -273,7 +274,7 @@ export function ModelConfigDialog({
 
     // Validate all models
     const handleValidate = useCallback(async () => {
-        if (!selectedProvider) return
+        if (!selectedProvider || !selectedProviderId) return
 
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
@@ -331,14 +332,14 @@ export function ModelConfigDialog({
                 const data = await response.json()
 
                 if (data.valid) {
-                    updateModel(selectedProviderId!, model.id, {
+                    updateModel(selectedProviderId, model.id, {
                         validated: true,
                         validationError: undefined,
                     })
                 } else {
                     allValid = false
                     errorCount++
-                    updateModel(selectedProviderId!, model.id, {
+                    updateModel(selectedProviderId, model.id, {
                         validated: false,
                         validationError: data.error || "Validation failed",
                     })
@@ -346,7 +347,7 @@ export function ModelConfigDialog({
             } catch {
                 allValid = false
                 errorCount++
-                updateModel(selectedProviderId!, model.id, {
+                updateModel(selectedProviderId, model.id, {
                     validated: false,
                     validationError: "Network error",
                 })
@@ -357,7 +358,7 @@ export function ModelConfigDialog({
 
         if (allValid) {
             setValidationStatus("success")
-            updateProvider(selectedProviderId!, { validated: true })
+            updateProvider(selectedProviderId, { validated: true })
             // Reset to idle after showing success briefly (with cleanup)
             if (validationResetTimeoutRef.current) {
                 clearTimeout(validationResetTimeoutRef.current)
@@ -1298,20 +1299,24 @@ export function ModelConfigDialog({
                                                                                     null,
                                                                                 )
                                                                             }
-                                                                            updateModel(
-                                                                                selectedProviderId!,
-                                                                                model.id,
-                                                                                {
-                                                                                    modelId:
-                                                                                        e
-                                                                                            .target
-                                                                                            .value,
-                                                                                    validated:
-                                                                                        undefined,
-                                                                                    validationError:
-                                                                                        undefined,
-                                                                                },
-                                                                            )
+                                                                            if (
+                                                                                selectedProviderId
+                                                                            ) {
+                                                                                updateModel(
+                                                                                    selectedProviderId,
+                                                                                    model.id,
+                                                                                    {
+                                                                                        modelId:
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        validated:
+                                                                                            undefined,
+                                                                                        validationError:
+                                                                                            undefined,
+                                                                                    },
+                                                                                )
+                                                                            }
                                                                         }}
                                                                         onKeyDown={(
                                                                             e,
