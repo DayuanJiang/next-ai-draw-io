@@ -871,11 +871,24 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.baseUrl ||
                 process.env.DOUBAO_BASE_URL ||
                 "https://ark.cn-beijing.volces.com/api/v3"
-            const doubaoProvider = createDeepSeek({
-                apiKey,
-                baseURL,
-            })
-            model = doubaoProvider(modelId)
+            const lowerModelId = modelId.toLowerCase()
+            // Use DeepSeek provider for DeepSeek/Kimi models, OpenAI for others (multimodal support)
+            if (
+                lowerModelId.includes("deepseek") ||
+                lowerModelId.includes("kimi")
+            ) {
+                const doubaoProvider = createDeepSeek({
+                    apiKey,
+                    baseURL,
+                })
+                model = doubaoProvider(modelId)
+            } else {
+                const doubaoProvider = createOpenAI({
+                    apiKey,
+                    baseURL,
+                })
+                model = doubaoProvider.chat(modelId)
+            }
             break
         }
 

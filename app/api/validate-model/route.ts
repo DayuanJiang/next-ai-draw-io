@@ -251,13 +251,26 @@ export async function POST(req: Request) {
             }
 
             case "doubao": {
-                // ByteDance Doubao uses DeepSeek-compatible API
-                const doubao = createDeepSeek({
-                    apiKey,
-                    baseURL:
-                        baseUrl || "https://ark.cn-beijing.volces.com/api/v3",
-                })
-                model = doubao(modelId)
+                // ByteDance Doubao: use DeepSeek for DeepSeek/Kimi models, OpenAI for others
+                const doubaoBaseUrl =
+                    baseUrl || "https://ark.cn-beijing.volces.com/api/v3"
+                const lowerModelId = modelId.toLowerCase()
+                if (
+                    lowerModelId.includes("deepseek") ||
+                    lowerModelId.includes("kimi")
+                ) {
+                    const doubao = createDeepSeek({
+                        apiKey,
+                        baseURL: doubaoBaseUrl,
+                    })
+                    model = doubao(modelId)
+                } else {
+                    const doubao = createOpenAI({
+                        apiKey,
+                        baseURL: doubaoBaseUrl,
+                    })
+                    model = doubao.chat(modelId)
+                }
                 break
             }
 
