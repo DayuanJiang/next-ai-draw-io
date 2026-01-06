@@ -900,7 +900,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "modelscope": {
-            const apiKey = overrides?.apiKey || process.env.MODELSOCPE_API_KEY
+            const apiKey = overrides?.apiKey || process.env.MODELSCOPE_API_KEY
             const baseURL =
                 overrides?.baseUrl ||
                 process.env.MODELSCOPE_BASE_URL ||

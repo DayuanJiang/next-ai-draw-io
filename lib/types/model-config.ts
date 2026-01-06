@@ -92,7 +92,10 @@ export const PROVIDER_INFO: Record<
         label: "Doubao (ByteDance)",
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     },
-    modelscope: { label: "ModelScope" },
+    modelscope: {
+        label: "ModelScope",
+        defaultBaseUrl: "https://api-inference.modelscope.cn/v1",
+    },
 }
 
 // Suggested models per provider for quick add
