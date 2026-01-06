@@ -162,7 +162,7 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 ```bash
 MODELSCOPE_API_KEY=your_api_key
-AI_MODEL=Qwen/Qwen3-32B
+AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 ```
 
 Optional custom endpoint:
