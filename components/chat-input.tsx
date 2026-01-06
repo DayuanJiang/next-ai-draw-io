@@ -347,6 +347,12 @@ export function ChatInput({
 
             setShowUrlDialog(false)
         } catch (error) {
+            // Remove the URL from the data map on error
+            const newUrlData = urlData
+                ? new Map(urlData)
+                : new Map<string, UrlData>()
+            newUrlData.delete(url)
+            onUrlChange(newUrlData)
             showErrorToast(
                 <span className="text-muted-foreground">
                     {error instanceof Error
