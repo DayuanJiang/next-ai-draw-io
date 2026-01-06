@@ -17,18 +17,7 @@ export const metadata: Metadata = {
     ],
 }
 
-function formatNumber(num: number): string {
-    if (num >= 1000) {
-        return `${num / 1000}k`
-    }
-    return num.toString()
-}
-
 export default function AboutJA() {
-    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
-    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
-    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
-
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -114,42 +103,6 @@ export default function AboutJA() {
                                     </span>
                                     が無料でもらえます！
                                 </p>
-                            </div>
-
-                            {/* Usage Limits */}
-                            <p className="text-sm text-gray-600 mb-3">
-                                現在の使用制限：
-                            </p>
-                            <div className="grid grid-cols-3 gap-3 mb-5">
-                                <div className="text-center p-3 bg-white/60 rounded-lg">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {formatNumber(dailyRequestLimit)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        リクエスト/日
-                                    </p>
-                                </div>
-                                <div className="text-center p-3 bg-white/60 rounded-lg">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {formatNumber(dailyTokenLimit)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        トークン/日
-                                    </p>
-                                </div>
-                                <div className="text-center p-3 bg-white/60 rounded-lg">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {formatNumber(tpmLimit)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        トークン/分
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="flex items-center gap-3 my-5">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 
                             {/* Bring Your Own Key */}
