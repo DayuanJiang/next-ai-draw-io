@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
     - [Installation](#installation)
   - [Deployment](#deployment)
     - [Deploy to EdgeOne Pages](#deploy-to-edgeone-pages)
-    - [Deploy on Vercel (Recommended)](#deploy-on-vercel-recommended)
+    - [Deploy on Vercel](#deploy-on-vercel)
     - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
   - [Multi-Provider Support](#multi-provider-support)
   - [How It Works](#how-it-works)
@@ -185,7 +185,7 @@ Check out the [Tencent EdgeOne Pages documentation](https://pages.edgeone.ai/doc
 
 Additionally, deploying through Tencent EdgeOne Pages will also grant you a [daily free quota for DeepSeek models](https://pages.edgeone.ai/document/edge-ai).
 
-### Deploy on Vercel (Recommended)
+### Deploy on Vercel 
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 

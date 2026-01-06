@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
     - [インストール](#インストール)
   - [デプロイ](#デプロイ)
     - [EdgeOne Pagesへのデプロイ](#edgeone-pagesへのデプロイ)
-    - [Vercelへのデプロイ（推奨）](#vercelへのデプロイ推奨)
+    - [Vercelへのデプロイ](#vercelへのデプロイ)
     - [Cloudflare Workersへのデプロイ](#cloudflare-workersへのデプロイ)
   - [マルチプロバイダーサポート](#マルチプロバイダーサポート)
   - [仕組み](#仕組み)
@@ -180,7 +180,7 @@ npm run dev
 
 また、Tencent EdgeOne Pagesでデプロイすると、[DeepSeekモデルの毎日の無料クォータ](https://pages.edgeone.ai/document/edge-ai)が付与されます。
 
-### Vercelへのデプロイ（推奨）
+### Vercelへのデプロイ
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 
