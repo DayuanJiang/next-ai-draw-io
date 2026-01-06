@@ -211,6 +211,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   ModelScope
 -   SGLang
 -   Vercel AI Gateway
 
