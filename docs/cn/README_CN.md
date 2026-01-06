@@ -204,6 +204,7 @@ npm run dev
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   ModelScope
 -   SGLang
 -   Vercel AI Gateway
 

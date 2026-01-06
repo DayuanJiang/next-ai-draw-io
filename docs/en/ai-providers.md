@@ -158,6 +158,19 @@ Optional custom URL:
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
+### ModelScope
+
+```bash
+MODELSCOPE_API_KEY=your_api_key
+AI_MODEL=Qwen/Qwen3-32B
+```
+
+Optional custom endpoint:
+
+```bash
+MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway provides unified access to multiple AI providers through a single API key. This simplifies authentication and allows you to switch between providers without managing multiple API keys.
@@ -201,7 +214,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope
 ```
 
 ## Model Capability Requirements

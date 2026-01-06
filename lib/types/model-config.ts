@@ -13,6 +13,7 @@ export type ProviderName =
     | "gateway"
     | "edgeone"
     | "doubao"
+    | "modelscope"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -91,6 +92,7 @@ export const PROVIDER_INFO: Record<
         label: "Doubao (ByteDance)",
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     },
+    modelscope: { label: "ModelScope" },
 }
 
 // Suggested models per provider for quick add
@@ -230,6 +232,17 @@ export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
         "doubao-1.5-pro-256k-250115",
         "doubao-pro-32k-241215",
         "doubao-pro-256k-241215",
+    ],
+    modelscope: [
+        // Qwen
+        "Qwen/Qwen2.5-72B-Instruct",
+        "Qwen/Qwen2.5-32B-Instruct",
+        "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        "Qwen/Qwen3-32B",
+        // DeepSeek
+        "deepseek-ai/DeepSeek-R1-0528",
+        "deepseek-ai/DeepSeek-V3.2",
     ],
 }
 
