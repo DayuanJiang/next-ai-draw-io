@@ -152,6 +152,19 @@ AI_PROVIDER=ollama
 AI_MODEL=llama3.2
 ```
 
+### ModelScope
+
+```bash
+MODELSCOPE_API_KEY=your_api_key
+AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+```
+
+可选的自定义端点：
+
+```bash
+MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
 可选的自定义 URL：
 
 ```bash

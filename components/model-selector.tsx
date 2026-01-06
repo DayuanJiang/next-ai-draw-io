@@ -50,6 +50,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     gateway: "vercel",
     edgeone: "tencent-cloud",
     doubao: "bytedance",
+    modelscope: "modelscope",
 }
 
 // Group models by providerLabel (handles duplicate providers)

@@ -28,7 +28,8 @@
         "azure": "Azure OpenAI",
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
-        "siliconflow": "SiliconFlow"
+        "siliconflow": "SiliconFlow",
+        "modelscope": "ModelScope"
     },
     "chat": {
         "placeholder": "描述您的图表或上传文件...",

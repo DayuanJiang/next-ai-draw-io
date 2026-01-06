@@ -297,6 +297,7 @@ export default function AboutCN() {
                         <li>OpenRouter</li>
                         <li>DeepSeek</li>
                         <li>SiliconFlow</li>
+                        <li>ModelScope</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         注意：<code>claude-sonnet-4-5</code>{" "}
