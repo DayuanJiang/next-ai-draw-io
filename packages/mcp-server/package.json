@@ -1,6 +1,6 @@
 {
     "name": "@next-ai-drawio/mcp-server",
-    "version": "0.1.11",
+    "version": "0.1.12",
     "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
     "type": "module",
     "main": "dist/index.js",
@@ -21,16 +21,16 @@
         "claude",
         "model-context-protocol"
     ],
-    "author": "Biki-dev",
+    "author": "DayuanJiang",
     "license": "Apache-2.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Biki-dev/next-ai-draw-io",
+        "url": "https://github.com/DayuanJiang/next-ai-draw-io",
         "directory": "packages/mcp-server"
     },
     "homepage": "https://next-ai-drawio.jiang.jp",
     "bugs": {
-        "url": "https://github.com/Biki-dev/next-ai-draw-io/issues"
+        "url": "https://github.com/DayuanJiang/next-ai-draw-io/issues"
     },
     "publishConfig": {
         "access": "public"
