@@ -13,6 +13,45 @@ import {
 } from "./history.js"
 import { log } from "./logger.js"
 
+// Configurable draw.io embed URL for private deployments
+const DRAWIO_BASE_URL =
+    process.env.DRAWIO_BASE_URL || "https://embed.diagrams.net"
+
+// Extract origin (scheme + host + port) from URL for postMessage security check
+function getOrigin(url: string): string {
+    try {
+        const parsed = new URL(url)
+        return `${parsed.protocol}//${parsed.host}`
+    } catch {
+        return url // Fallback if parsing fails
+    }
+}
+
+const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
+
+// Minimal blank diagram used to bootstrap new sessions.
+// This avoids the draw.io embed spinner (spin=1) getting stuck when no `load(xml)` is ever sent.
+const DEFAULT_DIAGRAM_XML = `<mxfile host="app.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+
+// Normalize URL for iframe src - ensure no double slashes
+function normalizeUrl(url: string): string {
+    // Remove trailing slash to avoid double slashes
+    return url.replace(/\/$/, "")
+}
+
+function isLikelyMcpSessionId(sessionId: string): boolean {
+    // Keep this cheap and conservative to avoid creating state for arbitrary IDs.
+    return sessionId.startsWith("mcp-") && sessionId.length <= 128
+}
+
+function ensureSessionStateInitialized(sessionId: string): void {
+    if (!sessionId) return
+    if (!isLikelyMcpSessionId(sessionId)) return
+    if (stateStore.has(sessionId)) return
+
+    setState(sessionId, DEFAULT_DIAGRAM_XML)
+}
+
 interface SessionState {
     xml: string
     version: number
@@ -127,7 +166,12 @@ function cleanupExpiredSessions(): void {
     }
 }
 
-setInterval(cleanupExpiredSessions, 5 * 60 * 1000)
+const cleanupIntervalId = setInterval(cleanupExpiredSessions, 5 * 60 * 1000)
+
+export function shutdown(): void {
+    clearInterval(cleanupIntervalId)
+    stopHttpServer()
+}
 
 export function getServerPort(): number {
     return serverPort
@@ -150,8 +194,11 @@ function handleRequest(
     }
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
+        const sessionId = url.searchParams.get("mcp") || ""
+        ensureSessionStateInitialized(sessionId)
+
         res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(getHtmlPage(url.searchParams.get("mcp") || ""))
+        res.end(getHtmlPage(sessionId))
     } else if (url.pathname === "/api/state") {
         handleStateApi(req, res, url)
     } else if (url.pathname === "/api/history") {
@@ -178,6 +225,7 @@ function handleStateApi(
             res.end(JSON.stringify({ error: "sessionId required" }))
             return
         }
+        ensureSessionStateInitialized(sessionId)
         const state = stateStore.get(sessionId)
         res.writeHead(200, { "Content-Type": "application/json" })
         res.end(
@@ -398,7 +446,7 @@ function getHtmlPage(sessionId: string): string {
             </div>
             <div id="status" class="status disconnected">Connecting...</div>
         </div>
-        <iframe id="drawio" src="https://embed.diagrams.net/?embed=1&proto=json&spin=1&libraries=1"></iframe>
+        <iframe id="drawio" src="${normalizeUrl(DRAWIO_BASE_URL)}/?embed=1&proto=json&spin=1&libraries=1"></iframe>
     </div>
     <button id="history-btn" title="History" ${sessionId ? "" : "disabled"}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -428,7 +476,7 @@ function getHtmlPage(sessionId: string): string {
         let pendingAiSvg = false;
 
         window.addEventListener('message', (e) => {
-            if (e.origin !== 'https://embed.diagrams.net') return;
+            if (e.origin !== '${DRAWIO_ORIGIN}') return;
             try {
                 const msg = JSON.parse(e.data);
                 if (msg.event === 'init') {

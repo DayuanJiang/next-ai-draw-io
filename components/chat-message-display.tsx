@@ -7,7 +7,6 @@ import {
     ChevronDown,
     ChevronUp,
     Copy,
-    Cpu,
     FileCode,
     FileText,
     Pencil,
@@ -26,23 +25,20 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import { ChatLobby } from "@/components/chat/ChatLobby"
+import { ToolCallCard } from "@/components/chat/ToolCallCard"
+import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
     applyDiagramOperations,
     convertToLegalXml,
-    isMxCellXmlComplete,
+    extractCompleteMxCells,
     replaceNodes,
     validateAndFixXml,
 } from "@/lib/utils"
 import ExamplePanel from "./chat-example-panel"
-import { CodeBlock } from "./code-block"
-
-interface DiagramOperation {
-    type: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -52,61 +48,11 @@ function getCompleteOperations(
     return operations.filter(
         (op) =>
             op &&
-            typeof op.type === "string" &&
-            ["update", "add", "delete"].includes(op.type) &&
+            typeof op.operation === "string" &&
+            ["update", "add", "delete"].includes(op.operation) &&
             typeof op.cell_id === "string" &&
             op.cell_id.length > 0 &&
-            // delete doesn't need new_xml, update/add do
-            (op.type === "delete" || typeof op.new_xml === "string"),
-    )
-}
-
-// Tool part interface for type safety
-interface ToolPartLike {
-    type: string
-    toolCallId: string
-    state?: string
-    input?: {
-        xml?: string
-        operations?: DiagramOperation[]
-    } & Record<string, unknown>
-    output?: string
-}
-
-function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
-    return (
-        <div className="space-y-3">
-            {operations.map((op, index) => (
-                <div
-                    key={`${op.type}-${op.cell_id}-${index}`}
-                    className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
-                >
-                    <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
-                        <span
-                            className={`text-[10px] font-medium uppercase tracking-wide ${
-                                op.type === "delete"
-                                    ? "text-red-600"
-                                    : op.type === "add"
-                                      ? "text-green-600"
-                                      : "text-blue-600"
-                            }`}
-                        >
-                            {op.type}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                            cell_id: {op.cell_id}
-                        </span>
-                    </div>
-                    {op.new_xml && (
-                        <div className="px-3 py-2">
-                            <pre className="text-[11px] font-mono text-foreground/80 bg-muted/30 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
-                                {op.new_xml}
-                            </pre>
-                        </div>
-                    )}
-                </div>
-            ))}
-        </div>
+            (op.operation === "delete" || typeof op.new_xml === "string"),
     )
 }
 
@@ -181,6 +127,13 @@ const getUserOriginalText = (message: UIMessage): string => {
     return fullText.replace(filePattern, "").trim()
 }
 
+interface SessionMetadata {
+    id: string
+    title: string
+    updatedAt: number
+    thumbnailDataUrl?: string
+}
+
 interface ChatMessageDisplayProps {
     messages: UIMessage[]
     setInput: (input: string) => void
@@ -191,6 +144,11 @@ interface ChatMessageDisplayProps {
     onRegenerate?: (messageIndex: number) => void
     onEditMessage?: (messageIndex: number, newText: string) => void
     status?: "streaming" | "submitted" | "idle" | "error" | "ready"
+    isRestored?: boolean
+    sessions?: SessionMetadata[]
+    onSelectSession?: (id: string) => void
+    onDeleteSession?: (id: string) => void
+    loadedMessageIdsRef?: MutableRefObject<Set<string>>
 }
 
 export function ChatMessageDisplay({
@@ -203,13 +161,33 @@ export function ChatMessageDisplay({
     onRegenerate,
     onEditMessage,
     status = "idle",
+    isRestored = false,
+    sessions = [],
+    onSelectSession,
+    onDeleteSession,
+    loadedMessageIdsRef,
 }: ChatMessageDisplayProps) {
+    const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const scrollTopRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
     const processedToolCalls = processedToolCallsRef
     // Track the last processed XML per toolCallId to skip redundant processing during streaming
     const lastProcessedXmlRef = useRef<Map<string, string>>(new Map())
+
+    // Reset refs when messages become empty (new chat or session switch)
+    // This ensures cached examples work correctly after starting a new session
+    useEffect(() => {
+        if (messages.length === 0) {
+            previousXML.current = ""
+            lastProcessedXmlRef.current.clear()
+            // Note: processedToolCalls is passed from parent, so we clear it too
+            processedToolCalls.current.clear()
+            // Scroll to top to show newest history items
+            scrollTopRef.current?.scrollIntoView({ behavior: "instant" })
+        }
+    }, [messages.length, processedToolCalls])
     // Debounce streaming diagram updates - store pending XML and timeout
     const pendingXmlRef = useRef<string | null>(null)
     const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -227,6 +205,12 @@ export function ChatMessageDisplay({
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {},
     )
+    const [copiedToolCallId, setCopiedToolCallId] = useState<string | null>(
+        null,
+    )
+    const [copyFailedToolCallId, setCopyFailedToolCallId] = useState<
+        string | null
+    >(null)
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
     const [copyFailedMessageId, setCopyFailedMessageId] = useState<
         string | null
@@ -242,13 +226,39 @@ export function ChatMessageDisplay({
         Record<string, boolean>
     >({})
 
-    const copyMessageToClipboard = async (messageId: string, text: string) => {
+    const setCopyState = (
+        messageId: string,
+        isToolCall: boolean,
+        isSuccess: boolean,
+    ) => {
+        if (isSuccess) {
+            if (isToolCall) {
+                setCopiedToolCallId(messageId)
+                setTimeout(() => setCopiedToolCallId(null), 2000)
+            } else {
+                setCopiedMessageId(messageId)
+                setTimeout(() => setCopiedMessageId(null), 2000)
+            }
+        } else {
+            if (isToolCall) {
+                setCopyFailedToolCallId(messageId)
+                setTimeout(() => setCopyFailedToolCallId(null), 2000)
+            } else {
+                setCopyFailedMessageId(messageId)
+                setTimeout(() => setCopyFailedMessageId(null), 2000)
+            }
+        }
+    }
+
+    const copyMessageToClipboard = async (
+        messageId: string,
+        text: string,
+        isToolCall = false,
+    ) => {
         try {
             await navigator.clipboard.writeText(text)
-
-            setCopiedMessageId(messageId)
-            setTimeout(() => setCopiedMessageId(null), 2000)
-        } catch (err) {
+            setCopyState(messageId, isToolCall, true)
+        } catch (_err) {
             // Fallback for non-secure contexts (HTTP) or permission denied
             const textarea = document.createElement("textarea")
             textarea.value = text
@@ -263,15 +273,11 @@ export function ChatMessageDisplay({
                 if (!success) {
                     throw new Error("Copy command failed")
                 }
-                setCopiedMessageId(messageId)
-                setTimeout(() => setCopiedMessageId(null), 2000)
+                setCopyState(messageId, isToolCall, true)
             } catch (fallbackErr) {
                 console.error("Failed to copy message:", fallbackErr)
-                toast.error(
-                    "Failed to copy message. Please copy manually or check clipboard permissions.",
-                )
-                setCopyFailedMessageId(messageId)
-                setTimeout(() => setCopyFailedMessageId(null), 2000)
+                toast.error(dict.chat.failedToCopyDetail)
+                setCopyState(messageId, isToolCall, false)
             } finally {
                 document.body.removeChild(textarea)
             }
@@ -303,7 +309,7 @@ export function ChatMessageDisplay({
             })
         } catch (error) {
             console.error("Failed to log feedback:", error)
-            toast.error("Failed to record your feedback. Please try again.")
+            toast.error(dict.errors.failedToRecordFeedback)
             // Revert optimistic UI update
             setFeedback((prev) => {
                 const next = { ...prev }
@@ -315,26 +321,33 @@ export function ChatMessageDisplay({
 
     const handleDisplayChart = useCallback(
         (xml: string, showToast = false) => {
-            const currentXml = xml || ""
+            let currentXml = xml || ""
+
+            // During streaming (showToast=false), extract only complete mxCell elements
+            // This allows progressive rendering even with partial/incomplete trailing XML
+            if (!showToast) {
+                const completeCells = extractCompleteMxCells(currentXml)
+                if (!completeCells) {
+                    return
+                }
+                currentXml = completeCells
+            }
+
             const convertedXml = convertToLegalXml(currentXml)
             if (convertedXml !== previousXML.current) {
                 // Parse and validate XML BEFORE calling replaceNodes
                 const parser = new DOMParser()
-                const testDoc = parser.parseFromString(convertedXml, "text/xml")
+                // Wrap in root element for parsing multiple mxCell elements
+                const testDoc = parser.parseFromString(
+                    `<root>${convertedXml}</root>`,
+                    "text/xml",
+                )
                 const parseError = testDoc.querySelector("parsererror")
 
                 if (parseError) {
-                    // Use console.warn instead of console.error to avoid triggering
-                    // Next.js dev mode error overlay for expected streaming states
-                    // (partial XML during streaming is normal and will be fixed by subsequent updates)
+                    // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
-                        // Only log as error and show toast if this is the final XML
-                        console.error(
-                            "[ChatMessageDisplay] Malformed XML detected in final output",
-                        )
-                        toast.error(
-                            "AI generated invalid diagram XML. Please try regenerating.",
-                        )
+                        toast.error(dict.errors.malformedXml)
                     }
                     return // Skip this update
                 }
@@ -347,42 +360,30 @@ export function ChatMessageDisplay({
                         `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
                     const replacedXML = replaceNodes(baseXML, convertedXml)
 
-                    // Validate and auto-fix the XML
+                    // During streaming (showToast=false), skip heavy validation for lower latency
+                    // The quick DOM parse check above catches malformed XML
+                    // Full validation runs on final output (showToast=true)
+                    if (!showToast) {
+                        previousXML.current = convertedXml
+                        onDisplayChart(replacedXML, true)
+                        return
+                    }
+
+                    // Final output: run full validation and auto-fix
                     const validation = validateAndFixXml(replacedXML)
                     if (validation.valid) {
                         previousXML.current = convertedXml
                         // Use fixed XML if available, otherwise use original
                         const xmlToLoad = validation.fixed || replacedXML
-                        if (validation.fixes.length > 0) {
-                            console.log(
-                                "[ChatMessageDisplay] Auto-fixed XML issues:",
-                                validation.fixes,
-                            )
-                        }
-                        // Skip validation in loadDiagram since we already validated above
                         onDisplayChart(xmlToLoad, true)
                     } else {
-                        console.error(
-                            "[ChatMessageDisplay] XML validation failed:",
-                            validation.error,
-                        )
-                        // Only show toast if this is the final XML (not during streaming)
-                        if (showToast) {
-                            toast.error(
-                                "Diagram validation failed. Please try regenerating.",
-                            )
-                        }
+                        toast.error(dict.errors.validationFailed)
                     }
                 } catch (error) {
-                    console.error(
-                        "[ChatMessageDisplay] Error processing XML:",
-                        error,
-                    )
+                    console.error("Error processing XML:", error)
                     // Only show toast if this is the final XML (not during streaming)
                     if (showToast) {
-                        toast.error(
-                            "Failed to process diagram. Please try regenerating.",
-                        )
+                        toast.error(dict.errors.failedToProcess)
                     }
                 }
             }
@@ -390,8 +391,22 @@ export function ChatMessageDisplay({
         [chartXML, onDisplayChart],
     )
 
+    // Track previous message count to detect bulk loads vs streaming
+    const prevMessageCountRef = useRef(0)
+
     useEffect(() => {
-        if (messagesEndRef.current) {
+        if (messagesEndRef.current && messages.length > 0) {
+            const prevCount = prevMessageCountRef.current
+            const currentCount = messages.length
+            prevMessageCountRef.current = currentCount
+
+            // Bulk load (session restore) - instant scroll, no animation
+            if (prevCount === 0 || currentCount - prevCount > 1) {
+                messagesEndRef.current.scrollIntoView({ behavior: "instant" })
+                return
+            }
+
+            // Single message added - smooth scroll
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
         }
     }, [messages])
@@ -603,162 +618,25 @@ export function ChatMessageDisplay({
             }
         })
 
-        // Cleanup: clear any pending debounce timeout on unmount
-        return () => {
-            if (debounceTimeoutRef.current) {
-                clearTimeout(debounceTimeoutRef.current)
-                debounceTimeoutRef.current = null
-            }
-            if (editDebounceTimeoutRef.current) {
-                clearTimeout(editDebounceTimeoutRef.current)
-                editDebounceTimeoutRef.current = null
-            }
-        }
+        // NOTE: Don't cleanup debounce timeouts here!
+        // The cleanup runs on every re-render (when messages changes),
+        // which would cancel the timeout before it fires.
+        // Let the timeouts complete naturally - they're harmless if component unmounts.
     }, [messages, handleDisplayChart, chartXML])
-
-    const renderToolPart = (part: ToolPartLike) => {
-        const callId = part.toolCallId
-        const { state, input, output } = part
-        const isExpanded = expandedTools[callId] ?? true
-        const toolName = part.type?.replace("tool-", "")
-
-        const toggleExpanded = () => {
-            setExpandedTools((prev) => ({
-                ...prev,
-                [callId]: !isExpanded,
-            }))
-        }
-
-        const getToolDisplayName = (name: string) => {
-            switch (name) {
-                case "display_diagram":
-                    return "Generate Diagram"
-                case "edit_diagram":
-                    return "Edit Diagram"
-                case "get_shape_library":
-                    return "Get Shape Library"
-                default:
-                    return name
-            }
-        }
-
-        return (
-            <div
-                key={callId}
-                className="my-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden"
-            >
-                <div className="flex items-center justify-between px-4 py-3 bg-muted/50">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
-                            <Cpu className="w-3.5 h-3.5 text-primary" />
-                        </div>
-                        <span className="text-sm font-medium text-foreground/80">
-                            {getToolDisplayName(toolName)}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {state === "input-streaming" && (
-                            <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        )}
-                        {state === "output-available" && (
-                            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                Complete
-                            </span>
-                        )}
-                        {state === "output-error" &&
-                            (() => {
-                                // Check if this is a truncation (incomplete XML) vs real error
-                                const isTruncated =
-                                    (toolName === "display_diagram" ||
-                                        toolName === "append_diagram") &&
-                                    !isMxCellXmlComplete(input?.xml)
-                                return isTruncated ? (
-                                    <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
-                                        Truncated
-                                    </span>
-                                ) : (
-                                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                                        Error
-                                    </span>
-                                )
-                            })()}
-                        {input && Object.keys(input).length > 0 && (
-                            <button
-                                type="button"
-                                onClick={toggleExpanded}
-                                className="p-1 rounded hover:bg-muted transition-colors"
-                            >
-                                {isExpanded ? (
-                                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                ) : (
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                )}
-                            </button>
-                        )}
-                    </div>
-                </div>
-                {input && isExpanded && (
-                    <div className="px-4 py-3 border-t border-border/40 bg-muted/20">
-                        {typeof input === "object" && input.xml ? (
-                            <CodeBlock code={input.xml} language="xml" />
-                        ) : typeof input === "object" &&
-                          input.operations &&
-                          Array.isArray(input.operations) ? (
-                            <OperationsDisplay operations={input.operations} />
-                        ) : typeof input === "object" &&
-                          Object.keys(input).length > 0 ? (
-                            <CodeBlock
-                                code={JSON.stringify(input, null, 2)}
-                                language="json"
-                            />
-                        ) : null}
-                    </div>
-                )}
-                {output &&
-                    state === "output-error" &&
-                    (() => {
-                        const isTruncated =
-                            (toolName === "display_diagram" ||
-                                toolName === "append_diagram") &&
-                            !isMxCellXmlComplete(input?.xml)
-                        return (
-                            <div
-                                className={`px-4 py-3 border-t border-border/40 text-sm ${isTruncated ? "text-yellow-600" : "text-red-600"}`}
-                            >
-                                {isTruncated
-                                    ? "Output truncated due to length limits. Try a simpler request or increase the maxOutputLength."
-                                    : output}
-                            </div>
-                        )
-                    })()}
-                {/* Show get_shape_library output on success */}
-                {output &&
-                    toolName === "get_shape_library" &&
-                    state === "output-available" &&
-                    isExpanded && (
-                        <div className="px-4 py-3 border-t border-border/40">
-                            <div className="text-xs text-muted-foreground mb-2">
-                                Library loaded (
-                                {typeof output === "string" ? output.length : 0}{" "}
-                                chars)
-                            </div>
-                            <pre className="text-xs bg-muted/50 p-2 rounded-md overflow-auto max-h-32 whitespace-pre-wrap">
-                                {typeof output === "string"
-                                    ? output.substring(0, 800) +
-                                      (output.length > 800 ? "\n..." : "")
-                                    : String(output)}
-                            </pre>
-                        </div>
-                    )}
-            </div>
-        )
-    }
 
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
-            {messages.length === 0 ? (
-                <ExamplePanel setInput={setInput} setFiles={setFiles} />
-            ) : (
+            <div ref={scrollTopRef} />
+            {messages.length === 0 && isRestored ? (
+                <ChatLobby
+                    sessions={sessions}
+                    onSelectSession={onSelectSession || (() => {})}
+                    onDeleteSession={onDeleteSession}
+                    setInput={setInput}
+                    setFiles={setFiles}
+                    dict={dict}
+                />
+            ) : messages.length === 0 ? null : (
                 <div className="py-4 px-4 space-y-4">
                     {messages.map((message, messageIndex) => {
                         const userMessageText =
@@ -778,13 +656,21 @@ export function ChatMessageDisplay({
                                     .slice(messageIndex + 1)
                                     .every((m) => m.role !== "user"))
                         const isEditing = editingMessageId === message.id
+                        // Skip animation for loaded messages (from session restore)
+                        const isRestoredMessage =
+                            loadedMessageIdsRef?.current.has(message.id) ??
+                            false
                         return (
                             <div
                                 key={message.id}
-                                className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"} animate-message-in`}
-                                style={{
-                                    animationDelay: `${messageIndex * 50}ms`,
-                                }}
+                                className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"} ${isRestoredMessage ? "" : "animate-message-in"}`}
+                                style={
+                                    isRestoredMessage
+                                        ? undefined
+                                        : {
+                                              animationDelay: `${messageIndex * 50}ms`,
+                                          }
+                                }
                             >
                                 {message.role === "user" &&
                                     userMessageText &&
@@ -806,7 +692,10 @@ export function ChatMessageDisplay({
                                                             )
                                                         }}
                                                         className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
-                                                        title="Edit message"
+                                                        title={
+                                                            dict.chat
+                                                                .editMessage
+                                                        }
                                                     >
                                                         <Pencil className="h-3.5 w-3.5" />
                                                     </button>
@@ -823,11 +712,13 @@ export function ChatMessageDisplay({
                                                 title={
                                                     copiedMessageId ===
                                                     message.id
-                                                        ? "Copied!"
+                                                        ? dict.chat.copied
                                                         : copyFailedMessageId ===
                                                             message.id
-                                                          ? "Failed to copy"
-                                                          : "Copy message"
+                                                          ? dict.chat
+                                                                .failedToCopy
+                                                          : dict.chat
+                                                                .copyResponse
                                                 }
                                             >
                                                 {copiedMessageId ===
@@ -875,6 +766,9 @@ export function ChatMessageDisplay({
                                                             className="w-full"
                                                             isStreaming={
                                                                 isStreamingReasoning
+                                                            }
+                                                            defaultOpen={
+                                                                !isRestoredMessage
                                                             }
                                                         >
                                                             <ReasoningTrigger />
@@ -942,7 +836,7 @@ export function ChatMessageDisplay({
                                                     }}
                                                     className="px-3 py-1.5 text-xs rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                                                 >
-                                                    Cancel
+                                                    {dict.common.cancel}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -964,7 +858,7 @@ export function ChatMessageDisplay({
                                                     disabled={!editText.trim()}
                                                     className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
                                                 >
-                                                    Save & Submit
+                                                    {dict.chat.saveAndSubmit}
                                                 </button>
                                             </div>
                                         </div>
@@ -1018,9 +912,30 @@ export function ChatMessageDisplay({
                                             return groups.map(
                                                 (group, groupIndex) => {
                                                     if (group.type === "tool") {
-                                                        return renderToolPart(
-                                                            group
-                                                                .parts[0] as ToolPartLike,
+                                                        return (
+                                                            <ToolCallCard
+                                                                key={`${message.id}-tool-${group.startIndex}`}
+                                                                part={
+                                                                    group
+                                                                        .parts[0] as ToolPartLike
+                                                                }
+                                                                expandedTools={
+                                                                    expandedTools
+                                                                }
+                                                                setExpandedTools={
+                                                                    setExpandedTools
+                                                                }
+                                                                onCopy={
+                                                                    copyMessageToClipboard
+                                                                }
+                                                                copiedToolCallId={
+                                                                    copiedToolCallId
+                                                                }
+                                                                copyFailedToolCallId={
+                                                                    copyFailedToolCallId
+                                                                }
+                                                                dict={dict}
+                                                            />
                                                         )
                                                     }
 
@@ -1097,7 +1012,8 @@ export function ChatMessageDisplay({
                                                                     "user" &&
                                                                 isLastUserMessage &&
                                                                 onEditMessage
-                                                                    ? "Click to edit"
+                                                                    ? dict.chat
+                                                                          .clickToEdit
                                                                     : undefined
                                                             }
                                                         >
@@ -1299,8 +1215,8 @@ export function ChatMessageDisplay({
                                                 title={
                                                     copiedMessageId ===
                                                     message.id
-                                                        ? "Copied!"
-                                                        : "Copy response"
+                                                        ? dict.chat.copied
+                                                        : dict.chat.copyResponse
                                                 }
                                             >
                                                 {copiedMessageId ===
@@ -1326,7 +1242,9 @@ export function ChatMessageDisplay({
                                                             )
                                                         }
                                                         className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
-                                                        title="Regenerate response"
+                                                        title={
+                                                            dict.chat.regenerate
+                                                        }
                                                     >
                                                         <RotateCcw className="h-3.5 w-3.5" />
                                                     </button>
@@ -1348,7 +1266,7 @@ export function ChatMessageDisplay({
                                                         ? "text-green-600 bg-green-100"
                                                         : "text-muted-foreground/60 hover:text-green-600 hover:bg-green-50"
                                                 }`}
-                                                title="Good response"
+                                                title={dict.chat.goodResponse}
                                             >
                                                 <ThumbsUp className="h-3.5 w-3.5" />
                                             </button>
@@ -1367,7 +1285,7 @@ export function ChatMessageDisplay({
                                                         ? "text-red-600 bg-red-100"
                                                         : "text-muted-foreground/60 hover:text-red-600 hover:bg-red-50"
                                                 }`}
-                                                title="Bad response"
+                                                title={dict.chat.badResponse}
                                             >
                                                 <ThumbsDown className="h-3.5 w-3.5" />
                                             </button>

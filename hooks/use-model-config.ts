@@ -11,7 +11,6 @@ import {
     flattenModels,
     type ModelConfig,
     type MultiModelConfig,
-    PROVIDER_INFO,
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
@@ -109,9 +108,11 @@ export interface UseModelConfigReturn {
     models: FlattenedModel[]
     selectedModel: FlattenedModel | undefined
     selectedModelId: string | undefined
+    showUnvalidatedModels: boolean
 
     // Actions
     setSelectedModelId: (modelId: string | undefined) => void
+    setShowUnvalidatedModels: (show: boolean) => void
     addProvider: (provider: ProviderName) => ProviderConfig
     updateProvider: (
         providerId: string,
@@ -157,6 +158,13 @@ export function useModelConfig(): UseModelConfigReturn {
         setConfig((prev) => ({
             ...prev,
             selectedModelId: modelId,
+        }))
+    }, [])
+
+    const setShowUnvalidatedModels = useCallback((show: boolean) => {
+        setConfig((prev) => ({
+            ...prev,
+            showUnvalidatedModels: show,
         }))
     }, [])
 
@@ -278,7 +286,9 @@ export function useModelConfig(): UseModelConfigReturn {
         models,
         selectedModel,
         selectedModelId: config.selectedModelId,
+        showUnvalidatedModels: config.showUnvalidatedModels ?? false,
         setSelectedModelId,
+        setShowUnvalidatedModels,
         addProvider,
         updateProvider,
         deleteProvider,

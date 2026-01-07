@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import { z } from "zod"
 import { getLangfuseClient } from "@/lib/langfuse"
+import { getUserIdFromRequest } from "@/lib/user-id"
 
 const feedbackSchema = z.object({
     messageId: z.string().min(1).max(200),
@@ -27,9 +28,13 @@ export async function POST(req: Request) {
 
     const { messageId, feedback, sessionId } = data
 
-    // Get user IP for tracking
-    const forwardedFor = req.headers.get("x-forwarded-for")
-    const userId = forwardedFor?.split(",")[0]?.trim() || "anonymous"
+    // Skip logging if no sessionId - prevents attaching to wrong user's trace
+    if (!sessionId) {
+        return Response.json({ success: true, logged: false })
+    }
+
+    // Get user ID for tracking
+    const userId = getUserIdFromRequest(req)
 
     try {
         // Find the most recent chat trace for this session to attach the score to

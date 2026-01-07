@@ -39,6 +39,7 @@ import {
     getState,
     requestSync,
     setState,
+    shutdown,
     startHttpServer,
     waitForSync,
 } from "./http-server.js"
@@ -47,7 +48,7 @@ import { validateAndFixXml } from "./xml-validation.js"
 
 // Server configuration
 const config = {
-    port: parseInt(process.env.PORT || "6002"),
+    port: parseInt(process.env.PORT || "6002", 10),
 }
 
 // Session state (single session for simplicity)
@@ -78,7 +79,7 @@ server.prompt(
 
 ## Creating a New Diagram
 1. Call start_session to open the browser preview
-2. Use display_diagram with complete mxGraphModel XML to create a new diagram
+2. Use create_new_diagram with complete mxGraphModel XML to create a new diagram
 
 ## Adding Elements to Existing Diagram
 1. Use edit_diagram with "add" operation
@@ -91,7 +92,7 @@ server.prompt(
 3. For update, provide the cell_id and complete new mxCell XML
 
 ## Important Notes
-- display_diagram REPLACES the entire diagram - only use for new diagrams
+- create_new_diagram REPLACES the entire diagram - only use for new diagrams
 - edit_diagram PRESERVES user's manual changes (fetches browser state first)
 - Always use unique cell_ids when adding elements (e.g., "shape-1", "arrow-2")`,
                 },
@@ -150,19 +151,59 @@ server.registerTool(
     },
 )
 
-// Tool: display_diagram
+// Tool: create_new_diagram
 server.registerTool(
-    "display_diagram",
+    "create_new_diagram",
     {
-        description:
-            "Display a NEW draw.io diagram from XML. REPLACES the entire diagram. " +
-            "Use this for creating new diagrams from scratch. " +
-            "To ADD elements to an existing diagram, use edit_diagram with 'add' operation instead. " +
-            "You should generate valid draw.io/mxGraph XML format.",
+        description: `Create a NEW diagram from mxGraphModel XML. Use this when creating a diagram from scratch or replacing the current diagram entirely.
+
+CRITICAL: You MUST provide the 'xml' argument in EVERY call. Do NOT call this tool without xml.
+
+When to use this tool:
+- Creating a new diagram from scratch
+- Replacing the current diagram with a completely different one
+- Major structural changes that require regenerating the diagram
+
+When to use edit_diagram instead:
+- Small modifications to existing diagram
+- Adding/removing individual elements
+- Changing labels, colors, or positions
+
+XML FORMAT - Full mxGraphModel structure:
+<mxGraphModel>
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="2" value="Shape" style="rounded=1;" vertex="1" parent="1">
+      <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>
+
+LAYOUT CONSTRAINTS:
+- Keep all elements within x=0-800, y=0-600 (single page viewport)
+- Start from margins (x=40, y=40), keep elements grouped closely
+- Use unique IDs starting from "2" (0 and 1 are reserved)
+- Set parent="1" for top-level shapes
+- Space shapes 150-200px apart for clear edge routing
+
+EDGE ROUTING RULES:
+- Never let multiple edges share the same path - use different exitY/entryY values
+- For bidirectional connections (A↔B), use OPPOSITE sides
+- Always specify exitX, exitY, entryX, entryY explicitly in edge style
+- Route edges AROUND obstacles using waypoints (add 20-30px clearance)
+- Use natural connection points based on flow (not corners)
+
+COMMON STYLES:
+- Shapes: rounded=1; fillColor=#hex; strokeColor=#hex
+- Edges: endArrow=classic; edgeStyle=orthogonalEdgeStyle; curved=1
+- Text: fontSize=14; fontStyle=1 (bold); align=center`,
         inputSchema: {
             xml: z
                 .string()
-                .describe("The draw.io XML to display (mxGraphModel format)"),
+                .describe(
+                    "REQUIRED: The complete mxGraphModel XML. Must always be provided.",
+                ),
         },
     },
     async ({ xml: inputXml }) => {
@@ -199,7 +240,7 @@ server.registerTool(
                 }
             }
 
-            log.info(`Displaying diagram, ${xml.length} chars`)
+            log.info(`Setting diagram content, ${xml.length} chars`)
 
             // Sync from browser state first
             const browserState = getState(currentSession.id)
@@ -226,20 +267,20 @@ server.registerTool(
             // Save AI result (no SVG yet - will be captured by browser)
             addHistory(currentSession.id, xml, "")
 
-            log.info(`Diagram displayed successfully`)
+            log.info(`Diagram content set successfully`)
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Diagram displayed successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters`,
+                        text: `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters`,
                     },
                 ],
             }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
-            log.error("display_diagram failed:", message)
+            log.error("create_new_diagram failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,
@@ -265,14 +306,22 @@ server.registerTool(
             "- add: Add a new cell. Provide cell_id (new unique id) and new_xml.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
             "- delete: Remove a cell by its id. Only cell_id is needed.\n\n" +
-            "For add/update, new_xml must be a complete mxCell element including mxGeometry.",
+            "For add/update, new_xml must be a complete mxCell element including mxGeometry.\n\n" +
+            "Example - Add a rectangle:\n" +
+            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            "Example - Update a cell:\n" +
+            '{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            "Example - Delete a cell:\n" +
+            '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
             operations: z
                 .array(
                     z.object({
-                        type: z
+                        operation: z
                             .enum(["update", "add", "delete"])
-                            .describe("Operation type"),
+                            .describe(
+                                "Operation to perform: add, update, or delete",
+                            ),
                         cell_id: z.string().describe("The id of the mxCell"),
                         new_xml: z
                             .string()
@@ -332,7 +381,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "Error: No diagram to edit. Please create a diagram first with display_diagram.",
+                            text: "Error: No diagram to edit. Please create a diagram first with create_new_diagram.",
                         },
                     ],
                     isError: true,
@@ -356,13 +405,13 @@ server.registerTool(
                     )
                     if (fixed) {
                         log.info(
-                            `Operation ${op.type} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
+                            `Operation ${op.operation} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
                         )
                         return { ...op, new_xml: fixed }
                     }
                     if (!valid && error) {
                         log.warn(
-                            `Operation ${op.type} ${op.cell_id}: XML validation failed: ${error}`,
+                            `Operation ${op.operation} ${op.cell_id}: XML validation failed: ${error}`,
                         )
                     }
                 }
@@ -466,7 +515,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "No diagram exists yet. Use display_diagram to create one.",
+                            text: "No diagram exists yet. Use create_new_diagram to create one.",
                         },
                     ],
                 }
@@ -569,6 +618,31 @@ server.registerTool(
         }
     },
 )
+
+// Graceful shutdown handler
+let isShuttingDown = false
+function gracefulShutdown(reason: string) {
+    if (isShuttingDown) return
+    isShuttingDown = true
+    log.info(`Shutting down: ${reason}`)
+    shutdown()
+    process.exit(0)
+}
+
+// Handle stdin close (primary method - works on all platforms including Windows)
+process.stdin.on("close", () => gracefulShutdown("stdin closed"))
+process.stdin.on("end", () => gracefulShutdown("stdin ended"))
+
+// Handle signals (may not work reliably on Windows)
+process.on("SIGINT", () => gracefulShutdown("SIGINT"))
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"))
+
+// Handle broken pipe (writing to closed stdout)
+process.stdout.on("error", (err) => {
+    if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") {
+        gracefulShutdown("stdout error")
+    }
+})
 
 // Start the MCP server
 async function main() {

@@ -6,7 +6,7 @@
 ## Usage
 
 ```xml
-<mxCell value="label" style="shape=mxgraph.cisco19.rect;prIcon={shape};fillColor=#00bceb;strokeColor=none;" vertex="1" parent="1">
+<mxCell value="label" style="shape=mxgraph.cisco19.rect;prIcon={shape};fillColor=#00bceb;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;" vertex="1" parent="1">
   <mxGeometry x="0" y="0" width="60" height="60" as="geometry" />
 </mxCell>
 ```

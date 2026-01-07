@@ -72,96 +72,70 @@ export default function AboutCN() {
                         <p className="text-xl text-gray-600 font-medium">
                             AI驱动的图表创建工具 - 对话、绘制、可视化
                         </p>
-                        <div className="flex justify-center gap-4 mt-4 text-sm">
-                            <Link
-                                href="/about"
-                                className="text-gray-600 hover:text-blue-600"
-                            >
-                                English
-                            </Link>
-                            <span className="text-gray-400">|</span>
-                            <Link
-                                href="/about/cn"
-                                className="text-blue-600 font-semibold"
-                            >
-                                中文
-                            </Link>
-                            <span className="text-gray-400">|</span>
-                            <Link
-                                href="/about/ja"
-                                className="text-gray-600 hover:text-blue-600"
-                            >
-                                日本語
-                            </Link>
-                        </div>
                     </div>
 
-                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-[1px] shadow-lg">
-                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 opacity-20" />
+                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
                         <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
                             {/* Header */}
                             <div className="mb-4">
                                 <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    模型变更与用量限制{" "}
-                                    <span className="text-sm text-amber-600 font-medium italic font-normal">
-                                        (或者说：我的钱包顶不住了)
-                                    </span>
+                                    由字节跳动豆包提供支持
                                 </h3>
                             </div>
 
                             {/* Story */}
                             <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
                                 <p>
-                                    大家对这个项目的热情太高了——看来大家都真的很喜欢画图！但这也带来了一个幸福的烦恼：我们经常触发出上游
-                                    AI 接口的频率限制
-                                    (TPS/TPM)。一旦超限，系统就会暂停，导致请求失败。
-                                </p>
-                                <p>
-                                    由于使用量过高，我已将模型从 Claude 更换为{" "}
+                                    好消息！感谢{" "}
+                                    <a
+                                        href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-blue-600 hover:underline"
+                                    >
+                                        字节跳动豆包
+                                    </a>
+                                    的慷慨赞助，演示站点现已接入强大的{" "}
                                     <span className="font-semibold text-amber-700">
-                                        minimax-m2
-                                    </span>
-                                    ，以降低成本。
-                                </p>
-                                <p>
-                                    作为一个
+                                        K2-thinking
+                                    </span>{" "}
+                                    模型，图表生成效果更佳！点击链接注册即可领取{" "}
                                     <span className="font-semibold text-amber-700">
-                                        独立开发者
+                                        50万免费Token
                                     </span>
-                                    ，目前的 API
-                                    费用全是我自己在掏腰包（纯属为爱发电）。为了保证服务能细水长流，同时也为了避免我个人陷入财务危机，我还设置了以下临时用量限制：
+                                    ，适用于所有模型！
                                 </p>
                             </div>
 
-                            {/* Limits Cards */}
-                            <div className="grid grid-cols-2 gap-3 mb-5">
-                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
-                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
-                                        Token 用量
-                                    </div>
-                                    <div className="text-lg font-bold text-gray-900">
-                                        {formatNumber(tpmLimit)}
-                                        <span className="text-sm font-normal text-gray-600">
-                                            /分钟
-                                        </span>
-                                    </div>
-                                    <div className="text-lg font-bold text-gray-900">
-                                        {formatNumber(dailyTokenLimit)}
-                                        <span className="text-sm font-normal text-gray-600">
-                                            /天
-                                        </span>
-                                    </div>
+                            {/* Usage Limits */}
+                            <p className="text-sm text-gray-600 mb-3">
+                                当前使用限制：
+                            </p>
+                            <div className="grid grid-cols-3 gap-3 mb-5">
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(dailyRequestLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        请求/天
+                                    </p>
                                 </div>
-                                <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-center">
-                                    <div className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-1">
-                                        每日请求数
-                                    </div>
-                                    <div className="text-2xl font-bold text-gray-900">
-                                        {dailyRequestLimit}
-                                    </div>
-                                    <div className="text-sm text-gray-600">
-                                        次
-                                    </div>
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(dailyTokenLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Token/天
+                                    </p>
+                                </div>
+                                <div className="text-center p-3 bg-white/60 rounded-lg">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {formatNumber(tpmLimit)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Token/分钟
+                                    </p>
                                 </div>
                             </div>
 
@@ -171,47 +145,18 @@ export default function AboutCN() {
                             </div>
 
                             {/* Bring Your Own Key */}
-                            <div className="text-center mb-5">
+                            <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">
                                     使用自己的 API Key
                                 </h4>
                                 <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
-                                    您可以使用自己的 API Key
-                                    来绕过这些限制。点击聊天面板中的设置图标即可配置您的
-                                    Provider 和 API Key。
+                                    您也可以使用自己的 API
+                                    Key，支持多种服务商。点击聊天面板中的设置图标即可配置。
                                 </p>
                                 <p className="text-xs text-gray-500 max-w-md mx-auto">
                                     您的 Key
                                     仅保存在浏览器本地，不会被存储在服务器上。
                                 </p>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="flex items-center gap-3 mb-5">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
-                            </div>
-
-                            {/* Sponsorship CTA */}
-                            <div className="text-center">
-                                <h4 className="text-base font-bold text-gray-900 mb-2">
-                                    寻求赞助 (求大佬捞一把)
-                                </h4>
-                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
-                                    要想彻底解除这些限制，扩容后端是唯一的办法。我正在积极寻求
-                                    AI API 提供商或云平台的赞助。
-                                </p>
-                                <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
-                                    作为回报（无论是额度支持还是资金支持），我将在
-                                    GitHub 仓库和 Live Demo
-                                    网站的显眼位置展示贵公司的 Logo
-                                    作为平台赞助商。
-                                </p>
-                                <a
-                                    href="mailto:me@jiang.jp"
-                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
-                                >
-                                    联系我
-                                </a>
                             </div>
                         </div>
                     </div>
@@ -377,6 +322,16 @@ export default function AboutCN() {
                         多提供商支持
                     </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                        <li>
+                            <a
+                                href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                            >
+                                字节跳动豆包
+                            </a>
+                        </li>
                         <li>AWS Bedrock（默认）</li>
                         <li>
                             OpenAI / OpenAI兼容API（通过{" "}
@@ -388,6 +343,7 @@ export default function AboutCN() {
                         <li>Ollama</li>
                         <li>OpenRouter</li>
                         <li>DeepSeek</li>
+                        <li>SiliconFlow</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         注意：<code>claude-sonnet-4-5</code>{" "}
@@ -395,18 +351,21 @@ export default function AboutCN() {
                     </p>
 
                     {/* Support */}
-                    <div className="flex items-center gap-4 mt-10 mb-4">
-                        <h2 className="text-2xl font-semibold text-gray-900">
-                            支持与联系
-                        </h2>
-                        <iframe
-                            src="https://github.com/sponsors/DayuanJiang/button"
-                            title="Sponsor DayuanJiang"
-                            height="32"
-                            width="114"
-                            style={{ border: 0, borderRadius: 6 }}
-                        />
-                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        支持与联系
+                    </h2>
+                    <p className="text-gray-700 mb-4 font-semibold">
+                        特别感谢{" "}
+                        <a
+                            href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            字节跳动豆包
+                        </a>{" "}
+                        为本站提供 API Token 支持！
+                    </p>
                     <p className="text-gray-700">
                         如果您觉得这个项目有用，请考虑{" "}
                         <a

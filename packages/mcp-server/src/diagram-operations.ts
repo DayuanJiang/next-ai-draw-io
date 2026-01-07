@@ -4,7 +4,7 @@
  */
 
 export interface DiagramOperation {
-    type: "update" | "add" | "delete"
+    operation: "update" | "add" | "delete"
     cell_id: string
     new_xml?: string
 }
@@ -77,7 +77,7 @@ export function applyDiagramOperations(
 
     // Process each operation
     for (const op of operations) {
-        if (op.type === "update") {
+        if (op.operation === "update") {
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
                 errors.push({
@@ -129,7 +129,7 @@ export function applyDiagramOperations(
 
             // Update the map with the new element
             cellMap.set(op.cell_id, importedNode)
-        } else if (op.type === "add") {
+        } else if (op.operation === "add") {
             // Check if ID already exists
             if (cellMap.has(op.cell_id)) {
                 errors.push({
@@ -181,33 +181,78 @@ export function applyDiagramOperations(
 
             // Add to map
             cellMap.set(op.cell_id, importedNode)
-        } else if (op.type === "delete") {
-            const existingCell = cellMap.get(op.cell_id)
-            if (!existingCell) {
+        } else if (op.operation === "delete") {
+            // Protect root cells from deletion
+            if (op.cell_id === "0" || op.cell_id === "1") {
                 errors.push({
                     type: "delete",
                     cellId: op.cell_id,
-                    message: `Cell with id="${op.cell_id}" not found`,
+                    message: `Cannot delete root cell "${op.cell_id}"`,
                 })
                 continue
             }
 
-            // Check for edges referencing this cell (warning only, still delete)
-            const referencingEdges = root.querySelectorAll(
-                `mxCell[source="${op.cell_id}"], mxCell[target="${op.cell_id}"]`,
-            )
-            if (referencingEdges.length > 0) {
-                const edgeIds = Array.from(referencingEdges)
-                    .map((e) => e.getAttribute("id"))
-                    .join(", ")
-                console.warn(
-                    `[applyDiagramOperations] Deleting cell "${op.cell_id}" which is referenced by edges: ${edgeIds}`,
+            const existingCell = cellMap.get(op.cell_id)
+            if (!existingCell) {
+                // Cell not found - might have been cascade-deleted by a previous operation
+                // Skip silently instead of erroring (AI may redundantly list children/edges)
+                continue
+            }
+
+            // Cascade delete: collect all cells to delete (children + edges + self)
+            const cellsToDelete = new Set<string>()
+
+            // Recursive function to find all descendants
+            const collectDescendants = (cellId: string) => {
+                if (cellsToDelete.has(cellId)) return
+                cellsToDelete.add(cellId)
+
+                // Find children (cells where parent === cellId)
+                const children = root.querySelectorAll(
+                    `mxCell[parent="${cellId}"]`,
+                )
+                children.forEach((child) => {
+                    const childId = child.getAttribute("id")
+                    if (childId && childId !== "0" && childId !== "1") {
+                        collectDescendants(childId)
+                    }
+                })
+            }
+
+            // Collect the target cell and all its descendants
+            collectDescendants(op.cell_id)
+
+            // Find edges referencing any of the cells to be deleted
+            // Also recursively collect children of those edges (e.g., edge labels)
+            for (const cellId of cellsToDelete) {
+                const referencingEdges = root.querySelectorAll(
+                    `mxCell[source="${cellId}"], mxCell[target="${cellId}"]`,
+                )
+                referencingEdges.forEach((edge) => {
+                    const edgeId = edge.getAttribute("id")
+                    // Protect root cells from being added via edge references
+                    if (edgeId && edgeId !== "0" && edgeId !== "1") {
+                        // Recurse to collect edge's children (like labels)
+                        collectDescendants(edgeId)
+                    }
+                })
+            }
+
+            // Log what will be deleted
+            if (cellsToDelete.size > 1) {
+                console.log(
+                    `[applyDiagramOperations] Cascade delete "${op.cell_id}" → deleting ${cellsToDelete.size} cells: ${Array.from(cellsToDelete).join(", ")}`,
                 )
             }
 
-            // Remove the node
-            existingCell.parentNode?.removeChild(existingCell)
-            cellMap.delete(op.cell_id)
+            // Delete all collected cells
+            for (const cellId of cellsToDelete) {
+                const cell = cellMap.get(cellId)
+                if (cell) {
+                    cell.parentNode?.removeChild(cell)
+                    cellMap.delete(cellId)
+                }
+            }
         }
     }
 
