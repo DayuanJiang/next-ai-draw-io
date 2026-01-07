@@ -72,6 +72,7 @@
         "jsonrepair": "^3.13.1",
         "lucide-react": "^0.562.0",
         "motion": "^12.23.25",
+        "nanoid": "^3.3.11",
         "negotiator": "^1.0.0",
         "next": "^16.0.7",
         "ollama-ai-provider-v2": "^2.0.0",
