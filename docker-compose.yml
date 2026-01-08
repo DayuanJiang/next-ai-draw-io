@@ -11,7 +11,7 @@ services:
         # - NEXT_PUBLIC_BASE_PATH=/nextaidrawio
     ports: ["3000:3000"]
     env_file: .env
-    environment:
-      # For subdirectory deployment, uncomment and set your path:
-      # NEXT_PUBLIC_BASE_PATH: /nextaidrawio
+    # environment:
+    #   # For subdirectory deployment, uncomment and set your path:
+    #   NEXT_PUBLIC_BASE_PATH: /nextaidrawio
     depends_on: [drawio]

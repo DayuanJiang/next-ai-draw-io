@@ -6,7 +6,6 @@ import {
     Image as ImageIcon,
     Loader2,
     Send,
-    Trash2,
 } from "lucide-react"
 import type React from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -15,16 +14,10 @@ import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ErrorToast } from "@/components/error-toast"
 import { HistoryDialog } from "@/components/history-dialog"
 import { ModelSelector } from "@/components/model-selector"
-import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SaveDialog } from "@/components/save-dialog"
+
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
@@ -145,23 +138,20 @@ interface ChatInputProps {
     status: "submitted" | "streaming" | "ready" | "error"
     onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
-    onClearChat: () => void
     files?: File[]
     onFileChange?: (files: File[]) => void
     pdfData?: Map<
         File,
         { text: string; charCount: number; isExtracting: boolean }
     >
-    showHistory?: boolean
-    onToggleHistory?: (show: boolean) => void
+
     sessionId?: string
     error?: Error | null
-    minimalStyle?: boolean
-    onMinimalStyleChange?: (value: boolean) => void
     // Model selector props
     models?: FlattenedModel[]
     selectedModelId?: string
     onModelSelect?: (modelId: string | undefined) => void
+    showUnvalidatedModels?: boolean
     onConfigureModels?: () => void
 }
 
@@ -170,19 +160,15 @@ export function ChatInput({
     status,
     onSubmit,
     onChange,
-    onClearChat,
     files = [],
     onFileChange = () => {},
     pdfData = new Map(),
-    showHistory = false,
-    onToggleHistory = () => {},
     sessionId,
     error = null,
-    minimalStyle = false,
-    onMinimalStyleChange = () => {},
     models = [],
     selectedModelId,
     onModelSelect = () => {},
+    showUnvalidatedModels = false,
     onConfigureModels = () => {},
 }: ChatInputProps) {
     const dict = useDictionary()
@@ -192,10 +178,11 @@ export function ChatInput({
         showSaveDialog,
         setShowSaveDialog,
     } = useDiagram()
+
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
-    const [showClearDialog, setShowClearDialog] = useState(false)
+    const [showHistory, setShowHistory] = useState(false)
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -325,11 +312,6 @@ export function ChatInput({
         }
     }
 
-    const handleClear = () => {
-        onClearChat()
-        setShowClearDialog(false)
-    }
-
     return (
         <form
             onSubmit={onSubmit}
@@ -365,65 +347,13 @@ export function ChatInput({
                     className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
                 />
 
-                <div className="flex items-center justify-between px-3 py-2 border-t border-border/50">
+                <div className="flex items-center justify-end gap-1 px-3 py-2 border-t border-border/50">
                     <div className="flex items-center gap-1 overflow-x-hidden">
                         <ButtonWithTooltip
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => setShowClearDialog(true)}
-                            tooltipContent={dict.chat.clearConversation}
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </ButtonWithTooltip>
-
-                        <ResetWarningModal
-                            open={showClearDialog}
-                            onOpenChange={setShowClearDialog}
-                            onClear={handleClear}
-                        />
-
-                        <HistoryDialog
-                            showHistory={showHistory}
-                            onToggleHistory={onToggleHistory}
-                        />
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5">
-                                    <Switch
-                                        id="minimal-style"
-                                        checked={minimalStyle}
-                                        onCheckedChange={onMinimalStyleChange}
-                                        className="scale-75"
-                                    />
-                                    <label
-                                        htmlFor="minimal-style"
-                                        className={`text-xs cursor-pointer select-none ${
-                                            minimalStyle
-                                                ? "text-primary font-medium"
-                                                : "text-muted-foreground"
-                                        }`}
-                                    >
-                                        {minimalStyle
-                                            ? dict.chat.minimalStyle
-                                            : dict.chat.styledMode}
-                                    </label>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                                {dict.chat.minimalTooltip}
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
-
-                    <div className="flex items-center gap-1 overflow-hidden justify-end">
-                        <ButtonWithTooltip
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onToggleHistory(true)}
+                            onClick={() => setShowHistory(true)}
                             disabled={isDisabled || diagramHistory.length === 0}
                             tooltipContent={dict.chat.diagramHistory}
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
@@ -442,17 +372,6 @@ export function ChatInput({
                         >
                             <Download className="h-4 w-4" />
                         </ButtonWithTooltip>
-
-                        <SaveDialog
-                            open={showSaveDialog}
-                            onOpenChange={setShowSaveDialog}
-                            onSave={(filename, format) =>
-                                saveDiagramToFile(filename, format, sessionId)
-                            }
-                            defaultFilename={`diagram-${new Date()
-                                .toISOString()
-                                .slice(0, 10)}`}
-                        />
 
                         <ButtonWithTooltip
                             type="button"
@@ -475,38 +394,55 @@ export function ChatInput({
                             multiple
                             disabled={isDisabled}
                         />
-
-                        <ModelSelector
-                            models={models}
-                            selectedModelId={selectedModelId}
-                            onSelect={onModelSelect}
-                            onConfigure={onConfigureModels}
-                            disabled={isDisabled}
-                        />
-
-                        <div className="w-px h-5 bg-border mx-1" />
-
-                        <Button
-                            type="submit"
-                            disabled={isDisabled || !input.trim()}
-                            size="sm"
-                            className="h-8 px-4 rounded-xl font-medium shadow-sm"
-                            aria-label={
-                                isDisabled ? dict.chat.sending : dict.chat.send
-                            }
-                        >
-                            {isDisabled ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <>
-                                    <Send className="h-4 w-4 mr-1.5" />
-                                    {dict.chat.send}
-                                </>
-                            )}
-                        </Button>
                     </div>
+                    <ModelSelector
+                        models={models}
+                        selectedModelId={selectedModelId}
+                        onSelect={onModelSelect}
+                        onConfigure={onConfigureModels}
+                        disabled={isDisabled}
+                        showUnvalidatedModels={showUnvalidatedModels}
+                    />
+                    <div className="w-px h-5 bg-border mx-1" />
+                    <Button
+                        type="submit"
+                        disabled={isDisabled || !input.trim()}
+                        size="sm"
+                        className="h-8 px-4 rounded-xl font-medium shadow-sm"
+                        aria-label={
+                            isDisabled ? dict.chat.sending : dict.chat.send
+                        }
+                    >
+                        {isDisabled ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <>
+                                <Send className="h-4 w-4 mr-1.5" />
+                                {dict.chat.send}
+                            </>
+                        )}
+                    </Button>
                 </div>
             </div>
+            <HistoryDialog
+                showHistory={showHistory}
+                onToggleHistory={setShowHistory}
+            />
+            <SaveDialog
+                open={showSaveDialog}
+                onOpenChange={setShowSaveDialog}
+                onSave={(filename, format) =>
+                    saveDiagramToFile(
+                        filename,
+                        format,
+                        sessionId,
+                        dict.save.savedSuccessfully,
+                    )
+                }
+                defaultFilename={`diagram-${new Date()
+                    .toISOString()
+                    .slice(0, 10)}`}
+            />
         </form>
     )
 }

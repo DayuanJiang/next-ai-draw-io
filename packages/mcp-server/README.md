@@ -64,6 +64,24 @@ Add to Cursor MCP config (`~/.cursor/mcp.json`):
 }
 ```
 
+### Cline (VS Code Extension)
+
+1. Click the **MCP Servers** icon in Cline's top menu bar
+2. Select the **Configure** tab
+3. Click **Configure MCP Servers** to edit `cline_mcp_settings.json`
+4. Add the drawio server:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"]
+    }
+  }
+}
+```
+
 ### Claude Code CLI
 
 ```bash
@@ -90,14 +108,14 @@ Use the standard MCP configuration with:
 - **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
 - **Edit Support**: Modify existing diagrams with natural language instructions
 - **Export**: Save diagrams as `.drawio` files
-- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from embed.diagrams.net)
+- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from `embed.diagrams.net` by default, configurable via `DRAWIO_BASE_URL`)
 
 ## Available Tools
 
 | Tool | Description |
 |------|-------------|
 | `start_session` | Opens browser with real-time diagram preview |
-| `display_diagram` | Create a new diagram from XML |
+| `create_new_diagram` | Create a new diagram from XML (requires `xml` argument) |
 | `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells) |
 | `get_diagram` | Get the current diagram XML |
 | `export_diagram` | Save diagram to a `.drawio` file |
@@ -130,6 +148,33 @@ Use the standard MCP configuration with:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `6002` | Port for the embedded HTTP server |
+| `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for the draw.io embed. Set this to use a self-hosted draw.io instance for private deployments. |
+
+### Private Deployment (Self-hosted draw.io)
+
+For security-sensitive environments that require private deployment of draw.io:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["@next-ai-drawio/mcp-server@latest"],
+      "env": { 
+        "DRAWIO_BASE_URL": "https://drawio.your-company.com"
+      }
+    }
+  }
+}
+```
+
+You can deploy your own draw.io instance using the official Docker image:
+
+```bash
+docker run -d -p 8080:8080 jgraph/drawio
+```
+
+Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL).
 
 ## Troubleshooting
 

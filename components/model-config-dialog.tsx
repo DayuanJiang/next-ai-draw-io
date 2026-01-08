@@ -21,7 +21,6 @@ import {
     Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -50,8 +49,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
+import { formatMessage } from "@/lib/i18n/utils"
 import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
@@ -74,7 +75,10 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     openrouter: "openrouter",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
+    sglang: "openai", // SGLang is OpenAI-compatible
     gateway: "vercel",
+    edgeone: "tencent-cloud",
+    doubao: "bytedance",
 }
 
 // Provider logo component
@@ -85,9 +89,15 @@ function ProviderLogo({
     provider: ProviderName
     className?: string
 }) {
-    // Use Lucide icon for bedrock since models.dev doesn't have a good AWS icon
+    // Use Lucide icons for providers without models.dev logos
     if (provider === "bedrock") {
         return <Cloud className={cn("size-4", className)} />
+    }
+    if (provider === "sglang") {
+        return <Server className={cn("size-4", className)} />
+    }
+    if (provider === "doubao") {
+        return <Sparkles className={cn("size-4", className)} />
     }
 
     const logoName = PROVIDER_LOGO_MAP[provider] || provider
@@ -102,39 +112,40 @@ function ProviderLogo({
     )
 }
 
-// Reusable validation button component
-function ValidationButton({
-    status,
-    onClick,
-    disabled,
+// Configuration section with title and optional action
+function ConfigSection({
+    title,
+    icon: Icon,
+    action,
+    children,
 }: {
-    status: ValidationStatus
-    onClick: () => void
-    disabled: boolean
+    title: string
+    icon: React.ComponentType<{ className?: string }>
+    action?: React.ReactNode
+    children: React.ReactNode
 }) {
     return (
-        <Button
-            variant={status === "success" ? "outline" : "default"}
-            size="sm"
-            onClick={onClick}
-            disabled={disabled}
-            className={cn(
-                "h-9 px-4 min-w-[80px]",
-                status === "success" &&
-                    "text-emerald-600 border-emerald-200 dark:border-emerald-800",
-            )}
-        >
-            {status === "validating" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-            ) : status === "success" ? (
-                <>
-                    <Check className="h-4 w-4 mr-1.5" />
-                    Verified
-                </>
-            ) : (
-                "Test"
-            )}
-        </Button>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {title}
+                    </span>
+                </div>
+                {action}
+            </div>
+            {children}
+        </div>
+    )
+}
+
+// Card wrapper with subtle depth
+function ConfigCard({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="rounded-2xl border border-border-subtle bg-surface-2/50 p-5 space-y-5">
+            {children}
+        </div>
     )
 }
 
@@ -151,7 +162,6 @@ export function ModelConfigDialog({
     const [validationStatus, setValidationStatus] =
         useState<ValidationStatus>("idle")
     const [validationError, setValidationError] = useState<string>("")
-    const [scrollState, setScrollState] = useState({ top: false, bottom: true })
     const [customModelInput, setCustomModelInput] = useState("")
     const scrollRef = useRef<HTMLDivElement>(null)
     const validationResetTimeoutRef = useRef<ReturnType<
@@ -182,26 +192,6 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
-
-    // Track scroll position for gradient shadows
-    useEffect(() => {
-        const scrollEl = scrollRef.current?.querySelector(
-            "[data-radix-scroll-area-viewport]",
-        ) as HTMLElement | null
-        if (!scrollEl) return
-
-        const handleScroll = () => {
-            const { scrollTop, scrollHeight, clientHeight } = scrollEl
-            setScrollState({
-                top: scrollTop > 10,
-                bottom: scrollTop < scrollHeight - clientHeight - 10,
-            })
-        }
-
-        handleScroll() // Initial check
-        scrollEl.addEventListener("scroll", handleScroll)
-        return () => scrollEl.removeEventListener("scroll", handleScroll)
-    }, [selectedProvider])
 
     // Cleanup validation reset timeout on unmount
     useEffect(() => {
@@ -287,6 +277,7 @@ export function ModelConfigDialog({
 
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
+        const isEdgeOne = selectedProvider.provider === "edgeone"
         if (isBedrock) {
             if (
                 !selectedProvider.awsAccessKeyId ||
@@ -295,7 +286,7 @@ export function ModelConfigDialog({
             ) {
                 return
             }
-        } else if (!selectedProvider.apiKey) {
+        } else if (!isEdgeOne && !selectedProvider.apiKey) {
             return
         }
 
@@ -318,13 +309,18 @@ export function ModelConfigDialog({
             setValidatingModelIndex(i)
 
             try {
+                // For EdgeOne, construct baseUrl from current origin
+                const baseUrl = isEdgeOne
+                    ? `${window.location.origin}/api/edgeai`
+                    : selectedProvider.baseUrl
+
                 const response = await fetch("/api/validate-model", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         provider: selectedProvider.provider,
                         apiKey: selectedProvider.apiKey,
-                        baseUrl: selectedProvider.baseUrl,
+                        baseUrl,
                         modelId: model.modelId,
                         // AWS Bedrock credentials
                         awsAccessKeyId: selectedProvider.awsAccessKeyId,
@@ -332,7 +328,6 @@ export function ModelConfigDialog({
                         awsRegion: selectedProvider.awsRegion,
                     }),
                 })
-
                 const data = await response.json()
 
                 if (data.valid) {
@@ -387,104 +382,116 @@ export function ModelConfigDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl h-[75vh] max-h-[700px] overflow-hidden flex flex-col gap-0 p-0">
-                <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-primary/5 via-primary/3 to-transparent">
-                    <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold">
-                        <div className="p-1.5 rounded-lg bg-primary/10">
+            <DialogContent className="sm:max-w-4xl h-[80vh] max-h-[800px] overflow-hidden flex flex-col gap-0 p-0">
+                {/* Header */}
+                <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+                    <DialogTitle className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-surface-2">
                             <Server className="h-5 w-5 text-primary" />
                         </div>
                         {dict.modelConfig?.title || "AI Model Configuration"}
                     </DialogTitle>
-                    <DialogDescription className="text-sm">
+                    <DialogDescription className="mt-1">
                         {dict.modelConfig?.description ||
                             "Configure multiple AI providers and models for your workspace"}
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex flex-1 min-h-0 overflow-hidden">
+                <div className="flex flex-1 min-h-0 overflow-hidden border-t border-border-subtle">
                     {/* Provider List (Left Sidebar) */}
-                    <div className="w-56 flex-shrink-0 flex flex-col border-r bg-muted/20">
-                        <div className="px-4 py-3 border-b">
+                    <div className="w-60 shrink-0 flex flex-col bg-surface-1/50 border-r border-border-subtle">
+                        <div className="px-4 py-3">
                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                Providers
+                                {dict.modelConfig.providers}
                             </span>
                         </div>
 
-                        <ScrollArea className="flex-1">
-                            <div className="p-2">
+                        <ScrollArea className="flex-1 px-2">
+                            <div className="space-y-1 pb-2">
                                 {config.providers.length === 0 ? (
                                     <div className="px-3 py-8 text-center">
-                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-muted mb-3">
+                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface-2 mb-3">
                                             <Plus className="h-5 w-5 text-muted-foreground" />
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Add a provider to get started
+                                            {dict.modelConfig.addProviderHint}
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col gap-1">
-                                        {config.providers.map((provider) => (
-                                            <button
-                                                key={provider.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setSelectedProviderId(
-                                                        provider.id,
-                                                    )
-                                                    setValidationStatus(
-                                                        provider.validated
-                                                            ? "success"
-                                                            : "idle",
-                                                    )
-                                                    setShowApiKey(false)
-                                                }}
+                                    config.providers.map((provider) => (
+                                        <button
+                                            key={provider.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedProviderId(
+                                                    provider.id,
+                                                )
+                                                setValidationStatus("idle")
+                                                setShowApiKey(false)
+                                            }}
+                                            className={cn(
+                                                "group flex items-center gap-3 px-3 py-2.5 rounded-xl w-full",
+                                                "text-left text-sm transition-all duration-150",
+                                                "hover:bg-interactive-hover",
+                                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                                selectedProviderId ===
+                                                    provider.id &&
+                                                    "bg-surface-0 shadow-sm ring-1 ring-border-subtle",
+                                            )}
+                                        >
+                                            <div
                                                 className={cn(
-                                                    "group flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                                    "w-8 h-8 rounded-lg flex items-center justify-center",
+                                                    "bg-surface-2 transition-colors duration-150",
                                                     selectedProviderId ===
                                                         provider.id &&
-                                                        "bg-background shadow-sm ring-1 ring-border",
+                                                        "bg-primary/10",
                                                 )}
                                             >
                                                 <ProviderLogo
                                                     provider={provider.provider}
                                                     className="flex-shrink-0"
                                                 />
-                                                <span className="flex-1 truncate font-medium">
-                                                    {getProviderDisplayName(
-                                                        provider,
-                                                    )}
-                                                </span>
-                                                {provider.validated ? (
-                                                    <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10">
-                                                        <Check className="h-3 w-3 text-emerald-500" />
-                                                    </div>
-                                                ) : (
-                                                    <ChevronRight
-                                                        className={cn(
-                                                            "h-4 w-4 text-muted-foreground/50 transition-transform",
-                                                            selectedProviderId ===
-                                                                provider.id &&
-                                                                "translate-x-0.5",
-                                                        )}
-                                                    />
+                                            </div>
+                                            <span className="flex-1 truncate font-medium">
+                                                {getProviderDisplayName(
+                                                    provider,
                                                 )}
-                                            </button>
-                                        ))}
-                                    </div>
+                                            </span>
+                                            {provider.validated ? (
+                                                <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-success-muted">
+                                                    <Check className="h-3 w-3 text-success" />
+                                                </div>
+                                            ) : (
+                                                <ChevronRight
+                                                    className={cn(
+                                                        "h-4 w-4 text-muted-foreground/50 transition-transform duration-150",
+                                                        selectedProviderId ===
+                                                            provider.id &&
+                                                            "translate-x-0.5",
+                                                    )}
+                                                />
+                                            )}
+                                        </button>
+                                    ))
                                 )}
                             </div>
                         </ScrollArea>
 
                         {/* Add Provider */}
-                        <div className="p-2 border-t">
+                        <div className="p-3 border-t border-border-subtle">
                             <Select
                                 onValueChange={(v) =>
                                     handleAddProvider(v as ProviderName)
                                 }
                             >
-                                <SelectTrigger className="h-9 bg-background hover:bg-accent">
+                                <SelectTrigger className="w-full h-9 rounded-xl bg-surface-0 border-border-subtle hover:bg-interactive-hover">
                                     <Plus className="h-4 w-4 mr-2 text-muted-foreground" />
-                                    <SelectValue placeholder="Add Provider" />
+                                    <SelectValue
+                                        placeholder={
+                                            dict.modelConfig.addProvider
+                                        }
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {availableProviders.map((p) => (
@@ -507,174 +514,453 @@ export function ModelConfigDialog({
                     </div>
 
                     {/* Provider Details (Right Panel) */}
-                    <div className="flex-1 min-w-0 overflow-hidden relative">
+                    <div className="flex-1 min-w-0 flex flex-col overflow-auto [&::-webkit-scrollbar]:hidden ">
                         {selectedProvider ? (
-                            <>
-                                {/* Top gradient shadow */}
-                                <div
-                                    className={cn(
-                                        "absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-                                        scrollState.top
-                                            ? "opacity-100"
-                                            : "opacity-0",
-                                    )}
-                                />
-                                {/* Bottom gradient shadow */}
-                                <div
-                                    className={cn(
-                                        "absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent z-10 pointer-events-none transition-opacity duration-200",
-                                        scrollState.bottom
-                                            ? "opacity-100"
-                                            : "opacity-0",
-                                    )}
-                                />
-                                <ScrollArea className="h-full" ref={scrollRef}>
-                                    <div className="p-6 space-y-6">
-                                        {/* Provider Header */}
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted">
-                                                <ProviderLogo
-                                                    provider={
-                                                        selectedProvider.provider
-                                                    }
-                                                    className="h-5 w-5"
-                                                />
+                            <ScrollArea className="flex-1" ref={scrollRef}>
+                                <div className="p-6 space-y-8">
+                                    {/* Provider Header */}
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-surface-2">
+                                            <ProviderLogo
+                                                provider={
+                                                    selectedProvider.provider
+                                                }
+                                                className="h-6 w-6"
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold text-lg tracking-tight">
+                                                {
+                                                    PROVIDER_INFO[
+                                                        selectedProvider
+                                                            .provider
+                                                    ].label
+                                                }
+                                            </h3>
+                                            <p className="text-sm text-muted-foreground">
+                                                {selectedProvider.models
+                                                    .length === 0
+                                                    ? dict.modelConfig
+                                                          .noModelsConfigured
+                                                    : formatMessage(
+                                                          dict.modelConfig
+                                                              .modelsConfiguredCount,
+                                                          {
+                                                              count: selectedProvider
+                                                                  .models
+                                                                  .length,
+                                                          },
+                                                      )}
+                                            </p>
+                                        </div>
+                                        {selectedProvider.validated && (
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-success-muted text-success">
+                                                <Check className="h-3.5 w-3.5 animate-check-pop" />
+                                                <span className="text-xs font-medium">
+                                                    {dict.modelConfig.verified}
+                                                </span>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-semibold text-base">
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                                setDeleteConfirmOpen(true)
+                                            }
+                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-1.5" />
+                                            {dict.modelConfig.deleteProvider}
+                                        </Button>
+                                    </div>
+
+                                    {/* Configuration Section */}
+                                    <ConfigSection
+                                        title={dict.modelConfig.configuration}
+                                        icon={Settings2}
+                                    >
+                                        <ConfigCard>
+                                            {/* Display Name */}
+                                            <div className="space-y-2">
+                                                <Label
+                                                    htmlFor="provider-name"
+                                                    className="text-xs font-medium flex items-center gap-1.5"
+                                                >
+                                                    <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                                                     {
+                                                        dict.modelConfig
+                                                            .displayName
+                                                    }
+                                                </Label>
+                                                <Input
+                                                    id="provider-name"
+                                                    value={
+                                                        selectedProvider.name ||
+                                                        ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        handleProviderUpdate(
+                                                            "name",
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder={
                                                         PROVIDER_INFO[
                                                             selectedProvider
                                                                 .provider
                                                         ].label
                                                     }
-                                                </h3>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {selectedProvider.models
-                                                        .length === 0
-                                                        ? "No models configured"
-                                                        : `${selectedProvider.models.length} model${selectedProvider.models.length > 1 ? "s" : ""} configured`}
-                                                </p>
-                                            </div>
-                                            {selectedProvider.validated && (
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                                                    <Check className="h-3.5 w-3.5" />
-                                                    <span className="text-xs font-medium">
-                                                        Verified
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Configuration Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                                <Settings2 className="h-4 w-4" />
-                                                <span>Configuration</span>
+                                                    className="h-9"
+                                                />
                                             </div>
 
-                                            <div className="rounded-xl border bg-card p-4 space-y-4">
-                                                {/* Display Name */}
-                                                <div className="space-y-2">
-                                                    <Label
-                                                        htmlFor="provider-name"
-                                                        className="text-xs font-medium flex items-center gap-1.5"
-                                                    >
-                                                        <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        Display Name
-                                                    </Label>
-                                                    <Input
-                                                        id="provider-name"
-                                                        value={
-                                                            selectedProvider.name ||
-                                                            ""
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleProviderUpdate(
-                                                                "name",
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        placeholder={
-                                                            PROVIDER_INFO[
-                                                                selectedProvider
-                                                                    .provider
-                                                            ].label
-                                                        }
-                                                        className="h-9"
-                                                    />
-                                                </div>
+                                            {/* Credentials - different for Bedrock vs other providers */}
+                                            {selectedProvider.provider ===
+                                            "bedrock" ? (
+                                                <>
+                                                    {/* AWS Access Key ID */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="aws-access-key-id"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {
+                                                                dict.modelConfig
+                                                                    .awsAccessKeyId
+                                                            }
+                                                        </Label>
+                                                        <Input
+                                                            id="aws-access-key-id"
+                                                            type={
+                                                                showApiKey
+                                                                    ? "text"
+                                                                    : "password"
+                                                            }
+                                                            value={
+                                                                selectedProvider.awsAccessKeyId ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderUpdate(
+                                                                    "awsAccessKeyId",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="AKIA..."
+                                                            className="h-9 font-mono text-xs"
+                                                        />
+                                                    </div>
 
-                                                {/* Credentials - different for Bedrock vs other providers */}
-                                                {selectedProvider.provider ===
-                                                "bedrock" ? (
-                                                    <>
-                                                        {/* AWS Access Key ID */}
-                                                        <div className="space-y-2">
-                                                            <Label
-                                                                htmlFor="aws-access-key-id"
-                                                                className="text-xs font-medium flex items-center gap-1.5"
-                                                            >
-                                                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                AWS Access Key
-                                                                ID
-                                                            </Label>
+                                                    {/* AWS Secret Access Key */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="aws-secret-access-key"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {
+                                                                dict.modelConfig
+                                                                    .awsSecretAccessKey
+                                                            }
+                                                        </Label>
+                                                        <div className="relative">
                                                             <Input
-                                                                id="aws-access-key-id"
+                                                                id="aws-secret-access-key"
                                                                 type={
                                                                     showApiKey
                                                                         ? "text"
                                                                         : "password"
                                                                 }
                                                                 value={
-                                                                    selectedProvider.awsAccessKeyId ||
+                                                                    selectedProvider.awsSecretAccessKey ||
                                                                     ""
                                                                 }
                                                                 onChange={(e) =>
                                                                     handleProviderUpdate(
-                                                                        "awsAccessKeyId",
+                                                                        "awsSecretAccessKey",
                                                                         e.target
                                                                             .value,
                                                                     )
                                                                 }
-                                                                placeholder="AKIA..."
-                                                                className="h-9 font-mono text-xs"
+                                                                placeholder={
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .enterSecretKey
+                                                                }
+                                                                className="h-9 pr-10 font-mono text-xs"
                                                             />
-                                                        </div>
-
-                                                        {/* AWS Secret Access Key */}
-                                                        <div className="space-y-2">
-                                                            <Label
-                                                                htmlFor="aws-secret-access-key"
-                                                                className="text-xs font-medium flex items-center gap-1.5"
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setShowApiKey(
+                                                                        !showApiKey,
+                                                                    )
+                                                                }
+                                                                aria-label={
+                                                                    showApiKey
+                                                                        ? "Hide secret access key"
+                                                                        : "Show secret access key"
+                                                                }
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                                                             >
-                                                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                AWS Secret
-                                                                Access Key
-                                                            </Label>
-                                                            <div className="relative">
+                                                                {showApiKey ? (
+                                                                    <EyeOff className="h-4 w-4" />
+                                                                ) : (
+                                                                    <Eye className="h-4 w-4" />
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* AWS Region */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="aws-region"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {
+                                                                dict.modelConfig
+                                                                    .awsRegion
+                                                            }
+                                                        </Label>
+                                                        <Select
+                                                            value={
+                                                                selectedProvider.awsRegion ||
+                                                                ""
+                                                            }
+                                                            onValueChange={(
+                                                                v,
+                                                            ) =>
+                                                                handleProviderUpdate(
+                                                                    "awsRegion",
+                                                                    v,
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="h-9 font-mono text-xs hover:bg-accent">
+                                                                <SelectValue
+                                                                    placeholder={
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .selectRegion
+                                                                    }
+                                                                />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="max-h-64">
+                                                                <SelectItem value="us-east-1">
+                                                                    us-east-1
+                                                                    (N.
+                                                                    Virginia)
+                                                                </SelectItem>
+                                                                <SelectItem value="us-east-2">
+                                                                    us-east-2
+                                                                    (Ohio)
+                                                                </SelectItem>
+                                                                <SelectItem value="us-west-2">
+                                                                    us-west-2
+                                                                    (Oregon)
+                                                                </SelectItem>
+                                                                <SelectItem value="eu-west-1">
+                                                                    eu-west-1
+                                                                    (Ireland)
+                                                                </SelectItem>
+                                                                <SelectItem value="eu-west-2">
+                                                                    eu-west-2
+                                                                    (London)
+                                                                </SelectItem>
+                                                                <SelectItem value="eu-west-3">
+                                                                    eu-west-3
+                                                                    (Paris)
+                                                                </SelectItem>
+                                                                <SelectItem value="eu-central-1">
+                                                                    eu-central-1
+                                                                    (Frankfurt)
+                                                                </SelectItem>
+                                                                <SelectItem value="ap-south-1">
+                                                                    ap-south-1
+                                                                    (Mumbai)
+                                                                </SelectItem>
+                                                                <SelectItem value="ap-northeast-1">
+                                                                    ap-northeast-1
+                                                                    (Tokyo)
+                                                                </SelectItem>
+                                                                <SelectItem value="ap-northeast-2">
+                                                                    ap-northeast-2
+                                                                    (Seoul)
+                                                                </SelectItem>
+                                                                <SelectItem value="ap-southeast-1">
+                                                                    ap-southeast-1
+                                                                    (Singapore)
+                                                                </SelectItem>
+                                                                <SelectItem value="ap-southeast-2">
+                                                                    ap-southeast-2
+                                                                    (Sydney)
+                                                                </SelectItem>
+                                                                <SelectItem value="sa-east-1">
+                                                                    sa-east-1
+                                                                    (São Paulo)
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+
+                                                    {/* Test Button for Bedrock */}
+                                                    <div className="flex items-center gap-2">
+                                                        <Button
+                                                            variant={
+                                                                validationStatus ===
+                                                                "success"
+                                                                    ? "outline"
+                                                                    : "default"
+                                                            }
+                                                            size="sm"
+                                                            onClick={
+                                                                handleValidate
+                                                            }
+                                                            disabled={
+                                                                !selectedProvider.awsAccessKeyId ||
+                                                                !selectedProvider.awsSecretAccessKey ||
+                                                                !selectedProvider.awsRegion ||
+                                                                validationStatus ===
+                                                                    "validating"
+                                                            }
+                                                            className={cn(
+                                                                "h-9 px-4",
+                                                                validationStatus ===
+                                                                    "success" &&
+                                                                    "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                            )}
+                                                        >
+                                                            {validationStatus ===
+                                                            "validating" ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : validationStatus ===
+                                                              "success" ? (
+                                                                <>
+                                                                    <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
+                                                                    {
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .verified
+                                                                    }
+                                                                </>
+                                                            ) : (
+                                                                dict.modelConfig
+                                                                    .test
+                                                            )}
+                                                        </Button>
+                                                        {validationStatus ===
+                                                            "error" &&
+                                                            validationError && (
+                                                                <p className="text-xs text-destructive flex items-center gap-1">
+                                                                    <X className="h-3 w-3" />
+                                                                    {
+                                                                        validationError
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                    </div>
+                                                </>
+                                            ) : selectedProvider.provider ===
+                                              "edgeone" ? (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Button
+                                                            variant={
+                                                                validationStatus ===
+                                                                "success"
+                                                                    ? "outline"
+                                                                    : "default"
+                                                            }
+                                                            size="sm"
+                                                            onClick={
+                                                                handleValidate
+                                                            }
+                                                            disabled={
+                                                                validationStatus ===
+                                                                "validating"
+                                                            }
+                                                            className={cn(
+                                                                "h-9 px-4",
+                                                                validationStatus ===
+                                                                    "success" &&
+                                                                    "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                            )}
+                                                        >
+                                                            {validationStatus ===
+                                                            "validating" ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : validationStatus ===
+                                                              "success" ? (
+                                                                <>
+                                                                    <Check className="h-4 w-4 mr-1.5" />
+                                                                    {
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .verified
+                                                                    }
+                                                                </>
+                                                            ) : (
+                                                                dict.modelConfig
+                                                                    .test
+                                                            )}
+                                                        </Button>
+                                                        {validationStatus ===
+                                                            "error" &&
+                                                            validationError && (
+                                                                <p className="text-xs text-destructive flex items-center gap-1">
+                                                                    <X className="h-3 w-3" />
+                                                                    {
+                                                                        validationError
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {/* API Key */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="api-key"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {
+                                                                dict.modelConfig
+                                                                    .apiKey
+                                                            }
+                                                        </Label>
+                                                        <div className="flex gap-2">
+                                                            <div className="relative flex-1">
                                                                 <Input
-                                                                    id="aws-secret-access-key"
+                                                                    id="api-key"
                                                                     type={
                                                                         showApiKey
                                                                             ? "text"
                                                                             : "password"
                                                                     }
                                                                     value={
-                                                                        selectedProvider.awsSecretAccessKey ||
-                                                                        ""
+                                                                        selectedProvider.apiKey
                                                                     }
                                                                     onChange={(
                                                                         e,
                                                                     ) =>
                                                                         handleProviderUpdate(
-                                                                            "awsSecretAccessKey",
+                                                                            "apiKey",
                                                                             e
                                                                                 .target
                                                                                 .value,
                                                                         )
                                                                     }
-                                                                    placeholder="Enter your secret access key"
+                                                                    placeholder={
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .enterApiKey
+                                                                    }
                                                                     className="h-9 pr-10 font-mono text-xs"
                                                                 />
                                                                 <button
@@ -686,8 +972,8 @@ export function ModelConfigDialog({
                                                                     }
                                                                     aria-label={
                                                                         showApiKey
-                                                                            ? "Hide secret access key"
-                                                                            : "Show secret access key"
+                                                                            ? "Hide API key"
+                                                                            : "Show API key"
                                                                     }
                                                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                                                                 >
@@ -698,95 +984,6 @@ export function ModelConfigDialog({
                                                                     )}
                                                                 </button>
                                                             </div>
-                                                        </div>
-
-                                                        {/* AWS Region */}
-                                                        <div className="space-y-2">
-                                                            <Label
-                                                                htmlFor="aws-region"
-                                                                className="text-xs font-medium flex items-center gap-1.5"
-                                                            >
-                                                                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                AWS Region
-                                                            </Label>
-                                                            <Select
-                                                                value={
-                                                                    selectedProvider.awsRegion ||
-                                                                    ""
-                                                                }
-                                                                onValueChange={(
-                                                                    v,
-                                                                ) =>
-                                                                    handleProviderUpdate(
-                                                                        "awsRegion",
-                                                                        v,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <SelectTrigger className="h-9 font-mono text-xs hover:bg-accent">
-                                                                    <SelectValue placeholder="Select region" />
-                                                                </SelectTrigger>
-                                                                <SelectContent className="max-h-64">
-                                                                    <SelectItem value="us-east-1">
-                                                                        us-east-1
-                                                                        (N.
-                                                                        Virginia)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="us-east-2">
-                                                                        us-east-2
-                                                                        (Ohio)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="us-west-2">
-                                                                        us-west-2
-                                                                        (Oregon)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="eu-west-1">
-                                                                        eu-west-1
-                                                                        (Ireland)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="eu-west-2">
-                                                                        eu-west-2
-                                                                        (London)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="eu-west-3">
-                                                                        eu-west-3
-                                                                        (Paris)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="eu-central-1">
-                                                                        eu-central-1
-                                                                        (Frankfurt)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="ap-south-1">
-                                                                        ap-south-1
-                                                                        (Mumbai)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="ap-northeast-1">
-                                                                        ap-northeast-1
-                                                                        (Tokyo)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="ap-northeast-2">
-                                                                        ap-northeast-2
-                                                                        (Seoul)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="ap-southeast-1">
-                                                                        ap-southeast-1
-                                                                        (Singapore)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="ap-southeast-2">
-                                                                        ap-southeast-2
-                                                                        (Sydney)
-                                                                    </SelectItem>
-                                                                    <SelectItem value="sa-east-1">
-                                                                        sa-east-1
-                                                                        (São
-                                                                        Paulo)
-                                                                    </SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-
-                                                        {/* Test Button for Bedrock */}
-                                                        <div className="flex items-center gap-2">
                                                             <Button
                                                                 variant={
                                                                     validationStatus ===
@@ -799,9 +996,7 @@ export function ModelConfigDialog({
                                                                     handleValidate
                                                                 }
                                                                 disabled={
-                                                                    !selectedProvider.awsAccessKeyId ||
-                                                                    !selectedProvider.awsSecretAccessKey ||
-                                                                    !selectedProvider.awsRegion ||
+                                                                    !selectedProvider.apiKey ||
                                                                     validationStatus ===
                                                                         "validating"
                                                                 }
@@ -809,7 +1004,7 @@ export function ModelConfigDialog({
                                                                     "h-9 px-4",
                                                                     validationStatus ===
                                                                         "success" &&
-                                                                        "text-emerald-600 border-emerald-200 dark:border-emerald-800",
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
                                                                 )}
                                                             >
                                                                 {validationStatus ===
@@ -818,238 +1013,110 @@ export function ModelConfigDialog({
                                                                 ) : validationStatus ===
                                                                   "success" ? (
                                                                     <>
-                                                                        <Check className="h-4 w-4 mr-1.5" />
-                                                                        Verified
+                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .verified
+                                                                        }
                                                                     </>
                                                                 ) : (
-                                                                    "Test"
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .test
                                                                 )}
                                                             </Button>
-                                                            {validationStatus ===
-                                                                "error" &&
-                                                                validationError && (
-                                                                    <p className="text-xs text-destructive flex items-center gap-1">
-                                                                        <X className="h-3 w-3" />
-                                                                        {
-                                                                            validationError
-                                                                        }
-                                                                    </p>
-                                                                )}
                                                         </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {/* API Key */}
-                                                        <div className="space-y-2">
-                                                            <Label
-                                                                htmlFor="api-key"
-                                                                className="text-xs font-medium flex items-center gap-1.5"
-                                                            >
-                                                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                API Key
-                                                            </Label>
-                                                            <div className="flex gap-2">
-                                                                <div className="relative flex-1">
-                                                                    <Input
-                                                                        id="api-key"
-                                                                        type={
-                                                                            showApiKey
-                                                                                ? "text"
-                                                                                : "password"
-                                                                        }
-                                                                        value={
-                                                                            selectedProvider.apiKey
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleProviderUpdate(
-                                                                                "apiKey",
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            )
-                                                                        }
-                                                                        placeholder="Enter your API key"
-                                                                        className="h-9 pr-10 font-mono text-xs"
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            setShowApiKey(
-                                                                                !showApiKey,
-                                                                            )
-                                                                        }
-                                                                        aria-label={
-                                                                            showApiKey
-                                                                                ? "Hide API key"
-                                                                                : "Show API key"
-                                                                        }
-                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-                                                                    >
-                                                                        {showApiKey ? (
-                                                                            <EyeOff className="h-4 w-4" />
-                                                                        ) : (
-                                                                            <Eye className="h-4 w-4" />
-                                                                        )}
-                                                                    </button>
-                                                                </div>
-                                                                <Button
-                                                                    variant={
-                                                                        validationStatus ===
-                                                                        "success"
-                                                                            ? "outline"
-                                                                            : "default"
+                                                        {validationStatus ===
+                                                            "error" &&
+                                                            validationError && (
+                                                                <p className="text-xs text-destructive flex items-center gap-1">
+                                                                    <X className="h-3 w-3" />
+                                                                    {
+                                                                        validationError
                                                                     }
-                                                                    size="sm"
-                                                                    onClick={
-                                                                        handleValidate
-                                                                    }
-                                                                    disabled={
-                                                                        !selectedProvider.apiKey ||
-                                                                        validationStatus ===
-                                                                            "validating"
-                                                                    }
-                                                                    className={cn(
-                                                                        "h-9 px-4",
-                                                                        validationStatus ===
-                                                                            "success" &&
-                                                                            "text-emerald-600 border-emerald-200 dark:border-emerald-800",
-                                                                    )}
-                                                                >
-                                                                    {validationStatus ===
-                                                                    "validating" ? (
-                                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                                    ) : validationStatus ===
-                                                                      "success" ? (
-                                                                        <>
-                                                                            <Check className="h-4 w-4 mr-1.5" />
-                                                                            Verified
-                                                                        </>
-                                                                    ) : (
-                                                                        "Test"
-                                                                    )}
-                                                                </Button>
-                                                            </div>
-                                                            {validationStatus ===
-                                                                "error" &&
-                                                                validationError && (
-                                                                    <p className="text-xs text-destructive flex items-center gap-1">
-                                                                        <X className="h-3 w-3" />
-                                                                        {
-                                                                            validationError
-                                                                        }
-                                                                    </p>
-                                                                )}
-                                                        </div>
+                                                                </p>
+                                                            )}
+                                                    </div>
 
-                                                        {/* Base URL */}
-                                                        <div className="space-y-2">
-                                                            <Label
-                                                                htmlFor="base-url"
-                                                                className="text-xs font-medium flex items-center gap-1.5"
-                                                            >
-                                                                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                Base URL
-                                                                <span className="text-muted-foreground font-normal">
-                                                                    (optional)
-                                                                </span>
-                                                            </Label>
-                                                            <Input
-                                                                id="base-url"
-                                                                value={
-                                                                    selectedProvider.baseUrl ||
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    handleProviderUpdate(
-                                                                        "baseUrl",
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                }
-                                                                placeholder={
-                                                                    PROVIDER_INFO[
-                                                                        selectedProvider
-                                                                            .provider
-                                                                    ]
-                                                                        .defaultBaseUrl ||
-                                                                    "Custom endpoint URL"
-                                                                }
-                                                                className="h-9 font-mono text-xs"
-                                                            />
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Models Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                                    <Sparkles className="h-4 w-4" />
-                                                    <span>Models</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="relative">
-                                                        <Input
-                                                            placeholder="Custom model ID..."
-                                                            value={
-                                                                customModelInput
+                                                    {/* Base URL */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="base-url"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {
+                                                                dict.modelConfig
+                                                                    .baseUrl
                                                             }
-                                                            onChange={(e) => {
-                                                                setCustomModelInput(
+                                                            <span className="text-muted-foreground font-normal">
+                                                                {
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .optional
+                                                                }
+                                                            </span>
+                                                        </Label>
+                                                        <Input
+                                                            id="base-url"
+                                                            value={
+                                                                selectedProvider.baseUrl ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderUpdate(
+                                                                    "baseUrl",
                                                                     e.target
                                                                         .value,
                                                                 )
-                                                                // Clear duplicate error when typing
-                                                                if (
-                                                                    duplicateError
-                                                                ) {
-                                                                    setDuplicateError(
-                                                                        "",
-                                                                    )
-                                                                }
-                                                            }}
-                                                            onKeyDown={(e) => {
-                                                                if (
-                                                                    e.key ===
-                                                                        "Enter" &&
-                                                                    customModelInput.trim()
-                                                                ) {
-                                                                    const success =
-                                                                        handleAddModel(
-                                                                            customModelInput.trim(),
-                                                                        )
-                                                                    if (
-                                                                        success
-                                                                    ) {
-                                                                        setCustomModelInput(
-                                                                            "",
-                                                                        )
-                                                                    }
-                                                                }
-                                                            }}
-                                                            className={cn(
-                                                                "h-8 w-48 font-mono text-xs",
-                                                                duplicateError &&
-                                                                    "border-destructive focus-visible:ring-destructive",
-                                                            )}
+                                                            }
+                                                            placeholder={
+                                                                PROVIDER_INFO[
+                                                                    selectedProvider
+                                                                        .provider
+                                                                ]
+                                                                    .defaultBaseUrl ||
+                                                                dict.modelConfig
+                                                                    .customEndpoint
+                                                            }
+                                                            className="h-9 rounded-xl font-mono text-xs"
                                                         />
-                                                        {/* Show duplicate error for custom model input */}
-                                                        {duplicateError && (
-                                                            <p className="absolute top-full left-0 mt-1 text-[11px] text-destructive">
-                                                                {duplicateError}
-                                                            </p>
-                                                        )}
                                                     </div>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8"
-                                                        onClick={() => {
+                                                </>
+                                            )}
+                                        </ConfigCard>
+                                    </ConfigSection>
+
+                                    {/* Models Section */}
+                                    <ConfigSection
+                                        title={dict.modelConfig.models}
+                                        icon={Sparkles}
+                                        action={
+                                            <div className="flex items-center gap-2">
+                                                <div className="relative">
+                                                    <Input
+                                                        placeholder={
+                                                            dict.modelConfig
+                                                                .customModelId
+                                                        }
+                                                        value={customModelInput}
+                                                        onChange={(e) => {
+                                                            setCustomModelInput(
+                                                                e.target.value,
+                                                            )
                                                             if (
+                                                                duplicateError
+                                                            ) {
+                                                                setDuplicateError(
+                                                                    "",
+                                                                )
+                                                            }
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (
+                                                                e.key ===
+                                                                    "Enter" &&
                                                                 customModelInput.trim()
                                                             ) {
                                                                 const success =
@@ -1063,343 +1130,353 @@ export function ModelConfigDialog({
                                                                 }
                                                             }
                                                         }}
-                                                        disabled={
-                                                            !customModelInput.trim()
-                                                        }
-                                                    >
-                                                        <Plus className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Select
-                                                        onValueChange={(
-                                                            value,
-                                                        ) => {
-                                                            if (value) {
+                                                        className={cn(
+                                                            "h-8 w-44 rounded-lg font-mono text-xs",
+                                                            duplicateError &&
+                                                                "border-destructive focus-visible:ring-destructive",
+                                                        )}
+                                                    />
+                                                    {duplicateError && (
+                                                        <p className="absolute top-full left-0 mt-1 text-[11px] text-destructive">
+                                                            {duplicateError}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 rounded-lg"
+                                                    onClick={() => {
+                                                        if (
+                                                            customModelInput.trim()
+                                                        ) {
+                                                            const success =
                                                                 handleAddModel(
-                                                                    value,
+                                                                    customModelInput.trim(),
+                                                                )
+                                                            if (success) {
+                                                                setCustomModelInput(
+                                                                    "",
                                                                 )
                                                             }
-                                                        }}
-                                                        disabled={
-                                                            availableSuggestions.length ===
-                                                            0
                                                         }
-                                                    >
-                                                        <SelectTrigger className="w-32 h-8 hover:bg-accent">
-                                                            <span className="text-xs">
-                                                                {availableSuggestions.length ===
-                                                                0
-                                                                    ? "All added"
-                                                                    : "Suggested"}
-                                                            </span>
-                                                        </SelectTrigger>
-                                                        <SelectContent className="max-h-72">
-                                                            {availableSuggestions.map(
-                                                                (modelId) => (
-                                                                    <SelectItem
-                                                                        key={
-                                                                            modelId
-                                                                        }
-                                                                        value={
-                                                                            modelId
-                                                                        }
-                                                                        className="font-mono text-xs"
-                                                                    >
-                                                                        {
-                                                                            modelId
-                                                                        }
-                                                                    </SelectItem>
-                                                                ),
-                                                            )}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            </div>
-
-                                            {/* Model List */}
-                                            <div className="rounded-xl border bg-card overflow-hidden min-h-[120px]">
-                                                {selectedProvider.models
-                                                    .length === 0 ? (
-                                                    <div className="p-4 text-center h-full flex flex-col items-center justify-center">
-                                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-muted mb-2">
-                                                            <Sparkles className="h-5 w-5 text-muted-foreground" />
-                                                        </div>
-                                                        <p className="text-sm text-muted-foreground">
-                                                            No models configured
-                                                        </p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="divide-y">
-                                                        {selectedProvider.models.map(
-                                                            (model, index) => (
-                                                                <div
+                                                    }}
+                                                    disabled={
+                                                        !customModelInput.trim()
+                                                    }
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Select
+                                                    onValueChange={(value) => {
+                                                        if (value) {
+                                                            handleAddModel(
+                                                                value,
+                                                            )
+                                                        }
+                                                    }}
+                                                    disabled={
+                                                        availableSuggestions.length ===
+                                                        0
+                                                    }
+                                                >
+                                                    <SelectTrigger className="w-28 h-8 rounded-lg hover:bg-interactive-hover">
+                                                        <span className="text-xs">
+                                                            {availableSuggestions.length ===
+                                                            0
+                                                                ? dict
+                                                                      .modelConfig
+                                                                      .allAdded
+                                                                : dict
+                                                                      .modelConfig
+                                                                      .suggested}
+                                                        </span>
+                                                    </SelectTrigger>
+                                                    <SelectContent className="max-h-72">
+                                                        {availableSuggestions.map(
+                                                            (modelId) => (
+                                                                <SelectItem
                                                                     key={
-                                                                        model.id
+                                                                        modelId
                                                                     }
-                                                                    className={cn(
-                                                                        "transition-colors hover:bg-muted/30",
-                                                                        index ===
-                                                                            0 &&
-                                                                            "rounded-t-xl",
-                                                                        index ===
-                                                                            selectedProvider
-                                                                                .models
-                                                                                .length -
-                                                                                1 &&
-                                                                            "rounded-b-xl",
-                                                                    )}
+                                                                    value={
+                                                                        modelId
+                                                                    }
+                                                                    className="font-mono text-xs"
                                                                 >
-                                                                    <div className="flex items-center gap-3 p-3 min-w-0">
-                                                                        {/* Status icon */}
-                                                                        <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
-                                                                            {validatingModelIndex !==
-                                                                                null &&
-                                                                            index ===
-                                                                                validatingModelIndex ? (
-                                                                                // Currently validating
-                                                                                <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
-                                                                                    <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                                                                                </div>
-                                                                            ) : validatingModelIndex !==
-                                                                                  null &&
-                                                                              index >
-                                                                                  validatingModelIndex &&
-                                                                              model.validated ===
-                                                                                  undefined ? (
-                                                                                // Queued
-                                                                                <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
-                                                                                    <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                                </div>
-                                                                            ) : model.validated ===
-                                                                              true ? (
-                                                                                // Valid
-                                                                                <div className="w-full h-full rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                                                                                    <Check className="h-4 w-4 text-emerald-500" />
-                                                                                </div>
-                                                                            ) : model.validated ===
-                                                                              false ? (
-                                                                                // Invalid
-                                                                                <div className="w-full h-full rounded-lg bg-destructive/10 flex items-center justify-center">
-                                                                                    <AlertCircle className="h-4 w-4 text-destructive" />
-                                                                                </div>
-                                                                            ) : (
-                                                                                // Not validated yet
-                                                                                <div className="w-full h-full rounded-lg bg-primary/5 flex items-center justify-center">
-                                                                                    <Zap className="h-4 w-4 text-primary" />
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <Input
-                                                                            value={
-                                                                                model.modelId
-                                                                            }
-                                                                            title={
-                                                                                model.modelId
-                                                                            }
-                                                                            onChange={(
-                                                                                e,
-                                                                            ) => {
-                                                                                // Allow free typing - validation happens on blur
-                                                                                // Clear edit error when typing
-                                                                                if (
-                                                                                    editError?.modelId ===
-                                                                                    model.id
-                                                                                ) {
-                                                                                    setEditError(
-                                                                                        null,
-                                                                                    )
-                                                                                }
-                                                                                updateModel(
-                                                                                    selectedProviderId!,
-                                                                                    model.id,
-                                                                                    {
-                                                                                        modelId:
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
-                                                                                        validated:
-                                                                                            undefined,
-                                                                                        validationError:
-                                                                                            undefined,
-                                                                                    },
-                                                                                )
-                                                                            }}
-                                                                            onKeyDown={(
-                                                                                e,
-                                                                            ) => {
-                                                                                if (
-                                                                                    e.key ===
-                                                                                    "Enter"
-                                                                                ) {
-                                                                                    e.currentTarget.blur()
-                                                                                }
-                                                                            }}
-                                                                            onBlur={(
-                                                                                e,
-                                                                            ) => {
-                                                                                const newModelId =
-                                                                                    e.target.value.trim()
-
-                                                                                // Helper to show error with shake
-                                                                                const showError =
-                                                                                    (
-                                                                                        message: string,
-                                                                                    ) => {
-                                                                                        setEditError(
-                                                                                            {
-                                                                                                modelId:
-                                                                                                    model.id,
-                                                                                                message,
-                                                                                            },
-                                                                                        )
-                                                                                        e.target.animate(
-                                                                                            [
-                                                                                                {
-                                                                                                    transform:
-                                                                                                        "translateX(0)",
-                                                                                                },
-                                                                                                {
-                                                                                                    transform:
-                                                                                                        "translateX(-4px)",
-                                                                                                },
-                                                                                                {
-                                                                                                    transform:
-                                                                                                        "translateX(4px)",
-                                                                                                },
-                                                                                                {
-                                                                                                    transform:
-                                                                                                        "translateX(-4px)",
-                                                                                                },
-                                                                                                {
-                                                                                                    transform:
-                                                                                                        "translateX(4px)",
-                                                                                                },
-                                                                                                {
-                                                                                                    transform:
-                                                                                                        "translateX(0)",
-                                                                                                },
-                                                                                            ],
-                                                                                            {
-                                                                                                duration: 400,
-                                                                                                easing: "ease-in-out",
-                                                                                            },
-                                                                                        )
-                                                                                        e.target.focus()
-                                                                                    }
-
-                                                                                // Check for empty model name
-                                                                                if (
-                                                                                    !newModelId
-                                                                                ) {
-                                                                                    showError(
-                                                                                        "Model ID cannot be empty",
-                                                                                    )
-                                                                                    return
-                                                                                }
-
-                                                                                // Check for duplicate
-                                                                                const otherModelIds =
-                                                                                    selectedProvider?.models
-                                                                                        .filter(
-                                                                                            (
-                                                                                                m,
-                                                                                            ) =>
-                                                                                                m.id !==
-                                                                                                model.id,
-                                                                                        )
-                                                                                        .map(
-                                                                                            (
-                                                                                                m,
-                                                                                            ) =>
-                                                                                                m.modelId,
-                                                                                        ) ||
-                                                                                    []
-                                                                                if (
-                                                                                    otherModelIds.includes(
-                                                                                        newModelId,
-                                                                                    )
-                                                                                ) {
-                                                                                    showError(
-                                                                                        "This model ID already exists",
-                                                                                    )
-                                                                                    return
-                                                                                }
-
-                                                                                // Clear error on valid blur
+                                                                    {modelId}
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        }
+                                    >
+                                        {/* Model List */}
+                                        <div className="rounded-2xl border border-border-subtle bg-surface-2/30 overflow-hidden min-h-[120px]">
+                                            {selectedProvider.models.length ===
+                                            0 ? (
+                                                <div className="p-6 text-center h-full flex flex-col items-center justify-center">
+                                                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface-2 mb-3">
+                                                        <Sparkles className="h-5 w-5 text-muted-foreground" />
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {
+                                                            dict.modelConfig
+                                                                .noModelsConfigured
+                                                        }
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="divide-y divide-border-subtle">
+                                                    {selectedProvider.models.map(
+                                                        (model, index) => (
+                                                            <div
+                                                                key={model.id}
+                                                                className={cn(
+                                                                    "transition-colors duration-150 hover:bg-interactive-hover/50",
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center gap-3 p-3 min-w-0">
+                                                                    {/* Status icon */}
+                                                                    <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
+                                                                        {validatingModelIndex !==
+                                                                            null &&
+                                                                        index ===
+                                                                            validatingModelIndex ? (
+                                                                            // Currently validating
+                                                                            <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                                                                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                                                                            </div>
+                                                                        ) : validatingModelIndex !==
+                                                                              null &&
+                                                                          index >
+                                                                              validatingModelIndex &&
+                                                                          model.validated ===
+                                                                              undefined ? (
+                                                                            // Queued
+                                                                            <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
+                                                                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                                                            </div>
+                                                                        ) : model.validated ===
+                                                                          true ? (
+                                                                            // Valid
+                                                                            <div className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center">
+                                                                                <Check className="h-4 w-4 text-success" />
+                                                                            </div>
+                                                                        ) : model.validated ===
+                                                                          false ? (
+                                                                            // Invalid
+                                                                            <div className="w-full h-full rounded-lg bg-destructive/10 flex items-center justify-center">
+                                                                                <AlertCircle className="h-4 w-4 text-destructive" />
+                                                                            </div>
+                                                                        ) : (
+                                                                            // Not validated yet
+                                                                            <div className="w-full h-full rounded-lg bg-primary/5 flex items-center justify-center">
+                                                                                <Zap className="h-4 w-4 text-primary" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <Input
+                                                                        value={
+                                                                            model.modelId
+                                                                        }
+                                                                        title={
+                                                                            model.modelId
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) => {
+                                                                            // Allow free typing - validation happens on blur
+                                                                            // Clear edit error when typing
+                                                                            if (
+                                                                                editError?.modelId ===
+                                                                                model.id
+                                                                            ) {
                                                                                 setEditError(
                                                                                     null,
                                                                                 )
-                                                                            }}
-                                                                            className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
-                                                                        />
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                                                            onClick={() =>
-                                                                                handleDeleteModel(
-                                                                                    model.id,
-                                                                                )
                                                                             }
-                                                                            aria-label={`Delete ${model.modelId}`}
-                                                                        >
-                                                                            <X className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </div>
-                                                                    {/* Show validation error inline */}
-                                                                    {model.validated ===
-                                                                        false &&
-                                                                        model.validationError && (
-                                                                            <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
+                                                                            updateModel(
+                                                                                selectedProviderId!,
+                                                                                model.id,
                                                                                 {
-                                                                                    model.validationError
+                                                                                    modelId:
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    validated:
+                                                                                        undefined,
+                                                                                    validationError:
+                                                                                        undefined,
+                                                                                },
+                                                                            )
+                                                                        }}
+                                                                        onKeyDown={(
+                                                                            e,
+                                                                        ) => {
+                                                                            if (
+                                                                                e.key ===
+                                                                                "Enter"
+                                                                            ) {
+                                                                                e.currentTarget.blur()
+                                                                            }
+                                                                        }}
+                                                                        onBlur={(
+                                                                            e,
+                                                                        ) => {
+                                                                            const newModelId =
+                                                                                e.target.value.trim()
+
+                                                                            // Helper to show error with shake
+                                                                            const showError =
+                                                                                (
+                                                                                    message: string,
+                                                                                ) => {
+                                                                                    setEditError(
+                                                                                        {
+                                                                                            modelId:
+                                                                                                model.id,
+                                                                                            message,
+                                                                                        },
+                                                                                    )
+                                                                                    e.target.animate(
+                                                                                        [
+                                                                                            {
+                                                                                                transform:
+                                                                                                    "translateX(0)",
+                                                                                            },
+                                                                                            {
+                                                                                                transform:
+                                                                                                    "translateX(-4px)",
+                                                                                            },
+                                                                                            {
+                                                                                                transform:
+                                                                                                    "translateX(4px)",
+                                                                                            },
+                                                                                            {
+                                                                                                transform:
+                                                                                                    "translateX(-4px)",
+                                                                                            },
+                                                                                            {
+                                                                                                transform:
+                                                                                                    "translateX(4px)",
+                                                                                            },
+                                                                                            {
+                                                                                                transform:
+                                                                                                    "translateX(0)",
+                                                                                            },
+                                                                                        ],
+                                                                                        {
+                                                                                            duration: 400,
+                                                                                            easing: "ease-in-out",
+                                                                                        },
+                                                                                    )
+                                                                                    e.target.focus()
                                                                                 }
-                                                                            </p>
-                                                                        )}
-                                                                    {/* Show edit error inline */}
-                                                                    {editError?.modelId ===
-                                                                        model.id && (
+
+                                                                            // Check for empty model name
+                                                                            if (
+                                                                                !newModelId
+                                                                            ) {
+                                                                                showError(
+                                                                                    dict
+                                                                                        .modelConfig
+                                                                                        .modelIdEmpty,
+                                                                                )
+                                                                                return
+                                                                            }
+
+                                                                            // Check for duplicate
+                                                                            const otherModelIds =
+                                                                                selectedProvider?.models
+                                                                                    .filter(
+                                                                                        (
+                                                                                            m,
+                                                                                        ) =>
+                                                                                            m.id !==
+                                                                                            model.id,
+                                                                                    )
+                                                                                    .map(
+                                                                                        (
+                                                                                            m,
+                                                                                        ) =>
+                                                                                            m.modelId,
+                                                                                    ) ||
+                                                                                []
+                                                                            if (
+                                                                                otherModelIds.includes(
+                                                                                    newModelId,
+                                                                                )
+                                                                            ) {
+                                                                                showError(
+                                                                                    dict
+                                                                                        .modelConfig
+                                                                                        .modelIdExists,
+                                                                                )
+                                                                                return
+                                                                            }
+
+                                                                            // Clear error on valid blur
+                                                                            setEditError(
+                                                                                null,
+                                                                            )
+                                                                        }}
+                                                                        className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
+                                                                    />
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                                        onClick={() =>
+                                                                            handleDeleteModel(
+                                                                                model.id,
+                                                                            )
+                                                                        }
+                                                                        aria-label={`Delete ${model.modelId}`}
+                                                                    >
+                                                                        <X className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                                {/* Show validation error inline */}
+                                                                {model.validated ===
+                                                                    false &&
+                                                                    model.validationError && (
                                                                         <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
                                                                             {
-                                                                                editError.message
+                                                                                model.validationError
                                                                             }
                                                                         </p>
                                                                     )}
-                                                                </div>
-                                                            ),
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                                                {/* Show edit error inline */}
+                                                                {editError?.modelId ===
+                                                                    model.id && (
+                                                                    <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
+                                                                        {
+                                                                            editError.message
+                                                                        }
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-
-                                        {/* Danger Zone */}
-                                        <div className="pt-4">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                    setDeleteConfirmOpen(true)
-                                                }
-                                                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                            >
-                                                <Trash2 className="h-4 w-4 mr-2" />
-                                                Delete Provider
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </ScrollArea>
-                            </>
+                                    </ConfigSection>
+                                </div>
+                            </ScrollArea>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 mb-4">
-                                    <Server className="h-8 w-8 text-primary/60" />
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-surface-2 mb-4">
+                                    <Server className="h-8 w-8 text-muted-foreground" />
                                 </div>
-                                <h3 className="font-semibold mb-1">
-                                    Configure AI Providers
+                                <h3 className="font-semibold text-lg tracking-tight mb-1">
+                                    {dict.modelConfig.configureProviders}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-xs">
-                                    Select a provider from the list or add a new
-                                    one to configure API keys and models
+                                    {dict.modelConfig.selectProviderHint}
                                 </p>
                             </div>
                         )}
@@ -1407,11 +1484,24 @@ export function ModelConfigDialog({
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-3 border-t bg-muted/20">
-                    <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1.5">
-                        <Key className="h-3 w-3" />
-                        API keys are stored locally in your browser
-                    </p>
+                <div className="px-6 py-3 border-t border-border-subtle bg-surface-1/30 shrink-0">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                checked={modelConfig.showUnvalidatedModels}
+                                onCheckedChange={
+                                    modelConfig.setShowUnvalidatedModels
+                                }
+                            />
+                            <Label className="text-xs text-muted-foreground cursor-pointer">
+                                {dict.modelConfig.showUnvalidatedModels}
+                            </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Key className="h-3 w-3" />
+                            {dict.modelConfig.apiKeyStored}
+                        </p>
+                    </div>
                 </div>
             </DialogContent>
 
@@ -1429,19 +1519,16 @@ export function ModelConfigDialog({
                             <AlertCircle className="h-6 w-6 text-destructive" />
                         </div>
                         <AlertDialogTitle className="text-center">
-                            Delete Provider
+                            {dict.modelConfig.deleteProvider}
                         </AlertDialogTitle>
                         <AlertDialogDescription className="text-center">
-                            Are you sure you want to delete{" "}
-                            <span className="font-medium text-foreground">
-                                {selectedProvider
+                            {formatMessage(dict.modelConfig.deleteConfirmDesc, {
+                                name: selectedProvider
                                     ? selectedProvider.name ||
                                       PROVIDER_INFO[selectedProvider.provider]
                                           .label
-                                    : "this provider"}
-                            </span>
-                            ? This will remove all configured models and cannot
-                            be undone.
+                                    : "this provider",
+                            })}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     {selectedProvider &&
@@ -1451,11 +1538,16 @@ export function ModelConfigDialog({
                                     htmlFor="delete-confirm"
                                     className="text-sm text-muted-foreground"
                                 >
-                                    Type &quot;
-                                    {selectedProvider.name ||
-                                        PROVIDER_INFO[selectedProvider.provider]
-                                            .label}
-                                    &quot; to confirm
+                                    {formatMessage(
+                                        dict.modelConfig.typeToConfirm,
+                                        {
+                                            name:
+                                                selectedProvider.name ||
+                                                PROVIDER_INFO[
+                                                    selectedProvider.provider
+                                                ].label,
+                                        },
+                                    )}
                                 </Label>
                                 <Input
                                     id="delete-confirm"
@@ -1463,13 +1555,17 @@ export function ModelConfigDialog({
                                     onChange={(e) =>
                                         setDeleteConfirmText(e.target.value)
                                     }
-                                    placeholder="Type provider name..."
+                                    placeholder={
+                                        dict.modelConfig.typeProviderName
+                                    }
                                     className="h-9"
                                 />
                             </div>
                         )}
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>
+                            {dict.modelConfig.cancel}
+                        </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteProvider}
                             disabled={
@@ -1482,7 +1578,7 @@ export function ModelConfigDialog({
                             }
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                         >
-                            Delete
+                            {dict.modelConfig.delete}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

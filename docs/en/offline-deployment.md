@@ -33,7 +33,7 @@ services:
 | Scenario | URL Value |
 |----------|-----------|
 | Localhost | `http://localhost:8080` |
-| Remote/Server | `http://YOUR_SERVER_IP:8080` or `https://drawio.your-domain.com` |
+| Remote/Server | `http://YOUR_SERVER_IP:8080` |
 
 **Do NOT use** internal Docker aliases like `http://drawio:8080`; the browser cannot resolve them.
 

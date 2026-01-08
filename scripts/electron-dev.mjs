@@ -253,7 +253,7 @@ async function main() {
                 },
             )
             console.log("👀 Watching for preset configuration changes...")
-        } catch (err) {
+        } catch (_err) {
             // File might not exist yet, that's ok
             setTimeout(setupConfigWatcher, 5000)
         }

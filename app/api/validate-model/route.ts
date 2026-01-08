@@ -121,7 +121,7 @@ export async function POST(req: Request) {
                     { status: 400 },
                 )
             }
-        } else if (provider !== "ollama" && !apiKey) {
+        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -222,6 +222,42 @@ export async function POST(req: Request) {
                     ...(baseUrl && { baseURL: baseUrl }),
                 })
                 model = gw(modelId)
+                break
+            }
+
+            case "edgeone": {
+                // EdgeOne uses OpenAI-compatible API via Edge Functions
+                // Need to pass cookies for EdgeOne Pages authentication
+                const cookieHeader = req.headers.get("cookie") || ""
+                const edgeone = createOpenAI({
+                    apiKey: "edgeone", // EdgeOne doesn't require API key
+                    baseURL: baseUrl || "/api/edgeai",
+                    headers: {
+                        cookie: cookieHeader,
+                    },
+                })
+                model = edgeone.chat(modelId)
+                break
+            }
+
+            case "sglang": {
+                // SGLang is OpenAI-compatible
+                const sglang = createOpenAI({
+                    apiKey: apiKey || "not-needed",
+                    baseURL: baseUrl || "http://127.0.0.1:8000/v1",
+                })
+                model = sglang.chat(modelId)
+                break
+            }
+
+            case "doubao": {
+                // ByteDance Doubao uses DeepSeek-compatible API
+                const doubao = createDeepSeek({
+                    apiKey,
+                    baseURL:
+                        baseUrl || "https://ark.cn-beijing.volces.com/api/v3",
+                })
+                model = doubao(modelId)
                 break
             }
 
