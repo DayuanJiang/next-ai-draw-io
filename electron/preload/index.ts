@@ -21,4 +21,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     // File operations
     openFile: () => ipcRenderer.invoke("dialog-open-file"),
     saveFile: (data: string) => ipcRenderer.invoke("dialog-save-file", data),
+
+    // Proxy settings
+    getProxy: () => ipcRenderer.invoke("get-proxy"),
+    setProxy: (config: {
+        httpProxy?: string
+        httpsProxy?: string
+        noProxy?: string
+    }) => ipcRenderer.invoke("set-proxy", config),
 })

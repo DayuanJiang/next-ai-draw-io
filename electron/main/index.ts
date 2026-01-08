@@ -4,6 +4,7 @@ import { getCurrentPresetEnv } from "./config-manager"
 import { loadEnvFile } from "./env-loader"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { startNextServer, stopNextServer } from "./next-server"
+import { applyProxyToEnv } from "./proxy-manager"
 import { registerSettingsWindowHandlers } from "./settings-window"
 import { createWindow, getMainWindow } from "./window-manager"
 
@@ -23,6 +24,9 @@ if (!gotTheLock) {
 
     // Load environment variables from .env files
     loadEnvFile()
+
+    // Apply proxy settings from saved config
+    applyProxyToEnv()
 
     // Apply saved preset environment variables (overrides .env)
     const presetEnv = getCurrentPresetEnv()
