@@ -24,9 +24,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
     // Proxy settings
     getProxy: () => ipcRenderer.invoke("get-proxy"),
-    setProxy: (config: {
-        httpProxy?: string
-        httpsProxy?: string
-        noProxy?: string
-    }) => ipcRenderer.invoke("set-proxy", config),
+    setProxy: (config: { httpProxy?: string; httpsProxy?: string }) =>
+        ipcRenderer.invoke("set-proxy", config),
 })

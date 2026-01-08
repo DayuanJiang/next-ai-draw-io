@@ -5,7 +5,6 @@ import * as path from "path"
 export interface ProxyConfig {
     httpProxy?: string
     httpsProxy?: string
-    noProxy?: string
 }
 
 const CONFIG_FILE = "proxy-config.json"
@@ -65,14 +64,6 @@ export function applyProxyToEnv(): void {
         delete process.env.HTTPS_PROXY
         delete process.env.https_proxy
     }
-
-    if (config.noProxy) {
-        process.env.NO_PROXY = config.noProxy
-        process.env.no_proxy = config.noProxy
-    } else {
-        delete process.env.NO_PROXY
-        delete process.env.no_proxy
-    }
 }
 
 /**
@@ -82,6 +73,5 @@ export function getProxyConfig(): ProxyConfig {
     return {
         httpProxy: process.env.HTTP_PROXY || process.env.http_proxy || "",
         httpsProxy: process.env.HTTPS_PROXY || process.env.https_proxy || "",
-        noProxy: process.env.NO_PROXY || process.env.no_proxy || "",
     }
 }

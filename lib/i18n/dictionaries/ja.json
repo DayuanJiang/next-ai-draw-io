@@ -112,8 +112,6 @@
         "proxyDescription": "API リクエスト用の HTTP/HTTPS プロキシを設定（デスクトップ版のみ）",
         "httpProxy": "HTTP プロキシ",
         "httpsProxy": "HTTPS プロキシ",
-        "noProxy": "プロキシ除外",
-        "noProxyDescription": "プロキシを使用しないホスト（カンマ区切り）",
         "applyProxy": "適用",
         "proxyApplied": "プロキシ設定が適用されました"
     },

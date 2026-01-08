@@ -112,8 +112,6 @@
         "proxyDescription": "Configure HTTP/HTTPS proxy for API requests (Desktop only)",
         "httpProxy": "HTTP Proxy",
         "httpsProxy": "HTTPS Proxy",
-        "noProxy": "No Proxy",
-        "noProxyDescription": "Comma-separated hosts to bypass proxy",
         "applyProxy": "Apply",
         "proxyApplied": "Proxy settings applied"
     },

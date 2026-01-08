@@ -112,8 +112,6 @@
         "proxyDescription": "配置 API 请求的 HTTP/HTTPS 代理（仅桌面版）",
         "httpProxy": "HTTP 代理",
         "httpsProxy": "HTTPS 代理",
-        "noProxy": "不使用代理",
-        "noProxyDescription": "不使用代理的主机列表，用逗号分隔",
         "applyProxy": "应用",
         "proxyApplied": "代理设置已应用"
     },

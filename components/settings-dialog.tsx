@@ -107,7 +107,6 @@ function SettingsContent({
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
     const [httpsProxy, setHttpsProxy] = useState("")
-    const [noProxy, setNoProxy] = useState("")
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
 
     useEffect(() => {
@@ -163,7 +162,6 @@ function SettingsContent({
                 window.electronAPI.getProxy().then((config) => {
                     setHttpProxy(config.httpProxy || "")
                     setHttpsProxy(config.httpsProxy || "")
-                    setNoProxy(config.noProxy || "")
                 })
             }
         }
@@ -227,12 +225,29 @@ function SettingsContent({
     const handleApplyProxy = async () => {
         if (!window.electronAPI?.setProxy) return
 
+        // Validate proxy URLs (must start with http:// or https://)
+        const validateProxyUrl = (url: string): boolean => {
+            if (!url) return true // Empty is OK
+            return url.startsWith("http://") || url.startsWith("https://")
+        }
+
+        const trimmedHttp = httpProxy.trim()
+        const trimmedHttps = httpsProxy.trim()
+
+        if (trimmedHttp && !validateProxyUrl(trimmedHttp)) {
+            toast.error("HTTP Proxy must start with http:// or https://")
+            return
+        }
+        if (trimmedHttps && !validateProxyUrl(trimmedHttps)) {
+            toast.error("HTTPS Proxy must start with http:// or https://")
+            return
+        }
+
         setIsApplyingProxy(true)
         try {
             const result = await window.electronAPI.setProxy({
-                httpProxy: httpProxy.trim() || undefined,
-                httpsProxy: httpsProxy.trim() || undefined,
-                noProxy: noProxy.trim() || undefined,
+                httpProxy: trimmedHttp || undefined,
+                httpsProxy: trimmedHttps || undefined,
             })
 
             if (result.success) {
@@ -444,21 +459,6 @@ function SettingsContent({
                                         placeholder={`${dict.settings.httpsProxy}: http://proxy:8080`}
                                         className="h-9"
                                     />
-                                    <div className="space-y-1">
-                                        <Input
-                                            id="no-proxy"
-                                            type="text"
-                                            value={noProxy}
-                                            onChange={(e) =>
-                                                setNoProxy(e.target.value)
-                                            }
-                                            placeholder={`${dict.settings.noProxy}: localhost,127.0.0.1`}
-                                            className="h-9"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            {dict.settings.noProxyDescription}
-                                        </p>
-                                    </div>
                                 </div>
 
                                 <Button

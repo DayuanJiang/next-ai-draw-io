@@ -29,7 +29,6 @@ interface ApplyPresetResult {
 interface ProxyConfig {
     httpProxy?: string
     httpsProxy?: string
-    noProxy?: string
 }
 
 /** Result of setting proxy */
