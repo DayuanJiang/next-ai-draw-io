@@ -247,15 +247,15 @@
 
     /* Dark mode scrollbar */
     .dark .scrollbar-thin {
-        scrollbar-color: oklch(0.45 0.015 260) transparent;
+        scrollbar-color: oklch(0.35 0.015 260) transparent;
     }
 
     .dark .scrollbar-thin::-webkit-scrollbar-thumb {
-        background-color: oklch(0.45 0.015 260);
+        background-color: oklch(0.35 0.015 260);
     }
 
     .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-        background-color: oklch(0.55 0.015 260);
+        background-color: oklch(0.45 0.015 260);
     }
 }
 
