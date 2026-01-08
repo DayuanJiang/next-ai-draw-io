@@ -11,7 +11,8 @@ on:
         required: false
 
 jobs:
-  build:
+  # Mac and Linux: Build and publish directly (no signing needed)
+  build-mac-linux:
     permissions:
       contents: write
     strategy:
@@ -20,13 +21,9 @@ jobs:
         include:
           - os: macos-latest
             platform: mac
-          - os: windows-latest
-            platform: win
           - os: ubuntu-latest
             platform: linux
-
     runs-on: ${{ matrix.os }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -40,7 +37,57 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build and publish Electron app
+      - name: Build and publish
         run: npm run dist:${{ matrix.platform }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Windows: Build, sign with SignPath, then publish
+  build-windows:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      # Build WITHOUT publishing
+      - name: Build Windows app
+        run: npm run dist:win:build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload unsigned artifacts for signing
+        uses: actions/upload-artifact@v4
+        id: upload-unsigned
+        with:
+          name: windows-unsigned
+          path: release/*.exe
+          retention-days: 1
+
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: '880a211d-2cd3-4e7b-8d04-3d1f8eb39df5'
+          project-slug: 'next-ai-draw-io'
+          signing-policy-slug: 'test-signing'
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: release-signed
+
+      - name: Upload signed artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-signed/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

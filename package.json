@@ -24,6 +24,7 @@
         "dist": "npm run electron:build && npm run electron:prepare && npx electron-builder --config electron/electron-builder.yml",
         "dist:mac": "npm run electron:build && npm run electron:prepare && npx electron-builder --config electron/electron-builder.yml --mac",
         "dist:win": "npm run electron:build && npm run electron:prepare && npx electron-builder --config electron/electron-builder.yml --win",
+        "dist:win:build": "npm run electron:build && npm run electron:prepare && npx electron-builder --config electron/electron-builder.yml --win --publish never",
         "dist:linux": "npm run electron:build && npm run electron:prepare && npx electron-builder --config electron/electron-builder.yml --linux",
         "dist:all": "npm run electron:build && npm run electron:prepare && npx electron-builder --config electron/electron-builder.yml --mac --win --linux",
         "test": "vitest",
