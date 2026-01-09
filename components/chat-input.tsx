@@ -24,6 +24,7 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+import { STORAGE_KEYS } from "@/lib/storage"
 import type { FlattenedModel } from "@/lib/types/model-config"
 import { extractUrlContent, type UrlData } from "@/lib/url-utils"
 import { FilePreviewList } from "./file-preview-list"
@@ -214,11 +215,13 @@ export function ChatInput({
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        const sendShortcut = localStorage.getItem("next-ai-draw-io-send-shortcut") || "enter"
-        const shouldSend = sendShortcut === "enter" 
-            ? e.key === "Enter" && !e.shiftKey
-            : (e.metaKey || e.ctrlKey) && e.key === "Enter"
-        
+        const sendShortcut =
+            localStorage.getItem(STORAGE_KEYS.sendShortcut) || "enter"
+        const shouldSend =
+            sendShortcut === "enter"
+                ? e.key === "Enter" && !e.shiftKey
+                : (e.metaKey || e.ctrlKey) && e.key === "Enter"
+
         if (shouldSend) {
             e.preventDefault()
             const form = e.currentTarget.closest("form")

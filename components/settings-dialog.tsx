@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { STORAGE_KEYS } from "@/lib/storage"
 
 // Reusable setting item component for consistent layout
 function SettingItem({
@@ -156,7 +157,9 @@ function SettingsContent({
             // Default to true if not set
             setCloseProtection(storedCloseProtection !== "false")
 
-            const storedSendShortcut = localStorage.getItem("next-ai-draw-io-send-shortcut")
+            const storedSendShortcut = localStorage.getItem(
+                STORAGE_KEYS.sendShortcut,
+            )
             setSendShortcut(storedSendShortcut || "enter")
 
             setError("")
@@ -438,7 +441,10 @@ function SettingsContent({
                             value={sendShortcut}
                             onValueChange={(value) => {
                                 setSendShortcut(value)
-                                localStorage.setItem("next-ai-draw-io-send-shortcut", value)
+                                localStorage.setItem(
+                                    STORAGE_KEYS.sendShortcut,
+                                    value,
+                                )
                             }}
                         >
                             <SelectTrigger
