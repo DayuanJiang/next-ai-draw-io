@@ -43,7 +43,7 @@ export function HistoryDialog({
 
     return (
         <Dialog open={showHistory} onOpenChange={onToggleHistory}>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto scrollbar-thin">
                 <DialogHeader>
                     <DialogTitle>{dict.history.title}</DialogTitle>
                     <DialogDescription>
