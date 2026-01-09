@@ -1,11 +1,9 @@
 import { app } from "electron"
 import * as fs from "fs"
 import * as path from "path"
+import type { ProxyConfig } from "../electron.d"
 
-export interface ProxyConfig {
-    httpProxy?: string
-    httpsProxy?: string
-}
+export type { ProxyConfig }
 
 const CONFIG_FILE = "proxy-config.json"
 
