@@ -107,7 +107,13 @@
         "diagramActions": "ダイアグラム操作",
         "diagramActionsDescription": "ダイアグラムの履歴とエクスポートを管理",
         "history": "履歴",
-        "download": "ダウンロード"
+        "download": "ダウンロード",
+        "proxy": "プロキシ設定",
+        "proxyDescription": "API リクエスト用の HTTP/HTTPS プロキシを設定（デスクトップ版のみ）",
+        "httpProxy": "HTTP プロキシ",
+        "httpsProxy": "HTTPS プロキシ",
+        "applyProxy": "適用",
+        "proxyApplied": "プロキシ設定が適用されました"
     },
     "save": {
         "title": "ダイアグラムを保存",

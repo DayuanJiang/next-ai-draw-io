@@ -107,7 +107,13 @@
         "diagramActions": "图表操作",
         "diagramActionsDescription": "管理图表历史记录和导出",
         "history": "历史记录",
-        "download": "下载"
+        "download": "下载",
+        "proxy": "代理设置",
+        "proxyDescription": "配置 API 请求的 HTTP/HTTPS 代理（仅桌面版）",
+        "httpProxy": "HTTP 代理",
+        "httpsProxy": "HTTPS 代理",
+        "applyProxy": "应用",
+        "proxyApplied": "代理设置已应用"
     },
     "save": {
         "title": "保存图表",

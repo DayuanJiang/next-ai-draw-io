@@ -107,7 +107,13 @@
         "diagramActions": "Diagram Actions",
         "diagramActionsDescription": "Manage diagram history and exports",
         "history": "History",
-        "download": "Download"
+        "download": "Download",
+        "proxy": "Proxy Settings",
+        "proxyDescription": "Configure HTTP/HTTPS proxy for API requests (Desktop only)",
+        "httpProxy": "HTTP Proxy",
+        "httpsProxy": "HTTPS Proxy",
+        "applyProxy": "Apply",
+        "proxyApplied": "Proxy settings applied"
     },
     "save": {
         "title": "Save Diagram",
