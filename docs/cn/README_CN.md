@@ -42,6 +42,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [多提供商支持](#多提供商支持)
   - [工作原理](#工作原理)
   - [支持与联系](#支持与联系)
+  - [常见问题](#常见问题)
   - [Star历史](#star历史)
 
 ## 示例
@@ -237,6 +238,10 @@ npm run dev
 如需支持或咨询，请在GitHub仓库上提交issue或联系维护者：
 
 -   邮箱：me[at]jiang.jp
+
+## 常见问题
+
+请参阅 [FAQ](./FAQ.md) 了解常见问题和解决方案。
 
 ## Star历史
 
