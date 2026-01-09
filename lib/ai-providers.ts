@@ -464,7 +464,7 @@ function validateProviderCredentials(provider: ProviderName): void {
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  * - SILICONFLOW_API_KEY: SiliconFlow API key
- * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.com/v1)
+ * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.cn/v1)
  * - SGLANG_API_KEY: SGLang API key
  * - SGLANG_BASE_URL: SGLang endpoint (optional)
  * - MODELSCOPE_API_KEY: ModelScope API key
@@ -721,7 +721,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const baseURL =
                 overrides?.baseUrl ||
                 process.env.SILICONFLOW_BASE_URL ||
-                "https://api.siliconflow.com/v1"
+                "https://api.siliconflow.cn/v1"
             const siliconflowProvider = createOpenAI({
                 apiKey,
                 baseURL,

@@ -80,7 +80,7 @@ export const PROVIDER_INFO: Record<
     deepseek: { label: "DeepSeek" },
     siliconflow: {
         label: "SiliconFlow",
-        defaultBaseUrl: "https://api.siliconflow.com/v1",
+        defaultBaseUrl: "https://api.siliconflow.cn/v1",
     },
     sglang: {
         label: "SGLang",
