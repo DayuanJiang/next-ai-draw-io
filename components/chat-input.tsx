@@ -214,7 +214,12 @@ export function ChatInput({
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        const sendShortcut = localStorage.getItem("next-ai-draw-io-send-shortcut") || "enter"
+        const shouldSend = sendShortcut === "enter" 
+            ? e.key === "Enter" && !e.shiftKey
+            : (e.metaKey || e.ctrlKey) && e.key === "Enter"
+        
+        if (shouldSend) {
             e.preventDefault()
             const form = e.currentTarget.closest("form")
             if (form && input.trim() && !isDisabled) {

@@ -103,6 +103,7 @@ function SettingsContent({
         () => getStoredAccessCodeRequired() ?? false,
     )
     const [currentLang, setCurrentLang] = useState("en")
+    const [sendShortcut, setSendShortcut] = useState("enter")
 
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
@@ -154,6 +155,9 @@ function SettingsContent({
             )
             // Default to true if not set
             setCloseProtection(storedCloseProtection !== "false")
+
+            const storedSendShortcut = localStorage.getItem("next-ai-draw-io-send-shortcut")
+            setSendShortcut(storedSendShortcut || "enter")
 
             setError("")
 
@@ -423,6 +427,35 @@ function SettingsContent({
                                     : dict.chat.styledMode}
                             </span>
                         </div>
+                    </SettingItem>
+
+                    {/* Send Shortcut */}
+                    <SettingItem
+                        label={dict.settings.sendShortcut}
+                        description={dict.settings.sendShortcutDescription}
+                    >
+                        <Select
+                            value={sendShortcut}
+                            onValueChange={(value) => {
+                                setSendShortcut(value)
+                                localStorage.setItem("next-ai-draw-io-send-shortcut", value)
+                            }}
+                        >
+                            <SelectTrigger
+                                id="send-shortcut-select"
+                                className="w-[160px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="enter">
+                                    {dict.settings.enterToSend}
+                                </SelectItem>
+                                <SelectItem value="ctrl-enter">
+                                    {dict.settings.ctrlEnterToSend}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </SettingItem>
 
                     {/* Proxy Settings - Electron only */}
