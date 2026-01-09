@@ -65,11 +65,13 @@ python -m vllm.entrypoints.openai.api_server \
 
 ## 4. 画像アップロード後「画像が提供されていません」と表示される
 
+**問題**: 画像をアップロードした後、「画像が提供されていません」というエラーが表示される
+
 **考えられる原因**:
 1. モデルがビジョン機能をサポートしていない（Kimi K2、DeepSeek、Qwenテキストモデルなど）
 
 **解決策**:
-- ビジョン対応モデルを使用：GPT-4o、Claude 3.5 Sonnet、Gemini Pro Vision
+- ビジョン対応モデルを使用：GPT-5.2、Claude 4.5 Sonnet、Gemini 3 Pro
 - モデル名に `vision` または `vl` が含まれているものは画像をサポート
 - 最新バージョン（v0.4.9+）にアップデート
 

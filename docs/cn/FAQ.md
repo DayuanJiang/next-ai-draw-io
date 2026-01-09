@@ -65,11 +65,13 @@ python -m vllm.entrypoints.openai.api_server \
 
 ## 4. 上传图片后提示"未提供图片"
 
+**问题**: 上传图片后，系统显示"未提供图片"错误
+
 **可能原因**:
 1. 模型不支持视觉功能（如 Kimi K2、DeepSeek、Qwen 文本模型）
 
 **解决方案**:
-- 使用支持视觉的模型：GPT-4o、Claude 3.5 Sonnet、Gemini Pro Vision
+- 使用支持视觉的模型：GPT-5.2、Claude 4.5 Sonnet、Gemini 3 Pro
 - 模型名带 `vision` 或 `vl` 的支持图片
 - 更新到最新版本（v0.4.9+）
 
