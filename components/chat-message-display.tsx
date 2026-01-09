@@ -791,7 +791,7 @@ export function ChatMessageDisplay({
                                                 onChange={(e) =>
                                                     setEditText(e.target.value)
                                                 }
-                                                className="w-full min-w-[300px] px-4 py-3 text-sm rounded-2xl border border-primary bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary scrollbar-thin"
+                                                className="w-full min-w-[300px] px-4 py-3 text-sm rounded-2xl border border-primary bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                                                 rows={Math.min(
                                                     editText.split("\n")
                                                         .length + 1,
