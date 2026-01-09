@@ -202,7 +202,7 @@ export async function POST(req: Request) {
             case "siliconflow": {
                 const sf = createOpenAI({
                     apiKey,
-                    baseURL: baseUrl || "https://api.siliconflow.com/v1",
+                    baseURL: baseUrl || "https://api.siliconflow.cn/v1",
                 })
                 model = sf.chat(modelId)
                 break
