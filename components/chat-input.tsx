@@ -407,7 +407,7 @@ export function ChatInput({
                     placeholder={dict.chat.placeholder}
                     disabled={isDisabled}
                     aria-label="Chat input"
-                    className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+                    className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60 scrollbar-thin"
                 />
 
                 <div className="flex items-center justify-end gap-1 px-3 py-2 border-t border-border/50">
