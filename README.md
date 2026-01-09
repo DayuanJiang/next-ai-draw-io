@@ -45,6 +45,7 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
   - [Multi-Provider Support](#multi-provider-support)
   - [How It Works](#how-it-works)
   - [Support \& Contact](#support--contact)
+  - [FAQ](#faq)
   - [Star History](#star-history)
 
 ## Examples
@@ -245,6 +246,10 @@ If you find this project useful, please consider [sponsoring](https://github.com
 For support or inquiries, please open an issue on the GitHub repository or contact the maintainer at:
 
 -   Email: me[at]jiang.jp
+
+## FAQ
+
+See [FAQ](./docs/en/FAQ.md) for common issues and solutions.
 
 ## Star History
 
