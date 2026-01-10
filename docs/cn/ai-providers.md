@@ -7,7 +7,7 @@
 1. 将 `.env.example` 复制为 `.env.local`
 2. 设置所选提供商的 API 密钥
 3. 将 `AI_MODEL` 设置为所需的模型
-4. 运行 `npm run dev`
+4. 运行 `pnpm run dev`
 
 ## 支持的提供商
 

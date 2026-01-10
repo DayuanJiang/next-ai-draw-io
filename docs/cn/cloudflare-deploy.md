@@ -23,7 +23,7 @@
 3. 安装 **Wrangler CLI**（作为开发依赖安装即可）：
 
 ```bash
-npm install -D wrangler
+pnpm install -D wrangler
 ```
 
 4. 登录 Cloudflare：
@@ -39,7 +39,7 @@ npx wrangler login
 ## 第一步 — 安装依赖
 
 ```bash
-npm install
+pnpm install
 ```
 
 ---
@@ -169,7 +169,7 @@ export default defineCloudflareConfig({
 
 **选项 2：在部署过程中**
 
-运行 `npm run deploy` 时，Wrangler 可能会提示：
+运行 `pnpm run deploy` 时，Wrangler 可能会提示：
 
 ```
 Would you like to register a workers.dev subdomain? (Y/n)
@@ -184,7 +184,7 @@ Would you like to register a workers.dev subdomain? (Y/n)
 ## 第五步 — 部署到 Cloudflare
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 该脚本执行的操作：
@@ -249,7 +249,7 @@ https://<worker-name>.<your-subdomain>.workers.dev
 部署前在本地预览 Worker：
 
 ```bash
-npm run preview
+pnpm run preview
 ```
 
 ---

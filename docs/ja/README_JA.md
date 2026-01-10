@@ -153,7 +153,8 @@ Claudeにダイアグラムの作成を依頼：
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-npm install
+npm i -g pnpm
+pnpm install
 cp env.example .env.local
 ```
 
@@ -162,7 +163,7 @@ cp env.example .env.local
 2. 開発サーバーを起動：
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 3. ブラウザで[http://localhost:6002](http://localhost:6002)を開いてアプリケーションを確認。

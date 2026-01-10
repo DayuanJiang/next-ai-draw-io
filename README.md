@@ -158,7 +158,8 @@ Supported platforms: Windows, macOS, Linux.
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-npm install
+npm i -g pnpm
+pnpm install
 cp env.example .env.local
 ```
 
@@ -167,7 +168,7 @@ See the [Provider Configuration Guide](./docs/en/ai-providers.md) for detailed s
 2. Run the development server:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 3. Open [http://localhost:6002](http://localhost:6002) in your browser to see the application.

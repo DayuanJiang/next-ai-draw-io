@@ -5,9 +5,10 @@
 ```bash
 git clone https://github.com/YOUR_USERNAME/next-ai-draw-io.git
 cd next-ai-draw-io
-npm install
+npm i -g pnpm
+pnpm install
 cp env.example .env.local
-npm run dev
+pnpm run dev
 ```
 
 ## Code Style
@@ -15,9 +16,9 @@ npm run dev
 We use [Biome](https://biomejs.dev/) for linting and formatting:
 
 ```bash
-npm run format   # Format code
-npm run lint     # Check lint errors
-npm run check    # Run all checks (CI)
+pnpm run format   # Format code
+pnpm run lint     # Check lint errors
+pnpm run check    # Run all checks (CI)
 ```
 
 Git hooks via Husky run automatically:
@@ -31,8 +32,8 @@ For a better experience, install the [Biome VS Code extension](https://marketpla
 Run tests before submitting PRs:
 
 ```bash
-npm run test        # Unit tests (Vitest)
-npm run test:e2e    # E2E tests (Playwright)
+pnpm run test        # Unit tests (Vitest)
+pnpm run test:e2e    # E2E tests (Playwright)
 ```
 
 E2E tests use mocked API responses - no AI provider needed. Tests are in `tests/e2e/`.
@@ -51,7 +52,7 @@ npx playwright test --ui
 
 1. Create a feature branch
 2. Make changes (pre-commit runs lint + type check automatically)
-3. Run E2E tests with `npm run test:e2e`
+3. Run E2E tests with `pnpm run test:e2e`
 4. Push (pre-push runs unit tests automatically)
 5. Submit PR against `main` with a clear description
 

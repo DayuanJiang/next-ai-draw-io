@@ -153,7 +153,8 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-npm install
+npm i -g pnpm
+pnpm install
 cp env.example .env.local
 ```
 
@@ -162,7 +163,7 @@ cp env.example .env.local
 2. 运行开发服务器：
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 3. 在浏览器中打开 [http://localhost:6002](http://localhost:6002) 查看应用。

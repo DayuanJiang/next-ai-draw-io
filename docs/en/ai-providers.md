@@ -7,7 +7,7 @@ This guide explains how to configure different AI model providers for next-ai-dr
 1. Copy `.env.example` to `.env.local`
 2. Set your API key for your chosen provider
 3. Set `AI_MODEL` to your desired model
-4. Run `npm run dev`
+4. Run `pnpm run dev`
 
 ## Supported Providers
 
