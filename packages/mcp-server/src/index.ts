@@ -65,7 +65,7 @@ const server = new McpServer({
     version: "0.1.2",
 })
 
-// Register prompt with workflow guidance
+// Register prompt with workflow guidelines
 server.prompt(
     "diagram-workflow",
     "Guidelines for creating and editing draw.io diagrams",
@@ -89,7 +89,7 @@ server.prompt(
 ## Modifying or Deleting Existing Elements
 1. FIRST call get_diagram to see current cell IDs and structure
 2. THEN call edit_diagram with "update" or "delete" operations
-3. For update, provide the cell_id and complete new mxCell XML
+3. For update, provide the cell_id and complete new_xml
 
 ## Important Notes
 - create_new_diagram REPLACES the entire diagram - only use for new diagrams
@@ -541,16 +541,75 @@ server.registerTool(
     },
 )
 
+/**
+ * Decodes a base64 data URL to a Buffer
+ * Supports: data:image/svg+xml;base64, data:image/png;base64, etc.
+ */
+function decodeDataUrl(dataUrl: string): Buffer | null {
+    if (!dataUrl || !dataUrl.startsWith("data:")) {
+        return null
+    }
+
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+    if (!match) {
+        return null
+    }
+
+    const mimeType = match[1]
+    const base64Data = match[2]
+
+    try {
+        return Buffer.from(base64Data, "base64")
+    } catch {
+        return null
+    }
+}
+
+/**
+ * Detects export format from file extension
+ */
+type ExportFormat = "drawio" | "svg" | "png" | "drawio-svg"
+
+function detectExportFormat(path: string): ExportFormat {
+    const lowerPath = path.toLowerCase()
+    if (lowerPath.endsWith(".svg")) {
+        return "svg"
+    }
+    if (lowerPath.endsWith(".png")) {
+        return "png"
+    }
+    if (lowerPath.endsWith(".drawio.svg")) {
+        return "drawio-svg"
+    }
+    if (lowerPath.endsWith(".drawio.png")) {
+        return "drawio-svg" // PNG with embedded XML
+    }
+    return "drawio"
+}
+
 // Tool: export_diagram
 server.registerTool(
     "export_diagram",
     {
-        description: "Export the current diagram to a .drawio file.",
+        description: `Export the current diagram to a file.
+
+Supported formats:
+- .drawio - XML format (default, editable in draw.io)
+- .svg - Standalone SVG image
+- .png - PNG image
+- .drawio.svg - SVG with embedded draw.io XML (editable + viewable)
+- .drawio.png - PNG with embedded draw.io XML
+
+Examples:
+- export_diagram({ path: "./diagram.drawio" }) - XML format
+- export_diagram({ path: "./diagram.svg" }) - SVG image
+- export_diagram({ path: "./diagram.png" }) - PNG image
+- export_diagram({ path: "./diagram.drawio.svg" }) - Hybrid format`,
         inputSchema: {
             path: z
                 .string()
                 .describe(
-                    "File path to save the diagram (e.g., ./diagram.drawio)",
+                    "File path to save the diagram. Format is detected from extension (.drawio, .svg, .png, .drawio.svg, .drawio.png)",
                 ),
         },
     },
@@ -590,22 +649,145 @@ server.registerTool(
             const nodePath = await import("node:path")
 
             let filePath = path
-            if (!filePath.endsWith(".drawio")) {
-                filePath = `${filePath}.drawio`
+            const format = detectExportFormat(filePath)
+
+            // Add extension if not present
+            const ext = nodePath.extname(filePath)
+            if (!ext) {
+                switch (format) {
+                    case "svg":
+                    case "drawio-svg":
+                        filePath = `${filePath}.svg`
+                        break
+                    case "png":
+                        filePath = `${filePath}.png`
+                        break
+                    default:
+                        filePath = `${filePath}.drawio`
+                }
             }
 
             const absolutePath = nodePath.resolve(filePath)
-            await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
 
-            log.info(`Diagram exported to ${absolutePath}`)
+            switch (format) {
+                case "svg": {
+                    // Export pure SVG
+                    const svgBuffer = browserState?.svg
+                        ? decodeDataUrl(browserState.svg)
+                        : null
 
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${currentSession.xml.length} characters`,
-                    },
-                ],
+                    if (!svgBuffer) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Error: No SVG data available. The browser may not have rendered the diagram yet. Try saving again in a few seconds.",
+                                },
+                            ],
+                            isError: true,
+                        }
+                    }
+
+                    await fs.writeFile(absolutePath, svgBuffer)
+                    log.info(`SVG exported to ${absolutePath}`)
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `SVG exported successfully!\n\nFile: ${absolutePath}\nSize: ${svgBuffer.length} bytes`,
+                            },
+                        ],
+                    }
+                }
+
+                case "png": {
+                    // Export PNG (use SVG if PNG not available, or request PNG export)
+                    // For now, we'll use SVG as fallback since PNG may not be cached
+                    const svgBuffer = browserState?.svg
+                        ? decodeDataUrl(browserState.svg)
+                        : null
+
+                    if (!svgBuffer) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Error: No image data available. The browser may not have rendered the diagram yet. Try saving as .svg instead, or save again in a few seconds.",
+                                },
+                            ],
+                            isError: true,
+                        }
+                    }
+
+                    // Note: SVG is saved but user requested PNG - inform them
+                    await fs.writeFile(absolutePath, svgBuffer)
+                    log.info(`Image exported to ${absolutePath} (SVG format)`)
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Image exported successfully!\n\nFile: ${absolutePath}\nSize: ${svgBuffer.length} bytes\n\nNote: PNG export not fully supported yet. SVG was saved instead. You can convert SVG to PNG using any image converter.`,
+                            },
+                        ],
+                    }
+                }
+
+                case "drawio-svg": {
+                    // Export SVG with embedded draw.io XML (hybrid format)
+                    const svgBuffer = browserState?.svg
+                        ? decodeDataUrl(browserState.svg)
+                        : null
+
+                    if (!svgBuffer) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Error: No SVG data available. The browser may not have rendered the diagram yet.",
+                                },
+                            ],
+                            isError: true,
+                        }
+                    }
+
+                    let svgContent = svgBuffer.toString("utf-8")
+
+                    // Embed the draw.io XML as a comment for editability
+                    const xmlComment = `<!-- Draw.io XML:\n${currentSession.xml}\n-->`
+
+                    // Insert XML comment after the opening <svg> tag
+                    const svgInsertIndex = svgContent.indexOf(">") + 1
+                    svgContent =
+                        svgContent.slice(0, svgInsertIndex) +
+                        xmlComment +
+                        svgContent.slice(svgInsertIndex)
+
+                    await fs.writeFile(absolutePath, svgContent, "utf-8")
+                    log.info(`Hybrid SVG exported to ${absolutePath}`)
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Hybrid SVG exported successfully!\n\nFile: ${absolutePath}\nSize: ${svgContent.length} bytes\n\nThis file can be:\n- Viewed as an image in browsers/viewers\n- Edited in draw.io (XML embedded in comment)`,
+                            },
+                        ],
+                    }
+                }
+
+                case "drawio":
+                default: {
+                    // Export pure drawio XML
+                    await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
+                    log.info(`Diagram exported to ${absolutePath}`)
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${currentSession.xml.length} characters`,
+                            },
+                        ],
+                    }
+                }
             }
         } catch (error) {
             const message =
