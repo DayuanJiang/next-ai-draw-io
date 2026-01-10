@@ -67,7 +67,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload unsigned artifacts for signing
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         id: upload-unsigned
         with:
           name: windows-unsigned
