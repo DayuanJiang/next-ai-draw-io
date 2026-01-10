@@ -1,4 +1,5 @@
 import type { MutableRefObject } from "react"
+import type { DiagramOperation } from "@/components/chat/types"
 import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 
 const DEBUG = process.env.NODE_ENV === "development"
@@ -28,12 +29,6 @@ type AddToolOutputError = {
 type AddToolOutputParams = AddToolOutputSuccess | AddToolOutputError
 
 type AddToolOutputFn = (params: AddToolOutputParams) => void
-
-interface DiagramOperation {
-    operation: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
 
 interface UseDiagramToolHandlersParams {
     partialXmlRef: MutableRefObject<string>
