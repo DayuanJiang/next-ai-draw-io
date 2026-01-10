@@ -25,20 +25,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+
+      - name: Install pnpm
+        run: npm i -g pnpm
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Approve builds
+        run: pnpm approve-builds
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
 
       - name: Lint check
-        run: npm run check
+        run: pnpm run check
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Security audit
-        run: npm audit --audit-level=high --omit=dev
+        run: pnpm audit --audit-level=high --prod
