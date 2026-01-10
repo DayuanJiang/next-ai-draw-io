@@ -219,7 +219,7 @@ export function ChatInput({
             localStorage.getItem(STORAGE_KEYS.sendShortcut) || "ctrl-enter"
         const shouldSend =
             sendShortcut === "enter"
-                ? e.key === "Enter" && !e.shiftKey
+                ? e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey
                 : (e.metaKey || e.ctrlKey) && e.key === "Enter"
 
         if (shouldSend) {

@@ -107,7 +107,7 @@
         "sendShortcut": "发送快捷键",
         "sendShortcutDescription": "选择发送消息的方式。",
         "enterToSend": "回车发送",
-        "ctrlEnterToSend": "Ctrl+回车发送",
+        "ctrlEnterToSend": "Cmd/Ctrl+回车发送",
         "diagramActions": "图表操作",
         "diagramActionsDescription": "管理图表历史记录和导出",
         "history": "历史记录",

@@ -104,7 +104,7 @@ function SettingsContent({
         () => getStoredAccessCodeRequired() ?? false,
     )
     const [currentLang, setCurrentLang] = useState("en")
-    const [sendShortcut, setSendShortcut] = useState("enter")
+    const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
 
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
@@ -160,7 +160,7 @@ function SettingsContent({
             const storedSendShortcut = localStorage.getItem(
                 STORAGE_KEYS.sendShortcut,
             )
-            setSendShortcut(storedSendShortcut || "enter")
+            setSendShortcut(storedSendShortcut || "ctrl-enter")
 
             setError("")
 

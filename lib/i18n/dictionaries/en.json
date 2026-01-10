@@ -107,7 +107,7 @@
         "sendShortcut": "Send Shortcut",
         "sendShortcutDescription": "Choose how to send messages.",
         "enterToSend": "Enter to send",
-        "ctrlEnterToSend": "Ctrl+Enter to send",
+        "ctrlEnterToSend": "Cmd/Ctrl+Enter to send",
         "diagramActions": "Diagram Actions",
         "diagramActionsDescription": "Manage diagram history and exports",
         "history": "History",
