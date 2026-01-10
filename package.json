@@ -47,7 +47,7 @@
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
-        "@opennextjs/cloudflare": "1.14.7",
+        "@opennextjs/cloudflare": "1.14.8",
         "@openrouter/ai-sdk-provider": "^1.5.4",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
