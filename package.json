@@ -69,7 +69,6 @@
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
         "idb": "^8.0.3",
-        "js-tiktoken": "^1.0.21",
         "jsonrepair": "^3.13.1",
         "lucide-react": "^0.562.0",
         "motion": "^12.23.25",

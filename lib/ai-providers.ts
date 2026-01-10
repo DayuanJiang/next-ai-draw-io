@@ -8,22 +8,9 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
+import type { ProviderName } from "@/lib/types/model-config"
 
-export type ProviderName =
-    | "bedrock"
-    | "openai"
-    | "anthropic"
-    | "google"
-    | "azure"
-    | "ollama"
-    | "openrouter"
-    | "deepseek"
-    | "siliconflow"
-    | "sglang"
-    | "gateway"
-    | "edgeone"
-    | "doubao"
-    | "modelscope"
+export type { ProviderName }
 
 interface ModelConfig {
     model: any
