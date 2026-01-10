@@ -7,7 +7,7 @@
 1. `.env.example` を `.env.local` にコピーします
 2. 選択したプロバイダーの API キーを設定します
 3. `AI_MODEL` を希望のモデルに設定します
-4. `npm run dev` を実行します
+4. `pnpm run dev` を実行します
 
 ## 対応プロバイダー
 

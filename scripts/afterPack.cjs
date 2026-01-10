@@ -37,7 +37,7 @@ module.exports = async (context) => {
         )
         throw new Error(
             "[afterPack] Failed: Required directories not found. " +
-                "Ensure 'npm run electron:prepare' was run before building.",
+                "Ensure 'pnpm run electron:prepare' was run before building.",
         )
     }
 }

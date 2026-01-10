@@ -8,8 +8,11 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
+# Install pnpm using npm
+RUN npm install -g pnpm
+
 # Install dependencies
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
 # Stage 2: Build application
 FROM node:24-alpine AS builder
@@ -34,8 +37,11 @@ ENV NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=${NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE}
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 
+# Install pnpm using npm
+RUN npm install -g pnpm
+
 # Build Next.js application (standalone mode)
-RUN npm run build
+RUN pnpm run build
 
 # Stage 3: Production runtime
 FROM node:24-alpine AS runner

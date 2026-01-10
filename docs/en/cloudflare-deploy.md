@@ -23,7 +23,7 @@ This project can be deployed as a **Cloudflare Worker** using the **OpenNext ada
 3. **Wrangler CLI** installed (dev dependency is fine):
 
 ```bash
-npm install -D wrangler
+pnpm install -D wrangler
 ```
 
 4. Cloudflare login:
@@ -39,7 +39,7 @@ npx wrangler login
 ## Step 1 — Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ---
@@ -169,7 +169,7 @@ Visit: https://dash.cloudflare.com → Workers & Pages → Overview → Set up a
 
 **Option 2: During deploy**
 
-When you run `npm run deploy`, Wrangler may prompt:
+When you run `pnpm run deploy`, Wrangler may prompt:
 
 ```
 Would you like to register a workers.dev subdomain? (Y/n)
@@ -184,7 +184,7 @@ Type `Y` and choose a subdomain name.
 ## Step 5 — Deploy to Cloudflare
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 What the script does:
@@ -249,7 +249,7 @@ https://<worker-name>.<your-subdomain>.workers.dev
 Preview the Worker locally before deploying:
 
 ```bash
-npm run preview
+pnpm run preview
 ```
 
 ---

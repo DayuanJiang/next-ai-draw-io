@@ -56,7 +56,7 @@ export async function startNextServer(): Promise<string> {
     if (!existsSync(serverPath)) {
         throw new Error(
             `Server script not found at ${serverPath}. ` +
-                "Please ensure the app was built correctly with 'npm run build'.",
+                "Please ensure the app was built correctly with 'pnpm run build'.",
         )
     }
 

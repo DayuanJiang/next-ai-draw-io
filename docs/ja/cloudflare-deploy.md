@@ -23,7 +23,7 @@
 3. **Wrangler CLI** のインストール（開発依存関係で問題ありません）：
 
 ```bash
-npm install -D wrangler
+pnpm install -D wrangler
 ```
 
 4. Cloudflare へのログイン：
@@ -39,7 +39,7 @@ npx wrangler login
 ## ステップ 1 — 依存関係のインストール
 
 ```bash
-npm install
+pnpm install
 ```
 
 ---
@@ -169,7 +169,7 @@ export default defineCloudflareConfig({
 
 **オプション 2: デプロイ時**
 
-`npm run deploy` を実行した際、Wrangler が以下のように尋ねてくる場合があります：
+`pnpm run deploy` を実行した際、Wrangler が以下のように尋ねてくる場合があります：
 
 ```
 Would you like to register a workers.dev subdomain? (Y/n)
@@ -184,7 +184,7 @@ Would you like to register a workers.dev subdomain? (Y/n)
 ## ステップ 5 — Cloudflare へのデプロイ
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 スクリプトの処理内容：
@@ -249,7 +249,7 @@ https://<worker-name>.<your-subdomain>.workers.dev
 デプロイ前に Worker をローカルでプレビューできます：
 
 ```bash
-npm run preview
+pnpm run preview
 ```
 
 ---

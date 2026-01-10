@@ -143,7 +143,7 @@ function startNextServer(presetEnv) {
         }
     }
 
-    const nextProcess = spawn("npm", ["run", "dev"], {
+    const nextProcess = spawn("pnpm", ["run", "dev"], {
         cwd: rootDir,
         stdio: "inherit",
         shell: true,
@@ -183,7 +183,7 @@ async function main() {
     // Compile Electron TypeScript
     console.log("\n2. Compiling Electron code...")
     try {
-        await runCommand("npm", ["run", "electron:compile"])
+        await runCommand("pnpm", ["run", "electron:compile"])
     } catch (err) {
         console.error("❌ Electron compilation failed:", err.message)
         nextProcess.kill()
@@ -192,7 +192,7 @@ async function main() {
 
     // Start Electron
     console.log("\n3. Starting Electron...")
-    const electronProcess = spawn("npm", ["run", "electron:start"], {
+    const electronProcess = spawn("pnpm", ["run", "electron:start"], {
         cwd: rootDir,
         stdio: "inherit",
         shell: true,
