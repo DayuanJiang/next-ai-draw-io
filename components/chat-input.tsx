@@ -216,7 +216,7 @@ export function ChatInput({
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         const sendShortcut =
-            localStorage.getItem(STORAGE_KEYS.sendShortcut) || "enter"
+            localStorage.getItem(STORAGE_KEYS.sendShortcut) || "ctrl-enter"
         const shouldSend =
             sendShortcut === "enter"
                 ? e.key === "Enter" && !e.shiftKey
