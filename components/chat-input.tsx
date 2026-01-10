@@ -193,6 +193,9 @@ export function ChatInput({
     const [showHistory, setShowHistory] = useState(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
+    const [sendShortcut] = useState(() =>
+        localStorage.getItem(STORAGE_KEYS.sendShortcut) || "ctrl-enter",
+    )
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -215,8 +218,6 @@ export function ChatInput({
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        const sendShortcut =
-            localStorage.getItem(STORAGE_KEYS.sendShortcut) || "ctrl-enter"
         const shouldSend =
             sendShortcut === "enter"
                 ? e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey
