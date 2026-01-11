@@ -97,9 +97,9 @@ function parseIntSafe(
  * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens (1024-64000)
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
  * - GOOGLE_THINKING_BUDGET: Google Gemini 2.5 thinking budget in tokens (1024-100000)
- * - GOOGLE_THINKING_LEVEL: Google Gemini 3 thinking level (minimal/low/medium/high)
+ * - GOOGLE_THINKING_LEVEL: Google Gemini 3 thinking level (low/high)
  * - GOOGLE_VERTEX_THINKING_BUDGET: Vertex AI Gemini 2.5 thinking budget in tokens (1024-100000)
- * - GOOGLE_VERTEX_THINKING_LEVEL: Vertex AI Gemini 3 thinking level (minimal/low/medium/high)
+ * - GOOGLE_VERTEX_THINKING_LEVEL: Vertex AI Gemini 3 thinking level (low/high)
  * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low/medium/high)
  * - AZURE_REASONING_SUMMARY: Azure reasoning summary (none/brief/detailed)
  * - BEDROCK_REASONING_BUDGET_TOKENS: Bedrock Claude reasoning budget in tokens (1024-64000)
@@ -284,14 +284,14 @@ function buildProviderOptions(
                 const thinkingConfig: Record<string, any> = {
                     includeThoughts: true,
                 }
-                if (thinkingBudget) {
-                    thinkingConfig.thinkingBudget = thinkingBudget
-                } else if (thinkingLevel) {
+                const isGemini3 =
+                    modelId.includes("gemini-3") || modelId.includes("gemini3")
+                if (isGemini3 && thinkingLevel) {
                     thinkingConfig.thinkingLevel = thinkingLevel as
-                        | "minimal"
                         | "low"
-                        | "medium"
                         | "high"
+                } else if (!isGemini3 && thinkingBudget) {
+                    thinkingConfig.thinkingBudget = thinkingBudget
                 }
                 options.google = { thinkingConfig }
             }
