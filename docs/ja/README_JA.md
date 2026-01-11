@@ -201,6 +201,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   OpenAI
 -   Anthropic
 -   Google AI
+-   Google Vertex AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter

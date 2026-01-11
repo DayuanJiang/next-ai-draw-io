@@ -200,6 +200,7 @@ npm run dev
 -   OpenAI
 -   Anthropic
 -   Google AI
+-   Google Vertex AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
