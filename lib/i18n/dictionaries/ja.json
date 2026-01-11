@@ -100,8 +100,6 @@
         "switchTo": "切り替え",
         "minimal": "ミニマル",
         "sketch": "スケッチ",
-        "closeProtection": "ページ離脱確認",
-        "closeProtectionDescription": "ページを離れる際に確認を表示します。",
         "diagramStyle": "ダイアグラムスタイル",
         "diagramStyleDescription": "ミニマルとスタイル付きの出力を切り替えます。",
         "sendShortcut": "送信ショートカット",
