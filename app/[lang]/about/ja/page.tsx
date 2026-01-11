@@ -307,6 +307,7 @@ export default function AboutJA() {
                         </li>
                         <li>Anthropic</li>
                         <li>Google AI</li>
+                        <li>Google Vertex AI</li>
                         <li>Azure OpenAI</li>
                         <li>Ollama</li>
                         <li>OpenRouter</li>
