@@ -70,7 +70,6 @@ interface ChatPanelProps {
     darkMode: boolean
     onToggleDarkMode: () => void
     isMobile?: boolean
-    onCloseProtectionChange?: (enabled: boolean) => void
 }
 
 // Constants for tool states
@@ -111,7 +110,6 @@ export default function ChatPanel({
     darkMode,
     onToggleDarkMode,
     isMobile = false,
-    onCloseProtectionChange,
 }: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
@@ -1296,7 +1294,6 @@ export default function ChatPanel({
             <SettingsDialog
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
-                onCloseProtectionChange={onCloseProtectionChange}
                 drawioUi={drawioUi}
                 onToggleDrawioUi={onToggleDrawioUi}
                 darkMode={darkMode}
