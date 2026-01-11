@@ -3,6 +3,7 @@ import { createAnthropic } from "@ai-sdk/anthropic"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
@@ -121,7 +122,12 @@ export async function POST(req: Request) {
                     { status: 400 },
                 )
             }
-        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
+        } else if (
+            provider !== "ollama" &&
+            provider !== "edgeone" &&
+            provider !== "vertexai" &&
+            !apiKey
+        ) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -155,6 +161,30 @@ export async function POST(req: Request) {
                     ...(baseUrl && { baseURL: baseUrl }),
                 })
                 model = google(modelId)
+                break
+            }
+
+            case "vertexai": {
+                // Vertex AI uses GCP service account authentication via environment variables
+                const vertexProject = process.env.GOOGLE_VERTEX_PROJECT
+                const vertexLocation =
+                    process.env.GOOGLE_VERTEX_LOCATION || "us-central1"
+
+                if (!vertexProject) {
+                    return NextResponse.json(
+                        {
+                            valid: false,
+                            error: "GOOGLE_VERTEX_PROJECT environment variable is required",
+                        },
+                        { status: 400 },
+                    )
+                }
+
+                const vertex = createVertex({
+                    project: vertexProject,
+                    location: vertexLocation,
+                })
+                model = vertex(modelId)
                 break
             }
 
