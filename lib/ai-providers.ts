@@ -4,6 +4,7 @@ import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
+import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
@@ -38,6 +39,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "openai",
     "anthropic",
     "google",
+    "vertexai",
     "azure",
     "bedrock",
     "openrouter",
@@ -95,7 +97,9 @@ function parseIntSafe(
  * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens (1024-64000)
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
  * - GOOGLE_THINKING_BUDGET: Google Gemini 2.5 thinking budget in tokens (1024-100000)
- * - GOOGLE_THINKING_LEVEL: Google Gemini 3 thinking level (low/high)
+ * - GOOGLE_THINKING_LEVEL: Google Gemini 3 thinking level (minimal/low/medium/high)
+ * - GOOGLE_VERTEX_THINKING_BUDGET: Vertex AI Gemini 2.5 thinking budget in tokens (1024-100000)
+ * - GOOGLE_VERTEX_THINKING_LEVEL: Vertex AI Gemini 3 thinking level (minimal/low/medium/high)
  * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low/medium/high)
  * - AZURE_REASONING_SUMMARY: Azure reasoning summary (none/brief/detailed)
  * - BEDROCK_REASONING_BUDGET_TOKENS: Bedrock Claude reasoning budget in tokens (1024-64000)
@@ -260,7 +264,39 @@ function buildProviderOptions(
             }
             break
         }
+        case "vertexai": {
+            // Google Vertex supports the same thinking config as standard Google provider
+            const thinkingBudget = parseIntSafe(
+                process.env.GOOGLE_VERTEX_THINKING_BUDGET,
+                "GOOGLE_VERTEX_THINKING_BUDGET",
+                1024,
+                100000,
+            )
+            const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
 
+            if (
+                modelId &&
+                (modelId.includes("gemini-2") ||
+                    modelId.includes("gemini-3") ||
+                    modelId.includes("gemini2") ||
+                    modelId.includes("gemini3"))
+            ) {
+                const thinkingConfig: Record<string, any> = {
+                    includeThoughts: true,
+                }
+                if (thinkingBudget) {
+                    thinkingConfig.thinkingBudget = thinkingBudget
+                } else if (thinkingLevel) {
+                    thinkingConfig.thinkingLevel = thinkingLevel as
+                        | "minimal"
+                        | "low"
+                        | "medium"
+                        | "high"
+                }
+                options.google = { thinkingConfig }
+            }
+            break
+        }
         case "azure": {
             const reasoningEffort = process.env.AZURE_REASONING_EFFORT
             const reasoningSummary = process.env.AZURE_REASONING_SUMMARY
@@ -362,6 +398,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     openai: "OPENAI_API_KEY",
     anthropic: "ANTHROPIC_API_KEY",
     google: "GOOGLE_GENERATIVE_AI_API_KEY",
+    vertexai: null, // Uses GOOGLE_APPLICATION_CREDENTIALS or IAM role
     azure: "AZURE_API_KEY",
     ollama: null, // No credentials needed for local Ollama
     openrouter: "OPENROUTER_API_KEY",
@@ -642,6 +679,26 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             } else {
                 model = google(modelId)
             }
+            break
+        }
+        case "vertexai": {
+            // Google Vertex AI uses GCP service account authentication, not API keys
+            // Auth is handled via GOOGLE_APPLICATION_CREDENTIALS env var or GCP default credentials
+            const vertexProject = process.env.GOOGLE_VERTEX_PROJECT
+            const vertexLocation =
+                process.env.GOOGLE_VERTEX_LOCATION || "us-central1"
+
+            if (!vertexProject) {
+                throw new Error(
+                    "GOOGLE_VERTEX_PROJECT environment variable is required for vertexai provider.",
+                )
+            }
+
+            const vertexProvider = createVertex({
+                project: vertexProject,
+                location: vertexLocation,
+            })
+            model = vertexProvider(modelId)
             break
         }
 
