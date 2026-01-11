@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { STORAGE_KEYS } from "@/lib/storage"
 
 // Reusable setting item component for consistent layout
 function SettingItem({
@@ -103,6 +104,7 @@ function SettingsContent({
         () => getStoredAccessCodeRequired() ?? false,
     )
     const [currentLang, setCurrentLang] = useState("en")
+    const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
 
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
@@ -154,6 +156,11 @@ function SettingsContent({
             )
             // Default to true if not set
             setCloseProtection(storedCloseProtection !== "false")
+
+            const storedSendShortcut = localStorage.getItem(
+                STORAGE_KEYS.sendShortcut,
+            )
+            setSendShortcut(storedSendShortcut || "ctrl-enter")
 
             setError("")
 
@@ -423,6 +430,43 @@ function SettingsContent({
                                     : dict.chat.styledMode}
                             </span>
                         </div>
+                    </SettingItem>
+
+                    {/* Send Shortcut */}
+                    <SettingItem
+                        label={dict.settings.sendShortcut}
+                        description={dict.settings.sendShortcutDescription}
+                    >
+                        <Select
+                            value={sendShortcut}
+                            onValueChange={(value) => {
+                                setSendShortcut(value)
+                                localStorage.setItem(
+                                    STORAGE_KEYS.sendShortcut,
+                                    value,
+                                )
+                                window.dispatchEvent(
+                                    new CustomEvent("sendShortcutChange", {
+                                        detail: value,
+                                    }),
+                                )
+                            }}
+                        >
+                            <SelectTrigger
+                                id="send-shortcut-select"
+                                className="w-[170px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="enter">
+                                    {dict.settings.enterToSend}
+                                </SelectItem>
+                                <SelectItem value="ctrl-enter">
+                                    {dict.settings.ctrlEnterToSend}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </SettingItem>
 
                     {/* Proxy Settings - Electron only */}
