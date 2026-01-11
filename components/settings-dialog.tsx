@@ -445,6 +445,11 @@ function SettingsContent({
                                     STORAGE_KEYS.sendShortcut,
                                     value,
                                 )
+                                window.dispatchEvent(
+                                    new CustomEvent("sendShortcutChange", {
+                                        detail: value,
+                                    }),
+                                )
                             }}
                         >
                             <SelectTrigger

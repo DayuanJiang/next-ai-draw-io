@@ -193,9 +193,7 @@ export function ChatInput({
     const [showHistory, setShowHistory] = useState(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
-    const [sendShortcut] = useState(() =>
-        localStorage.getItem(STORAGE_KEYS.sendShortcut) || "ctrl-enter",
-    )
+    const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -211,6 +209,24 @@ export function ChatInput({
     useEffect(() => {
         adjustTextareaHeight()
     }, [input, adjustTextareaHeight])
+
+    // Load send shortcut preference from localStorage and listen for changes
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEYS.sendShortcut)
+        if (stored) setSendShortcut(stored)
+
+        const handleChange = (e: CustomEvent<string>) =>
+            setSendShortcut(e.detail)
+        window.addEventListener(
+            "sendShortcutChange",
+            handleChange as EventListener,
+        )
+        return () =>
+            window.removeEventListener(
+                "sendShortcutChange",
+                handleChange as EventListener,
+            )
+    }, [])
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         onChange(e)
