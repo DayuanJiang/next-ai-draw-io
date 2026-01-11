@@ -78,6 +78,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     sglang: "openai", // SGLang is OpenAI-compatible
     gateway: "vercel",
     edgeone: "tencent-cloud",
+    vertexai: "google",
     doubao: "bytedance",
     modelscope: "modelscope",
 }
@@ -280,6 +281,7 @@ export function ModelConfigDialog({
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
         const isEdgeOne = selectedProvider.provider === "edgeone"
+        const isVertexAI = selectedProvider.provider === "vertexai"
         if (isBedrock) {
             if (
                 !selectedProvider.awsAccessKeyId ||
@@ -288,7 +290,7 @@ export function ModelConfigDialog({
             ) {
                 return
             }
-        } else if (!isEdgeOne && !selectedProvider.apiKey) {
+        } else if (!isEdgeOne && !isVertexAI && !selectedProvider.apiKey) {
             return
         }
 
@@ -867,7 +869,9 @@ export function ModelConfigDialog({
                                                     </div>
                                                 </>
                                             ) : selectedProvider.provider ===
-                                              "edgeone" ? (
+                                                  "edgeone" ||
+                                              selectedProvider.provider ===
+                                                  "vertexai" ? (
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
                                                         <Button
