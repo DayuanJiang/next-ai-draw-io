@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
-import { STORAGE_CLOSE_PROTECTION_KEY } from "@/components/settings-dialog"
 import {
     ResizableHandle,
     ResizablePanel,
@@ -29,7 +28,6 @@ export default function Home() {
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
-    const [closeProtection, setCloseProtection] = useState(false)
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isMobileRef = useRef(false)
@@ -64,13 +62,6 @@ export default function Home() {
             ).matches
             setDarkMode(prefersDark)
             document.documentElement.classList.toggle("dark", prefersDark)
-        }
-
-        const savedCloseProtection = localStorage.getItem(
-            STORAGE_CLOSE_PROTECTION_KEY,
-        )
-        if (savedCloseProtection === "true") {
-            setCloseProtection(true)
         }
 
         setIsLoaded(true)
@@ -145,20 +136,6 @@ export default function Home() {
         window.addEventListener("keydown", handleKeyDown)
         return () => window.removeEventListener("keydown", handleKeyDown)
     }, [])
-
-    // Show confirmation dialog when user tries to leave the page
-    useEffect(() => {
-        if (!closeProtection) return
-
-        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-            event.preventDefault()
-            return ""
-        }
-
-        window.addEventListener("beforeunload", handleBeforeUnload)
-        return () =>
-            window.removeEventListener("beforeunload", handleBeforeUnload)
-    }, [closeProtection])
 
     return (
         <div className="h-screen bg-background relative overflow-hidden">
@@ -243,7 +220,6 @@ export default function Home() {
                                 darkMode={darkMode}
                                 onToggleDarkMode={handleDarkModeChange}
                                 isMobile={isMobile}
-                                onCloseProtectionChange={setCloseProtection}
                             />
                         </Suspense>
                     </div>
