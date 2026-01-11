@@ -24,6 +24,7 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+import { STORAGE_KEYS } from "@/lib/storage"
 import type { FlattenedModel } from "@/lib/types/model-config"
 import { extractUrlContent, type UrlData } from "@/lib/url-utils"
 import { FilePreviewList } from "./file-preview-list"
@@ -192,6 +193,7 @@ export function ChatInput({
     const [showHistory, setShowHistory] = useState(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
+    const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -208,13 +210,36 @@ export function ChatInput({
         adjustTextareaHeight()
     }, [input, adjustTextareaHeight])
 
+    // Load send shortcut preference from localStorage and listen for changes
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEYS.sendShortcut)
+        if (stored) setSendShortcut(stored)
+
+        const handleChange = (e: CustomEvent<string>) =>
+            setSendShortcut(e.detail)
+        window.addEventListener(
+            "sendShortcutChange",
+            handleChange as EventListener,
+        )
+        return () =>
+            window.removeEventListener(
+                "sendShortcutChange",
+                handleChange as EventListener,
+            )
+    }, [])
+
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         onChange(e)
         adjustTextareaHeight()
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        const shouldSend =
+            sendShortcut === "enter"
+                ? e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey
+                : (e.metaKey || e.ctrlKey) && e.key === "Enter"
+
+        if (shouldSend) {
             e.preventDefault()
             const form = e.currentTarget.closest("form")
             if (form && input.trim() && !isDisabled) {
