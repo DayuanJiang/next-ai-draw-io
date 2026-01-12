@@ -202,7 +202,7 @@ export async function POST(req: Request) {
             case "siliconflow": {
                 const sf = createOpenAI({
                     apiKey,
-                    baseURL: baseUrl || "https://api.siliconflow.com/v1",
+                    baseURL: baseUrl || "https://api.siliconflow.cn/v1",
                 })
                 model = sf.chat(modelId)
                 break
@@ -251,14 +251,96 @@ export async function POST(req: Request) {
             }
 
             case "doubao": {
-                // ByteDance Doubao uses DeepSeek-compatible API
-                const doubao = createDeepSeek({
-                    apiKey,
-                    baseURL:
-                        baseUrl || "https://ark.cn-beijing.volces.com/api/v3",
-                })
-                model = doubao(modelId)
+                // ByteDance Doubao: use DeepSeek for DeepSeek/Kimi models, OpenAI for others
+                const doubaoBaseUrl =
+                    baseUrl || "https://ark.cn-beijing.volces.com/api/v3"
+                const lowerModelId = modelId.toLowerCase()
+                if (
+                    lowerModelId.includes("deepseek") ||
+                    lowerModelId.includes("kimi")
+                ) {
+                    const doubao = createDeepSeek({
+                        apiKey,
+                        baseURL: doubaoBaseUrl,
+                    })
+                    model = doubao(modelId)
+                } else {
+                    const doubao = createOpenAI({
+                        apiKey,
+                        baseURL: doubaoBaseUrl,
+                    })
+                    model = doubao.chat(modelId)
+                }
                 break
+            }
+
+            case "modelscope": {
+                const baseURL =
+                    baseUrl || "https://api-inference.modelscope.cn/v1"
+                const startTime = Date.now()
+
+                try {
+                    // Initiate a streaming request (required for QwQ-32B and certain Qwen3 models)
+                    const response = await fetch(
+                        `${baseURL}/chat/completions`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${apiKey}`,
+                            },
+                            body: JSON.stringify({
+                                model: modelId,
+                                messages: [
+                                    { role: "user", content: "Say 'OK'" },
+                                ],
+                                max_tokens: 20,
+                                stream: true,
+                                enable_thinking: false,
+                            }),
+                        },
+                    )
+
+                    if (!response.ok) {
+                        const errorText = await response.text()
+                        throw new Error(
+                            `ModelScope API error (${response.status}): ${errorText}`,
+                        )
+                    }
+
+                    const contentType =
+                        response.headers.get("content-type") || ""
+                    const isValidStreamingResponse =
+                        response.status === 200 &&
+                        (contentType.includes("text/event-stream") ||
+                            contentType.includes("application/json"))
+
+                    if (!isValidStreamingResponse) {
+                        throw new Error(
+                            `Unexpected response format: ${contentType}`,
+                        )
+                    }
+
+                    const responseTime = Date.now() - startTime
+
+                    if (response.body) {
+                        response.body.cancel().catch(() => {
+                            /* Ignore cancellation errors */
+                        })
+                    }
+
+                    return NextResponse.json({
+                        valid: true,
+                        responseTime,
+                        note: "ModelScope model validated (using streaming API)",
+                    })
+                } catch (error) {
+                    console.error(
+                        "[validate-model] ModelScope validation failed:",
+                        error,
+                    )
+                    throw error
+                }
             }
 
             default:

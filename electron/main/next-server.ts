@@ -69,6 +69,8 @@ export async function startNextServer(): Promise<string> {
         NODE_ENV: "production",
         PORT: String(port),
         HOSTNAME: "localhost",
+        // Enable Node.js built-in proxy support for fetch (Node.js 24+)
+        NODE_USE_ENV_PROXY: "1",
     }
 
     // Set cache directory to a writable location (user's app data folder)
@@ -84,6 +86,13 @@ export async function startNextServer(): Promise<string> {
             env[key] = value
         }
     }
+
+    // Debug: log proxy-related env vars
+    console.log("Proxy env vars being passed to server:", {
+        HTTP_PROXY: env.HTTP_PROXY || env.http_proxy || "not set",
+        HTTPS_PROXY: env.HTTPS_PROXY || env.https_proxy || "not set",
+        NODE_USE_ENV_PROXY: env.NODE_USE_ENV_PROXY || "not set",
+    })
 
     // Use Electron's utilityProcess API for running Node.js in background
     // This is the recommended way to run Node.js code in Electron
@@ -114,13 +123,41 @@ export async function startNextServer(): Promise<string> {
 }
 
 /**
- * Stop the Next.js server process
+ * Stop the Next.js server process and wait for it to exit
  */
-export function stopNextServer(): void {
+export async function stopNextServer(): Promise<void> {
     if (serverProcess) {
         console.log("Stopping Next.js server...")
+
+        // Create a promise that resolves when the process exits
+        const exitPromise = new Promise<void>((resolve) => {
+            const proc = serverProcess
+            if (!proc) {
+                resolve()
+                return
+            }
+
+            const onExit = () => {
+                resolve()
+            }
+
+            proc.once("exit", onExit)
+
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                proc.removeListener("exit", onExit)
+                resolve()
+            }, 5000)
+        })
+
         serverProcess.kill()
         serverProcess = null
+
+        // Wait for process to exit
+        await exitPromise
+
+        // Additional wait for OS to release port
+        await new Promise((resolve) => setTimeout(resolve, 500))
     }
 }
 
@@ -150,8 +187,8 @@ async function waitForServerStop(timeout = 5000): Promise<void> {
 export async function restartNextServer(): Promise<string> {
     console.log("Restarting Next.js server...")
 
-    // Stop the current server
-    stopNextServer()
+    // Stop the current server and wait for it to exit
+    await stopNextServer()
 
     // Wait for the port to be released
     await waitForServerStop()

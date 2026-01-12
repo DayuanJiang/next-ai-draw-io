@@ -1,7 +1,7 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "extends": ["config:recommended"],
-    "schedule": ["after 10am on saturday"],
+    "schedule": ["after 10am on the first day of the month"],
     "timezone": "Asia/Tokyo",
     "packageRules": [
         {
@@ -13,6 +13,7 @@
         {
             "matchUpdateTypes": ["major"],
             "matchPackagePatterns": ["*"],
+            "groupName": "major dependencies",
             "automerge": false
         },
         {

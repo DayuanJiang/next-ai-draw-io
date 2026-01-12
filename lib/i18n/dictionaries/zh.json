@@ -28,7 +28,8 @@
         "azure": "Azure OpenAI",
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
-        "siliconflow": "SiliconFlow"
+        "siliconflow": "SiliconFlow",
+        "modelscope": "ModelScope"
     },
     "chat": {
         "placeholder": "描述您的图表或上传文件...",
@@ -51,7 +52,8 @@
         "badResponse": "无帮助",
         "clickToEdit": "点击编辑",
         "editMessage": "编辑消息",
-        "saveAndSubmit": "保存并提交"
+        "saveAndSubmit": "保存并提交",
+        "ExtractURL": "从 URL 提取"
     },
     "examples": {
         "title": "用 AI 创建图表",
@@ -106,10 +108,20 @@
         "closeProtectionDescription": "离开页面时显示确认。",
         "diagramStyle": "图表样式",
         "diagramStyleDescription": "切换简约与精致图表输出模式。",
+        "sendShortcut": "发送快捷键",
+        "sendShortcutDescription": "选择发送消息的方式。",
+        "enterToSend": "回车发送",
+        "ctrlEnterToSend": "Cmd/Ctrl+回车发送",
         "diagramActions": "图表操作",
         "diagramActionsDescription": "管理图表历史记录和导出",
         "history": "历史记录",
-        "download": "下载"
+        "download": "下载",
+        "proxy": "代理设置",
+        "proxyDescription": "配置 API 请求的 HTTP/HTTPS 代理（仅桌面版）",
+        "httpProxy": "HTTP 代理",
+        "httpsProxy": "HTTPS 代理",
+        "applyProxy": "应用",
+        "proxyApplied": "代理设置已应用"
     },
     "save": {
         "title": "保存图表",
@@ -189,6 +201,15 @@
         "reading": "读取中...",
         "chars": "字符",
         "removeFile": "移除文件"
+    },
+    "url": {
+        "title": "从 URL 提取内容",
+        "description": "粘贴 URL 以提取和分析其内容",
+        "Extracting": "提取中...",
+        "extract": "提取",
+        "Cancel": "取消",
+        "enterUrl": "请输入 URL",
+        "invalidFormat": "URL 格式无效"
     },
     "reasoning": {
         "thinking": "思考中...",

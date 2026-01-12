@@ -158,6 +158,19 @@ AI_MODEL=llama3.2
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
+### ModelScope
+
+```bash
+MODELSCOPE_API_KEY=your_api_key
+AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+```
+
+任意のカスタムエンドポイント:
+
+```bash
+MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway は、単一の API キーで複数の AI プロバイダーへの統合アクセスを提供します。これにより認証が簡素化され、複数の API キーを管理することなくプロバイダーを切り替えることができます。

@@ -25,6 +25,19 @@ interface ApplyPresetResult {
     env?: Record<string, string>
 }
 
+/** Proxy configuration interface */
+interface ProxyConfig {
+    httpProxy?: string
+    httpsProxy?: string
+}
+
+/** Result of setting proxy */
+interface SetProxyResult {
+    success: boolean
+    error?: string
+    devMode?: boolean
+}
+
 declare global {
     interface Window {
         /** Main window Electron API */
@@ -45,6 +58,10 @@ declare global {
             openFile: () => Promise<string | null>
             /** Save data to file via save dialog */
             saveFile: (data: string) => Promise<boolean>
+            /** Get proxy configuration */
+            getProxy: () => Promise<ProxyConfig>
+            /** Set proxy configuration (saves and restarts server) */
+            setProxy: (config: ProxyConfig) => Promise<SetProxyResult>
         }
 
         /** Settings window Electron API */
@@ -71,4 +88,4 @@ declare global {
     }
 }
 
-export { ConfigPreset, ApplyPresetResult }
+export { ConfigPreset, ApplyPresetResult, ProxyConfig, SetProxyResult }
