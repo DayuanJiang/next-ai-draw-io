@@ -30,6 +30,9 @@ export interface ClientOverrides {
     awsSecretAccessKey?: string | null
     awsRegion?: string | null
     awsSessionToken?: string | null
+    // Vertex AI config
+    vertexProject?: string | null
+    vertexLocation?: string | null
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
 }
@@ -684,13 +687,17 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "vertexai": {
             // Google Vertex AI uses GCP service account authentication, not API keys
             // Auth is handled via GOOGLE_APPLICATION_CREDENTIALS env var or GCP default credentials
-            const vertexProject = process.env.GOOGLE_VERTEX_PROJECT
+            // Client-provided Project ID and Location, falling back to server environment variables
+            const vertexProject =
+                overrides?.vertexProject || process.env.GOOGLE_VERTEX_PROJECT
             const vertexLocation =
-                process.env.GOOGLE_VERTEX_LOCATION || "us-central1"
+                overrides?.vertexLocation ||
+                process.env.GOOGLE_VERTEX_LOCATION ||
+                "us-central1"
 
             if (!vertexProject) {
                 throw new Error(
-                    "GOOGLE_VERTEX_PROJECT environment variable is required for vertexai provider.",
+                    "Project ID is required for Vertex AI. Please configure it in Settings or set GOOGLE_VERTEX_PROJECT environment variable.",
                 )
             }
 
