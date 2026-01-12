@@ -81,6 +81,9 @@ interface ValidateRequest {
     awsAccessKeyId?: string
     awsSecretAccessKey?: string
     awsRegion?: string
+    // Vertex AI specific
+    vertexProject?: string
+    vertexLocation?: string
 }
 
 export async function POST(req: Request) {
@@ -94,6 +97,8 @@ export async function POST(req: Request) {
             awsAccessKeyId,
             awsSecretAccessKey,
             awsRegion,
+            vertexProject,
+            vertexLocation,
         } = body
 
         if (!provider || !modelId) {
@@ -166,23 +171,27 @@ export async function POST(req: Request) {
 
             case "vertexai": {
                 // Vertex AI uses GCP service account authentication via environment variables
-                const vertexProject = process.env.GOOGLE_VERTEX_PROJECT
-                const vertexLocation =
-                    process.env.GOOGLE_VERTEX_LOCATION || "us-central1"
+                // OR client-provided project/location
+                const project =
+                    vertexProject || process.env.GOOGLE_VERTEX_PROJECT
+                const location =
+                    vertexLocation ||
+                    process.env.GOOGLE_VERTEX_LOCATION ||
+                    "us-central1"
 
-                if (!vertexProject) {
+                if (!project) {
                     return NextResponse.json(
                         {
                             valid: false,
-                            error: "GOOGLE_VERTEX_PROJECT environment variable is required",
+                            error: "Project ID is required (set in Settings or via GOOGLE_VERTEX_PROJECT)",
                         },
                         { status: 400 },
                     )
                 }
 
                 const vertex = createVertex({
-                    project: vertexProject,
-                    location: vertexLocation,
+                    project: project,
+                    location: location,
                 })
                 model = vertex(modelId)
                 break

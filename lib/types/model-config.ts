@@ -37,6 +37,10 @@ export interface ProviderConfig {
     awsSecretAccessKey?: string
     awsRegion?: string
     awsSessionToken?: string // Optional, for temporary credentials
+    // Vertex AI specific fields
+    vertexProject?: string
+    vertexLocation?: string
+
     models: ModelConfig[]
     validated?: boolean // Has API key been validated
 }
@@ -62,6 +66,10 @@ export interface FlattenedModel {
     awsSecretAccessKey?: string
     awsRegion?: string
     awsSessionToken?: string
+    // Vertex AI specific fields
+    vertexProject?: string
+    vertexLocation?: string
+
     validated?: boolean // Has this model been validated
 }
 
@@ -323,6 +331,10 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 awsSecretAccessKey: provider.awsSecretAccessKey,
                 awsRegion: provider.awsRegion,
                 awsSessionToken: provider.awsSessionToken,
+                // Vertex AI fields
+                vertexProject: provider.vertexProject,
+                vertexLocation: provider.vertexLocation,
+
                 validated: model.validated,
             })
         }
