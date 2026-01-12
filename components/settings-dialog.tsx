@@ -23,7 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
-import type { DrawioTheme } from "@/lib/drawio-themes"
+import { DRAWIO_THEMES, type DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 // Reusable setting item component for consistent layout
