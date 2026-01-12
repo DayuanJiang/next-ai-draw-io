@@ -10,18 +10,7 @@ export const metadata: Metadata = {
     keywords: ["AI图表", "draw.io", "AWS架构", "GCP图表", "Azure图表", "LLM"],
 }
 
-function formatNumber(num: number): string {
-    if (num >= 1000) {
-        return `${num / 1000}k`
-    }
-    return num.toString()
-}
-
 export default function AboutCN() {
-    const dailyRequestLimit = Number(process.env.DAILY_REQUEST_LIMIT) || 20
-    const dailyTokenLimit = Number(process.env.DAILY_TOKEN_LIMIT) || 500000
-    const tpmLimit = Number(process.env.TPM_LIMIT) || 50000
-
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Navigation */}
@@ -106,42 +95,6 @@ export default function AboutCN() {
                                     </span>
                                     ，适用于所有模型！
                                 </p>
-                            </div>
-
-                            {/* Usage Limits */}
-                            <p className="text-sm text-gray-600 mb-3">
-                                当前使用限制：
-                            </p>
-                            <div className="grid grid-cols-3 gap-3 mb-5">
-                                <div className="text-center p-3 bg-white/60 rounded-lg">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {formatNumber(dailyRequestLimit)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        请求/天
-                                    </p>
-                                </div>
-                                <div className="text-center p-3 bg-white/60 rounded-lg">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {formatNumber(dailyTokenLimit)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        Token/天
-                                    </p>
-                                </div>
-                                <div className="text-center p-3 bg-white/60 rounded-lg">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {formatNumber(tpmLimit)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        Token/分钟
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Divider */}
-                            <div className="flex items-center gap-3 my-5">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
                             </div>
 
                             {/* Bring Your Own Key */}
@@ -344,6 +297,7 @@ export default function AboutCN() {
                         <li>OpenRouter</li>
                         <li>DeepSeek</li>
                         <li>SiliconFlow</li>
+                        <li>ModelScope</li>
                     </ul>
                     <p className="text-gray-700 mt-4">
                         注意：<code>claude-sonnet-4-5</code>{" "}

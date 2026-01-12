@@ -37,11 +37,12 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
     - [安装](#安装)
   - [部署](#部署)
     - [部署到腾讯云EdgeOne Pages](#部署到腾讯云edgeone-pages)
-    - [部署到Vercel（推荐）](#部署到vercel推荐)
+    - [部署到Vercel](#部署到vercel)
     - [部署到Cloudflare Workers](#部署到cloudflare-workers)
   - [多提供商支持](#多提供商支持)
   - [工作原理](#工作原理)
   - [支持与联系](#支持与联系)
+  - [常见问题](#常见问题)
   - [Star历史](#star历史)
 
 ## 示例
@@ -179,7 +180,7 @@ npm run dev
 
 同时，通过腾讯云EdgeOne Pages部署，也会获得[每日免费的DeepSeek模型额度](https://edgeone.cloud.tencent.com/pages/document/169925463311781888)。
 
-### 部署到Vercel（推荐）
+### 部署到Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 
@@ -204,6 +205,7 @@ npm run dev
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   ModelScope
 -   SGLang
 -   Vercel AI Gateway
 
@@ -236,6 +238,10 @@ npm run dev
 如需支持或咨询，请在GitHub仓库上提交issue或联系维护者：
 
 -   邮箱：me[at]jiang.jp
+
+## 常见问题
+
+请参阅 [FAQ](./FAQ.md) 了解常见问题和解决方案。
 
 ## Star历史
 

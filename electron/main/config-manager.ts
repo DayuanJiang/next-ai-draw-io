@@ -351,6 +351,10 @@ const PROVIDER_ENV_MAP: Record<string, { apiKey: string; baseUrl: string }> = {
         apiKey: "SILICONFLOW_API_KEY",
         baseUrl: "SILICONFLOW_BASE_URL",
     },
+    modelscope: {
+        apiKey: "MODELSCOPE_API_KEY",
+        baseUrl: "MODELSCOPE_BASE_URL",
+    },
     gateway: { apiKey: "AI_GATEWAY_API_KEY", baseUrl: "AI_GATEWAY_BASE_URL" },
     // bedrock and ollama don't use API keys in the same way
     bedrock: { apiKey: "", baseUrl: "" },

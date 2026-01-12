@@ -38,7 +38,6 @@ import {
     replaceNodes,
     validateAndFixXml,
 } from "@/lib/utils"
-import ExamplePanel from "./chat-example-panel"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -1115,7 +1114,7 @@ export function ChatMessageDisplay({
                                                                                                         )}
                                                                                                     </button>
                                                                                                     {isExpanded && (
-                                                                                                        <div className="px-3 py-2 border-t border-border/40 max-h-48 overflow-y-auto bg-muted/30">
+                                                                                                        <div className="px-3 py-2 border-t border-border/40 max-h-48 overflow-y-auto bg-muted/30 scrollbar-thin">
                                                                                                             <pre className="text-xs whitespace-pre-wrap text-foreground/80">
                                                                                                                 {
                                                                                                                     section.content

@@ -34,6 +34,7 @@ import { findCachedResponse } from "@/lib/cached-responses"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { sanitizeMessages } from "@/lib/session-storage"
+import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { cn, formatXML, isRealDiagram } from "@/lib/utils"
@@ -69,7 +70,6 @@ interface ChatPanelProps {
     darkMode: boolean
     onToggleDarkMode: () => void
     isMobile?: boolean
-    onCloseProtectionChange?: (enabled: boolean) => void
 }
 
 // Constants for tool states
@@ -110,7 +110,6 @@ export default function ChatPanel({
     darkMode,
     onToggleDarkMode,
     isMobile = false,
-    onCloseProtectionChange,
 }: ChatPanelProps) {
     const {
         loadDiagram: onDisplayChart,
@@ -158,6 +157,7 @@ export default function ChatPanel({
 
     // File processing using extracted hook
     const { files, pdfData, handleFileChange, setFiles } = useFileProcessor()
+    const [urlData, setUrlData] = useState<Map<string, UrlData>>(new Map())
 
     const [showSettingsDialog, setShowSettingsDialog] = useState(false)
     const [showModelConfigDialog, setShowModelConfigDialog] = useState(false)
@@ -710,6 +710,8 @@ export default function ChatPanel({
                         input,
                         files,
                         pdfData,
+                        undefined,
+                        urlData,
                     )
 
                     setMessages([
@@ -735,6 +737,7 @@ export default function ChatPanel({
                     setInput("")
                     sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                     setFiles([])
+                    setUrlData(new Map())
                     return
                 }
             }
@@ -755,6 +758,7 @@ export default function ChatPanel({
                     files,
                     pdfData,
                     parts,
+                    urlData,
                 )
 
                 // Add the combined text as the first part
@@ -779,6 +783,7 @@ export default function ChatPanel({
                 setInput("")
                 sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                 setFiles([])
+                setUrlData(new Map())
             } catch (error) {
                 console.error("Error fetching chart data:", error)
             }
@@ -854,6 +859,7 @@ export default function ChatPanel({
         clearDiagram()
         setDiagramHistory([])
         handleFileChange([]) // Use handleFileChange to also clear pdfData
+        setUrlData(new Map())
         const newSessionId = `session-${Date.now()}-${Math.random()
             .toString(36)
             .slice(2, 9)}`
@@ -972,6 +978,7 @@ export default function ChatPanel({
         files: File[],
         pdfData: Map<File, FileData>,
         imageParts?: any[],
+        urlDataParam?: Map<string, UrlData>,
     ): Promise<string> => {
         let userText = baseText
 
@@ -999,6 +1006,14 @@ export default function ChatPanel({
                     url: dataUrl,
                     mediaType: file.type,
                 })
+            }
+        }
+
+        if (urlDataParam) {
+            for (const [url, data] of urlDataParam) {
+                if (data.content) {
+                    userText += `\n\n[URL: ${url}]\nTitle: ${data.title}\n\n${data.content}`
+                }
             }
         }
 
@@ -1185,6 +1200,7 @@ export default function ChatPanel({
                                 status === "streaming" || status === "submitted"
                             }
                             className="hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid="new-chat-button"
                         >
                             <MessageSquarePlus
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
@@ -1197,6 +1213,7 @@ export default function ChatPanel({
                             size="icon"
                             onClick={() => setShowSettingsDialog(true)}
                             className="hover:bg-accent"
+                            data-testid="settings-button"
                         >
                             <Settings
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
@@ -1262,6 +1279,8 @@ export default function ChatPanel({
                     files={files}
                     onFileChange={handleFileChange}
                     pdfData={pdfData}
+                    urlData={urlData}
+                    onUrlChange={setUrlData}
                     sessionId={sessionId}
                     error={error}
                     models={modelConfig.models}
@@ -1275,7 +1294,6 @@ export default function ChatPanel({
             <SettingsDialog
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
-                onCloseProtectionChange={onCloseProtectionChange}
                 drawioUi={drawioUi}
                 onDrawioUiChange={onDrawioUiChange}
                 darkMode={darkMode}

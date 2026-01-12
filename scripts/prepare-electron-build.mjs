@@ -38,4 +38,12 @@ const targetStaticDir = join(targetDir, ".next", "static")
 mkdirSync(targetStaticDir, { recursive: true })
 cpSync(staticDir, targetStaticDir, { recursive: true })
 
+// Copy public folder (required for favicon-white.svg and other assets)
+console.log("Copying public folder...")
+const publicDir = join(rootDir, "public")
+const targetPublicDir = join(targetDir, "public")
+if (existsSync(publicDir)) {
+    cpSync(publicDir, targetPublicDir, { recursive: true })
+}
+
 console.log("Done! Files prepared in electron-standalone/")

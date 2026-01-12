@@ -4,6 +4,7 @@ import {
     Download,
     History,
     Image as ImageIcon,
+    Link,
     Loader2,
     Send,
 } from "lucide-react"
@@ -18,11 +19,14 @@ import { SaveDialog } from "@/components/save-dialog"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { UrlInputDialog } from "@/components/url-input-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
+import { STORAGE_KEYS } from "@/lib/storage"
 import type { FlattenedModel } from "@/lib/types/model-config"
+import { extractUrlContent, type UrlData } from "@/lib/url-utils"
 import { FilePreviewList } from "./file-preview-list"
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -144,6 +148,8 @@ interface ChatInputProps {
         File,
         { text: string; charCount: number; isExtracting: boolean }
     >
+    urlData?: Map<string, UrlData>
+    onUrlChange?: (data: Map<string, UrlData>) => void
 
     sessionId?: string
     error?: Error | null
@@ -163,6 +169,8 @@ export function ChatInput({
     files = [],
     onFileChange = () => {},
     pdfData = new Map(),
+    urlData,
+    onUrlChange,
     sessionId,
     error = null,
     models = [],
@@ -183,6 +191,9 @@ export function ChatInput({
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [showHistory, setShowHistory] = useState(false)
+    const [showUrlDialog, setShowUrlDialog] = useState(false)
+    const [isExtractingUrl, setIsExtractingUrl] = useState(false)
+    const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
     // Allow retry when there's an error (even if status is still "streaming" or "submitted")
     const isDisabled =
         (status === "streaming" || status === "submitted") && !error
@@ -199,13 +210,36 @@ export function ChatInput({
         adjustTextareaHeight()
     }, [input, adjustTextareaHeight])
 
+    // Load send shortcut preference from localStorage and listen for changes
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEYS.sendShortcut)
+        if (stored) setSendShortcut(stored)
+
+        const handleChange = (e: CustomEvent<string>) =>
+            setSendShortcut(e.detail)
+        window.addEventListener(
+            "sendShortcutChange",
+            handleChange as EventListener,
+        )
+        return () =>
+            window.removeEventListener(
+                "sendShortcutChange",
+                handleChange as EventListener,
+            )
+    }, [])
+
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         onChange(e)
         adjustTextareaHeight()
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        const shouldSend =
+            sendShortcut === "enter"
+                ? e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey
+                : (e.metaKey || e.ctrlKey) && e.key === "Enter"
+
+        if (shouldSend) {
             e.preventDefault()
             const form = e.currentTarget.closest("form")
             if (form && input.trim() && !isDisabled) {
@@ -312,6 +346,50 @@ export function ChatInput({
         }
     }
 
+    const handleUrlExtract = async (url: string) => {
+        if (!onUrlChange) return
+
+        setIsExtractingUrl(true)
+
+        try {
+            const existing = urlData
+                ? new Map(urlData)
+                : new Map<string, UrlData>()
+            existing.set(url, {
+                url,
+                title: url,
+                content: "",
+                charCount: 0,
+                isExtracting: true,
+            })
+            onUrlChange(existing)
+
+            const data = await extractUrlContent(url)
+
+            const newUrlData = new Map(existing)
+            newUrlData.set(url, data)
+            onUrlChange(newUrlData)
+
+            setShowUrlDialog(false)
+        } catch (error) {
+            // Remove the URL from the data map on error
+            const newUrlData = urlData
+                ? new Map(urlData)
+                : new Map<string, UrlData>()
+            newUrlData.delete(url)
+            onUrlChange(newUrlData)
+            showErrorToast(
+                <span className="text-muted-foreground">
+                    {error instanceof Error
+                        ? error.message
+                        : "Failed to extract URL content"}
+                </span>,
+            )
+        } finally {
+            setIsExtractingUrl(false)
+        }
+    }
+
     return (
         <form
             onSubmit={onSubmit}
@@ -324,13 +402,23 @@ export function ChatInput({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            {/* File previews */}
-            {files.length > 0 && (
+            {/* File & URL previews */}
+            {(files.length > 0 || (urlData && urlData.size > 0)) && (
                 <div className="mb-3">
                     <FilePreviewList
                         files={files}
                         onRemoveFile={handleRemoveFile}
                         pdfData={pdfData}
+                        urlData={urlData}
+                        onRemoveUrl={
+                            onUrlChange
+                                ? (url) => {
+                                      const next = new Map(urlData)
+                                      next.delete(url)
+                                      onUrlChange(next)
+                                  }
+                                : undefined
+                        }
                     />
                 </div>
             )}
@@ -344,7 +432,7 @@ export function ChatInput({
                     placeholder={dict.chat.placeholder}
                     disabled={isDisabled}
                     aria-label="Chat input"
-                    className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+                    className="min-h-[60px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60 scrollbar-thin"
                 />
 
                 <div className="flex items-center justify-end gap-1 px-3 py-2 border-t border-border/50">
@@ -384,6 +472,20 @@ export function ChatInput({
                         >
                             <ImageIcon className="h-4 w-4" />
                         </ButtonWithTooltip>
+
+                        {onUrlChange && (
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowUrlDialog(true)}
+                                disabled={isDisabled}
+                                tooltipContent={dict.chat.ExtractURL}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <Link className="h-4 w-4" />
+                            </ButtonWithTooltip>
+                        )}
 
                         <input
                             type="file"
@@ -443,6 +545,14 @@ export function ChatInput({
                     .toISOString()
                     .slice(0, 10)}`}
             />
+            {onUrlChange && (
+                <UrlInputDialog
+                    open={showUrlDialog}
+                    onOpenChange={setShowUrlDialog}
+                    onSubmit={handleUrlExtract}
+                    isExtracting={isExtractingUrl}
+                />
+            )}
         </form>
     )
 }

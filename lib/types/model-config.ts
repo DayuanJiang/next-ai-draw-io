@@ -6,6 +6,7 @@ export type ProviderName =
     | "google"
     | "azure"
     | "bedrock"
+    | "ollama"
     | "openrouter"
     | "deepseek"
     | "siliconflow"
@@ -13,6 +14,7 @@ export type ProviderName =
     | "gateway"
     | "edgeone"
     | "doubao"
+    | "modelscope"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -75,11 +77,15 @@ export const PROVIDER_INFO: Record<
     google: { label: "Google" },
     azure: { label: "Azure OpenAI" },
     bedrock: { label: "Amazon Bedrock" },
+    ollama: {
+        label: "Ollama",
+        defaultBaseUrl: "http://localhost:11434",
+    },
     openrouter: { label: "OpenRouter" },
     deepseek: { label: "DeepSeek" },
     siliconflow: {
         label: "SiliconFlow",
-        defaultBaseUrl: "https://api.siliconflow.com/v1",
+        defaultBaseUrl: "https://api.siliconflow.cn/v1",
     },
     sglang: {
         label: "SGLang",
@@ -91,10 +97,14 @@ export const PROVIDER_INFO: Record<
         label: "Doubao (ByteDance)",
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     },
+    modelscope: {
+        label: "ModelScope",
+        defaultBaseUrl: "https://api-inference.modelscope.cn/v1",
+    },
 }
 
 // Suggested models per provider for quick add
-export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
+export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     openai: [
         "gpt-5.2-pro",
         "gpt-5.2-chat-latest",
@@ -230,6 +240,17 @@ export const SUGGESTED_MODELS: Record<ProviderName, string[]> = {
         "doubao-1.5-pro-256k-250115",
         "doubao-pro-32k-241215",
         "doubao-pro-256k-241215",
+    ],
+    modelscope: [
+        // Qwen
+        "Qwen/Qwen2.5-72B-Instruct",
+        "Qwen/Qwen2.5-32B-Instruct",
+        "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        "Qwen/Qwen3-32B",
+        // DeepSeek
+        "deepseek-ai/DeepSeek-R1-0528",
+        "deepseek-ai/DeepSeek-V3.2",
     ],
 }
 

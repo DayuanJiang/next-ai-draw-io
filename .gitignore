@@ -14,6 +14,8 @@ packages/*/dist
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
 
 # next.js
 /.next/
@@ -66,3 +68,4 @@ CLAUDE.md
 
 # edgeone
 .edgeone
+opencode.json

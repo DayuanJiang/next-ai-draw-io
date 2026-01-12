@@ -37,11 +37,12 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
     - [インストール](#インストール)
   - [デプロイ](#デプロイ)
     - [EdgeOne Pagesへのデプロイ](#edgeone-pagesへのデプロイ)
-    - [Vercelへのデプロイ（推奨）](#vercelへのデプロイ推奨)
+    - [Vercelへのデプロイ](#vercelへのデプロイ)
     - [Cloudflare Workersへのデプロイ](#cloudflare-workersへのデプロイ)
   - [マルチプロバイダーサポート](#マルチプロバイダーサポート)
   - [仕組み](#仕組み)
   - [サポート＆お問い合わせ](#サポートお問い合わせ)
+  - [よくある質問](#よくある質問)
   - [スター履歴](#スター履歴)
 
 ## 例
@@ -180,7 +181,7 @@ npm run dev
 
 また、Tencent EdgeOne Pagesでデプロイすると、[DeepSeekモデルの毎日の無料クォータ](https://pages.edgeone.ai/document/edge-ai)が付与されます。
 
-### Vercelへのデプロイ（推奨）
+### Vercelへのデプロイ
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 
@@ -205,6 +206,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   OpenRouter
 -   DeepSeek
 -   SiliconFlow
+-   ModelScope
 -   SGLang
 -   Vercel AI Gateway
 
@@ -237,6 +239,10 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 サポートやお問い合わせについては、GitHubリポジトリでissueを開くか、メンテナーにご連絡ください：
 
 -   メール：me[at]jiang.jp
+
+## よくある質問
+
+一般的な問題と解決策については [FAQ](./FAQ.md) をご覧ください。
 
 ## スター履歴
 

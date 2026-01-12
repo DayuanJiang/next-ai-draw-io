@@ -1,6 +1,9 @@
 import { type ClassValue, clsx } from "clsx"
 import * as pako from "pako"
 import { twMerge } from "tailwind-merge"
+import type { DiagramOperation } from "@/components/chat/types"
+
+export type { DiagramOperation }
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -472,12 +475,6 @@ export function replaceNodes(currentXML: string, nodes: string): string {
 // ============================================================================
 // ID-based Diagram Operations
 // ============================================================================
-
-export interface DiagramOperation {
-    operation: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
 
 export interface OperationError {
     type: "update" | "add" | "delete"

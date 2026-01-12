@@ -28,7 +28,8 @@
         "azure": "Azure OpenAI",
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
-        "siliconflow": "SiliconFlow"
+        "siliconflow": "SiliconFlow",
+        "modelscope": "ModelScope"
     },
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",
@@ -51,7 +52,8 @@
         "badResponse": "悪い応答",
         "clickToEdit": "クリックして編集",
         "editMessage": "メッセージを編集",
-        "saveAndSubmit": "保存して送信"
+        "saveAndSubmit": "保存して送信",
+        "ExtractURL": "URLから抽出"
     },
     "examples": {
         "title": "AI でダイアグラムを作成",
@@ -106,10 +108,20 @@
         "closeProtectionDescription": "ページを離れる際に確認を表示します。",
         "diagramStyle": "ダイアグラムスタイル",
         "diagramStyleDescription": "ミニマルとスタイル付きの出力を切り替えます。",
+        "sendShortcut": "送信ショートカット",
+        "sendShortcutDescription": "メッセージの送信方法を選択します。",
+        "enterToSend": "Enterで送信",
+        "ctrlEnterToSend": "Cmd/Ctrl+Enterで送信",
         "diagramActions": "ダイアグラム操作",
         "diagramActionsDescription": "ダイアグラムの履歴とエクスポートを管理",
         "history": "履歴",
-        "download": "ダウンロード"
+        "download": "ダウンロード",
+        "proxy": "プロキシ設定",
+        "proxyDescription": "API リクエスト用の HTTP/HTTPS プロキシを設定（デスクトップ版のみ）",
+        "httpProxy": "HTTP プロキシ",
+        "httpsProxy": "HTTPS プロキシ",
+        "applyProxy": "適用",
+        "proxyApplied": "プロキシ設定が適用されました"
     },
     "save": {
         "title": "ダイアグラムを保存",
@@ -189,6 +201,15 @@
         "reading": "読み込み中...",
         "chars": "文字",
         "removeFile": "ファイルを削除"
+    },
+    "url": {
+        "title": "URLからコンテンツを抽出",
+        "description": "URLを貼り付けてそのコンテンツを抽出および分析します",
+        "Extracting": "抽出中...",
+        "extract": "抽出",
+        "Cancel": "キャンセル",
+        "enterUrl": "URLを入力してください",
+        "invalidFormat": "無効なURL形式です"
     },
     "reasoning": {
         "thinking": "考え中...",

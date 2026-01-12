@@ -12,7 +12,6 @@ export const STORAGE_KEYS = {
 
     // Settings
     accessCode: "next-ai-draw-io-access-code",
-    closeProtection: "next-ai-draw-io-close-protection",
     accessCodeRequired: "next-ai-draw-io-access-code-required",
     aiProvider: "next-ai-draw-io-ai-provider",
     aiBaseUrl: "next-ai-draw-io-ai-base-url",
@@ -22,4 +21,7 @@ export const STORAGE_KEYS = {
     // Multi-model configuration
     modelConfigs: "next-ai-draw-io-model-configs",
     selectedModelId: "next-ai-draw-io-selected-model-id",
+
+    // Chat input preferences
+    sendShortcut: "next-ai-draw-io-send-shortcut",
 } as const

@@ -288,6 +288,7 @@ function getProviderLabel(provider) {
         openrouter: "OpenRouter",
         deepseek: "DeepSeek",
         siliconflow: "SiliconFlow",
+        modelscope: "ModelScope",
         ollama: "Ollama",
     }
     return labels[provider] || provider
