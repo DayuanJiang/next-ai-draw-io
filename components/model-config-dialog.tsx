@@ -238,6 +238,8 @@ export function ModelConfigDialog({
             "awsAccessKeyId",
             "awsSecretAccessKey",
             "awsRegion",
+            "vertexProject",
+            "vertexLocation",
         ]
         if (credentialFields.includes(field)) {
             setValidationStatus("idle")
@@ -330,6 +332,9 @@ export function ModelConfigDialog({
                         awsAccessKeyId: selectedProvider.awsAccessKeyId,
                         awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
                         awsRegion: selectedProvider.awsRegion,
+                        // Vertex AI credentials
+                        vertexProject: selectedProvider.vertexProject,
+                        vertexLocation: selectedProvider.vertexLocation,
                     }),
                 })
                 const data = await response.json()
@@ -869,9 +874,72 @@ export function ModelConfigDialog({
                                                     </div>
                                                 </>
                                             ) : selectedProvider.provider ===
-                                                  "edgeone" ||
+                                              "vertexai" ? (
+                                                <>
+                                                    {/* Google Cloud Project ID */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="vertex-project"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            Google Cloud Project
+                                                            ID
+                                                        </Label>
+                                                        <Input
+                                                            id="vertex-project"
+                                                            value={
+                                                                selectedProvider.vertexProject ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderUpdate(
+                                                                    "vertexProject",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder={
+                                                                "Enter your GCP Project ID (optional)"
+                                                            }
+                                                            className="h-9 font-mono text-xs"
+                                                        />
+                                                    </div>
+
+                                                    {/* Location */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="vertex-location"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            Location
+                                                        </Label>
+                                                        <Input
+                                                            id="vertex-location"
+                                                            value={
+                                                                selectedProvider.vertexLocation ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderUpdate(
+                                                                    "vertexLocation",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="us-central1"
+                                                            className="h-9 font-mono text-xs"
+                                                        />
+                                                        <p className="text-[10px] text-muted-foreground">
+                                                            Default: us-central1
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            ) : selectedProvider.provider ===
+                                                  "ollama" ||
                                               selectedProvider.provider ===
-                                                  "vertexai" ? (
+                                                  "edgeone" ? (
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
                                                         <Button
