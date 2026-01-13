@@ -16,8 +16,13 @@ const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        handleAutoSave,
+        onDrawioLoad,
+        resetDrawioReady,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -164,6 +169,8 @@ export default function Home() {
                                         ref={drawioRef}
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
+                                        onAutoSave={handleAutoSave}
+                                        autosave={true}
                                         baseUrl={drawioBaseUrl}
                                         urlParameters={{
                                             ui: drawioUi,
