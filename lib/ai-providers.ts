@@ -63,6 +63,32 @@ const ANTHROPIC_BETA_HEADERS = {
 }
 
 /**
+ * Resolve baseURL based on whether user is providing their own API key.
+ * When user provides their own API key, we should NOT fall back to server's
+ * baseURL environment variable - user credentials should only be sent to
+ * user-specified endpoints or official provider endpoints.
+ *
+ * @param userApiKey - User-provided API key (if any)
+ * @param userBaseUrl - User-provided base URL (if any)
+ * @param serverBaseUrl - Server's base URL from environment variable
+ * @param defaultBaseUrl - Provider's official/default base URL (optional)
+ * @returns The resolved base URL to use
+ */
+export function resolveBaseURL(
+    userApiKey: string | null | undefined,
+    userBaseUrl: string | null | undefined,
+    serverBaseUrl: string | undefined,
+    defaultBaseUrl?: string,
+): string | undefined {
+    if (userApiKey) {
+        // User provides their own API key - only use user's baseUrl or default
+        return userBaseUrl || defaultBaseUrl || undefined
+    }
+    // No user API key - fall back to server config
+    return userBaseUrl || serverBaseUrl || defaultBaseUrl || undefined
+}
+
+/**
  * Safely parse integer from environment variable with validation
  */
 function parseIntSafe(
