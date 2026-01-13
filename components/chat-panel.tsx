@@ -639,6 +639,7 @@ export default function ChatPanel({
         sessionIsAvailable,
         currentSessionId,
         buildSessionData,
+        chartXML,
     ])
 
     // Update URL when a new session is created (first message sent)
