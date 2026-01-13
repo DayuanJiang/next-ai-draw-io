@@ -179,6 +179,7 @@ export default function Home() {
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,
+                                            modified: false,
                                             dark: darkMode,
                                             lang: currentLang,
                                         }}
