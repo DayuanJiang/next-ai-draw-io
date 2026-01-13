@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
-import type { DrawIoEmbedRef } from "react-drawio"
+import type { DrawIoEmbedRef, EventAutoSave } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -23,7 +23,7 @@ interface DiagramContextType {
     resolverRef: React.Ref<((value: string) => void) | null>
     drawioRef: React.Ref<DrawIoEmbedRef | null>
     handleDiagramExport: (data: any) => void
-    handleAutoSave: (data: any) => void
+    handleAutoSave: (data: EventAutoSave) => void
     clearDiagram: () => void
     saveDiagramToFile: (
         filename: string,
@@ -228,7 +228,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Handle autosave events from draw.io - keeps chartXML in sync with user modifications
-    const handleAutoSave = (data: any) => {
+    const handleAutoSave = (data: EventAutoSave) => {
         if (data.xml) {
             setChartXML(data.xml)
         }
