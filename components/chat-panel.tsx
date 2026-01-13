@@ -1157,17 +1157,20 @@ export default function ChatPanel({
                         title={dict.nav.newChat}
                     >
                         <div className="flex items-center gap-2">
-                            {/*<Image
-                                src={
-                                    darkMode
+                            {
+                                <Image
+                                    src={
+                                        /*darkMode
                                         ? "/favicon-white.svg"
-                                        : "/favicon.ico"
-                                }
-                                alt="Next AI Drawio"
-                                width={isMobile ? 24 : 28}
-                                height={isMobile ? 24 : 28}
-                                className="rounded flex-shrink-0"
-                            />*/}
+                                        : "/favicon.ico" */
+                                        "/logo.png"
+                                    }
+                                    alt="Designer Agent"
+                                    width={isMobile ? 24 : 28}
+                                    height={isMobile ? 24 : 28}
+                                    className="rounded flex-shrink-0"
+                                />
+                            }
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
                             >
