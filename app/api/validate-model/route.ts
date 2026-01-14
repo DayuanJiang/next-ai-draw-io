@@ -176,6 +176,7 @@ export async function POST(req: Request) {
             case "vertexai": {
                 const vertex = createVertex({
                     apiKey: vertexApiKey,
+                    ...(baseUrl && { baseURL: baseUrl }),
                 })
                 model = vertex(modelId)
                 break
