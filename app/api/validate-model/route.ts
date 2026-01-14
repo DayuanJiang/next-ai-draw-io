@@ -82,8 +82,7 @@ interface ValidateRequest {
     awsSecretAccessKey?: string
     awsRegion?: string
     // Vertex AI specific
-    vertexProject?: string
-    vertexLocation?: string
+    vertexApiKey?: string // Express Mode API key
 }
 
 export async function POST(req: Request) {
@@ -97,8 +96,8 @@ export async function POST(req: Request) {
             awsAccessKeyId,
             awsSecretAccessKey,
             awsRegion,
-            vertexProject,
-            vertexLocation,
+            // Note: Express Mode only needs vertexApiKey
+            vertexApiKey,
         } = body
 
         if (!provider || !modelId) {
@@ -127,12 +126,17 @@ export async function POST(req: Request) {
                     { status: 400 },
                 )
             }
-        } else if (
-            provider !== "ollama" &&
-            provider !== "edgeone" &&
-            provider !== "vertexai" &&
-            !apiKey
-        ) {
+        } else if (provider === "vertexai") {
+            if (!vertexApiKey) {
+                return NextResponse.json(
+                    {
+                        valid: false,
+                        error: "Vertex AI API key is required for Express Mode",
+                    },
+                    { status: 400 },
+                )
+            }
+        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -170,28 +174,8 @@ export async function POST(req: Request) {
             }
 
             case "vertexai": {
-                // Vertex AI uses GCP service account authentication via environment variables
-                // OR client-provided project/location
-                const project =
-                    vertexProject || process.env.GOOGLE_VERTEX_PROJECT
-                const location =
-                    vertexLocation ||
-                    process.env.GOOGLE_VERTEX_LOCATION ||
-                    "us-central1"
-
-                if (!project) {
-                    return NextResponse.json(
-                        {
-                            valid: false,
-                            error: "Project ID is required (set in Settings or via GOOGLE_VERTEX_PROJECT)",
-                        },
-                        { status: 400 },
-                    )
-                }
-
                 const vertex = createVertex({
-                    project: project,
-                    location: location,
+                    apiKey: vertexApiKey,
                 })
                 model = vertex(modelId)
                 break

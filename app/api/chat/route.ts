@@ -189,6 +189,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
         awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
         awsRegion: req.headers.get("x-aws-region"),
         awsSessionToken: req.headers.get("x-aws-session-token"),
+        // Vertex AI credentials (Express Mode)
+        vertexApiKey: req.headers.get("x-vertex-api-key"),
         // Pass cookies for EdgeOne Pages authentication
         ...(provider === "edgeone" &&
             cookieHeader && {
