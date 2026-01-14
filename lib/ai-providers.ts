@@ -31,8 +31,7 @@ export interface ClientOverrides {
     awsRegion?: string | null
     awsSessionToken?: string | null
     // Vertex AI config
-    vertexProject?: string | null
-    vertexLocation?: string | null
+    vertexApiKey?: string | null // Express Mode API key
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
 }
@@ -294,30 +293,32 @@ function buildProviderOptions(
             break
         }
         case "vertexai": {
-            // Google Vertex supports the same thinking config as standard Google provider
-            const thinkingBudget = parseIntSafe(
-                process.env.GOOGLE_VERTEX_THINKING_BUDGET,
-                "GOOGLE_VERTEX_THINKING_BUDGET",
-                1024,
-                100000,
-            )
-            const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
+            // Google Vertex supports thinking config for thinking-enabled models
+            // Only models with "thinking" in their name support this feature
+            const isThinkingModel = modelId?.toLowerCase().includes("thinking")
 
-            if (
-                modelId &&
-                (modelId.includes("gemini-2") ||
-                    modelId.includes("gemini-3") ||
-                    modelId.includes("gemini2") ||
-                    modelId.includes("gemini3"))
-            ) {
+            if (isThinkingModel) {
+                const thinkingBudget = parseIntSafe(
+                    process.env.GOOGLE_VERTEX_THINKING_BUDGET,
+                    "GOOGLE_VERTEX_THINKING_BUDGET",
+                    1024,
+                    100000,
+                )
+                const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
+
                 const thinkingConfig: Record<string, any> = {
                     includeThoughts: true,
                 }
+
                 const isGemini3 =
-                    modelId.includes("gemini-3") || modelId.includes("gemini3")
+                    modelId?.includes("gemini-3") ||
+                    modelId?.includes("gemini3")
                 if (isGemini3 && thinkingLevel) {
+                    // Gemini 3: Use thinkingLevel (minimal/low/medium/high)
                     thinkingConfig.thinkingLevel = thinkingLevel as
+                        | "minimal"
                         | "low"
+                        | "medium"
                         | "high"
                 } else if (!isGemini3 && thinkingBudget) {
                     thinkingConfig.thinkingBudget = thinkingBudget
@@ -427,7 +428,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     openai: "OPENAI_API_KEY",
     anthropic: "ANTHROPIC_API_KEY",
     google: "GOOGLE_GENERATIVE_AI_API_KEY",
-    vertexai: null, // Uses GOOGLE_APPLICATION_CREDENTIALS or IAM role
+    vertexai: "GOOGLE_VERTEX_API_KEY",
     azure: "AZURE_API_KEY",
     ollama: null, // No credentials needed for local Ollama
     openrouter: "OPENROUTER_API_KEY",
@@ -540,7 +541,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     }
 
     // Check if client is providing their own provider override
-    const isClientOverride = !!(overrides?.provider && overrides?.apiKey)
+    const isClientOverride = !!(
+        overrides?.provider &&
+        (overrides?.apiKey ||
+            (overrides?.provider === "vertexai" && overrides?.vertexApiKey))
+    )
 
     // Use client override if provided, otherwise fall back to env vars
     const modelId = overrides?.modelId || process.env.AI_MODEL
@@ -721,25 +726,24 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
         case "vertexai": {
-            // Google Vertex AI uses GCP service account authentication, not API keys
-            // Auth is handled via GOOGLE_APPLICATION_CREDENTIALS env var or GCP default credentials
-            // Client-provided Project ID and Location, falling back to server environment variables
-            const vertexProject =
-                overrides?.vertexProject || process.env.GOOGLE_VERTEX_PROJECT
-            const vertexLocation =
-                overrides?.vertexLocation ||
-                process.env.GOOGLE_VERTEX_LOCATION ||
-                "us-central1"
+            // Express Mode: Use API key for authentication
+            const vertexApiKey =
+                overrides?.vertexApiKey || process.env.GOOGLE_VERTEX_API_KEY
 
-            if (!vertexProject) {
+            if (!vertexApiKey) {
                 throw new Error(
-                    "Project ID is required for Vertex AI. Please configure it in Settings or set GOOGLE_VERTEX_PROJECT environment variable.",
+                    "Vertex AI requires an API key for Express Mode. " +
+                        "Get one from Google Cloud Console or set GOOGLE_VERTEX_API_KEY environment variable.",
                 )
             }
 
+            // Support custom base URL from env or client override
+            const baseURL =
+                overrides?.baseUrl || process.env.GOOGLE_VERTEX_BASE_URL
+
             const vertexProvider = createVertex({
-                project: vertexProject,
-                location: vertexLocation,
+                apiKey: vertexApiKey,
+                ...(baseURL && { baseURL }),
             })
             model = vertexProvider(modelId)
             break

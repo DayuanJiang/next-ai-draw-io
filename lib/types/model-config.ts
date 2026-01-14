@@ -38,8 +38,7 @@ export interface ProviderConfig {
     awsRegion?: string
     awsSessionToken?: string // Optional, for temporary credentials
     // Vertex AI specific fields
-    vertexProject?: string
-    vertexLocation?: string
+    vertexApiKey?: string // Express Mode API key
 
     models: ModelConfig[]
     validated?: boolean // Has API key been validated
@@ -67,8 +66,7 @@ export interface FlattenedModel {
     awsRegion?: string
     awsSessionToken?: string
     // Vertex AI specific fields
-    vertexProject?: string
-    vertexLocation?: string
+    vertexApiKey?: string // Express Mode API key
 
     validated?: boolean // Has this model been validated
 }
@@ -332,8 +330,7 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 awsRegion: provider.awsRegion,
                 awsSessionToken: provider.awsSessionToken,
                 // Vertex AI fields
-                vertexProject: provider.vertexProject,
-                vertexLocation: provider.vertexLocation,
+                vertexApiKey: provider.vertexApiKey,
 
                 validated: model.validated,
             })
