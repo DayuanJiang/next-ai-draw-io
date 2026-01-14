@@ -293,19 +293,21 @@ function buildProviderOptions(
             break
         }
         case "vertexai": {
-            // Google Vertex supports thinking config for thinking-enabled models
-            // Only models with "thinking" in their name support this feature
-            const isThinkingModel = modelId?.toLowerCase().includes("thinking")
+            const thinkingBudget = parseIntSafe(
+                process.env.GOOGLE_VERTEX_THINKING_BUDGET,
+                "GOOGLE_VERTEX_THINKING_BUDGET",
+                1024,
+                100000,
+            )
+            const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
 
-            if (isThinkingModel) {
-                const thinkingBudget = parseIntSafe(
-                    process.env.GOOGLE_VERTEX_THINKING_BUDGET,
-                    "GOOGLE_VERTEX_THINKING_BUDGET",
-                    1024,
-                    100000,
-                )
-                const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
-
+            if (
+                modelId &&
+                (modelId.includes("gemini-2") ||
+                    modelId.includes("gemini-3") ||
+                    modelId.includes("gemini2") ||
+                    modelId.includes("gemini3"))
+            ) {
                 const thinkingConfig: Record<string, any> = {
                     includeThoughts: true,
                 }
@@ -313,14 +315,17 @@ function buildProviderOptions(
                 const isGemini3 =
                     modelId?.includes("gemini-3") ||
                     modelId?.includes("gemini3")
+                const isGemini25 =
+                    modelId?.includes("2.5") || modelId?.includes("2-5")
+
                 if (isGemini3 && thinkingLevel) {
-                    // Gemini 3: Use thinkingLevel (minimal/low/medium/high)
+                    // Vertex AI provider in AI SDK supports more granular levels (minimal/low/medium/high)
                     thinkingConfig.thinkingLevel = thinkingLevel as
                         | "minimal"
                         | "low"
                         | "medium"
                         | "high"
-                } else if (!isGemini3 && thinkingBudget) {
+                } else if (isGemini25 && thinkingBudget) {
                     thinkingConfig.thinkingBudget = thinkingBudget
                 }
                 options.google = { thinkingConfig }
@@ -532,6 +537,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     if (
         overrides?.baseUrl &&
         !overrides?.apiKey &&
+        !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone"
     ) {
         throw new Error(
