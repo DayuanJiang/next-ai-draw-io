@@ -15,6 +15,15 @@ import {
     type ProviderName,
 } from "@/lib/types/model-config"
 
+// Server-side model descriptor returned by /api/server-models
+interface ServerModel {
+    id: string
+    modelId: string
+    provider: ProviderName
+    providerLabel: string
+    isDefault: boolean
+}
+
 // Old storage keys for migration
 const OLD_KEYS = {
     aiProvider: "next-ai-draw-io-ai-provider",
@@ -132,12 +141,30 @@ export interface UseModelConfigReturn {
 export function useModelConfig(): UseModelConfigReturn {
     const [config, setConfig] = useState<MultiModelConfig>(createEmptyConfig)
     const [isLoaded, setIsLoaded] = useState(false)
+    const [serverModels, setServerModels] = useState<ServerModel[]>([])
+    const [serverLoaded, setServerLoaded] = useState(false)
 
-    // Load config on mount
+    // Load client config on mount
     useEffect(() => {
         const loaded = loadConfig()
         setConfig(loaded)
         setIsLoaded(true)
+    }, [])
+
+    // Load server models on mount (if any)
+    useEffect(() => {
+        if (typeof window === "undefined") return
+
+        fetch("/api/server-models")
+            .then((res) => res.json())
+            .then((data) => {
+                const raw: ServerModel[] = data?.models || []
+                setServerModels(raw)
+                setServerLoaded(true)
+            })
+            .catch(() => {
+                setServerLoaded(true)
+            })
     }, [])
 
     // Save config whenever it changes (after initial load)
@@ -148,9 +175,31 @@ export function useModelConfig(): UseModelConfigReturn {
     }, [config, isLoaded])
 
     // Derived state
-    const models = flattenModels(config)
+    const userModels = flattenModels(config)
+
+    const models: FlattenedModel[] = [
+        // Server models (read-only, credentials from env)
+        ...serverModels.map((m) => ({
+            id: m.id,
+            modelId: m.modelId,
+            provider: m.provider,
+            providerLabel: `Server · ${m.providerLabel}`,
+            apiKey: "",
+            baseUrl: undefined,
+            awsAccessKeyId: undefined,
+            awsSecretAccessKey: undefined,
+            awsRegion: undefined,
+            awsSessionToken: undefined,
+            validated: true,
+            source: "server" as const,
+            isServerDefault: m.isDefault,
+        })),
+        // User models from local configuration
+        ...userModels,
+    ]
+
     const selectedModel = config.selectedModelId
-        ? findModelById(config, config.selectedModelId)
+        ? models.find((m) => m.id === config.selectedModelId)
         : undefined
 
     // Actions
@@ -282,7 +331,7 @@ export function useModelConfig(): UseModelConfigReturn {
 
     return {
         config,
-        isLoaded,
+        isLoaded: isLoaded && serverLoaded,
         models,
         selectedModel,
         selectedModelId: config.selectedModelId,
@@ -357,12 +406,28 @@ export function getSelectedAIConfig(): {
         return { ...empty, accessCode }
     }
 
-    // No selected model = use server default
+    // No selected model = use server default (AI_PROVIDER/AI_MODEL/env auto-detect)
     if (!config.selectedModelId) {
         return { ...empty, accessCode }
     }
 
-    // Find selected model
+    // Server-side model selection (id = "server:<provider>:<modelId>")
+    if (config.selectedModelId.startsWith("server:")) {
+        const parts = config.selectedModelId.split(":")
+        const provider = parts[1] || ""
+        const modelId = parts.slice(2).join(":") // Preserve Bedrock-style IDs
+
+        return {
+            ...empty,
+            accessCode,
+            aiProvider: provider,
+            aiBaseUrl: "",
+            aiApiKey: "",
+            aiModel: modelId,
+        }
+    }
+
+    // Find selected user-defined model
     const model = findModelById(config, config.selectedModelId)
     if (!model) {
         return { ...empty, accessCode }

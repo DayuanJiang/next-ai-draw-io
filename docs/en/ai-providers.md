@@ -217,6 +217,37 @@ If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope
 ```
 
+## Server-Side Multi-Model Configuration (ai-models.json)
+
+In addition to client-side model configuration, you can define a shared list of **server models** that all users can access without providing their own API keys.
+
+1. Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PATH` to a custom location).
+2. Configure providers and models:
+
+```json
+{
+  "version": 1,
+  "providers": [
+    {
+      "name": "OpenAI Production",
+      "provider": "openai",
+      "models": ["gpt-4o", "gpt-4o-mini"]
+    },
+    {
+      "name": "Anthropic Production",
+      "provider": "anthropic",
+      "models": ["claude-sonnet-4-5-20250514"]
+    }
+  ]
+}
+```
+
+-   The `provider` field maps to the same provider names used in this guide (`openai`, `anthropic`, `bedrock`, etc.).
+-   The `models` array contains model IDs exactly as you would set in `AI_MODEL`.
+-   API keys and other credentials are still read from environment variables (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
+-   If `AI_MODEL` is set and matches one of the models in `ai-models.json`, that model is treated as the server **default** in the UI.
+-   If `ai-models.json` is missing or invalid, the application falls back to the standard `AI_PROVIDER`/`AI_MODEL` behavior.
+
 ## Model Capability Requirements
 
 This task requires exceptionally strong model capabilities, as it involves generating long-form text with strict formatting constraints (draw.io XML).

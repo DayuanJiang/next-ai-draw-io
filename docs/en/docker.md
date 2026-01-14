@@ -22,6 +22,27 @@ cp env.example .env
 docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
+### Using server-side model configuration
+
+You can mount an `ai-models.json` file into the container to provide multiple server-side models without exposing user API keys:
+
+```bash
+docker run -d -p 3000:3000 \
+  -e OPENAI_API_KEY=your_api_key \
+  -v $(pwd)/ai-models.json:/app/ai-models.json:ro \
+  ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
+If you prefer to keep the config in a different path inside the container, set `AI_MODELS_CONFIG_PATH`:
+
+```bash
+docker run -d -p 3000:3000 \
+  -e OPENAI_API_KEY=your_api_key \
+  -e AI_MODELS_CONFIG_PATH=/config/ai-models.json \
+  -v $(pwd)/ai-models.json:/config/ai-models.json:ro \
+  ghcr.io/dayuanjiang/next-ai-draw-io:latest
+```
+
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Replace the environment variables with your preferred AI provider configuration. See [AI Providers](./ai-providers.md) for available options.
