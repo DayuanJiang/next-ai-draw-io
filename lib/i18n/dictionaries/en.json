@@ -100,8 +100,6 @@
         "switchTo": "Switch to",
         "minimal": "Minimal",
         "sketch": "Sketch",
-        "closeProtection": "Close Protection",
-        "closeProtectionDescription": "Show confirmation when leaving the page.",
         "diagramStyle": "Diagram Style",
         "diagramStyleDescription": "Toggle between minimal and styled diagram output.",
         "sendShortcut": "Send Shortcut",

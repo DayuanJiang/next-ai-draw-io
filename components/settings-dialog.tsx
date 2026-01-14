@@ -61,7 +61,6 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onCloseProtectionChange?: (enabled: boolean) => void
     drawioUi: "min" | "sketch"
     onToggleDrawioUi: () => void
     darkMode: boolean
@@ -71,7 +70,6 @@ interface SettingsDialogProps {
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
-export const STORAGE_CLOSE_PROTECTION_KEY = "next-ai-draw-io-close-protection"
 const STORAGE_ACCESS_CODE_REQUIRED_KEY = "next-ai-draw-io-access-code-required"
 
 function getStoredAccessCodeRequired(): boolean | null {
@@ -84,7 +82,6 @@ function getStoredAccessCodeRequired(): boolean | null {
 function SettingsContent({
     open,
     onOpenChange,
-    onCloseProtectionChange,
     drawioUi,
     onToggleDrawioUi,
     darkMode,
@@ -97,7 +94,6 @@ function SettingsContent({
     const pathname = usePathname() || "/"
     const search = useSearchParams()
     const [accessCode, setAccessCode] = useState("")
-    const [closeProtection, setCloseProtection] = useState(true)
     const [isVerifying, setIsVerifying] = useState(false)
     const [error, setError] = useState("")
     const [accessCodeRequired, setAccessCodeRequired] = useState(
@@ -150,12 +146,6 @@ function SettingsContent({
             const storedCode =
                 localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
             setAccessCode(storedCode)
-
-            const storedCloseProtection = localStorage.getItem(
-                STORAGE_CLOSE_PROTECTION_KEY,
-            )
-            // Default to true if not set
-            setCloseProtection(storedCloseProtection !== "false")
 
             const storedSendShortcut = localStorage.getItem(
                 STORAGE_KEYS.sendShortcut,
@@ -392,25 +382,6 @@ function SettingsContent({
                                 ? dict.settings.sketch
                                 : dict.settings.minimal}
                         </Button>
-                    </SettingItem>
-
-                    {/* Close Protection */}
-                    <SettingItem
-                        label={dict.settings.closeProtection}
-                        description={dict.settings.closeProtectionDescription}
-                    >
-                        <Switch
-                            id="close-protection"
-                            checked={closeProtection}
-                            onCheckedChange={(checked) => {
-                                setCloseProtection(checked)
-                                localStorage.setItem(
-                                    STORAGE_CLOSE_PROTECTION_KEY,
-                                    checked.toString(),
-                                )
-                                onCloseProtectionChange?.(checked)
-                            }}
-                        />
                     </SettingItem>
 
                     {/* Diagram Style */}
