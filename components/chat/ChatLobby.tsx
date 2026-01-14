@@ -10,7 +10,6 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
-import ExamplePanel from "@/components/chat-example-panel"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -21,6 +20,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { ExampleVisibilityPlugin } from "./ExampleVisibilityPlugin"
 
 interface SessionMetadata {
     id: string
@@ -83,8 +83,6 @@ export function ChatLobby({
     setFiles,
     dict,
 }: ChatLobbyProps) {
-    // Track whether examples section is expanded (collapsed by default when there's history)
-    const [examplesExpanded, setExamplesExpanded] = useState(false)
     // Delete confirmation dialog state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
@@ -93,145 +91,127 @@ export function ChatLobby({
 
     const hasHistory = sessions.length > 0
 
-    if (!hasHistory) {
-        // Show full examples when no history
-        return <ExamplePanel setInput={setInput} setFiles={setFiles} />
-    }
-
     // Show history + collapsible examples when there are sessions
     return (
-        <div className="py-6 px-2 animate-fade-in">
+        <div className="py-6 px-2 animate-fade-in flex flex-col min-h-full">
             {/* Recent Chats Section */}
-            <div className="mb-6">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
-                    {dict.sessionHistory?.recentChats || "Recent Chats"}
-                </p>
-                {/* Search Bar */}
-                <div className="relative mb-3">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                        type="text"
-                        placeholder={
-                            dict.sessionHistory?.searchPlaceholder ||
-                            "Search chats..."
-                        }
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery("")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors"
-                        >
-                            <X className="w-3 h-3 text-muted-foreground" />
-                        </button>
-                    )}
-                </div>
-                <div className="space-y-2">
-                    {sessions
-                        .filter((session) =>
-                            session.title
+            {hasHistory && (
+                <div className="mb-6 flex-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
+                        {dict.sessionHistory?.recentChats || "Recent Chats"}
+                    </p>
+                    {/* Search Bar */}
+                    <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <input
+                            type="text"
+                            placeholder={
+                                dict.sessionHistory?.searchPlaceholder ||
+                                "Search chats..."
+                            }
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors"
+                            >
+                                <X className="w-3 h-3 text-muted-foreground" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        {sessions
+                            .filter((session) =>
+                                session.title
+                                    .toLowerCase()
+                                    .includes(searchQuery.toLowerCase()),
+                            )
+                            .map((session) => (
+                                // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested delete button which causes hydration error
+                                <div
+                                    key={session.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
+                                    onClick={() => onSelectSession(session.id)}
+                                    onKeyDown={(e) => {
+                                        if (
+                                            e.key === "Enter" ||
+                                            e.key === " "
+                                        ) {
+                                            e.preventDefault()
+                                            onSelectSession(session.id)
+                                        }
+                                    }}
+                                >
+                                    {session.thumbnailDataUrl ? (
+                                        <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
+                                            <Image
+                                                src={session.thumbnailDataUrl}
+                                                alt=""
+                                                width={48}
+                                                height={48}
+                                                className="object-contain w-full h-full"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <MessageSquare className="w-5 h-5 text-primary" />
+                                        </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-medium truncate">
+                                            {session.title}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {formatSessionDate(
+                                                session.updatedAt,
+                                                dict.sessionHistory,
+                                            )}
+                                        </div>
+                                    </div>
+                                    {onDeleteSession && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSessionToDelete(session.id)
+                                                setDeleteDialogOpen(true)
+                                            }}
+                                            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                            title={dict.common.delete}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        {sessions.filter((s) =>
+                            s.title
                                 .toLowerCase()
                                 .includes(searchQuery.toLowerCase()),
-                        )
-                        .map((session) => (
-                            // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested delete button which causes hydration error
-                            <div
-                                key={session.id}
-                                role="button"
-                                tabIndex={0}
-                                className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
-                                onClick={() => onSelectSession(session.id)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault()
-                                        onSelectSession(session.id)
-                                    }
-                                }}
-                            >
-                                {session.thumbnailDataUrl ? (
-                                    <div className="w-12 h-12 shrink-0 rounded-lg border bg-white overflow-hidden">
-                                        <Image
-                                            src={session.thumbnailDataUrl}
-                                            alt=""
-                                            width={48}
-                                            height={48}
-                                            className="object-contain w-full h-full"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="w-12 h-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <MessageSquare className="w-5 h-5 text-primary" />
-                                    </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-medium truncate">
-                                        {session.title}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {formatSessionDate(
-                                            session.updatedAt,
-                                            dict.sessionHistory,
-                                        )}
-                                    </div>
-                                </div>
-                                {onDeleteSession && (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            setSessionToDelete(session.id)
-                                            setDeleteDialogOpen(true)
-                                        }}
-                                        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                                        title={dict.common.delete}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    {sessions.filter((s) =>
-                        s.title
-                            .toLowerCase()
-                            .includes(searchQuery.toLowerCase()),
-                    ).length === 0 &&
-                        searchQuery && (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                                {dict.sessionHistory?.noResults ||
-                                    "No chats found"}
-                            </p>
-                        )}
-                </div>
-            </div>
-
-            {/* Collapsible Examples Section */}
-            <div className="border-t border-border/50 pt-4">
-                <button
-                    type="button"
-                    onClick={() => setExamplesExpanded(!examplesExpanded)}
-                    className="w-full flex items-center justify-between px-1 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                >
-                    <span>
-                        {dict.examples?.quickExamples || "Quick Examples"}
-                    </span>
-                    {examplesExpanded ? (
-                        <ChevronUp className="w-4 h-4" />
-                    ) : (
-                        <ChevronDown className="w-4 h-4" />
-                    )}
-                </button>
-                {examplesExpanded && (
-                    <div className="mt-2">
-                        <ExamplePanel
-                            setInput={setInput}
-                            setFiles={setFiles}
-                            minimal
-                        />
+                        ).length === 0 &&
+                            searchQuery && (
+                                <p className="text-sm text-muted-foreground text-center py-4">
+                                    {dict.sessionHistory?.noResults ||
+                                        "No chats found"}
+                                </p>
+                            )}
                     </div>
-                )}
+                </div>
+            )}
+
+            {/* Plugin-based Collapsible Examples Section */}
+            <div className={hasHistory ? "" : "mt-auto"}>
+                <ExampleVisibilityPlugin
+                    setInput={setInput}
+                    setFiles={setFiles}
+                    dict={dict}
+                />
             </div>
 
             {/* Delete Confirmation Dialog */}
