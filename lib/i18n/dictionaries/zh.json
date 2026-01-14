@@ -100,8 +100,6 @@
         "switchTo": "切换到",
         "minimal": "简约",
         "sketch": "草图",
-        "closeProtection": "关闭确认",
-        "closeProtectionDescription": "离开页面时显示确认。",
         "diagramStyle": "图表样式",
         "diagramStyleDescription": "切换简约与精致图表输出模式。",
         "sendShortcut": "发送快捷键",
