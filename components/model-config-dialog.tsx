@@ -238,8 +238,7 @@ export function ModelConfigDialog({
             "awsAccessKeyId",
             "awsSecretAccessKey",
             "awsRegion",
-            "vertexProject",
-            "vertexLocation",
+            "vertexApiKey",
         ]
         if (credentialFields.includes(field)) {
             setValidationStatus("idle")
@@ -292,7 +291,12 @@ export function ModelConfigDialog({
             ) {
                 return
             }
-        } else if (!isEdgeOne && !isVertexAI && !selectedProvider.apiKey) {
+        } else if (isVertexAI) {
+            // Vertex AI requires vertexApiKey for Express Mode
+            if (!selectedProvider.vertexApiKey) {
+                return
+            }
+        } else if (!isEdgeOne && !selectedProvider.apiKey) {
             return
         }
 
@@ -332,9 +336,8 @@ export function ModelConfigDialog({
                         awsAccessKeyId: selectedProvider.awsAccessKeyId,
                         awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
                         awsRegion: selectedProvider.awsRegion,
-                        // Vertex AI credentials
-                        vertexProject: selectedProvider.vertexProject,
-                        vertexLocation: selectedProvider.vertexLocation,
+                        // Vertex AI credentials (Express Mode)
+                        vertexApiKey: selectedProvider.vertexApiKey,
                     }),
                 })
                 const data = await response.json()
@@ -876,64 +879,145 @@ export function ModelConfigDialog({
                                             ) : selectedProvider.provider ===
                                               "vertexai" ? (
                                                 <>
-                                                    {/* Google Cloud Project ID */}
+                                                    {/* Vertex AI API Key */}
                                                     <div className="space-y-2">
                                                         <Label
-                                                            htmlFor="vertex-project"
+                                                            htmlFor="vertex-api-key"
                                                             className="text-xs font-medium flex items-center gap-1.5"
                                                         >
                                                             <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            Google Cloud Project
-                                                            ID
+                                                            API Key
                                                         </Label>
-                                                        <Input
-                                                            id="vertex-project"
-                                                            value={
-                                                                selectedProvider.vertexProject ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleProviderUpdate(
-                                                                    "vertexProject",
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder={
-                                                                "Enter your GCP Project ID (optional)"
-                                                            }
-                                                            className="h-9 font-mono text-xs"
-                                                        />
+                                                        <div className="flex gap-2">
+                                                            <div className="relative flex-1">
+                                                                <Input
+                                                                    id="vertex-api-key"
+                                                                    type={
+                                                                        showApiKey
+                                                                            ? "text"
+                                                                            : "password"
+                                                                    }
+                                                                    value={
+                                                                        selectedProvider.vertexApiKey ||
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleProviderUpdate(
+                                                                            "vertexApiKey",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="Enter your Vertex AI API key"
+                                                                    className="h-9 pr-10 font-mono text-xs"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setShowApiKey(
+                                                                            !showApiKey,
+                                                                        )
+                                                                    }
+                                                                    aria-label={
+                                                                        showApiKey
+                                                                            ? "Hide API key"
+                                                                            : "Show API key"
+                                                                    }
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                                                                >
+                                                                    {showApiKey ? (
+                                                                        <EyeOff className="h-4 w-4" />
+                                                                    ) : (
+                                                                        <Eye className="h-4 w-4" />
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                            <Button
+                                                                variant={
+                                                                    validationStatus ===
+                                                                    "success"
+                                                                        ? "outline"
+                                                                        : "default"
+                                                                }
+                                                                size="sm"
+                                                                onClick={
+                                                                    handleValidate
+                                                                }
+                                                                disabled={
+                                                                    !selectedProvider.vertexApiKey ||
+                                                                    validationStatus ===
+                                                                        "validating"
+                                                                }
+                                                                className={cn(
+                                                                    "h-9 px-4",
+                                                                    validationStatus ===
+                                                                        "success" &&
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                                )}
+                                                            >
+                                                                {validationStatus ===
+                                                                "validating" ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : validationStatus ===
+                                                                  "success" ? (
+                                                                    <>
+                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .verified
+                                                                        }
+                                                                    </>
+                                                                ) : (
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .test
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                        {validationStatus ===
+                                                            "error" &&
+                                                            validationError && (
+                                                                <p className="text-xs text-destructive flex items-center gap-1">
+                                                                    <X className="h-3 w-3" />
+                                                                    {
+                                                                        validationError
+                                                                    }
+                                                                </p>
+                                                            )}
                                                     </div>
 
-                                                    {/* Location */}
+                                                    {/* Base URL (optional) */}
                                                     <div className="space-y-2">
                                                         <Label
-                                                            htmlFor="vertex-location"
+                                                            htmlFor="vertex-base-url"
                                                             className="text-xs font-medium flex items-center gap-1.5"
                                                         >
                                                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            Location
+                                                            Base URL{" "}
+                                                            <span className="text-muted-foreground font-normal">
+                                                                (optional)
+                                                            </span>
                                                         </Label>
                                                         <Input
-                                                            id="vertex-location"
+                                                            id="vertex-base-url"
                                                             value={
-                                                                selectedProvider.vertexLocation ||
+                                                                selectedProvider.baseUrl ||
                                                                 ""
                                                             }
                                                             onChange={(e) =>
                                                                 handleProviderUpdate(
-                                                                    "vertexLocation",
+                                                                    "baseUrl",
                                                                     e.target
                                                                         .value,
                                                                 )
                                                             }
-                                                            placeholder="us-central1"
+                                                            placeholder="Custom endpoint URL"
                                                             className="h-9 font-mono text-xs"
                                                         />
-                                                        <p className="text-[10px] text-muted-foreground">
-                                                            Default: us-central1
-                                                        </p>
                                                     </div>
                                                 </>
                                             ) : selectedProvider.provider ===

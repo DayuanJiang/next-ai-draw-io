@@ -314,6 +314,8 @@ export function getSelectedAIConfig(): {
     awsSecretAccessKey: string
     awsRegion: string
     awsSessionToken: string
+    // Vertex AI credentials (Express Mode)
+    vertexApiKey: string
 } {
     const empty = {
         accessCode: "",
@@ -325,6 +327,7 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: "",
         awsRegion: "",
         awsSessionToken: "",
+        vertexApiKey: "",
     }
 
     if (typeof window === "undefined") return empty
@@ -347,6 +350,7 @@ export function getSelectedAIConfig(): {
             awsSecretAccessKey: "",
             awsRegion: "",
             awsSessionToken: "",
+            vertexApiKey: "",
         }
     }
 
@@ -379,5 +383,7 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: model.awsSecretAccessKey || "",
         awsRegion: model.awsRegion || "",
         awsSessionToken: model.awsSessionToken || "",
+        // Vertex AI credentials (Express Mode)
+        vertexApiKey: model.vertexApiKey || "",
     }
 }
