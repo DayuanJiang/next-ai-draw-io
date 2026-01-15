@@ -3,6 +3,7 @@ import { createAnthropic } from "@ai-sdk/anthropic"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
@@ -80,6 +81,8 @@ interface ValidateRequest {
     awsAccessKeyId?: string
     awsSecretAccessKey?: string
     awsRegion?: string
+    // Vertex AI specific
+    vertexApiKey?: string // Express Mode API key
 }
 
 export async function POST(req: Request) {
@@ -93,6 +96,8 @@ export async function POST(req: Request) {
             awsAccessKeyId,
             awsSecretAccessKey,
             awsRegion,
+            // Note: Express Mode only needs vertexApiKey
+            vertexApiKey,
         } = body
 
         if (!provider || !modelId) {
@@ -117,6 +122,16 @@ export async function POST(req: Request) {
                     {
                         valid: false,
                         error: "AWS credentials (Access Key ID, Secret Access Key, Region) are required",
+                    },
+                    { status: 400 },
+                )
+            }
+        } else if (provider === "vertexai") {
+            if (!vertexApiKey) {
+                return NextResponse.json(
+                    {
+                        valid: false,
+                        error: "Vertex AI API key is required for Express Mode",
                     },
                     { status: 400 },
                 )
@@ -155,6 +170,15 @@ export async function POST(req: Request) {
                     ...(baseUrl && { baseURL: baseUrl }),
                 })
                 model = google(modelId)
+                break
+            }
+
+            case "vertexai": {
+                const vertex = createVertex({
+                    apiKey: vertexApiKey,
+                    ...(baseUrl && { baseURL: baseUrl }),
+                })
+                model = vertex(modelId)
                 break
             }
 

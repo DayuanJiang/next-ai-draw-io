@@ -4,6 +4,7 @@ import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
+import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
@@ -29,6 +30,8 @@ export interface ClientOverrides {
     awsSecretAccessKey?: string | null
     awsRegion?: string | null
     awsSessionToken?: string | null
+    // Vertex AI config
+    vertexApiKey?: string | null // Express Mode API key
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
 }
@@ -38,6 +41,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "openai",
     "anthropic",
     "google",
+    "vertexai",
     "azure",
     "bedrock",
     "openrouter",
@@ -122,6 +126,8 @@ function parseIntSafe(
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
  * - GOOGLE_THINKING_BUDGET: Google Gemini 2.5 thinking budget in tokens (1024-100000)
  * - GOOGLE_THINKING_LEVEL: Google Gemini 3 thinking level (low/high)
+ * - GOOGLE_VERTEX_THINKING_BUDGET: Vertex AI Gemini 2.5 thinking budget in tokens (1024-100000)
+ * - GOOGLE_VERTEX_THINKING_LEVEL: Vertex AI Gemini 3 thinking level (low/high)
  * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low/medium/high)
  * - AZURE_REASONING_SUMMARY: Azure reasoning summary (none/brief/detailed)
  * - BEDROCK_REASONING_BUDGET_TOKENS: Bedrock Claude reasoning budget in tokens (1024-64000)
@@ -286,7 +292,46 @@ function buildProviderOptions(
             }
             break
         }
+        case "vertexai": {
+            const thinkingBudget = parseIntSafe(
+                process.env.GOOGLE_VERTEX_THINKING_BUDGET,
+                "GOOGLE_VERTEX_THINKING_BUDGET",
+                1024,
+                100000,
+            )
+            const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
 
+            if (
+                modelId &&
+                (modelId.includes("gemini-2") ||
+                    modelId.includes("gemini-3") ||
+                    modelId.includes("gemini2") ||
+                    modelId.includes("gemini3"))
+            ) {
+                const thinkingConfig: Record<string, any> = {
+                    includeThoughts: true,
+                }
+
+                const isGemini3 =
+                    modelId?.includes("gemini-3") ||
+                    modelId?.includes("gemini3")
+                const isGemini25 =
+                    modelId?.includes("2.5") || modelId?.includes("2-5")
+
+                if (isGemini3 && thinkingLevel) {
+                    // Vertex AI provider in AI SDK supports more granular levels (minimal/low/medium/high)
+                    thinkingConfig.thinkingLevel = thinkingLevel as
+                        | "minimal"
+                        | "low"
+                        | "medium"
+                        | "high"
+                } else if (isGemini25 && thinkingBudget) {
+                    thinkingConfig.thinkingBudget = thinkingBudget
+                }
+                options.google = { thinkingConfig }
+            }
+            break
+        }
         case "azure": {
             const reasoningEffort = process.env.AZURE_REASONING_EFFORT
             const reasoningSummary = process.env.AZURE_REASONING_SUMMARY
@@ -388,6 +433,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     openai: "OPENAI_API_KEY",
     anthropic: "ANTHROPIC_API_KEY",
     google: "GOOGLE_GENERATIVE_AI_API_KEY",
+    vertexai: "GOOGLE_VERTEX_API_KEY",
     azure: "AZURE_API_KEY",
     ollama: null, // No credentials needed for local Ollama
     openrouter: "OPENROUTER_API_KEY",
@@ -491,6 +537,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     if (
         overrides?.baseUrl &&
         !overrides?.apiKey &&
+        !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone"
     ) {
         throw new Error(
@@ -500,7 +547,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     }
 
     // Check if client is providing their own provider override
-    const isClientOverride = !!(overrides?.provider && overrides?.apiKey)
+    const isClientOverride = !!(
+        overrides?.provider &&
+        (overrides?.apiKey ||
+            (overrides?.provider === "vertexai" && overrides?.vertexApiKey))
+    )
 
     // Use client override if provided, otherwise fall back to env vars
     const modelId = overrides?.modelId || process.env.AI_MODEL
@@ -678,6 +729,29 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             } else {
                 model = google(modelId)
             }
+            break
+        }
+        case "vertexai": {
+            // Express Mode: Use API key for authentication
+            const vertexApiKey =
+                overrides?.vertexApiKey || process.env.GOOGLE_VERTEX_API_KEY
+
+            if (!vertexApiKey) {
+                throw new Error(
+                    "Vertex AI requires an API key for Express Mode. " +
+                        "Get one from Google Cloud Console or set GOOGLE_VERTEX_API_KEY environment variable.",
+                )
+            }
+
+            // Support custom base URL from env or client override
+            const baseURL =
+                overrides?.baseUrl || process.env.GOOGLE_VERTEX_BASE_URL
+
+            const vertexProvider = createVertex({
+                apiKey: vertexApiKey,
+                ...(baseURL && { baseURL }),
+            })
+            model = vertexProvider(modelId)
             break
         }
 
