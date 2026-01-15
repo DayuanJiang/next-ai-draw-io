@@ -21,7 +21,7 @@ import {
 import { flushSync } from "react-dom"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
-import { ChatInput } from "@/components/chat-input"
+import { ChatInput, type ChatInputRef } from "@/components/chat-input"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
@@ -173,6 +173,7 @@ export default function ChatPanel({
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
     const [minimalStyle, setMinimalStyle] = useState(false)
+    const chatInputRef = useRef<ChatInputRef | null>(null)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
     useEffect(() => {
@@ -856,6 +857,7 @@ export default function ChatPanel({
 
         // Clear UI state (can't use syncUIWithSession here because we also need to clear files)
         setMessages([])
+        setInput("")
         clearDiagram()
         setDiagramHistory([])
         handleFileChange([]) // Use handleFileChange to also clear pdfData
@@ -870,6 +872,11 @@ export default function ChatPanel({
 
         // Clear URL param to show blank state
         router.replace(window.location.pathname, { scroll: false })
+
+        // After starting a fresh chat, move focus back to the chat input
+        setTimeout(() => {
+            chatInputRef.current?.focus()
+        }, 100)
     }, [
         clearDiagram,
         handleFileChange,
@@ -881,6 +888,7 @@ export default function ChatPanel({
         dict.dialogs.clearSuccess,
         buildSessionData,
         setDiagramHistory,
+        chatInputRef,
     ])
 
     const handleInputChange = (
@@ -1280,6 +1288,7 @@ export default function ChatPanel({
                 className={`${isMobile ? "p-2" : "p-4"} border-t border-border/50 bg-card/50`}
             >
                 <ChatInput
+                    ref={chatInputRef}
                     input={input}
                     status={status}
                     onSubmit={onFormSubmit}
