@@ -78,6 +78,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     sglang: "openai", // SGLang is OpenAI-compatible
     gateway: "vercel",
     edgeone: "tencent-cloud",
+    vertexai: "google",
     doubao: "bytedance",
     modelscope: "modelscope",
 }
@@ -237,6 +238,7 @@ export function ModelConfigDialog({
             "awsAccessKeyId",
             "awsSecretAccessKey",
             "awsRegion",
+            "vertexApiKey",
         ]
         if (credentialFields.includes(field)) {
             setValidationStatus("idle")
@@ -280,12 +282,18 @@ export function ModelConfigDialog({
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
         const isEdgeOne = selectedProvider.provider === "edgeone"
+        const isVertexAI = selectedProvider.provider === "vertexai"
         if (isBedrock) {
             if (
                 !selectedProvider.awsAccessKeyId ||
                 !selectedProvider.awsSecretAccessKey ||
                 !selectedProvider.awsRegion
             ) {
+                return
+            }
+        } else if (isVertexAI) {
+            // Vertex AI requires vertexApiKey for Express Mode
+            if (!selectedProvider.vertexApiKey) {
                 return
             }
         } else if (!isEdgeOne && !selectedProvider.apiKey) {
@@ -328,6 +336,8 @@ export function ModelConfigDialog({
                         awsAccessKeyId: selectedProvider.awsAccessKeyId,
                         awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
                         awsRegion: selectedProvider.awsRegion,
+                        // Vertex AI credentials (Express Mode)
+                        vertexApiKey: selectedProvider.vertexApiKey,
                     }),
                 })
                 const data = await response.json()
@@ -867,7 +877,153 @@ export function ModelConfigDialog({
                                                     </div>
                                                 </>
                                             ) : selectedProvider.provider ===
-                                              "edgeone" ? (
+                                              "vertexai" ? (
+                                                <>
+                                                    {/* Vertex AI API Key */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="vertex-api-key"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            API Key
+                                                        </Label>
+                                                        <div className="flex gap-2">
+                                                            <div className="relative flex-1">
+                                                                <Input
+                                                                    id="vertex-api-key"
+                                                                    type={
+                                                                        showApiKey
+                                                                            ? "text"
+                                                                            : "password"
+                                                                    }
+                                                                    value={
+                                                                        selectedProvider.vertexApiKey ||
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleProviderUpdate(
+                                                                            "vertexApiKey",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    placeholder="Enter your Vertex AI API key"
+                                                                    className="h-9 pr-10 font-mono text-xs"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setShowApiKey(
+                                                                            !showApiKey,
+                                                                        )
+                                                                    }
+                                                                    aria-label={
+                                                                        showApiKey
+                                                                            ? "Hide API key"
+                                                                            : "Show API key"
+                                                                    }
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                                                                >
+                                                                    {showApiKey ? (
+                                                                        <EyeOff className="h-4 w-4" />
+                                                                    ) : (
+                                                                        <Eye className="h-4 w-4" />
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                            <Button
+                                                                variant={
+                                                                    validationStatus ===
+                                                                    "success"
+                                                                        ? "outline"
+                                                                        : "default"
+                                                                }
+                                                                size="sm"
+                                                                onClick={
+                                                                    handleValidate
+                                                                }
+                                                                disabled={
+                                                                    !selectedProvider.vertexApiKey ||
+                                                                    validationStatus ===
+                                                                        "validating"
+                                                                }
+                                                                className={cn(
+                                                                    "h-9 px-4",
+                                                                    validationStatus ===
+                                                                        "success" &&
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                                )}
+                                                            >
+                                                                {validationStatus ===
+                                                                "validating" ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : validationStatus ===
+                                                                  "success" ? (
+                                                                    <>
+                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .verified
+                                                                        }
+                                                                    </>
+                                                                ) : (
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .test
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                        {validationStatus ===
+                                                            "error" &&
+                                                            validationError && (
+                                                                <p className="text-xs text-destructive flex items-center gap-1">
+                                                                    <X className="h-3 w-3" />
+                                                                    {
+                                                                        validationError
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                    </div>
+
+                                                    {/* Base URL (optional) */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="vertex-base-url"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            Base URL{" "}
+                                                            <span className="text-muted-foreground font-normal">
+                                                                (optional)
+                                                            </span>
+                                                        </Label>
+                                                        <Input
+                                                            id="vertex-base-url"
+                                                            value={
+                                                                selectedProvider.baseUrl ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderUpdate(
+                                                                    "baseUrl",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder="Custom endpoint URL"
+                                                            className="h-9 font-mono text-xs"
+                                                        />
+                                                    </div>
+                                                </>
+                                            ) : selectedProvider.provider ===
+                                                  "ollama" ||
+                                              selectedProvider.provider ===
+                                                  "edgeone" ? (
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
                                                         <Button

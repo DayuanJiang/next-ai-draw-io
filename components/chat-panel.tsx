@@ -963,6 +963,10 @@ export default function ChatPanel({
                         ...(config.awsSessionToken && {
                             "x-aws-session-token": config.awsSessionToken,
                         }),
+                        // Vertex AI credentials (Express Mode)
+                        ...(config.vertexApiKey && {
+                            "x-vertex-api-key": config.vertexApiKey,
+                        }),
                     }),
                     ...(minimalStyle && {
                         "x-minimal-style": "true",

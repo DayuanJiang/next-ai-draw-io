@@ -33,6 +33,21 @@ Optional custom endpoint:
 GOOGLE_BASE_URL=https://your-custom-endpoint
 ```
 
+### Google Vertex AI (Enterprise GCP)
+
+Google Vertex AI offers enterprise-grade features and data residency. **Express Mode** allows for simple API key authentication, making it compatible with edge runtimes like Vercel and Cloudflare.
+
+```bash
+GOOGLE_VERTEX_API_KEY=your_api_key
+AI_MODEL=gemini-2.0-flash
+```
+
+Optional custom endpoint:
+
+```bash
+GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
+```
+
 ### OpenAI
 
 ```bash
