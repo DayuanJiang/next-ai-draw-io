@@ -4,13 +4,19 @@ import { z } from "zod"
 import type { ProviderName } from "@/lib/types/model-config"
 import { PROVIDER_INFO } from "@/lib/types/model-config"
 
-const ServerProviderSchema = z.object({
+export const ProviderNameSchema: z.ZodType<ProviderName> = z
+    .string()
+    .refine((val): val is ProviderName => val in PROVIDER_INFO, {
+        message: "Invalid provider name",
+    })
+
+export const ServerProviderSchema = z.object({
     name: z.string().min(1),
-    provider: z.string() as z.ZodType<ProviderName>,
+    provider: ProviderNameSchema,
     models: z.array(z.string().min(1)),
 })
 
-const ServerModelsConfigSchema = z.object({
+export const ServerModelsConfigSchema = z.object({
     version: z.number().optional(),
     providers: z.array(ServerProviderSchema),
 })

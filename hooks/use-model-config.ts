@@ -156,13 +156,24 @@ export function useModelConfig(): UseModelConfigReturn {
         if (typeof window === "undefined") return
 
         fetch("/api/server-models")
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) {
+                    console.error(
+                        "Failed to load server models:",
+                        res.status,
+                        res.statusText,
+                    )
+                    throw new Error(`Request failed with status ${res.status}`)
+                }
+                return res.json()
+            })
             .then((data) => {
                 const raw: ServerModel[] = data?.models || []
                 setServerModels(raw)
                 setServerLoaded(true)
             })
-            .catch(() => {
+            .catch((error) => {
+                console.error("Error while loading server models:", error)
                 setServerLoaded(true)
             })
     }, [])
@@ -193,6 +204,7 @@ export function useModelConfig(): UseModelConfigReturn {
             validated: true,
             source: "server" as const,
             isServerDefault: m.isDefault,
+            isDefault: m.isDefault,
         })),
         // User models from local configuration
         ...userModels,

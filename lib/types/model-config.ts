@@ -66,6 +66,8 @@ export interface FlattenedModel {
     source?: "user" | "server"
     // Whether this server model matches the env default (AI_MODEL)
     isServerDefault?: boolean
+    // Whether this model is the default as defined by the environment (AI_MODEL)
+    isDefault?: boolean
 }
 
 // Provider metadata
