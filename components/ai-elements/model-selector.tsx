@@ -169,3 +169,27 @@ export const ModelSelectorName = ({
 }: ModelSelectorNameProps) => (
     <span className={cn("flex-1 truncate text-left", className)} {...props} />
 )
+
+export type ModelSelectorSectionHeaderProps = {
+    icon: ReactNode
+    label: string
+    className?: string
+}
+
+export const ModelSelectorSectionHeader = ({
+    icon,
+    label,
+    className,
+}: ModelSelectorSectionHeaderProps) => (
+    <div
+        className={cn(
+            "flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/40 rounded-sm mx-1 mt-1",
+            className,
+        )}
+    >
+        <span className="[&>svg]:size-3.5" aria-hidden="true">
+            {icon}
+        </span>
+        <span>{label}</span>
+    </div>
+)

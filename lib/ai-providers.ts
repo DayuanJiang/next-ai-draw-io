@@ -34,6 +34,9 @@ export interface ClientOverrides {
     vertexApiKey?: string | null // Express Mode API key
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
+    // Custom env var names for server models (allows multiple API keys per provider)
+    apiKeyEnv?: string
+    baseUrlEnv?: string
 }
 
 // Providers that can be used with client-provided API keys
@@ -90,6 +93,36 @@ export function resolveBaseURL(
     }
     // No user API key - fall back to server config
     return userBaseUrl || serverBaseUrl || defaultBaseUrl || undefined
+}
+
+/**
+ * Resolve API key from custom env var name or default env var.
+ * Supports multiple API keys per provider via ai-models.json apiKeyEnv config.
+ *
+ * Priority:
+ * 1. User-provided API key (overrides.apiKey)
+ * 2. Custom env var from ai-models.json (overrides.apiKeyEnv)
+ * 3. Default provider env var (defaultEnvVar)
+ */
+function resolveApiKey(
+    overrides: ClientOverrides | undefined,
+    defaultEnvVar: string,
+): string | undefined {
+    if (overrides?.apiKey) return overrides.apiKey
+    if (overrides?.apiKeyEnv) return process.env[overrides.apiKeyEnv]
+    return process.env[defaultEnvVar]
+}
+
+/**
+ * Resolve base URL from custom env var name or default env var.
+ * Supports multiple base URLs per provider via ai-models.json baseUrlEnv config.
+ */
+function resolveBaseUrlEnv(
+    overrides: ClientOverrides | undefined,
+    defaultEnvVar: string,
+): string | undefined {
+    if (overrides?.baseUrlEnv) return process.env[overrides.baseUrlEnv]
+    return process.env[defaultEnvVar]
 }
 
 /**
@@ -481,9 +514,15 @@ function detectProvider(): ProviderName | null {
 
 /**
  * Validate that required API keys are present for the selected provider
+ * @param provider - The provider to validate
+ * @param customApiKeyEnv - Optional custom env var name (from ai-models.json apiKeyEnv)
  */
-function validateProviderCredentials(provider: ProviderName): void {
-    const requiredVar = PROVIDER_ENV_VARS[provider]
+function validateProviderCredentials(
+    provider: ProviderName,
+    customApiKeyEnv?: string,
+): void {
+    // Use custom env var name if provided, otherwise use default
+    const requiredVar = customApiKeyEnv || PROVIDER_ENV_VARS[provider]
     if (requiredVar && !process.env[requiredVar]) {
         throw new Error(
             `${requiredVar} environment variable is required for ${provider} provider. ` +
@@ -621,7 +660,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
     // Only validate server credentials if client isn't providing their own API key
     if (!isClientOverride) {
-        validateProviderCredentials(provider)
+        validateProviderCredentials(provider, overrides?.apiKeyEnv)
     }
 
     console.log(`[AI Provider] Initializing ${provider} with model: ${modelId}`)
@@ -671,11 +710,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "openai": {
-            const apiKey = overrides?.apiKey || process.env.OPENAI_API_KEY
+            const apiKey = resolveApiKey(overrides, "OPENAI_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "OPENAI_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.OPENAI_BASE_URL,
+                serverBaseUrl,
             )
             if (baseURL) {
                 // Custom base URL = third-party proxy, use Chat Completions API
@@ -694,11 +737,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "anthropic": {
-            const apiKey = overrides?.apiKey || process.env.ANTHROPIC_API_KEY
+            const apiKey = resolveApiKey(overrides, "ANTHROPIC_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "ANTHROPIC_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.ANTHROPIC_BASE_URL,
+                serverBaseUrl,
                 "https://api.anthropic.com/v1",
             )
             const customProvider = createAnthropic({
@@ -713,12 +760,18 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "google": {
-            const apiKey =
-                overrides?.apiKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+            const apiKey = resolveApiKey(
+                overrides,
+                "GOOGLE_GENERATIVE_AI_API_KEY",
+            )
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "GOOGLE_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.GOOGLE_BASE_URL,
+                serverBaseUrl,
             )
             if (baseURL || overrides?.apiKey) {
                 const customGoogle = createGoogleGenerativeAI({
@@ -756,11 +809,12 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "azure": {
-            const apiKey = overrides?.apiKey || process.env.AZURE_API_KEY
+            const apiKey = resolveApiKey(overrides, "AZURE_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(overrides, "AZURE_BASE_URL")
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.AZURE_BASE_URL,
+                serverBaseUrl,
             )
             // Only use server's resourceName if user is NOT providing their own API key
             const resourceName = overrides?.apiKey
@@ -794,11 +848,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
 
         case "openrouter": {
-            const apiKey = overrides?.apiKey || process.env.OPENROUTER_API_KEY
+            const apiKey = resolveApiKey(overrides, "OPENROUTER_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "OPENROUTER_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.OPENROUTER_BASE_URL,
+                serverBaseUrl,
             )
             const openrouter = createOpenRouter({
                 apiKey,
@@ -809,11 +867,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "deepseek": {
-            const apiKey = overrides?.apiKey || process.env.DEEPSEEK_API_KEY
+            const apiKey = resolveApiKey(overrides, "DEEPSEEK_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "DEEPSEEK_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.DEEPSEEK_BASE_URL,
+                serverBaseUrl,
             )
             if (baseURL || overrides?.apiKey) {
                 const customDeepSeek = createDeepSeek({
@@ -828,11 +890,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "siliconflow": {
-            const apiKey = overrides?.apiKey || process.env.SILICONFLOW_API_KEY
+            const apiKey = resolveApiKey(overrides, "SILICONFLOW_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "SILICONFLOW_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.SILICONFLOW_BASE_URL,
+                serverBaseUrl,
                 "https://api.siliconflow.cn/v1",
             )
             const siliconflowProvider = createOpenAI({
@@ -844,11 +910,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "sglang": {
-            const apiKey = overrides?.apiKey || process.env.SGLANG_API_KEY
+            const apiKey = resolveApiKey(overrides, "SGLANG_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "SGLANG_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.SGLANG_BASE_URL,
+                serverBaseUrl,
             )
 
             const sglangProvider = createOpenAI({
@@ -957,11 +1027,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             // Vercel AI Gateway - unified access to multiple AI providers
             // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
             // See: https://vercel.com/ai-gateway
-            const apiKey = overrides?.apiKey || process.env.AI_GATEWAY_API_KEY
+            const apiKey = resolveApiKey(overrides, "AI_GATEWAY_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "AI_GATEWAY_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.AI_GATEWAY_BASE_URL,
+                serverBaseUrl,
             )
             // Only use custom configuration if explicitly set (local dev or custom Gateway)
             // Otherwise undefined → AI SDK uses Vercel default (https://ai-gateway.vercel.sh/v1/ai) + OIDC
@@ -993,11 +1067,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "doubao": {
-            const apiKey = overrides?.apiKey || process.env.DOUBAO_API_KEY
+            const apiKey = resolveApiKey(overrides, "DOUBAO_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "DOUBAO_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.DOUBAO_BASE_URL,
+                serverBaseUrl,
                 "https://ark.cn-beijing.volces.com/api/v3",
             )
             const lowerModelId = modelId.toLowerCase()
@@ -1022,11 +1100,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "modelscope": {
-            const apiKey = overrides?.apiKey || process.env.MODELSCOPE_API_KEY
+            const apiKey = resolveApiKey(overrides, "MODELSCOPE_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "MODELSCOPE_BASE_URL",
+            )
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                process.env.MODELSCOPE_BASE_URL,
+                serverBaseUrl,
                 "https://api-inference.modelscope.cn/v1",
             )
             const modelscopeProvider = createOpenAI({

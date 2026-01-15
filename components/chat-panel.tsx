@@ -968,6 +968,10 @@ export default function ChatPanel({
                             "x-vertex-api-key": config.vertexApiKey,
                         }),
                     }),
+                    // Send selected model ID for server model lookup (apiKeyEnv/baseUrlEnv)
+                    ...(config.selectedModelId && {
+                        "x-selected-model-id": config.selectedModelId,
+                    }),
                     ...(minimalStyle && {
                         "x-minimal-style": "true",
                     }),

@@ -54,7 +54,7 @@ export interface MultiModelConfig {
 
 // Flattened model for dropdown display
 export interface FlattenedModel {
-    id: string // Model config UUID
+    id: string // Model config UUID or synthetic server ID (e.g., "server:provider:modelId")
     modelId: string // Actual model ID
     provider: ProviderName
     providerLabel: string // Provider display name
@@ -69,6 +69,13 @@ export interface FlattenedModel {
     vertexApiKey?: string // Express Mode API key
 
     validated?: boolean // Has this model been validated
+    // Source of this model config: user-defined (client) or server-defined
+    source?: "user" | "server"
+    // Whether this model is the server default (matches AI_MODEL env var)
+    isDefault?: boolean
+    // Custom env var names for server models (allows multiple API keys per provider)
+    apiKeyEnv?: string
+    baseUrlEnv?: string
 }
 
 // Provider metadata
@@ -307,7 +314,7 @@ export function createModelConfig(modelId: string): ModelConfig {
     }
 }
 
-// Get all models as flattened list for dropdown
+// Get all models as flattened list for dropdown (user-defined only)
 export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
     const models: FlattenedModel[] = []
 
@@ -333,6 +340,8 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 vertexApiKey: provider.vertexApiKey,
 
                 validated: model.validated,
+                source: "user",
+                isDefault: false,
             })
         }
     }
