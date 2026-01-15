@@ -217,6 +217,63 @@ AI_MODEL=openai/gpt-4o
 AI_PROVIDER=google  # 或：openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
 ```
 
+## 服务端多模型配置
+
+管理员可以配置多个服务端模型，让所有用户无需提供个人 API Key 即可使用。
+
+### 配置方式
+
+**方式一：环境变量**（推荐用于云部署）
+
+设置 `AI_MODELS_CONFIG` 为 JSON 字符串：
+
+```bash
+AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
+```
+
+**方式二：配置文件**
+
+在项目根目录创建 `ai-models.json` 文件（或通过 `AI_MODELS_CONFIG_PATH` 指定路径）。
+
+### 配置示例
+
+```json
+{
+  "providers": [
+    {
+      "name": "OpenAI Production",
+      "provider": "openai",
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "default": true
+    },
+    {
+      "name": "Custom DeepSeek",
+      "provider": "deepseek",
+      "models": ["deepseek-chat"],
+      "apiKeyEnv": "MY_DEEPSEEK_KEY",
+      "baseUrlEnv": "MY_DEEPSEEK_URL"
+    }
+  ]
+}
+```
+
+### 字段说明
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `name` | 是 | 显示名称（支持同一提供商多个配置） |
+| `provider` | 是 | 提供商类型（`openai`, `anthropic`, `google`, `bedrock` 等） |
+| `models` | 是 | 模型 ID 列表 |
+| `default` | 否 | 设为 `true` 表示默认选中该提供商的第一个模型 |
+| `apiKeyEnv` | 否 | 自定义 API Key 环境变量名（默认使用提供商标准变量如 `OPENAI_API_KEY`） |
+| `baseUrlEnv` | 否 | 自定义 Base URL 环境变量名 |
+
+### 说明
+
+- API Key 和凭证通过环境变量提供。默认使用标准变量名（如 `OPENAI_API_KEY`），也可通过 `apiKeyEnv` 指定自定义变量名。
+- `name` 字段允许同一提供商多个配置（例如 "OpenAI Production" 和 "OpenAI Staging" 都使用 `provider: "openai"` 但 `apiKeyEnv` 不同）。
+- 如果配置不存在，应用会回退到 `AI_PROVIDER`/`AI_MODEL` 环境变量配置。
+
 ## 模型能力要求
 
 此任务对模型能力要求极高，因为它涉及生成具有严格格式约束（draw.io XML）的长文本。

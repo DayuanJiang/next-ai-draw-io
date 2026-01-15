@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import {
     createEmptyConfig,
@@ -132,12 +133,54 @@ export interface UseModelConfigReturn {
 export function useModelConfig(): UseModelConfigReturn {
     const [config, setConfig] = useState<MultiModelConfig>(createEmptyConfig)
     const [isLoaded, setIsLoaded] = useState(false)
+    const [serverModels, setServerModels] = useState<FlattenedServerModel[]>([])
+    const [serverLoaded, setServerLoaded] = useState(false)
 
-    // Load config on mount
+    // Load client config on mount
     useEffect(() => {
         const loaded = loadConfig()
         setConfig(loaded)
         setIsLoaded(true)
+    }, [])
+
+    // Load server models on mount (if any)
+    useEffect(() => {
+        if (typeof window === "undefined") return
+
+        fetch("/api/server-models")
+            .then((res) => {
+                if (!res.ok) {
+                    console.error(
+                        "Failed to load server models:",
+                        res.status,
+                        res.statusText,
+                    )
+                    throw new Error(`Request failed with status ${res.status}`)
+                }
+                return res.json()
+            })
+            .then((data) => {
+                const raw: FlattenedServerModel[] = data?.models || []
+                setServerModels(raw)
+                setServerLoaded(true)
+
+                // Auto-select default server model if no model is currently selected
+                setConfig((prev) => {
+                    if (!prev.selectedModelId && raw.length > 0) {
+                        const defaultModel = raw.find((m) => m.isDefault)
+                        if (defaultModel) {
+                            return { ...prev, selectedModelId: defaultModel.id }
+                        }
+                        // If no default marked, use first server model
+                        return { ...prev, selectedModelId: raw[0].id }
+                    }
+                    return prev
+                })
+            })
+            .catch((error) => {
+                console.error("Error while loading server models:", error)
+                setServerLoaded(true)
+            })
     }, [])
 
     // Save config whenever it changes (after initial load)
@@ -148,9 +191,33 @@ export function useModelConfig(): UseModelConfigReturn {
     }, [config, isLoaded])
 
     // Derived state
-    const models = flattenModels(config)
+    const userModels = flattenModels(config)
+
+    const models: FlattenedModel[] = [
+        // Server models (read-only, credentials from env)
+        ...serverModels.map((m) => ({
+            id: m.id,
+            modelId: m.modelId,
+            provider: m.provider,
+            providerLabel: `Server · ${m.providerLabel}`,
+            apiKey: "",
+            baseUrl: undefined,
+            awsAccessKeyId: undefined,
+            awsSecretAccessKey: undefined,
+            awsRegion: undefined,
+            awsSessionToken: undefined,
+            validated: true,
+            source: "server" as const,
+            isDefault: m.isDefault,
+            apiKeyEnv: m.apiKeyEnv,
+            baseUrlEnv: m.baseUrlEnv,
+        })),
+        // User models from local configuration
+        ...userModels,
+    ]
+
     const selectedModel = config.selectedModelId
-        ? findModelById(config, config.selectedModelId)
+        ? models.find((m) => m.id === config.selectedModelId)
         : undefined
 
     // Actions
@@ -282,7 +349,7 @@ export function useModelConfig(): UseModelConfigReturn {
 
     return {
         config,
-        isLoaded,
+        isLoaded: isLoaded && serverLoaded,
         models,
         selectedModel,
         selectedModelId: config.selectedModelId,
@@ -314,6 +381,8 @@ export function getSelectedAIConfig(): {
     awsSecretAccessKey: string
     awsRegion: string
     awsSessionToken: string
+    // Selected model ID (for server model lookup)
+    selectedModelId: string
     // Vertex AI credentials (Express Mode)
     vertexApiKey: string
 } {
@@ -327,6 +396,7 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: "",
         awsRegion: "",
         awsSessionToken: "",
+        selectedModelId: "",
         vertexApiKey: "",
     }
 
@@ -350,6 +420,7 @@ export function getSelectedAIConfig(): {
             awsSecretAccessKey: "",
             awsRegion: "",
             awsSessionToken: "",
+            selectedModelId: "",
             vertexApiKey: "",
         }
     }
@@ -361,12 +432,32 @@ export function getSelectedAIConfig(): {
         return { ...empty, accessCode }
     }
 
-    // No selected model = use server default
+    // No selected model = use server default (AI_PROVIDER/AI_MODEL/env auto-detect)
     if (!config.selectedModelId) {
         return { ...empty, accessCode }
     }
 
-    // Find selected model
+    // Server-side model selection (id = "server:<name-slug>:<modelId>")
+    // Provider is resolved server-side via findServerModelById()
+    if (config.selectedModelId.startsWith("server:")) {
+        const parts = config.selectedModelId.split(":")
+        const nameSlug = parts[1] || ""
+        const modelId = parts.slice(2).join(":") // Preserve Bedrock-style IDs
+
+        return {
+            ...empty,
+            accessCode,
+            // Note: nameSlug is NOT the provider, but we send it for backwards compat
+            // Server uses selectedModelId to lookup the actual provider
+            aiProvider: nameSlug,
+            aiBaseUrl: "",
+            aiApiKey: "",
+            aiModel: modelId,
+            selectedModelId: config.selectedModelId,
+        }
+    }
+
+    // Find selected user-defined model
     const model = findModelById(config, config.selectedModelId)
     if (!model) {
         return { ...empty, accessCode }
@@ -383,6 +474,7 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: model.awsSecretAccessKey || "",
         awsRegion: model.awsRegion || "",
         awsSessionToken: model.awsSessionToken || "",
+        selectedModelId: config.selectedModelId || "",
         // Vertex AI credentials (Express Mode)
         vertexApiKey: model.vertexApiKey || "",
     }

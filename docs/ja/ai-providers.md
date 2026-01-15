@@ -217,6 +217,63 @@ AI_MODEL=openai/gpt-4o
 AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
 ```
 
+## サーバーサイドマルチモデル設定
+
+管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。
+
+### 設定方法
+
+**方法1：環境変数**（クラウドデプロイ推奨）
+
+`AI_MODELS_CONFIG` をJSON文字列として設定：
+
+```bash
+AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
+```
+
+**方法2：設定ファイル**
+
+プロジェクトルートに `ai-models.json` ファイルを作成します（または `AI_MODELS_CONFIG_PATH` でパスを指定）。
+
+### 設定例
+
+```json
+{
+  "providers": [
+    {
+      "name": "OpenAI Production",
+      "provider": "openai",
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "default": true
+    },
+    {
+      "name": "Custom DeepSeek",
+      "provider": "deepseek",
+      "models": ["deepseek-chat"],
+      "apiKeyEnv": "MY_DEEPSEEK_KEY",
+      "baseUrlEnv": "MY_DEEPSEEK_URL"
+    }
+  ]
+}
+```
+
+### フィールド説明
+
+| フィールド | 必須 | 説明 |
+|------------|------|------|
+| `name` | はい | 表示名（同一プロバイダーの複数設定をサポート） |
+| `provider` | はい | プロバイダータイプ（`openai`, `anthropic`, `google`, `bedrock` など） |
+| `models` | はい | モデルIDのリスト |
+| `default` | いいえ | `true` に設定すると、そのプロバイダーの最初のモデルがデフォルトで選択されます |
+| `apiKeyEnv` | いいえ | カスタムAPIキー環境変数名（デフォルトは `OPENAI_API_KEY` などの標準変数） |
+| `baseUrlEnv` | いいえ | カスタムBase URL環境変数名 |
+
+### 備考
+
+- APIキーと認証情報は環境変数で提供します。デフォルトは標準変数名（例：`OPENAI_API_KEY`）を使用しますが、`apiKeyEnv` でカスタム変数名を指定できます。
+- `name` フィールドにより同一プロバイダーの複数設定が可能です（例：「OpenAI Production」と「OpenAI Staging」が両方とも `provider: "openai"` を使用しつつ、異なる `apiKeyEnv` を持つ）。
+- 設定が存在しない場合、アプリは `AI_PROVIDER`/`AI_MODEL` 環境変数設定にフォールバックします。
+
 ## モデル性能要件
 
 このタスクは、厳密なフォーマット制約（draw.io XML）を伴う長文テキストの生成を含むため、非常に強力なモデル性能が必要です。
