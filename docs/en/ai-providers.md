@@ -217,36 +217,62 @@ If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope
 ```
 
-## Server-Side Multi-Model Configuration (ai-models.json)
+## Server-Side Multi-Model Configuration
 
-In addition to client-side model configuration, you can define a shared list of **server models** that all users can access without providing their own API keys.
+Administrators can configure multiple server-side models that are available to all users without requiring personal API keys.
 
-1. Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PATH` to a custom location).
-2. Configure providers and models:
+### Configuration Methods
+
+**Option 1: Environment Variable** (recommended for cloud deployments)
+
+Set `AI_MODELS_CONFIG` as a JSON string:
+
+```bash
+AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
+```
+
+**Option 2: Config File**
+
+Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PATH` to a custom location).
+
+### Example Configuration
 
 ```json
 {
-  "version": 1,
   "providers": [
     {
       "name": "OpenAI Production",
       "provider": "openai",
-      "models": ["gpt-4o", "gpt-4o-mini"]
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "default": true
     },
     {
-      "name": "Anthropic Production",
-      "provider": "anthropic",
-      "models": ["claude-sonnet-4-5-20250514"]
+      "name": "Custom DeepSeek",
+      "provider": "deepseek",
+      "models": ["deepseek-chat"],
+      "apiKeyEnv": "MY_DEEPSEEK_KEY",
+      "baseUrlEnv": "MY_DEEPSEEK_URL"
     }
   ]
 }
 ```
 
--   The `provider` field maps to the same provider names used in this guide (`openai`, `anthropic`, `bedrock`, etc.).
--   The `models` array contains model IDs exactly as you would set in `AI_MODEL`.
--   API keys and other credentials are still read from environment variables (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
--   If `AI_MODEL` is set and matches one of the models in `ai-models.json`, that model is treated as the server **default** in the UI.
--   If `ai-models.json` is missing or invalid, the application falls back to the standard `AI_PROVIDER`/`AI_MODEL` behavior.
+### Field Reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Display name (supports multiple configs for same provider) |
+| `provider` | Yes | Provider type (`openai`, `anthropic`, `google`, `bedrock`, etc.) |
+| `models` | Yes | List of model IDs |
+| `default` | No | Set to `true` to auto-select this provider's first model as default |
+| `apiKeyEnv` | No | Custom API key env var name (defaults to provider's standard var like `OPENAI_API_KEY`) |
+| `baseUrlEnv` | No | Custom base URL env var name |
+
+### Notes
+
+- API keys and credentials are provided via environment variables. By default, standard var names are used (e.g., `OPENAI_API_KEY`), but you can specify custom var names with `apiKeyEnv`.
+- The `name` field allows multiple configurations for the same provider (e.g., "OpenAI Production" and "OpenAI Staging" both using `provider: "openai"` but with different `apiKeyEnv` values).
+- If config is not present, the app falls back to `AI_PROVIDER`/`AI_MODEL` environment variable configuration.
 
 ## Model Capability Requirements
 

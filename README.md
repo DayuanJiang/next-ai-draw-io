@@ -221,38 +221,9 @@ All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
 📖 **[Detailed Provider Configuration Guide](./docs/en/ai-providers.md)** - See setup instructions for each provider.
 
-### Server-Side Multi-Model Configuration (ai-models.json)
+### Server-Side Multi-Model Configuration
 
-Administrators can configure multiple server-side models that are available to all users without requiring personal API keys.
-
--   Create an `ai-models.json` file in the project root (or point `AI_MODELS_CONFIG_PATH` to it).
--   Example configuration:
-
-```json
-{
-  "version": 1,
-  "providers": [
-    {
-      "name": "OpenAI Production",
-      "provider": "openai",
-      "models": ["gpt-4o", "gpt-4o-mini"]
-    },
-    {
-      "name": "Anthropic Production",
-      "provider": "anthropic",
-      "models": ["claude-sonnet-4-5-20250514"]
-    },
-    {
-      "name": "AWS Bedrock",
-      "provider": "bedrock",
-      "models": ["anthropic.claude-sonnet-4-5-20250514-v1:0"]
-    }
-  ]
-}
-```
-
--   API keys and credentials are still provided via environment variables (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
--   If `ai-models.json` is not present, the app falls back to the existing `AI_PROVIDER`/`AI_MODEL` configuration and auto-detection.
+Administrators can configure multiple server-side models that are available to all users without requiring personal API keys. Configure via `AI_MODELS_CONFIG` environment variable (JSON string) or `ai-models.json` file.
 
 **Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-5.1, Gemini 3 Pro, and DeepSeek V3.2/R1.
 
