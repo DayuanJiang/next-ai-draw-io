@@ -305,10 +305,13 @@
         "noModelsFound": "No models found.",
         "default": "Default",
         "serverDefault": "Server Default",
+        "serverModels": "Server Models",
+        "userModels": "User Models",
         "configureModels": "Configure Models...",
         "onlyVerifiedShown": "Only verified models are shown",
         "showUnvalidatedModels": "Show unvalidated models",
         "allModelsShown": "All models are shown (including unvalidated)",
-        "unvalidatedModelWarning": "This model has not been validated"
+        "unvalidatedModelWarning": "This model has not been validated",
+        "serverDefaultModel": "Server default model"
     }
 }

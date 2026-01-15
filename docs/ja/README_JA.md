@@ -214,6 +214,39 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 📖 **[詳細なプロバイダー設定ガイド](./ai-providers.md)** - 各プロバイダーの設定手順をご覧ください。
 
+### サーバーサイドマルチモデル設定（ai-models.json）
+
+管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。
+
+-   プロジェクトルートに `ai-models.json` ファイルを作成します（または `AI_MODELS_CONFIG_PATH` でパスを指定）。
+-   設定例：
+
+```json
+{
+  "version": 1,
+  "providers": [
+    {
+      "name": "OpenAI Production",
+      "provider": "openai",
+      "models": ["gpt-4o", "gpt-4o-mini"]
+    },
+    {
+      "name": "Anthropic Production",
+      "provider": "anthropic",
+      "models": ["claude-sonnet-4-5-20250514"]
+    },
+    {
+      "name": "AWS Bedrock",
+      "provider": "bedrock",
+      "models": ["anthropic.claude-sonnet-4-5-20250514-v1:0"]
+    }
+  ]
+}
+```
+
+-   APIキーと認証情報は引き続き環境変数で提供します（例：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`AWS_REGION`、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`）。
+-   `ai-models.json` が存在しない場合、アプリは既存の `AI_PROVIDER`/`AI_MODEL` 設定と自動検出にフォールバックします。
+
 **モデル要件**：このタスクは厳密なフォーマット制約（draw.io XML）を持つ長文テキスト生成を伴うため、強力なモデル機能が必要です。Claude Sonnet 4.5、GPT-5.1、Gemini 3 Pro、DeepSeek V3.2/R1を推奨します。
 
 注：`claude`シリーズはAWS、Azure、GCPなどのクラウドアーキテクチャロゴ付きのdraw.ioダイアグラムで学習されているため、クラウドアーキテクチャダイアグラムを作成したい場合は最適な選択です。

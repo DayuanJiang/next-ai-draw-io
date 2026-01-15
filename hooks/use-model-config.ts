@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import {
     createEmptyConfig,
@@ -14,15 +15,6 @@ import {
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
-
-// Server-side model descriptor returned by /api/server-models
-interface ServerModel {
-    id: string
-    modelId: string
-    provider: ProviderName
-    providerLabel: string
-    isDefault: boolean
-}
 
 // Old storage keys for migration
 const OLD_KEYS = {
@@ -141,7 +133,7 @@ export interface UseModelConfigReturn {
 export function useModelConfig(): UseModelConfigReturn {
     const [config, setConfig] = useState<MultiModelConfig>(createEmptyConfig)
     const [isLoaded, setIsLoaded] = useState(false)
-    const [serverModels, setServerModels] = useState<ServerModel[]>([])
+    const [serverModels, setServerModels] = useState<FlattenedServerModel[]>([])
     const [serverLoaded, setServerLoaded] = useState(false)
 
     // Load client config on mount
@@ -168,9 +160,22 @@ export function useModelConfig(): UseModelConfigReturn {
                 return res.json()
             })
             .then((data) => {
-                const raw: ServerModel[] = data?.models || []
+                const raw: FlattenedServerModel[] = data?.models || []
                 setServerModels(raw)
                 setServerLoaded(true)
+
+                // Auto-select default server model if no model is currently selected
+                setConfig((prev) => {
+                    if (!prev.selectedModelId && raw.length > 0) {
+                        const defaultModel = raw.find((m) => m.isDefault)
+                        if (defaultModel) {
+                            return { ...prev, selectedModelId: defaultModel.id }
+                        }
+                        // If no default marked, use first server model
+                        return { ...prev, selectedModelId: raw[0].id }
+                    }
+                    return prev
+                })
             })
             .catch((error) => {
                 console.error("Error while loading server models:", error)
@@ -203,8 +208,9 @@ export function useModelConfig(): UseModelConfigReturn {
             awsSessionToken: undefined,
             validated: true,
             source: "server" as const,
-            isServerDefault: m.isDefault,
             isDefault: m.isDefault,
+            apiKeyEnv: m.apiKeyEnv,
+            baseUrlEnv: m.baseUrlEnv,
         })),
         // User models from local configuration
         ...userModels,
@@ -375,6 +381,8 @@ export function getSelectedAIConfig(): {
     awsSecretAccessKey: string
     awsRegion: string
     awsSessionToken: string
+    // Selected model ID (for server model lookup)
+    selectedModelId: string
 } {
     const empty = {
         accessCode: "",
@@ -386,6 +394,7 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: "",
         awsRegion: "",
         awsSessionToken: "",
+        selectedModelId: "",
     }
 
     if (typeof window === "undefined") return empty
@@ -408,6 +417,7 @@ export function getSelectedAIConfig(): {
             awsSecretAccessKey: "",
             awsRegion: "",
             awsSessionToken: "",
+            selectedModelId: "",
         }
     }
 
@@ -423,19 +433,23 @@ export function getSelectedAIConfig(): {
         return { ...empty, accessCode }
     }
 
-    // Server-side model selection (id = "server:<provider>:<modelId>")
+    // Server-side model selection (id = "server:<name-slug>:<modelId>")
+    // Provider is resolved server-side via findServerModelById()
     if (config.selectedModelId.startsWith("server:")) {
         const parts = config.selectedModelId.split(":")
-        const provider = parts[1] || ""
+        const nameSlug = parts[1] || ""
         const modelId = parts.slice(2).join(":") // Preserve Bedrock-style IDs
 
         return {
             ...empty,
             accessCode,
-            aiProvider: provider,
+            // Note: nameSlug is NOT the provider, but we send it for backwards compat
+            // Server uses selectedModelId to lookup the actual provider
+            aiProvider: nameSlug,
             aiBaseUrl: "",
             aiApiKey: "",
             aiModel: modelId,
+            selectedModelId: config.selectedModelId,
         }
     }
 
@@ -456,5 +470,6 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: model.awsSecretAccessKey || "",
         awsRegion: model.awsRegion || "",
         awsSessionToken: model.awsSessionToken || "",
+        selectedModelId: config.selectedModelId || "",
     }
 }

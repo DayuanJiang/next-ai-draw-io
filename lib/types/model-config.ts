@@ -64,10 +64,11 @@ export interface FlattenedModel {
     validated?: boolean // Has this model been validated
     // Source of this model config: user-defined (client) or server-defined
     source?: "user" | "server"
-    // Whether this server model matches the env default (AI_MODEL)
-    isServerDefault?: boolean
-    // Whether this model is the default as defined by the environment (AI_MODEL)
+    // Whether this model is the server default (matches AI_MODEL env var)
     isDefault?: boolean
+    // Custom env var names for server models (allows multiple API keys per provider)
+    apiKeyEnv?: string
+    baseUrlEnv?: string
 }
 
 // Provider metadata
@@ -318,7 +319,7 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 awsSessionToken: provider.awsSessionToken,
                 validated: model.validated,
                 source: "user",
-                isServerDefault: false,
+                isDefault: false,
             })
         }
     }

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { loadFlattenedServerModels } from "@/lib/server-model-config"
 
-// Server models configuration rarely changes, so we can serve this route statically
-export const dynamic = "force-static"
+// Use dynamic rendering to read AI_MODEL/AI_PROVIDER env vars at runtime
+// This ensures Docker users can set these values when starting containers
+export const dynamic = "force-dynamic"
 
 export async function GET() {
     const models = await loadFlattenedServerModels()

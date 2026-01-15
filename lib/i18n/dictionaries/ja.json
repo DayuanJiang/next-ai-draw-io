@@ -305,10 +305,13 @@
         "noModelsFound": "モデルが見つかりません。",
         "default": "デフォルト",
         "serverDefault": "サーバーデフォルト",
+        "serverModels": "サーバーモデル",
+        "userModels": "ユーザーモデル",
         "configureModels": "モデルを設定...",
         "onlyVerifiedShown": "検証済みのモデルのみ表示",
         "showUnvalidatedModels": "未検証のモデルを表示",
         "allModelsShown": "すべてのモデルを表示（未検証を含む）",
-        "unvalidatedModelWarning": "このモデルは検証されていません"
+        "unvalidatedModelWarning": "このモデルは検証されていません",
+        "serverDefaultModel": "サーバーデフォルトモデル"
     }
 }
