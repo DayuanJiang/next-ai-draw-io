@@ -207,6 +207,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   OpenAI
 -   Anthropic
 -   Google AI
+-   Google Vertex AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter

@@ -4,6 +4,7 @@ export type ProviderName =
     | "openai"
     | "anthropic"
     | "google"
+    | "vertexai"
     | "azure"
     | "bedrock"
     | "ollama"
@@ -36,6 +37,9 @@ export interface ProviderConfig {
     awsSecretAccessKey?: string
     awsRegion?: string
     awsSessionToken?: string // Optional, for temporary credentials
+    // Vertex AI specific fields
+    vertexApiKey?: string // Express Mode API key
+
     models: ModelConfig[]
     validated?: boolean // Has API key been validated
 }
@@ -61,6 +65,9 @@ export interface FlattenedModel {
     awsSecretAccessKey?: string
     awsRegion?: string
     awsSessionToken?: string
+    // Vertex AI specific fields
+    vertexApiKey?: string // Express Mode API key
+
     validated?: boolean // Has this model been validated
     // Source of this model config: user-defined (client) or server-defined
     source?: "user" | "server"
@@ -82,6 +89,7 @@ export const PROVIDER_INFO: Record<
         defaultBaseUrl: "https://api.anthropic.com/v1",
     },
     google: { label: "Google" },
+    vertexai: { label: "Google Vertex AI" },
     azure: { label: "Azure OpenAI" },
     bedrock: { label: "Amazon Bedrock" },
     ollama: {
@@ -163,6 +171,17 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "gemini-1.5-flash",
         // Legacy
         "gemini-pro",
+    ],
+    vertexai: [
+        // Gemini 2.5 series
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        // Gemini 2.0 series
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp",
+        // Gemini 1.5 series
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
     ],
     azure: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-35-turbo"],
     bedrock: [
@@ -317,6 +336,9 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 awsSecretAccessKey: provider.awsSecretAccessKey,
                 awsRegion: provider.awsRegion,
                 awsSessionToken: provider.awsSessionToken,
+                // Vertex AI fields
+                vertexApiKey: provider.vertexApiKey,
+
                 validated: model.validated,
                 source: "user",
                 isDefault: false,
