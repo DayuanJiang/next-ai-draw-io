@@ -213,7 +213,7 @@ export default function About() {
                                     <strong>Prompt:</strong> Generate a RAG
                                     architecture diagram for{" "}
                                     <strong>chat application</strong>. Use
-                                    connected diagram for data inngestion
+                                    connected diagram for data ingestion
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
