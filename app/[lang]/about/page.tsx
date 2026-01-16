@@ -185,93 +185,103 @@ export default function About() {
                         {/* Animated Transformer */}
                         <div className="text-center">
                             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                Animated Transformer Connectors
+                                Animated Resnet50 model Architecture
                             </h3>
                             <p className="text-gray-600 mb-4">
                                 <strong>Prompt:</strong> Give me an{" "}
                                 <strong>animated connector</strong> diagram of
                                 transformer&apos;s architecture.
                             </p>
-                            <Image
-                                src="/animated_connectors.svg"
-                                alt="Transformer Architecture with Animated Connectors"
-                                width={480}
-                                height={360}
-                                className="mx-auto"
-                            />
+                            <div className="bg-neutral-950 rounded-lg p-4 inline-block">
+                                <Image
+                                    src="/resnet50.svg"
+                                    alt="Architecture diagram for ResNet50 model"
+                                    width={480}
+                                    height={360}
+                                    className="mx-auto"
+                                />
+                            </div>
                         </div>
 
                         {/* Cloud Architecture Grid */}
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    GCP Architecture Diagram
+                                    RAG Technique Diagram
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Generate a GCP
-                                    architecture diagram with{" "}
-                                    <strong>GCP icons</strong>. Users connect to
-                                    a frontend hosted on an instance.
+                                    <strong>Prompt:</strong> Generate a RAG
+                                    architecture diagram for{" "}
+                                    <strong>chat application</strong>. Use
+                                    connected diagram for data inngestion
                                 </p>
-                                <Image
-                                    src="/gcp_demo.svg"
-                                    alt="GCP Architecture Diagram"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/rag_prod.svg"
+                                        alt="RAG Architecture Diagram"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    AWS Architecture Diagram
+                                    Authentication using React and AWS
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Generate an AWS
-                                    architecture diagram with{" "}
-                                    <strong>AWS icons</strong>. Users connect to
-                                    a frontend hosted on an instance.
+                                    <strong>Prompt:</strong> Generate
+                                    authentication process using React with{" "}
+                                    <strong>AWS</strong>. Use Serverless
+                                    architecture.
                                 </p>
-                                <Image
-                                    src="/aws_demo.svg"
-                                    alt="AWS Architecture Diagram"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/auth.svg"
+                                        alt="AWS Architecture Diagram"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Azure Architecture Diagram
+                                    Agile Scrum process
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Generate an Azure
-                                    architecture diagram with{" "}
-                                    <strong>Azure icons</strong>. Users connect
-                                    to a frontend hosted on an instance.
+                                    <strong>Prompt:</strong> Generate agile
+                                    scrum workflow diagram for software
+                                    development team.
                                 </p>
-                                <Image
-                                    src="/azure_demo.svg"
-                                    alt="Azure Architecture Diagram"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/agile_scrum.svg"
+                                        alt="Azure Architecture Diagram"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Cat Sketch
+                                    Open Innovativon
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Draw a cute cat for
-                                    me.
+                                    <strong>Prompt:</strong> Create
+                                    visualization of Henry Chesbrough's Open
+                                    Innovation model.
                                 </p>
-                                <Image
-                                    src="/cat_demo.svg"
-                                    alt="Cat Drawing"
-                                    width={240}
-                                    height={240}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/inno.svg"
+                                        alt="Cat Drawing"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
