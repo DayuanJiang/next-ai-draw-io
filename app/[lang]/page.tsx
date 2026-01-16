@@ -16,8 +16,13 @@ const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        resetDrawioReady,
+        setShowSaveDialog,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -31,6 +36,24 @@ export default function Home() {
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isMobileRef = useRef(false)
+
+    useEffect(() => {
+        //fix:save event is triggered frequently
+        const messageHandler = (drawioEvent: MessageEvent) => {
+            const { data } = drawioEvent
+            try {
+                const drawioInfo =
+                    typeof data === "string" ? JSON.parse(data) : data
+                if (drawioInfo?.event === "save") {
+                    setShowSaveDialog(true)
+                }
+            } catch (_err) {}
+        }
+        window.addEventListener("message", messageHandler)
+        return () => {
+            window.removeEventListener("message", messageHandler)
+        }
+    }, [])
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -170,7 +193,6 @@ export default function Home() {
                                             spin: false,
                                             libraries: false,
                                             saveAndExit: false,
-                                            noSaveBtn: true,
                                             noExitBtn: true,
                                             dark: darkMode,
                                             lang: currentLang,
