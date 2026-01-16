@@ -260,6 +260,7 @@ COMMON STYLES:
             // Update session state
             currentSession.xml = xml
             currentSession.version++
+            currentSession.lastGetDiagramTime = Date.now()
 
             // Push to embedded server state
             setState(currentSession.id, xml)
