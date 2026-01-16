@@ -50,6 +50,7 @@
         "@next/third-parties": "^16.0.6",
         "@opennextjs/cloudflare": "1.14.8",
         "@openrouter/ai-sdk-provider": "^1.5.4",
+        "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-http": "^0.209.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
