@@ -1007,7 +1007,7 @@ export function ModelConfigDialog({
                                                                                 .provider
                                                                         ]
                                                                             .defaultBaseUrl ||
-                                                                        "https://api.openai.com/v1",
+                                                                        "https://api.example.com/v1",
                                                                 },
                                                             )}
                                                         </Label>
@@ -1223,7 +1223,7 @@ export function ModelConfigDialog({
                                                                                 .provider
                                                                         ]
                                                                             .defaultBaseUrl ||
-                                                                        "https://api.openai.com/v1",
+                                                                        "https://api.example.com/v1",
                                                                 },
                                                             )}
                                                         </Label>
