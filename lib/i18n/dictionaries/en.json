@@ -280,6 +280,7 @@
         "enterSecretKey": "Enter your secret access key",
         "baseUrl": "Base URL",
         "optional": "(optional)",
+        "baseUrlWithExample": "Base URL (optional, e.g. {example})",
         "customEndpoint": "Custom endpoint URL",
         "models": "Models",
         "customModelId": "Custom model ID...",

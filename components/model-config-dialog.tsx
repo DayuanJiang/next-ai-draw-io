@@ -997,10 +997,19 @@ export function ModelConfigDialog({
                                                             className="text-xs font-medium flex items-center gap-1.5"
                                                         >
                                                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            Base URL{" "}
-                                                            <span className="text-muted-foreground font-normal">
-                                                                (optional)
-                                                            </span>
+                                                            {formatMessage(
+                                                                dict.modelConfig
+                                                                    .baseUrlWithExample,
+                                                                {
+                                                                    example:
+                                                                        PROVIDER_INFO[
+                                                                            selectedProvider
+                                                                                .provider
+                                                                        ]
+                                                                            .defaultBaseUrl ||
+                                                                        "https://api.openai.com/v1",
+                                                                },
+                                                            )}
                                                         </Label>
                                                         <Input
                                                             id="vertex-base-url"
@@ -1204,17 +1213,19 @@ export function ModelConfigDialog({
                                                             className="text-xs font-medium flex items-center gap-1.5"
                                                         >
                                                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {
+                                                            {formatMessage(
                                                                 dict.modelConfig
-                                                                    .baseUrl
-                                                            }
-                                                            <span className="text-muted-foreground font-normal">
+                                                                    .baseUrlWithExample,
                                                                 {
-                                                                    dict
-                                                                        .modelConfig
-                                                                        .optional
-                                                                }
-                                                            </span>
+                                                                    example:
+                                                                        PROVIDER_INFO[
+                                                                            selectedProvider
+                                                                                .provider
+                                                                        ]
+                                                                            .defaultBaseUrl ||
+                                                                        "https://api.openai.com/v1",
+                                                                },
+                                                            )}
                                                         </Label>
                                                         <Input
                                                             id="base-url"
