@@ -34,10 +34,12 @@ import { findCachedResponse } from "@/lib/cached-responses"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { sanitizeMessages } from "@/lib/session-storage"
+import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { cn, formatXML, isRealDiagram } from "@/lib/utils"
+import type { ValidationState } from "./chat/ValidationCard"
 import { ChatMessageDisplay } from "./chat-message-display"
 import { DevXmlSimulator } from "./dev-xml-simulator"
 
@@ -75,7 +77,8 @@ interface ChatPanelProps {
 // Constants for tool states
 const TOOL_ERROR_STATE = "output-error" as const
 const DEBUG = process.env.NODE_ENV === "development"
-const MAX_AUTO_RETRY_COUNT = 1
+// Increased to 3 to support VLM validation retries (matches MAX_VALIDATION_RETRIES)
+const MAX_AUTO_RETRY_COUNT = 3
 
 const MAX_CONTINUATION_RETRY_COUNT = 2 // Limit for truncation continuation retries
 
@@ -120,6 +123,7 @@ export default function ChatPanel({
         latestSvg,
         clearDiagram,
         getThumbnailSvg,
+        captureValidationPng,
         diagramHistory,
         setDiagramHistory,
     } = useDiagram()
@@ -173,12 +177,21 @@ export default function ChatPanel({
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
     const [minimalStyle, setMinimalStyle] = useState(false)
+    const [vlmValidationEnabled, setVlmValidationEnabled] = useState(true)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
     useEffect(() => {
         const savedInput = sessionStorage.getItem(SESSION_STORAGE_INPUT_KEY)
         if (savedInput) {
             setInput(savedInput)
+        }
+    }, [])
+
+    // Load VLM validation setting from localStorage on mount
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEYS.vlmValidationEnabled)
+        if (stored !== null) {
+            setVlmValidationEnabled(stored === "true")
         }
     }, [])
 
@@ -269,6 +282,43 @@ export default function ChatPanel({
     > | null>(null)
     const LOCAL_STORAGE_DEBOUNCE_MS = 1000 // Save at most once per second
 
+    // Validation state for displaying VLM validation progress
+    // Key: toolCallId, Value: ValidationState
+    const [validationStates, setValidationStates] = useState<
+        Record<string, ValidationState>
+    >({})
+
+    // Callback to update validation state from tool handler
+    const handleValidationStateChange = useCallback(
+        (toolCallId: string, state: ValidationState) => {
+            setValidationStates((prev) => ({
+                ...prev,
+                [toolCallId]: state,
+            }))
+        },
+        [],
+    )
+
+    // Handler for VLM validation setting change
+    const handleVlmValidationChange = useCallback((value: boolean) => {
+        setVlmValidationEnabled(value)
+        localStorage.setItem(STORAGE_KEYS.vlmValidationEnabled, String(value))
+    }, [])
+
+    // Ref to store the sendMessage function for use in callbacks
+    const sendMessageRef = useRef<typeof sendMessage | null>(null)
+
+    // Callback to improve diagram with validation suggestions
+    const handleImproveWithSuggestions = useCallback((feedback: string) => {
+        if (sendMessageRef.current) {
+            // Send the feedback as a new user message to trigger regeneration
+            sendMessageRef.current({
+                role: "user",
+                parts: [{ type: "text", text: feedback }],
+            })
+        }
+    }, [])
+
     // Diagram tool handlers (display_diagram, edit_diagram, append_diagram)
     const { handleToolCall } = useDiagramToolHandlers({
         partialXmlRef,
@@ -277,6 +327,10 @@ export default function ChatPanel({
         onDisplayChart,
         onFetchChart,
         onExport,
+        captureValidationPng,
+        enableVlmValidation: vlmValidationEnabled,
+        sessionId,
+        onValidationStateChange: handleValidationStateChange,
     })
 
     const { messages, sendMessage, addToolOutput, status, error, setMessages } =
@@ -424,6 +478,11 @@ export default function ChatPanel({
                 return true
             },
         })
+
+    // Store sendMessage in ref for use in callbacks (like handleImproveWithSuggestions)
+    useEffect(() => {
+        sendMessageRef.current = sendMessage
+    }, [sendMessage])
 
     // Ref to track latest messages for unload persistence
     const messagesRef = useRef(messages)
@@ -1261,6 +1320,8 @@ export default function ChatPanel({
                     onSelectSession={handleSelectSession}
                     onDeleteSession={handleDeleteSession}
                     loadedMessageIdsRef={loadedMessageIdsRef}
+                    validationStates={validationStates}
+                    onImproveWithSuggestions={handleImproveWithSuggestions}
                 />
             </main>
 
@@ -1308,6 +1369,8 @@ export default function ChatPanel({
                 onToggleDarkMode={onToggleDarkMode}
                 minimalStyle={minimalStyle}
                 onMinimalStyleChange={setMinimalStyle}
+                vlmValidationEnabled={vlmValidationEnabled}
+                onVlmValidationChange={handleVlmValidationChange}
             />
 
             <ModelConfigDialog

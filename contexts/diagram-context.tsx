@@ -31,6 +31,7 @@ interface DiagramContextType {
         successMessage?: string,
     ) => void
     getThumbnailSvg: () => Promise<string | null>
+    captureValidationPng: () => Promise<string | null>
     isDrawioReady: boolean
     onDrawioLoad: () => void
     resetDrawioReady: () => void
@@ -51,6 +52,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
     const resolverRef = useRef<((value: string) => void) | null>(null)
+    // Resolver for PNG export (used for VLM validation)
+    const pngResolverRef = useRef<((value: string) => void) | null>(null)
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false)
     // Track if diagram has been restored after DrawIO remount (e.g., theme change)
@@ -147,6 +150,37 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    // Capture current diagram as PNG for VLM validation
+    const captureValidationPng = async (): Promise<string | null> => {
+        if (!drawioRef.current) return null
+        // Don't export if diagram is empty
+        if (!isRealDiagram(chartXML)) return null
+
+        try {
+            const pngData = await Promise.race([
+                new Promise<string>((resolve) => {
+                    pngResolverRef.current = resolve
+                    drawioRef.current?.exportDiagram({ format: "png" })
+                }),
+                new Promise<string>((_, reject) =>
+                    setTimeout(
+                        () => reject(new Error("PNG export timeout")),
+                        5000,
+                    ),
+                ),
+            ])
+
+            // PNG data should be a base64 data URL
+            if (pngData?.startsWith("data:image/png")) {
+                return pngData
+            }
+            return null
+        } catch {
+            // Timeout is expected occasionally - don't log as error
+            return null
+        }
+    }
+
     const loadDiagram = (
         chart: string,
         skipValidation?: boolean,
@@ -186,6 +220,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleDiagramExport = (data: any) => {
+        // Handle PNG export for VLM validation
+        if (pngResolverRef.current && data.data?.startsWith("data:image/png")) {
+            pngResolverRef.current(data.data)
+            pngResolverRef.current = null
+            return
+        }
+
         // Handle save to file if requested (process raw data before extraction)
         if (saveResolverRef.current.resolver) {
             const format = saveResolverRef.current.format
@@ -353,6 +394,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 clearDiagram,
                 saveDiagramToFile,
                 getThumbnailSvg,
+                captureValidationPng,
                 isDrawioReady,
                 onDrawioLoad,
                 resetDrawioReady,

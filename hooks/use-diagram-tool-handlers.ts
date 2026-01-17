@@ -1,5 +1,15 @@
 import type { MutableRefObject } from "react"
+import { useRef } from "react"
 import type { DiagramOperation } from "@/components/chat/types"
+import type {
+    ValidationState,
+    ValidationStatus,
+} from "@/components/chat/ValidationCard"
+import type { ValidationResult } from "@/lib/diagram-validator"
+import {
+    formatValidationFeedback,
+    validateRenderedDiagram,
+} from "@/lib/diagram-validator"
 import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 
 const DEBUG = process.env.NODE_ENV === "development"
@@ -30,6 +40,8 @@ type AddToolOutputParams = AddToolOutputSuccess | AddToolOutputError
 
 type AddToolOutputFn = (params: AddToolOutputParams) => void
 
+const MAX_VALIDATION_RETRIES = 3
+
 interface UseDiagramToolHandlersParams {
     partialXmlRef: MutableRefObject<string>
     editDiagramOriginalXmlRef: MutableRefObject<Map<string, string>>
@@ -37,6 +49,13 @@ interface UseDiagramToolHandlersParams {
     onDisplayChart: (xml: string, skipValidation?: boolean) => string | null
     onFetchChart: (saveToHistory?: boolean) => Promise<string>
     onExport: () => void
+    captureValidationPng?: () => Promise<string | null>
+    enableVlmValidation?: boolean
+    sessionId?: string
+    onValidationStateChange?: (
+        toolCallId: string,
+        state: ValidationState,
+    ) => void
 }
 
 /**
@@ -53,7 +72,33 @@ export function useDiagramToolHandlers({
     onDisplayChart,
     onFetchChart,
     onExport,
+    captureValidationPng,
+    enableVlmValidation = true,
+    sessionId,
+    onValidationStateChange,
 }: UseDiagramToolHandlersParams) {
+    // Track validation retry count per tool call
+    const validationRetryCountRef = useRef<Map<string, number>>(new Map())
+
+    // Helper to update validation state
+    const updateValidationState = (
+        toolCallId: string,
+        status: ValidationStatus,
+        options?: {
+            attempt?: number
+            maxAttempts?: number
+            result?: ValidationResult
+            error?: string
+            imageData?: string
+        },
+    ) => {
+        if (onValidationStateChange) {
+            onValidationStateChange(toolCallId, {
+                status,
+                ...options,
+            })
+        }
+    }
     const handleToolCall = async (
         { toolCall }: { toolCall: ToolCall },
         addToolOutput: AddToolOutputFn,
@@ -155,7 +200,151 @@ ${finalXml}
             // Success - diagram will be rendered by chat-message-display
             if (DEBUG) {
                 console.log(
-                    "[display_diagram] Success! Adding tool output with state: output-available",
+                    "[display_diagram] Success! Checking if VLM validation is enabled...",
+                )
+            }
+
+            // VLM validation after successful display
+            if (enableVlmValidation && captureValidationPng) {
+                let capturedPngData: string | null = null
+                try {
+                    // Notify UI that we're starting capture
+                    updateValidationState(toolCall.toolCallId, "capturing")
+
+                    // Small delay to ensure diagram is rendered before capture
+                    await new Promise((resolve) => setTimeout(resolve, 100))
+
+                    capturedPngData = await captureValidationPng()
+                    if (capturedPngData) {
+                        if (DEBUG) {
+                            console.log(
+                                "[display_diagram] Captured PNG for validation",
+                            )
+                        }
+
+                        const retryCount =
+                            validationRetryCountRef.current.get(
+                                toolCall.toolCallId,
+                            ) || 0
+
+                        // Notify UI that we're validating (include the image)
+                        updateValidationState(
+                            toolCall.toolCallId,
+                            "validating",
+                            {
+                                attempt: retryCount + 1,
+                                maxAttempts: MAX_VALIDATION_RETRIES,
+                                imageData: capturedPngData,
+                            },
+                        )
+
+                        const result = await validateRenderedDiagram(
+                            capturedPngData,
+                            finalXml,
+                            sessionId,
+                        )
+
+                        if (!result.valid) {
+                            if (retryCount < MAX_VALIDATION_RETRIES) {
+                                validationRetryCountRef.current.set(
+                                    toolCall.toolCallId,
+                                    retryCount + 1,
+                                )
+
+                                const feedback =
+                                    formatValidationFeedback(result)
+                                if (DEBUG) {
+                                    console.log(
+                                        `[display_diagram] Validation failed (attempt ${retryCount + 1}/${MAX_VALIDATION_RETRIES}):`,
+                                        result.issues,
+                                    )
+                                }
+
+                                // Notify UI of validation failure (include the image)
+                                updateValidationState(
+                                    toolCall.toolCallId,
+                                    "failed",
+                                    {
+                                        attempt: retryCount + 1,
+                                        maxAttempts: MAX_VALIDATION_RETRIES,
+                                        result,
+                                        imageData: capturedPngData,
+                                    },
+                                )
+
+                                addToolOutput({
+                                    tool: "display_diagram",
+                                    toolCallId: toolCall.toolCallId,
+                                    state: "output-error",
+                                    errorText: `[Validation attempt ${retryCount + 1}/${MAX_VALIDATION_RETRIES}]\n${feedback}`,
+                                })
+                                return
+                            } else {
+                                // Max retries reached - accept the diagram with warning
+                                if (DEBUG) {
+                                    console.log(
+                                        "[display_diagram] Max validation retries reached, accepting diagram",
+                                    )
+                                }
+                                validationRetryCountRef.current.delete(
+                                    toolCall.toolCallId,
+                                )
+
+                                // Notify UI that we're accepting with issues (include the image)
+                                updateValidationState(
+                                    toolCall.toolCallId,
+                                    "skipped",
+                                    { result, imageData: capturedPngData },
+                                )
+
+                                addToolOutput({
+                                    tool: "display_diagram",
+                                    toolCallId: toolCall.toolCallId,
+                                    output: "Diagram displayed (validation issues noted but max retries reached).",
+                                })
+                                return
+                            }
+                        } else {
+                            // Validation passed - clean up retry count
+                            validationRetryCountRef.current.delete(
+                                toolCall.toolCallId,
+                            )
+                            if (DEBUG) {
+                                console.log(
+                                    "[display_diagram] Validation passed!",
+                                )
+                            }
+
+                            // Notify UI of success (include the image)
+                            updateValidationState(
+                                toolCall.toolCallId,
+                                "success",
+                                { result, imageData: capturedPngData },
+                            )
+                        }
+                    } else {
+                        // PNG capture failed - skip validation
+                        updateValidationState(toolCall.toolCallId, "skipped")
+                    }
+                } catch (error) {
+                    // VLM validation error - log but don't block the user
+                    console.warn(
+                        "[display_diagram] VLM validation error:",
+                        error,
+                    )
+                    updateValidationState(toolCall.toolCallId, "error", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : "Validation failed",
+                        imageData: capturedPngData || undefined,
+                    })
+                }
+            }
+
+            if (DEBUG) {
+                console.log(
+                    "[display_diagram] Adding tool output with state: output-available",
                 )
             }
             addToolOutput({

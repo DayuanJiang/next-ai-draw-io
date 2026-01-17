@@ -67,6 +67,8 @@ interface SettingsDialogProps {
     onToggleDarkMode: () => void
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    vlmValidationEnabled?: boolean
+    onVlmValidationChange?: (value: boolean) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -88,6 +90,8 @@ function SettingsContent({
     onToggleDarkMode,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    vlmValidationEnabled = true,
+    onVlmValidationChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -399,6 +403,23 @@ function SettingsContent({
                                 {minimalStyle
                                     ? dict.chat.minimalStyle
                                     : dict.chat.styledMode}
+                            </span>
+                        </div>
+                    </SettingItem>
+
+                    {/* VLM Diagram Validation */}
+                    <SettingItem
+                        label="Diagram Validation"
+                        description="Use AI vision to validate and improve generated diagrams"
+                    >
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id="vlm-validation"
+                                checked={vlmValidationEnabled}
+                                onCheckedChange={onVlmValidationChange}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                                {vlmValidationEnabled ? "Enabled" : "Disabled"}
                             </span>
                         </div>
                     </SettingItem>
