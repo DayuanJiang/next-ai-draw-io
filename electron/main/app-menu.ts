@@ -1,4 +1,3 @@
-// electron/main/app-menu.ts (updated with i18n support)
 import {
     app,
     BrowserWindow,
