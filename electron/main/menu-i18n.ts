@@ -3,6 +3,8 @@
  * Translations for menu labels that don't use Electron's built-in roles
  */
 
+import { getUserLocale } from "./config-manager"
+
 export type MenuLocale = "en" | "zh" | "ja"
 
 export interface MenuTranslations {
@@ -169,10 +171,15 @@ export function detectSystemLocale(appLocale: string): MenuLocale {
 
 /**
  * Get locale from stored preference or system default
- * Checks localStorage for user's language preference first
+ * Checks config file for user's language preference first
  */
 export function getPreferredLocale(appLocale: string): MenuLocale {
-    // In Electron, we don't have direct access to localStorage
-    // This will be handled by reading from a config file if needed
+    // Try to get from saved preference first
+    const savedLocale = getUserLocale()
+    if (savedLocale) {
+        return savedLocale
+    }
+
+    // Fall back to system locale
     return detectSystemLocale(appLocale)
 }

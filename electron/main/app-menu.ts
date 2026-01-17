@@ -13,7 +13,7 @@ import {
     getCurrentPresetId,
     setCurrentPreset,
 } from "./config-manager"
-import { detectSystemLocale, getMenuTranslations } from "./menu-i18n"
+import { getMenuTranslations, getPreferredLocale } from "./menu-i18n"
 import { restartNextServer } from "./next-server"
 import { showSettingsWindow } from "./settings-window"
 
@@ -39,8 +39,8 @@ export function rebuildAppMenu(): void {
 function getMenuTemplate(): MenuItemConstructorOptions[] {
     const isMac = process.platform === "darwin"
 
-    // Get translations for current system locale
-    const locale = detectSystemLocale(app.getLocale())
+    // Get translations for preferred locale (saved preference or system default)
+    const locale = getPreferredLocale(app.getLocale())
     const t = getMenuTranslations(locale)
 
     const template: MenuItemConstructorOptions[] = []
