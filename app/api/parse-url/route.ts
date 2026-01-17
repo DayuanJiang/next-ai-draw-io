@@ -77,8 +77,9 @@ export async function POST(req: Request) {
             )
         }
 
-        // SSRF protection
-        if (isPrivateUrl(url)) {
+        // SSRF protection - enabled by default, set ALLOW_PRIVATE_URLS=false to block
+        const allowPrivateUrls = process.env.ALLOW_PRIVATE_URLS !== "false"
+        if (!allowPrivateUrls && isPrivateUrl(url)) {
             return NextResponse.json(
                 { error: "Cannot access private/internal URLs" },
                 { status: 400 },

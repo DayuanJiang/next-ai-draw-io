@@ -108,7 +108,9 @@ export async function POST(req: Request) {
         }
 
         // SECURITY: Block SSRF attacks via custom baseUrl
-        if (baseUrl && isPrivateUrl(baseUrl)) {
+        // Enabled by default for self-hosted deployments, set ALLOW_PRIVATE_URLS=false to block
+        const allowPrivateUrls = process.env.ALLOW_PRIVATE_URLS !== "false"
+        if (baseUrl && !allowPrivateUrls && isPrivateUrl(baseUrl)) {
             return NextResponse.json(
                 { valid: false, error: "Invalid base URL" },
                 { status: 400 },
