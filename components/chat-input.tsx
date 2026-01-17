@@ -197,6 +197,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     ) => {
         const dict = useDictionary()
         const {
+            chartXML,
             diagramHistory,
             saveDiagramToFile,
             showSaveDialog,
@@ -483,7 +484,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => setShowSaveDialog(true)}
-                                disabled={isDisabled}
+                                disabled={
+                                    isDisabled || !isRealDiagram(chartXML)
+                                }
                                 tooltipContent={dict.chat.saveDiagram}
                                 className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                             >
@@ -586,3 +589,5 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         )
     },
 )
+
+ChatInput.displayName = "ChatInput"

@@ -888,7 +888,6 @@ export default function ChatPanel({
         dict.dialogs.clearSuccess,
         buildSessionData,
         setDiagramHistory,
-        chatInputRef,
     ])
 
     const handleInputChange = (
