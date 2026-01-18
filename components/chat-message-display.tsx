@@ -28,6 +28,8 @@ import {
 import { ChatLobby } from "@/components/chat/ChatLobby"
 import { ToolCallCard } from "@/components/chat/ToolCallCard"
 import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
+import type { ValidationState } from "@/components/chat/ValidationCard"
+import { ValidationCard } from "@/components/chat/ValidationCard"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -148,6 +150,8 @@ interface ChatMessageDisplayProps {
     onSelectSession?: (id: string) => void
     onDeleteSession?: (id: string) => void
     loadedMessageIdsRef?: MutableRefObject<Set<string>>
+    validationStates?: Record<string, ValidationState>
+    onImproveWithSuggestions?: (feedback: string) => void
 }
 
 export function ChatMessageDisplay({
@@ -165,6 +169,8 @@ export function ChatMessageDisplay({
     onSelectSession,
     onDeleteSession,
     loadedMessageIdsRef,
+    validationStates = {},
+    onImproveWithSuggestions,
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
@@ -911,30 +917,59 @@ export function ChatMessageDisplay({
                                             return groups.map(
                                                 (group, groupIndex) => {
                                                     if (group.type === "tool") {
+                                                        const toolPart = group
+                                                            .parts[0] as ToolPartLike
+                                                        const toolCallId =
+                                                            toolPart.toolCallId
+                                                        const isDisplayDiagram =
+                                                            toolPart.type ===
+                                                            "tool-display_diagram"
+                                                        const validationState =
+                                                            validationStates[
+                                                                toolCallId
+                                                            ]
+
                                                         return (
-                                                            <ToolCallCard
+                                                            <div
                                                                 key={`${message.id}-tool-${group.startIndex}`}
-                                                                part={
-                                                                    group
-                                                                        .parts[0] as ToolPartLike
-                                                                }
-                                                                expandedTools={
-                                                                    expandedTools
-                                                                }
-                                                                setExpandedTools={
-                                                                    setExpandedTools
-                                                                }
-                                                                onCopy={
-                                                                    copyMessageToClipboard
-                                                                }
-                                                                copiedToolCallId={
-                                                                    copiedToolCallId
-                                                                }
-                                                                copyFailedToolCallId={
-                                                                    copyFailedToolCallId
-                                                                }
-                                                                dict={dict}
-                                                            />
+                                                            >
+                                                                <ToolCallCard
+                                                                    part={
+                                                                        toolPart
+                                                                    }
+                                                                    expandedTools={
+                                                                        expandedTools
+                                                                    }
+                                                                    setExpandedTools={
+                                                                        setExpandedTools
+                                                                    }
+                                                                    onCopy={
+                                                                        copyMessageToClipboard
+                                                                    }
+                                                                    copiedToolCallId={
+                                                                        copiedToolCallId
+                                                                    }
+                                                                    copyFailedToolCallId={
+                                                                        copyFailedToolCallId
+                                                                    }
+                                                                    dict={dict}
+                                                                />
+                                                                {/* Show validation card for display_diagram tools */}
+                                                                {isDisplayDiagram &&
+                                                                    validationState && (
+                                                                        <ValidationCard
+                                                                            state={
+                                                                                validationState
+                                                                            }
+                                                                            dict={
+                                                                                dict
+                                                                            }
+                                                                            onImproveWithSuggestions={
+                                                                                onImproveWithSuggestions
+                                                                            }
+                                                                        />
+                                                                    )}
+                                                            </div>
                                                         )
                                                     }
 
