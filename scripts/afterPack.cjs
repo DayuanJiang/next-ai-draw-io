@@ -25,7 +25,10 @@ module.exports = async (context) => {
     console.log(`[afterPack] Copying node_modules to ${targetNodeModules}`)
 
     if (existsSync(sourceNodeModules) && existsSync(standaloneDir)) {
-        cpSync(sourceNodeModules, targetNodeModules, { recursive: true, dereference: true })
+        cpSync(sourceNodeModules, targetNodeModules, {
+            recursive: true,
+            dereference: true,
+        })
         console.log("[afterPack] node_modules copied successfully")
     } else {
         console.error("[afterPack] Source or target directory not found!")
