@@ -6,18 +6,13 @@
 
 import { experimental_useObject as useObject } from "@ai-sdk/react"
 import { useCallback, useRef } from "react"
-import { ValidationResultSchema } from "@/app/api/validate-diagram/route"
 import { getApiEndpoint } from "@/lib/base-path"
+import {
+    type ValidationResult,
+    ValidationResultSchema,
+} from "@/lib/validation-schema"
 
-export type ValidationResult = {
-    valid: boolean
-    issues: Array<{
-        type: "overlap" | "edge_routing" | "text" | "layout" | "rendering"
-        severity: "critical" | "warning"
-        description: string
-    }>
-    suggestions: string[]
-}
+export type { ValidationResult }
 
 // Default valid result for fallback cases
 const DEFAULT_VALID_RESULT: ValidationResult = {

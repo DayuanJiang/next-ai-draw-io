@@ -4,42 +4,14 @@
  */
 
 import { streamObject } from "ai"
-import { z } from "zod"
 import { getValidationModel } from "@/lib/ai-providers"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
+import {
+    type ValidationResult,
+    ValidationResultSchema,
+} from "@/lib/validation-schema"
 
 export const maxDuration = 30
-
-// Schema for structured validation output - exported for client-side useObject
-export const ValidationResultSchema = z.object({
-    valid: z.boolean().describe("True if there are no critical issues"),
-    issues: z
-        .array(
-            z.object({
-                type: z
-                    .enum([
-                        "overlap",
-                        "edge_routing",
-                        "text",
-                        "layout",
-                        "rendering",
-                    ])
-                    .describe("Type of visual issue"),
-                severity: z
-                    .enum(["critical", "warning"])
-                    .describe("Severity level"),
-                description: z
-                    .string()
-                    .describe("Clear description of the issue"),
-            }),
-        )
-        .describe("List of visual issues found"),
-    suggestions: z
-        .array(z.string())
-        .describe("Actionable suggestions to fix issues"),
-})
-
-export type ValidationResult = z.infer<typeof ValidationResultSchema>
 
 interface ValidateDiagramRequest {
     imageData: string // Base64 PNG data URL
