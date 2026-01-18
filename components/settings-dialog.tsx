@@ -172,6 +172,13 @@ function SettingsContent({
         // Save locale to localStorage for persistence across restarts
         localStorage.setItem("next-ai-draw-io-locale", lang)
 
+        // Notify Electron main process to update its menu language
+        if (window.electronAPI?.setUserLocale) {
+            window.electronAPI.setUserLocale(lang).catch((error) => {
+                console.error("Failed to sync locale with Electron:", error)
+            })
+        }
+
         const parts = pathname.split("/")
         if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
             parts[1] = lang

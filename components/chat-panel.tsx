@@ -179,6 +179,7 @@ export default function ChatPanel({
     const [tpmLimit, setTpmLimit] = useState(0)
     const [minimalStyle, setMinimalStyle] = useState(false)
     const [vlmValidationEnabled, setVlmValidationEnabled] = useState(true)
+    const [shouldFocusInput, setShouldFocusInput] = useState(false)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
     useEffect(() => {
@@ -921,6 +922,7 @@ export default function ChatPanel({
 
         // Clear UI state (can't use syncUIWithSession here because we also need to clear files)
         setMessages([])
+        setInput("")
         clearDiagram()
         setDiagramHistory([])
         setValidationStates({}) // Clear validation states to prevent memory leak
@@ -936,6 +938,9 @@ export default function ChatPanel({
 
         // Clear URL param to show blank state
         router.replace(window.location.pathname, { scroll: false })
+
+        // After starting a fresh chat, move focus back to the chat input
+        setShouldFocusInput(true)
     }, [
         clearDiagram,
         handleFileChange,
@@ -1364,6 +1369,8 @@ export default function ChatPanel({
                     onModelSelect={modelConfig.setSelectedModelId}
                     showUnvalidatedModels={modelConfig.showUnvalidatedModels}
                     onConfigureModels={() => setShowModelConfigDialog(true)}
+                    shouldFocus={shouldFocusInput}
+                    onFocused={() => setShouldFocusInput(false)}
                 />
             </footer>
 
