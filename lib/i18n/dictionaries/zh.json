@@ -280,6 +280,7 @@
         "enterSecretKey": "输入您的 Secret Key",
         "baseUrl": "基础 URL",
         "optional": "（可选）",
+        "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "customEndpoint": "自定义端点 URL",
         "models": "模型",
         "customModelId": "自定义模型 ID...",

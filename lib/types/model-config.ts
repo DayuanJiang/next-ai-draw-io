@@ -83,21 +83,36 @@ export const PROVIDER_INFO: Record<
     ProviderName,
     { label: string; defaultBaseUrl?: string }
 > = {
-    openai: { label: "OpenAI" },
+    openai: {
+        label: "OpenAI",
+        defaultBaseUrl: "https://api.openai.com/v1",
+    },
     anthropic: {
         label: "Anthropic",
         defaultBaseUrl: "https://api.anthropic.com/v1",
     },
-    google: { label: "Google" },
+    google: {
+        label: "Google",
+        defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    },
     vertexai: { label: "Google Vertex AI" },
-    azure: { label: "Azure OpenAI" },
+    azure: {
+        label: "Azure OpenAI",
+        defaultBaseUrl: "https://your-resource.openai.azure.com/openai",
+    },
     bedrock: { label: "Amazon Bedrock" },
     ollama: {
         label: "Ollama",
         defaultBaseUrl: "http://localhost:11434",
     },
-    openrouter: { label: "OpenRouter" },
-    deepseek: { label: "DeepSeek" },
+    openrouter: {
+        label: "OpenRouter",
+        defaultBaseUrl: "https://openrouter.ai/api/v1",
+    },
+    deepseek: {
+        label: "DeepSeek",
+        defaultBaseUrl: "https://api.deepseek.com/v1",
+    },
     siliconflow: {
         label: "SiliconFlow",
         defaultBaseUrl: "https://api.siliconflow.cn/v1",
@@ -106,7 +121,10 @@ export const PROVIDER_INFO: Record<
         label: "SGLang",
         defaultBaseUrl: "http://127.0.0.1:8000/v1",
     },
-    gateway: { label: "AI Gateway" },
+    gateway: {
+        label: "AI Gateway",
+        defaultBaseUrl: "https://ai-gateway.vercel.sh/v1/ai",
+    },
     edgeone: { label: "EdgeOne Pages" },
     doubao: {
         label: "Doubao (ByteDance)",
