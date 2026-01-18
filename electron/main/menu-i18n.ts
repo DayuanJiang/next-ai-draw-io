@@ -10,15 +10,9 @@ export type MenuLocale = "en" | "zh" | "ja"
 export interface MenuTranslations {
     // App menu (macOS only)
     settings: string
-    services: string
-    hide: string
-    hideOthers: string
-    unhide: string
-    quit: string
 
     // File menu
     file: string
-    close: string
 
     // Edit menu
     edit: string
@@ -45,15 +39,9 @@ const translations: Record<MenuLocale, MenuTranslations> = {
     en: {
         // App menu
         settings: "Settings...",
-        services: "Services",
-        hide: "Hide",
-        hideOthers: "Hide Others",
-        unhide: "Show All",
-        quit: "Quit",
 
         // File menu
         file: "File",
-        close: "Close",
 
         // Edit menu
         edit: "Edit",
@@ -79,15 +67,9 @@ const translations: Record<MenuLocale, MenuTranslations> = {
     zh: {
         // App menu
         settings: "设置...",
-        services: "服务",
-        hide: "隐藏",
-        hideOthers: "隐藏其他",
-        unhide: "全部显示",
-        quit: "退出",
 
         // File menu
         file: "文件",
-        close: "关闭",
 
         // Edit menu
         edit: "编辑",
@@ -113,15 +95,9 @@ const translations: Record<MenuLocale, MenuTranslations> = {
     ja: {
         // App menu
         settings: "設定...",
-        services: "サービス",
-        hide: "隠す",
-        hideOthers: "他を隠す",
-        unhide: "すべて表示",
-        quit: "終了",
 
         // File menu
         file: "ファイル",
-        close: "閉じる",
 
         // Edit menu
         edit: "編集",
@@ -151,10 +127,11 @@ const translations: Record<MenuLocale, MenuTranslations> = {
  */
 export function getMenuTranslations(locale: string): MenuTranslations {
     // Normalize locale (e.g., "zh-CN" -> "zh", "ja-JP" -> "ja")
-    const normalizedLocale = locale.toLowerCase().split("-")[0] as MenuLocale
+    const normalized = locale.toLowerCase().split("-")[0]
 
-    // Return translations if supported, otherwise fallback to English
-    return translations[normalizedLocale] || translations.en
+    if (normalized === "zh") return translations.zh
+    if (normalized === "ja") return translations.ja
+    return translations.en
 }
 
 /**
