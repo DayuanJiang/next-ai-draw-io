@@ -38,6 +38,12 @@ interface SetProxyResult {
     devMode?: boolean
 }
 
+/** Result of setting user locale */
+interface SetUserLocaleResult {
+    success: boolean
+    error?: string
+}
+
 declare global {
     interface Window {
         /** Main window Electron API */
@@ -62,6 +68,10 @@ declare global {
             getProxy: () => Promise<ProxyConfig>
             /** Set proxy configuration (saves and restarts server) */
             setProxy: (config: ProxyConfig) => Promise<SetProxyResult>
+            /** Get user's preferred locale */
+            getUserLocale: () => Promise<"en" | "zh" | "ja" | undefined>
+            /** Set user's preferred locale */
+            setUserLocale: (locale: string) => Promise<SetUserLocaleResult>
         }
 
         /** Settings window Electron API */
@@ -88,4 +98,10 @@ declare global {
     }
 }
 
-export { ConfigPreset, ApplyPresetResult, ProxyConfig, SetProxyResult }
+export type {
+    ConfigPreset,
+    ApplyPresetResult,
+    ProxyConfig,
+    SetProxyResult,
+    SetUserLocaleResult,
+}
