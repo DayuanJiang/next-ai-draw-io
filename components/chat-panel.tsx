@@ -65,8 +65,8 @@ interface ChatMessage {
 interface ChatPanelProps {
     isVisible: boolean
     onToggleVisibility: () => void
-    drawioUi: "min" | "sketch"
-    onToggleDrawioUi: () => void
+    drawioUi: import("@/lib/drawio-themes").DrawioTheme
+    onDrawioUiChange: (theme: import("@/lib/drawio-themes").DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     isMobile?: boolean
@@ -106,7 +106,7 @@ export default function ChatPanel({
     isVisible,
     onToggleVisibility,
     drawioUi,
-    onToggleDrawioUi,
+    onDrawioUiChange,
     darkMode,
     onToggleDarkMode,
     isMobile = false,
@@ -1310,7 +1310,7 @@ export default function ChatPanel({
                 open={showSettingsDialog}
                 onOpenChange={setShowSettingsDialog}
                 drawioUi={drawioUi}
-                onToggleDrawioUi={onToggleDrawioUi}
+                onDrawioUiChange={onDrawioUiChange}
                 darkMode={darkMode}
                 onToggleDarkMode={onToggleDarkMode}
                 minimalStyle={minimalStyle}
