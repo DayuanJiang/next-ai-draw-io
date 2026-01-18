@@ -211,7 +211,8 @@ ${finalXml}
                     // Notify UI that we're starting capture
                     updateValidationState(toolCall.toolCallId, "capturing")
 
-                    // Small delay to ensure diagram is rendered before capture
+                    // Small delay (100ms) to allow diagram rendering to complete before capture.
+                    // This is a best-effort heuristic and may need adjustment for complex diagrams or slower devices.
                     await new Promise((resolve) => setTimeout(resolve, 100))
 
                     capturedPngData = await captureValidationPng()
@@ -240,7 +241,6 @@ ${finalXml}
 
                         const result = await validateRenderedDiagram(
                             capturedPngData,
-                            finalXml,
                             sessionId,
                         )
 

@@ -3,19 +3,45 @@
  * Accepts a PNG image and returns validation results.
  */
 
-import { generateText } from "ai"
+import { generateObject } from "ai"
+import { z } from "zod"
 import { getValidationModel } from "@/lib/ai-providers"
 import type { ValidationResult } from "@/lib/diagram-validator"
-import {
-    parseValidationResponse,
-    VALIDATION_SYSTEM_PROMPT,
-} from "@/lib/validation-prompts"
+import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
 
 export const maxDuration = 30
 
+// Schema for structured validation output
+const ValidationResultSchema = z.object({
+    valid: z.boolean().describe("True if there are no critical issues"),
+    issues: z
+        .array(
+            z.object({
+                type: z
+                    .enum([
+                        "overlap",
+                        "edge_routing",
+                        "text",
+                        "layout",
+                        "rendering",
+                    ])
+                    .describe("Type of visual issue"),
+                severity: z
+                    .enum(["critical", "warning"])
+                    .describe("Severity level"),
+                description: z
+                    .string()
+                    .describe("Clear description of the issue"),
+            }),
+        )
+        .describe("List of visual issues found"),
+    suggestions: z
+        .array(z.string())
+        .describe("Actionable suggestions to fix issues"),
+})
+
 interface ValidateDiagramRequest {
     imageData: string // Base64 PNG data URL
-    xml: string // Diagram XML for context
     sessionId?: string
 }
 
@@ -32,7 +58,7 @@ export async function POST(req: Request): Promise<Response> {
         }
 
         const body: ValidateDiagramRequest = await req.json()
-        const { imageData, xml, sessionId } = body
+        const { imageData, sessionId } = body
 
         if (!imageData) {
             return Response.json(
@@ -69,40 +95,38 @@ export async function POST(req: Request): Promise<Response> {
             } satisfies ValidationResult)
         }
 
-        const timeout = parseInt(process.env.VALIDATION_TIMEOUT || "10000", 10)
+        // Parse timeout with validation (minimum 1000ms, default 10000ms)
+        const timeout =
+            Math.max(
+                1000,
+                parseInt(process.env.VALIDATION_TIMEOUT || "10000", 10),
+            ) || 10000
 
-        // Call the VLM with the image
-        const result = await Promise.race([
-            generateText({
-                model,
-                system: VALIDATION_SYSTEM_PROMPT,
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            {
-                                type: "image",
-                                image: imageData,
-                            },
-                            {
-                                type: "text",
-                                text: "Please analyze this diagram for visual quality issues and return your assessment as JSON.",
-                            },
-                        ],
-                    },
-                ],
-                maxOutputTokens: 1024,
-            }),
-            new Promise<never>((_, reject) =>
-                setTimeout(
-                    () => reject(new Error("Validation timeout")),
-                    timeout,
-                ),
-            ),
-        ])
+        // Call the VLM with structured output schema
+        const result = await generateObject({
+            model,
+            schema: ValidationResultSchema,
+            system: VALIDATION_SYSTEM_PROMPT,
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "image",
+                            image: imageData,
+                        },
+                        {
+                            type: "text",
+                            text: "Please analyze this diagram for visual quality issues.",
+                        },
+                    ],
+                },
+            ],
+            maxOutputTokens: 1024,
+            abortSignal: AbortSignal.timeout(timeout),
+        })
 
-        // Parse the VLM response
-        const validationResult = parseValidationResponse(result.text)
+        const validationResult: ValidationResult = result.object
 
         if (sessionId) {
             console.log(
@@ -112,7 +136,10 @@ export async function POST(req: Request): Promise<Response> {
 
         return Response.json(validationResult)
     } catch (error) {
-        console.error("[validate-diagram] Error:", error)
+        // Log with session context if available
+        const errorMessage =
+            error instanceof Error ? error.message : String(error)
+        console.error("[validate-diagram] Error:", errorMessage)
 
         // On error, return valid to not block the user
         return Response.json({

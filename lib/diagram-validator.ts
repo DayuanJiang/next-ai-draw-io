@@ -20,13 +20,11 @@ export interface ValidationResult {
  * Validate a rendered diagram by sending its PNG to the VLM validation API.
  *
  * @param pngDataUrl - Base64 PNG data URL from draw.io export
- * @param xml - The diagram XML (for context in error messages)
  * @param sessionId - Optional session ID for logging
  * @returns ValidationResult with issues and suggestions
  */
 export async function validateRenderedDiagram(
     pngDataUrl: string,
-    xml: string,
     sessionId?: string,
 ): Promise<ValidationResult> {
     try {
@@ -37,7 +35,6 @@ export async function validateRenderedDiagram(
             },
             body: JSON.stringify({
                 imageData: pngDataUrl,
-                xml,
                 sessionId,
             }),
         })

@@ -878,6 +878,7 @@ export default function ChatPanel({
                 } else {
                     justLoadedSessionIdRef.current = null
                 }
+                setValidationStates({}) // Clear validation states when switching sessions
                 syncUIWithSession(sessionData)
                 router.replace(`?session=${sessionId}`, { scroll: false })
             }
@@ -917,6 +918,7 @@ export default function ChatPanel({
         setMessages([])
         clearDiagram()
         setDiagramHistory([])
+        setValidationStates({}) // Clear validation states to prevent memory leak
         handleFileChange([]) // Use handleFileChange to also clear pdfData
         setUrlData(new Map())
         const newSessionId = `session-${Date.now()}-${Math.random()

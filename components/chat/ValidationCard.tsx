@@ -11,7 +11,7 @@ import {
     X,
 } from "lucide-react"
 import Image from "next/image"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import type { ValidationResult } from "@/lib/diagram-validator"
 
 export type ValidationStatus =
@@ -254,8 +254,7 @@ export function ValidationCard({
                     )}
 
                     {/* Valid result message */}
-                    {state.result &&
-                        state.result.valid &&
+                    {state.result?.valid &&
                         state.result.issues.length === 0 && (
                             <div className="text-xs text-green-600 dark:text-green-400">
                                 Diagram passed visual validation - no issues
