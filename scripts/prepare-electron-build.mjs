@@ -30,20 +30,20 @@ mkdirSync(targetDir, { recursive: true })
 
 // Copy standalone (includes node_modules)
 console.log("Copying standalone directory...")
-cpSync(standaloneDir, targetDir, { recursive: true })
+cpSync(standaloneDir, targetDir, { recursive: true, dereference: true })
 
 // Copy static files
 console.log("Copying static files...")
 const targetStaticDir = join(targetDir, ".next", "static")
 mkdirSync(targetStaticDir, { recursive: true })
-cpSync(staticDir, targetStaticDir, { recursive: true })
+cpSync(staticDir, targetStaticDir, { recursive: true, dereference: true })
 
 // Copy public folder (required for favicon-white.svg and other assets)
 console.log("Copying public folder...")
 const publicDir = join(rootDir, "public")
 const targetPublicDir = join(targetDir, "public")
 if (existsSync(publicDir)) {
-    cpSync(publicDir, targetPublicDir, { recursive: true })
+    cpSync(publicDir, targetPublicDir, { recursive: true, dereference: true })
 }
 
 console.log("Done! Files prepared in electron-standalone/")
