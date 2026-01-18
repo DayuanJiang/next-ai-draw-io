@@ -6,10 +6,7 @@ import type {
     ValidationStatus,
 } from "@/components/chat/ValidationCard"
 import type { ValidationResult } from "@/lib/diagram-validator"
-import {
-    formatValidationFeedback,
-    validateRenderedDiagram,
-} from "@/lib/diagram-validator"
+import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
 
 const DEBUG = process.env.NODE_ENV === "development"
@@ -42,6 +39,12 @@ type AddToolOutputFn = (params: AddToolOutputParams) => void
 
 const MAX_VALIDATION_RETRIES = 3
 
+// Type for the validation function passed from useValidateDiagram hook
+type ValidateDiagramFn = (
+    imageData: string,
+    sessionId?: string,
+) => Promise<ValidationResult>
+
 interface UseDiagramToolHandlersParams {
     partialXmlRef: MutableRefObject<string>
     editDiagramOriginalXmlRef: MutableRefObject<Map<string, string>>
@@ -50,6 +53,7 @@ interface UseDiagramToolHandlersParams {
     onFetchChart: (saveToHistory?: boolean) => Promise<string>
     onExport: () => void
     captureValidationPng?: () => Promise<string | null>
+    validateDiagram?: ValidateDiagramFn
     enableVlmValidation?: boolean
     sessionId?: string
     onValidationStateChange?: (
@@ -73,6 +77,7 @@ export function useDiagramToolHandlers({
     onFetchChart,
     onExport,
     captureValidationPng,
+    validateDiagram,
     enableVlmValidation = true,
     sessionId,
     onValidationStateChange,
@@ -205,7 +210,11 @@ ${finalXml}
             }
 
             // VLM validation after successful display
-            if (enableVlmValidation && captureValidationPng) {
+            if (
+                enableVlmValidation &&
+                captureValidationPng &&
+                validateDiagram
+            ) {
                 let capturedPngData: string | null = null
                 try {
                     // Notify UI that we're starting capture
@@ -239,7 +248,7 @@ ${finalXml}
                             },
                         )
 
-                        const result = await validateRenderedDiagram(
+                        const result = await validateDiagram(
                             capturedPngData,
                             sessionId,
                         )

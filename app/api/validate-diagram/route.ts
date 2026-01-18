@@ -1,18 +1,17 @@
 /**
  * API endpoint for VLM-based diagram validation.
- * Accepts a PNG image and returns validation results.
+ * Accepts a PNG image and streams validation results using useObject-compatible format.
  */
 
-import { generateObject } from "ai"
+import { streamObject } from "ai"
 import { z } from "zod"
 import { getValidationModel } from "@/lib/ai-providers"
-import type { ValidationResult } from "@/lib/diagram-validator"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
 
 export const maxDuration = 30
 
-// Schema for structured validation output
-const ValidationResultSchema = z.object({
+// Schema for structured validation output - exported for client-side useObject
+export const ValidationResultSchema = z.object({
     valid: z.boolean().describe("True if there are no critical issues"),
     issues: z
         .array(
@@ -40,9 +39,18 @@ const ValidationResultSchema = z.object({
         .describe("Actionable suggestions to fix issues"),
 })
 
+export type ValidationResult = z.infer<typeof ValidationResultSchema>
+
 interface ValidateDiagramRequest {
     imageData: string // Base64 PNG data URL
     sessionId?: string
+}
+
+// Default valid result for disabled/error cases
+const DEFAULT_VALID_RESULT: ValidationResult = {
+    valid: true,
+    issues: [],
+    suggestions: [],
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -50,11 +58,7 @@ export async function POST(req: Request): Promise<Response> {
         // Check if VLM validation is enabled (default: true)
         const enableValidation = process.env.ENABLE_VLM_VALIDATION !== "false"
         if (!enableValidation) {
-            return Response.json({
-                valid: true,
-                issues: [],
-                suggestions: [],
-            } satisfies ValidationResult)
+            return Response.json(DEFAULT_VALID_RESULT)
         }
 
         const body: ValidateDiagramRequest = await req.json()
@@ -88,11 +92,7 @@ export async function POST(req: Request): Promise<Response> {
                 error,
             )
             // Return valid if no vision model is configured
-            return Response.json({
-                valid: true,
-                issues: [],
-                suggestions: [],
-            } satisfies ValidationResult)
+            return Response.json(DEFAULT_VALID_RESULT)
         }
 
         // Parse timeout with validation (minimum 1000ms, default 10000ms)
@@ -102,8 +102,8 @@ export async function POST(req: Request): Promise<Response> {
                 parseInt(process.env.VALIDATION_TIMEOUT || "10000", 10),
             ) || 10000
 
-        // Call the VLM with structured output schema
-        const result = await generateObject({
+        // Stream the VLM response for useObject consumption
+        const result = streamObject({
             model,
             schema: ValidationResultSchema,
             system: VALIDATION_SYSTEM_PROMPT,
@@ -124,17 +124,16 @@ export async function POST(req: Request): Promise<Response> {
             ],
             maxOutputTokens: 1024,
             abortSignal: AbortSignal.timeout(timeout),
+            onFinish: ({ object }) => {
+                if (sessionId && object) {
+                    console.log(
+                        `[validate-diagram] Session ${sessionId}: valid=${object.valid}, issues=${object.issues?.length ?? 0}`,
+                    )
+                }
+            },
         })
 
-        const validationResult: ValidationResult = result.object
-
-        if (sessionId) {
-            console.log(
-                `[validate-diagram] Session ${sessionId}: valid=${validationResult.valid}, issues=${validationResult.issues.length}`,
-            )
-        }
-
-        return Response.json(validationResult)
+        return result.toTextStreamResponse()
     } catch (error) {
         // Log with session context if available
         const errorMessage =
@@ -142,10 +141,6 @@ export async function POST(req: Request): Promise<Response> {
         console.error("[validate-diagram] Error:", errorMessage)
 
         // On error, return valid to not block the user
-        return Response.json({
-            valid: true,
-            issues: [],
-            suggestions: [],
-        } satisfies ValidationResult)
+        return Response.json(DEFAULT_VALID_RESULT)
     }
 }

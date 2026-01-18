@@ -1,8 +1,7 @@
 /**
- * Client-side validation orchestration for VLM-based diagram validation.
+ * Types and utilities for VLM-based diagram validation.
+ * The actual validation is performed via useValidateDiagram hook using AI SDK's useObject.
  */
-
-import { getApiEndpoint } from "./base-path"
 
 export interface ValidationIssue {
     type: "overlap" | "edge_routing" | "text" | "layout" | "rendering"
@@ -14,57 +13,6 @@ export interface ValidationResult {
     valid: boolean
     issues: ValidationIssue[]
     suggestions: string[]
-}
-
-/**
- * Validate a rendered diagram by sending its PNG to the VLM validation API.
- *
- * @param pngDataUrl - Base64 PNG data URL from draw.io export
- * @param sessionId - Optional session ID for logging
- * @returns ValidationResult with issues and suggestions
- */
-export async function validateRenderedDiagram(
-    pngDataUrl: string,
-    sessionId?: string,
-): Promise<ValidationResult> {
-    try {
-        const response = await fetch(getApiEndpoint("/api/validate-diagram"), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                imageData: pngDataUrl,
-                sessionId,
-            }),
-        })
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            console.error(
-                "[validateRenderedDiagram] API error:",
-                response.status,
-                errorData,
-            )
-            // Return valid on API error to not block the user
-            return {
-                valid: true,
-                issues: [],
-                suggestions: [],
-            }
-        }
-
-        const result: ValidationResult = await response.json()
-        return result
-    } catch (error) {
-        console.error("[validateRenderedDiagram] Failed:", error)
-        // Return valid on network error to not block the user
-        return {
-            valid: true,
-            issues: [],
-            suggestions: [],
-        }
-    }
 }
 
 /**

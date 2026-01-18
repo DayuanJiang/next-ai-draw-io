@@ -29,6 +29,7 @@ import { useDiagramToolHandlers } from "@/hooks/use-diagram-tool-handlers"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import { useSessionManager } from "@/hooks/use-session-manager"
+import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { formatMessage } from "@/lib/i18n/utils"
@@ -319,6 +320,9 @@ export default function ChatPanel({
         }
     }, [])
 
+    // VLM validation hook using AI SDK's useObject
+    const { validateWithFallback } = useValidateDiagram()
+
     // Diagram tool handlers (display_diagram, edit_diagram, append_diagram)
     const { handleToolCall } = useDiagramToolHandlers({
         partialXmlRef,
@@ -328,6 +332,7 @@ export default function ChatPanel({
         onFetchChart,
         onExport,
         captureValidationPng,
+        validateDiagram: validateWithFallback,
         enableVlmValidation: vlmValidationEnabled,
         sessionId,
         onValidationStateChange: handleValidationStateChange,
