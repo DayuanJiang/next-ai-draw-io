@@ -160,6 +160,9 @@ interface ChatInputProps {
     onModelSelect?: (modelId: string | undefined) => void
     showUnvalidatedModels?: boolean
     onConfigureModels?: () => void
+    // Focus control props
+    shouldFocus?: boolean
+    onFocused?: () => void
 }
 
 export function ChatInput({
@@ -179,6 +182,8 @@ export function ChatInput({
     onModelSelect = () => {},
     showUnvalidatedModels = false,
     onConfigureModels = () => {},
+    shouldFocus = false,
+    onFocused,
 }: ChatInputProps) {
     const dict = useDictionary()
     const {
@@ -192,6 +197,19 @@ export function ChatInput({
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
+
+    // Focus the textarea when shouldFocus becomes true
+    // Use setTimeout to ensure focus happens after drawio iframe settles
+    useEffect(() => {
+        if (shouldFocus) {
+            const timer = setTimeout(() => {
+                textareaRef.current?.focus()
+                onFocused?.()
+            }, 150)
+            return () => clearTimeout(timer)
+        }
+    }, [shouldFocus, onFocused])
+
     const [showHistory, setShowHistory] = useState(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
