@@ -122,25 +122,27 @@ export function ValidationCard({
                 return {
                     label: "Valid",
                     color: "text-green-600 bg-green-50",
-                    icon: <Check className="h-4 w-4" />,
+                    icon: <Check className="h-4 w-4" aria-hidden="true" />,
                 }
             case "failed":
                 return {
                     label: "Issues Found",
                     color: "text-yellow-600 bg-yellow-50",
-                    icon: <AlertTriangle className="h-4 w-4" />,
+                    icon: (
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    ),
                 }
             case "error":
                 return {
                     label: "Error",
                     color: "text-red-600 bg-red-50",
-                    icon: <X className="h-4 w-4" />,
+                    icon: <X className="h-4 w-4" aria-hidden="true" />,
                 }
             case "skipped":
                 return {
                     label: "Skipped",
                     color: "text-gray-600 bg-gray-50",
-                    icon: <Check className="h-4 w-4" />,
+                    icon: <Check className="h-4 w-4" aria-hidden="true" />,
                 }
             default:
                 return null
@@ -155,7 +157,10 @@ export function ValidationCard({
             <div className="flex items-center justify-between px-4 py-3 bg-muted/50">
                 <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
-                        <Eye className="w-3.5 h-3.5 text-primary" />
+                        <Eye
+                            className="w-3.5 h-3.5 text-primary"
+                            aria-hidden="true"
+                        />
                     </div>
                     <span className="text-sm font-medium text-foreground/80">
                         Validate Diagram
@@ -175,9 +180,15 @@ export function ValidationCard({
                             className="p-1 rounded hover:bg-muted transition-colors"
                         >
                             {isExpanded ? (
-                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                <ChevronUp
+                                    className="w-4 h-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
                             ) : (
-                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                <ChevronDown
+                                    className="w-4 h-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
                             )}
                         </button>
                     )}
@@ -191,7 +202,10 @@ export function ValidationCard({
                     {state.imageData && (
                         <div>
                             <div className="text-xs font-medium text-foreground/70 mb-2 flex items-center gap-1">
-                                <ImageIcon className="h-3 w-3" />
+                                <ImageIcon
+                                    className="h-3 w-3"
+                                    aria-hidden="true"
+                                />
                                 Captured Screenshot:
                             </div>
                             <div className="rounded-lg border border-border/50 overflow-hidden bg-white">
@@ -265,7 +279,7 @@ export function ValidationCard({
                 <div className="px-4 py-3 border-t border-border/40 bg-muted/10">
                     {hasRequestedImprovement ? (
                         <div className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-green-600 dark:text-green-400">
-                            <Check className="h-4 w-4" />
+                            <Check className="h-4 w-4" aria-hidden="true" />
                             Improvement requested - check the new diagram below
                         </div>
                     ) : (
@@ -275,7 +289,10 @@ export function ValidationCard({
                                 onClick={handleImproveClick}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
                             >
-                                <RefreshCw className="h-4 w-4" />
+                                <RefreshCw
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                                 Improve with Suggestions
                             </button>
                             <p className="text-xs text-muted-foreground mt-2 text-center">
