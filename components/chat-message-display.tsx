@@ -961,9 +961,6 @@ export function ChatMessageDisplay({
                                                                             state={
                                                                                 validationState
                                                                             }
-                                                                            dict={
-                                                                                dict
-                                                                            }
                                                                             onImproveWithSuggestions={
                                                                                 onImproveWithSuggestions
                                                                             }

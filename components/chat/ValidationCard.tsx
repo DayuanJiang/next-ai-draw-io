@@ -34,15 +34,11 @@ export interface ValidationState {
 
 interface ValidationCardProps {
     state: ValidationState
-    dict: {
-        tools: { complete: string }
-    }
     onImproveWithSuggestions?: (feedback: string) => void
 }
 
 export function ValidationCard({
     state,
-    dict,
     onImproveWithSuggestions,
 }: ValidationCardProps) {
     const [isExpanded, setIsExpanded] = useState(
@@ -124,7 +120,7 @@ export function ValidationCard({
                 }
             case "success":
                 return {
-                    label: dict.tools.complete,
+                    label: "Valid",
                     color: "text-green-600 bg-green-50",
                     icon: <Check className="h-4 w-4" />,
                 }
