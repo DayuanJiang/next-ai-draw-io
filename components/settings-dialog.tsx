@@ -432,7 +432,7 @@ function SettingsContent({
                         >
                             <SelectTrigger
                                 id="send-shortcut-select"
-                                className="w-[170px] h-9 rounded-xl"
+                                className="w-auto h-9 rounded-xl"
                             >
                                 <SelectValue />
                             </SelectTrigger>
