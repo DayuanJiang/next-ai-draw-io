@@ -118,7 +118,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
     const hasOwnApiKey = !!(
-        req.headers.get("x-ai-provider") && req.headers.get("x-ai-api-key")
+        req.headers.get("x-ai-provider") &&
+        (req.headers.get("x-ai-api-key") ||
+            req.headers.get("x-aws-access-key-id"))
     )
 
     // Skip quota check if: quota disabled, user has own API key, or is anonymous
