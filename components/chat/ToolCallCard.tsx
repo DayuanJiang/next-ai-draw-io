@@ -67,8 +67,8 @@ export function ToolCallCard({
 }: ToolCallCardProps) {
     const callId = part.toolCallId
     const { state, input, output } = part
-    // Default to collapsed if tool is complete, expanded if still streaming
-    const isExpanded = expandedTools[callId] ?? state !== "output-available"
+    // Default to expanded for all states (user can manually collapse if needed)
+    const isExpanded = expandedTools[callId] ?? true
     const toolName = part.type?.replace("tool-", "")
     const isCopied = copiedToolCallId === callId
 

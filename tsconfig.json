@@ -30,5 +30,11 @@
         ".next/types/**/*.ts",
         ".next/dev/types/**/*.ts"
     ],
-    "exclude": ["node_modules", "packages", "electron", "dist-electron"]
+    "exclude": [
+        "node_modules",
+        "packages",
+        "electron",
+        "electron-standalone",
+        "dist-electron"
+    ]
 }

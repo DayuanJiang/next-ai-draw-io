@@ -1177,3 +1177,27 @@ export function supportsImageInput(modelId: string): boolean {
     // Default: assume model supports images
     return true
 }
+
+/**
+ * Get the AI model for diagram validation.
+ * Uses VALIDATION_MODEL env var if set, otherwise falls back to AI_MODEL.
+ * Throws if the model doesn't support image input.
+ */
+export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
+    const modelId = process.env.VALIDATION_MODEL || process.env.AI_MODEL
+
+    if (!modelId) {
+        throw new Error(
+            "No validation model configured. Set VALIDATION_MODEL or AI_MODEL.",
+        )
+    }
+
+    if (!supportsImageInput(modelId)) {
+        throw new Error(
+            `Validation requires a vision-capable model. Model "${modelId}" does not support image input.`,
+        )
+    }
+
+    const { model } = getAIModel({ modelId })
+    return model
+}
