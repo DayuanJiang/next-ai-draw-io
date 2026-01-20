@@ -252,6 +252,24 @@
         "searchPlaceholder": "チャットを検索...",
         "noResults": "チャットが見つかりません"
     },
+    "validation": {
+        "title": "ダイアグラムを検証",
+        "capturing": "キャプチャ中",
+        "validating": "検証中",
+        "validatingWithAttempt": "検証中 ({attempt}/{max})",
+        "valid": "有効",
+        "validWithWarnings": "有効（警告あり）",
+        "issuesFound": "問題が見つかりました",
+        "error": "エラー",
+        "skipped": "スキップ",
+        "capturedScreenshot": "キャプチャした画像：",
+        "issuesFoundLabel": "検出された問題：",
+        "suggestions": "提案：",
+        "passedValidation": "ダイアグラムは視覚検証に合格しました - 問題は検出されませんでした。",
+        "improvementRequested": "改善リクエスト済み - 下の新しいダイアグラムを確認してください",
+        "improveWithSuggestions": "提案で改善",
+        "regenerateWithFeedback": "検証フィードバックを使用してダイアグラムを再生成"
+    },
     "modelConfig": {
         "title": "AIモデル設定",
         "description": "複数のAIプロバイダーとモデルを設定",

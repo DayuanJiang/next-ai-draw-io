@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
+import { useDictionary } from "@/hooks/use-dictionary"
 import type { ValidationResult } from "@/lib/diagram-validator"
 
 export type ValidationStatus =
@@ -42,6 +43,7 @@ export function ValidationCard({
     state,
     onImproveWithSuggestions,
 }: ValidationCardProps) {
+    const dict = useDictionary()
     const [isExpanded, setIsExpanded] = useState(
         state.status === "validating" || state.status === "failed",
     )
@@ -105,7 +107,7 @@ export function ValidationCard({
         switch (state.status) {
             case "capturing":
                 return {
-                    label: "Capturing",
+                    label: dict.validation.capturing,
                     color: "text-blue-600 bg-blue-50",
                     icon: (
                         <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -114,8 +116,10 @@ export function ValidationCard({
             case "validating":
                 return {
                     label: state.attempt
-                        ? `Validating (${state.attempt}/${state.maxAttempts || 3})`
-                        : "Validating",
+                        ? dict.validation.validatingWithAttempt
+                              .replace("{attempt}", String(state.attempt))
+                              .replace("{max}", String(state.maxAttempts || 3))
+                        : dict.validation.validating,
                     color: "text-blue-600 bg-blue-50",
                     icon: (
                         <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -123,13 +127,13 @@ export function ValidationCard({
                 }
             case "success":
                 return {
-                    label: "Valid",
+                    label: dict.validation.valid,
                     color: "text-green-600 bg-green-50",
                     icon: <Check className="h-4 w-4" aria-hidden="true" />,
                 }
             case "success_with_warnings":
                 return {
-                    label: "Valid with Warnings",
+                    label: dict.validation.validWithWarnings,
                     color: "text-amber-600 bg-amber-50",
                     icon: (
                         <AlertTriangle className="h-4 w-4" aria-hidden="true" />
@@ -137,7 +141,7 @@ export function ValidationCard({
                 }
             case "failed":
                 return {
-                    label: "Issues Found",
+                    label: dict.validation.issuesFound,
                     color: "text-yellow-600 bg-yellow-50",
                     icon: (
                         <AlertTriangle className="h-4 w-4" aria-hidden="true" />
@@ -145,13 +149,13 @@ export function ValidationCard({
                 }
             case "error":
                 return {
-                    label: "Error",
+                    label: dict.validation.error,
                     color: "text-red-600 bg-red-50",
                     icon: <X className="h-4 w-4" aria-hidden="true" />,
                 }
             case "skipped":
                 return {
-                    label: "Skipped",
+                    label: dict.validation.skipped,
                     color: "text-gray-600 bg-gray-50",
                     icon: <Check className="h-4 w-4" aria-hidden="true" />,
                 }
@@ -174,7 +178,7 @@ export function ValidationCard({
                         />
                     </div>
                     <span className="text-sm font-medium text-foreground/80">
-                        Validate Diagram
+                        {dict.validation.title}
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -217,7 +221,7 @@ export function ValidationCard({
                                     className="h-3 w-3"
                                     aria-hidden="true"
                                 />
-                                Captured Screenshot:
+                                {dict.validation.capturedScreenshot}
                             </div>
                             <div className="rounded-lg border border-border/50 overflow-hidden bg-white">
                                 <Image
@@ -236,7 +240,7 @@ export function ValidationCard({
                     {state.result && state.result.issues.length > 0 && (
                         <div>
                             <div className="text-xs font-medium text-foreground/70 mb-2">
-                                Issues Found:
+                                {dict.validation.issuesFoundLabel}
                             </div>
                             <div className="space-y-2">
                                 {state.result.issues.map((issue, index) => (
@@ -262,7 +266,7 @@ export function ValidationCard({
                     {state.result && state.result.suggestions.length > 0 && (
                         <div>
                             <div className="text-xs font-medium text-foreground/70 mb-2">
-                                Suggestions:
+                                {dict.validation.suggestions}
                             </div>
                             <ul className="text-xs text-foreground/60 space-y-1 list-disc list-inside">
                                 {state.result.suggestions.map(
@@ -278,8 +282,7 @@ export function ValidationCard({
                     {state.result?.valid &&
                         state.result.issues.length === 0 && (
                             <div className="text-xs text-green-600 dark:text-green-400">
-                                Diagram passed visual validation - no issues
-                                detected.
+                                {dict.validation.passedValidation}
                             </div>
                         )}
                 </div>
@@ -291,7 +294,7 @@ export function ValidationCard({
                     {hasRequestedImprovement ? (
                         <div className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-green-600 dark:text-green-400">
                             <Check className="h-4 w-4" aria-hidden="true" />
-                            Improvement requested - check the new diagram below
+                            {dict.validation.improvementRequested}
                         </div>
                     ) : (
                         <>
@@ -304,11 +307,10 @@ export function ValidationCard({
                                     className="h-4 w-4"
                                     aria-hidden="true"
                                 />
-                                Improve with Suggestions
+                                {dict.validation.improveWithSuggestions}
                             </button>
                             <p className="text-xs text-muted-foreground mt-2 text-center">
-                                Regenerate the diagram using the validation
-                                feedback
+                                {dict.validation.regenerateWithFeedback}
                             </p>
                         </>
                     )}

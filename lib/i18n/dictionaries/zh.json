@@ -252,6 +252,24 @@
         "searchPlaceholder": "搜索对话...",
         "noResults": "未找到对话"
     },
+    "validation": {
+        "title": "验证图表",
+        "capturing": "截图中",
+        "validating": "验证中",
+        "validatingWithAttempt": "验证中 ({attempt}/{max})",
+        "valid": "通过",
+        "validWithWarnings": "通过（有警告）",
+        "issuesFound": "发现问题",
+        "error": "错误",
+        "skipped": "已跳过",
+        "capturedScreenshot": "截图预览：",
+        "issuesFoundLabel": "发现的问题：",
+        "suggestions": "建议：",
+        "passedValidation": "图表通过视觉验证 - 未发现问题。",
+        "improvementRequested": "改进请求已发送 - 请查看下方新图表",
+        "improveWithSuggestions": "根据建议改进",
+        "regenerateWithFeedback": "使用验证反馈重新生成图表"
+    },
     "modelConfig": {
         "title": "AI 模型配置",
         "description": "配置多个 AI 提供商和模型",

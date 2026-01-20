@@ -252,6 +252,24 @@
         "searchPlaceholder": "Search chats...",
         "noResults": "No chats found"
     },
+    "validation": {
+        "title": "Validate Diagram",
+        "capturing": "Capturing",
+        "validating": "Validating",
+        "validatingWithAttempt": "Validating ({attempt}/{max})",
+        "valid": "Valid",
+        "validWithWarnings": "Valid with Warnings",
+        "issuesFound": "Issues Found",
+        "error": "Error",
+        "skipped": "Skipped",
+        "capturedScreenshot": "Captured Screenshot:",
+        "issuesFoundLabel": "Issues Found:",
+        "suggestions": "Suggestions:",
+        "passedValidation": "Diagram passed visual validation - no issues detected.",
+        "improvementRequested": "Improvement requested - check the new diagram below",
+        "improveWithSuggestions": "Improve with Suggestions",
+        "regenerateWithFeedback": "Regenerate the diagram using the validation feedback"
+    },
     "modelConfig": {
         "title": "AI Model Configuration",
         "description": "Configure multiple AI providers and models",
