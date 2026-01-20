@@ -60,7 +60,7 @@ function getCompleteOperations(
 
 import { useDiagram } from "@/contexts/diagram-context"
 
-// Helper to split text content into regular text and file sections (PDF or text files)
+// Helper to split text content into regular text and file/URL sections (PDF, text files, or URLs)
 interface TextSection {
     type: "text" | "file" | "url"
     content: string
