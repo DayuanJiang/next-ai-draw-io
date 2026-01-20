@@ -78,7 +78,7 @@ describe("formatValidationFeedback", () => {
         expect(feedback).toContain("Adjust spacing")
     })
 
-    it("formats result with no issues", () => {
+    it("returns empty string for valid result with no issues", () => {
         const result: ValidationResult = {
             valid: true,
             issues: [],
@@ -87,10 +87,7 @@ describe("formatValidationFeedback", () => {
 
         const feedback = formatValidationFeedback(result)
 
-        expect(feedback).toContain("DIAGRAM VISUAL VALIDATION FAILED")
-        expect(feedback).not.toContain("Critical Issues")
-        expect(feedback).not.toContain("Warnings:")
-        expect(feedback).not.toContain("Suggestions to fix:")
+        expect(feedback).toBe("")
     })
 
     it("formats result with multiple suggestions", () => {

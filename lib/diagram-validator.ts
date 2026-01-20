@@ -16,6 +16,11 @@ import type { ValidationResult } from "./validation-schema"
  * @returns Formatted string for tool error output
  */
 export function formatValidationFeedback(result: ValidationResult): string {
+    // If validation passed with no issues, return empty string
+    if (result.valid && result.issues.length === 0) {
+        return ""
+    }
+
     const lines: string[] = []
 
     lines.push("DIAGRAM VISUAL VALIDATION FAILED")
