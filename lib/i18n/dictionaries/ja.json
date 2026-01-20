@@ -302,6 +302,7 @@
         "enterSecretKey": "シークレットアクセスキーを入力",
         "baseUrl": "ベース URL",
         "optional": "（オプション）",
+        "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
         "models": "モデル",
         "customModelId": "カスタムモデル ID...",
