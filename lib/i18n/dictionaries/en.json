@@ -115,7 +115,11 @@
         "httpProxy": "HTTP Proxy",
         "httpsProxy": "HTTPS Proxy",
         "applyProxy": "Apply",
-        "proxyApplied": "Proxy settings applied"
+        "proxyApplied": "Proxy settings applied",
+        "diagramValidation": "Diagram Validation (Experimental)",
+        "diagramValidationDescription": "Use a vision language model to validate generated diagrams. Requires a VLM like GPT-5.2 or Sonnet-4.5.",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
     },
     "save": {
         "title": "Save Diagram",

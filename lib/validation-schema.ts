@@ -35,3 +35,4 @@ export const ValidationResultSchema = z.object({
 })
 
 export type ValidationResult = z.infer<typeof ValidationResultSchema>
+export type ValidationIssue = ValidationResult["issues"][number]

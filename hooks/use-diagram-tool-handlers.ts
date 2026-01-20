@@ -325,9 +325,13 @@ ${finalXml}
                             }
 
                             // Notify UI of success (include the image)
+                            // Use "success_with_warnings" if valid but has issues
+                            const hasWarnings = result.issues.length > 0
                             updateValidationState(
                                 toolCall.toolCallId,
-                                "success",
+                                hasWarnings
+                                    ? "success_with_warnings"
+                                    : "success",
                                 { result, imageData: capturedPngData },
                             )
                         }

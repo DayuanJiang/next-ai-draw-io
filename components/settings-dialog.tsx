@@ -90,7 +90,7 @@ function SettingsContent({
     onToggleDarkMode,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
-    vlmValidationEnabled = true,
+    vlmValidationEnabled = false,
     onVlmValidationChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
@@ -416,8 +416,8 @@ function SettingsContent({
 
                     {/* VLM Diagram Validation */}
                     <SettingItem
-                        label="Diagram Validation"
-                        description="Use AI vision to validate and improve generated diagrams"
+                        label={dict.settings.diagramValidation}
+                        description={dict.settings.diagramValidationDescription}
                     >
                         <div className="flex items-center gap-2">
                             <Switch
@@ -426,7 +426,9 @@ function SettingsContent({
                                 onCheckedChange={onVlmValidationChange}
                             />
                             <span className="text-sm text-muted-foreground">
-                                {vlmValidationEnabled ? "Enabled" : "Disabled"}
+                                {vlmValidationEnabled
+                                    ? dict.settings.enabled
+                                    : dict.settings.disabled}
                             </span>
                         </div>
                     </SettingItem>

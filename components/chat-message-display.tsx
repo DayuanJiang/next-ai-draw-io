@@ -435,11 +435,15 @@ export function ChatMessageDisplay({
                         const toolPart = part as ToolPartLike
                         const { toolCallId, state, input } = toolPart
 
+                        // Auto-collapse on completion, but only if user hasn't manually toggled
                         if (state === "output-available") {
-                            setExpandedTools((prev) => ({
-                                ...prev,
-                                [toolCallId]: false,
-                            }))
+                            setExpandedTools((prev) => {
+                                // Only auto-collapse if not already set (user hasn't interacted)
+                                if (prev[toolCallId] === undefined) {
+                                    return { ...prev, [toolCallId]: false }
+                                }
+                                return prev
+                            })
                         }
 
                         if (

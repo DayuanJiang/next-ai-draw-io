@@ -26,11 +26,6 @@ interface UseValidateDiagramOptions {
     onError?: (error: Error) => void
 }
 
-interface ValidationRequest {
-    imageData: string
-    sessionId?: string
-}
-
 // Track pending validation promises for imperative API
 type PendingValidation = {
     resolve: (result: ValidationResult) => void
@@ -40,7 +35,6 @@ type PendingValidation = {
 export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
     const { onSuccess, onError } = options
     const pendingValidationRef = useRef<PendingValidation | null>(null)
-    const lastRequestRef = useRef<ValidationRequest | null>(null)
 
     const { object, submit, isLoading, error, stop } = useObject({
         api: getApiEndpoint("/api/validate-diagram"),
@@ -87,8 +81,13 @@ export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
             imageData: string,
             sessionId?: string,
         ): Promise<ValidationResult> => {
-            // Store request for potential retry
-            lastRequestRef.current = { imageData, sessionId }
+            // Reject any pending validation to prevent promise leaks
+            if (pendingValidationRef.current) {
+                pendingValidationRef.current.reject(
+                    new Error("Validation superseded by new request"),
+                )
+                pendingValidationRef.current = null
+            }
 
             return new Promise((resolve, reject) => {
                 // Store the promise handlers

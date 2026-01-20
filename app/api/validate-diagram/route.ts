@@ -25,12 +25,30 @@ const DEFAULT_VALID_RESULT: ValidationResult = {
     suggestions: [],
 }
 
+/**
+ * Create a streaming response for useObject compatibility.
+ * useObject expects text stream format, not plain JSON.
+ */
+function createStreamingResponse(result: ValidationResult): Response {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+        start(controller) {
+            // Stream the JSON as text (useObject parses this)
+            controller.enqueue(encoder.encode(JSON.stringify(result)))
+            controller.close()
+        },
+    })
+    return new Response(stream, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+    })
+}
+
 export async function POST(req: Request): Promise<Response> {
     try {
         // Check if VLM validation is enabled (default: true)
         const enableValidation = process.env.ENABLE_VLM_VALIDATION !== "false"
         if (!enableValidation) {
-            return Response.json(DEFAULT_VALID_RESULT)
+            return createStreamingResponse(DEFAULT_VALID_RESULT)
         }
 
         const body: ValidateDiagramRequest = await req.json()
@@ -64,7 +82,7 @@ export async function POST(req: Request): Promise<Response> {
                 error,
             )
             // Return valid if no vision model is configured
-            return Response.json(DEFAULT_VALID_RESULT)
+            return createStreamingResponse(DEFAULT_VALID_RESULT)
         }
 
         // Parse timeout with validation (minimum 1000ms, default 10000ms)
@@ -113,6 +131,6 @@ export async function POST(req: Request): Promise<Response> {
         console.error("[validate-diagram] Error:", errorMessage)
 
         // On error, return valid to not block the user
-        return Response.json(DEFAULT_VALID_RESULT)
+        return createStreamingResponse(DEFAULT_VALID_RESULT)
     }
 }

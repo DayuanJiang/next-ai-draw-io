@@ -115,7 +115,11 @@
         "httpProxy": "HTTP プロキシ",
         "httpsProxy": "HTTPS プロキシ",
         "applyProxy": "適用",
-        "proxyApplied": "プロキシ設定が適用されました"
+        "proxyApplied": "プロキシ設定が適用されました",
+        "diagramValidation": "ダイアグラム検証（実験的）",
+        "diagramValidationDescription": "視覚言語モデルを使用して生成されたダイアグラムを検証します。GPT-5.2 や Sonnet-4.5 などの VLM が必要です。",
+        "enabled": "有効",
+        "disabled": "無効"
     },
     "save": {
         "title": "ダイアグラムを保存",

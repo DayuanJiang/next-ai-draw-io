@@ -178,7 +178,7 @@ export default function ChatPanel({
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
     const [minimalStyle, setMinimalStyle] = useState(false)
-    const [vlmValidationEnabled, setVlmValidationEnabled] = useState(true)
+    const [vlmValidationEnabled, setVlmValidationEnabled] = useState(false)
     const [shouldFocusInput, setShouldFocusInput] = useState(false)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)

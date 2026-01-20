@@ -3,17 +3,10 @@
  * The actual validation is performed via useValidateDiagram hook using AI SDK's useObject.
  */
 
-export interface ValidationIssue {
-    type: "overlap" | "edge_routing" | "text" | "layout" | "rendering"
-    severity: "critical" | "warning"
-    description: string
-}
+// Re-export types from the schema file (single source of truth)
+export type { ValidationIssue, ValidationResult } from "./validation-schema"
 
-export interface ValidationResult {
-    valid: boolean
-    issues: ValidationIssue[]
-    suggestions: string[]
-}
+import type { ValidationResult } from "./validation-schema"
 
 /**
  * Format validation feedback for display to the AI model.

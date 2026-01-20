@@ -19,6 +19,7 @@ export type ValidationStatus =
     | "capturing"
     | "validating"
     | "success"
+    | "success_with_warnings"
     | "failed"
     | "error"
     | "skipped"
@@ -95,7 +96,9 @@ export function ValidationCard({
     const showImproveButton =
         onImproveWithSuggestions &&
         state.result &&
-        (state.status === "success" || state.status === "skipped") &&
+        (state.status === "success" ||
+            state.status === "success_with_warnings" ||
+            state.status === "skipped") &&
         (state.result.issues.length > 0 || state.result.suggestions.length > 0)
 
     const getStatusDisplay = () => {
@@ -123,6 +126,14 @@ export function ValidationCard({
                     label: "Valid",
                     color: "text-green-600 bg-green-50",
                     icon: <Check className="h-4 w-4" aria-hidden="true" />,
+                }
+            case "success_with_warnings":
+                return {
+                    label: "Valid with Warnings",
+                    color: "text-amber-600 bg-amber-50",
+                    icon: (
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    ),
                 }
             case "failed":
                 return {
