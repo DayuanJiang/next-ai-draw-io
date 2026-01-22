@@ -1122,10 +1122,7 @@ export function ChatMessageDisplay({
                                                                                                 section.fileType ===
                                                                                                 "pdf"
                                                                                                     ? "text-red-500"
-                                                                                                    : section.fileType ===
-                                                                                                        "url"
-                                                                                                      ? "text-blue-700"
-                                                                                                      : "text-blue-500"
+                                                                                                    : "text-blue-700"
 
                                                                                             return (
                                                                                                 <div
