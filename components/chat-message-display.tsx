@@ -1125,7 +1125,7 @@ export function ChatMessageDisplay({
                                                                                                     : section.fileType ===
                                                                                                         "url"
                                                                                                       ? "text-blue-700"
-                                                                                                      : "text-blue-700"
+                                                                                                      : "text-blue-500"
 
                                                                                             return (
                                                                                                 <div
