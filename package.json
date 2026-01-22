@@ -139,7 +139,7 @@
         "vite-tsconfig-paths": "^6.0.3",
         "vitest": "^4.0.16",
         "wait-on": "^9.0.3",
-        "wrangler": "4.58.0"
+        "wrangler": "^4.60.0"
     },
     "overrides": {
         "@openrouter/ai-sdk-provider": {
