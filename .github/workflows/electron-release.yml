@@ -37,11 +37,11 @@ jobs:
       - name: Download draw.io static files for offline use
         run: |
           rm -rf public/drawio
-          git clone --depth 1 --branch v29.3.5 https://github.com/jgraph/drawio.git /tmp/drawio
+          git clone --depth 1 --branch v29.3.5 --filter=blob:none --sparse https://github.com/jgraph/drawio.git /tmp/drawio
+          cd /tmp/drawio && git sparse-checkout set src/main/webapp
           mkdir -p public/drawio
           cp -r /tmp/drawio/src/main/webapp/* public/drawio/
-          rm -rf public/drawio/WEB-INF
-          rm -rf public/drawio/META-INF
+          rm -rf public/drawio/WEB-INF public/drawio/META-INF
 
       - name: Install dependencies
         run: npm install
@@ -70,11 +70,11 @@ jobs:
         shell: bash
         run: |
           rm -rf public/drawio
-          git clone --depth 1 --branch v29.3.5 https://github.com/jgraph/drawio.git /tmp/drawio
+          git clone --depth 1 --branch v29.3.5 --filter=blob:none --sparse https://github.com/jgraph/drawio.git /tmp/drawio
+          cd /tmp/drawio && git sparse-checkout set src/main/webapp
           mkdir -p public/drawio
           cp -r /tmp/drawio/src/main/webapp/* public/drawio/
-          rm -rf public/drawio/WEB-INF
-          rm -rf public/drawio/META-INF
+          rm -rf public/drawio/WEB-INF public/drawio/META-INF
 
       - name: Install dependencies
         run: npm install
