@@ -99,7 +99,7 @@ jobs:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: '880a211d-2cd3-4e7b-8d04-3d1f8eb39df5'
           project-slug: 'next-ai-draw-io'
-          signing-policy-slug: 'test-signing'
+          signing-policy-slug: 'release-signing'
           artifact-configuration-slug: 'windows-exe'
           github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
           wait-for-completion: true
