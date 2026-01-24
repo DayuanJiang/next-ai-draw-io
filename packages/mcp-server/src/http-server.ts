@@ -44,6 +44,17 @@ function isLikelyMcpSessionId(sessionId: string): boolean {
     return sessionId.startsWith("mcp-") && sessionId.length <= 128
 }
 
+// Find the most recent active session (for auto-redirect when no sessionId provided)
+function getMostRecentSessionId(): string | null {
+    let mostRecent: { id: string; lastUpdated: Date } | null = null
+    for (const [sessionId, state] of stateStore) {
+        if (!mostRecent || state.lastUpdated > mostRecent.lastUpdated) {
+            mostRecent = { id: sessionId, lastUpdated: state.lastUpdated }
+        }
+    }
+    return mostRecent?.id || null
+}
+
 function ensureSessionStateInitialized(sessionId: string): void {
     if (!sessionId) return
     if (!isLikelyMcpSessionId(sessionId)) return
@@ -195,6 +206,17 @@ function handleRequest(
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
         const sessionId = url.searchParams.get("mcp") || ""
+
+        // Auto-redirect to most recent session if no sessionId provided
+        if (!sessionId) {
+            const recentSessionId = getMostRecentSessionId()
+            if (recentSessionId) {
+                res.writeHead(302, { Location: `/?mcp=${recentSessionId}` })
+                res.end()
+                return
+            }
+        }
+
         ensureSessionStateInitialized(sessionId)
 
         res.writeHead(200, { "Content-Type": "text/html" })
