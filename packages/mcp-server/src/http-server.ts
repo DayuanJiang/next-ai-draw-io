@@ -638,7 +638,6 @@ function getHtmlPage(sessionId: string): string {
         let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
         let pendingSvgExport = null;
         let pendingAiSvg = false;
-        let pendingManualSave = false;
 
         window.addEventListener('message', (e) => {
             if (e.origin !== '${DRAWIO_ORIGIN}') return;
@@ -675,13 +674,6 @@ function getHtmlPage(sessionId: string): string {
                     if (pendingSyncExport && !msg.data.startsWith('data:') && !msg.data.startsWith('<svg')) {
                         pendingSyncExport = false;
                         pushState(msg.data, '');
-                        return;
-                    }
-                    // Handle manual save - XML export (legacy, no longer used)
-                    if (pendingManualSave && !msg.data.startsWith('data:') && !msg.data.startsWith('<svg')) {
-                        pendingManualSave = false;
-                        pendingSvgExport = msg.data;
-                        iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
                         return;
                     }
                     // Handle SVG export
@@ -807,27 +799,6 @@ function getHtmlPage(sessionId: string): string {
                 setTimeout(() => { saveConfirmBtn.disabled = false; saveConfirmBtn.textContent = 'Save'; pendingDownload = null; }, 5000);
             }
         };
-
-        function downloadFile(data, filename, mimeType) {
-            const blob = new Blob([data], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        function downloadDataUrl(dataUrl, filename) {
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
 
         // History UI
         const historyBtn = document.getElementById('history-btn');
