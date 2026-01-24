@@ -9,6 +9,7 @@ import {
     Copy,
     FileCode,
     FileText,
+    Link,
     Pencil,
     RotateCcw,
     ThumbsDown,
@@ -59,20 +60,20 @@ function getCompleteOperations(
 
 import { useDiagram } from "@/contexts/diagram-context"
 
-// Helper to split text content into regular text and file sections (PDF or text files)
+// Helper to split text content into regular text and file/URL sections (PDF, text files, or URLs)
 interface TextSection {
-    type: "text" | "file"
+    type: "text" | "file" | "url"
     content: string
     filename?: string
     charCount?: number
-    fileType?: "pdf" | "text"
+    fileType?: "pdf" | "text" | "url"
 }
 
 function splitTextIntoFileSections(text: string): TextSection[] {
     const sections: TextSection[] = []
-    // Match [PDF: filename] or [File: filename] patterns
+    // Match [PDF: filename], [File: filename], or [URL: url] patterns
     const filePattern =
-        /\[(PDF|File):\s*([^\]]+)\]\n([\s\S]*?)(?=\n\n\[(PDF|File):|$)/g
+        /\[(PDF|File|URL):\s*([^\]]+)\]\n([\s\S]*?)(?=\n\n\[(PDF|File|URL):|$)/g
     let lastIndex = 0
     let match
 
@@ -83,28 +84,34 @@ function splitTextIntoFileSections(text: string): TextSection[] {
             sections.push({ type: "text", content: beforeText })
         }
 
-        // Add file section
-        const fileType = match[1].toLowerCase() === "pdf" ? "pdf" : "text"
+        // Add file/url section
+        const sectionType = match[1].toLowerCase()
+        const fileType =
+            sectionType === "pdf"
+                ? "pdf"
+                : sectionType === "url"
+                  ? "url"
+                  : "text"
         const filename = match[2].trim()
-        const fileContent = match[3].trim()
+        const content = match[3].trim()
         sections.push({
-            type: "file",
-            content: fileContent,
+            type: sectionType === "url" ? "url" : "file",
+            content: content,
             filename,
-            charCount: fileContent.length,
+            charCount: content.length,
             fileType,
         })
 
         lastIndex = match.index + match[0].length
     }
 
-    // Add remaining text after last file section
+    // Add remaining text after last section
     const remainingText = text.slice(lastIndex).trim()
     if (remainingText) {
         sections.push({ type: "text", content: remainingText })
     }
 
-    // If no file sections found, return original text
+    // If no file/url sections found, return original text
     if (sections.length === 0) {
         sections.push({ type: "text", content: text })
     }
@@ -123,8 +130,8 @@ const getMessageTextContent = (message: UIMessage): string => {
 // Get only the user's original text, excluding appended file content
 const getUserOriginalText = (message: UIMessage): string => {
     const fullText = getMessageTextContent(message)
-    // Strip out [PDF: ...] and [File: ...] sections that were appended
-    const filePattern = /\n\n\[(PDF|File):\s*[^\]]+\]\n[\s\S]*$/
+    // Strip out [PDF: ...], [File: ...], and [URL: ...] sections that were appended
+    const filePattern = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
     return fullText.replace(filePattern, "").trim()
 }
 
@@ -1084,12 +1091,14 @@ export function ChatMessageDisplay({
                                                                                     ) => {
                                                                                         if (
                                                                                             section.type ===
-                                                                                            "file"
+                                                                                                "file" ||
+                                                                                            section.type ===
+                                                                                                "url"
                                                                                         ) {
-                                                                                            const pdfKey = `${message.id}-file-${partIndex}-${sectionIndex}`
+                                                                                            const sectionKey = `${message.id}-${section.type}-${partIndex}-${sectionIndex}`
                                                                                             const isExpanded =
                                                                                                 expandedPdfSections[
-                                                                                                    pdfKey
+                                                                                                    sectionKey
                                                                                                 ] ??
                                                                                                 false
                                                                                             const charDisplay =
@@ -1098,10 +1107,27 @@ export function ChatMessageDisplay({
                                                                                                     1000
                                                                                                     ? `${(section.charCount / 1000).toFixed(1)}k`
                                                                                                     : section.charCount
+
+                                                                                            // Icon selector
+                                                                                            const Icon =
+                                                                                                section.fileType ===
+                                                                                                "pdf"
+                                                                                                    ? FileText
+                                                                                                    : section.fileType ===
+                                                                                                        "url"
+                                                                                                      ? Link
+                                                                                                      : FileCode
+
+                                                                                            const iconColor =
+                                                                                                section.fileType ===
+                                                                                                "pdf"
+                                                                                                    ? "text-red-500"
+                                                                                                    : "text-blue-700"
+
                                                                                             return (
                                                                                                 <div
                                                                                                     key={
-                                                                                                        pdfKey
+                                                                                                        sectionKey
                                                                                                     }
                                                                                                     className="rounded-lg border border-border/60 bg-muted/30 overflow-hidden"
                                                                                                 >
@@ -1116,7 +1142,7 @@ export function ChatMessageDisplay({
                                                                                                                     prev,
                                                                                                                 ) => ({
                                                                                                                     ...prev,
-                                                                                                                    [pdfKey]:
+                                                                                                                    [sectionKey]:
                                                                                                                         !isExpanded,
                                                                                                                 }),
                                                                                                             )
@@ -1124,13 +1150,10 @@ export function ChatMessageDisplay({
                                                                                                         className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
                                                                                                     >
                                                                                                         <div className="flex items-center gap-2">
-                                                                                                            {section.fileType ===
-                                                                                                            "pdf" ? (
-                                                                                                                <FileText className="h-4 w-4 text-red-500" />
-                                                                                                            ) : (
-                                                                                                                <FileCode className="h-4 w-4 text-blue-500" />
-                                                                                                            )}
-                                                                                                            <span className="text-xs font-medium">
+                                                                                                            <Icon
+                                                                                                                className={`h-4 w-4 ${iconColor}`}
+                                                                                                            />
+                                                                                                            <span className="text-xs font-medium truncate max-w-[200px]">
                                                                                                                 {
                                                                                                                     section.filename
                                                                                                                 }
