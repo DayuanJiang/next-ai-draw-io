@@ -1,6 +1,7 @@
 /**
  * electron-builder afterPack hook
  * Copies node_modules to the standalone directory in the packaged app
+ * and ad-hoc signs macOS apps for offline draw.io bundle compatibility
  */
 
 const {
@@ -12,6 +13,7 @@ const {
     statSync,
 } = require("fs")
 const path = require("path")
+const { execSync } = require("child_process")
 
 /**
  * Copy directory recursively, converting symlinks to regular files/directories.
@@ -79,5 +81,23 @@ module.exports = async (context) => {
             "[afterPack] Failed: Required directories not found. " +
                 "Ensure 'npm run electron:prepare' was run before building.",
         )
+    }
+
+    // Ad-hoc sign macOS apps to fix signature issues with bundled draw.io files
+    if (context.packager.platform.name === "mac") {
+        const appPath = path.join(
+            appOutDir,
+            `${context.packager.appInfo.productFilename}.app`,
+        )
+        console.log(`[afterPack] Ad-hoc signing macOS app: ${appPath}`)
+        try {
+            execSync(`codesign --force --deep --sign - "${appPath}"`, {
+                stdio: "inherit",
+            })
+            console.log("[afterPack] Ad-hoc signing completed successfully")
+        } catch (error) {
+            console.error("[afterPack] Ad-hoc signing failed:", error.message)
+            throw error
+        }
     }
 }
