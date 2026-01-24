@@ -37,10 +37,11 @@ mac:
       arch:
         - x64
         - arm64
-  hardenedRuntime: true
+  # Disable electron-builder's signing - we use custom ad-hoc signing in afterPack
+  # to properly sign nested bundles with --deep flag for bundled draw.io files
+  identity: null
+  hardenedRuntime: false
   gatekeeperAssess: false
-  entitlements: resources/entitlements.mac.plist
-  entitlementsInherit: resources/entitlements.mac.plist
 
 dmg:
   contents:

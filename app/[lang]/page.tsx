@@ -12,9 +12,6 @@ import {
 import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
-const drawioBaseUrl =
-    process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
-
 export default function Home() {
     const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
         useDiagram()
@@ -28,6 +25,10 @@ export default function Home() {
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
+    const [isElectron, setIsElectron] = useState(false)
+    const [drawioBaseUrl, setDrawioBaseUrl] = useState(
+        process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net",
+    )
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isMobileRef = useRef(false)
@@ -62,6 +63,17 @@ export default function Home() {
             ).matches
             setDarkMode(prefersDark)
             document.documentElement.classList.toggle("dark", prefersDark)
+        }
+
+        // Detect Electron and use bundled draw.io files for offline use
+        // Note: react-drawio uses `new URL(baseUrl)` so we need absolute URL
+        // Include /index.html because Next.js doesn't auto-serve index.html for directories
+        const electronDetected =
+            !process.env.NEXT_PUBLIC_DRAWIO_BASE_URL &&
+            !!(window as unknown as { electronAPI?: unknown }).electronAPI
+        if (electronDetected) {
+            setIsElectron(true)
+            setDrawioBaseUrl(`${window.location.origin}/drawio/index.html`)
         }
 
         setIsLoaded(true)
@@ -160,7 +172,7 @@ export default function Home() {
                                     className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
                                 >
                                     <DrawIoEmbed
-                                        key={`${drawioUi}-${darkMode}-${currentLang}`}
+                                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
                                         ref={drawioRef}
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
@@ -174,6 +186,10 @@ export default function Home() {
                                             noExitBtn: true,
                                             dark: darkMode,
                                             lang: currentLang,
+                                            // Enable offline mode in Electron to disable external service calls
+                                            ...(isElectron && {
+                                                offline: true,
+                                            }),
                                         }}
                                     />
                                 </div>
