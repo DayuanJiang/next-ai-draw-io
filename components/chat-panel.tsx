@@ -677,7 +677,7 @@ export default function ChatPanel({
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(async () => {
             try {
-                if (messages.length > 0) {
+                if (messages.length > 0 || hasDiagramNow) {
                     const sessionData = await buildSessionData({
                         // Only capture thumbnail if there was a diagram AND this isn't a no-diagram session
                         withThumbnail: hasDiagramNow && !isNodiagramSession,
@@ -699,6 +699,7 @@ export default function ChatPanel({
             }
         }
     }, [
+        chartXML,
         messages,
         status,
         sessionIsAvailable,

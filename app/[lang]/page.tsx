@@ -13,8 +13,13 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        handleDiagramAutoSave,
+        onDrawioLoad,
+        resetDrawioReady,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -83,6 +88,17 @@ export default function Home() {
         setIsDrawioReady(true)
         onDrawioLoad()
     }, [onDrawioLoad])
+
+    const handleDrawioAutoSave = useCallback(
+        (data: { xml?: string }) => {
+            handleDiagramAutoSave(data)
+            // Clear modified state to avoid beforeunload prompts in embed mode
+            if (drawioRef && "current" in drawioRef) {
+                drawioRef.current?.status({ message: "", modified: false })
+            }
+        },
+        [drawioRef, handleDiagramAutoSave],
+    )
 
     const handleDarkModeChange = () => {
         const newValue = !darkMode
@@ -174,13 +190,19 @@ export default function Home() {
                                     <DrawIoEmbed
                                         key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
                                         ref={drawioRef}
+                                        autosave
+                                        onAutoSave={handleDrawioAutoSave}
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
                                         baseUrl={drawioBaseUrl}
+                                        configuration={{ confirmExit: false }}
                                         urlParameters={{
                                             ui: drawioUi,
                                             spin: false,
                                             libraries: false,
+                                            // Disable draw.io modified state to avoid beforeunload prompts
+                                            modified: false,
+                                            keepmodified: false,
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,
