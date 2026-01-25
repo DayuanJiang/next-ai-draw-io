@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
-import { isIndexedDBAvailable } from "@/lib/session-storage"
+import { isIndexedDBUsable } from "@/lib/session-storage"
 
 export default function Home() {
     const {
@@ -83,7 +83,10 @@ export default function Home() {
             setDrawioBaseUrl(`${window.location.origin}/drawio/index.html`)
         }
 
-        setCanPersist(isIndexedDBAvailable())
+        void (async () => {
+            const usable = await isIndexedDBUsable()
+            setCanPersist(usable)
+        })()
         setIsLoaded(true)
     }, [pathname, router])
 

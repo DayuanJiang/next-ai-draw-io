@@ -144,17 +144,15 @@ export default function ChatPanel({
                     handleExportWithoutHistory()
                 }
             }),
-            new Promise<string>((_, reject) =>
-                setTimeout(
-                    () =>
-                        reject(
-                            new Error(
-                                "Chart export timed out after 10 seconds",
-                            ),
-                        ),
-                    10000,
-                ),
-            ),
+            new Promise<string>((_, reject) => {
+                const currentResolver = resolverRef.current
+                setTimeout(() => {
+                    if (resolverRef.current === currentResolver) {
+                        resolverRef.current = null
+                    }
+                    reject(new Error("Chart export timed out after 10 seconds"))
+                }, 10000)
+            }),
         ])
     }
 
