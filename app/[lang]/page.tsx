@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { isIndexedDBAvailable } from "@/lib/session-storage"
 
 export default function Home() {
     const {
@@ -31,6 +32,7 @@ export default function Home() {
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
     const [isElectron, setIsElectron] = useState(false)
+    const [canPersist, setCanPersist] = useState(false)
     const [drawioBaseUrl, setDrawioBaseUrl] = useState(
         process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net",
     )
@@ -81,6 +83,7 @@ export default function Home() {
             setDrawioBaseUrl(`${window.location.origin}/drawio/index.html`)
         }
 
+        setCanPersist(isIndexedDBAvailable())
         setIsLoaded(true)
     }, [pathname, router])
 
@@ -92,12 +95,12 @@ export default function Home() {
     const handleDrawioAutoSave = useCallback(
         (data: { xml?: string }) => {
             handleDiagramAutoSave(data)
-            // Clear modified state to avoid beforeunload prompts in embed mode
-            if (drawioRef && "current" in drawioRef) {
+            // Only suppress modified state when persistence is available
+            if (canPersist) {
                 drawioRef.current?.status({ message: "", modified: false })
             }
         },
-        [drawioRef, handleDiagramAutoSave],
+        [canPersist, drawioRef, handleDiagramAutoSave],
     )
 
     const handleDarkModeChange = () => {
@@ -195,14 +198,20 @@ export default function Home() {
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
                                         baseUrl={drawioBaseUrl}
-                                        configuration={{ confirmExit: false }}
+                                        configuration={
+                                            canPersist
+                                                ? { confirmExit: false }
+                                                : undefined
+                                        }
                                         urlParameters={{
                                             ui: drawioUi,
                                             spin: false,
                                             libraries: false,
-                                            // Disable draw.io modified state to avoid beforeunload prompts
-                                            modified: false,
-                                            keepmodified: false,
+                                            // Disable modified tracking only when persistence is available
+                                            ...(canPersist && {
+                                                modified: false,
+                                                keepmodified: false,
+                                            }),
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,

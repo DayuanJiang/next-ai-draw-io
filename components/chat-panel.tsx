@@ -137,9 +137,7 @@ export default function ChatPanel({
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
             new Promise<string>((resolve) => {
-                if (resolverRef && "current" in resolverRef) {
-                    resolverRef.current = resolve
-                }
+                resolverRef.current = resolve
                 if (saveToHistory) {
                     onExport()
                 } else {
@@ -730,7 +728,8 @@ export default function ChatPanel({
         const handleVisibilityChange = async () => {
             if (
                 document.visibilityState === "hidden" &&
-                messagesRef.current.length > 0
+                (messagesRef.current.length > 0 ||
+                    isRealDiagram(chartXMLRef.current))
             ) {
                 try {
                     // Attempt to save session - browser may not wait for completion
