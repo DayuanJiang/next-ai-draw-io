@@ -299,6 +299,7 @@ function SettingsContent({
                                     onOpenChange(false)
                                     onOpenModelConfig()
                                 }}
+                                aria-label={dict.settings.apiKeysModels}
                             >
                                 <ChevronRight className="h-4 w-4" />
                             </Button>
