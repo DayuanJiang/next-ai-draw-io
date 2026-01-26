@@ -1383,6 +1383,7 @@ export default function ChatPanel({
                 onMinimalStyleChange={setMinimalStyle}
                 vlmValidationEnabled={vlmValidationEnabled}
                 onVlmValidationChange={handleVlmValidationChange}
+                onOpenModelConfig={() => setShowModelConfigDialog(true)}
             />
 
             <ModelConfigDialog
