@@ -20,9 +20,10 @@ interface DiagramContextType {
     loadDiagram: (chart: string, skipValidation?: boolean) => string | null
     handleExport: () => void
     handleExportWithoutHistory: () => void
-    resolverRef: React.Ref<((value: string) => void) | null>
-    drawioRef: React.Ref<DrawIoEmbedRef | null>
+    resolverRef: React.MutableRefObject<((value: string) => void) | null>
+    drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>
     handleDiagramExport: (data: any) => void
+    handleDiagramAutoSave: (data: { xml?: string }) => void
     clearDiagram: () => void
     saveDiagramToFile: (
         filename: string,
@@ -267,6 +268,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    const handleDiagramAutoSave = (data: { xml?: string }) => {
+        if (!data?.xml) return
+        setChartXML(data.xml)
+    }
+
     const clearDiagram = () => {
         const emptyDiagram = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
         // Skip validation for trusted internal template (loadDiagram also sets chartXML)
@@ -391,6 +397,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 resolverRef,
                 drawioRef,
                 handleDiagramExport,
+                handleDiagramAutoSave,
                 clearDiagram,
                 saveDiagramToFile,
                 getThumbnailSvg,

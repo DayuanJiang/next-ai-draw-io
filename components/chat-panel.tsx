@@ -137,26 +137,22 @@ export default function ChatPanel({
     const onFetchChart = (saveToHistory = true) => {
         return Promise.race([
             new Promise<string>((resolve) => {
-                if (resolverRef && "current" in resolverRef) {
-                    resolverRef.current = resolve
-                }
+                resolverRef.current = resolve
                 if (saveToHistory) {
                     onExport()
                 } else {
                     handleExportWithoutHistory()
                 }
             }),
-            new Promise<string>((_, reject) =>
-                setTimeout(
-                    () =>
-                        reject(
-                            new Error(
-                                "Chart export timed out after 10 seconds",
-                            ),
-                        ),
-                    10000,
-                ),
-            ),
+            new Promise<string>((_, reject) => {
+                const currentResolver = resolverRef.current
+                setTimeout(() => {
+                    if (resolverRef.current === currentResolver) {
+                        resolverRef.current = null
+                    }
+                    reject(new Error("Chart export timed out after 10 seconds"))
+                }, 10000)
+            }),
         ])
     }
 
@@ -677,7 +673,7 @@ export default function ChatPanel({
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(async () => {
             try {
-                if (messages.length > 0) {
+                if (messages.length > 0 || hasDiagramNow) {
                     const sessionData = await buildSessionData({
                         // Only capture thumbnail if there was a diagram AND this isn't a no-diagram session
                         withThumbnail: hasDiagramNow && !isNodiagramSession,
@@ -699,6 +695,7 @@ export default function ChatPanel({
             }
         }
     }, [
+        chartXML,
         messages,
         status,
         sessionIsAvailable,
@@ -729,7 +726,8 @@ export default function ChatPanel({
         const handleVisibilityChange = async () => {
             if (
                 document.visibilityState === "hidden" &&
-                messagesRef.current.length > 0
+                (messagesRef.current.length > 0 ||
+                    isRealDiagram(chartXMLRef.current))
             ) {
                 try {
                     // Attempt to save session - browser may not wait for completion
