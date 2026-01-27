@@ -194,7 +194,7 @@ export default function Home() {
                                     className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
                                 >
                                     <DrawIoEmbed
-                                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
+                                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}-${canPersist}`}
                                         ref={drawioRef}
                                         autosave
                                         onAutoSave={handleDrawioAutoSave}
