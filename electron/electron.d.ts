@@ -69,7 +69,9 @@ declare global {
             /** Set proxy configuration (saves and restarts server) */
             setProxy: (config: ProxyConfig) => Promise<SetProxyResult>
             /** Get user's preferred locale */
-            getUserLocale: () => Promise<"en" | "zh" | "ja" | undefined>
+            getUserLocale: () => Promise<
+                "en" | "zh" | "ja" | "zh-Hant" | undefined
+            >
             /** Set user's preferred locale */
             setUserLocale: (locale: string) => Promise<SetUserLocaleResult>
         }

@@ -5,7 +5,7 @@
 
 import { getUserLocale } from "./config-manager"
 
-export type MenuLocale = "en" | "zh" | "ja"
+export type MenuLocale = "en" | "zh" | "ja" | "zh-Hant"
 
 export interface MenuTranslations {
     // App menu (macOS only)
@@ -119,6 +119,34 @@ const translations: Record<MenuLocale, MenuTranslations> = {
         documentation: "ドキュメント",
         reportIssue: "問題を報告",
     },
+
+    "zh-Hant": {
+        // App menu
+        settings: "設定...",
+
+        // File menu
+        file: "檔案",
+
+        // Edit menu
+        edit: "編輯",
+
+        // View menu
+        view: "檢視",
+
+        // Configuration menu
+        configuration: "配置",
+        switchPreset: "切換預設",
+        managePresets: "管理預設...",
+        addConfigurationPreset: "新增配置預設...",
+
+        // Window menu
+        window: "視窗",
+
+        // Help menu
+        help: "說明",
+        documentation: "文件",
+        reportIssue: "回報問題",
+    },
 }
 
 /**
@@ -126,6 +154,16 @@ const translations: Record<MenuLocale, MenuTranslations> = {
  * Falls back to English if locale is not supported
  */
 export function getMenuTranslations(locale: string): MenuTranslations {
+    // Check for zh-Hant before normalizing
+    if (
+        locale === "zh-Hant" ||
+        locale.toLowerCase().startsWith("zh-hant") ||
+        locale.toLowerCase().startsWith("zh-tw") ||
+        locale.toLowerCase().startsWith("zh-hk")
+    ) {
+        return translations["zh-Hant"]
+    }
+
     // Normalize locale (e.g., "zh-CN" -> "zh", "ja-JP" -> "ja")
     const normalized = locale.toLowerCase().split("-")[0]
 
@@ -136,10 +174,21 @@ export function getMenuTranslations(locale: string): MenuTranslations {
 
 /**
  * Detect system locale from Electron app
- * Returns one of: "en", "zh", "ja"
+ * Returns one of: "en", "zh", "ja", "zh-Hant"
  */
 export function detectSystemLocale(appLocale: string): MenuLocale {
-    const normalized = appLocale.toLowerCase().split("-")[0]
+    const lower = appLocale.toLowerCase()
+
+    // Distinguish Traditional Chinese locales (TW, HK, Hant) from Simplified
+    if (
+        lower.startsWith("zh-hant") ||
+        lower.startsWith("zh-tw") ||
+        lower.startsWith("zh-hk")
+    ) {
+        return "zh-Hant"
+    }
+
+    const normalized = lower.split("-")[0]
 
     if (normalized === "zh") return "zh"
     if (normalized === "ja") return "ja"
