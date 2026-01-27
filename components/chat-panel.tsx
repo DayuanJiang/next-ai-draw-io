@@ -581,7 +581,7 @@ export default function ChatPanel({
 
         try {
             const currentSession = sessionManager.currentSession
-            if (currentSession && currentSession.messages.length > 0) {
+            if (currentSession) {
                 // Restore from session manager (IndexedDB)
                 justLoadedSessionRef.current = true
                 syncUIWithSession(currentSession)
@@ -618,7 +618,7 @@ export default function ChatPanel({
         lastSyncedSessionIdRef.current = newSessionId
 
         // Sync UI with new session
-        if (newSession && newSession.messages.length > 0) {
+        if (newSession) {
             justLoadedSessionRef.current = true
             syncUIWithSession(newSession)
         } else if (!newSession) {
