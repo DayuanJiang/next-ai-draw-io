@@ -33,6 +33,7 @@ export default function Home() {
     const [isDrawioReady, setIsDrawioReady] = useState(false)
     const [isElectron, setIsElectron] = useState(false)
     const [canPersist, setCanPersist] = useState(false)
+    const [canPersistChecked, setCanPersistChecked] = useState(false)
     const [drawioBaseUrl, setDrawioBaseUrl] = useState(
         process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net",
     )
@@ -86,6 +87,7 @@ export default function Home() {
         void (async () => {
             const usable = await isIndexedDBUsable()
             setCanPersist(usable)
+            setCanPersistChecked(true)
         })()
         setIsLoaded(true)
     }, [pathname, router])
@@ -189,12 +191,12 @@ export default function Home() {
                         }`}
                     >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 relative">
-                            {isLoaded && (
+                            {isLoaded && canPersistChecked && (
                                 <div
                                     className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
                                 >
                                     <DrawIoEmbed
-                                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}-${canPersist}`}
+                                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
                                         ref={drawioRef}
                                         autosave
                                         onAutoSave={handleDrawioAutoSave}
