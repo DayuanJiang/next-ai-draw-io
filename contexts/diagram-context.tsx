@@ -89,6 +89,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         ) {
             lastRestoredXmlRef.current = chartXML
             drawioRef.current.load({ xml: chartXML })
+        } else if (!isRealDiagram(chartXML)) {
+            // Reset when diagram is cleared so a future restore can re-load the same XML.
+            lastRestoredXmlRef.current = ""
         }
     }, [isDrawioReady, chartXML])
 
@@ -265,6 +268,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     const handleDiagramAutoSave = (data: { xml?: string }) => {
         if (!data?.xml) return
+        // Don't overwrite a pending restore - if we have a real diagram in state
+        // but DrawIO isn't ready yet, it means we're waiting to restore
+        if (!isDrawioReady && isRealDiagram(chartXML)) {
+            return
+        }
         setChartXML(data.xml)
     }
 
