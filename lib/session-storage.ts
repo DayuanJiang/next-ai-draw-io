@@ -75,18 +75,6 @@ export function isIndexedDBAvailable(): boolean {
     }
 }
 
-// Check if IndexedDB is actually usable (not just present).
-export async function isIndexedDBUsable(): Promise<boolean> {
-    if (!isIndexedDBAvailable()) return false
-    try {
-        const db = await getDB()
-        db.close()
-        return true
-    } catch {
-        return false
-    }
-}
-
 // CRUD Operations
 export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
     if (!isIndexedDBAvailable()) return []
