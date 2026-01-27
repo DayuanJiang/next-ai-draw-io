@@ -56,6 +56,7 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
     en: "English",
     zh: "中文",
     ja: "日本語",
+    "zh-Hant": "繁體中文",
 }
 
 interface SettingsDialogProps {
