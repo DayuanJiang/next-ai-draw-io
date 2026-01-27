@@ -137,7 +137,7 @@ interface ConfigPresetsFile {
     version: 1
     currentPresetId: string | null
     presets: ConfigPreset[]
-    userLocale?: "en" | "zh" | "ja"
+    userLocale?: "en" | "zh" | "ja" | "zh-Hant"
 }
 
 const CONFIG_FILE_NAME = "config-presets.json"
@@ -470,7 +470,7 @@ export function getCurrentPresetEnv(): Record<string, string> {
  * Get user's preferred locale from config
  * Returns undefined if not set
  */
-export function getUserLocale(): "en" | "zh" | "ja" | undefined {
+export function getUserLocale(): "en" | "zh" | "ja" | "zh-Hant" | undefined {
     const data = loadPresets()
     return data.userLocale
 }
@@ -478,7 +478,9 @@ export function getUserLocale(): "en" | "zh" | "ja" | undefined {
 /**
  * Set user's preferred locale in config
  */
-export function setUserLocale(locale: "en" | "zh" | "ja" | null): void {
+export function setUserLocale(
+    locale: "en" | "zh" | "ja" | "zh-Hant" | null,
+): void {
     const data = loadPresets()
     data.userLocale = locale === null ? undefined : locale
     savePresets(data)
