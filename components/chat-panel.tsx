@@ -1366,7 +1366,6 @@ export default function ChatPanel({
                     selectedModelId={modelConfig.selectedModelId}
                     onModelSelect={modelConfig.setSelectedModelId}
                     showUnvalidatedModels={modelConfig.showUnvalidatedModels}
-                    onConfigureModels={() => setShowModelConfigDialog(true)}
                     shouldFocus={shouldFocusInput}
                     onFocused={() => setShouldFocusInput(false)}
                 />
