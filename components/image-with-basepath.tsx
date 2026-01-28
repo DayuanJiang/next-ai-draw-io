@@ -1,4 +1,5 @@
 import NextImage from "next/image"
+import type * as React from "react"
 
 export default function Image(props: React.ComponentProps<typeof NextImage>) {
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ""
