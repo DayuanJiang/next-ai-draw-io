@@ -9,7 +9,7 @@ import {
     Settings,
 } from "lucide-react"
 import Image from "next/image"
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type React from "react"
 import {
     useCallback,
@@ -131,6 +131,7 @@ export default function ChatPanel({
 
     const dict = useDictionary()
     const router = useRouter()
+    const pathname = usePathname()
     const searchParams = useSearchParams()
     const urlSessionId = searchParams.get("session")
 
@@ -901,7 +902,7 @@ export default function ChatPanel({
             if (result.wasCurrentSession) {
                 // Deleted current session - clear UI and URL
                 syncUIWithSession(null)
-                router.replace(window.location.pathname, { scroll: false })
+                router.replace(pathname, { scroll: false })
             }
         },
         [sessionManager, syncUIWithSession, router],
@@ -937,7 +938,7 @@ export default function ChatPanel({
         toast.success(dict.dialogs.clearSuccess)
 
         // Clear URL param to show blank state
-        router.replace(window.location.pathname, { scroll: false })
+        router.replace(pathname, { scroll: false })
 
         // After starting a fresh chat, move focus back to the chat input
         setShouldFocusInput(true)
