@@ -10,8 +10,8 @@ import {
     RefreshCw,
     X,
 } from "lucide-react"
-import Image from "next/image"
 import { useState } from "react"
+import Image from "@/components/image-with-basepath"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { ValidationResult } from "@/lib/diagram-validator"
 

@@ -16,7 +16,6 @@ import {
     ThumbsUp,
     X,
 } from "lucide-react"
-import Image from "next/image"
 import type { MutableRefObject } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
@@ -31,6 +30,7 @@ import { ToolCallCard } from "@/components/chat/ToolCallCard"
 import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import type { ValidationState } from "@/components/chat/ValidationCard"
 import { ValidationCard } from "@/components/chat/ValidationCard"
+import Image from "@/components/image-with-basepath"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
