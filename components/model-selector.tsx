@@ -7,7 +7,6 @@ import {
     ChevronDown,
     Monitor,
     Server,
-    Settings2,
     User,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -34,7 +33,6 @@ interface ModelSelectorProps {
     models: FlattenedModel[]
     selectedModelId: string | undefined
     onSelect: (modelId: string | undefined) => void
-    onConfigure: () => void
     disabled?: boolean
     showUnvalidatedModels?: boolean
 }
@@ -85,7 +83,6 @@ export function ModelSelector({
     models,
     selectedModelId,
     onSelect,
-    onConfigure,
     disabled = false,
     showUnvalidatedModels = false,
 }: ModelSelectorProps) {
@@ -126,9 +123,7 @@ export function ModelSelector({
     )
 
     const handleSelect = (value: string) => {
-        if (value === "__configure__") {
-            onConfigure()
-        } else if (value === "__server_default__") {
+        if (value === "__server_default__") {
             onSelect(undefined)
         } else {
             onSelect(value)
@@ -386,20 +381,6 @@ export function ModelSelector({
                             </>
                         )}
 
-                        {/* Configure Option */}
-                        <ModelSelectorSeparator />
-                        <ModelSelectorGroup>
-                            <ModelSelectorItem
-                                value="__configure__"
-                                onSelect={handleSelect}
-                                className="cursor-pointer text-muted-foreground hover:text-foreground"
-                            >
-                                <Settings2 className="mr-2 h-4 w-4" />
-                                <ModelSelectorName>
-                                    {dict.modelConfig.configureModels}
-                                </ModelSelectorName>
-                            </ModelSelectorItem>
-                        </ModelSelectorGroup>
                         {/* Info text */}
                         <div className="px-3 py-2 text-xs text-muted-foreground border-t">
                             {showUnvalidatedModels

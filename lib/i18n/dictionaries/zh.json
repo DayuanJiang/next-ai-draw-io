@@ -77,6 +77,8 @@
     "settings": {
         "title": "设置",
         "description": "配置您的应用程序设置。",
+        "apiKeysModels": "API 密钥和模型",
+        "apiKeysModelsDescription": "配置 AI 提供商和 API 密钥。",
         "accessCode": "访问码",
         "accessCodePlaceholder": "输入访问码",
         "accessCodeDescription": "使用此应用程序需要访问码。",

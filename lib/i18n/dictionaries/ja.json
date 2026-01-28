@@ -77,6 +77,8 @@
     "settings": {
         "title": "設定",
         "description": "アプリケーション設定を構成します。",
+        "apiKeysModels": "API キーとモデル",
+        "apiKeysModelsDescription": "AI プロバイダーと API キーを設定します。",
         "accessCode": "アクセスコード",
         "accessCodePlaceholder": "アクセスコードを入力",
         "accessCodeDescription": "このアプリケーションを使用するために必要です。",

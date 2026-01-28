@@ -1368,7 +1368,6 @@ export default function ChatPanel({
                     selectedModelId={modelConfig.selectedModelId}
                     onModelSelect={modelConfig.setSelectedModelId}
                     showUnvalidatedModels={modelConfig.showUnvalidatedModels}
-                    onConfigureModels={() => setShowModelConfigDialog(true)}
                     shouldFocus={shouldFocusInput}
                     onFocused={() => setShouldFocusInput(false)}
                 />
@@ -1385,6 +1384,7 @@ export default function ChatPanel({
                 onMinimalStyleChange={setMinimalStyle}
                 vlmValidationEnabled={vlmValidationEnabled}
                 onVlmValidationChange={handleVlmValidationChange}
+                onOpenModelConfig={() => setShowModelConfigDialog(true)}
             />
 
             <ModelConfigDialog
