@@ -1,6 +1,6 @@
 "use client"
 
-import { Github, Info, Moon, Sun, Tag } from "lucide-react"
+import { ChevronRight, Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -70,6 +70,7 @@ interface SettingsDialogProps {
     onMinimalStyleChange?: (value: boolean) => void
     vlmValidationEnabled?: boolean
     onVlmValidationChange?: (value: boolean) => void
+    onOpenModelConfig?: () => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -93,6 +94,7 @@ function SettingsContent({
     onMinimalStyleChange = () => {},
     vlmValidationEnabled = false,
     onVlmValidationChange = () => {},
+    onOpenModelConfig,
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -284,6 +286,27 @@ function SettingsContent({
             {/* Content */}
             <div className="px-6 pb-6">
                 <div className="divide-y divide-border-subtle">
+                    {/* API Keys & Models */}
+                    {onOpenModelConfig && (
+                        <SettingItem
+                            label={dict.settings.apiKeysModels}
+                            description={dict.settings.apiKeysModelsDescription}
+                        >
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 p-0"
+                                onClick={() => {
+                                    onOpenChange(false)
+                                    onOpenModelConfig()
+                                }}
+                                aria-label={dict.settings.apiKeysModels}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </SettingItem>
+                    )}
+
                     {/* Access Code (conditional) */}
                     {accessCodeRequired && (
                         <div className="py-4 first:pt-0 space-y-3">
