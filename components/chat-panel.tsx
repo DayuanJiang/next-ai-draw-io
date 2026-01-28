@@ -8,7 +8,6 @@ import {
     PanelRightOpen,
     Settings,
 } from "lucide-react"
-import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type React from "react"
 import {
@@ -22,6 +21,7 @@ import { flushSync } from "react-dom"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import Image from "@/components/image-with-basepath"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
