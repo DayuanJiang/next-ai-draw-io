@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { getApiEndpoint } from "@/lib/base-path"
 
 export interface UrlData {
     url: string
@@ -15,7 +16,7 @@ const UrlResponseSchema = z.object({
 })
 
 export async function extractUrlContent(url: string): Promise<UrlData> {
-    const response = await fetch("/api/parse-url", {
+    const response = await fetch(getApiEndpoint("/api/parse-url"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
