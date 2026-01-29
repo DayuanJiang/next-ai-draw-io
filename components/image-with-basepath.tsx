@@ -1,5 +1,6 @@
 import NextImage from "next/image"
 import type * as React from "react"
+import type * as React from "react"
 import { getAssetUrl } from "@/lib/base-path"
 
 export default function Image(props: React.ComponentProps<typeof NextImage>) {
