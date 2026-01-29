@@ -34,6 +34,7 @@
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",
         "send": "送信",
+        "stopGeneration": "生成を停止",
         "sending": "送信中...",
         "sendMessage": "メッセージを送信",
         "clearConversation": "会話をクリア",
