@@ -77,6 +77,8 @@
     "settings": {
         "title": "設定",
         "description": "配置您的應用程式設定。",
+        "apiKeysModels": "API 金鑰和模型",
+        "apiKeysModelsDescription": "配置 AI 提供商和 API 金鑰。",
         "accessCode": "存取碼",
         "accessCodePlaceholder": "輸入存取碼",
         "accessCodeDescription": "使用此應用程式需要存取碼。",
