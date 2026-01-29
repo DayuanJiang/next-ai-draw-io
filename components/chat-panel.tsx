@@ -953,6 +953,7 @@ export default function ChatPanel({
         dict.dialogs.clearSuccess,
         buildSessionData,
         setDiagramHistory,
+        pathname,
     ])
 
     const handleInputChange = (
