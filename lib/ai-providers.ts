@@ -39,7 +39,7 @@ export interface ClientOverrides {
     baseUrlEnv?: string
 }
 
-// Providers that can be used with client-provided API keys
+// Providers that can be selected from client settings
 const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "openai",
     "anthropic",
@@ -53,6 +53,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "sglang",
     "gateway",
     "edgeone",
+    "ollama",
     "doubao",
     "modelscope",
 ]
