@@ -563,7 +563,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                                 size="sm"
                                 variant="destructive"
                                 className="h-8 w-8 p-0 rounded-xl shadow-sm"
-                                aria-label="Stop generation"
+                                aria-label={dict.chat.stopGeneration}
                             >
                                 <Square className="h-4 w-4" />
                             </Button>
