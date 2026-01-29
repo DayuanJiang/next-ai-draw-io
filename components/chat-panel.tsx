@@ -905,7 +905,7 @@ export default function ChatPanel({
                 router.replace(pathname, { scroll: false })
             }
         },
-        [sessionManager, syncUIWithSession, router],
+        [sessionManager, syncUIWithSession, router, pathname],
     )
 
     const handleNewChat = useCallback(async () => {
