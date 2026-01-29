@@ -449,6 +449,7 @@ ${userInputText}
 
     const result = streamText({
         model,
+        abortSignal: req.signal,
         ...(process.env.MAX_OUTPUT_TOKENS && {
             maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
         }),
