@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { getApiEndpoint } from "@/lib/base-path"
 import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import {
@@ -147,7 +148,7 @@ export function useModelConfig(): UseModelConfigReturn {
     useEffect(() => {
         if (typeof window === "undefined") return
 
-        fetch("/api/server-models")
+        fetch(getApiEndpoint("/api/server-models"))
             .then((res) => {
                 if (!res.ok) {
                     console.error(
