@@ -838,16 +838,16 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
-        case "ollama":
-            if (process.env.OLLAMA_BASE_URL) {
-                const customOllama = createOllama({
-                    baseURL: process.env.OLLAMA_BASE_URL,
-                })
+        case "ollama": {
+            const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
+            if (baseURL) {
+                const customOllama = createOllama({ baseURL })
                 model = customOllama(modelId)
             } else {
                 model = ollama(modelId)
             }
             break
+        }
 
         case "openrouter": {
             const apiKey = resolveApiKey(overrides, "OPENROUTER_API_KEY")
