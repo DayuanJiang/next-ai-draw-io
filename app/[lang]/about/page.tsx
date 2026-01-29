@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import Image from "next/image"
 import Link from "next/link"
 import { FaGithub } from "react-icons/fa"
+import Image from "@/components/image-with-basepath"
 
 export const metadata: Metadata = {
     title: "About - Next AI Draw.io",
