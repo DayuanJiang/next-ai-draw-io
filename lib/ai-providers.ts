@@ -572,12 +572,13 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
-    // Exception: EdgeOne provider doesn't require API key (uses Edge AI runtime)
+    // Exception: EdgeOne and Ollama providers don't require API keys
     if (
         overrides?.baseUrl &&
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
-        overrides?.provider !== "edgeone"
+        overrides?.provider !== "edgeone" &&
+        overrides?.provider !== "ollama"
     ) {
         throw new Error(
             `API key is required when using a custom base URL. ` +
