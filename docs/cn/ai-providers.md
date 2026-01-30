@@ -13,7 +13,7 @@
 
 ### 豆包 (字节跳动火山引擎)
 
-> **免费 Token**：在 [火山引擎 ARK 平台](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) 注册，即可获得所有模型 50 万免费 Token！
+> **免费 Token**：在 [火山引擎 ARK 平台](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) 注册，即可获得所有模型 50 万免费 Token！
 
 ```bash
 DOUBAO_API_KEY=your_api_key
