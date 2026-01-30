@@ -34,7 +34,7 @@
     "chat": {
         "placeholder": "描述您的圖表或上傳檔案...",
         "send": "傳送",
-        "sending": "傳送中...",
+        "stopGeneration": "停止產生",
         "sendMessage": "傳送訊息",
         "clearConversation": "清除對話",
         "diagramHistory": "圖表歷史",

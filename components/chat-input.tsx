@@ -7,6 +7,7 @@ import {
     Link,
     Loader2,
     Send,
+    Square,
 } from "lucide-react"
 import type React from "react"
 import {
@@ -154,6 +155,7 @@ interface ChatInputProps {
     status: "submitted" | "streaming" | "ready" | "error"
     onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
     onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+    onStop?: () => void
     files?: File[]
     onFileChange?: (files: File[]) => void
     pdfData?: Map<
@@ -182,6 +184,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             status,
             onSubmit,
             onChange,
+            onStop,
             files = [],
             onFileChange = () => {},
             pdfData = new Map(),
@@ -552,24 +555,30 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                             showUnvalidatedModels={showUnvalidatedModels}
                         />
                         <div className="w-px h-5 bg-border mx-1" />
-                        <Button
-                            type="submit"
-                            disabled={isDisabled || !input.trim()}
-                            size="sm"
-                            className="h-8 px-4 rounded-xl font-medium shadow-sm"
-                            aria-label={
-                                isDisabled ? dict.chat.sending : dict.chat.send
-                            }
-                        >
-                            {isDisabled ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <>
-                                    <Send className="h-4 w-4 mr-1.5" />
-                                    {dict.chat.send}
-                                </>
-                            )}
-                        </Button>
+                        {(status === "streaming" || status === "submitted") &&
+                        onStop ? (
+                            <Button
+                                type="button"
+                                onClick={onStop}
+                                size="sm"
+                                variant="destructive"
+                                className="h-8 w-8 p-0 rounded-xl shadow-sm"
+                                aria-label={dict.chat.stopGeneration}
+                            >
+                                <Square className="h-4 w-4" />
+                            </Button>
+                        ) : (
+                            <Button
+                                type="submit"
+                                disabled={isDisabled || !input.trim()}
+                                size="sm"
+                                className="h-8 px-4 rounded-xl font-medium shadow-sm"
+                                aria-label={dict.chat.send}
+                            >
+                                <Send className="h-4 w-4 mr-1.5" />
+                                {dict.chat.send}
+                            </Button>
+                        )}
                     </div>
                 </div>
                 <HistoryDialog
