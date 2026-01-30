@@ -8,8 +8,7 @@ import {
     PanelRightOpen,
     Settings,
 } from "lucide-react"
-import Image from "next/image"
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type React from "react"
 import {
     useCallback,
@@ -22,6 +21,7 @@ import { flushSync } from "react-dom"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import Image from "@/components/image-with-basepath"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
@@ -131,6 +131,7 @@ export default function ChatPanel({
 
     const dict = useDictionary()
     const router = useRouter()
+    const pathname = usePathname()
     const searchParams = useSearchParams()
     const urlSessionId = searchParams.get("session")
 
@@ -905,10 +906,10 @@ export default function ChatPanel({
             if (result.wasCurrentSession) {
                 // Deleted current session - clear UI and URL
                 syncUIWithSession(null)
-                router.replace(window.location.pathname, { scroll: false })
+                router.replace(pathname, { scroll: false })
             }
         },
-        [sessionManager, syncUIWithSession, router],
+        [sessionManager, syncUIWithSession, router, pathname],
     )
 
     const handleNewChat = useCallback(async () => {
@@ -941,7 +942,7 @@ export default function ChatPanel({
         toast.success(dict.dialogs.clearSuccess)
 
         // Clear URL param to show blank state
-        router.replace(window.location.pathname, { scroll: false })
+        router.replace(pathname, { scroll: false })
 
         // After starting a fresh chat, move focus back to the chat input
         setShouldFocusInput(true)
@@ -956,6 +957,7 @@ export default function ChatPanel({
         dict.dialogs.clearSuccess,
         buildSessionData,
         setDiagramHistory,
+        pathname,
     ])
 
     const handleInputChange = (

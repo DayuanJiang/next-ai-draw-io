@@ -1,7 +1,7 @@
 "use client"
 
-import Image from "next/image"
 import { useState } from "react"
+import Image from "@/components/image-with-basepath"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
