@@ -13,7 +13,7 @@ This guide explains how to configure different AI model providers for next-ai-dr
 
 ### Doubao (ByteDance Volcengine)
 
-> **Free tokens**: Register on the [Volcengine ARK platform](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) to get 500K free tokens for all models!
+> **Free tokens**: Register on the [Volcengine ARK platform](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) to get 500K free tokens for all models!
 
 ```bash
 DOUBAO_API_KEY=your_api_key

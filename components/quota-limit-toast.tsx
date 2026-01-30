@@ -79,7 +79,7 @@ export function QuotaLimitToast({
                 <p
                     dangerouslySetInnerHTML={{
                         __html: formatMessage(dict.quota.doubaoSponsorship, {
-                            link: "https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project",
+                            link: "https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project",
                         }),
                     }}
                 />
