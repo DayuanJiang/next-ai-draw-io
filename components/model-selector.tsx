@@ -421,25 +421,24 @@ export function ModelSelector({
                                 )}
                             </ModelSelectorList>
                         </div>
-                        {/* Pinned footer: Configure Models... + info text */}
-                        <div className="shrink-0 border-t bg-background">
+                        {/* Pinned footer: Configure Models... + info text (z-10 above list shadow) */}
+                        <div className="relative z-10 shrink-0 border-t bg-background">
                             {onConfigure && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        onConfigure()
-                                        setOpen(false)
-                                    }}
-                                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground rounded-sm mx-1 my-1"
-                                    aria-label={
-                                        dict.modelConfig.configureModels
-                                    }
-                                >
-                                    <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    <span>
-                                        {dict.modelConfig.configureModels}
-                                    </span>
-                                </button>
+                                <div className="px-3 py-2">
+                                    <ModelSelectorItem
+                                        value="__configure_models__"
+                                        onSelect={() => {
+                                            onConfigure()
+                                            setOpen(false)
+                                        }}
+                                        className="flex cursor-pointer items-center gap-2 rounded-sm"
+                                    >
+                                        <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <ModelSelectorName>
+                                            {dict.modelConfig.configureModels}
+                                        </ModelSelectorName>
+                                    </ModelSelectorItem>
+                                </div>
                             )}
                             <div className="px-3 py-2 text-xs text-muted-foreground">
                                 {showUnvalidatedModels
