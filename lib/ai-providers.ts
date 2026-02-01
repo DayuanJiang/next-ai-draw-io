@@ -1162,8 +1162,10 @@ export function supportsImageInput(modelId: string): boolean {
 
     // Models that DON'T support image/vision input (unless vision variant)
     // Kimi K2 doesn't support images, but K2.5 does
+    // Only block kimi-k2 specifically, not other Kimi models
     if (
-        lowerModelId.includes("kimi") &&
+        (lowerModelId.includes("kimi-k2") ||
+            lowerModelId.includes("kimi_k2")) &&
         !hasVisionIndicator &&
         !lowerModelId.includes("2.5") &&
         !lowerModelId.includes("k2.5")
