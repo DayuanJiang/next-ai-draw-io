@@ -168,6 +168,11 @@ describe("supportsImageInput", () => {
         expect(supportsImageInput("moonshot/kimi-k2")).toBe(false)
     })
 
+    it("returns true for Kimi K2.5 models (supports vision)", () => {
+        expect(supportsImageInput("kimi-k2.5")).toBe(true)
+        expect(supportsImageInput("moonshotai/kimi-k2.5")).toBe(true)
+    })
+
     it("returns false for DeepSeek text models", () => {
         expect(supportsImageInput("deepseek-chat")).toBe(false)
         expect(supportsImageInput("deepseek-coder")).toBe(false)
