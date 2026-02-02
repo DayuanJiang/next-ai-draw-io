@@ -73,8 +73,9 @@ export interface FlattenedModel {
     source?: "user" | "server"
     // Whether this model is the server default (matches AI_MODEL env var)
     isDefault?: boolean
-    // Custom env var names for server models (allows multiple API keys per provider)
-    apiKeyEnv?: string
+    // Custom env var name(s) for server models
+    // Can be a single string or array of strings for load balancing
+    apiKeyEnv?: string | string[]
     baseUrlEnv?: string
 }
 
