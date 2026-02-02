@@ -186,7 +186,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // Check if this is a server model with custom env var names
     let serverModelConfig: {
-        apiKeyEnv?: string
+        apiKeyEnv?: string | string[]
         baseUrlEnv?: string
         provider?: string
     } = {}
