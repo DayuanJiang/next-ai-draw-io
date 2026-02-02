@@ -440,7 +440,7 @@ export function ModelSelector({
                                     </ModelSelectorItem>
                                 </div>
                             )}
-                            <div className="px-3 py-2 text-xs text-muted-foreground">
+                            <div className="px-3 pb-2 text-xs text-muted-foreground">
                                 {showUnvalidatedModels
                                     ? dict.modelConfig.allModelsShown
                                     : dict.modelConfig.onlyVerifiedShown}
