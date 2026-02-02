@@ -14,9 +14,12 @@ export const ServerProviderSchema = z.object({
     name: z.string().min(1),
     provider: ProviderNameSchema,
     models: z.array(z.string().min(1)),
-    // Optional: custom environment variable name for API key
-    // e.g., "OPENAI_API_KEY_TEAM_A" instead of default "OPENAI_API_KEY"
-    apiKeyEnv: z.string().min(1).optional(),
+    // Optional: custom environment variable name(s) for API key
+    // Can be a single string or array of strings for load balancing
+    // e.g., "OPENAI_API_KEY_TEAM_A" or ["OPENAI_KEY_1", "OPENAI_KEY_2"]
+    apiKeyEnv: z
+        .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+        .optional(),
     // Optional: custom environment variable name for base URL
     baseUrlEnv: z.string().min(1).optional(),
     // Optional: mark the first model in this provider as the default
@@ -36,8 +39,9 @@ export interface FlattenedServerModel {
     provider: ProviderName
     providerLabel: string
     isDefault: boolean
-    // Custom env var names for credentials (optional)
-    apiKeyEnv?: string
+    // Custom env var name(s) for API key (optional)
+    // Can be a single string or array of strings for load balancing
+    apiKeyEnv?: string | string[]
     baseUrlEnv?: string
 }
 

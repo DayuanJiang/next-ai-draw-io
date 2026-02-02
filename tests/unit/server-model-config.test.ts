@@ -45,6 +45,72 @@ describe("ServerModelsConfigSchema", () => {
             ServerModelsConfigSchema.parse(invalidConfig as any),
         ).toThrow()
     })
+
+    it("accepts apiKeyEnv as single string", () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "OpenAI Server",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                    apiKeyEnv: "OPENAI_API_KEY_TEAM_A",
+                },
+            ],
+        }
+
+        const parsed = ServerModelsConfigSchema.parse(config)
+        expect(parsed.providers[0].apiKeyEnv).toBe("OPENAI_API_KEY_TEAM_A")
+    })
+
+    it("accepts apiKeyEnv as array of strings for load balancing", () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "OpenAI Server",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                    apiKeyEnv: ["OPENAI_KEY_1", "OPENAI_KEY_2", "OPENAI_KEY_3"],
+                },
+            ],
+        }
+
+        const parsed = ServerModelsConfigSchema.parse(config)
+        expect(parsed.providers[0].apiKeyEnv).toEqual([
+            "OPENAI_KEY_1",
+            "OPENAI_KEY_2",
+            "OPENAI_KEY_3",
+        ])
+    })
+
+    it("rejects empty array for apiKeyEnv", () => {
+        const config = {
+            providers: [
+                {
+                    name: "OpenAI Server",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                    apiKeyEnv: [],
+                },
+            ],
+        }
+
+        expect(() => ServerModelsConfigSchema.parse(config)).toThrow()
+    })
+
+    it("rejects empty string in apiKeyEnv array", () => {
+        const config = {
+            providers: [
+                {
+                    name: "OpenAI Server",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                    apiKeyEnv: ["VALID_KEY", ""],
+                },
+            ],
+        }
+
+        expect(() => ServerModelsConfigSchema.parse(config)).toThrow()
+    })
 })
 
 describe("loadFlattenedServerModels", () => {
@@ -81,5 +147,25 @@ describe("loadFlattenedServerModels", () => {
         const defaultModel = defaults[0]
         expect(defaultModel.provider).toBe("openai")
         expect(defaultModel.modelId).toBe("gpt-4o") // First model of default provider
+    })
+
+    it("preserves apiKeyEnv array in flattened models for load balancing", async () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "OpenAI LoadBalanced",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                    apiKeyEnv: ["OPENAI_KEY_1", "OPENAI_KEY_2"],
+                },
+            ],
+        }
+        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
+        process.env.AI_MODELS_CONFIG_PATH = "" // Clear file path
+
+        const models = await loadFlattenedServerModels()
+
+        expect(models.length).toBe(1)
+        expect(models[0].apiKeyEnv).toEqual(["OPENAI_KEY_1", "OPENAI_KEY_2"])
     })
 })
