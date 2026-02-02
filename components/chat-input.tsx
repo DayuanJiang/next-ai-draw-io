@@ -171,6 +171,7 @@ interface ChatInputProps {
     models?: FlattenedModel[]
     selectedModelId?: string
     onModelSelect?: (modelId: string | undefined) => void
+    onConfigureModels?: () => void
     showUnvalidatedModels?: boolean
     // Focus control props
     shouldFocus?: boolean
@@ -195,6 +196,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             models = [],
             selectedModelId,
             onModelSelect = () => {},
+            onConfigureModels,
             showUnvalidatedModels = false,
             shouldFocus = false,
             onFocused,
@@ -551,6 +553,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                             models={models}
                             selectedModelId={selectedModelId}
                             onSelect={onModelSelect}
+                            onConfigure={onConfigureModels}
                             disabled={isDisabled}
                             showUnvalidatedModels={showUnvalidatedModels}
                         />
