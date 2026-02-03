@@ -93,7 +93,7 @@ const CommandList = React.forwardRef<
     />
   )
 })
-CommandList.displayName = CommandPrimitive.List.displayName
+CommandList.displayName = CommandPrimitive.List.displayName ?? "CommandList"
 
 function CommandEmpty({
   ...props
