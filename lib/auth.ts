@@ -22,7 +22,7 @@ export const AUTH_CONFIG = {
  * 获取登录页面URL
  */
 export const getLoginUrl = (): string => {
-    return `${AUTH_CONFIG.baseUrl}/#/Login?appKey=${AUTH_CONFIG.appKey}&callbackUrl=http://localhost:3011`
+    return `${AUTH_CONFIG.baseUrl}/#/Login?appKey=${AUTH_CONFIG.appKey}&callbackUrl=https://ai.vesync.com/draw-io`
 }
 
 /**
