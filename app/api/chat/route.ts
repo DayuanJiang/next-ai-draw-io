@@ -17,6 +17,7 @@ import {
     supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
+import { getEmail } from "@/lib/auth"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
     isMinimalDiagram,
@@ -34,6 +35,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import { reportAICenterCall } from "@/lib/metric"
 import { findServerModelById } from "@/lib/server-model-config"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
@@ -72,6 +74,15 @@ function createCachedStreamResponse(xml: string): Response {
 
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
+    // 上报监控计数 - 只要请求一次就上报
+    reportAICenterCall({
+        entity_type: "INTERNAL_TOOL",
+        entity_name: "ai-i-drawIOService",
+        entity_name_cn: "AI 流程图绘制服务",
+        function_desc: "流程图绘制对话",
+        consumer: getEmail(),
+    })
+
     // Check for access code
     const accessCodes =
         process.env.ACCESS_CODE_LIST?.split(",")

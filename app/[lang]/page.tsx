@@ -10,6 +10,7 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { isLoggedIn, redirectToLogin } from "@/lib/auth"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 export default function Home() {
@@ -35,6 +36,13 @@ export default function Home() {
 
     // Load preferences from localStorage after mount
     useEffect(() => {
+        // 🔐 检查登录状态
+        // if (!isLoggedIn()) {
+        //     console.log("🔐 未登录，跳转到登录页")
+        //     redirectToLogin();
+        //     return;
+        // }
+
         // Restore saved locale and redirect if needed
         const savedLocale = localStorage.getItem("next-ai-draw-io-locale")
         if (savedLocale && i18n.locales.includes(savedLocale as Locale)) {
