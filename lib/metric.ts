@@ -37,6 +37,8 @@ function initPrometheus() {
             ],
             registers: [register],
         })
+
+        console.log("✅ Prometheus metrics initialized")
     }
 }
 
