@@ -102,12 +102,12 @@ export function ChatLobby({
     return (
         <div className="py-6 px-2 animate-fade-in">
             {/* Recent Chats Section */}
-            <div className="mb-6">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
+            {/* <div className="mb-6"> */}
+            {/* <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-3">
                     {dict.sessionHistory?.recentChats || "Recent Chats"}
-                </p>
-                {/* Search Bar */}
-                <div className="relative mb-3">
+                </p> */}
+            {/* Search Bar */}
+            {/* <div className="relative mb-3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                         type="text"
@@ -204,12 +204,12 @@ export function ChatLobby({
                                     "No chats found"}
                             </p>
                         )}
-                </div>
-            </div>
+                </div> */}
+            {/* </div> */}
 
             {/* Collapsible Examples Section */}
-            <div className="border-t border-border/50 pt-4">
-                <button
+            {/* <div className="border-t border-border/50 pt-4"> */}
+            {/* <button
                     type="button"
                     onClick={() => setExamplesExpanded(!examplesExpanded)}
                     className="w-full flex items-center justify-between px-1 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
@@ -223,16 +223,12 @@ export function ChatLobby({
                         <ChevronDown className="w-4 h-4" />
                     )}
                 </button>
-                {examplesExpanded && (
-                    <div className="mt-2">
-                        <ExamplePanel
-                            setInput={setInput}
-                            setFiles={setFiles}
-                            minimal
-                        />
-                    </div>
-                )}
+                {examplesExpanded && ( */}
+            <div className="mt-2">
+                <ExamplePanel setInput={setInput} setFiles={setFiles} minimal />
             </div>
+            {/* )} */}
+            {/* </div> */}
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog

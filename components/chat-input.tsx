@@ -549,14 +549,14 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                                 disabled={isDisabled}
                             />
                         </div>
-                        <ModelSelector
+                        {/* <ModelSelector
                             models={models}
                             selectedModelId={selectedModelId}
                             onSelect={onModelSelect}
                             onConfigure={onConfigureModels}
                             disabled={isDisabled}
                             showUnvalidatedModels={showUnvalidatedModels}
-                        />
+                        /> */}
                         <div className="w-px h-5 bg-border mx-1" />
                         {(status === "streaming" || status === "submitted") &&
                         onStop ? (

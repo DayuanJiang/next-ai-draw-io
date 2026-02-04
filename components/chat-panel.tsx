@@ -1286,7 +1286,7 @@ export default function ChatPanel({
                                         ? "/favicon-white.svg"
                                         : "/favicon.ico"
                                 }
-                                alt="Next AI Drawio"
+                                alt="VeSync AI Draw.io"
                                 width={isMobile ? 24 : 28}
                                 height={isMobile ? 24 : 28}
                                 className="rounded flex-shrink-0"
@@ -1294,7 +1294,7 @@ export default function ChatPanel({
                             <h1
                                 className={`${isMobile ? "text-sm" : "text-base"} font-semibold tracking-tight whitespace-nowrap`}
                             >
-                                Next AI Drawio
+                                VeSync AI Draw.io
                             </h1>
                         </div>
                     </button>
@@ -1315,7 +1315,7 @@ export default function ChatPanel({
                             />
                         </ButtonWithTooltip>
 
-                        <ButtonWithTooltip
+                        {/* <ButtonWithTooltip
                             tooltipContent={dict.nav.settings}
                             variant="ghost"
                             size="icon"
@@ -1326,7 +1326,7 @@ export default function ChatPanel({
                             <Settings
                                 className={`${isMobile ? "h-4 w-4" : "h-5 w-5"} text-muted-foreground`}
                             />
-                        </ButtonWithTooltip>
+                        </ButtonWithTooltip> */}
                         <div className="hidden sm:flex items-center gap-2">
                             {!isMobile && (
                                 <ButtonWithTooltip
@@ -1367,7 +1367,7 @@ export default function ChatPanel({
             </main>
 
             {/* Dev XML Streaming Simulator - only in development */}
-            {DEBUG && (
+            {/* {DEBUG && (
                 <DevXmlSimulator
                     setMessages={setMessages}
                     onDisplayChart={onDisplayChart}
@@ -1375,7 +1375,7 @@ export default function ChatPanel({
                         quotaManager.showQuotaLimitToast(50, 50)
                     }
                 />
-            )}
+            )} */}
 
             {/* Input */}
             <footer

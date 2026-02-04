@@ -126,7 +126,7 @@ export default function ExamplePanel({
             {!minimal && (
                 <>
                     {/* MCP Server Notice */}
-                    <a
+                    {/* <a
                         href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -150,7 +150,7 @@ export default function ExamplePanel({
                                 </p>
                             </div>
                         </div>
-                    </a>
+                    </a> */}
 
                     {/* Welcome section */}
                     <div className="text-center mb-6">
