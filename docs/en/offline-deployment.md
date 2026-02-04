@@ -1,6 +1,6 @@
 # Offline Deployment
 
-Deploy Next AI Draw.io offline by self-hosting draw.io to replace `embed.diagrams.net`.
+Deploy VeSync AI Draw.io offline by self-hosting draw.io to replace `embed.diagrams.net`.
 
 **Note:** `NEXT_PUBLIC_DRAWIO_BASE_URL` is a **build-time** variable. Changing it requires rebuilding the Docker image.
 

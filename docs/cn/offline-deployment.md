@@ -1,6 +1,6 @@
 # 离线部署
 
-通过自托管 draw.io 来替代 `embed.diagrams.net`，从而离线部署 Next AI Draw.io。
+通过自托管 draw.io 来替代 `embed.diagrams.net`，从而离线部署 VeSync AI Draw.io。
 
 **注意：** `NEXT_PUBLIC_DRAWIO_BASE_URL` 是一个**构建时**变量。修改它需要重新构建 Docker 镜像。
 

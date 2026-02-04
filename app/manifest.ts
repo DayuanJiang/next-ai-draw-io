@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next"
 import { getAssetUrl } from "@/lib/base-path"
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: "Next AI Draw.io",
+        name: "VeSync AI Draw.io",
         short_name: "AIDraw.io",
         description:
             "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating draw.io with AI assistance for professional diagram creation.",

@@ -1,7 +1,7 @@
 {
     "name": "@next-ai-drawio/mcp-server",
     "version": "0.1.15",
-    "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
+    "description": "MCP server for VeSync AI Draw.io - AI-powered diagram generation with real-time browser preview",
     "type": "module",
     "main": "dist/index.js",
     "bin": {

@@ -1,6 +1,6 @@
 # オフラインデプロイ
 
-`embed.diagrams.net` の代わりに draw.io をセルフホストすることで、Next AI Draw.io をオフライン環境にデプロイできます。
+`embed.diagrams.net` の代わりに draw.io をセルフホストすることで、VeSync AI Draw.io をオフライン環境にデプロイできます。
 
 **注:** `NEXT_PUBLIC_DRAWIO_BASE_URL` は**ビルド時**の変数です。これを変更する場合は、Docker イメージの再ビルドが必要です。
 

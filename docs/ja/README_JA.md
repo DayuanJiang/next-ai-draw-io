@@ -1,4 +1,4 @@
-# Next AI Draw.io
+# VeSync AI Draw.io
 
 <div align="center">
 
@@ -21,10 +21,11 @@ AI機能とdraw.ioダイアグラムを統合したNext.jsウェブアプリケ�
 
 > 注：<img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) のご支援により、デモサイトに強力な K2-thinking モデルを導入しました！
 
-https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+<https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979>
 
 ## 目次
-- [Next AI Draw.io](#next-ai-drawio)
+
+- [VeSync AI Draw.io](#next-ai-drawio)
   - [目次](#目次)
   - [例](#例)
   - [機能](#機能)
@@ -87,20 +88,20 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## 機能
 
--   **LLM搭載のダイアグラム作成**：大規模言語モデルを活用して、自然言語コマンドで直接draw.ioダイアグラムを作成・操作
--   **画像ベースのダイアグラム複製**：既存のダイアグラムや画像をアップロードし、AIが自動的に複製・強化
--   **PDFとテキストファイルのアップロード**：PDFドキュメントやテキストファイルをアップロードして、既存のドキュメントからコンテンツを抽出し、ダイアグラムを生成
--   **AI推論プロセス表示**：サポートされているモデル（OpenAI o1/o3、Gemini、Claudeなど）のAIの思考プロセスを表示
--   **ダイアグラム履歴**：すべての変更を追跡する包括的なバージョン管理。AI編集前のダイアグラムの以前のバージョンを表示・復元可能
--   **インタラクティブなチャットインターフェース**：AIとリアルタイムでコミュニケーションしてダイアグラムを改善
--   **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
--   **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
+- **LLM搭載のダイアグラム作成**：大規模言語モデルを活用して、自然言語コマンドで直接draw.ioダイアグラムを作成・操作
+- **画像ベースのダイアグラム複製**：既存のダイアグラムや画像をアップロードし、AIが自動的に複製・強化
+- **PDFとテキストファイルのアップロード**：PDFドキュメントやテキストファイルをアップロードして、既存のドキュメントからコンテンツを抽出し、ダイアグラムを生成
+- **AI推論プロセス表示**：サポートされているモデル（OpenAI o1/o3、Gemini、Claudeなど）のAIの思考プロセスを表示
+- **ダイアグラム履歴**：すべての変更を追跡する包括的なバージョン管理。AI編集前のダイアグラムの以前のバージョンを表示・復元可能
+- **インタラクティブなチャットインターフェース**：AIとリアルタイムでコミュニケーションしてダイアグラムを改善
+- **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
+- **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
 
 ## MCPサーバー（プレビュー）
 
 > **プレビュー機能**：この機能は実験的であり、安定しない可能性があります。
 
-MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
+MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでVeSync AI Draw.ioを使用できます。
 
 ```json
 {
@@ -159,13 +160,13 @@ cp env.example .env.local
 
 詳細な設定手順については[プロバイダー設定ガイド](./ai-providers.md)を参照してください。
 
-2. 開発サーバーを起動：
+1. 開発サーバーを起動：
 
 ```bash
 npm run dev
 ```
 
-3. ブラウザで[http://localhost:6002](http://localhost:6002)を開いてアプリケーションを確認。
+1. ブラウザで[http://localhost:6002](http://localhost:6002)を開いてアプリケーションを確認。
 
 ## デプロイ
 
@@ -193,23 +194,22 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 
 [Cloudflare デプロイガイドを参照](./cloudflare-deploy.md)
 
-
 ## マルチプロバイダーサポート
 
--   [ByteDance Doubao](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
--   AWS Bedrock（デフォルト）
--   OpenAI
--   Anthropic
--   Google AI
--   Google Vertex AI
--   Azure OpenAI
--   Ollama
--   OpenRouter
--   DeepSeek
--   SiliconFlow
--   ModelScope
--   SGLang
--   Vercel AI Gateway
+- [ByteDance Doubao](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
+- AWS Bedrock（デフォルト）
+- OpenAI
+- Anthropic
+- Google AI
+- Google Vertex AI
+- Azure OpenAI
+- Ollama
+- OpenRouter
+- DeepSeek
+- SiliconFlow
+- ModelScope
+- SGLang
+- Vercel AI Gateway
 
 AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタムエンドポイントをサポートしています。
 
@@ -223,17 +223,15 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 注：`claude`シリーズはAWS、Azure、GCPなどのクラウドアーキテクチャロゴ付きのdraw.ioダイアグラムで学習されているため、クラウドアーキテクチャダイアグラムを作成したい場合は最適な選択です。
 
-
 ## 仕組み
 
 本アプリケーションは以下の技術を使用しています：
 
--   **Next.js**：フロントエンドフレームワークとルーティング
--   **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：ストリーミングAIレスポンスとマルチプロバイダーサポート
--   **react-drawio**：ダイアグラムの表現と操作
+- **Next.js**：フロントエンドフレームワークとルーティング
+- **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：ストリーミングAIレスポンスとマルチプロバイダーサポート
+- **react-drawio**：ダイアグラムの表現と操作
 
 ダイアグラムはdraw.ioでレンダリングできるXMLとして表現されます。AIがコマンドを処理し、それに応じてこのXMLを生成または変更します。
-
 
 ## サポート＆お問い合わせ
 
@@ -243,7 +241,7 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 サポートやお問い合わせについては、GitHubリポジトリでissueを開くか、メンテナーにご連絡ください：
 
--   メール：me[at]jiang.jp
+- メール：me[at]jiang.jp
 
 ## よくある質問
 

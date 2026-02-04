@@ -1,4 +1,4 @@
-# Next AI Draw.io - Claude Code Plugin
+# VeSync AI Draw.io - Claude Code Plugin
 
 AI-powered Draw.io diagram generation with real-time browser preview for Claude Code.
 

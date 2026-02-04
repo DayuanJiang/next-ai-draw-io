@@ -35,7 +35,7 @@ export function createWindow(serverUrl: string): BrowserWindow {
         height: Math.min(900, Math.floor(height * 0.9)),
         minWidth: 800,
         minHeight: 600,
-        title: "Next AI Draw.io",
+        title: "VeSync AI Draw.io",
         icon: getIconPath(),
         show: false, // Don't show until ready
         webPreferences: {

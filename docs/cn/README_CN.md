@@ -1,4 +1,4 @@
-# Next AI Draw.io
+# VeSync AI Draw.io
 
 <div align="center">
 
@@ -21,10 +21,11 @@
 
 > 注：感谢 <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [字节跳动豆包](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) 的赞助支持，本项目的 Demo 现已接入强大的 K2-thinking 模型！
 
-https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+<https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979>
 
 ## 目录
-- [Next AI Draw.io](#next-ai-drawio)
+
+- [VeSync AI Draw.io](#next-ai-drawio)
   - [目录](#目录)
   - [示例](#示例)
   - [功能特性](#功能特性)
@@ -87,20 +88,20 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
 ## 功能特性
 
--   **LLM驱动的图表创建**：利用大语言模型通过自然语言命令直接创建和操作draw.io图表
--   **基于图像的图表复制**：上传现有图表或图像，让AI自动复制和增强
--   **PDF和文本文件上传**：上传PDF文档和文本文件，提取内容并从现有文档生成图表
--   **AI推理过程显示**：查看支持模型的AI思考过程（OpenAI o1/o3、Gemini、Claude等）
--   **图表历史记录**：全面的版本控制，跟踪所有更改，允许您查看和恢复AI编辑前的图表版本
--   **交互式聊天界面**：与AI实时对话来完善您的图表
--   **云架构图支持**：专门支持生成云架构图（AWS、GCP、Azure）
--   **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
+- **LLM驱动的图表创建**：利用大语言模型通过自然语言命令直接创建和操作draw.io图表
+- **基于图像的图表复制**：上传现有图表或图像，让AI自动复制和增强
+- **PDF和文本文件上传**：上传PDF文档和文本文件，提取内容并从现有文档生成图表
+- **AI推理过程显示**：查看支持模型的AI思考过程（OpenAI o1/o3、Gemini、Claude等）
+- **图表历史记录**：全面的版本控制，跟踪所有更改，允许您查看和恢复AI编辑前的图表版本
+- **交互式聊天界面**：与AI实时对话来完善您的图表
+- **云架构图支持**：专门支持生成云架构图（AWS、GCP、Azure）
+- **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
 
 ## MCP服务器（预览）
 
 > **预览功能**：此功能为实验性功能，可能不稳定。
 
-通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
+通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用VeSync AI Draw.io。
 
 ```json
 {
@@ -159,13 +160,13 @@ cp env.example .env.local
 
 详细设置说明请参阅[提供商配置指南](./ai-providers.md)。
 
-2. 运行开发服务器：
+1. 运行开发服务器：
 
 ```bash
 npm run dev
 ```
 
-3. 在浏览器中打开 [http://localhost:6002](http://localhost:6002) 查看应用。
+1. 在浏览器中打开 [http://localhost:6002](http://localhost:6002) 查看应用。
 
 ## 部署
 
@@ -192,23 +193,22 @@ npm run dev
 
 [查看 Cloudflare 部署指南](./cloudflare-deploy.md)
 
-
 ## 多提供商支持
 
--   [字节跳动豆包](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
--   AWS Bedrock（默认）
--   OpenAI
--   Anthropic
--   Google AI
--   Google Vertex AI
--   Azure OpenAI
--   Ollama
--   OpenRouter
--   DeepSeek
--   SiliconFlow
--   ModelScope
--   SGLang
--   Vercel AI Gateway
+- [字节跳动豆包](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
+- AWS Bedrock（默认）
+- OpenAI
+- Anthropic
+- Google AI
+- Google Vertex AI
+- Azure OpenAI
+- Ollama
+- OpenRouter
+- DeepSeek
+- SiliconFlow
+- ModelScope
+- SGLang
+- Vercel AI Gateway
 
 除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
 
@@ -222,17 +222,15 @@ npm run dev
 
 注意：`claude` 系列已在带有 AWS、Azure、GCP 等云架构 Logo 的 draw.io 图表上进行训练，因此如果您想创建云架构图，这是最佳选择。
 
-
 ## 工作原理
 
 本应用使用以下技术：
 
--   **Next.js**：用于前端框架和路由
--   **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：用于流式AI响应和多提供商支持
--   **react-drawio**：用于图表表示和操作
+- **Next.js**：用于前端框架和路由
+- **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：用于流式AI响应和多提供商支持
+- **react-drawio**：用于图表表示和操作
 
 图表以XML格式表示，可在draw.io中渲染。AI处理您的命令并相应地生成或修改此XML。
-
 
 ## 支持与联系
 
@@ -242,7 +240,7 @@ npm run dev
 
 如需支持或咨询，请在GitHub仓库上提交issue或联系维护者：
 
--   邮箱：me[at]jiang.jp
+- 邮箱：me[at]jiang.jp
 
 ## 常见问题
 

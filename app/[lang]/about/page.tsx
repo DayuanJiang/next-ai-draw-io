@@ -4,7 +4,7 @@ import { FaGithub } from "react-icons/fa"
 import Image from "@/components/image-with-basepath"
 
 export const metadata: Metadata = {
-    title: "About - Next AI Draw.io",
+    title: "About - VeSync AI Draw.io",
     description:
         "AI-Powered Diagram Creation Tool - Chat, Draw, Visualize. Create AWS, GCP, and Azure architecture diagrams with natural language.",
     keywords: [
@@ -28,7 +28,7 @@ export default function About() {
                             href="/"
                             className="text-xl font-bold text-gray-900 hover:text-gray-700"
                         >
-                            Next AI Draw.io
+                            VeSync AI Draw.io
                         </Link>
                         <nav className="flex items-center gap-6 text-sm">
                             <Link
@@ -63,7 +63,7 @@ export default function About() {
                     {/* Title */}
                     <div className="text-center mb-8">
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            Next AI Draw.io
+                            VeSync AI Draw.io
                         </h1>
                         <p className="text-xl text-gray-600 font-medium">
                             AI-Powered Diagram Creation Tool - Chat, Draw,
@@ -398,7 +398,7 @@ export default function About() {
             <footer className="bg-white border-t border-gray-200 mt-16">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <p className="text-center text-gray-600 text-sm">
-                        Next AI Draw.io - Open Source AI-Powered Diagram
+                        VeSync AI Draw.io - Open Source AI-Powered Diagram
                         Generator
                     </p>
                 </div>

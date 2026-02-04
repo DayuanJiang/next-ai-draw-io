@@ -4,7 +4,7 @@ import { FaGithub } from "react-icons/fa"
 import Image from "@/components/image-with-basepath"
 
 export const metadata: Metadata = {
-    title: "关于 - Next AI Draw.io",
+    title: "关于 - VeSync AI Draw.io",
     description:
         "AI驱动的图表创建工具 - 对话、绘制、可视化。使用自然语言创建AWS、GCP和Azure架构图。",
     keywords: ["AI图表", "draw.io", "AWS架构", "GCP图表", "Azure图表", "LLM"],
@@ -21,7 +21,7 @@ export default function AboutCN() {
                             href="/"
                             className="text-xl font-bold text-gray-900 hover:text-gray-700"
                         >
-                            Next AI Draw.io
+                            VeSync AI Draw.io
                         </Link>
                         <nav className="flex items-center gap-6 text-sm">
                             <Link
@@ -56,7 +56,7 @@ export default function AboutCN() {
                     {/* Title */}
                     <div className="text-center mb-8">
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            Next AI Draw.io
+                            VeSync AI Draw.io
                         </h1>
                         <p className="text-xl text-gray-600 font-medium">
                             AI驱动的图表创建工具 - 对话、绘制、可视化
@@ -362,7 +362,7 @@ export default function AboutCN() {
             <footer className="bg-white border-t border-gray-200 mt-16">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <p className="text-center text-gray-600 text-sm">
-                        Next AI Draw.io - 开源AI驱动的图表生成器
+                        VeSync AI Draw.io - 开源AI驱动的图表生成器
                     </p>
                 </div>
             </footer>

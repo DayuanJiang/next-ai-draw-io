@@ -4,7 +4,7 @@ import { FaGithub } from "react-icons/fa"
 import Image from "@/components/image-with-basepath"
 
 export const metadata: Metadata = {
-    title: "概要 - Next AI Draw.io",
+    title: "概要 - VeSync AI Draw.io",
     description:
         "AI搭載のダイアグラム作成ツール - チャット、描画、可視化。自然言語でAWS、GCP、Azureアーキテクチャ図を作成。",
     keywords: [
@@ -28,7 +28,7 @@ export default function AboutJA() {
                             href="/"
                             className="text-xl font-bold text-gray-900 hover:text-gray-700"
                         >
-                            Next AI Draw.io
+                            VeSync AI Draw.io
                         </Link>
                         <nav className="flex items-center gap-6 text-sm">
                             <Link
@@ -63,7 +63,7 @@ export default function AboutJA() {
                     {/* Title */}
                     <div className="text-center mb-8">
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            Next AI Draw.io
+                            VeSync AI Draw.io
                         </h1>
                         <p className="text-xl text-gray-600 font-medium">
                             AI搭載のダイアグラム作成ツール -
@@ -377,7 +377,7 @@ export default function AboutJA() {
             <footer className="bg-white border-t border-gray-200 mt-16">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <p className="text-center text-gray-600 text-sm">
-                        Next AI Draw.io -
+                        VeSync AI Draw.io -
                         オープンソースAI搭載ダイアグラムジェネレーター
                     </p>
                 </div>

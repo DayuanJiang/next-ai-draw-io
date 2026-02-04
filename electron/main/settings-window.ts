@@ -32,7 +32,7 @@ export function showSettingsWindow(parentWindow?: BrowserWindow): void {
         parent: parentWindow,
         modal: false,
         show: false,
-        title: "Settings - Next AI Draw.io",
+        title: "Settings - VeSync AI Draw.io",
         webPreferences: {
             preload: preloadPath,
             contextIsolation: true,

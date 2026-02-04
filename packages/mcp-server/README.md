@@ -1,4 +1,4 @@
-# Next AI Draw.io MCP Server
+# VeSync AI Draw.io MCP Server
 
 MCP (Model Context Protocol) server that enables AI agents like Claude Desktop and Cursor to generate and edit draw.io diagrams with **real-time browser preview**.
 

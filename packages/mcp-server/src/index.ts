@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MCP Server for Next AI Draw.io
+ * MCP Server for VeSync AI Draw.io
  *
  * Enables AI agents (Claude Desktop, Cursor, etc.) to generate and edit
  * draw.io diagrams with real-time browser preview.
@@ -647,7 +647,7 @@ process.stdout.on("error", (err) => {
 
 // Start the MCP server
 async function main() {
-    log.info("Starting MCP server for Next AI Draw.io (embedded mode)...")
+    log.info("Starting MCP server for VeSync AI Draw.io (embedded mode)...")
 
     const transport = new StdioServerTransport()
     await server.connect(transport)
