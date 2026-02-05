@@ -82,16 +82,8 @@ export function reportAICenterCall(labels: {
             return
         }
 
-        // 确保所有标签都是字符串类型
-        const stringLabels: Record<string, string> = {}
-        for (const [key, value] of Object.entries(labels)) {
-            if (value !== undefined) {
-                stringLabels[key] = String(value)
-            }
-        }
-
-        aiCenterCallsCounter.inc(stringLabels)
-        console.log("📊 AI Center call recorded:", stringLabels)
+        aiCenterCallsCounter.inc(labels)
+        console.log("📊 AI Center call recorded:", labels)
     } catch (error) {
         console.error("❌ Error recording AI Center call:", error)
     }

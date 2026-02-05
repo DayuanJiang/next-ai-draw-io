@@ -30,6 +30,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import { useSessionManager } from "@/hooks/use-session-manager"
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
+import { getEmail } from "@/lib/auth"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { formatMessage } from "@/lib/i18n/utils"
@@ -1040,6 +1041,7 @@ export default function ChatPanel({
                 body: { xml, previousXml, sessionId },
                 headers: {
                     "x-access-code": config.accessCode,
+                    "x-user-email": getEmail() || "common", // 添加用户邮箱
                     ...(config.aiProvider && {
                         "x-ai-provider": config.aiProvider,
                         ...(config.aiBaseUrl && {

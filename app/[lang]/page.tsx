@@ -10,7 +10,7 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
-import { isLoggedIn, redirectToLogin } from "@/lib/auth"
+import { initAuthEnvironment, isLoggedIn } from "@/lib/auth"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 export default function Home() {
@@ -39,7 +39,7 @@ export default function Home() {
         // 🔐 检查登录状态
         if (!isLoggedIn()) {
             console.log("🔐 未登录，跳转到登录页")
-            redirectToLogin()
+            initAuthEnvironment()
             return
         }
 

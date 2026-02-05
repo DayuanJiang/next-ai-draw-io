@@ -17,7 +17,6 @@ import {
     supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
-import { getEmail } from "@/lib/auth"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
     isMinimalDiagram,
@@ -74,13 +73,16 @@ function createCachedStreamResponse(xml: string): Response {
 
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
+    // 从请求头获取用户邮箱
+    const userEmail = req.headers.get("x-user-email") || "common"
+
     // 上报监控计数 - 只要请求一次就上报
     reportAICenterCall({
         entity_type: "INTERNAL_TOOL",
         entity_name: "ai-i-drawIOService",
         entity_name_cn: "AI 流程图绘制服务",
         function_desc: "流程图绘制对话",
-        consumer: getEmail(),
+        consumer: userEmail,
     })
 
     // Check for access code

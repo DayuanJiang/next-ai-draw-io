@@ -29,8 +29,6 @@ export const getLoginUrl = (): string => {
  * 跳转到登录页
  */
 export function redirectToLogin(): void {
-    if (!isBrowser()) return
-
     window.location.href = getLoginUrl()
 }
 
@@ -47,35 +45,37 @@ export function isBrowser(): boolean {
  * @returns 是否是开发环境
  */
 export function isDevEnvironment(): boolean {
+    console.log("🔧 环境：", process.env.NODE_ENV)
     return process.env.NODE_ENV === "development"
 }
 
 /**
  * 初始化开发环境
  */
-export function initDevEnvironment(): void {
+export function initAuthEnvironment(): void {
     if (!isBrowser()) return
 
     const isDev = isDevEnvironment()
-    if (!isDev) {
-        return
-    }
-    if (!localStorage.getItem("vesync_user_token")) {
-        console.log("🔧 开发环境：自动填充默认token")
-        localStorage.setItem("vesync_user_token", "dev_token_" + Date.now())
-    }
-    if (!localStorage.getItem("vesync_user_info")) {
-        console.log("🔧 开发环境：自动填充默认用户信息")
-        localStorage.setItem(
-            "vesync_user_info",
-            JSON.stringify({
-                userId: "dev_user_001",
-                cn: "开发测试用户",
-                email: "dev@vesync.com",
-                dept: "研发中心",
-                title: "开发工程师",
-            }),
-        )
+    if (isDev) {
+        if (!localStorage.getItem("vesync_user_token")) {
+            console.log("🔧 开发环境：自动填充默认token")
+            localStorage.setItem("vesync_user_token", "dev_token_" + Date.now())
+        }
+        if (!localStorage.getItem("vesync_user_info")) {
+            console.log("🔧 开发环境：自动填充默认用户信息")
+            localStorage.setItem(
+                "vesync_user_info",
+                JSON.stringify({
+                    userId: "dev_user_001",
+                    cn: "开发测试用户",
+                    email: "dev@vesync.com",
+                    dept: "研发中心",
+                    title: "开发工程师",
+                }),
+            )
+        }
+    } else {
+        redirectToLogin()
     }
 }
 
@@ -85,7 +85,11 @@ export function initDevEnvironment(): void {
  */
 export function getUserInfo(): LoginResponse {
     if (!isBrowser()) return {} as LoginResponse
-    return JSON.parse(localStorage.getItem("vesync_user_info") || "{}")
+    const veSyncUserInfo: LoginResponse = JSON.parse(
+        localStorage.getItem("vesync_user_info") || "{}",
+    )
+    console.log("🔧 获取用户信息：", veSyncUserInfo)
+    return veSyncUserInfo
 }
 
 export function setUserInfo(userInfo: LoginResponse): void {
