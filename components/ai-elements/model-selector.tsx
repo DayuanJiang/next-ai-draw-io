@@ -1,5 +1,5 @@
 import { Cloud } from "lucide-react"
-import type { ComponentProps, ReactNode } from "react"
+import type { ComponentProps, ElementRef, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import {
     Command,
@@ -71,7 +71,7 @@ export const ModelSelectorList = ({
     className,
     ...props
 }: ModelSelectorListProps) => {
-    const listRef = useRef<HTMLDivElement>(null)
+    const listRef = useRef<ElementRef<typeof CommandList>>(null)
     const [showShadow, setShowShadow] = useState(false)
 
     useEffect(() => {
