@@ -36,11 +36,8 @@ import {
 } from "./diagram-operations.js"
 import { addHistory } from "./history.js"
 import {
-    clearExportData,
-    getExportData,
     getState,
     requestSync,
-    setExportFormat,
     setState,
     shutdown,
     startHttpServer,
@@ -636,11 +633,8 @@ server.registerTool(
             }
             const absolutePath = nodePath.resolve(filePath)
 
-            const ok = setExportFormat(
-                currentSession.id,
-                detectedFormat as "png" | "svg",
-            )
-            if (!ok) {
+            const state = getState(currentSession.id)
+            if (!state) {
                 return {
                     content: [
                         {
@@ -651,17 +645,19 @@ server.registerTool(
                     isError: true,
                 }
             }
+            state.exportFormat = detectedFormat as "png" | "svg"
+            state.exportData = undefined
 
             // Wait for browser to produce the export data
             const timeoutMs = 10000
             const start = Date.now()
-            let exportData: string | undefined
             while (Date.now() - start < timeoutMs) {
-                exportData = getExportData(currentSession.id)
-                if (exportData) break
+                if (state.exportData) break
                 await new Promise((r) => setTimeout(r, 200))
             }
-            clearExportData(currentSession.id)
+            const exportData = state.exportData as string | undefined
+            state.exportData = undefined
+            state.exportFormat = undefined
 
             if (!exportData) {
                 return {

@@ -100,33 +100,6 @@ export function setState(sessionId: string, xml: string, svg?: string): number {
     return newVersion
 }
 
-export function setExportFormat(
-    sessionId: string,
-    format: "png" | "svg",
-): boolean {
-    const state = stateStore.get(sessionId)
-    if (state) {
-        state.exportFormat = format
-        state.exportData = undefined
-        log.debug(`Export format set to ${format} for session=${sessionId}`)
-        return true
-    }
-    return false
-}
-
-export function getExportData(sessionId: string): string | undefined {
-    const state = stateStore.get(sessionId)
-    return state?.exportData
-}
-
-export function clearExportData(sessionId: string): void {
-    const state = stateStore.get(sessionId)
-    if (state) {
-        state.exportData = undefined
-        state.exportFormat = undefined
-    }
-}
-
 export function requestSync(sessionId: string): boolean {
     const state = stateStore.get(sessionId)
     if (state) {
