@@ -607,45 +607,35 @@ server.registerTool(
                 format ||
                 (ext === ".png" ? "png" : ext === ".svg" ? "svg" : "drawio")
 
-            // Ensure file has the right extension
-            let filePath = path
-            const extMap: Record<string, string> = {
-                drawio: ".drawio",
-                png: ".png",
-                svg: ".svg",
-            }
-            if (ext !== extMap[detectedFormat]) {
-                // Strip existing supported extension to avoid double extensions
-                if (ext === ".drawio" || ext === ".png" || ext === ".svg") {
-                    filePath = filePath.slice(0, -ext.length)
-                }
-                filePath = `${filePath}${extMap[detectedFormat]}`
-            }
-
-            const absolutePath = nodePath.resolve(filePath)
-
-            // Sync fresh state from browser before any export
-            requestSync(currentSession.id)
-            await waitForSync(currentSession.id)
-            const freshState = getState(currentSession.id)
-            if (freshState?.xml) {
-                currentSession.xml = freshState.xml
-            }
-
+            // Original .drawio export path (unchanged logic)
             if (detectedFormat === "drawio") {
+                let filePath = path
+                if (!filePath.endsWith(".drawio")) {
+                    filePath = `${filePath}.drawio`
+                }
+                const absolutePath = nodePath.resolve(filePath)
                 await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
                 log.info(`Diagram exported to ${absolutePath}`)
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nFormat: drawio\nSize: ${currentSession.xml.length} characters`,
+                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${currentSession.xml.length} characters`,
                         },
                     ],
                 }
             }
 
-            // PNG or SVG: request browser to export
+            // PNG or SVG: request browser to export via iframe
+            let filePath = path
+            if (ext !== `.${detectedFormat}`) {
+                if (ext === ".drawio" || ext === ".png" || ext === ".svg") {
+                    filePath = filePath.slice(0, -ext.length)
+                }
+                filePath = `${filePath}.${detectedFormat}`
+            }
+            const absolutePath = nodePath.resolve(filePath)
+
             const ok = setExportFormat(
                 currentSession.id,
                 detectedFormat as "png" | "svg",
@@ -671,7 +661,6 @@ server.registerTool(
                 if (exportData) break
                 await new Promise((r) => setTimeout(r, 200))
             }
-
             clearExportData(currentSession.id)
 
             if (!exportData) {
@@ -688,14 +677,12 @@ server.registerTool(
 
             // Decode and write
             if (detectedFormat === "png") {
-                // exportData is a data:image/png;base64,... URI
                 const base64 = exportData.replace(
                     /^data:image\/png;base64,/,
                     "",
                 )
                 await fs.writeFile(absolutePath, Buffer.from(base64, "base64"))
             } else {
-                // SVG: may be a data URI or raw SVG
                 let svgContent = exportData
                 if (svgContent.startsWith("data:image/svg+xml;base64,")) {
                     const base64 = svgContent.replace(
@@ -711,7 +698,6 @@ server.registerTool(
             log.info(
                 `Diagram exported to ${absolutePath} (${detectedFormat}, ${stat.size} bytes)`,
             )
-
             return {
                 content: [
                     {
