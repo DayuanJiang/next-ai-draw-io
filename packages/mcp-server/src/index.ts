@@ -614,7 +614,12 @@ server.registerTool(
                 png: ".png",
                 svg: ".svg",
             }
-            if (ext !== extMap[detectedFormat]) {
+            const supportedExts = new Set(Object.values(extMap))
+            if (supportedExts.has(ext) && ext !== extMap[detectedFormat]) {
+                // Strip mismatched supported extension to avoid double extensions
+                filePath = filePath.slice(0, -ext.length)
+            }
+            if (!filePath.toLowerCase().endsWith(extMap[detectedFormat])) {
                 filePath = `${filePath}${extMap[detectedFormat]}`
             }
 

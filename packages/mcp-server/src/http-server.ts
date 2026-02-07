@@ -108,6 +108,7 @@ export function setExportFormat(
     if (state) {
         state.exportFormat = format
         state.exportData = undefined
+        state.lastUpdated = new Date()
         log.debug(`Export format set to ${format} for session=${sessionId}`)
         return true
     }
@@ -306,6 +307,17 @@ function handleStateApi(
 
                 // Browser is returning export data (png/svg)
                 if (data.exportData !== undefined) {
+                    if (typeof data.exportData !== "string") {
+                        res.writeHead(400, {
+                            "Content-Type": "application/json",
+                        })
+                        res.end(
+                            JSON.stringify({
+                                error: "exportData must be a string",
+                            }),
+                        )
+                        return
+                    }
                     const state = stateStore.get(sessionId)
                     if (state) {
                         state.exportData = data.exportData
@@ -705,7 +717,6 @@ function getHtmlPage(sessionId: string): string {
                 } else if (msg.event === 'export' && msg.data) {
                     // Handle MCP server export request (png/svg)
                     if (pendingMcpExport) {
-                        const fmt = pendingMcpExport;
                         pendingMcpExport = null;
                         fetch('/api/state', {
                             method: 'POST',
@@ -789,7 +800,7 @@ function getHtmlPage(sessionId: string): string {
                 if (!r.ok) return;
                 const s = await r.json();
                 // Handle export request from MCP server (png/svg)
-                if (s.exportFormat && !pendingMcpExport) {
+                if (s.exportFormat && !pendingMcpExport && isReady) {
                     pendingMcpExport = s.exportFormat;
                     const exportOpts = s.exportFormat === 'png'
                         ? { action: 'export', format: 'png', scale: 2 }
