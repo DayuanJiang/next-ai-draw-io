@@ -61,7 +61,7 @@ IMPORTANT: Choose the right tool:
 - Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
 - Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
-- Use get_shape_library for: Discovering available icons/shapes when creating cloud architecture or technical diagrams (call BEFORE display_diagram)
+- Use get_shape_library for: Discovering available icons/shapes when creating diagrams with any icon library (cloud, material design, etc.) — call BEFORE display_diagram
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams
