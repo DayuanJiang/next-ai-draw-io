@@ -1661,12 +1661,16 @@ export function ModelConfigDialog({
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Switch
+                                id="show-unvalidated-models"
                                 checked={modelConfig.showUnvalidatedModels}
                                 onCheckedChange={
                                     modelConfig.setShowUnvalidatedModels
                                 }
                             />
-                            <Label className="text-xs text-muted-foreground cursor-pointer">
+                            <Label
+                                htmlFor="show-unvalidated-models"
+                                className="text-xs text-muted-foreground cursor-pointer"
+                            >
                                 {dict.modelConfig.showUnvalidatedModels}
                             </Label>
                         </div>
