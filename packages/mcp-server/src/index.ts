@@ -626,7 +626,13 @@ server.registerTool(
             const absolutePath = nodePath.resolve(filePath)
 
             if (detectedFormat === "drawio") {
-                // Original .drawio XML export
+                // Sync fresh state from browser before exporting
+                requestSync(currentSession.id)
+                await waitForSync(currentSession.id)
+                const freshState = getState(currentSession.id)
+                if (freshState?.xml) {
+                    currentSession.xml = freshState.xml
+                }
                 await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
                 log.info(`Diagram exported to ${absolutePath}`)
                 return {
@@ -689,7 +695,7 @@ server.registerTool(
                 )
                 await fs.writeFile(absolutePath, Buffer.from(base64, "base64"))
             } else {
-                // SVG: may be a data URI or raw SVG
+                // SVG: may be a data URI (base64 or URL-encoded) or raw SVG
                 let svgContent = exportData
                 if (svgContent.startsWith("data:image/svg+xml;base64,")) {
                     const base64 = svgContent.replace(
@@ -697,6 +703,11 @@ server.registerTool(
                         "",
                     )
                     svgContent = Buffer.from(base64, "base64").toString("utf-8")
+                } else if (svgContent.startsWith("data:image/svg+xml")) {
+                    // Handle URL-encoded data URI (e.g. data:image/svg+xml,...  or data:image/svg+xml;charset=utf-8,...)
+                    svgContent = decodeURIComponent(
+                        svgContent.replace(/^data:image\/svg\+xml[^,]*,/, ""),
+                    )
                 }
                 await fs.writeFile(absolutePath, svgContent, "utf-8")
             }

@@ -319,13 +319,17 @@ function handleStateApi(
                         return
                     }
                     const state = stateStore.get(sessionId)
-                    if (state) {
-                        state.exportData = data.exportData
-                        state.exportFormat = undefined
-                        log.debug(
-                            `Export data received for session=${sessionId}`,
-                        )
+                    if (!state) {
+                        res.writeHead(404, {
+                            "Content-Type": "application/json",
+                        })
+                        res.end(JSON.stringify({ error: "Session not found" }))
+                        return
                     }
+                    state.exportData = data.exportData
+                    state.exportFormat = undefined
+                    state.lastUpdated = new Date()
+                    log.debug(`Export data received for session=${sessionId}`)
                     res.writeHead(200, { "Content-Type": "application/json" })
                     res.end(JSON.stringify({ success: true }))
                     return
@@ -799,23 +803,25 @@ function getHtmlPage(sessionId: string): string {
                 const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
                 if (!r.ok) return;
                 const s = await r.json();
-                // Handle export request from MCP server (png/svg)
+                // Handle sync request - server needs fresh state
+                if (s.syncRequested && !pendingSyncExport) {
+                    pendingSyncExport = true;
+                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
+                }
+                // Load new diagram from server (before export, so we export latest)
+                if (s.version > currentVersion && s.xml) {
+                    currentVersion = s.version;
+                    loadDiagram(s.xml, true);
+                }
+                // Handle export request from MCP server (png/svg) - after version update
                 if (s.exportFormat && !pendingMcpExport && isReady) {
                     pendingMcpExport = s.exportFormat;
                     const exportOpts = s.exportFormat === 'png'
                         ? { action: 'export', format: 'png', scale: 2 }
                         : { action: 'export', format: 'svg' };
                     iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
-                }
-                // Handle sync request - server needs fresh state
-                if (s.syncRequested && !pendingSyncExport) {
-                    pendingSyncExport = true;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
-                }
-                // Load new diagram from server
-                if (s.version > currentVersion && s.xml) {
-                    currentVersion = s.version;
-                    loadDiagram(s.xml, true);
+                    // Timeout: reset if draw.io never responds
+                    setTimeout(() => { if (pendingMcpExport) { pendingMcpExport = null; } }, 8000);
                 }
             } catch {}
         }
