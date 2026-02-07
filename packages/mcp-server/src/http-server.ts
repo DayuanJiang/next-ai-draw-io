@@ -108,7 +108,6 @@ export function setExportFormat(
     if (state) {
         state.exportFormat = format
         state.exportData = undefined
-        state.lastUpdated = new Date()
         log.debug(`Export format set to ${format} for session=${sessionId}`)
         return true
     }
@@ -291,20 +290,11 @@ function handleStateApi(
             }),
         )
     } else if (req.method === "POST") {
-        const MAX_BODY = 10 * 1024 * 1024 // 10MB
         let body = ""
-        let aborted = false
         req.on("data", (chunk) => {
             body += chunk
-            if (body.length > MAX_BODY) {
-                aborted = true
-                res.writeHead(413, { "Content-Type": "application/json" })
-                res.end(JSON.stringify({ error: "Request body too large" }))
-                req.destroy()
-            }
         })
         req.on("end", () => {
-            if (aborted) return
             try {
                 const data = JSON.parse(body)
                 const { sessionId } = data
@@ -316,29 +306,14 @@ function handleStateApi(
 
                 // Browser is returning export data (png/svg)
                 if (data.exportData !== undefined) {
-                    if (typeof data.exportData !== "string") {
-                        res.writeHead(400, {
-                            "Content-Type": "application/json",
-                        })
-                        res.end(
-                            JSON.stringify({
-                                error: "exportData must be a string",
-                            }),
-                        )
-                        return
-                    }
                     const state = stateStore.get(sessionId)
-                    if (!state) {
-                        res.writeHead(404, {
-                            "Content-Type": "application/json",
-                        })
-                        res.end(JSON.stringify({ error: "Session not found" }))
-                        return
+                    if (state) {
+                        state.exportData = data.exportData
+                        state.exportFormat = undefined
+                        log.debug(
+                            `Export data received for session=${sessionId}`,
+                        )
                     }
-                    state.exportData = data.exportData
-                    state.exportFormat = undefined
-                    state.lastUpdated = new Date()
-                    log.debug(`Export data received for session=${sessionId}`)
                     res.writeHead(200, { "Content-Type": "application/json" })
                     res.end(JSON.stringify({ success: true }))
                     return

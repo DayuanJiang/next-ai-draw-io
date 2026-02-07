@@ -614,25 +614,25 @@ server.registerTool(
                 png: ".png",
                 svg: ".svg",
             }
-            const supportedExts = new Set(Object.values(extMap))
-            if (supportedExts.has(ext) && ext !== extMap[detectedFormat]) {
-                // Strip mismatched supported extension to avoid double extensions
-                filePath = filePath.slice(0, -ext.length)
-            }
-            if (!filePath.toLowerCase().endsWith(extMap[detectedFormat])) {
+            if (ext !== extMap[detectedFormat]) {
+                // Strip existing supported extension to avoid double extensions
+                if (ext === ".drawio" || ext === ".png" || ext === ".svg") {
+                    filePath = filePath.slice(0, -ext.length)
+                }
                 filePath = `${filePath}${extMap[detectedFormat]}`
             }
 
             const absolutePath = nodePath.resolve(filePath)
 
+            // Sync fresh state from browser before any export
+            requestSync(currentSession.id)
+            await waitForSync(currentSession.id)
+            const freshState = getState(currentSession.id)
+            if (freshState?.xml) {
+                currentSession.xml = freshState.xml
+            }
+
             if (detectedFormat === "drawio") {
-                // Sync fresh state from browser before exporting
-                requestSync(currentSession.id)
-                await waitForSync(currentSession.id)
-                const freshState = getState(currentSession.id)
-                if (freshState?.xml) {
-                    currentSession.xml = freshState.xml
-                }
                 await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
                 log.info(`Diagram exported to ${absolutePath}`)
                 return {
@@ -643,14 +643,6 @@ server.registerTool(
                         },
                     ],
                 }
-            }
-
-            // Sync fresh state from browser before exporting
-            requestSync(currentSession.id)
-            await waitForSync(currentSession.id)
-            const freshBrowserState = getState(currentSession.id)
-            if (freshBrowserState?.xml) {
-                currentSession.xml = freshBrowserState.xml
             }
 
             // PNG or SVG: request browser to export
@@ -703,7 +695,7 @@ server.registerTool(
                 )
                 await fs.writeFile(absolutePath, Buffer.from(base64, "base64"))
             } else {
-                // SVG: may be a data URI (base64 or URL-encoded) or raw SVG
+                // SVG: may be a data URI or raw SVG
                 let svgContent = exportData
                 if (svgContent.startsWith("data:image/svg+xml;base64,")) {
                     const base64 = svgContent.replace(
@@ -711,11 +703,6 @@ server.registerTool(
                         "",
                     )
                     svgContent = Buffer.from(base64, "base64").toString("utf-8")
-                } else if (svgContent.startsWith("data:image/svg+xml")) {
-                    // Handle URL-encoded data URI (e.g. data:image/svg+xml,...  or data:image/svg+xml;charset=utf-8,...)
-                    svgContent = decodeURIComponent(
-                        svgContent.replace(/^data:image\/svg\+xml[^,]*,/, ""),
-                    )
                 }
                 await fs.writeFile(absolutePath, svgContent, "utf-8")
             }
