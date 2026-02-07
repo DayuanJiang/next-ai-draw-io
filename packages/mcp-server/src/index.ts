@@ -645,6 +645,14 @@ server.registerTool(
                 }
             }
 
+            // Sync fresh state from browser before exporting
+            requestSync(currentSession.id)
+            await waitForSync(currentSession.id)
+            const freshBrowserState = getState(currentSession.id)
+            if (freshBrowserState?.xml) {
+                currentSession.xml = freshBrowserState.xml
+            }
+
             // PNG or SVG: request browser to export
             const ok = setExportFormat(
                 currentSession.id,

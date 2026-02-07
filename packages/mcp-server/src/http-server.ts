@@ -291,11 +291,20 @@ function handleStateApi(
             }),
         )
     } else if (req.method === "POST") {
+        const MAX_BODY = 10 * 1024 * 1024 // 10MB
         let body = ""
+        let aborted = false
         req.on("data", (chunk) => {
             body += chunk
+            if (body.length > MAX_BODY) {
+                aborted = true
+                res.writeHead(413, { "Content-Type": "application/json" })
+                res.end(JSON.stringify({ error: "Request body too large" }))
+                req.destroy()
+            }
         })
         req.on("end", () => {
+            if (aborted) return
             try {
                 const data = JSON.parse(body)
                 const { sessionId } = data
@@ -720,14 +729,21 @@ function getHtmlPage(sessionId: string): string {
                     setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
                 } else if (msg.event === 'export' && msg.data) {
                     // Handle MCP server export request (png/svg)
+                    // Verify the response matches the requested format to avoid capturing
+                    // unrelated exports (autosave SVG, sync XML)
                     if (pendingMcpExport) {
-                        pendingMcpExport = null;
-                        fetch('/api/state', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sessionId, exportData: msg.data })
-                        }).catch(() => {});
-                        return;
+                        const d = msg.data;
+                        const isPng = pendingMcpExport === 'png' && (d.startsWith('data:image/png') || (typeof d === 'string' && d.length > 100 && !d.startsWith('<')));
+                        const isSvg = pendingMcpExport === 'svg' && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
+                        if (isPng || isSvg) {
+                            pendingMcpExport = null;
+                            fetch('/api/state', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ sessionId, exportData: d })
+                            }).catch(() => {});
+                            return;
+                        }
                     }
                     // Handle file download export (PNG/SVG only, drawio uses lastXml directly)
                     if (pendingDownload && (pendingDownload.format === 'png' || pendingDownload.format === 'svg')) {
