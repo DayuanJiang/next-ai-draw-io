@@ -69,6 +69,8 @@ interface SessionState {
     lastUpdated: Date
     svg?: string // Cached SVG from last browser save
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
+    exportFormat?: "png" | "svg" // Set by MCP tool to request browser export
+    exportData?: string // Base64/SVG data returned by browser after export
 }
 
 export const stateStore = new Map<string, SessionState>()
@@ -91,9 +93,38 @@ export function setState(sessionId: string, xml: string, svg?: string): number {
         lastUpdated: new Date(),
         svg: svg || existing?.svg, // Preserve cached SVG if not provided
         syncRequested: undefined, // Clear sync request when browser pushes state
+        exportFormat: existing?.exportFormat, // Preserve pending export request
+        exportData: existing?.exportData, // Preserve export result
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
     return newVersion
+}
+
+export function setExportFormat(
+    sessionId: string,
+    format: "png" | "svg",
+): boolean {
+    const state = stateStore.get(sessionId)
+    if (state) {
+        state.exportFormat = format
+        state.exportData = undefined
+        log.debug(`Export format set to ${format} for session=${sessionId}`)
+        return true
+    }
+    return false
+}
+
+export function getExportData(sessionId: string): string | undefined {
+    const state = stateStore.get(sessionId)
+    return state?.exportData
+}
+
+export function clearExportData(sessionId: string): void {
+    const state = stateStore.get(sessionId)
+    if (state) {
+        state.exportData = undefined
+        state.exportFormat = undefined
+    }
 }
 
 export function requestSync(sessionId: string): boolean {
@@ -255,6 +286,7 @@ function handleStateApi(
                 xml: state?.xml || null,
                 version: state?.version || 0,
                 syncRequested: !!state?.syncRequested,
+                exportFormat: state?.exportFormat || null,
             }),
         )
     } else if (req.method === "POST") {
@@ -264,13 +296,30 @@ function handleStateApi(
         })
         req.on("end", () => {
             try {
-                const { sessionId, xml, svg } = JSON.parse(body)
+                const data = JSON.parse(body)
+                const { sessionId } = data
                 if (!sessionId) {
                     res.writeHead(400, { "Content-Type": "application/json" })
                     res.end(JSON.stringify({ error: "sessionId required" }))
                     return
                 }
-                const version = setState(sessionId, xml, svg)
+
+                // Browser is returning export data (png/svg)
+                if (data.exportData !== undefined) {
+                    const state = stateStore.get(sessionId)
+                    if (state) {
+                        state.exportData = data.exportData
+                        state.exportFormat = undefined
+                        log.debug(
+                            `Export data received for session=${sessionId}`,
+                        )
+                    }
+                    res.writeHead(200, { "Content-Type": "application/json" })
+                    res.end(JSON.stringify({ success: true }))
+                    return
+                }
+
+                const version = setState(sessionId, data.xml, data.svg)
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ success: true, version }))
             } catch {
@@ -638,6 +687,7 @@ function getHtmlPage(sessionId: string): string {
         let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
         let pendingSvgExport = null;
         let pendingAiSvg = false;
+        let pendingMcpExport = null; // 'png' or 'svg' when MCP requested export
 
         window.addEventListener('message', (e) => {
             if (e.origin !== '${DRAWIO_ORIGIN}') return;
@@ -653,6 +703,17 @@ function getHtmlPage(sessionId: string): string {
                     // Fallback if export doesn't respond
                     setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
                 } else if (msg.event === 'export' && msg.data) {
+                    // Handle MCP server export request (png/svg)
+                    if (pendingMcpExport) {
+                        const fmt = pendingMcpExport;
+                        pendingMcpExport = null;
+                        fetch('/api/state', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId, exportData: msg.data })
+                        }).catch(() => {});
+                        return;
+                    }
                     // Handle file download export (PNG/SVG only, drawio uses lastXml directly)
                     if (pendingDownload && (pendingDownload.format === 'png' || pendingDownload.format === 'svg')) {
                         const dl = pendingDownload;
@@ -727,6 +788,14 @@ function getHtmlPage(sessionId: string): string {
                 const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
                 if (!r.ok) return;
                 const s = await r.json();
+                // Handle export request from MCP server (png/svg)
+                if (s.exportFormat && !pendingMcpExport) {
+                    pendingMcpExport = s.exportFormat;
+                    const exportOpts = s.exportFormat === 'png'
+                        ? { action: 'export', format: 'png', scale: 2 }
+                        : { action: 'export', format: 'svg' };
+                    iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
+                }
                 // Handle sync request - server needs fresh state
                 if (s.syncRequested && !pendingSyncExport) {
                     pendingSyncExport = true;
