@@ -282,6 +282,7 @@ export function ModelConfigDialog({
         // Check credentials based on provider type
         const isBedrock = selectedProvider.provider === "bedrock"
         const isEdgeOne = selectedProvider.provider === "edgeone"
+        const isOllama = selectedProvider.provider === "ollama"
         const isVertexAI = selectedProvider.provider === "vertexai"
         if (isBedrock) {
             if (
@@ -296,7 +297,7 @@ export function ModelConfigDialog({
             if (!selectedProvider.vertexApiKey) {
                 return
             }
-        } else if (!isEdgeOne && !selectedProvider.apiKey) {
+        } else if (!isEdgeOne && !isOllama && !selectedProvider.apiKey) {
             return
         }
 
@@ -1030,9 +1031,177 @@ export function ModelConfigDialog({
                                                     </div>
                                                 </>
                                             ) : selectedProvider.provider ===
-                                                  "ollama" ||
-                                              selectedProvider.provider ===
-                                                  "edgeone" ? (
+                                              "ollama" ? (
+                                                <>
+                                                    {/* Base URL */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="base-url"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {formatMessage(
+                                                                dict.modelConfig
+                                                                    .baseUrlWithExample,
+                                                                {
+                                                                    example:
+                                                                        PROVIDER_INFO[
+                                                                            selectedProvider
+                                                                                .provider
+                                                                        ]
+                                                                            .defaultBaseUrl ||
+                                                                        "https://api.example.com/v1",
+                                                                },
+                                                            )}
+                                                        </Label>
+                                                        <Input
+                                                            id="base-url"
+                                                            value={
+                                                                selectedProvider.baseUrl ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleProviderUpdate(
+                                                                    "baseUrl",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                            placeholder={
+                                                                PROVIDER_INFO[
+                                                                    selectedProvider
+                                                                        .provider
+                                                                ]
+                                                                    .defaultBaseUrl ||
+                                                                dict.modelConfig
+                                                                    .customEndpoint
+                                                            }
+                                                            className="h-9 rounded-xl font-mono text-xs"
+                                                        />
+                                                    </div>
+
+                                                    {/* API Key (optional) */}
+                                                    <div className="space-y-2">
+                                                        <Label
+                                                            htmlFor="api-key"
+                                                            className="text-xs font-medium flex items-center gap-1.5"
+                                                        >
+                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {
+                                                                dict.modelConfig
+                                                                    .apiKey
+                                                            }{" "}
+                                                            {
+                                                                dict.modelConfig
+                                                                    .optional
+                                                            }
+                                                        </Label>
+                                                        <div className="flex gap-2">
+                                                            <div className="relative flex-1">
+                                                                <Input
+                                                                    id="api-key"
+                                                                    type={
+                                                                        showApiKey
+                                                                            ? "text"
+                                                                            : "password"
+                                                                    }
+                                                                    value={
+                                                                        selectedProvider.apiKey
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleProviderUpdate(
+                                                                            "apiKey",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    placeholder={
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .enterApiKey
+                                                                    }
+                                                                    className="h-9 pr-10 font-mono text-xs"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setShowApiKey(
+                                                                            !showApiKey,
+                                                                        )
+                                                                    }
+                                                                    aria-label={
+                                                                        showApiKey
+                                                                            ? "Hide API key"
+                                                                            : "Show API key"
+                                                                    }
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                                                                >
+                                                                    {showApiKey ? (
+                                                                        <EyeOff className="h-4 w-4" />
+                                                                    ) : (
+                                                                        <Eye className="h-4 w-4" />
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                            <Button
+                                                                variant={
+                                                                    validationStatus ===
+                                                                    "success"
+                                                                        ? "outline"
+                                                                        : "default"
+                                                                }
+                                                                size="sm"
+                                                                onClick={
+                                                                    handleValidate
+                                                                }
+                                                                disabled={
+                                                                    validationStatus ===
+                                                                    "validating"
+                                                                }
+                                                                className={cn(
+                                                                    "h-9 px-4",
+                                                                    validationStatus ===
+                                                                        "success" &&
+                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                                                                )}
+                                                            >
+                                                                {validationStatus ===
+                                                                "validating" ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : validationStatus ===
+                                                                  "success" ? (
+                                                                    <>
+                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .verified
+                                                                        }
+                                                                    </>
+                                                                ) : (
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .test
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                        {validationStatus ===
+                                                            "error" &&
+                                                            validationError && (
+                                                                <p className="text-xs text-destructive flex items-center gap-1">
+                                                                    <X className="h-3 w-3" />
+                                                                    {
+                                                                        validationError
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                    </div>
+                                                </>
+                                            ) : selectedProvider.provider ===
+                                              "edgeone" ? (
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
                                                         <Button

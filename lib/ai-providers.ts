@@ -878,8 +878,14 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         case "ollama": {
             const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
-            if (baseURL) {
-                const customOllama = createOllama({ baseURL })
+            const apiKey = resolveApiKey(overrides, "OLLAMA_API_KEY")
+            if (baseURL || apiKey) {
+                const customOllama = createOllama({
+                    ...(baseURL && { baseURL }),
+                    ...(apiKey && {
+                        headers: { Authorization: `Bearer ${apiKey}` },
+                    }),
+                })
                 model = customOllama(modelId)
             } else {
                 model = ollama(modelId)
