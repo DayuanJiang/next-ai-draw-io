@@ -175,7 +175,10 @@ export async function POST(req: Request) {
 
             case "ollama": {
                 const ollamaProvider = createOllama({
-                    baseURL: baseUrl || "http://localhost:11434",
+                    baseURL:
+                        baseUrl ||
+                        process.env.OLLAMA_BASE_URL ||
+                        "http://localhost:11434",
                     ...(apiKey && {
                         headers: { Authorization: `Bearer ${apiKey}` },
                     }),
