@@ -34,6 +34,33 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
+        try {
+            const headController = new AbortController()
+            const headTimeout = setTimeout(() => headController.abort(), 3000)
+
+            const headResponse = await fetch(url, {
+                method: "HEAD",
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; NextAIDrawio/1.0)",
+                },
+                signal: headController.signal,
+            })
+            clearTimeout(headTimeout)
+            const contentType = headResponse.headers.get("content-type")
+            if (contentType?.includes("application/pdf")) {
+                return NextResponse.json(
+                    {
+                        error: "PDF URLs are not supported. Please download and upload the PDF file directly",
+                    },
+                    { status: 422 },
+                )
+            }
+        } catch (err) {
+            console.warn(
+                "HEAD pre-check failed, proceeding with extraction:",
+                err,
+            )
+        }
 
         // Extract article content with timeout to avoid tying up server resources
         const controller = new AbortController()
