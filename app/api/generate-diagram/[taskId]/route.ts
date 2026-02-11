@@ -3,7 +3,7 @@ import { taskManager } from "@/lib/task-manager"
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   const accessCodes = process.env.ACCESS_CODE_LIST?.split(",")
     .map((code) => code.trim())
@@ -19,7 +19,8 @@ export async function GET(
     }
   }
 
-  const task = taskManager.getTask(params.taskId)
+  const { taskId } = await params
+  const task = taskManager.getTask(taskId)
 
   if (!task) {
     return NextResponse.json(
