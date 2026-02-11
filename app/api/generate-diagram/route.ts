@@ -3,6 +3,7 @@ import { z } from "zod"
 import { taskManager } from "@/lib/task-manager"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { checkAndIncrementRequest, isQuotaEnabled } from "@/lib/dynamo-quota-manager"
+import { generateDiagramXML } from "@/lib/diagram-generator"
 
 export const maxDuration = 120
 
@@ -94,13 +95,34 @@ async function processTask(
     description: string,
     format: "xml" | "png" | "svg"
 ): Promise<void> {
-    // TODO: Implement AI diagram generation logic in subsequent tasks
-    // This will include:
-    // 1. Call AI service to generate diagram XML
-    // 2. If format is png/svg, convert XML to image
-    // 3. Update task with result or error
-    taskManager.updateTask(taskId, {
-        status: "processing",
-        progress: 0,
-    })
+    try {
+        taskManager.updateTask(taskId, {
+            status: "processing",
+            progress: 10,
+        })
+
+        const xml = await generateDiagramXML(description)
+
+        taskManager.updateTask(taskId, {
+            progress: 50,
+        })
+
+        if (format === "xml") {
+            taskManager.updateTask(taskId, {
+                status: "completed",
+                result: xml,
+                completedAt: new Date(),
+            })
+            return
+        }
+
+        // TODO: Implement image conversion in Task 7
+        throw new Error(`Format ${format} not yet implemented`)
+    } catch (error: any) {
+        taskManager.updateTask(taskId, {
+            status: "failed",
+            error: error.message,
+            failedAt: new Date(),
+        })
+    }
 }
