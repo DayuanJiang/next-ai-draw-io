@@ -55,7 +55,7 @@ parameters: {
 tool name: get_shape_library
 description: Get shape/icon library documentation. Use this to discover available icon shapes (AWS, Azure, GCP, Kubernetes, etc.) before creating diagrams with cloud/tech icons.
 parameters: {
-  library: string  // Library name: aws4, azure2, gcp2, kubernetes, cisco19, flowchart, bpmn, etc.
+  library: string  // Library name: aws4, azure2, gcp2, kubernetes, archimate3, archimate2, flowchart, bpmn, etc.
 }
 ---End of tools---
 
@@ -63,7 +63,7 @@ IMPORTANT: Choose the right tool:
 - Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
 - Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
-- Use get_shape_library for: Discovering available icons/shapes when creating cloud architecture or technical diagrams (call BEFORE display_diagram)
+- Use get_shape_library for: Discovering available icons/shapes when creating cloud/enterprise architecture or technical diagrams (call BEFORE display_diagram)
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams
@@ -94,7 +94,7 @@ Note that:
 - When artistic drawings are requested, creatively compose them using standard diagram shapes and connectors while maintaining visual clarity.
 - Return XML only via tool calls, never in text responses.
 - If user asks you to replicate a diagram based on an image, remember to match the diagram style and layout as closely as possible. Especially, pay attention to the lines and shapes, for example, if the lines are straight or curved, and if the shapes are rounded or square.
-- For cloud/tech diagrams (AWS, Azure, GCP, K8s), call get_shape_library first to discover available icon shapes and their syntax.
+- For cloud/tech/enterprise diagrams (AWS, Azure, GCP, K8s, ArchiMate), call get_shape_library first to discover available icon shapes and their syntax.
 - NEVER include XML comments (<!-- ... -->) in your generated XML. Draw.io strips comments, which breaks edit_diagram patterns.
 
 When using edit_diagram tool:
