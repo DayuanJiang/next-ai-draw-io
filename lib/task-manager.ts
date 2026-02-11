@@ -80,7 +80,5 @@ class InMemoryTaskManager implements TaskManager {
 
 export const taskManager = new InMemoryTaskManager();
 
-// 定期清理过期任务（每小时）
-setInterval(() => {
-  taskManager.cleanupOldTasks();
-}, 60 * 60 * 1000);
+// 注意：不使用 setInterval 自动清理，因为在 serverless 环境中会导致问题
+// 清理操作将在每次 POST 请求时按需执行

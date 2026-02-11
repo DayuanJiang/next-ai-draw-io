@@ -1,4 +1,5 @@
-import puppeteer from "puppeteer"
+import puppeteer from "puppeteer-core"
+import chromium from "@sparticuz/chromium"
 import { saveDiagramImage } from "./diagram-storage"
 
 export async function renderDiagramToImage(
@@ -7,9 +8,12 @@ export async function renderDiagramToImage(
   format: "png" | "svg",
   options?: { width?: number; height?: number }
 ): Promise<{ url: string; size: number }> {
+  // 配置 Puppeteer 以支持 serverless 环境
+  const isProduction = process.env.NODE_ENV === "production"
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: isProduction ? chromium.args : ["--no-sandbox", "--disable-setuid-sandbox"],
+    executablePath: isProduction ? await chromium.executablePath() : undefined,
+    headless: chromium.headless,
   })
 
   try {
@@ -21,9 +25,11 @@ export async function renderDiagramToImage(
 
     const drawioUrl =
       process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
-    await page.goto(`${drawioUrl}/?embed=1&ui=min&spin=1&proto=json`)
+    await page.goto(`${drawioUrl}/?embed=1&ui=min&spin=1&proto=json`, {
+      timeout: 30000,
+    })
 
-    await page.waitForSelector("iframe")
+    await page.waitForSelector("iframe", { timeout: 10000 })
 
     await page.evaluate((diagramXml) => {
       const iframe = document.querySelector("iframe") as HTMLIFrameElement
@@ -33,7 +39,15 @@ export async function renderDiagramToImage(
       )
     }, xml)
 
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    // 等待图表渲染完成（使用超时保护）
+    await page.waitForFunction(
+      () => {
+        const iframe = document.querySelector("iframe") as HTMLIFrameElement
+        const svg = iframe?.contentDocument?.querySelector("svg")
+        return svg && svg.children.length > 0
+      },
+      { timeout: 10000 }
+    )
 
     let buffer: Buffer
     if (format === "png") {
@@ -42,7 +56,11 @@ export async function renderDiagramToImage(
     } else {
       const svg = await page.evaluate(() => {
         const iframe = document.querySelector("iframe") as HTMLIFrameElement
-        return iframe?.contentDocument?.querySelector("svg")?.outerHTML || ""
+        const svgElement = iframe?.contentDocument?.querySelector("svg")
+        if (!svgElement) {
+          throw new Error("SVG element not found")
+        }
+        return svgElement.outerHTML
       })
       buffer = Buffer.from(svg, "utf-8")
     }
