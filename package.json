@@ -5,7 +5,7 @@
     "private": true,
     "main": "dist-electron/main/index.js",
     "scripts": {
-        "dev": "next dev --turbopack --port 6002",
+        "dev": "next dev --turbopack --port 9000",
         "build": "next build",
         "start": "next start --port 6001",
         "lint": "biome lint .",
@@ -86,6 +86,7 @@
         "react-icons": "^5.5.0",
         "react-markdown": "^10.1.0",
         "react-resizable-panels": "^3.0.6",
+        "react-window": "^2.2.5",
         "remark-gfm": "^4.0.1",
         "server-only": "^0.0.1",
         "sonner": "^2.0.7",
