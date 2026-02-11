@@ -1,5 +1,3 @@
-import puppeteer from "puppeteer-core"
-import chromium from "@sparticuz/chromium"
 import { saveDiagramImage } from "./diagram-storage"
 
 export async function renderDiagramToImage(
@@ -10,11 +8,25 @@ export async function renderDiagramToImage(
 ): Promise<{ url: string; size: number }> {
   // 配置 Puppeteer 以支持 serverless 环境
   const isProduction = process.env.NODE_ENV === "production"
-  const browser = await puppeteer.launch({
-    args: isProduction ? chromium.args : ["--no-sandbox", "--disable-setuid-sandbox"],
-    executablePath: isProduction ? await chromium.executablePath() : undefined,
-    headless: chromium.headless,
-  })
+
+  let browser
+  if (isProduction) {
+    // 生产环境：使用 puppeteer-core + chromium
+    const puppeteerCore = await import("puppeteer-core")
+    const chromium = await import("@sparticuz/chromium")
+    browser = await puppeteerCore.default.launch({
+      args: chromium.default.args,
+      executablePath: await chromium.default.executablePath(),
+      headless: chromium.default.headless,
+    })
+  } else {
+    // 开发环境：使用完整的 puppeteer（自带 Chrome）
+    const puppeteer = await import("puppeteer")
+    browser = await puppeteer.default.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      headless: true,
+    })
+  }
 
   try {
     const page = await browser.newPage()
@@ -25,8 +37,11 @@ export async function renderDiagramToImage(
 
     const drawioUrl =
       process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
-    await page.goto(`${drawioUrl}/?embed=1&ui=min&spin=1&proto=json`, {
+
+    // 使用简化的 URL 参数，确保 iframe 能够正确加载
+    await page.goto(`${drawioUrl}/?embed=1&proto=json&spin=1`, {
       timeout: 30000,
+      waitUntil: 'networkidle0',
     })
 
     await page.waitForSelector("iframe", { timeout: 10000 })
