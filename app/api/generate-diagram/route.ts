@@ -4,6 +4,7 @@ import { taskManager } from "@/lib/task-manager"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { checkAndIncrementRequest, isQuotaEnabled } from "@/lib/dynamo-quota-manager"
 import { generateDiagramXML } from "@/lib/diagram-generator"
+import { renderDiagramToImage } from "@/lib/diagram-renderer"
 
 export const maxDuration = 120
 
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
     const task = taskManager.createTask(format, description, options)
 
     // Process task asynchronously
-    processTask(task.taskId, description, format).catch((error) => {
+    processTask(task.taskId, description, format, options).catch((error) => {
         console.error(`[generate-diagram] Task ${task.taskId} failed:`, error)
         taskManager.updateTask(task.taskId, {
             status: "failed",
@@ -93,7 +94,8 @@ export async function POST(req: NextRequest) {
 async function processTask(
     taskId: string,
     description: string,
-    format: "xml" | "png" | "svg"
+    format: "xml" | "png" | "svg",
+    options?: { width?: number; height?: number }
 ): Promise<void> {
     try {
         taskManager.updateTask(taskId, {
@@ -116,8 +118,13 @@ async function processTask(
             return
         }
 
-        // TODO: Implement image conversion in Task 7
-        throw new Error(`Format ${format} not yet implemented`)
+        const { url, size } = await renderDiagramToImage(taskId, xml, format, options)
+
+        taskManager.updateTask(taskId, {
+            status: "completed",
+            result: { url, size, format },
+            completedAt: new Date(),
+        })
     } catch (error: any) {
         taskManager.updateTask(taskId, {
             status: "failed",
