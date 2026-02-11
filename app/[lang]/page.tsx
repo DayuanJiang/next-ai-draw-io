@@ -206,7 +206,7 @@ export default function Home() {
                             {(!isLoaded || !isDrawioReady) && (
                                 <div className="h-full w-full bg-background flex items-center justify-center">
                                     <span className="text-muted-foreground">
-                                        Draw.io panel is loading...
+                                        Designer Studio is loading ...
                                     </span>
                                 </div>
                             )}

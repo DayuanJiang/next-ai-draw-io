@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select"
 import { useDictionary } from "@/hooks/use-dictionary"
 
-export type ExportFormat = "drawio" | "png" | "svg"
+export type ExportFormat = "xml" | "png" | "svg"
 
 interface SaveDialogProps {
     open: boolean
@@ -37,7 +37,7 @@ export function SaveDialog({
 }: SaveDialogProps) {
     const dict = useDictionary()
     const [filename, setFilename] = useState(defaultFilename)
-    const [format, setFormat] = useState<ExportFormat>("drawio")
+    const [format, setFormat] = useState<ExportFormat>("xml")
 
     useEffect(() => {
         if (open) {
@@ -60,9 +60,9 @@ export function SaveDialog({
 
     const FORMAT_OPTIONS = [
         {
-            value: "drawio" as const,
-            label: dict.save.formats.drawio,
-            extension: ".drawio",
+            value: "xml" as const,
+            label: dict.save.formats.xml,
+            extension: ".xml",
         },
         {
             value: "png" as const,
@@ -126,7 +126,7 @@ export function SaveDialog({
                                 className="rounded-r-none border-r-0 focus-visible:z-10"
                             />
                             <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-input bg-muted text-sm text-muted-foreground font-mono">
-                                {currentFormat?.extension || ".drawio"}
+                                {currentFormat?.extension || ".xml"}
                             </span>
                         </div>
                     </div>
