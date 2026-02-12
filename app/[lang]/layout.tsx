@@ -45,15 +45,15 @@ export async function generateMetadata({
 
     // Default to English metadata
     const titles: Record<Locale, string> = {
-        en: "Next AI Draw.io - AI-Powered Diagram Generator",
-        zh: "Next AI Draw.io - AI powered diagram generator",
-        ja: "Next AI Draw.io - AI-powered diagram generator",
+        en: "Designer Studio - AI-Powered Diagram Generator",
+        zh: "Designer Studio - AI powered diagram generator",
+        ja: "Designer Studio - AI-powered diagram generator",
     }
 
     const descriptions: Record<Locale, string> = {
-        en: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating draw.io with AI assistance for professional diagram creation.",
-        zh: "Use AI to create AWS architecture diagrams, flowcharts, and technical diagrams. Free online tool integrated with draw.io and AI assistance for professional diagram creation.",
-        ja: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Create professional diagrams with a free online tool that integrates draw.io with an AI assistant.",
+        en: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating professional diagramming with AI assistance for professional creation.",
+        zh: "Use AI to create AWS architecture diagrams, flowcharts, and technical diagrams. Free online tool integrated with professional diagramming and AI assistance for professional creation.",
+        ja: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Create professional diagrams with a free online tool that integrates professional diagramming with an AI assistant.",
     }
 
     return {
@@ -70,23 +70,23 @@ export async function generateMetadata({
             "free diagram generator",
             "online diagram maker",
         ],
-        authors: [{ name: "Next AI Draw.io" }],
-        creator: "Next AI Draw.io",
-        publisher: "Next AI Draw.io",
-        metadataBase: new URL("https://next-ai-drawio.jiang.jp"),
+        authors: [{ name: "Designer Studio" }],
+        creator: "Designer Studio",
+        publisher: "Designer Studio",
+        metadataBase: new URL("https://www.yultra.ai/"),
         openGraph: {
             title: titles[lang],
             description: descriptions[lang],
             type: "website",
-            url: "https://next-ai-drawio.jiang.jp",
-            siteName: "Next AI Draw.io",
+            url: "https://www.yultra.ai/",
+            siteName: "Designer Studio",
             locale: lang === "zh" ? "zh_CN" : lang === "ja" ? "ja_JP" : "en_US",
             images: [
                 {
                     url: "/architecture.png",
                     width: 1200,
                     height: 630,
-                    alt: "Next AI Draw.io - AI-powered diagram creation tool",
+                    alt: "Designer Studio - AI-powered diagram creation tool",
                 },
             ],
         },
@@ -135,12 +135,12 @@ export default async function RootLayout({
     const jsonLd = {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: "Next AI Draw.io",
+        name: "Designer Studio",
         applicationCategory: "DesignApplication",
         operatingSystem: "Web Browser",
         description:
-            "AI-powered diagram generator with targeted XML editing capabilities that integrates with draw.io for creating AWS architecture diagrams, flowcharts, and technical diagrams. Features diagram history, multi-provider AI support, and real-time collaboration.",
-        url: "https://next-ai-drawio.jiang.jp",
+            "AI-powered diagram generator with targeted XML editing capabilities that integrates with professional editors for creating AWS architecture diagrams, flowcharts, and technical diagrams. Features diagram history, multi-provider AI support, and real-time collaboration.",
+        url: "https://www.yultra.ai/",
         inLanguage: validLang,
         offers: {
             "@type": "Offer",

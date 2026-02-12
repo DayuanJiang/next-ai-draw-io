@@ -701,6 +701,7 @@ Available libraries:
 - Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
 - Networking: cisco19, network, kubernetes, vvd, rack
 - Business: bpmn, lean_mapping
+- Enterprise Architecture: archimate3, archimate2
 - General: flowchart, basic, arrows2, infographic, sitemap
 - UI/Mockups: android
 - Enterprise: citrix, sap, mscae, atlassian

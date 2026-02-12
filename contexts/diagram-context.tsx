@@ -246,7 +246,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Map format to draw.io export format
-        const drawioFormat = format === "drawio" ? "xmlsvg" : format
+        // Use xmlsvg for xml format to ensure we get the full mode
+        const drawioFormat = format === "xml" ? "xmlsvg" : format
 
         // Set up the resolver before triggering export
         saveResolverRef.current = {
@@ -255,8 +256,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 let mimeType: string
                 let extension: string
 
-                if (format === "drawio") {
-                    // Extract XML from SVG for .drawio format
+                if (format === "xml") {
+                    // Extract XML from SVG for .xml format
                     const xml = extractDiagramXML(exportData)
                     let xmlContent = xml
                     if (!xml.includes("<mxfile")) {
@@ -264,7 +265,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     }
                     fileContent = xmlContent
                     mimeType = "application/xml"
-                    extension = ".drawio"
+                    extension = ".xml"
                 } else if (format === "png") {
                     // PNG data comes as base64 data URL
                     fileContent = exportData

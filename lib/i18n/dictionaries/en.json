@@ -92,8 +92,8 @@
         "language": "Language",
         "languageDescription": "Choose your interface language.",
         "theme": "Theme",
-        "themeDescription": "Dark/Light mode for interface and DrawIO canvas.",
-        "drawioStyle": "DrawIO Style",
+        "themeDescription": "Dark/Light mode for interface and Editor canvas.",
+        "drawioStyle": "Editor Style",
         "drawioStyleDescription": "Canvas style:",
         "switchTo": "Switch to",
         "minimal": "Minimal",
@@ -114,7 +114,7 @@
         "filename": "Filename",
         "filenamePlaceholder": "Enter filename",
         "formats": {
-            "drawio": "Draw.io XML",
+            "xml": "Diagram XML",
             "png": "PNG Image",
             "svg": "SVG Image"
         },

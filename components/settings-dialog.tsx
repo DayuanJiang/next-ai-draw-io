@@ -380,7 +380,7 @@ function SettingsContent({
                         <Tag className="h-3 w-3" />
                         {process.env.APP_VERSION}
                     </span>
-                    <span className="text-muted-foreground">·</span>
+                    {/* <span className="text-muted-foreground">·</span>
                     <a
                         href="https://github.com/DayuanJiang/next-ai-draw-io"
                         target="_blank"
@@ -404,7 +404,7 @@ function SettingsContent({
                                 {dict.nav.about}
                             </a>
                         </>
-                    )}
+                    )} */}
                 </div>
             </div>
         </DialogContent>
