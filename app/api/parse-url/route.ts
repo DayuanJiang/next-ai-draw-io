@@ -5,6 +5,7 @@ import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 
 const MAX_CONTENT_LENGTH = 150000 // Match PDF limit
 const EXTRACT_TIMEOUT_MS = 15000
+const USER_AGENT = "Mozilla/5.0 (compatible; NextAIDrawio/1.0)"
 
 export async function POST(req: Request) {
     try {
@@ -34,6 +35,31 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
+        const headController = new AbortController()
+        const headTimeout = setTimeout(() => headController.abort(), 3000)
+        try {
+            const headResponse = await fetch(url, {
+                method: "HEAD",
+                headers: { "User-Agent": USER_AGENT },
+                signal: headController.signal,
+            })
+            const contentType = headResponse.headers.get("content-type")
+            if (contentType?.includes("application/pdf")) {
+                return NextResponse.json(
+                    {
+                        error: "PDF URLs are not supported. Please download and upload the PDF file directly",
+                    },
+                    { status: 422 },
+                )
+            }
+        } catch (err) {
+            console.warn(
+                "HEAD pre-check failed, proceeding with extraction:",
+                err,
+            )
+        } finally {
+            clearTimeout(headTimeout)
+        }
 
         // Extract article content with timeout to avoid tying up server resources
         const controller = new AbortController()
@@ -44,9 +70,7 @@ export async function POST(req: Request) {
         let article
         try {
             article = await extract(url, undefined, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (compatible; NextAIDrawio/1.0)",
-                },
+                headers: { "User-Agent": USER_AGENT },
                 signal: controller.signal,
             })
         } catch (err: any) {
