@@ -1,6 +1,6 @@
 {
     "name": "next-ai-draw-io",
-    "version": "0.4.10",
+    "version": "0.4.12",
     "license": "Apache-2.0",
     "private": true,
     "main": "dist-electron/main/index.js",
@@ -43,15 +43,15 @@
         "@aws-sdk/client-dynamodb": "^3.957.0",
         "@aws-sdk/credential-providers": "^3.943.0",
         "@extractus/article-extractor": "^8.0.18",
-        "@formatjs/intl-localematcher": "^0.7.2",
+        "@formatjs/intl-localematcher": "^0.8.0",
         "@langfuse/client": "^4.4.9",
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
-        "@opennextjs/cloudflare": "1.14.8",
+        "@opennextjs/cloudflare": "1.16.1",
         "@openrouter/ai-sdk-provider": "^1.5.4",
         "@opentelemetry/api": "^1.9.0",
-        "@opentelemetry/exporter-trace-otlp-http": "^0.209.0",
+        "@opentelemetry/exporter-trace-otlp-http": "^0.211.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
         "@radix-ui/react-collapsible": "^1.1.12",
@@ -72,7 +72,7 @@
         "cmdk": "^1.1.1",
         "idb": "^8.0.3",
         "jsonrepair": "^3.13.1",
-        "lucide-react": "^0.562.0",
+        "lucide-react": "^0.563.0",
         "motion": "^12.23.25",
         "nanoid": "^5.0.0",
         "negotiator": "^1.0.0",
@@ -129,7 +129,7 @@
         "electron-builder": "^26.0.12",
         "esbuild": "^0.27.2",
         "eslint": "9.39.2",
-        "eslint-config-next": "16.1.1",
+        "eslint-config-next": "16.1.6",
         "husky": "^9.1.7",
         "jsdom": "^27.4.0",
         "lint-staged": "^16.2.7",
@@ -139,7 +139,7 @@
         "vite-tsconfig-paths": "^6.0.3",
         "vitest": "^4.0.16",
         "wait-on": "^9.0.3",
-        "wrangler": "4.58.0"
+        "wrangler": "^4.60.0"
     },
     "overrides": {
         "@openrouter/ai-sdk-provider": {

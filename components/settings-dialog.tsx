@@ -1,6 +1,6 @@
 "use client"
 
-import { Github, Info, Moon, Sun, Tag } from "lucide-react"
+import { ChevronRight, Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -56,6 +56,7 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
     en: "English",
     zh: "中文",
     ja: "日本語",
+    "zh-Hant": "繁體中文",
 }
 
 interface SettingsDialogProps {
@@ -67,6 +68,9 @@ interface SettingsDialogProps {
     onToggleDarkMode: () => void
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    vlmValidationEnabled?: boolean
+    onVlmValidationChange?: (value: boolean) => void
+    onOpenModelConfig?: () => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -88,6 +92,9 @@ function SettingsContent({
     onToggleDarkMode,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    vlmValidationEnabled = false,
+    onVlmValidationChange = () => {},
+    onOpenModelConfig,
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -167,6 +174,13 @@ function SettingsContent({
     const changeLanguage = (lang: string) => {
         // Save locale to localStorage for persistence across restarts
         localStorage.setItem("next-ai-draw-io-locale", lang)
+
+        // Notify Electron main process to update its menu language
+        if (window.electronAPI?.setUserLocale) {
+            window.electronAPI.setUserLocale(lang).catch((error) => {
+                console.error("Failed to sync locale with Electron:", error)
+            })
+        }
 
         const parts = pathname.split("/")
         if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
@@ -272,6 +286,27 @@ function SettingsContent({
             {/* Content */}
             <div className="px-6 pb-6">
                 <div className="divide-y divide-border-subtle">
+                    {/* API Keys & Models */}
+                    {onOpenModelConfig && (
+                        <SettingItem
+                            label={dict.settings.apiKeysModels}
+                            description={dict.settings.apiKeysModelsDescription}
+                        >
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 p-0"
+                                onClick={() => {
+                                    onOpenChange(false)
+                                    onOpenModelConfig()
+                                }}
+                                aria-label={dict.settings.apiKeysModels}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </SettingItem>
+                    )}
+
                     {/* Access Code (conditional) */}
                     {accessCodeRequired && (
                         <div className="py-4 first:pt-0 space-y-3">
@@ -403,6 +438,25 @@ function SettingsContent({
                         </div>
                     </SettingItem>
 
+                    {/* VLM Diagram Validation */}
+                    <SettingItem
+                        label={dict.settings.diagramValidation}
+                        description={dict.settings.diagramValidationDescription}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id="vlm-validation"
+                                checked={vlmValidationEnabled}
+                                onCheckedChange={onVlmValidationChange}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                                {vlmValidationEnabled
+                                    ? dict.settings.enabled
+                                    : dict.settings.disabled}
+                            </span>
+                        </div>
+                    </SettingItem>
+
                     {/* Send Shortcut */}
                     <SettingItem
                         label={dict.settings.sendShortcut}
@@ -425,7 +479,7 @@ function SettingsContent({
                         >
                             <SelectTrigger
                                 id="send-shortcut-select"
-                                className="w-[170px] h-9 rounded-xl"
+                                className="w-auto h-9 rounded-xl"
                             >
                                 <SelectValue />
                             </SelectTrigger>

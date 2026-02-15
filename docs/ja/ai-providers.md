@@ -13,7 +13,7 @@
 
 ### Doubao (ByteDance Volcengine)
 
-> **無料トークン**: [Volcengine ARK プラットフォーム](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)に登録すると、すべてのモデルで使える50万トークンが無料で入手できます！
+> **無料トークン**: [Volcengine ARK プラットフォーム](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)に登録すると、すべてのモデルで使える50万トークンが無料で入手できます！
 
 ```bash
 DOUBAO_API_KEY=your_api_key

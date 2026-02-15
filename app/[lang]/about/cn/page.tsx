@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import Image from "next/image"
 import Link from "next/link"
 import { FaGithub } from "react-icons/fa"
+import Image from "@/components/image-with-basepath"
 
 export const metadata: Metadata = {
     title: "关于 - Next AI Draw.io",
@@ -78,7 +78,7 @@ export default function AboutCN() {
                                 <p>
                                     好消息！感谢{" "}
                                     <a
-                                        href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="font-semibold text-blue-600 hover:underline"
@@ -277,7 +277,7 @@ export default function AboutCN() {
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>
                             <a
-                                href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
@@ -312,7 +312,7 @@ export default function AboutCN() {
                     <p className="text-gray-700 mb-4 font-semibold">
                         特别感谢{" "}
                         <a
-                            href="https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline"

@@ -34,7 +34,7 @@
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",
         "send": "送信",
-        "sending": "送信中...",
+        "stopGeneration": "生成を停止",
         "sendMessage": "メッセージを送信",
         "clearConversation": "会話をクリア",
         "diagramHistory": "ダイアグラム履歴",
@@ -77,6 +77,8 @@
     "settings": {
         "title": "設定",
         "description": "アプリケーション設定を構成します。",
+        "apiKeysModels": "API キーとモデル",
+        "apiKeysModelsDescription": "AI プロバイダーと API キーを設定します。",
         "accessCode": "アクセスコード",
         "accessCodePlaceholder": "アクセスコードを入力",
         "accessCodeDescription": "このアプリケーションを使用するために必要です。",
@@ -115,7 +117,11 @@
         "httpProxy": "HTTP プロキシ",
         "httpsProxy": "HTTPS プロキシ",
         "applyProxy": "適用",
-        "proxyApplied": "プロキシ設定が適用されました"
+        "proxyApplied": "プロキシ設定が適用されました",
+        "diagramValidation": "ダイアグラム検証（実験的）",
+        "diagramValidationDescription": "視覚言語モデルを使用して生成されたダイアグラムを検証します。GPT-5.2 や Sonnet-4.5 などの VLM が必要です。",
+        "enabled": "有効",
+        "disabled": "無効"
     },
     "save": {
         "title": "ダイアグラムを保存",
@@ -248,6 +254,24 @@
         "searchPlaceholder": "チャットを検索...",
         "noResults": "チャットが見つかりません"
     },
+    "validation": {
+        "title": "ダイアグラムを検証",
+        "capturing": "キャプチャ中",
+        "validating": "検証中",
+        "validatingWithAttempt": "検証中 ({attempt}/{max})",
+        "valid": "有効",
+        "validWithWarnings": "有効（警告あり）",
+        "issuesFound": "問題が見つかりました",
+        "error": "エラー",
+        "skipped": "スキップ",
+        "capturedScreenshot": "キャプチャした画像：",
+        "issuesFoundLabel": "検出された問題：",
+        "suggestions": "提案：",
+        "passedValidation": "ダイアグラムは視覚検証に合格しました - 問題は検出されませんでした。",
+        "improvementRequested": "改善リクエスト済み - 下の新しいダイアグラムを確認してください",
+        "improveWithSuggestions": "提案で改善",
+        "regenerateWithFeedback": "検証フィードバックを使用してダイアグラムを再生成"
+    },
     "modelConfig": {
         "title": "AIモデル設定",
         "description": "複数のAIプロバイダーとモデルを設定",
@@ -280,6 +304,7 @@
         "enterSecretKey": "シークレットアクセスキーを入力",
         "baseUrl": "ベース URL",
         "optional": "（オプション）",
+        "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
         "models": "モデル",
         "customModelId": "カスタムモデル ID...",

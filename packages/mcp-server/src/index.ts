@@ -260,6 +260,7 @@ COMMON STYLES:
             // Update session state
             currentSession.xml = xml
             currentSession.version++
+            currentSession.lastGetDiagramTime = Date.now()
 
             // Push to embedded server state
             setState(currentSession.id, xml)
@@ -545,16 +546,24 @@ server.registerTool(
 server.registerTool(
     "export_diagram",
     {
-        description: "Export the current diagram to a .drawio file.",
+        description:
+            "Export the current diagram to a file. Supports .drawio (XML), .png, and .svg formats. " +
+            "The format is auto-detected from the file extension, or can be specified explicitly.",
         inputSchema: {
             path: z
                 .string()
                 .describe(
-                    "File path to save the diagram (e.g., ./diagram.drawio)",
+                    "File path to save the diagram (e.g., ./diagram.drawio, ./diagram.png, ./diagram.svg)",
+                ),
+            format: z
+                .enum(["drawio", "png", "svg"])
+                .optional()
+                .describe(
+                    "Export format. If omitted, detected from file extension. Defaults to drawio.",
                 ),
         },
     },
-    async ({ path }) => {
+    async ({ path, format }) => {
         try {
             if (!currentSession) {
                 return {
@@ -589,21 +598,107 @@ server.registerTool(
             const fs = await import("node:fs/promises")
             const nodePath = await import("node:path")
 
-            let filePath = path
-            if (!filePath.endsWith(".drawio")) {
-                filePath = `${filePath}.drawio`
+            // Detect format from extension if not specified
+            const ext = nodePath.extname(path).toLowerCase()
+            const detectedFormat =
+                format ||
+                (ext === ".png" ? "png" : ext === ".svg" ? "svg" : "drawio")
+
+            // Original .drawio export path (unchanged logic)
+            if (detectedFormat === "drawio") {
+                let filePath = path
+                if (!filePath.endsWith(".drawio")) {
+                    filePath = `${filePath}.drawio`
+                }
+                const absolutePath = nodePath.resolve(filePath)
+                await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
+                log.info(`Diagram exported to ${absolutePath}`)
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${currentSession.xml.length} characters`,
+                        },
+                    ],
+                }
             }
 
+            // PNG or SVG: request browser to export via iframe
+            let filePath = path
+            if (ext !== `.${detectedFormat}`) {
+                if (ext === ".drawio" || ext === ".png" || ext === ".svg") {
+                    filePath = filePath.slice(0, -ext.length)
+                }
+                filePath = `${filePath}.${detectedFormat}`
+            }
             const absolutePath = nodePath.resolve(filePath)
-            await fs.writeFile(absolutePath, currentSession.xml, "utf-8")
 
-            log.info(`Diagram exported to ${absolutePath}`)
+            const state = getState(currentSession.id)
+            if (!state) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Session state not found. Is the browser open?",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            state.exportFormat = detectedFormat as "png" | "svg"
+            state.exportData = undefined
 
+            // Wait for browser to produce the export data
+            const timeoutMs = 10000
+            const start = Date.now()
+            while (Date.now() - start < timeoutMs) {
+                if (state.exportData) break
+                await new Promise((r) => setTimeout(r, 200))
+            }
+            const exportData = state.exportData as string | undefined
+            state.exportData = undefined
+            state.exportFormat = undefined
+
+            if (!exportData) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Export timed out. Make sure the browser tab is open and the diagram is loaded.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            // Decode and write
+            if (detectedFormat === "png") {
+                const base64 = exportData.replace(
+                    /^data:image\/png;base64,/,
+                    "",
+                )
+                await fs.writeFile(absolutePath, Buffer.from(base64, "base64"))
+            } else {
+                let svgContent = exportData
+                if (svgContent.startsWith("data:image/svg+xml;base64,")) {
+                    const base64 = svgContent.replace(
+                        /^data:image\/svg\+xml;base64,/,
+                        "",
+                    )
+                    svgContent = Buffer.from(base64, "base64").toString("utf-8")
+                }
+                await fs.writeFile(absolutePath, svgContent, "utf-8")
+            }
+
+            const stat = await fs.stat(absolutePath)
+            log.info(
+                `Diagram exported to ${absolutePath} (${detectedFormat}, ${stat.size} bytes)`,
+            )
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${currentSession.xml.length} characters`,
+                        text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nFormat: ${detectedFormat}\nSize: ${stat.size} bytes`,
                     },
                 ],
             }

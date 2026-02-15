@@ -34,12 +34,13 @@ export interface ClientOverrides {
     vertexApiKey?: string | null // Express Mode API key
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
-    // Custom env var names for server models (allows multiple API keys per provider)
-    apiKeyEnv?: string
+    // Custom env var name(s) for server models
+    // Can be a single string or array of strings for load balancing
+    apiKeyEnv?: string | string[]
     baseUrlEnv?: string
 }
 
-// Providers that can be used with client-provided API keys
+// Providers that can be selected from client settings
 const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "openai",
     "anthropic",
@@ -53,6 +54,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "sglang",
     "gateway",
     "edgeone",
+    "ollama",
     "doubao",
     "modelscope",
 ]
@@ -98,10 +100,12 @@ export function resolveBaseURL(
 /**
  * Resolve API key from custom env var name or default env var.
  * Supports multiple API keys per provider via ai-models.json apiKeyEnv config.
+ * When multiple keys are configured, randomly selects one for load balancing.
  *
  * Priority:
  * 1. User-provided API key (overrides.apiKey)
- * 2. Custom env var from ai-models.json (overrides.apiKeyEnv)
+ * 2. Custom env var(s) from ai-models.json (overrides.apiKeyEnv)
+ *    - If array, randomly picks one with a valid value
  * 3. Default provider env var (defaultEnvVar)
  */
 function resolveApiKey(
@@ -109,7 +113,30 @@ function resolveApiKey(
     defaultEnvVar: string,
 ): string | undefined {
     if (overrides?.apiKey) return overrides.apiKey
-    if (overrides?.apiKeyEnv) return process.env[overrides.apiKeyEnv]
+
+    if (overrides?.apiKeyEnv) {
+        // Handle array of env var names - randomly select one
+        if (Array.isArray(overrides.apiKeyEnv)) {
+            // Filter to only env vars that have values
+            const validEnvVars = overrides.apiKeyEnv.filter(
+                (envVar) => process.env[envVar],
+            )
+            if (validEnvVars.length > 0) {
+                // Randomly select one
+                const selectedEnvVar =
+                    validEnvVars[
+                        Math.floor(Math.random() * validEnvVars.length)
+                    ]
+                console.log(
+                    `[API Key Routing] Selected ${selectedEnvVar} from ${validEnvVars.length} available keys`,
+                )
+                return process.env[selectedEnvVar]
+            }
+        } else {
+            return process.env[overrides.apiKeyEnv]
+        }
+    }
+
     return process.env[defaultEnvVar]
 }
 
@@ -515,12 +542,24 @@ function detectProvider(): ProviderName | null {
 /**
  * Validate that required API keys are present for the selected provider
  * @param provider - The provider to validate
- * @param customApiKeyEnv - Optional custom env var name (from ai-models.json apiKeyEnv)
+ * @param customApiKeyEnv - Optional custom env var name(s) (from ai-models.json apiKeyEnv)
  */
 function validateProviderCredentials(
     provider: ProviderName,
-    customApiKeyEnv?: string,
+    customApiKeyEnv?: string | string[],
 ): void {
+    // Handle array of env var names - at least one must be set
+    if (Array.isArray(customApiKeyEnv)) {
+        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
+        if (!hasAnyKey) {
+            throw new Error(
+                `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
+                    `Please set at least one in your .env.local file.`,
+            )
+        }
+        return
+    }
+
     // Use custom env var name if provided, otherwise use default
     const requiredVar = customApiKeyEnv || PROVIDER_ENV_VARS[provider]
     if (requiredVar && !process.env[requiredVar]) {
@@ -572,12 +611,13 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
-    // Exception: EdgeOne provider doesn't require API key (uses Edge AI runtime)
+    // Exception: EdgeOne and Ollama providers don't require API keys
     if (
         overrides?.baseUrl &&
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
-        overrides?.provider !== "edgeone"
+        overrides?.provider !== "edgeone" &&
+        overrides?.provider !== "ollama"
     ) {
         throw new Error(
             `API key is required when using a custom base URL. ` +
@@ -836,16 +876,16 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
-        case "ollama":
-            if (process.env.OLLAMA_BASE_URL) {
-                const customOllama = createOllama({
-                    baseURL: process.env.OLLAMA_BASE_URL,
-                })
+        case "ollama": {
+            const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
+            if (baseURL) {
+                const customOllama = createOllama({ baseURL })
                 model = customOllama(modelId)
             } else {
                 model = ollama(modelId)
             }
             break
+        }
 
         case "openrouter": {
             const apiKey = resolveApiKey(overrides, "OPENROUTER_API_KEY")
@@ -1159,8 +1199,15 @@ export function supportsImageInput(modelId: string): boolean {
         lowerModelId.includes("vision") || lowerModelId.includes("vl")
 
     // Models that DON'T support image/vision input (unless vision variant)
-    // Kimi K2 models don't support images
-    if (lowerModelId.includes("kimi") && !hasVisionIndicator) {
+    // Kimi K2 doesn't support images, but K2.5 does
+    // Only block kimi-k2 specifically, not other Kimi models
+    if (
+        (lowerModelId.includes("kimi-k2") ||
+            lowerModelId.includes("kimi_k2")) &&
+        !hasVisionIndicator &&
+        !lowerModelId.includes("2.5") &&
+        !lowerModelId.includes("k2.5")
+    ) {
         return false
     }
 
@@ -1176,4 +1223,28 @@ export function supportsImageInput(modelId: string): boolean {
 
     // Default: assume model supports images
     return true
+}
+
+/**
+ * Get the AI model for diagram validation.
+ * Uses VALIDATION_MODEL env var if set, otherwise falls back to AI_MODEL.
+ * Throws if the model doesn't support image input.
+ */
+export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
+    const modelId = process.env.VALIDATION_MODEL || process.env.AI_MODEL
+
+    if (!modelId) {
+        throw new Error(
+            "No validation model configured. Set VALIDATION_MODEL or AI_MODEL.",
+        )
+    }
+
+    if (!supportsImageInput(modelId)) {
+        throw new Error(
+            `Validation requires a vision-capable model. Model "${modelId}" does not support image input.`,
+        )
+    }
+
+    const { model } = getAIModel({ modelId })
+    return model
 }

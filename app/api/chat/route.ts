@@ -118,7 +118,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
     const hasOwnApiKey = !!(
-        req.headers.get("x-ai-provider") && req.headers.get("x-ai-api-key")
+        req.headers.get("x-ai-provider") &&
+        (req.headers.get("x-ai-api-key") ||
+            req.headers.get("x-aws-access-key-id") ||
+            req.headers.get("x-vertex-api-key"))
     )
 
     // Skip quota check if: quota disabled, user has own API key, or is anonymous
@@ -183,7 +186,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // Check if this is a server model with custom env var names
     let serverModelConfig: {
-        apiKeyEnv?: string
+        apiKeyEnv?: string | string[]
         baseUrlEnv?: string
         provider?: string
     } = {}
@@ -446,6 +449,7 @@ ${userInputText}
 
     const result = streamText({
         model,
+        abortSignal: req.signal,
         ...(process.env.MAX_OUTPUT_TOKENS && {
             maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
         }),
@@ -473,6 +477,13 @@ ${userInputText}
                         inputToRepair = inputToRepair.replace(/:=/g, ": ")
                         // Fix `= "` instead of `: "`
                         inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
+                        // Fix inconsistent quote escaping in XML attributes within JSON strings
+                        // Pattern: attribute="value\" where opening quote is unescaped but closing is escaped
+                        // Example: y="-20\" should be y=\"-20\"
+                        inputToRepair = inputToRepair.replace(
+                            /(\w+)="([^"]*?)\\"/g,
+                            '$1=\\"$2\\"',
+                        )
                     }
                     // Use jsonrepair to fix truncated JSON
                     const repairedInput = jsonrepair(inputToRepair)
@@ -652,7 +663,7 @@ Available libraries:
 - Networking: cisco19, network, kubernetes, vvd, rack
 - Business: bpmn, lean_mapping
 - General: flowchart, basic, arrows2, infographic, sitemap
-- UI/Mockups: android
+- UI/Mockups: android, material_design
 - Enterprise: citrix, sap, mscae, atlassian
 - Engineering: fluidpower, electrical, pid, cabinets, floorplan
 - Icons: webicons
@@ -697,7 +708,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                         if (
                             (error as NodeJS.ErrnoException).code === "ENOENT"
                         ) {
-                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, lean_mapping, openstack, rack`
+                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, material_design, lean_mapping, openstack, rack`
                         }
                         console.error(
                             `[get_shape_library] Error loading "${library}":`,

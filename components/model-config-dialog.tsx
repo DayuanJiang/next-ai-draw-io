@@ -443,12 +443,12 @@ export function ModelConfigDialog({
                                             }}
                                             className={cn(
                                                 "group flex items-center gap-3 px-3 py-2.5 rounded-xl w-full",
-                                                "text-left text-sm transition-all duration-150",
+                                                "text-left text-sm transition-all duration-150 border border-transparent",
                                                 "hover:bg-interactive-hover",
                                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                                                 selectedProviderId ===
                                                     provider.id &&
-                                                    "bg-surface-0 shadow-sm ring-1 ring-border-subtle",
+                                                    "bg-surface-0 shadow-sm border-border-subtle",
                                             )}
                                         >
                                             <div
@@ -997,10 +997,19 @@ export function ModelConfigDialog({
                                                             className="text-xs font-medium flex items-center gap-1.5"
                                                         >
                                                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            Base URL{" "}
-                                                            <span className="text-muted-foreground font-normal">
-                                                                (optional)
-                                                            </span>
+                                                            {formatMessage(
+                                                                dict.modelConfig
+                                                                    .baseUrlWithExample,
+                                                                {
+                                                                    example:
+                                                                        PROVIDER_INFO[
+                                                                            selectedProvider
+                                                                                .provider
+                                                                        ]
+                                                                            .defaultBaseUrl ||
+                                                                        "https://api.example.com/v1",
+                                                                },
+                                                            )}
                                                         </Label>
                                                         <Input
                                                             id="vertex-base-url"
@@ -1204,17 +1213,19 @@ export function ModelConfigDialog({
                                                             className="text-xs font-medium flex items-center gap-1.5"
                                                         >
                                                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {
+                                                            {formatMessage(
                                                                 dict.modelConfig
-                                                                    .baseUrl
-                                                            }
-                                                            <span className="text-muted-foreground font-normal">
+                                                                    .baseUrlWithExample,
                                                                 {
-                                                                    dict
-                                                                        .modelConfig
-                                                                        .optional
-                                                                }
-                                                            </span>
+                                                                    example:
+                                                                        PROVIDER_INFO[
+                                                                            selectedProvider
+                                                                                .provider
+                                                                        ]
+                                                                            .defaultBaseUrl ||
+                                                                        "https://api.example.com/v1",
+                                                                },
+                                                            )}
                                                         </Label>
                                                         <Input
                                                             id="base-url"
@@ -1650,12 +1661,16 @@ export function ModelConfigDialog({
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Switch
+                                id="show-unvalidated-models"
                                 checked={modelConfig.showUnvalidatedModels}
                                 onCheckedChange={
                                     modelConfig.setShowUnvalidatedModels
                                 }
                             />
-                            <Label className="text-xs text-muted-foreground cursor-pointer">
+                            <Label
+                                htmlFor="show-unvalidated-models"
+                                className="text-xs text-muted-foreground cursor-pointer"
+                            >
                                 {dict.modelConfig.showUnvalidatedModels}
                             </Label>
                         </div>

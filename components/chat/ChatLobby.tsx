@@ -8,9 +8,9 @@ import {
     Trash2,
     X,
 } from "lucide-react"
-import Image from "next/image"
 import { useState } from "react"
 import ExamplePanel from "@/components/chat-example-panel"
+import Image from "@/components/image-with-basepath"
 import {
     AlertDialog,
     AlertDialogAction,

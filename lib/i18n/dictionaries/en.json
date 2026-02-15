@@ -34,7 +34,7 @@
     "chat": {
         "placeholder": "Describe your diagram or upload a file...",
         "send": "Send",
-        "sending": "Sending...",
+        "stopGeneration": "Stop generation",
         "sendMessage": "Send message",
         "clearConversation": "Clear conversation",
         "diagramHistory": "Diagram history",
@@ -77,6 +77,8 @@
     "settings": {
         "title": "Settings",
         "description": "Configure your application settings.",
+        "apiKeysModels": "API Keys & Models",
+        "apiKeysModelsDescription": "Configure AI providers and API keys.",
         "accessCode": "Access Code",
         "accessCodePlaceholder": "Enter access code",
         "accessCodeDescription": "Required to use this application.",
@@ -115,7 +117,11 @@
         "httpProxy": "HTTP Proxy",
         "httpsProxy": "HTTPS Proxy",
         "applyProxy": "Apply",
-        "proxyApplied": "Proxy settings applied"
+        "proxyApplied": "Proxy settings applied",
+        "diagramValidation": "Diagram Validation (Experimental)",
+        "diagramValidationDescription": "Use a vision language model to validate generated diagrams. Requires a VLM like GPT-5.2 or Sonnet-4.5.",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
     },
     "save": {
         "title": "Save Diagram",
@@ -248,6 +254,24 @@
         "searchPlaceholder": "Search chats...",
         "noResults": "No chats found"
     },
+    "validation": {
+        "title": "Validate Diagram",
+        "capturing": "Capturing",
+        "validating": "Validating",
+        "validatingWithAttempt": "Validating ({attempt}/{max})",
+        "valid": "Valid",
+        "validWithWarnings": "Valid with Warnings",
+        "issuesFound": "Issues Found",
+        "error": "Error",
+        "skipped": "Skipped",
+        "capturedScreenshot": "Captured Screenshot:",
+        "issuesFoundLabel": "Issues Found:",
+        "suggestions": "Suggestions:",
+        "passedValidation": "Diagram passed visual validation - no issues detected.",
+        "improvementRequested": "Improvement requested - check the new diagram below",
+        "improveWithSuggestions": "Improve with Suggestions",
+        "regenerateWithFeedback": "Regenerate the diagram using the validation feedback"
+    },
     "modelConfig": {
         "title": "AI Model Configuration",
         "description": "Configure multiple AI providers and models",
@@ -280,6 +304,7 @@
         "enterSecretKey": "Enter your secret access key",
         "baseUrl": "Base URL",
         "optional": "(optional)",
+        "baseUrlWithExample": "Base URL (optional, e.g. {example})",
         "customEndpoint": "Custom endpoint URL",
         "models": "Models",
         "customModelId": "Custom model ID...",
