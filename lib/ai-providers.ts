@@ -878,7 +878,12 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         case "ollama": {
             const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
-            const apiKey = resolveApiKey(overrides, "OLLAMA_API_KEY")
+            // SECURITY: When client provides a custom base URL, only use
+            // client-provided API key. Never fall back to server OLLAMA_API_KEY
+            // to prevent leaking server credentials to user-controlled endpoints.
+            const apiKey = overrides?.baseUrl
+                ? overrides?.apiKey || undefined
+                : resolveApiKey(overrides, "OLLAMA_API_KEY")
             if (baseURL || apiKey) {
                 const customOllama = createOllama({
                     ...(baseURL && { baseURL }),
