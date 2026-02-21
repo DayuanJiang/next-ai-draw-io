@@ -92,8 +92,8 @@
         "language": "言語",
         "languageDescription": "インターフェース言語を選択します。",
         "theme": "テーマ",
-        "themeDescription": "インターフェースと DrawIO キャンバスのダーク/ライトモード。",
-        "drawioStyle": "DrawIO スタイル",
+        "themeDescription": "インターフェースと Editor キャンバスのダーク/ライトモード。",
+        "drawioStyle": "Editor スタイル",
         "drawioStyleDescription": "キャンバススタイル：",
         "switchTo": "切り替え",
         "minimal": "ミニマル",
@@ -114,7 +114,7 @@
         "filename": "ファイル名",
         "filenamePlaceholder": "ファイル名を入力",
         "formats": {
-            "drawio": "Draw.io XML",
+            "xml": "Diagram XML",
             "png": "PNG 画像",
             "svg": "SVG 画像"
         },

@@ -92,8 +92,8 @@
         "language": "语言",
         "languageDescription": "选择界面语言。",
         "theme": "主题",
-        "themeDescription": "界面和 DrawIO 画布的深色/浅色模式。",
-        "drawioStyle": "DrawIO 样式",
+        "themeDescription": "界面和 Editor 画布的深色/浅色模式。",
+        "drawioStyle": "Editor 样式",
         "drawioStyleDescription": "画布样式：",
         "switchTo": "切换到",
         "minimal": "简约",
@@ -114,7 +114,7 @@
         "filename": "文件名",
         "filenamePlaceholder": "输入文件名",
         "formats": {
-            "drawio": "Draw.io XML",
+            "xml": "Diagram XML",
             "png": "PNG 图片",
             "svg": "SVG 图片"
         },
