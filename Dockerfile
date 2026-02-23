@@ -9,6 +9,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install dependencies
+ARG ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN npm install
 
 # Stage 2: Build application
