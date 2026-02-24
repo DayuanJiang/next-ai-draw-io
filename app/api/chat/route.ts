@@ -24,16 +24,16 @@ import {
     validateFileParts,
 } from "@/lib/chat-helpers"
 import {
-    checkAndIncrementRequest,
-    isQuotaEnabled,
-    recordTokenUsage,
-} from "@/lib/dynamo-quota-manager"
-import {
     getTelemetryConfig,
     setTraceInput,
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import {
+    checkAndIncrementRequest,
+    isQuotaEnabled,
+    recordTokenUsage,
+} from "@/lib/quota-manager"
 import { findServerModelById } from "@/lib/server-model-config"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
@@ -117,6 +117,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
+    // and QUOTA_PROVIDER=dynamo
     const hasOwnApiKey = !!(
         req.headers.get("x-ai-provider") &&
         (req.headers.get("x-ai-api-key") ||
@@ -125,7 +126,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // Skip quota check if: quota disabled, user has own API key, or is anonymous
-    if (isQuotaEnabled() && !hasOwnApiKey && userId !== "anonymous") {
+    if ((await isQuotaEnabled()) && !hasOwnApiKey && userId !== "anonymous") {
         const quotaCheck = await checkAndIncrementRequest(userId, {
             requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
             tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
@@ -532,7 +533,7 @@ ${userInputText}
                 userId,
             }),
         }),
-        onFinish: ({ text, totalUsage }) => {
+        onFinish: async ({ text, totalUsage }) => {
             // AI SDK 6 telemetry auto-reports token usage on its spans
             setTraceOutput(text)
 
@@ -540,7 +541,7 @@ ${userInputText}
             // Use totalUsage (cumulative across all steps) instead of usage (final step only)
             // Include all 4 token types: input, output, cache read, cache write
             if (
-                isQuotaEnabled() &&
+                (await isQuotaEnabled()) &&
                 !hasOwnApiKey &&
                 userId !== "anonymous" &&
                 totalUsage
@@ -550,7 +551,7 @@ ${userInputText}
                     (totalUsage.outputTokens || 0) +
                     (totalUsage.cachedInputTokens || 0) +
                     (totalUsage.inputTokenDetails?.cacheWriteTokens || 0)
-                recordTokenUsage(userId, totalTokens)
+                await recordTokenUsage(userId, totalTokens)
             }
         },
         tools: {
