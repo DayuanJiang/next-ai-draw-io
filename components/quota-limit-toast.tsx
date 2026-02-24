@@ -23,6 +23,7 @@ export function QuotaLimitToast({
 }: QuotaLimitToastProps) {
     const dict = useDictionary()
     const isTokenLimit = type === "token"
+    const isSelfHosted = process.env.NEXT_PUBLIC_SELFHOSTED === "true"
     const formatNumber = (n: number) =>
         n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString()
 
@@ -73,17 +74,34 @@ export function QuotaLimitToast({
             <div className="text-sm text-muted-foreground leading-relaxed mb-4 space-y-2">
                 <p>
                     {isTokenLimit
-                        ? dict.quota.messageToken
-                        : dict.quota.messageApi}
+                        ? isSelfHosted
+                            ? (dict.quota.messageTokenSelfHosted ??
+                              dict.quota.messageToken)
+                            : dict.quota.messageToken
+                        : isSelfHosted
+                          ? (dict.quota.messageApiSelfHosted ??
+                            dict.quota.messageApi)
+                          : dict.quota.messageApi}
                 </p>
+                {!isSelfHosted && (
+                    <p
+                        dangerouslySetInnerHTML={{
+                            __html: formatMessage(
+                                dict.quota.doubaoSponsorship,
+                                {
+                                    link: "https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project",
+                                },
+                            ),
+                        }}
+                    />
+                )}
                 <p
                     dangerouslySetInnerHTML={{
-                        __html: formatMessage(dict.quota.doubaoSponsorship, {
-                            link: "https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project",
-                        }),
+                        __html: isSelfHosted
+                            ? (dict.quota.tipSelfHosted ?? dict.quota.tip)
+                            : dict.quota.tip,
                     }}
                 />
-                <p dangerouslySetInnerHTML={{ __html: dict.quota.tip }} />
                 <p>{dict.quota.reset}</p>
             </div>{" "}
             {/* Action buttons */}
@@ -101,24 +119,28 @@ export function QuotaLimitToast({
                         {dict.quota.configModel}
                     </button>
                 )}
-                <a
-                    href="https://github.com/DayuanJiang/next-ai-draw-io"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
-                >
-                    <FaGithub className="w-3.5 h-3.5" />
-                    {dict.quota.selfHost}
-                </a>
-                <a
-                    href="https://github.com/sponsors/DayuanJiang"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
-                >
-                    <Coffee className="w-3.5 h-3.5" />
-                    {dict.quota.sponsor}
-                </a>
+                {!isSelfHosted && (
+                    <a
+                        href="https://github.com/DayuanJiang/next-ai-draw-io"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+                    >
+                        <FaGithub className="w-3.5 h-3.5" />
+                        {dict.quota.selfHost}
+                    </a>
+                )}
+                {!isSelfHosted && (
+                    <a
+                        href="https://github.com/sponsors/DayuanJiang"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+                    >
+                        <Coffee className="w-3.5 h-3.5" />
+                        {dict.quota.sponsor}
+                    </a>
+                )}
             </div>
         </div>
     )
