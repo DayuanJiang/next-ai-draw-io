@@ -86,6 +86,35 @@ export function MessageBridge() {
                         saveDiagramToFile("diagram", data.format)
                     }
                     break
+
+                case "setTheme":
+                    if (data.theme === "dark" || data.theme === "light") {
+                        const isDark = data.theme === "dark"
+                        document.documentElement.classList.toggle(
+                            "dark",
+                            isDark,
+                        )
+                        localStorage.setItem(
+                            "next-ai-draw-io-dark-mode",
+                            String(isDark),
+                        )
+                        window.location.reload()
+                    }
+                    break
+
+                case "getTheme":
+                    window.parent.postMessage(
+                        JSON.stringify({
+                            event: "themeResponse",
+                            theme: document.documentElement.classList.contains(
+                                "dark",
+                            )
+                                ? "dark"
+                                : "light",
+                        }),
+                        "*",
+                    )
+                    break
             }
         }
 
