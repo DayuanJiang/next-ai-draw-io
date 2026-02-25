@@ -1217,7 +1217,12 @@ export function supportsImageInput(modelId: string): boolean {
     }
 
     // Qwen text models (not vision variants like qwen-vl)
-    if (lowerModelId.includes("qwen") && !hasVisionIndicator) {
+    // qwen3.5-plus is a vision model
+    if (
+        lowerModelId.includes("qwen") &&
+        !hasVisionIndicator &&
+        !lowerModelId.includes("qwen3.5-plus")
+    ) {
         return false
     }
 

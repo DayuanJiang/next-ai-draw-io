@@ -264,6 +264,7 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "Qwen/Qwen2.5-Coder-32B-Instruct",
         "Qwen/Qwen2.5-7B-Instruct",
         "Qwen/Qwen2-VL-72B-Instruct",
+        "qwen3.5-plus",
     ],
     sglang: [
         // SGLang is OpenAI-compatible, models depend on deployment
@@ -293,6 +294,7 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "Qwen/Qwen3-235B-A22B-Instruct-2507",
         "Qwen/Qwen3-VL-235B-A22B-Instruct",
         "Qwen/Qwen3-32B",
+        "qwen3.5-plus",
         // DeepSeek
         "deepseek-ai/DeepSeek-R1-0528",
         "deepseek-ai/DeepSeek-V3.2",
