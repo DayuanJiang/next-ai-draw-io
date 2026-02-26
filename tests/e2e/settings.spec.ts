@@ -1,10 +1,4 @@
-import {
-    expect,
-    getIframe,
-    getSettingsButton,
-    openSettings,
-    test,
-} from "./lib/fixtures"
+import { expect, getIframe, openSettings, test } from "./lib/fixtures"
 
 test.describe("Settings", () => {
     test.beforeEach(async ({ page }) => {
