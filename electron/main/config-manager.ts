@@ -359,9 +359,9 @@ const PROVIDER_ENV_MAP: Record<string, { apiKey: string; baseUrl: string }> = {
         baseUrl: "MODELSCOPE_BASE_URL",
     },
     gateway: { apiKey: "AI_GATEWAY_API_KEY", baseUrl: "AI_GATEWAY_BASE_URL" },
-    // bedrock and ollama don't use API keys in the same way
+    // bedrock doesn't use API keys in the same way
     bedrock: { apiKey: "", baseUrl: "" },
-    ollama: { apiKey: "", baseUrl: "OLLAMA_BASE_URL" },
+    ollama: { apiKey: "OLLAMA_API_KEY", baseUrl: "OLLAMA_BASE_URL" },
 }
 
 /**

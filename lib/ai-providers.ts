@@ -596,7 +596,7 @@ function validateProviderCredentials(
  * - GOOGLE_GENERATIVE_AI_API_KEY: Google API key
  * - AZURE_RESOURCE_NAME, AZURE_API_KEY: Azure OpenAI credentials
  * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
- * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to http://localhost:11434)
+ * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to https://ollama.com/api)
  * - OPENROUTER_API_KEY: OpenRouter API key
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
@@ -611,13 +611,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
-    // Exception: EdgeOne and Ollama providers don't require API keys
+    // Exception: EdgeOne doesn't require API keys.
+    // Ollama is exempt only when no server OLLAMA_API_KEY is configured;
+    // when it IS configured, the outer guard also enforces client apiKey for custom baseUrls.
     if (
         overrides?.baseUrl &&
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone" &&
-        overrides?.provider !== "ollama"
+        !(overrides?.provider === "ollama" && !process.env.OLLAMA_API_KEY)
     ) {
         throw new Error(
             `API key is required when using a custom base URL. ` +
