@@ -94,7 +94,8 @@ if (!gotTheLock) {
             if (
                 url.includes("diagrams.net") ||
                 url.includes("draw.io") ||
-                url.startsWith("http://localhost")
+                url.startsWith("http://localhost") ||
+                url.startsWith("http://127.0.0.1")
             ) {
                 return { action: "allow" }
             }
