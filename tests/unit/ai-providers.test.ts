@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+    getAIModel,
     resolveBaseURL,
     supportsImageInput,
     supportsPromptCaching,
@@ -187,5 +188,122 @@ describe("supportsImageInput", () => {
         expect(supportsImageInput("claude-sonnet-4-5")).toBe(true)
         expect(supportsImageInput("gpt-4o")).toBe(true)
         expect(supportsImageInput("gemini-pro")).toBe(true)
+    })
+})
+
+vi.mock("ollama-ai-provider-v2", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateOllama = vi.fn(() => mockProviderFn)
+    const mockOllama = vi.fn(() => mockModel)
+    return { createOllama: mockCreateOllama, ollama: mockOllama }
+})
+
+describe("Ollama API key security", () => {
+    let createOllamaMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.OLLAMA_API_KEY = process.env.OLLAMA_API_KEY
+        savedEnv.OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL
+        delete process.env.OLLAMA_BASE_URL
+
+        const mod = await import("ollama-ai-provider-v2")
+        createOllamaMock = mod.createOllama as ReturnType<typeof vi.fn>
+        createOllamaMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.OLLAMA_API_KEY = savedEnv.OLLAMA_API_KEY
+        process.env.OLLAMA_BASE_URL = savedEnv.OLLAMA_BASE_URL
+    })
+
+    it("applies server OLLAMA_API_KEY when no client baseUrl is provided", () => {
+        process.env.OLLAMA_API_KEY = "server-secret-key"
+
+        getAIModel({ provider: "ollama", modelId: "llama2" })
+
+        expect(createOllamaMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                headers: { Authorization: "Bearer server-secret-key" },
+            }),
+        )
+    })
+
+    it("does NOT leak server OLLAMA_API_KEY when client provides a custom baseUrl", () => {
+        process.env.OLLAMA_API_KEY = "server-secret-key"
+
+        // When server has OLLAMA_API_KEY, the SSRF guard rejects
+        // client-provided baseUrl without an apiKey outright
+        expect(() =>
+            getAIModel({
+                provider: "ollama",
+                baseUrl: "https://evil-server.com",
+                modelId: "llama2",
+            }),
+        ).toThrow("API key is required")
+    })
+
+    it("uses client API key when client provides both baseUrl and apiKey", () => {
+        process.env.OLLAMA_API_KEY = "server-secret-key"
+
+        getAIModel({
+            provider: "ollama",
+            baseUrl: "https://my-ollama.com",
+            apiKey: "client-key",
+            modelId: "llama2",
+        })
+
+        expect(createOllamaMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://my-ollama.com",
+                headers: { Authorization: "Bearer client-key" },
+            }),
+        )
+    })
+
+    it("applies both server OLLAMA_BASE_URL and OLLAMA_API_KEY when no client overrides", () => {
+        process.env.OLLAMA_BASE_URL = "https://cloud.ollama.com"
+        process.env.OLLAMA_API_KEY = "server-key"
+
+        getAIModel({ provider: "ollama", modelId: "llama2" })
+
+        expect(createOllamaMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://cloud.ollama.com",
+                headers: { Authorization: "Bearer server-key" },
+            }),
+        )
+    })
+
+    it("works when OLLAMA_API_KEY is set but OLLAMA_BASE_URL is not", () => {
+        process.env.OLLAMA_API_KEY = "server-key"
+        delete process.env.OLLAMA_BASE_URL
+
+        getAIModel({ provider: "ollama", modelId: "llama2" })
+
+        expect(createOllamaMock).toHaveBeenCalledTimes(1)
+        const callArgs = createOllamaMock.mock.calls[0][0]
+        expect(callArgs).not.toHaveProperty("baseURL")
+        expect(callArgs).toEqual(
+            expect.objectContaining({
+                headers: { Authorization: "Bearer server-key" },
+            }),
+        )
+    })
+
+    it("allows client custom baseUrl without apiKey when no server OLLAMA_API_KEY", () => {
+        delete process.env.OLLAMA_API_KEY
+
+        getAIModel({
+            provider: "ollama",
+            baseUrl: "https://my-ollama.com",
+            modelId: "llama2",
+        })
+
+        expect(createOllamaMock).toHaveBeenCalledTimes(1)
+        const callArgs = createOllamaMock.mock.calls[0][0]
+        expect(callArgs.baseURL).toBe("https://my-ollama.com")
+        expect(callArgs).not.toHaveProperty("headers")
     })
 })

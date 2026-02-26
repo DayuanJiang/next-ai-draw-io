@@ -174,10 +174,21 @@ export async function POST(req: Request) {
             }
 
             case "ollama": {
-                const ollama = createOllama({
-                    baseURL: baseUrl || "http://localhost:11434",
+                // SECURITY: Mirror ai-providers.ts guard — only use server
+                // OLLAMA_API_KEY when the URL is also from server config.
+                const ollamaApiKey = baseUrl
+                    ? apiKey || undefined
+                    : apiKey || process.env.OLLAMA_API_KEY || undefined
+                const ollamaProvider = createOllama({
+                    baseURL:
+                        baseUrl ||
+                        process.env.OLLAMA_BASE_URL ||
+                        "https://ollama.com/api",
+                    ...(ollamaApiKey && {
+                        headers: { Authorization: `Bearer ${ollamaApiKey}` },
+                    }),
                 })
-                model = ollama(modelId)
+                model = ollamaProvider(modelId)
                 break
             }
 
