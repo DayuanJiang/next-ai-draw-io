@@ -104,7 +104,7 @@ export const PROVIDER_INFO: Record<
     bedrock: { label: "Amazon Bedrock" },
     ollama: {
         label: "Ollama",
-        defaultBaseUrl: "http://localhost:11434",
+        defaultBaseUrl: "https://ollama.com/api",
     },
     openrouter: {
         label: "OpenRouter",
