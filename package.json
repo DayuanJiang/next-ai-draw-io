@@ -125,7 +125,7 @@
         "@vitest/coverage-v8": "^4.0.16",
         "concurrently": "^9.2.1",
         "cross-env": "^10.1.0",
-        "electron": "^39.2.7",
+        "electron": "^40.0.0",
         "electron-builder": "^26.0.12",
         "esbuild": "^0.27.2",
         "eslint": "9.39.2",
