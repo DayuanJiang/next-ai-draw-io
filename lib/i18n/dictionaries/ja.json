@@ -183,7 +183,7 @@
         "messageToken": "今日のトークン利用上限に達してしまったようです。楽しんでいただけて本当に嬉しいです。このデモはByteDance Doubaoのご厚意により提供されていますが、皆様に公平にご利用いただくため、少し制限を設けさせていただいております。",
         "messageTokenSelfHosted": null,
         "tip": "<strong>ヒント：</strong>独自の API キーを使用する（設定アイコンをクリック）か、プロジェクトをセルフホストしてこれらの制限を回避できます。",
-        "tipSelfHosted": null,
+        "tipSelfHosted": "<strong>ヒント：</strong>設定で独自の API キーを設定することで、引き続きサービスをご利用いただけます。",
         "reset": "制限は明日リセットされます。ご理解ありがとうございます。",
         "doubaoSponsorship": "<a href=\"{link}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"underline hover:text-foreground\">こちらから登録</a>すると、各モデル（Doubao、DeepSeek、Kimi含む）で50万トークンを無料で取得できます。モデル設定でAPIキーを設定してください。",
         "configModel": "APIキーを使用",

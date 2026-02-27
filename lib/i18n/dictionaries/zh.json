@@ -183,7 +183,7 @@
         "messageToken": "看来您今天的 Token 用量已达上限。非常高兴您玩得开心，虽然本项目由字节跳动豆包慷慨赞助，但为了确保大家都能公平使用，我们不得不对使用量做一点小小的限制。",
         "messageTokenSelfHosted": null,
         "tip": "<strong>提示：</strong>您可以使用自己的 API 密钥（点击设置图标）或自托管项目来绕过这些限制。",
-        "tipSelfHosted": null,
+        "tipSelfHosted": "<strong>提示：</strong>您可以在设置中配置自己的 API 密钥以继续使用服务。",
         "reset": "您的限制将在明天重置。感谢您的理解。",
         "doubaoSponsorship": "<a href=\"{link}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"underline hover:text-foreground\">点击此处注册</a>可获得每个模型 50 万免费 Token（包括豆包、DeepSeek 和 Kimi），然后在模型设置中配置您的 API Key。",
         "configModel": "使用您的密钥",
