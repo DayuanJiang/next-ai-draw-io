@@ -5,7 +5,6 @@ import {
     History,
     Image as ImageIcon,
     Link,
-    Loader2,
     Send,
     Square,
 } from "lucide-react"

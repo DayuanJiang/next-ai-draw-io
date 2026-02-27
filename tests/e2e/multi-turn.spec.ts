@@ -3,7 +3,6 @@ import {
     createMixedMock,
     createMultiTurnMock,
     expect,
-    getChatInput,
     sendMessage,
     test,
     waitForComplete,

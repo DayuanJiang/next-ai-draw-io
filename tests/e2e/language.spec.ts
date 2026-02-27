@@ -1,6 +1,5 @@
 import {
     expect,
-    expectBeforeAndAfterReload,
     getChatInput,
     getIframe,
     openSettings,
