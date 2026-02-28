@@ -13,8 +13,13 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        handleAutoSave,
+        onDrawioLoad,
+        resetDrawioReady,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -176,6 +181,8 @@ export default function Home() {
                                         ref={drawioRef}
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
+                                        onAutoSave={handleAutoSave}
+                                        autosave={true}
                                         baseUrl={drawioBaseUrl}
                                         urlParameters={{
                                             ui: drawioUi,
@@ -184,6 +191,7 @@ export default function Home() {
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,
+                                            modified: false,
                                             dark: darkMode,
                                             lang: currentLang,
                                             // Enable offline mode in Electron to disable external service calls
