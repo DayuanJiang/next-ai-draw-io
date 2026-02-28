@@ -11,10 +11,16 @@ import {
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { isIndexedDBUsable } from "@/lib/session-storage"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        handleDiagramAutoSave,
+        onDrawioLoad,
+        resetDrawioReady,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -26,6 +32,8 @@ export default function Home() {
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
     const [isElectron, setIsElectron] = useState(false)
+    const [canPersist, setCanPersist] = useState(false)
+    const [canPersistChecked, setCanPersistChecked] = useState(false)
     const [drawioBaseUrl, setDrawioBaseUrl] = useState(
         process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net",
     )
@@ -76,6 +84,11 @@ export default function Home() {
             setDrawioBaseUrl(`${window.location.origin}/drawio/index.html`)
         }
 
+        void (async () => {
+            const usable = await isIndexedDBUsable()
+            setCanPersist(usable)
+            setCanPersistChecked(true)
+        })()
         setIsLoaded(true)
     }, [pathname, router])
 
@@ -83,6 +96,17 @@ export default function Home() {
         setIsDrawioReady(true)
         onDrawioLoad()
     }, [onDrawioLoad])
+
+    const handleDrawioAutoSave = useCallback(
+        (data: { xml?: string }) => {
+            handleDiagramAutoSave(data)
+            // Only suppress modified state when persistence is available
+            if (canPersist) {
+                drawioRef.current?.status({ message: "", modified: false })
+            }
+        },
+        [canPersist, drawioRef, handleDiagramAutoSave],
+    )
 
     const handleDarkModeChange = () => {
         const newValue = !darkMode
@@ -167,20 +191,32 @@ export default function Home() {
                         }`}
                     >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 relative">
-                            {isLoaded && (
+                            {isLoaded && canPersistChecked && (
                                 <div
                                     className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
                                 >
                                     <DrawIoEmbed
                                         key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
                                         ref={drawioRef}
+                                        autosave
+                                        onAutoSave={handleDrawioAutoSave}
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
                                         baseUrl={drawioBaseUrl}
+                                        configuration={
+                                            canPersist
+                                                ? { confirmExit: false }
+                                                : undefined
+                                        }
                                         urlParameters={{
                                             ui: drawioUi,
                                             spin: false,
                                             libraries: false,
+                                            // Disable modified tracking only when persistence is available
+                                            ...(canPersist && {
+                                                modified: false,
+                                                keepmodified: false,
+                                            }),
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,
