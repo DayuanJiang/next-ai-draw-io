@@ -24,6 +24,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import { DRAWIO_THEMES, type DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
 
@@ -59,11 +60,24 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
     "zh-Hant": "繁體中文",
 }
 
+// Mapping of Draw.io theme values to their translation dictionary keys
+const DRAWIO_THEME_LABELS: Record<
+    DrawioTheme,
+    keyof typeof DRAWIO_THEMES | string
+> = {
+    kennedy: "classic",
+    simple: "simple",
+    min: "minimal",
+    sketch: "sketch",
+    atlas: "atlas",
+}
+
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    drawioUi: "min" | "sketch"
-    onToggleDrawioUi: () => void
+    onCloseProtectionChange?: (enabled: boolean) => void
+    drawioUi: DrawioTheme
+    onDrawioUiChange: (theme: DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     minimalStyle?: boolean
@@ -87,7 +101,7 @@ function SettingsContent({
     open,
     onOpenChange,
     drawioUi,
-    onToggleDrawioUi,
+    onDrawioUiChange,
     darkMode,
     onToggleDarkMode,
     minimalStyle = false,
@@ -400,23 +414,34 @@ function SettingsContent({
                     {/* Draw.io Style */}
                     <SettingItem
                         label={dict.settings.drawioStyle}
-                        description={`${dict.settings.drawioStyleDescription} ${
-                            drawioUi === "min"
-                                ? dict.settings.minimal
-                                : dict.settings.sketch
-                        }`}
+                        description={dict.settings.drawioStyleDescription}
                     >
-                        <Button
-                            id="drawio-ui"
-                            variant="outline"
-                            onClick={onToggleDrawioUi}
-                            className="h-9 w-[120px] rounded-xl border-border-subtle hover:bg-interactive-hover font-normal"
+                        <Select
+                            value={drawioUi}
+                            onValueChange={(value) =>
+                                onDrawioUiChange(value as DrawioTheme)
+                            }
                         >
-                            {dict.settings.switchTo}{" "}
-                            {drawioUi === "min"
-                                ? dict.settings.sketch
-                                : dict.settings.minimal}
-                        </Button>
+                            <SelectTrigger
+                                id="drawio-ui"
+                                className="w-[120px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {DRAWIO_THEMES.map((theme) => (
+                                    <SelectItem key={theme} value={theme}>
+                                        {
+                                            dict.settings.themes[
+                                                DRAWIO_THEME_LABELS[
+                                                    theme
+                                                ] as keyof typeof dict.settings.themes
+                                            ]
+                                        }
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </SettingItem>
 
                     {/* Diagram Style */}
