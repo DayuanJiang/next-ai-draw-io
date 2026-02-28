@@ -68,7 +68,7 @@ export async function startNextServer(): Promise<string> {
     const env: Record<string, string> = {
         NODE_ENV: "production",
         PORT: String(port),
-        HOSTNAME: "localhost",
+        HOSTNAME: "127.0.0.1",
         // Enable Node.js built-in proxy support for fetch (Node.js 24+)
         NODE_USE_ENV_PROXY: "1",
     }

@@ -9,9 +9,11 @@ import { app } from "electron"
 const PORT_CONFIG = {
     // Development mode uses fixed port for hot reload compatibility
     development: 6002,
-    // Production mode uses fixed port (61337) to preserve localStorage
-    // Falls back to sequential ports if unavailable
-    production: 61337,
+    // Legacy production port — tried first to preserve localStorage for existing users
+    legacyProduction: 61337,
+    // New production port below the ephemeral range (49152-65535)
+    // to avoid conflicts with Windows Hyper-V / ephemeral port reservations
+    production: 13370,
     // Maximum attempts to find an available port (fallback)
     maxAttempts: 100,
 }
@@ -27,7 +29,10 @@ let allocatedPort: number | null = null
 export function isPortAvailable(port: number): Promise<boolean> {
     return new Promise((resolve) => {
         const server = net.createServer()
-        server.once("error", () => resolve(false))
+        server.once("error", (err: NodeJS.ErrnoException) => {
+            console.warn(`Port ${port} unavailable: ${err.code}`)
+            resolve(false)
+        })
         server.once("listening", () => {
             server.close()
             resolve(true)
@@ -39,12 +44,12 @@ export function isPortAvailable(port: number): Promise<boolean> {
 /**
  * Find an available port
  * - In development: uses fixed port (6002)
- * - In production: uses fixed port (61337) to preserve localStorage
+ * - In production: uses fixed port (13370) to preserve localStorage
  * - Falls back to sequential ports if preferred port is unavailable
+ * - Last resort: lets the OS assign a port (port 0)
  *
  * @param reuseExisting If true, try to reuse the previously allocated port
  * @returns Promise<number> The available port
- * @throws Error if no available port found after max attempts
  */
 export async function findAvailablePort(reuseExisting = true): Promise<number> {
     const isDev = !app.isPackaged
@@ -64,7 +69,16 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
         allocatedPort = null
     }
 
-    // Try preferred port first
+    // In production, try legacy port first to preserve existing users' localStorage
+    if (!isDev) {
+        const legacyPort = PORT_CONFIG.legacyProduction
+        if (await isPortAvailable(legacyPort)) {
+            allocatedPort = legacyPort
+            return legacyPort
+        }
+    }
+
+    // Try preferred port
     if (await isPortAvailable(preferredPort)) {
         allocatedPort = preferredPort
         return preferredPort
@@ -84,9 +98,23 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
         }
     }
 
-    throw new Error(
-        `Failed to find available port after ${PORT_CONFIG.maxAttempts} attempts`,
+    // Last resort: let the OS pick an available port
+    console.warn(
+        "All sequential ports failed. Requesting OS-assigned port (localStorage may not persist across restarts).",
     )
+    const osPort = await new Promise<number>((resolve, reject) => {
+        const server = net.createServer()
+        server.once("error", reject)
+        server.once("listening", () => {
+            const addr = server.address()
+            const port = (addr as net.AddressInfo).port
+            server.close(() => resolve(port))
+        })
+        server.listen(0, "127.0.0.1")
+    })
+    allocatedPort = osPort
+    console.log(`OS assigned port: ${osPort}`)
+    return osPort
 }
 
 /**
@@ -113,5 +141,5 @@ export function getServerUrl(): string {
             "No port allocated yet. Call findAvailablePort() first.",
         )
     }
-    return `http://localhost:${allocatedPort}`
+    return `http://127.0.0.1:${allocatedPort}`
 }
