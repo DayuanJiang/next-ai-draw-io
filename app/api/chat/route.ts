@@ -466,6 +466,8 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
+    // DEBUG: Log final messages
+    console.log("[route.ts] Final allMessages count:", allMessages.length, "system:", systemMessages.length, "enhanced:", enhancedMessages.length)
 
     const result = streamText({
         model,
