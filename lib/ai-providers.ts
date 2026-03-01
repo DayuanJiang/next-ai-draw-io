@@ -1187,7 +1187,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "qwen":
         case "qiniu":
         case "kimi": {
-            const apiKey = resolveApiKey(overrides, PROVIDER_ENV_VARS[provider])
+            const envVar = PROVIDER_ENV_VARS[provider]
+            if (!envVar) {
+                throw new Error(`API key environment variable not defined for provider: ${provider}`)
+            }
+            const apiKey = resolveApiKey(overrides, envVar)
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
