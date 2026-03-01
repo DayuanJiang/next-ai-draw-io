@@ -422,7 +422,7 @@ ${userInputText}
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
     // MiniMax and some Chinese providers don't support multiple system messages
     // Merge them into a single system message for compatibility
-    const isSingleSystemProvider = ["minimax", "glm", "qwen", "kimi", "qiniu"].includes(provider)
+    const isSingleSystemProvider = ["minimax", "glm", "qwen", "kimi", "qiniu"].includes(provider || "")
     
     const xmlContext = `${previousXml ? `Previous diagram XML (before user's last message):
 """xml
