@@ -16,6 +16,11 @@ export type ProviderName =
     | "edgeone"
     | "doubao"
     | "modelscope"
+    | "glm"
+    | "qwen"
+    | "qiniu"
+    | "kimi"
+    | "minimax"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -134,6 +139,26 @@ export const PROVIDER_INFO: Record<
     modelscope: {
         label: "ModelScope",
         defaultBaseUrl: "https://api-inference.modelscope.cn/v1",
+    },
+    glm: {
+        label: "GLM (Zhipu)",
+        defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    },
+    qwen: {
+        label: "Qwen (Alibaba)",
+        defaultBaseUrl: "https://dashscope.aliyun.com/compatible-mode/v1",
+    },
+    qiniu: {
+        label: "Qiniu",
+        defaultBaseUrl: "https://api.qiniucdn.com/v1",
+    },
+    kimi: {
+        label: "Kimi (Moonshot)",
+        defaultBaseUrl: "https://api.moonshot.cn/v1",
+    },
+    minimax: {
+        label: "MiniMax",
+        defaultBaseUrl: "https://api.minimax.chat/v1",
     },
 }
 
@@ -298,6 +323,13 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         // DeepSeek
         "deepseek-ai/DeepSeek-R1-0528",
         "deepseek-ai/DeepSeek-V3.2",
+    ],
+    minimax: [
+        // MiniMax models
+        "abab6.5s-chat",
+        "abab6s-chat",
+        "MiniMax-M2",
+        "MiniMax-Text-01",
     ],
 }
 
