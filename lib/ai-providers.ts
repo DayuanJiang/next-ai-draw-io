@@ -57,6 +57,11 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "ollama",
     "doubao",
     "modelscope",
+    "glm",
+    "qwen",
+    "qiniu",
+    "kimi",
+    "minimax",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -1172,9 +1177,29 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "minimax":
+        case "glm":
+        case "qwen":
+        case "qiniu":
+        case "kimi": {
+            const apiKey = resolveApiKey(overrides, PROVIDER_ENV_VARS[provider])
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                resolveBaseUrlEnv(overrides, `${provider.toUpperCase()}_BASE_URL`),
+                undefined, // Use default from PROVIDER_INFO
+            )
+            const customProvider = createOpenAI({
+                apiKey,
+                baseURL,
+            })
+            model = customProvider.chat(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax`,
             )
     }
 
