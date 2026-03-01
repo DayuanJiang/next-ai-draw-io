@@ -11,6 +11,23 @@ import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 
+function getDefaultBaseUrl(provider: string): string {
+    switch (provider) {
+        case "minimax":
+            return "https://api.minimax.chat/v1"
+        case "glm":
+            return "https://open.bigmodel.cn/api/paas/v4"
+        case "qwen":
+            return "https://dashscope.aliyun.com/compatible-mode/v1"
+        case "kimi":
+            return "https://api.moonshot.cn/v1"
+        case "qiniu":
+            return "https://api.qiniucdn.com/v1"
+        default:
+            return ""
+    }
+}
+
 export const runtime = "nodejs"
 
 interface ValidateRequest {
@@ -315,6 +332,53 @@ export async function POST(req: Request) {
                         "[validate-model] ModelScope validation failed:",
                         error,
                     )
+                    throw error
+                }
+            }
+
+            // MiniMax, GLM, Qwen, Kimi, Qiniu - OpenAI compatible
+            case "minimax":
+            case "glm":
+            case "qwen":
+            case "kimi":
+            case "qiniu": {
+                const baseURL = baseUrl || getDefaultBaseUrl(provider)
+                const startTime = Date.now()
+
+                try {
+                    const response = await fetch(
+                        `${baseURL}/chat/completions`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${apiKey}`,
+                            },
+                            body: JSON.stringify({
+                                model: modelId,
+                                messages: [
+                                    { role: "user", content: "Say 'OK'" },
+                                ],
+                                max_tokens: 20,
+                            }),
+                        },
+                    )
+
+                    if (!response.ok) {
+                        const errorText = await response.text()
+                        throw new Error(
+                            `${provider} API error (${response.status}): ${errorText}`,
+                        )
+                    }
+
+                    const responseTime = Date.now() - startTime
+                    return NextResponse.json({
+                        valid: true,
+                        responseTime,
+                        note: `${provider} model validated`,
+                    })
+                } catch (error) {
+                    console.error(`[validate-model] ${provider} validation failed:`, error)
                     throw error
                 }
             }
