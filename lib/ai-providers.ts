@@ -479,7 +479,12 @@ function buildProviderOptions(
         case "sglang":
         case "gateway":
         case "modelscope":
-        case "doubao": {
+        case "doubao":
+        case "minimax":
+        case "glm":
+        case "qwen":
+        case "kimi":
+        case "qiniu": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
