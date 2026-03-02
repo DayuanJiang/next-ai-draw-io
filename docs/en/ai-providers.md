@@ -224,15 +224,21 @@ Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-ga
 
 ### MiniMax
 
+MiniMax uses Anthropic-compatible API with interleaved thinking support.
+
 ```bash
 MINIMAX_API_KEY=your_api_key
-AI_MODEL=abab6.5s-chat
+AI_MODEL=MiniMax-M2.5
 ```
 
-Optional custom endpoint:
+Optional configuration:
 
 ```bash
-MINIMAX_BASE_URL=https://your-custom-endpoint
+# International (default)
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# China mainland
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
 ```
 
 ### GLM (Zhipu AI)

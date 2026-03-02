@@ -211,13 +211,17 @@ AI_MODEL=openai/gpt-4o
 
 ```bash
 MINIMAX_API_KEY=your_api_key
-AI_MODEL=abab6.5s-chat
+AI_MODEL=MiniMax-M2.5
 ```
 
-オプションのカスタムエンドポイント：
+オプション設定：
 
 ```bash
-MINIMAX_BASE_URL=https://your-custom-endpoint
+# 国際版 (デフォルト)
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# 中国大陸版
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
 ```
 
 ### GLM (Zhipu AI)

@@ -209,15 +209,21 @@ AI_MODEL=openai/gpt-4o
 
 ### MiniMax
 
+MiniMax 使用 Anthropic 兼容 API，支持 interleaved thinking。
+
 ```bash
 MINIMAX_API_KEY=your_api_key
-AI_MODEL=abab6.5s-chat
+AI_MODEL=MiniMax-M2.5
 ```
 
-可选的自定义端点：
+可选配置：
 
 ```bash
-MINIMAX_BASE_URL=https://your-custom-endpoint
+# 国际版 (默认)
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# 中国大陆版
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
 ```
 
 ### GLM (智谱 AI)
