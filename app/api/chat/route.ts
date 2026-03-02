@@ -420,30 +420,67 @@ ${userInputText}
     // System messages with multiple cache breakpoints for optimal caching:
     // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
-    // This allows: if only user message changes, both system caches are reused
-    //              if XML changes, instruction cache is still reused
-    const systemMessages = [
-        // Cache breakpoint 1: Instructions (rarely change)
-        {
-            role: "system" as const,
-            content: systemMessage,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
-        },
-        // Cache breakpoint 2: Previous and Current diagram XML context
-        {
-            role: "system" as const,
-            content: `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
-        },
-    ]
+    // MiniMax and some Chinese providers don't support multiple system messages
+    // Merge them into a single system message for compatibility
+    // Use provider from client header, server model config, or env var fallback
+    const effectiveProvider =
+        serverModelConfig.provider || provider || process.env.AI_PROVIDER || ""
+
+    // Merge multiple system messages into a single system message for providers that don't support multiple system messages
+    // MiniMax, GLM, Qwen, Kimi, Qiniu only support one system message
+    const isSingleSystemProvider = [
+        "minimax",
+        "glm",
+        "qwen",
+        "kimi",
+        "qiniu",
+    ].includes(effectiveProvider)
+
+    const xmlContext = `${
+        previousXml
+            ? `Previous diagram XML (before user's last message):
+"""xml
+${previousXml}
+"""
+
+`
+            : ""
+    }Current diagram XML (AUTHORITATIVE - the source of truth):
+"""xml
+${xml || ""}
+"""
+
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`
+
+    const systemMessages = isSingleSystemProvider
+        ? [
+              {
+                  role: "system" as const,
+                  content: `${systemMessage}\n\n${xmlContext}`,
+              },
+          ]
+        : [
+              // Cache breakpoint 1: Instructions (rarely change)
+              {
+                  role: "system" as const,
+                  content: systemMessage,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+              // Cache breakpoint 2: Previous and Current diagram XML context
+              {
+                  role: "system" as const,
+                  content: xmlContext,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+          ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 

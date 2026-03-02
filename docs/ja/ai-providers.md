@@ -207,6 +207,75 @@ AI_MODEL=openai/gpt-4o
 
 [Vercel AI Gateway ダッシュボード](https://vercel.com/ai-gateway)から API キーを取得してください。
 
+### MiniMax
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=MiniMax-M2.5
+```
+
+オプション設定：
+
+```bash
+# 国際版 (デフォルト)
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# 中国大陸版
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+```
+
+### GLM (Zhipu AI)
+
+```bash
+GLM_API_KEY=your_api_key
+AI_MODEL=glm-4
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+GLM_BASE_URL=https://your-custom-endpoint
+```
+
+### Qwen (Alibaba Cloud)
+
+```bash
+QWEN_API_KEY=your_api_key
+AI_MODEL=qwen-turbo
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+QWEN_BASE_URL=https://your-custom-endpoint
+```
+
+### Kimi (Moonshot AI)
+
+```bash
+KIMI_API_KEY=your_api_key
+AI_MODEL=kimi-latest
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+KIMI_BASE_URL=https://your-custom-endpoint
+```
+
+### Qiniu (Qiniu Cloud)
+
+```bash
+QINIU_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+QINIU_BASE_URL=https://your-custom-endpoint
+```
+
 ## 自動検出
 
 **1つ**のプロバイダーの API キーのみを設定した場合、システムはそのプロバイダーを自動的に検出して使用します。`AI_PROVIDER` を設定する必要はありません。
@@ -214,7 +283,7 @@ AI_MODEL=openai/gpt-4o
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
+AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
 ```
 
 ## サーバーサイドマルチモデル設定

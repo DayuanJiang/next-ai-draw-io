@@ -9,7 +9,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
-import type { ProviderName } from "@/lib/types/model-config"
+import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
 
@@ -57,6 +57,11 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "ollama",
     "doubao",
     "modelscope",
+    "glm",
+    "qwen",
+    "qiniu",
+    "kimi",
+    "minimax",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -474,7 +479,12 @@ function buildProviderOptions(
         case "sglang":
         case "gateway":
         case "modelscope":
-        case "doubao": {
+        case "doubao":
+        case "minimax":
+        case "glm":
+        case "qwen":
+        case "kimi":
+        case "qiniu": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
@@ -504,6 +514,11 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     edgeone: null, // No credentials needed - uses EdgeOne Edge AI
     doubao: "DOUBAO_API_KEY",
     modelscope: "MODELSCOPE_API_KEY",
+    glm: "GLM_API_KEY",
+    qwen: "QWEN_API_KEY",
+    qiniu: "QINIU_API_KEY",
+    kimi: "KIMI_API_KEY",
+    minimax: "MINIMAX_API_KEY",
 }
 
 /**
@@ -1172,9 +1187,90 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "minimax": {
+            // MiniMax supports two API formats:
+            // 1. Anthropic-compatible: https://api.minimaxi.com/anthropic (or api.minimax.io/anthropic)
+            // 2. OpenAI-compatible: https://api.minimaxi.com/v1
+            // Default: Anthropic-compatible (recommended for interleaved thinking)
+            const apiKey = resolveApiKey(overrides, "MINIMAX_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "MINIMAX_BASE_URL",
+            )
+            let baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.minimax?.defaultBaseUrl,
+            )
+
+            // Determine if using Anthropic-compatible endpoint
+            const isAnthropicCompatible =
+                baseURL?.includes("/anthropic") ?? true // Default to true
+
+            if (baseURL) {
+                // Normalize baseURL - ensure proper suffix for AI SDK
+                baseURL = baseURL.replace(/\/$/, "")
+                if (isAnthropicCompatible) {
+                    // Anthropic-compatible needs /v1 suffix (AI SDK adds /messages)
+                    if (!baseURL.endsWith("/anthropic/v1")) {
+                        if (baseURL.endsWith("/anthropic")) {
+                            baseURL = `${baseURL}/v1`
+                        } else {
+                            baseURL = `${baseURL}/anthropic/v1`
+                        }
+                    }
+                } else {
+                    // OpenAI-compatible needs /v1 suffix (AI SDK adds /chat/completions)
+                    if (!baseURL.endsWith("/v1")) {
+                        baseURL = `${baseURL}/v1`
+                    }
+                }
+            }
+
+            // Use Anthropic SDK for Anthropic-compatible endpoints,
+            // OpenAI SDK for standard v1 endpoints
+            if (isAnthropicCompatible) {
+                const minimax = createAnthropic({ apiKey, baseURL })
+                model = minimax.chat(modelId)
+            } else {
+                const minimax = createOpenAI({ apiKey, baseURL })
+                model = minimax.chat(modelId)
+            }
+            break
+        }
+
+        case "glm":
+        case "qwen":
+        case "qiniu":
+        case "kimi": {
+            const envVar = PROVIDER_ENV_VARS[provider]
+            if (!envVar) {
+                throw new Error(
+                    `API key environment variable not defined for provider: ${provider}`,
+                )
+            }
+            const apiKey = resolveApiKey(overrides, envVar)
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                resolveBaseUrlEnv(
+                    overrides,
+                    `${provider.toUpperCase()}_BASE_URL`,
+                ),
+                PROVIDER_INFO[provider]?.defaultBaseUrl,
+            )
+            const customProvider = createOpenAI({
+                apiKey,
+                baseURL,
+            })
+            model = customProvider.chat(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax`,
             )
     }
 
