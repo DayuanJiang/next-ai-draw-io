@@ -199,6 +199,13 @@ vi.mock("ollama-ai-provider-v2", () => {
     return { createOllama: mockCreateOllama, ollama: mockOllama }
 })
 
+vi.mock("@ai-sdk/anthropic", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateAnthropic = vi.fn(() => mockProviderFn)
+    return { createAnthropic: mockCreateAnthropic }
+})
+
 describe("Ollama API key security", () => {
     let createOllamaMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
@@ -305,5 +312,106 @@ describe("Ollama API key security", () => {
         const callArgs = createOllamaMock.mock.calls[0][0]
         expect(callArgs.baseURL).toBe("https://my-ollama.com")
         expect(callArgs).not.toHaveProperty("headers")
+    })
+})
+
+describe("MiniMax provider", () => {
+    let createAnthropicMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.MINIMAX_API_KEY = process.env.MINIMAX_API_KEY
+        savedEnv.MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL
+        delete process.env.MINIMAX_API_KEY
+        delete process.env.MINIMAX_BASE_URL
+
+        const mod = await import("@ai-sdk/anthropic")
+        createAnthropicMock = mod.createAnthropic as ReturnType<typeof vi.fn>
+        createAnthropicMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.MINIMAX_API_KEY = savedEnv.MINIMAX_API_KEY
+        process.env.MINIMAX_BASE_URL = savedEnv.MINIMAX_BASE_URL
+    })
+
+    it("uses default base URL (api.minimax.io) when no custom URL is provided", () => {
+        process.env.MINIMAX_API_KEY = "test-minimax-key"
+
+        getAIModel({ provider: "minimax", modelId: "MiniMax-M2.5" })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "test-minimax-key",
+                baseURL: "https://api.minimax.io/anthropic/v1",
+            }),
+        )
+    })
+
+    it("uses custom base URL from environment variable", () => {
+        process.env.MINIMAX_API_KEY = "test-minimax-key"
+        process.env.MINIMAX_BASE_URL = "https://api.minimaxi.com/anthropic"
+
+        getAIModel({ provider: "minimax", modelId: "MiniMax-M2.5" })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "test-minimax-key",
+                baseURL: "https://api.minimaxi.com/anthropic/v1",
+            }),
+        )
+    })
+
+    it("uses client-provided base URL over environment variable", () => {
+        process.env.MINIMAX_API_KEY = "server-key"
+        process.env.MINIMAX_BASE_URL = "https://server-url.com/anthropic"
+
+        getAIModel({
+            provider: "minimax",
+            apiKey: "client-key",
+            baseUrl: "https://client-url.com/anthropic",
+            modelId: "MiniMax-M2.5",
+        })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "client-key",
+                baseURL: "https://client-url.com/anthropic/v1",
+            }),
+        )
+    })
+
+    it("uses client API key with default base URL when only apiKey is provided", () => {
+        getAIModel({
+            provider: "minimax",
+            apiKey: "client-key",
+            modelId: "MiniMax-M2.5-highspeed",
+        })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "client-key",
+                baseURL: "https://api.minimax.io/anthropic/v1",
+            }),
+        )
+    })
+
+    it("throws error when custom baseUrl is provided without apiKey", () => {
+        expect(() =>
+            getAIModel({
+                provider: "minimax",
+                baseUrl: "https://custom-url.com/anthropic",
+                modelId: "MiniMax-M2.5",
+            }),
+        ).toThrow("API key is required when using a custom base URL")
+    })
+
+    it("creates model with Anthropic-compatible provider", () => {
+        process.env.MINIMAX_API_KEY = "test-key"
+
+        const result = getAIModel({ provider: "minimax", modelId: "MiniMax-M2.5" })
+
+        expect(createAnthropicMock).toHaveBeenCalledTimes(1)
+        expect(result.modelId).toBe("MiniMax-M2.5")
     })
 })

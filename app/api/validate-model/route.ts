@@ -319,6 +319,22 @@ export async function POST(req: Request) {
                 }
             }
 
+            case "minimax": {
+                // MiniMax uses Anthropic-compatible API
+                // MiniMax endpoint is /anthropic/v1/messages, AI SDK appends /messages automatically
+                let minimaxBaseUrl = baseUrl || "https://api.minimax.io/anthropic"
+                // Ensure baseURL ends with /v1 for MiniMax API compatibility
+                if (!minimaxBaseUrl.endsWith("/v1")) {
+                    minimaxBaseUrl = `${minimaxBaseUrl.replace(/\/$/, "")}/v1`
+                }
+                const anthropic = createAnthropic({
+                    apiKey,
+                    baseURL: minimaxBaseUrl,
+                })
+                model = anthropic(modelId)
+                break
+            }
+
             default:
                 return NextResponse.json(
                     { valid: false, error: `Unknown provider: ${provider}` },

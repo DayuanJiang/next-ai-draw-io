@@ -57,6 +57,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "ollama",
     "doubao",
     "modelscope",
+    "minimax",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -474,7 +475,8 @@ function buildProviderOptions(
         case "sglang":
         case "gateway":
         case "modelscope":
-        case "doubao": {
+        case "doubao":
+        case "minimax": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
@@ -504,6 +506,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     edgeone: null, // No credentials needed - uses EdgeOne Edge AI
     doubao: "DOUBAO_API_KEY",
     modelscope: "MODELSCOPE_API_KEY",
+    minimax: "MINIMAX_API_KEY",
 }
 
 /**
@@ -586,7 +589,7 @@ function validateProviderCredentials(
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, modelscope)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, modelscope, minimax)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -606,6 +609,8 @@ function validateProviderCredentials(
  * - SGLANG_BASE_URL: SGLang endpoint (optional)
  * - MODELSCOPE_API_KEY: ModelScope API key
  * - MODELSCOPE_BASE_URL: ModelScope endpoint (optional)
+ * - MINIMAX_API_KEY: MiniMax API key
+ * - MINIMAX_BASE_URL: MiniMax endpoint (optional, defaults to https://api.minimax.io/anthropic, or use https://api.minimaxi.com/anthropic)
  */
 export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
@@ -1172,9 +1177,36 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "minimax": {
+            // MiniMax uses Anthropic-compatible API
+            // MiniMax endpoint is /anthropic/v1/messages, AI SDK appends /messages automatically
+            // So we need baseURL to end with /v1
+            const apiKey = resolveApiKey(overrides, "MINIMAX_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "MINIMAX_BASE_URL",
+            )
+            let baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                "https://api.minimax.io/anthropic",
+            )
+            // Ensure baseURL ends with /v1 for MiniMax API compatibility
+            if (baseURL && !baseURL.endsWith("/v1")) {
+                baseURL = `${baseURL.replace(/\/$/, "")}/v1`
+            }
+            const minimaxProvider = createAnthropic({
+                apiKey,
+                baseURL,
+            })
+            model = minimaxProvider(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, minimax`,
             )
     }
 

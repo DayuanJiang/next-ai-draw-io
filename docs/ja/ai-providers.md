@@ -171,6 +171,19 @@ AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 MODELSCOPE_BASE_URL=https://your-custom-endpoint
 ```
 
+### MiniMax (Anthropic 互換)
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=MiniMax-M2.5  # または MiniMax-M2.5-highspeed
+```
+
+任意のカスタムエンドポイント（デフォルトはインターナショナル版）:
+
+```bash
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic  # または https://api.minimaxi.com/anthropic
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway は、単一の API キーで複数の AI プロバイダーへの統合アクセスを提供します。これにより認証が簡素化され、複数の API キーを管理することなくプロバイダーを切り替えることができます。
@@ -214,7 +227,7 @@ AI_MODEL=openai/gpt-4o
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
+AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax
 ```
 
 ## サーバーサイドマルチモデル設定

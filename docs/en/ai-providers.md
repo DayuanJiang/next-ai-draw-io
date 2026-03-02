@@ -186,6 +186,19 @@ Optional custom endpoint:
 MODELSCOPE_BASE_URL=https://your-custom-endpoint
 ```
 
+### MiniMax (Anthropic-compatible)
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=MiniMax-M2.5  # or MiniMax-M2.5-highspeed
+```
+
+Optional custom endpoint (defaults to international):
+
+```bash
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic  # or https://api.minimaxi.com/anthropic
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway provides unified access to multiple AI providers through a single API key. This simplifies authentication and allows you to switch between providers without managing multiple API keys.
@@ -229,7 +242,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax
 ```
 
 ## Server-Side Multi-Model Configuration

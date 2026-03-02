@@ -445,7 +445,34 @@ ${userInputText}
         },
     ]
 
-    const allMessages = [...systemMessages, ...enhancedMessages]
+    // Determine effective provider (including env var fallback)
+    const effectiveProvider =
+        clientOverrides.provider || process.env.AI_PROVIDER
+
+    // MiniMax API doesn't support multiple system messages
+    // Merge them into a single system message for compatibility
+    const isSingleSystemProvider = effectiveProvider === "minimax"
+    let finalSystemMessages = systemMessages
+    if (isSingleSystemProvider && systemMessages.length > 1) {
+        const mergedContent = systemMessages
+            .map((msg) => msg.content)
+            .join("\n\n")
+        finalSystemMessages = [
+            {
+                role: "system" as const,
+                content: mergedContent,
+                ...(systemMessages[systemMessages.length - 1].providerOptions && {
+                    providerOptions:
+                        systemMessages[systemMessages.length - 1].providerOptions,
+                }),
+            },
+        ]
+        console.log(
+            `[MiniMax] Merged ${systemMessages.length} system messages into 1`,
+        )
+    }
+
+    const allMessages = [...finalSystemMessages, ...enhancedMessages]
 
     const result = streamText({
         model,

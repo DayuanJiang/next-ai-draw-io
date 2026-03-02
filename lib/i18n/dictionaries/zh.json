@@ -29,7 +29,8 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "modelscope": "ModelScope",
+        "minimax": "MiniMax"
     },
     "chat": {
         "placeholder": "描述您的图表或上传文件...",
