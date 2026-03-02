@@ -378,7 +378,10 @@ export async function POST(req: Request) {
                         note: `${provider} model validated`,
                     })
                 } catch (error) {
-                    console.error(`[validate-model] ${provider} validation failed:`, error)
+                    console.error(
+                        `[validate-model] ${provider} validation failed:`,
+                        error,
+                    )
                     throw error
                 }
             }

@@ -423,15 +423,26 @@ ${userInputText}
     // MiniMax and some Chinese providers don't support multiple system messages
     // Merge them into a single system message for compatibility
     // Use provider from client header, server model config, or env var fallback
-    const effectiveProvider = serverModelConfig.provider || provider || process.env.AI_PROVIDER || ""
-    const isSingleSystemProvider = ["minimax", "glm", "qwen", "kimi", "qiniu"].includes(effectiveProvider)
-    
-    const xmlContext = `${previousXml ? `Previous diagram XML (before user's last message):
+    const effectiveProvider =
+        serverModelConfig.provider || provider || process.env.AI_PROVIDER || ""
+    const isSingleSystemProvider = [
+        "minimax",
+        "glm",
+        "qwen",
+        "kimi",
+        "qiniu",
+    ].includes(effectiveProvider)
+
+    const xmlContext = `${
+        previousXml
+            ? `Previous diagram XML (before user's last message):
 """xml
 ${previousXml}
 """
 
-` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):
+`
+            : ""
+    }Current diagram XML (AUTHORITATIVE - the source of truth):
 """xml
 ${xml || ""}
 """
@@ -439,37 +450,46 @@ ${xml || ""}
 IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`
 
     const systemMessages = isSingleSystemProvider
-        ? [{
-            role: "system" as const,
-            content: `${systemMessage}\n\n${xmlContext}`,
-          }]
+        ? [
+              {
+                  role: "system" as const,
+                  content: `${systemMessage}\n\n${xmlContext}`,
+              },
+          ]
         : [
-            // Cache breakpoint 1: Instructions (rarely change)
-            {
-                role: "system" as const,
-                content: systemMessage,
-                ...(shouldCache && {
-                    providerOptions: {
-                        bedrock: { cachePoint: { type: "default" } },
-                    },
-                }),
-            },
-            // Cache breakpoint 2: Previous and Current diagram XML context
-            {
-                role: "system" as const,
-                content: xmlContext,
-                ...(shouldCache && {
-                    providerOptions: {
-                        bedrock: { cachePoint: { type: "default" } },
-                    },
-                }),
-            },
-        ]
+              // Cache breakpoint 1: Instructions (rarely change)
+              {
+                  role: "system" as const,
+                  content: systemMessage,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+              // Cache breakpoint 2: Previous and Current diagram XML context
+              {
+                  role: "system" as const,
+                  content: xmlContext,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+          ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
     // DEBUG: Log final messages
-    console.log("[route.ts] Final allMessages count:", allMessages.length, "system:", systemMessages.length, "enhanced:", enhancedMessages.length)
+    console.log(
+        "[route.ts] Final allMessages count:",
+        allMessages.length,
+        "system:",
+        systemMessages.length,
+        "enhanced:",
+        enhancedMessages.length,
+    )
 
     const result = streamText({
         model,
