@@ -9,7 +9,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
-import type { ProviderName } from "@/lib/types/model-config"
+import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
 
@@ -1200,8 +1200,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                resolveBaseUrlEnv(overrides, `${provider.toUpperCase()}_BASE_URL`),
-                undefined, // Use default from PROVIDER_INFO
+                resolveBaseUrlEnv(
+                    overrides,
+                    `${provider.toUpperCase()}_BASE_URL`,
+                ),
+                PROVIDER_INFO[provider]?.defaultBaseUrl,
             )
             const customProvider = createOpenAI({
                 apiKey,
