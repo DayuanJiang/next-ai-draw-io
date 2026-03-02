@@ -1188,29 +1188,55 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
 
         case "minimax": {
-            // MiniMax uses Anthropic-compatible API
-            // Default endpoint: https://api.minimax.io/anthropic (international)
-            // or https://api.minimaxi.com/anthropic (China mainland)
+            // MiniMax supports two API formats:
+            // 1. Anthropic-compatible: https://api.minimaxi.com/anthropic (or api.minimax.io/anthropic)
+            // 2. OpenAI-compatible: https://api.minimaxi.com/v1
+            // Default: Anthropic-compatible (recommended for interleaved thinking)
             const apiKey = resolveApiKey(overrides, "MINIMAX_API_KEY")
             const serverBaseUrl = resolveBaseUrlEnv(
                 overrides,
                 "MINIMAX_BASE_URL",
             )
-            // Ensure baseURL ends with /v1 for MiniMax API compatibility
             let baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
                 serverBaseUrl,
                 PROVIDER_INFO.minimax?.defaultBaseUrl,
             )
-            if (baseURL && !baseURL.endsWith("/v1")) {
-                baseURL = baseURL.replace(/\/$/, "") + "/v1"
+
+            // Determine if using Anthropic-compatible endpoint
+            const isAnthropicCompatible =
+                baseURL?.includes("/anthropic") ?? true // Default to true
+
+            if (baseURL) {
+                // Normalize baseURL - ensure proper suffix for AI SDK
+                baseURL = baseURL.replace(/\/$/, "")
+                if (isAnthropicCompatible) {
+                    // Anthropic-compatible needs /v1 suffix (AI SDK adds /messages)
+                    if (!baseURL.endsWith("/anthropic/v1")) {
+                        if (baseURL.endsWith("/anthropic")) {
+                            baseURL = `${baseURL}/v1`
+                        } else {
+                            baseURL = `${baseURL}/anthropic/v1`
+                        }
+                    }
+                } else {
+                    // OpenAI-compatible needs /v1 suffix (AI SDK adds /chat/completions)
+                    if (!baseURL.endsWith("/v1")) {
+                        baseURL = `${baseURL}/v1`
+                    }
+                }
             }
-            const minimax = createAnthropic({
-                apiKey,
-                baseURL,
-            })
-            model = minimax.chat(modelId)
+
+            // Use Anthropic SDK for Anthropic-compatible endpoints,
+            // OpenAI SDK for standard v1 endpoints
+            if (isAnthropicCompatible) {
+                const minimax = createAnthropic({ apiKey, baseURL })
+                model = minimax.chat(modelId)
+            } else {
+                const minimax = createOpenAI({ apiKey, baseURL })
+                model = minimax.chat(modelId)
+            }
             break
         }
 

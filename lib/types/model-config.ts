@@ -158,7 +158,7 @@ export const PROVIDER_INFO: Record<
     },
     minimax: {
         label: "MiniMax",
-        defaultBaseUrl: "https://api.minimax.io/anthropic",
+        defaultBaseUrl: "https://api.minimaxi.com/anthropic",
     },
 }
 
