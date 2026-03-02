@@ -158,7 +158,7 @@ export const PROVIDER_INFO: Record<
     },
     minimax: {
         label: "MiniMax",
-        defaultBaseUrl: "https://api.minimax.chat/v1",
+        defaultBaseUrl: "https://api.minimax.io/anthropic",
     },
 }
 
@@ -325,11 +325,9 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "deepseek-ai/DeepSeek-V3.2",
     ],
     minimax: [
-        // MiniMax models
-        "abab6.5s-chat",
-        "abab6s-chat",
-        "MiniMax-M2",
-        "MiniMax-Text-01",
+        // MiniMax models (Anthropic-compatible API)
+        "MiniMax-M2.5",
+        "MiniMax-M2.5-highspeed",
     ],
 }
 

@@ -208,6 +208,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope
+-   MiniMax
 -   SGLang
 -   Vercel AI Gateway
 

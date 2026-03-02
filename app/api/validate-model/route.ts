@@ -320,8 +320,26 @@ export async function POST(req: Request) {
                 }
             }
 
-            // MiniMax, GLM, Qwen, Kimi, Qiniu - OpenAI compatible
-            case "minimax":
+            // MiniMax - uses Anthropic-compatible API
+            case "minimax": {
+                // MiniMax uses Anthropic-compatible API
+                // Default endpoint: https://api.minimax.io/anthropic (international)
+                // or https://api.minimaxi.com/anthropic (China mainland)
+                let minimaxBaseUrl =
+                    baseUrl || "https://api.minimax.io/anthropic"
+                // Ensure baseURL ends with /v1 for MiniMax API compatibility
+                if (!minimaxBaseUrl.endsWith("/v1")) {
+                    minimaxBaseUrl = `${minimaxBaseUrl.replace(/\/$/, "")}/v1`
+                }
+                const minimax = createAnthropic({
+                    apiKey,
+                    baseURL: minimaxBaseUrl,
+                })
+                model = minimax(modelId)
+                break
+            }
+
+            // GLM, Qwen, Kimi, Qiniu - OpenAI compatible
             case "glm":
             case "qwen":
             case "kimi":

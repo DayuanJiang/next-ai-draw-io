@@ -214,6 +214,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope
+-   MiniMax
 -   SGLang
 -   Vercel AI Gateway
 

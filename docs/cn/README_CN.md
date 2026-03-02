@@ -207,6 +207,7 @@ npm run dev
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope
+-   MiniMax
 -   SGLang
 -   Vercel AI Gateway
 

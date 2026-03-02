@@ -307,3 +307,103 @@ describe("Ollama API key security", () => {
         expect(callArgs).not.toHaveProperty("headers")
     })
 })
+
+vi.mock("@ai-sdk/anthropic", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateAnthropic = vi.fn(() => mockProviderFn)
+    return { createAnthropic: mockCreateAnthropic }
+})
+
+describe("MiniMax provider configuration", () => {
+    let createAnthropicMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.MINIMAX_API_KEY = process.env.MINIMAX_API_KEY
+        savedEnv.MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL
+        delete process.env.MINIMAX_BASE_URL
+
+        const mod = await import("@ai-sdk/anthropic")
+        createAnthropicMock = mod.createAnthropic as ReturnType<typeof vi.fn>
+        createAnthropicMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.MINIMAX_API_KEY = savedEnv.MINIMAX_API_KEY
+        process.env.MINIMAX_BASE_URL = savedEnv.MINIMAX_BASE_URL
+    })
+
+    it("uses default international endpoint when no base URL provided", () => {
+        process.env.MINIMAX_API_KEY = "test-minimax-key"
+
+        getAIModel({ provider: "minimax", modelId: "MiniMax-M2.5" })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "test-minimax-key",
+                baseURL: "https://api.minimax.io/anthropic/v1",
+            }),
+        )
+    })
+
+    it("uses client-provided base URL with /v1 appended", () => {
+        getAIModel({
+            provider: "minimax",
+            apiKey: "client-key",
+            baseUrl: "https://api.minimaxi.com/anthropic",
+            modelId: "MiniMax-M2.5",
+        })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "client-key",
+                baseURL: "https://api.minimaxi.com/anthropic/v1",
+            }),
+        )
+    })
+
+    it("does not duplicate /v1 if already present in base URL", () => {
+        getAIModel({
+            provider: "minimax",
+            apiKey: "client-key",
+            baseUrl: "https://api.minimax.io/anthropic/v1",
+            modelId: "MiniMax-M2.5",
+        })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://api.minimax.io/anthropic/v1",
+            }),
+        )
+    })
+
+    it("uses server MINIMAX_BASE_URL when available", () => {
+        process.env.MINIMAX_API_KEY = "server-key"
+        process.env.MINIMAX_BASE_URL = "https://custom.minimax.io/anthropic"
+
+        getAIModel({ provider: "minimax", modelId: "MiniMax-M2.5" })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "server-key",
+                baseURL: "https://custom.minimax.io/anthropic/v1",
+            }),
+        )
+    })
+
+    it("strips trailing slash before appending /v1", () => {
+        getAIModel({
+            provider: "minimax",
+            apiKey: "client-key",
+            baseUrl: "https://api.minimax.io/anthropic/",
+            modelId: "MiniMax-M2.5",
+        })
+
+        expect(createAnthropicMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://api.minimax.io/anthropic/v1",
+            }),
+        )
+    })
+})

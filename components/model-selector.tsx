@@ -55,6 +55,7 @@ const PROVIDER_LOGO_MAP: Record<string, string> = {
     vertexai: "google",
     doubao: "bytedance",
     modelscope: "modelscope",
+    minimax: "minimax",
 }
 
 // Group models by providerLabel (handles duplicate providers)

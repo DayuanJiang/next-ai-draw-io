@@ -29,7 +29,7 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "minimax": "MiniMax"
     },
     "chat": {
         "placeholder": "Describe your diagram or upload a file...",

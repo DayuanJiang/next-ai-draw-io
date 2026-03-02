@@ -165,6 +165,23 @@ AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 MODELSCOPE_BASE_URL=https://your-custom-endpoint
 ```
 
+### MiniMax
+
+MiniMax 使用 Anthropic 兼容 API，推荐用于交织思考等功能。
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=MiniMax-M2.5
+```
+
+可选的自定义端点：
+
+```bash
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic  # 默认
+# 或
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic  
+```
+
 可选的自定义 URL：
 
 ```bash
@@ -214,7 +231,7 @@ AI_MODEL=openai/gpt-4o
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
+AI_PROVIDER=google  # 或：openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax
 ```
 
 ## 服务端多模型配置
