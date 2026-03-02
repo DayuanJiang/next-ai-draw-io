@@ -29,7 +29,12 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "modelscope": "ModelScope",
+        "minimax": "MiniMax",
+        "glm": "GLM",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "qiniu": "Qiniu"
     },
     "chat": {
         "placeholder": "Describe your diagram or upload a file...",

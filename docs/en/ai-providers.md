@@ -222,6 +222,71 @@ Model format uses `provider/model` syntax:
 
 Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
 
+### MiniMax
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=abab6.5s-chat
+```
+
+Optional custom endpoint:
+
+```bash
+MINIMAX_BASE_URL=https://your-custom-endpoint
+```
+
+### GLM (Zhipu AI)
+
+```bash
+GLM_API_KEY=your_api_key
+AI_MODEL=glm-4
+```
+
+Optional custom endpoint:
+
+```bash
+GLM_BASE_URL=https://your-custom-endpoint
+```
+
+### Qwen (Alibaba Cloud)
+
+```bash
+QWEN_API_KEY=your_api_key
+AI_MODEL=qwen-turbo
+```
+
+Optional custom endpoint:
+
+```bash
+QWEN_BASE_URL=https://your-custom-endpoint
+```
+
+### Kimi (Moonshot AI)
+
+```bash
+KIMI_API_KEY=your_api_key
+AI_MODEL=kimi-latest
+```
+
+Optional custom endpoint:
+
+```bash
+KIMI_BASE_URL=https://your-custom-endpoint
+```
+
+### Qiniu (Qiniu Cloud)
+
+```bash
+QINIU_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+Optional custom endpoint:
+
+```bash
+QINIU_BASE_URL=https://your-custom-endpoint
+```
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
@@ -229,7 +294,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope
+AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
 ```
 
 ## Server-Side Multi-Model Configuration
