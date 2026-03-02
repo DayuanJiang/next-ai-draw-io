@@ -10,23 +10,7 @@ import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
-
-function getDefaultBaseUrl(provider: string): string {
-    switch (provider) {
-        case "minimax":
-            return "https://api.minimax.chat/v1"
-        case "glm":
-            return "https://open.bigmodel.cn/api/paas/v4"
-        case "qwen":
-            return "https://dashscope.aliyun.com/compatible-mode/v1"
-        case "kimi":
-            return "https://api.moonshot.cn/v1"
-        case "qiniu":
-            return "https://api.qiniucdn.com/v1"
-        default:
-            return ""
-    }
-}
+import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export const runtime = "nodejs"
 
@@ -342,48 +326,39 @@ export async function POST(req: Request) {
             case "qwen":
             case "kimi":
             case "qiniu": {
-                const baseURL = baseUrl || getDefaultBaseUrl(provider)
-                const startTime = Date.now()
+                const baseURL =
+                    baseUrl ||
+                    PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||
+                    ""
 
-                try {
-                    const response = await fetch(
-                        `${baseURL}/chat/completions`,
+                if (!baseURL) {
+                    return NextResponse.json(
                         {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${apiKey}`,
-                            },
-                            body: JSON.stringify({
-                                model: modelId,
-                                messages: [
-                                    { role: "user", content: "Say 'OK'" },
-                                ],
-                                max_tokens: 20,
-                            }),
+                            valid: false,
+                            error: `No base URL configured for provider: ${provider}`,
                         },
+                        { status: 400 },
                     )
-
-                    if (!response.ok) {
-                        const errorText = await response.text()
-                        throw new Error(
-                            `${provider} API error (${response.status}): ${errorText}`,
-                        )
-                    }
-
-                    const responseTime = Date.now() - startTime
-                    return NextResponse.json({
-                        valid: true,
-                        responseTime,
-                        note: `${provider} model validated`,
-                    })
-                } catch (error) {
-                    console.error(
-                        `[validate-model] ${provider} validation failed:`,
-                        error,
-                    )
-                    throw error
                 }
+
+                const openai = createOpenAI({
+                    apiKey,
+                    baseURL,
+                })
+
+                const startTime = Date.now()
+                await generateText({
+                    model: openai.chat(modelId),
+                    prompt: "Say 'OK'",
+                    maxOutputTokens: 20,
+                })
+                const responseTime = Date.now() - startTime
+
+                return NextResponse.json({
+                    valid: true,
+                    responseTime,
+                    note: `${provider} model validated`,
+                })
             }
 
             default:
