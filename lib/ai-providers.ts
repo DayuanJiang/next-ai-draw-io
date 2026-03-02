@@ -1187,7 +1187,33 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
-        case "minimax":
+        case "minimax": {
+            // MiniMax uses Anthropic-compatible API
+            // Default endpoint: https://api.minimax.io/anthropic (international)
+            // or https://api.minimaxi.com/anthropic (China mainland)
+            const apiKey = resolveApiKey(overrides, "MINIMAX_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "MINIMAX_BASE_URL",
+            )
+            // Ensure baseURL ends with /v1 for MiniMax API compatibility
+            let baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.minimax?.defaultBaseUrl,
+            )
+            if (baseURL && !baseURL.endsWith("/v1")) {
+                baseURL = baseURL.replace(/\/$/, "") + "/v1"
+            }
+            const minimax = createAnthropic({
+                apiKey,
+                baseURL,
+            })
+            model = minimax.chat(modelId)
+            break
+        }
+
         case "glm":
         case "qwen":
         case "qiniu":

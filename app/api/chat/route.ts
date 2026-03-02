@@ -425,6 +425,9 @@ ${userInputText}
     // Use provider from client header, server model config, or env var fallback
     const effectiveProvider =
         serverModelConfig.provider || provider || process.env.AI_PROVIDER || ""
+
+    // Merge multiple system messages into a single system message for providers that don't support multiple system messages
+    // MiniMax, GLM, Qwen, Kimi, Qiniu only support one system message
     const isSingleSystemProvider = [
         "minimax",
         "glm",
