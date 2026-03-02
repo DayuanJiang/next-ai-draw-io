@@ -146,11 +146,11 @@ export const PROVIDER_INFO: Record<
     },
     qwen: {
         label: "Qwen (Alibaba)",
-        defaultBaseUrl: "https://dashscope.aliyun.com/compatible-mode/v1",
+        defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     },
     qiniu: {
         label: "Qiniu",
-        defaultBaseUrl: "https://api.qiniucdn.com/v1",
+        defaultBaseUrl: "https://api.qnaigc.com/v1",
     },
     kimi: {
         label: "Kimi (Moonshot)",
