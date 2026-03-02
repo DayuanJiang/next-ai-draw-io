@@ -461,9 +461,11 @@ ${userInputText}
             {
                 role: "system" as const,
                 content: mergedContent,
-                ...(systemMessages[systemMessages.length - 1].providerOptions && {
+                ...(systemMessages[systemMessages.length - 1]
+                    .providerOptions && {
                     providerOptions:
-                        systemMessages[systemMessages.length - 1].providerOptions,
+                        systemMessages[systemMessages.length - 1]
+                            .providerOptions,
                 }),
             },
         ]

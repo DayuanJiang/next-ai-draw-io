@@ -409,7 +409,10 @@ describe("MiniMax provider", () => {
     it("creates model with Anthropic-compatible provider", () => {
         process.env.MINIMAX_API_KEY = "test-key"
 
-        const result = getAIModel({ provider: "minimax", modelId: "MiniMax-M2.5" })
+        const result = getAIModel({
+            provider: "minimax",
+            modelId: "MiniMax-M2.5",
+        })
 
         expect(createAnthropicMock).toHaveBeenCalledTimes(1)
         expect(result.modelId).toBe("MiniMax-M2.5")

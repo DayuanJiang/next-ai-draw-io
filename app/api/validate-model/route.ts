@@ -322,7 +322,8 @@ export async function POST(req: Request) {
             case "minimax": {
                 // MiniMax uses Anthropic-compatible API
                 // MiniMax endpoint is /anthropic/v1/messages, AI SDK appends /messages automatically
-                let minimaxBaseUrl = baseUrl || "https://api.minimax.io/anthropic"
+                let minimaxBaseUrl =
+                    baseUrl || "https://api.minimax.io/anthropic"
                 // Ensure baseURL ends with /v1 for MiniMax API compatibility
                 if (!minimaxBaseUrl.endsWith("/v1")) {
                     minimaxBaseUrl = `${minimaxBaseUrl.replace(/\/$/, "")}/v1`
