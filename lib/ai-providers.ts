@@ -1194,13 +1194,18 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "kimi": {
             const envVar = PROVIDER_ENV_VARS[provider]
             if (!envVar) {
-                throw new Error(`API key environment variable not defined for provider: ${provider}`)
+                throw new Error(
+                    `API key environment variable not defined for provider: ${provider}`,
+                )
             }
             const apiKey = resolveApiKey(overrides, envVar)
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                resolveBaseUrlEnv(overrides, `${provider.toUpperCase()}_BASE_URL`),
+                resolveBaseUrlEnv(
+                    overrides,
+                    `${provider.toUpperCase()}_BASE_URL`,
+                ),
                 undefined, // Use default from PROVIDER_INFO
             )
             const customProvider = createOpenAI({
