@@ -11,6 +11,7 @@ afterPack: ./scripts/afterPack.cjs
 
 files:
   - dist-electron/**/*
+  - package.json
   - "!node_modules"
 
 asarUnpack:
