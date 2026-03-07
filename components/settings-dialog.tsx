@@ -465,7 +465,10 @@ function SettingsContent({
                     {/* Custom System Message */}
                     <div className="py-4 space-y-3">
                         <div className="space-y-0.5">
-                            <Label className="text-sm font-medium">
+                            <Label
+                                htmlFor="custom-system-message"
+                                className="text-sm font-medium"
+                            >
                                 {dict.settings.customSystemMessage}
                             </Label>
                             <p className="text-xs text-muted-foreground">
@@ -473,6 +476,7 @@ function SettingsContent({
                             </p>
                         </div>
                         <Textarea
+                            id="custom-system-message"
                             value={customSystemMessage}
                             onChange={(e) =>
                                 onCustomSystemMessageChange(e.target.value)
