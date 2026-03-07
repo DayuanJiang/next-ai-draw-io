@@ -14,6 +14,7 @@ import path from "path"
 import { z } from "zod"
 import {
     getAIModel,
+    SINGLE_SYSTEM_PROVIDERS,
     supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
@@ -235,8 +236,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // Get AI model with optional client overrides
-    const { model, providerOptions, headers, modelId } =
-        getAIModel(clientOverrides)
+    const {
+        model,
+        providerOptions,
+        headers,
+        modelId,
+        provider: resolvedProvider,
+    } = getAIModel(clientOverrides)
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
@@ -420,21 +426,9 @@ ${userInputText}
     // System messages with multiple cache breakpoints for optimal caching:
     // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
-    // MiniMax and some Chinese providers don't support multiple system messages
+    // Some providers (e.g. MiniMax) don't support multiple system messages
     // Merge them into a single system message for compatibility
-    // Use provider from client header, server model config, or env var fallback
-    const effectiveProvider =
-        serverModelConfig.provider || provider || process.env.AI_PROVIDER || ""
-
-    // Merge multiple system messages into a single system message for providers that don't support multiple system messages
-    // MiniMax, GLM, Qwen, Kimi, Qiniu only support one system message
-    const isSingleSystemProvider = [
-        "minimax",
-        "glm",
-        "qwen",
-        "kimi",
-        "qiniu",
-    ].includes(effectiveProvider)
+    const isSingleSystemProvider = SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider)
 
     const xmlContext = `${
         previousXml

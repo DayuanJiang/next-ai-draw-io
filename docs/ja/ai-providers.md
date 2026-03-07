@@ -217,11 +217,11 @@ AI_MODEL=MiniMax-M2.5
 オプション設定：
 
 ```bash
-# 国際版 (デフォルト)
-MINIMAX_BASE_URL=https://api.minimax.io/anthropic
-
-# 中国大陸版
+# 中国大陸版 (デフォルト)
 MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+
+# 国際版
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
 ```
 
 ### GLM (Zhipu AI)

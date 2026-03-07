@@ -9,6 +9,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
+import { normalizeMiniMaxBaseURL } from "@/lib/ai-providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
@@ -320,75 +321,28 @@ export async function POST(req: Request) {
                 }
             }
 
-            // MiniMax - supports both Anthropic-compatible and OpenAI-compatible APIs
             case "minimax": {
-                // MiniMax supports two API formats:
-                // 1. Anthropic-compatible: https://api.minimaxi.com/anthropic
-                // 2. OpenAI-compatible: https://api.minimaxi.com/v1
-                // Default: Anthropic-compatible
-                let minimaxBaseUrl =
+                const rawUrl =
                     baseUrl ||
                     PROVIDER_INFO.minimax?.defaultBaseUrl ||
                     "https://api.minimaxi.com/anthropic"
-
-                // Determine if using Anthropic-compatible endpoint
-                const isAnthropicCompatible =
-                    minimaxBaseUrl.includes("/anthropic")
-
-                // Normalize baseURL - ensure proper suffix for AI SDK
-                minimaxBaseUrl = minimaxBaseUrl.replace(/\/$/, "")
-                if (isAnthropicCompatible) {
-                    // Anthropic-compatible needs /v1 suffix (AI SDK adds /messages)
-                    if (!minimaxBaseUrl.endsWith("/anthropic/v1")) {
-                        if (minimaxBaseUrl.endsWith("/anthropic")) {
-                            minimaxBaseUrl = `${minimaxBaseUrl}/v1`
-                        } else {
-                            minimaxBaseUrl = `${minimaxBaseUrl}/anthropic/v1`
-                        }
-                    }
-                } else {
-                    // OpenAI-compatible needs /v1 suffix (AI SDK adds /chat/completions)
-                    if (!minimaxBaseUrl.endsWith("/v1")) {
-                        minimaxBaseUrl = `${minimaxBaseUrl}/v1`
-                    }
-                }
-
-                const startTime = Date.now()
-                let responseTime: number
+                const { baseURL: minimaxBaseUrl, isAnthropicCompatible } =
+                    normalizeMiniMaxBaseURL(rawUrl)
 
                 if (isAnthropicCompatible) {
                     const minimax = createAnthropic({
                         apiKey,
                         baseURL: minimaxBaseUrl,
                     })
-                    await generateText({
-                        model: minimax.chat(modelId),
-                        prompt: "Say 'OK'",
-                        maxOutputTokens: 20,
-                    })
-                    responseTime = Date.now() - startTime
-                    return NextResponse.json({
-                        valid: true,
-                        responseTime,
-                        note: "MiniMax model validated (Anthropic-compatible API)",
-                    })
+                    model = minimax.chat(modelId)
                 } else {
                     const minimax = createOpenAI({
                         apiKey,
                         baseURL: minimaxBaseUrl,
                     })
-                    await generateText({
-                        model: minimax.chat(modelId),
-                        prompt: "Say 'OK'",
-                        maxOutputTokens: 20,
-                    })
-                    responseTime = Date.now() - startTime
-                    return NextResponse.json({
-                        valid: true,
-                        responseTime,
-                        note: "MiniMax model validated (OpenAI-compatible API)",
-                    })
+                    model = minimax.chat(modelId)
                 }
+                break
             }
 
             // GLM, Qwen, Kimi, Qiniu - OpenAI compatible
@@ -415,20 +369,8 @@ export async function POST(req: Request) {
                     apiKey,
                     baseURL,
                 })
-
-                const startTime = Date.now()
-                await generateText({
-                    model: openai.chat(modelId),
-                    prompt: "Say 'OK'",
-                    maxOutputTokens: 20,
-                })
-                const responseTime = Date.now() - startTime
-
-                return NextResponse.json({
-                    valid: true,
-                    responseTime,
-                    note: `${provider} model validated`,
-                })
+                model = openai.chat(modelId)
+                break
             }
 
             default:

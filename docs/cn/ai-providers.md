@@ -219,11 +219,11 @@ AI_MODEL=MiniMax-M2.5
 可选配置：
 
 ```bash
-# 国际版 (默认)
-MINIMAX_BASE_URL=https://api.minimax.io/anthropic
-
-# 中国大陆版
+# 中国大陆版 (默认)
 MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+
+# 国际版
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
 ```
 
 ### GLM (智谱 AI)
