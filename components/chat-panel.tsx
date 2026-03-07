@@ -180,6 +180,7 @@ export default function ChatPanel({
     const [tpmLimit, setTpmLimit] = useState(0)
     const [minimalStyle, setMinimalStyle] = useState(false)
     const [vlmValidationEnabled, setVlmValidationEnabled] = useState(false)
+    const [customSystemMessage, setCustomSystemMessage] = useState("")
     const [shouldFocusInput, setShouldFocusInput] = useState(false)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
@@ -195,6 +196,14 @@ export default function ChatPanel({
         const stored = localStorage.getItem(STORAGE_KEYS.vlmValidationEnabled)
         if (stored !== null) {
             setVlmValidationEnabled(stored === "true")
+        }
+    }, [])
+
+    // Load custom system message from localStorage on mount
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEYS.customSystemMessage)
+        if (stored !== null) {
+            setCustomSystemMessage(stored)
         }
     }, [])
 
@@ -306,6 +315,12 @@ export default function ChatPanel({
     const handleVlmValidationChange = useCallback((value: boolean) => {
         setVlmValidationEnabled(value)
         localStorage.setItem(STORAGE_KEYS.vlmValidationEnabled, String(value))
+    }, [])
+
+    // Handler for custom system message change
+    const handleCustomSystemMessageChange = useCallback((value: string) => {
+        setCustomSystemMessage(value)
+        localStorage.setItem(STORAGE_KEYS.customSystemMessage, value)
     }, [])
 
     // Ref to store the sendMessage function for use in callbacks
@@ -1037,7 +1052,7 @@ export default function ChatPanel({
         sendMessage(
             { parts },
             {
-                body: { xml, previousXml, sessionId },
+                body: { xml, previousXml, sessionId, customSystemMessage },
                 headers: {
                     "x-access-code": config.accessCode,
                     ...(config.aiProvider && {
@@ -1415,6 +1430,8 @@ export default function ChatPanel({
                 onMinimalStyleChange={setMinimalStyle}
                 vlmValidationEnabled={vlmValidationEnabled}
                 onVlmValidationChange={handleVlmValidationChange}
+                customSystemMessage={customSystemMessage}
+                onCustomSystemMessageChange={handleCustomSystemMessageChange}
                 onOpenModelConfig={() => setShowModelConfigDialog(true)}
             />
 

@@ -90,7 +90,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
-    const { messages, xml, previousXml, sessionId } = await req.json()
+    const body = await req.json()
+    const { messages, xml, previousXml, sessionId } = body
+    const customSystemMessage =
+        typeof body.customSystemMessage === "string"
+            ? body.customSystemMessage.slice(0, 5000)
+            : ""
 
     // Get user ID for Langfuse tracking and quota
     const userId = getUserIdFromRequest(req)
@@ -252,6 +257,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId, minimalStyle)
+    const finalSystemMessage = customSystemMessage
+        ? `${systemMessage}\n\n## Custom Instructions\n${customSystemMessage}`
+        : systemMessage
 
     // Extract file parts (images) from the last user message
     const fileParts =
@@ -424,7 +432,7 @@ ${userInputText}
     }
 
     // System messages with multiple cache breakpoints for optimal caching:
-    // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
+    // - Breakpoint 1: System instructions + custom instructions - changes when user updates custom system message
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
     // Some providers (e.g. MiniMax) don't support multiple system messages
     // Merge them into a single system message for compatibility
@@ -450,14 +458,14 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         ? [
               {
                   role: "system" as const,
-                  content: `${systemMessage}\n\n${xmlContext}`,
+                  content: `${finalSystemMessage}\n\n${xmlContext}`,
               },
           ]
         : [
-              // Cache breakpoint 1: Instructions (rarely change)
+              // Cache breakpoint 1: Instructions (+ optional custom instructions)
               {
                   role: "system" as const,
-                  content: systemMessage,
+                  content: finalSystemMessage,
                   ...(shouldCache && {
                       providerOptions: {
                           bedrock: { cachePoint: { type: "default" } },
