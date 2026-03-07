@@ -84,6 +84,25 @@ export interface FlattenedModel {
     baseUrlEnv?: string
 }
 
+// Map provider names to models.dev logo names
+export const PROVIDER_LOGO_MAP: Record<string, string> = {
+    openai: "openai",
+    anthropic: "anthropic",
+    google: "google",
+    azure: "azure",
+    bedrock: "amazon-bedrock",
+    openrouter: "openrouter",
+    deepseek: "deepseek",
+    siliconflow: "siliconflow",
+    sglang: "openai", // SGLang is OpenAI-compatible
+    gateway: "vercel",
+    edgeone: "tencent-cloud",
+    vertexai: "google",
+    doubao: "bytedance",
+    modelscope: "modelscope",
+    minimax: "minimax",
+}
+
 // Provider metadata
 export const PROVIDER_INFO: Record<
     ProviderName,

@@ -1233,7 +1233,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.apiKey,
                 overrides?.baseUrl,
                 serverBaseUrl,
-                PROVIDER_INFO.minimax?.defaultBaseUrl,
+                PROVIDER_INFO.minimax.defaultBaseUrl,
             )
 
             if (!rawBaseURL) {
