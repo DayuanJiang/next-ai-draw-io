@@ -126,7 +126,10 @@
         "diagramValidation": "Diagram Validation (Experimental)",
         "diagramValidationDescription": "Use a vision language model to validate generated diagrams. Requires a VLM like GPT-5.2 or Sonnet-4.5.",
         "enabled": "Enabled",
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        "customSystemMessage": "Custom System Message",
+        "customSystemMessageDescription": "Add custom instructions appended to the AI's system prompt.",
+        "customSystemMessagePlaceholder": "e.g., Always use blue color scheme for diagrams..."
     },
     "save": {
         "title": "Save Diagram",

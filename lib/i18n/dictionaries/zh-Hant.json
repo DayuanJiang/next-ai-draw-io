@@ -126,7 +126,10 @@
         "diagramValidation": "圖表驗證（實驗性）",
         "diagramValidationDescription": "使用視覺語言模型驗證產生的圖表。需要支援視覺的模型，如 GPT-5.2 或 Sonnet-4.5。",
         "enabled": "已啟用",
-        "disabled": "已停用"
+        "disabled": "已停用",
+        "customSystemMessage": "自訂系統訊息",
+        "customSystemMessageDescription": "新增自訂指示，將附加到 AI 的系統提示末尾。",
+        "customSystemMessagePlaceholder": "例如：圖表始終使用藍色配色方案..."
     },
     "save": {
         "title": "儲存圖表",
