@@ -27,4 +27,7 @@ export const STORAGE_KEYS = {
 
     // Diagram validation
     vlmValidationEnabled: "next-ai-draw-io-vlm-validation-enabled",
+
+    // Custom system message
+    customSystemMessage: "next-ai-draw-io-custom-system-message",
 } as const

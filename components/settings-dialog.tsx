@@ -22,6 +22,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
@@ -71,6 +72,8 @@ interface SettingsDialogProps {
     vlmValidationEnabled?: boolean
     onVlmValidationChange?: (value: boolean) => void
     onOpenModelConfig?: () => void
+    customSystemMessage?: string
+    onCustomSystemMessageChange?: (value: string) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -95,6 +98,8 @@ function SettingsContent({
     vlmValidationEnabled = false,
     onVlmValidationChange = () => {},
     onOpenModelConfig,
+    customSystemMessage = "",
+    onCustomSystemMessageChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -456,6 +461,33 @@ function SettingsContent({
                             </span>
                         </div>
                     </SettingItem>
+
+                    {/* Custom System Message */}
+                    <div className="py-4 space-y-3">
+                        <div className="space-y-0.5">
+                            <Label
+                                htmlFor="custom-system-message"
+                                className="text-sm font-medium"
+                            >
+                                {dict.settings.customSystemMessage}
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                {dict.settings.customSystemMessageDescription}
+                            </p>
+                        </div>
+                        <Textarea
+                            id="custom-system-message"
+                            value={customSystemMessage}
+                            onChange={(e) =>
+                                onCustomSystemMessageChange(e.target.value)
+                            }
+                            placeholder={
+                                dict.settings.customSystemMessagePlaceholder
+                            }
+                            className="min-h-[80px] max-h-[160px] text-sm"
+                            maxLength={5000}
+                        />
+                    </div>
 
                     {/* Send Shortcut */}
                     <SettingItem
