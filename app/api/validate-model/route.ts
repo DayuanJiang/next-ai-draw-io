@@ -9,7 +9,9 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
+import { normalizeMiniMaxBaseURL } from "@/lib/ai-providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
+import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export const runtime = "nodejs"
 
@@ -317,6 +319,58 @@ export async function POST(req: Request) {
                     )
                     throw error
                 }
+            }
+
+            case "minimax": {
+                const rawUrl =
+                    baseUrl ||
+                    PROVIDER_INFO.minimax?.defaultBaseUrl ||
+                    "https://api.minimaxi.com/anthropic"
+                const { baseURL: minimaxBaseUrl, isAnthropicCompatible } =
+                    normalizeMiniMaxBaseURL(rawUrl)
+
+                if (isAnthropicCompatible) {
+                    const minimax = createAnthropic({
+                        apiKey,
+                        baseURL: minimaxBaseUrl,
+                    })
+                    model = minimax.chat(modelId)
+                } else {
+                    const minimax = createOpenAI({
+                        apiKey,
+                        baseURL: minimaxBaseUrl,
+                    })
+                    model = minimax.chat(modelId)
+                }
+                break
+            }
+
+            // GLM, Qwen, Kimi, Qiniu - OpenAI compatible
+            case "glm":
+            case "qwen":
+            case "kimi":
+            case "qiniu": {
+                const baseURL =
+                    baseUrl ||
+                    PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||
+                    ""
+
+                if (!baseURL) {
+                    return NextResponse.json(
+                        {
+                            valid: false,
+                            error: `No base URL configured for provider: ${provider}`,
+                        },
+                        { status: 400 },
+                    )
+                }
+
+                const openai = createOpenAI({
+                    apiKey,
+                    baseURL,
+                })
+                model = openai.chat(modelId)
+                break
             }
 
             default:
