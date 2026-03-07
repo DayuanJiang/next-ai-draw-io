@@ -10,9 +10,13 @@ directories:
 afterPack: ./scripts/afterPack.cjs
 
 files:
-  - dist-electron/**/*
-  - package.json
-  - "!node_modules"
+  - from: dist-electron
+    to: dist-electron
+    filter:
+      - "**/*"
+  - from: .
+    filter:
+      - package.json
 
 asarUnpack:
   - "**/*.node"
