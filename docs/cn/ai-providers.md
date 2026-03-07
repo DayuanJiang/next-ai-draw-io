@@ -209,7 +209,9 @@ AI_MODEL=openai/gpt-4o
 
 ### MiniMax
 
-MiniMax 使用 Anthropic 兼容 API，支持 interleaved thinking。
+MiniMax 支持两种 API 格式：
+- **Anthropic 兼容**（`/anthropic` 端点）— 推荐，支持 interleaved thinking
+- **OpenAI 兼容**（`/v1` 端点）— 标准 OpenAI 聊天补全格式
 
 ```bash
 MINIMAX_API_KEY=your_api_key
@@ -219,11 +221,17 @@ AI_MODEL=MiniMax-M2.5
 可选配置：
 
 ```bash
-# 中国大陆版 (默认)
+# 中国大陆版，Anthropic 兼容（默认）
 MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
 
-# 国际版
+# 中国大陆版，OpenAI 兼容
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+
+# 国际版，Anthropic 兼容
 MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# 国际版，OpenAI 兼容
+MINIMAX_BASE_URL=https://api.minimax.io/v1
 ```
 
 ### GLM (智谱 AI)

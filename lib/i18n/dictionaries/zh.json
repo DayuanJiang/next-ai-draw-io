@@ -314,6 +314,7 @@
         "optional": "（可选）",
         "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "customEndpoint": "自定义端点 URL",
+        "minimaxBaseUrlHint": "使用 /anthropic 端点为 Anthropic 兼容 API（推荐），或使用 /v1 端点为 OpenAI 兼容 API",
         "models": "模型",
         "customModelId": "自定义模型 ID...",
         "allAdded": "已全部添加",

@@ -314,6 +314,7 @@
         "optional": "（オプション）",
         "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
+        "minimaxBaseUrlHint": "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",
         "models": "モデル",
         "customModelId": "カスタムモデル ID...",
         "allAdded": "すべて追加済み",

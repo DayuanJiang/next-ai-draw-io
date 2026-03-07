@@ -314,6 +314,7 @@
         "optional": "(optional)",
         "baseUrlWithExample": "Base URL (optional, e.g. {example})",
         "customEndpoint": "Custom endpoint URL",
+        "minimaxBaseUrlHint": "Use /anthropic for Anthropic-compatible API (recommended), or /v1 for OpenAI-compatible API",
         "models": "Models",
         "customModelId": "Custom model ID...",
         "allAdded": "All added",

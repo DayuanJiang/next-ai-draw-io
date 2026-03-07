@@ -1256,6 +1256,16 @@ export function ModelConfigDialog({
                                                             }
                                                             className="h-9 rounded-xl font-mono text-xs"
                                                         />
+                                                        {selectedProvider.provider ===
+                                                            "minimax" && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .minimaxBaseUrlHint
+                                                                }
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </>
                                             )}

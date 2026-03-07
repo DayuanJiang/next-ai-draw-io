@@ -209,6 +209,10 @@ AI_MODEL=openai/gpt-4o
 
 ### MiniMax
 
+MiniMax は 2 つの API 形式をサポートしています：
+- **Anthropic 互換**（`/anthropic` エンドポイント）— 推奨、インターリーブ思考をサポート
+- **OpenAI 互換**（`/v1` エンドポイント）— 標準 OpenAI チャット補完形式
+
 ```bash
 MINIMAX_API_KEY=your_api_key
 AI_MODEL=MiniMax-M2.5
@@ -217,11 +221,17 @@ AI_MODEL=MiniMax-M2.5
 オプション設定：
 
 ```bash
-# 中国大陸版 (デフォルト)
+# 中国大陸版、Anthropic 互換（デフォルト）
 MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
 
-# 国際版
+# 中国大陸版、OpenAI 互換
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+
+# 国際版、Anthropic 互換
 MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# 国際版、OpenAI 互換
+MINIMAX_BASE_URL=https://api.minimax.io/v1
 ```
 
 ### GLM (Zhipu AI)
