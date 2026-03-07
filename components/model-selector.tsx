@@ -27,7 +27,10 @@ import {
 } from "@/components/ai-elements/model-selector"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { useDictionary } from "@/hooks/use-dictionary"
-import type { FlattenedModel } from "@/lib/types/model-config"
+import {
+    type FlattenedModel,
+    PROVIDER_LOGO_MAP,
+} from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
 interface ModelSelectorProps {
@@ -37,24 +40,6 @@ interface ModelSelectorProps {
     onConfigure?: () => void
     disabled?: boolean
     showUnvalidatedModels?: boolean
-}
-
-// Map our provider names to models.dev logo names
-const PROVIDER_LOGO_MAP: Record<string, string> = {
-    openai: "openai",
-    anthropic: "anthropic",
-    google: "google",
-    azure: "azure",
-    bedrock: "amazon-bedrock",
-    openrouter: "openrouter",
-    deepseek: "deepseek",
-    siliconflow: "siliconflow",
-    sglang: "openai", // SGLang is OpenAI-compatible, use OpenAI logo
-    gateway: "vercel",
-    edgeone: "tencent-cloud",
-    vertexai: "google",
-    doubao: "bytedance",
-    modelscope: "modelscope",
 }
 
 // Group models by providerLabel (handles duplicate providers)

@@ -29,7 +29,12 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "modelscope": "ModelScope",
+        "minimax": "MiniMax",
+        "glm": "GLM",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "qiniu": "Qiniu"
     },
     "chat": {
         "placeholder": "描述您的圖表或上傳檔案...",
@@ -309,6 +314,7 @@
         "optional": "（可選）",
         "baseUrlWithExample": "基礎 URL（可選，例如 {example}）",
         "customEndpoint": "自訂端點 URL",
+        "minimaxBaseUrlHint": "使用 /anthropic 端點為 Anthropic 相容 API（推薦），或使用 /v1 端點為 OpenAI 相容 API",
         "models": "模型",
         "customModelId": "自訂模型 ID...",
         "allAdded": "已全部新增",
