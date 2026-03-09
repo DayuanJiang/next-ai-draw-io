@@ -142,8 +142,6 @@
         "wrangler": "^4.60.0"
     },
     "overrides": {
-        "@openrouter/ai-sdk-provider": {
-            "ai": "^6.0.1"
-        }
+        "ai": "^6.0.1"
     }
 }
