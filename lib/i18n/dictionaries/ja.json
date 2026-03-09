@@ -29,7 +29,12 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "modelscope": "ModelScope",
+        "minimax": "MiniMax",
+        "glm": "GLM",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "qiniu": "Qiniu"
     },
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",
@@ -121,7 +126,10 @@
         "diagramValidation": "ダイアグラム検証（実験的）",
         "diagramValidationDescription": "視覚言語モデルを使用して生成されたダイアグラムを検証します。GPT-5.2 や Sonnet-4.5 などの VLM が必要です。",
         "enabled": "有効",
-        "disabled": "無効"
+        "disabled": "無効",
+        "customSystemMessage": "カスタムシステムメッセージ",
+        "customSystemMessageDescription": "AIのシステムプロンプトに追加されるカスタム指示を入力します。",
+        "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用..."
     },
     "save": {
         "title": "ダイアグラムを保存",
@@ -179,8 +187,11 @@
         "tpmMessage": "リクエストが多すぎます。しばらくお待ちください。",
         "tpmMessageDetailed": "レート制限に達しました（{limit}トークン/分）。{seconds}秒待ってからもう一度リクエストしてください。",
         "messageApi": "今日のデモ利用上限に達してしまったようです。楽しんでいただけて本当に嬉しいです。このデモはByteDance Doubaoのご厚意により提供されていますが、皆様に公平にご利用いただくため、少し制限を設けさせていただいております。",
+        "messageApiSelfHosted": null,
         "messageToken": "今日のトークン利用上限に達してしまったようです。楽しんでいただけて本当に嬉しいです。このデモはByteDance Doubaoのご厚意により提供されていますが、皆様に公平にご利用いただくため、少し制限を設けさせていただいております。",
+        "messageTokenSelfHosted": null,
         "tip": "<strong>ヒント：</strong>独自の API キーを使用する（設定アイコンをクリック）か、プロジェクトをセルフホストしてこれらの制限を回避できます。",
+        "tipSelfHosted": "<strong>ヒント：</strong>設定で独自の API キーを設定することで、引き続きサービスをご利用いただけます。",
         "reset": "制限は明日リセットされます。ご理解ありがとうございます。",
         "doubaoSponsorship": "<a href=\"{link}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"underline hover:text-foreground\">こちらから登録</a>すると、各モデル（Doubao、DeepSeek、Kimi含む）で50万トークンを無料で取得できます。モデル設定でAPIキーを設定してください。",
         "configModel": "APIキーを使用",
@@ -306,6 +317,7 @@
         "optional": "（オプション）",
         "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
+        "minimaxBaseUrlHint": "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",
         "models": "モデル",
         "customModelId": "カスタムモデル ID...",
         "allAdded": "すべて追加済み",

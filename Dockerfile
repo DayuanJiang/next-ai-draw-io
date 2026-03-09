@@ -9,6 +9,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install dependencies
+ARG ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN npm install
 
 # Stage 2: Build application
@@ -33,6 +34,11 @@ ENV NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=${NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE}
 # Build-time argument for subdirectory deployment (e.g., /nextaidrawio)
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+
+# Control sponsorship and self-hosting messaging in quota notifications.
+# Set NEXT_PUBLIC_SELFHOSTED="true" in self-hosted deployments to hide sponsorship/self-host links and related text in quota popups.
+ARG NEXT_PUBLIC_SELFHOSTED=""
+ENV NEXT_PUBLIC_SELFHOSTED="${NEXT_PUBLIC_SELFHOSTED}"
 
 # Build Next.js application (standalone mode)
 RUN npm run build

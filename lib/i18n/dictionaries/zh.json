@@ -29,7 +29,12 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "modelscope": "ModelScope",
+        "minimax": "MiniMax",
+        "glm": "GLM",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "qiniu": "Qiniu"
     },
     "chat": {
         "placeholder": "描述您的图表或上传文件...",
@@ -121,7 +126,10 @@
         "diagramValidation": "图表验证（实验性）",
         "diagramValidationDescription": "使用视觉语言模型验证生成的图表。需要支持视觉的模型，如 GPT-5.2 或 Sonnet-4.5。",
         "enabled": "已启用",
-        "disabled": "已禁用"
+        "disabled": "已禁用",
+        "customSystemMessage": "自定义系统消息",
+        "customSystemMessageDescription": "添加自定义指令，将附加到 AI 的系统提示末尾。",
+        "customSystemMessagePlaceholder": "例如：图表始终使用蓝色配色方案..."
     },
     "save": {
         "title": "保存图表",
@@ -179,8 +187,11 @@
         "tpmMessage": "请求过多。请稍等片刻。",
         "tpmMessageDetailed": "达到速率限制（{limit} 令牌/分钟）。请等待 {seconds} 秒后再发送请求。",
         "messageApi": "看来您今天的体验次数已达上限。非常高兴您玩得开心，虽然本项目由字节跳动豆包慷慨赞助，但为了确保大家都能公平使用，我们不得不对使用量做一点小小的限制。",
+        "messageApiSelfHosted": null,
         "messageToken": "看来您今天的 Token 用量已达上限。非常高兴您玩得开心，虽然本项目由字节跳动豆包慷慨赞助，但为了确保大家都能公平使用，我们不得不对使用量做一点小小的限制。",
+        "messageTokenSelfHosted": null,
         "tip": "<strong>提示：</strong>您可以使用自己的 API 密钥（点击设置图标）或自托管项目来绕过这些限制。",
+        "tipSelfHosted": "<strong>提示：</strong>您可以在设置中配置自己的 API 密钥以继续使用服务。",
         "reset": "您的限制将在明天重置。感谢您的理解。",
         "doubaoSponsorship": "<a href=\"{link}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"underline hover:text-foreground\">点击此处注册</a>可获得每个模型 50 万免费 Token（包括豆包、DeepSeek 和 Kimi），然后在模型设置中配置您的 API Key。",
         "configModel": "使用您的密钥",
@@ -306,6 +317,7 @@
         "optional": "（可选）",
         "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "customEndpoint": "自定义端点 URL",
+        "minimaxBaseUrlHint": "使用 /anthropic 端点为 Anthropic 兼容 API（推荐），或使用 /v1 端点为 OpenAI 兼容 API",
         "models": "模型",
         "customModelId": "自定义模型 ID...",
         "allAdded": "已全部添加",

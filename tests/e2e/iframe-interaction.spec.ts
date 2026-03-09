@@ -1,7 +1,6 @@
 import { TEST_NODE_XML } from "./fixtures/diagrams"
 import {
     expect,
-    getChatInput,
     getIframe,
     getIframeContent,
     sendMessage,

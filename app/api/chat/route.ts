@@ -14,6 +14,7 @@ import path from "path"
 import { z } from "zod"
 import {
     getAIModel,
+    SINGLE_SYSTEM_PROVIDERS,
     supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
@@ -89,7 +90,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
-    const { messages, xml, previousXml, sessionId } = await req.json()
+    const body = await req.json()
+    const { messages, xml, previousXml, sessionId } = body
+    const customSystemMessage =
+        typeof body.customSystemMessage === "string"
+            ? body.customSystemMessage.slice(0, 5000)
+            : ""
 
     // Get user ID for Langfuse tracking and quota
     const userId = getUserIdFromRequest(req)
@@ -235,8 +241,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // Get AI model with optional client overrides
-    const { model, providerOptions, headers, modelId } =
-        getAIModel(clientOverrides)
+    const {
+        model,
+        providerOptions,
+        headers,
+        modelId,
+        provider: resolvedProvider,
+    } = getAIModel(clientOverrides)
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
@@ -246,6 +257,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId, minimalStyle)
+    const finalSystemMessage = customSystemMessage
+        ? `${systemMessage}\n\n## Custom Instructions\n${customSystemMessage}`
+        : systemMessage
 
     // Extract file parts (images) from the last user message
     const fileParts =
@@ -418,32 +432,57 @@ ${userInputText}
     }
 
     // System messages with multiple cache breakpoints for optimal caching:
-    // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
+    // - Breakpoint 1: System instructions + custom instructions - changes when user updates custom system message
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
-    // This allows: if only user message changes, both system caches are reused
-    //              if XML changes, instruction cache is still reused
-    const systemMessages = [
-        // Cache breakpoint 1: Instructions (rarely change)
-        {
-            role: "system" as const,
-            content: systemMessage,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
-        },
-        // Cache breakpoint 2: Previous and Current diagram XML context
-        {
-            role: "system" as const,
-            content: `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
-        },
-    ]
+    // Some providers (e.g. MiniMax) don't support multiple system messages
+    // Merge them into a single system message for compatibility
+    const isSingleSystemProvider = SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider)
+
+    const xmlContext = `${
+        previousXml
+            ? `Previous diagram XML (before user's last message):
+"""xml
+${previousXml}
+"""
+
+`
+            : ""
+    }Current diagram XML (AUTHORITATIVE - the source of truth):
+"""xml
+${xml || ""}
+"""
+
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`
+
+    const systemMessages = isSingleSystemProvider
+        ? [
+              {
+                  role: "system" as const,
+                  content: `${finalSystemMessage}\n\n${xmlContext}`,
+              },
+          ]
+        : [
+              // Cache breakpoint 1: Instructions (+ optional custom instructions)
+              {
+                  role: "system" as const,
+                  content: finalSystemMessage,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+              // Cache breakpoint 2: Previous and Current diagram XML context
+              {
+                  role: "system" as const,
+                  content: xmlContext,
+                  ...(shouldCache && {
+                      providerOptions: {
+                          bedrock: { cachePoint: { type: "default" } },
+                      },
+                  }),
+              },
+          ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 

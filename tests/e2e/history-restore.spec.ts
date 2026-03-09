@@ -1,7 +1,6 @@
 import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
-    expectBeforeAndAfterReload,
     getChatInput,
     getIframe,
     getIframeContent,

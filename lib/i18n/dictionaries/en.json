@@ -29,7 +29,12 @@
         "openrouter": "OpenRouter",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
-        "modelscope": "ModelScope"
+        "modelscope": "ModelScope",
+        "minimax": "MiniMax",
+        "glm": "GLM",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "qiniu": "Qiniu"
     },
     "chat": {
         "placeholder": "Describe your diagram or upload a file...",
@@ -121,7 +126,10 @@
         "diagramValidation": "Diagram Validation (Experimental)",
         "diagramValidationDescription": "Use a vision language model to validate generated diagrams. Requires a VLM like GPT-5.2 or Sonnet-4.5.",
         "enabled": "Enabled",
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        "customSystemMessage": "Custom System Message",
+        "customSystemMessageDescription": "Add custom instructions appended to the AI's system prompt.",
+        "customSystemMessagePlaceholder": "e.g., Always use blue color scheme for diagrams..."
     },
     "save": {
         "title": "Save Diagram",
@@ -179,8 +187,11 @@
         "tpmMessage": "Too many requests. Please wait a moment.",
         "tpmMessageDetailed": "Rate limit reached ({limit} tokens/min). Please wait {seconds} seconds before sending another request.",
         "messageApi": "Looks like you've reached today's demo limit. We're thrilled you're enjoying it, and while ByteDance Doubao generously sponsors this demo, we've had to set a few boundaries to keep things fair for everyone.",
+        "messageApiSelfHosted": null,
         "messageToken": "Looks like you've reached today's token limit. We're thrilled you're enjoying it, and while ByteDance Doubao generously sponsors this demo, we've had to set a few boundaries to keep things fair for everyone.",
+        "messageTokenSelfHosted": null,
         "tip": "<strong>Tip:</strong> You can use your own API key (click the Settings icon) or self-host the project to bypass these limits.",
+        "tipSelfHosted": "<strong>Tip:</strong> You can configure your own API key in the settings to continue using the service.",
         "reset": "Your limit resets tomorrow. Thanks for understanding.",
         "doubaoSponsorship": "<a href=\"{link}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"underline hover:text-foreground\">Register here</a> to get 500K free tokens per model (including Doubao, DeepSeek and Kimi), then configure your API key in model settings.",
         "configModel": "Use Your API Key",
@@ -306,6 +317,7 @@
         "optional": "(optional)",
         "baseUrlWithExample": "Base URL (optional, e.g. {example})",
         "customEndpoint": "Custom endpoint URL",
+        "minimaxBaseUrlHint": "Use /anthropic for Anthropic-compatible API (recommended), or /v1 for OpenAI-compatible API",
         "models": "Models",
         "customModelId": "Custom model ID...",
         "allAdded": "All added",

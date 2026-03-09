@@ -9,7 +9,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
-import type { ProviderName } from "@/lib/types/model-config"
+import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
 
@@ -18,6 +18,42 @@ interface ModelConfig {
     providerOptions?: any
     headers?: Record<string, string>
     modelId: string
+    provider: ProviderName
+}
+
+// Providers that only support a single system message
+export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
+    "minimax",
+    "glm",
+    "qwen",
+    "kimi",
+    "qiniu",
+])
+
+/**
+ * Normalize MiniMax base URL for AI SDK compatibility.
+ * MiniMax supports Anthropic-compatible and OpenAI-compatible endpoints.
+ */
+export function normalizeMiniMaxBaseURL(rawUrl: string): {
+    baseURL: string
+    isAnthropicCompatible: boolean
+} {
+    const isAnthropicCompatible = rawUrl.includes("/anthropic")
+    let baseURL = rawUrl.replace(/\/$/, "")
+    if (isAnthropicCompatible) {
+        if (!baseURL.endsWith("/anthropic/v1")) {
+            if (baseURL.endsWith("/anthropic")) {
+                baseURL = `${baseURL}/v1`
+            } else {
+                baseURL = `${baseURL}/anthropic/v1`
+            }
+        }
+    } else {
+        if (!baseURL.endsWith("/v1")) {
+            baseURL = `${baseURL}/v1`
+        }
+    }
+    return { baseURL, isAnthropicCompatible }
 }
 
 export interface ClientOverrides {
@@ -57,6 +93,11 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "ollama",
     "doubao",
     "modelscope",
+    "glm",
+    "qwen",
+    "qiniu",
+    "kimi",
+    "minimax",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -474,7 +515,12 @@ function buildProviderOptions(
         case "sglang":
         case "gateway":
         case "modelscope":
-        case "doubao": {
+        case "doubao":
+        case "minimax":
+        case "glm":
+        case "qwen":
+        case "kimi":
+        case "qiniu": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
@@ -504,6 +550,11 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     edgeone: null, // No credentials needed - uses EdgeOne Edge AI
     doubao: "DOUBAO_API_KEY",
     modelscope: "MODELSCOPE_API_KEY",
+    glm: "GLM_API_KEY",
+    qwen: "QWEN_API_KEY",
+    qiniu: "QINIU_API_KEY",
+    kimi: "KIMI_API_KEY",
+    minimax: "MINIMAX_API_KEY",
 }
 
 /**
@@ -596,7 +647,7 @@ function validateProviderCredentials(
  * - GOOGLE_GENERATIVE_AI_API_KEY: Google API key
  * - AZURE_RESOURCE_NAME, AZURE_API_KEY: Azure OpenAI credentials
  * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
- * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to http://localhost:11434)
+ * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to https://ollama.com/api)
  * - OPENROUTER_API_KEY: OpenRouter API key
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
@@ -611,13 +662,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
-    // Exception: EdgeOne and Ollama providers don't require API keys
+    // Exception: EdgeOne doesn't require API keys.
+    // Ollama is exempt only when no server OLLAMA_API_KEY is configured;
+    // when it IS configured, the outer guard also enforces client apiKey for custom baseUrls.
     if (
         overrides?.baseUrl &&
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone" &&
-        overrides?.provider !== "ollama"
+        !(overrides?.provider === "ollama" && !process.env.OLLAMA_API_KEY)
     ) {
         throw new Error(
             `API key is required when using a custom base URL. ` +
@@ -878,8 +931,19 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         case "ollama": {
             const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
-            if (baseURL) {
-                const customOllama = createOllama({ baseURL })
+            // SECURITY: When client provides a custom base URL, only use
+            // client-provided API key. Never fall back to server OLLAMA_API_KEY
+            // to prevent leaking server credentials to user-controlled endpoints.
+            const apiKey = overrides?.baseUrl
+                ? overrides?.apiKey || undefined
+                : resolveApiKey(overrides, "OLLAMA_API_KEY")
+            if (baseURL || apiKey) {
+                const customOllama = createOllama({
+                    ...(baseURL && { baseURL }),
+                    ...(apiKey && {
+                        headers: { Authorization: `Bearer ${apiKey}` },
+                    }),
+                })
                 model = customOllama(modelId)
             } else {
                 model = ollama(modelId)
@@ -1159,9 +1223,69 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "minimax": {
+            const apiKey = resolveApiKey(overrides, "MINIMAX_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "MINIMAX_BASE_URL",
+            )
+            const rawBaseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.minimax.defaultBaseUrl,
+            )
+
+            if (!rawBaseURL) {
+                throw new Error(
+                    "MiniMax base URL could not be resolved. Set MINIMAX_BASE_URL or configure a base URL in settings.",
+                )
+            }
+
+            const { baseURL, isAnthropicCompatible } =
+                normalizeMiniMaxBaseURL(rawBaseURL)
+
+            if (isAnthropicCompatible) {
+                const minimax = createAnthropic({ apiKey, baseURL })
+                model = minimax.chat(modelId)
+            } else {
+                const minimax = createOpenAI({ apiKey, baseURL })
+                model = minimax.chat(modelId)
+            }
+            break
+        }
+
+        case "glm":
+        case "qwen":
+        case "qiniu":
+        case "kimi": {
+            const envVar = PROVIDER_ENV_VARS[provider]
+            if (!envVar) {
+                throw new Error(
+                    `API key environment variable not defined for provider: ${provider}`,
+                )
+            }
+            const apiKey = resolveApiKey(overrides, envVar)
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                resolveBaseUrlEnv(
+                    overrides,
+                    `${provider.toUpperCase()}_BASE_URL`,
+                ),
+                PROVIDER_INFO[provider]?.defaultBaseUrl,
+            )
+            const customProvider = createOpenAI({
+                apiKey,
+                baseURL,
+            })
+            model = customProvider.chat(modelId)
+            break
+        }
+
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax`,
             )
     }
 
@@ -1170,7 +1294,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         providerOptions = customProviderOptions
     }
 
-    return { model, providerOptions, headers, modelId }
+    return { model, providerOptions, headers, modelId, provider }
 }
 
 /**
@@ -1217,7 +1341,12 @@ export function supportsImageInput(modelId: string): boolean {
     }
 
     // Qwen text models (not vision variants like qwen-vl)
-    if (lowerModelId.includes("qwen") && !hasVisionIndicator) {
+    // qwen3.5-plus is a vision model
+    if (
+        lowerModelId.includes("qwen") &&
+        !hasVisionIndicator &&
+        !lowerModelId.includes("qwen3.5-plus")
+    ) {
         return false
     }
 
