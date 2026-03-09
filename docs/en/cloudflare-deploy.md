@@ -7,6 +7,16 @@ This project can be deployed as a **Cloudflare Worker** using the **OpenNext ada
 - Free `workers.dev` hosting
 - Full Next.js ISR support via R2 (optional)
 
+> **Next.js 16 middleware note:** Cloudflare via OpenNext currently requires **Edge Middleware**. If you use request interception for locale redirects/auth, keep it in `middleware.ts`. Do **not** rename it to `proxy.ts` for Cloudflare builds yet, because Next.js 16 compiles `proxy.ts` to the Node.js proxy runtime and OpenNext Cloudflare will fail with `Node.js middleware is not currently supported. Consider switching to Edge Middleware.`
+>
+> If you already renamed the file, move it back:
+>
+> ```bash
+> mv proxy.ts middleware.ts
+> ```
+>
+> And make sure the implementation only uses Edge-safe APIs. The Next.js 16 deprecation warning for `middleware.ts` is expected on Cloudflare until OpenNext supports the Node.js proxy runtime.
+
 > **Important Windows Note:** OpenNext and Wrangler are **not fully reliable on native Windows**. Recommended options:
 >
 > - Use **GitHub Codespaces** (works perfectly)
@@ -217,6 +227,26 @@ https://<worker-name>.<your-subdomain>.workers.dev
 **Cause:** R2 is configured in wrangler.jsonc but not enabled on your account.
 
 **Fix:** Either enable R2 (requires payment method) or use Option A (deploy without R2).
+
+---
+
+### `Node.js middleware is not currently supported. Consider switching to Edge Middleware.`
+
+**Cause:** In Next.js 16, `proxy.ts` uses the Node.js proxy runtime. OpenNext Cloudflare currently supports **Edge Middleware**, not Node.js proxy/middleware.
+
+**Fix:**
+
+1. Rename `proxy.ts` back to `middleware.ts`
+2. Keep the logic Edge-safe:
+   - Use `NextRequest`, `NextResponse`, `fetch`, `URL`, `Intl`, and other Web APIs
+   - Avoid Node-oriented packages inside middleware such as request parsers that depend on the Node runtime
+3. Run deploy again:
+
+```bash
+npm run deploy
+```
+
+If you are doing locale redirects, prefer parsing `Accept-Language` with Web APIs instead of using a Node-only helper.
 
 ---
 
