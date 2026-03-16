@@ -87,7 +87,7 @@ export default function About() {
                                     Great news! Thanks to the generous
                                     sponsorship from{" "}
                                     <a
-                                        href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="font-semibold text-blue-600 hover:underline"
@@ -96,7 +96,7 @@ export default function About() {
                                     </a>
                                     , the demo site now uses the powerful{" "}
                                     <span className="font-semibold text-amber-700">
-                                        K2-thinking
+                                        glm-4.7
                                     </span>{" "}
                                     model for better diagram generation! Sign up
                                     via the link to get{" "}
@@ -311,7 +311,7 @@ export default function About() {
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>
                             <a
-                                href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
@@ -348,7 +348,7 @@ export default function About() {
                     <p className="text-gray-700 mb-4 font-semibold">
                         Special thanks to{" "}
                         <a
-                            href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline"

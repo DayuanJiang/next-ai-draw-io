@@ -78,7 +78,7 @@ export default function AboutCN() {
                                 <p>
                                     好消息！感谢{" "}
                                     <a
-                                        href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="font-semibold text-blue-600 hover:underline"
@@ -87,7 +87,7 @@ export default function AboutCN() {
                                     </a>
                                     的慷慨赞助，演示站点现已接入强大的{" "}
                                     <span className="font-semibold text-amber-700">
-                                        K2-thinking
+                                        glm-4.7
                                     </span>{" "}
                                     模型，图表生成效果更佳！点击链接注册即可领取{" "}
                                     <span className="font-semibold text-amber-700">
@@ -95,6 +95,23 @@ export default function AboutCN() {
                                     </span>
                                     ，适用于所有模型！
                                 </p>
+                            </div>
+
+                            {/* Invite Poster */}
+                            <div className="text-center mb-5">
+                                <a
+                                    href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <Image
+                                        src="/volcengine-invite.png"
+                                        alt="火山引擎方舟 Coding Plan"
+                                        width={300}
+                                        height={400}
+                                        className="mx-auto rounded-lg"
+                                    />
+                                </a>
                             </div>
 
                             {/* Bring Your Own Key */}
@@ -277,7 +294,7 @@ export default function AboutCN() {
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>
                             <a
-                                href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
@@ -312,7 +329,7 @@ export default function AboutCN() {
                     <p className="text-gray-700 mb-4 font-semibold">
                         特别感谢{" "}
                         <a
-                            href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline"
