@@ -86,7 +86,7 @@ export default function AboutJA() {
                                 <p>
                                     朗報です！
                                     <a
-                                        href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="font-semibold text-blue-600 hover:underline"
@@ -95,7 +95,7 @@ export default function AboutJA() {
                                     </a>
                                     様のご支援により、デモサイトでは強力な{" "}
                                     <span className="font-semibold text-amber-700">
-                                        K2-thinking
+                                        glm-4.7
                                     </span>{" "}
                                     モデルを利用できるようになり、より高品質なダイアグラム生成が可能になりました。リンクから登録すると、すべてのモデルで使える{" "}
                                     <span className="font-semibold text-amber-700">
@@ -292,7 +292,7 @@ export default function AboutJA() {
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>
                             <a
-                                href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
@@ -327,7 +327,7 @@ export default function AboutJA() {
                     <p className="text-gray-700 mb-4 font-semibold">
                         デモサイトのAPIトークン使用を支援してくださった{" "}
                         <a
-                            href="https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project"
+                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline"
