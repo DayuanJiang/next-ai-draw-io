@@ -555,6 +555,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     qiniu: "QINIU_API_KEY",
     kimi: "KIMI_API_KEY",
     minimax: "MINIMAX_API_KEY",
+    custom: null,
 }
 
 /**

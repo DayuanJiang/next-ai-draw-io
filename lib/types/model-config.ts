@@ -21,6 +21,7 @@ export type ProviderName =
     | "qiniu"
     | "kimi"
     | "minimax"
+    | "custom"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -101,6 +102,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     doubao: "bytedance",
     modelscope: "modelscope",
     minimax: "minimax",
+    custom: "openai",
 }
 
 // Provider metadata
@@ -178,6 +180,9 @@ export const PROVIDER_INFO: Record<
     minimax: {
         label: "MiniMax",
         defaultBaseUrl: "https://api.minimaxi.com/anthropic",
+    },
+    custom: {
+        label: "Custom Provider",
     },
 }
 
@@ -348,6 +353,7 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "MiniMax-M2.5",
         "MiniMax-M2.5-highspeed",
     ],
+    custom: [],
 }
 
 // Helper to generate UUID
