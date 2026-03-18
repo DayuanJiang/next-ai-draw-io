@@ -345,6 +345,8 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     ],
     minimax: [
         // MiniMax models (Anthropic-compatible API)
+        "MiniMax-M2.7",
+        "MiniMax-M2.7-highspeed",
         "MiniMax-M2.5",
         "MiniMax-M2.5-highspeed",
     ],
