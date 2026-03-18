@@ -215,7 +215,7 @@ MiniMax 支持两种 API 格式：
 
 ```bash
 MINIMAX_API_KEY=your_api_key
-AI_MODEL=MiniMax-M2.5
+AI_MODEL=MiniMax-M2.7
 ```
 
 可选配置：
