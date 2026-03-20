@@ -1351,18 +1351,13 @@ export function supportsImageInput(modelId: string): boolean {
     }
 
     // GLM text models (not vision variants)
-    // GLM visual model naming convention: glm-Xv or glm-Xv-* (e.g., glm-4v, glm-4.5v, glm-4v-flash)
+    // GLM vision models: glm-4v, glm-4v-9b, glm-4.1v-9b-thinking
     if (lowerModelId.includes("glm") && !hasVisionIndicator) {
-        // Check if it is a GLM visual model (a pattern containing numbers + v, such as "4v", "4.5v")
-        const isGLMVision =
-            lowerModelId.includes("v") &&
-            (/[\d.]v/.test(lowerModelId) || lowerModelId.includes("v-"))
-
-        if (!isGLMVision) {
+        if (!/[\d.]v/.test(lowerModelId)) {
             return false
         }
     }
-    
+
     // Default: assume model supports images
     return true
 }

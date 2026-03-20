@@ -184,6 +184,21 @@ describe("supportsImageInput", () => {
         expect(supportsImageInput("qwen-plus")).toBe(false)
     })
 
+    it("returns false for GLM text models", () => {
+        expect(supportsImageInput("glm-4")).toBe(false)
+        expect(supportsImageInput("glm-4-plus")).toBe(false)
+        expect(supportsImageInput("glm-4-flash")).toBe(false)
+        expect(supportsImageInput("glm-4-long")).toBe(false)
+        expect(supportsImageInput("glm-4.7")).toBe(false)
+        expect(supportsImageInput("glm-5")).toBe(false)
+    })
+
+    it("returns true for GLM vision models", () => {
+        expect(supportsImageInput("glm-4v")).toBe(true)
+        expect(supportsImageInput("glm-4v-9b")).toBe(true)
+        expect(supportsImageInput("glm-4.1v-9b-thinking")).toBe(true)
+    })
+
     it("returns true for Claude and GPT models by default", () => {
         expect(supportsImageInput("claude-sonnet-4-5")).toBe(true)
         expect(supportsImageInput("gpt-4o")).toBe(true)
