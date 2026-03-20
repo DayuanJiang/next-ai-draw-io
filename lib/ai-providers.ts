@@ -1335,6 +1335,16 @@ export function supportsImageInput(modelId: string): boolean {
         return false
     }
 
+    // Moonshot text models (moonshot-v1 series are text-only)
+    if (lowerModelId.includes("moonshot-v1") && !hasVisionIndicator) {
+        return false
+    }
+
+    // MiniMax text models (MiniMax-M2.x series are text-only)
+    if (lowerModelId.includes("minimax") && !hasVisionIndicator) {
+        return false
+    }
+
     // DeepSeek text models (not vision variants)
     if (lowerModelId.includes("deepseek") && !hasVisionIndicator) {
         return false
@@ -1345,9 +1355,18 @@ export function supportsImageInput(modelId: string): boolean {
     if (
         lowerModelId.includes("qwen") &&
         !hasVisionIndicator &&
-        !lowerModelId.includes("qwen3.5-plus")
+        !lowerModelId.includes("qwen3.5-plus") &&
+        !lowerModelId.includes("qwen3.5-flash")
     ) {
         return false
+    }
+
+    // GLM text models (not vision variants)
+    // GLM vision models: glm-4v, glm-4v-9b, glm-4.1v-9b-thinking
+    if (lowerModelId.includes("glm") && !hasVisionIndicator) {
+        if (!/[\d.]v/.test(lowerModelId)) {
+            return false
+        }
     }
 
     // Default: assume model supports images

@@ -174,6 +174,19 @@ describe("supportsImageInput", () => {
         expect(supportsImageInput("moonshotai/kimi-k2.5")).toBe(true)
     })
 
+    it("returns false for Moonshot v1 text models", () => {
+        expect(supportsImageInput("moonshot-v1-8k")).toBe(false)
+        expect(supportsImageInput("moonshot-v1-32k")).toBe(false)
+        expect(supportsImageInput("moonshot-v1-128k")).toBe(false)
+    })
+
+    it("returns false for MiniMax text models", () => {
+        expect(supportsImageInput("MiniMax-M2.7")).toBe(false)
+        expect(supportsImageInput("MiniMax-M2.5")).toBe(false)
+        expect(supportsImageInput("MiniMax-M2")).toBe(false)
+        expect(supportsImageInput("MiniMax-M2.5-highspeed")).toBe(false)
+    })
+
     it("returns false for DeepSeek text models", () => {
         expect(supportsImageInput("deepseek-chat")).toBe(false)
         expect(supportsImageInput("deepseek-coder")).toBe(false)
@@ -182,6 +195,30 @@ describe("supportsImageInput", () => {
     it("returns false for Qwen text models", () => {
         expect(supportsImageInput("qwen-turbo")).toBe(false)
         expect(supportsImageInput("qwen-plus")).toBe(false)
+        expect(supportsImageInput("qwen3-max")).toBe(false)
+    })
+
+    it("returns true for Qwen vision models", () => {
+        expect(supportsImageInput("qwen-vl")).toBe(true)
+        expect(supportsImageInput("qwen3.5-plus")).toBe(true)
+        expect(supportsImageInput("qwen3.5-flash")).toBe(true)
+        expect(supportsImageInput("qwen3-vl-plus")).toBe(true)
+        expect(supportsImageInput("qwen3-vl-flash")).toBe(true)
+    })
+
+    it("returns false for GLM text models", () => {
+        expect(supportsImageInput("glm-4")).toBe(false)
+        expect(supportsImageInput("glm-4-plus")).toBe(false)
+        expect(supportsImageInput("glm-4-flash")).toBe(false)
+        expect(supportsImageInput("glm-4-long")).toBe(false)
+        expect(supportsImageInput("glm-4.7")).toBe(false)
+        expect(supportsImageInput("glm-5")).toBe(false)
+    })
+
+    it("returns true for GLM vision models", () => {
+        expect(supportsImageInput("glm-4v")).toBe(true)
+        expect(supportsImageInput("glm-4v-9b")).toBe(true)
+        expect(supportsImageInput("glm-4.1v-9b-thinking")).toBe(true)
     })
 
     it("returns true for Claude and GPT models by default", () => {
