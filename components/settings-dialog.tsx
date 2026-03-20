@@ -289,7 +289,7 @@ function SettingsContent({
             </DialogHeader>
 
             {/* Content */}
-            <div className="px-6 pb-6 overflow-y-auto flex-1 scrollbar-hidden">
+            <div className="px-6 pb-6 overflow-y-auto flex-1 scrollbar-thin">
                 <div className="divide-y divide-border-subtle">
                     {/* API Keys & Models */}
                     {onOpenModelConfig && (
