@@ -279,7 +279,7 @@ function SettingsContent({
     }
 
     return (
-        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
             <DialogHeader className="px-6 pt-6 pb-4">
                 <DialogTitle>{dict.settings.title}</DialogTitle>
