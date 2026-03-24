@@ -598,7 +598,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                             dict.save.savedSuccessfully,
                         )
                     }
-                    defaultFilename={`diagram-${new Date()
+                    defaultFilename={`next-ai-diagram-${new Date()
                         .toISOString()
                         .slice(0, 10)}`}
                 />

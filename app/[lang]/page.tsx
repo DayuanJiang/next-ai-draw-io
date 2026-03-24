@@ -13,8 +13,13 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        resetDrawioReady,
+        setShowSaveDialog,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -175,6 +180,7 @@ export default function Home() {
                                         key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
                                         ref={drawioRef}
                                         onExport={handleDiagramExport}
+                                        onSave={() => setShowSaveDialog(true)}
                                         onLoad={handleDrawioLoad}
                                         baseUrl={drawioBaseUrl}
                                         urlParameters={{
@@ -182,7 +188,7 @@ export default function Home() {
                                             spin: false,
                                             libraries: false,
                                             saveAndExit: false,
-                                            noSaveBtn: true,
+                                            noSaveBtn: false,
                                             noExitBtn: true,
                                             dark: darkMode,
                                             lang: currentLang,
