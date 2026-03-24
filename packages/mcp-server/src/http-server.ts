@@ -198,9 +198,12 @@ function handleRequest(
 ): void {
     const url = new URL(req.url || "/", `http://localhost:${serverPort}`)
 
-    res.setHeader("Access-Control-Allow-Origin", "*")
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+    const requestOrigin = req.headers.origin
+    if (requestOrigin === `http://localhost:${serverPort}`) {
+        res.setHeader("Access-Control-Allow-Origin", requestOrigin)
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+    }
 
     if (req.method === "OPTIONS") {
         res.writeHead(204)
