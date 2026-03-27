@@ -34,6 +34,7 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import type { ChatUIMessage } from "@/lib/chat-metadata"
 import { formatMessage } from "@/lib/i18n/utils"
+import { PRICING_HEADERS } from "@/lib/model-pricing"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { sanitizeMessages } from "@/lib/session-storage"
 import { STORAGE_KEYS } from "@/lib/storage"
@@ -1065,6 +1066,22 @@ export default function ChatPanel({
                             "x-ai-api-key": config.aiApiKey,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                        ...(config.inputPricePerMillionUsd && {
+                            [PRICING_HEADERS.inputPricePerMillionUsd]:
+                                config.inputPricePerMillionUsd,
+                        }),
+                        ...(config.outputPricePerMillionUsd && {
+                            [PRICING_HEADERS.outputPricePerMillionUsd]:
+                                config.outputPricePerMillionUsd,
+                        }),
+                        ...(config.cachedInputPricePerMillionUsd && {
+                            [PRICING_HEADERS.cachedInputPricePerMillionUsd]:
+                                config.cachedInputPricePerMillionUsd,
+                        }),
+                        ...(config.cacheWritePricePerMillionUsd && {
+                            [PRICING_HEADERS.cacheWritePricePerMillionUsd]:
+                                config.cacheWritePricePerMillionUsd,
+                        }),
                         // AWS Bedrock credentials
                         ...(config.awsAccessKeyId && {
                             "x-aws-access-key-id": config.awsAccessKeyId,

@@ -36,7 +36,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
-import { buildUsageMetadata, loadPricingConfig } from "@/lib/model-pricing"
+import { buildUsageMetadata, parsePricingHeaders } from "@/lib/model-pricing"
 import { findServerModelById } from "@/lib/server-model-config"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
@@ -83,7 +83,6 @@ function createCachedStreamResponse(xml: string): Response {
                         totalTokens: 0,
                         estimatedCostUsd: 0,
                         costAvailable: true,
-                        pricingSource: "cached",
                     },
                 } satisfies ChatMessageMetadata,
             })
@@ -201,6 +200,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const provider = req.headers.get("x-ai-provider")
     let baseUrl = req.headers.get("x-ai-base-url")
     const selectedModelId = req.headers.get("x-selected-model-id")
+    const requestPricing = parsePricingHeaders(req.headers)
 
     // For EdgeOne provider, construct full URL from request origin
     // because createOpenAI needs absolute URL, not relative path
@@ -785,8 +785,6 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         }),
     })
 
-    const pricingConfig = await loadPricingConfig()
-
     return result.toUIMessageStreamResponse({
         sendReasoning: true,
         messageMetadata: ({ part }) => {
@@ -801,12 +799,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                 const usage = (part as any).totalUsage
                 return {
                     finishReason: (part as any).finishReason,
-                    usage: buildUsageMetadata(
-                        resolvedProvider,
-                        modelId,
-                        usage,
-                        pricingConfig,
-                    ),
+                    usage: buildUsageMetadata(usage, requestPricing),
                 } satisfies ChatMessageMetadata
             }
             return undefined

@@ -1,23 +1,25 @@
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 import {
     buildUsageMetadata,
-    loadPricingConfig,
-    resetPricingConfigCache,
+    PRICING_HEADERS,
+    parsePricingHeaders,
 } from "@/lib/model-pricing"
 
-const ORIGINAL_ENV = { ...process.env }
+describe("parsePricingHeaders", () => {
+    it("returns null when required prices are missing", () => {
+        const pricing = parsePricingHeaders(
+            new Headers({
+                [PRICING_HEADERS.inputPricePerMillionUsd]: "2.5",
+            }),
+        )
 
-afterEach(() => {
-    process.env.AI_PRICING_CONFIG = ORIGINAL_ENV.AI_PRICING_CONFIG
-    process.env.AI_PRICING_CONFIG_PATH = ORIGINAL_ENV.AI_PRICING_CONFIG_PATH
-    resetPricingConfigCache()
+        expect(pricing).toBeNull()
+    })
 })
 
 describe("buildUsageMetadata", () => {
-    it("returns usage without cost when pricing config is missing", () => {
+    it("returns usage without cost when pricing is not configured", () => {
         const usage = buildUsageMetadata(
-            "openai",
-            "gpt-4o",
             {
                 inputTokens: 120,
                 outputTokens: 80,
@@ -34,25 +36,17 @@ describe("buildUsageMetadata", () => {
         })
     })
 
-    it("calculates estimated cost from matching pricing rule", async () => {
-        process.env.AI_PRICING_CONFIG = JSON.stringify({
-            rules: [
-                {
-                    provider: "openai",
-                    modelPattern: "^gpt-4o$",
-                    label: "OpenAI GPT-4o",
-                    inputPerMillionUsd: 2.5,
-                    outputPerMillionUsd: 10,
-                    cachedInputPerMillionUsd: 1.25,
-                    cacheWritePerMillionUsd: 3.75,
-                },
-            ],
-        })
+    it("calculates estimated cost from request headers", () => {
+        const pricing = parsePricingHeaders(
+            new Headers({
+                [PRICING_HEADERS.inputPricePerMillionUsd]: "2.5",
+                [PRICING_HEADERS.outputPricePerMillionUsd]: "10",
+                [PRICING_HEADERS.cachedInputPricePerMillionUsd]: "1.25",
+                [PRICING_HEADERS.cacheWritePricePerMillionUsd]: "3.75",
+            }),
+        )
 
-        const config = await loadPricingConfig()
         const usage = buildUsageMetadata(
-            "openai",
-            "gpt-4o",
             {
                 inputTokens: 1000,
                 outputTokens: 500,
@@ -62,11 +56,10 @@ describe("buildUsageMetadata", () => {
                     cacheWriteTokens: 50,
                 },
             },
-            config,
+            pricing,
         )
 
         expect(usage.costAvailable).toBe(true)
-        expect(usage.pricingSource).toBe("OpenAI GPT-4o")
         expect(usage.estimatedCostUsd).toBeCloseTo(0.0079375, 10)
     })
 })
