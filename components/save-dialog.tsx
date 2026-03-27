@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select"
 import { useDictionary } from "@/hooks/use-dictionary"
 
-export type ExportFormat = "drawio" | "png" | "svg"
+export type ExportFormat = "drawio" | "png" | "svg" | "xmlsvg"
 
 interface SaveDialogProps {
     open: boolean
@@ -73,6 +73,11 @@ export function SaveDialog({
             value: "svg" as const,
             label: dict.save.formats.svg,
             extension: ".svg",
+        },
+        {
+            value: "xmlsvg" as const,
+            label: dict.save.formats.xmlsvg,
+            extension: ".drawio.svg",
         },
     ]
 

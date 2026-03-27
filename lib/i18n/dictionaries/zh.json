@@ -140,7 +140,8 @@
         "formats": {
             "drawio": "Draw.io XML",
             "png": "PNG 图片",
-            "svg": "SVG 图片"
+            "svg": "SVG 图片",
+            "xmlsvg": "可编辑 SVG"
         },
         "savedSuccessfully": "保存成功！"
     },

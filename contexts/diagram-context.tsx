@@ -234,7 +234,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             saveResolverRef.current = { resolver: null, format: null }
             // For non-xmlsvg formats, skip XML extraction as it will fail
             // Only drawio (which uses xmlsvg internally) has the content attribute
-            if (format === "png" || format === "svg") {
+            // xmlsvg is saved directly as SVG file, no need for extraction
+            if (format === "png" || format === "svg" || format === "xmlsvg") {
                 return
             }
         }
@@ -287,7 +288,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Map format to draw.io export format
-        const drawioFormat = format === "drawio" ? "xmlsvg" : format
+        const drawioFormat =
+            format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
 
         // Set up the resolver before triggering export
         saveResolverRef.current = {
@@ -311,8 +313,22 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     fileContent = exportData
                     mimeType = "image/png"
                     extension = ".png"
+                } else if (format === "xmlsvg") {
+                    // Editable SVG: decode base64 data URL and save as SVG
+                    let svgContent = exportData
+                    if (svgContent.startsWith("data:image/svg+xml;base64,")) {
+                        // Decode base64 to get the actual SVG content
+                        const base64Data = svgContent.replace(
+                            "data:image/svg+xml;base64,",
+                            "",
+                        )
+                        svgContent = atob(base64Data)
+                    }
+                    fileContent = svgContent
+                    mimeType = "image/svg+xml"
+                    extension = ".drawio.svg"
                 } else {
-                    // SVG format
+                    // SVG format (view-only)
                     fileContent = exportData
                     mimeType = "image/svg+xml"
                     extension = ".svg"

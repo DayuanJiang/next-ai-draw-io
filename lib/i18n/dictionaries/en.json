@@ -140,7 +140,8 @@
         "formats": {
             "drawio": "Draw.io XML",
             "png": "PNG Image",
-            "svg": "SVG Image"
+            "svg": "SVG Image",
+            "xmlsvg": "Editable SVG"
         },
         "savedSuccessfully": "Saved successfully!"
     },
