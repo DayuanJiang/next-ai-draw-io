@@ -1,5 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import type { ChatMessageMetadata } from "@/lib/chat-metadata"
 
 // Constants
 const DB_NAME = "next-ai-drawio"
@@ -24,6 +25,7 @@ export interface ChatSession {
 export interface StoredMessage {
     id: string
     role: "user" | "assistant" | "system"
+    metadata?: ChatMessageMetadata
     parts: Array<{ type: string; [key: string]: unknown }>
 }
 
@@ -256,6 +258,10 @@ export function sanitizeMessage(message: unknown): StoredMessage | null {
     return {
         id: msg.id as string,
         role: role as "user" | "assistant" | "system",
+        metadata:
+            msg.metadata && typeof msg.metadata === "object"
+                ? structuredClone(msg.metadata as ChatMessageMetadata)
+                : undefined,
         parts,
     }
 }

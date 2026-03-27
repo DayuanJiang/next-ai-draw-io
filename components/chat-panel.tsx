@@ -32,6 +32,7 @@ import { useSessionManager } from "@/hooks/use-session-manager"
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
+import type { ChatUIMessage } from "@/lib/chat-metadata"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import { sanitizeMessages } from "@/lib/session-storage"
@@ -363,7 +364,7 @@ export default function ChatPanel({
         error,
         setMessages,
         stop,
-    } = useChat({
+    } = useChat<ChatUIMessage>({
         transport: new DefaultChatTransport({
             api: getApiEndpoint("/api/chat"),
         }),

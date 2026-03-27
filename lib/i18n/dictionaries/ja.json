@@ -58,7 +58,15 @@
         "clickToEdit": "クリックして編集",
         "editMessage": "メッセージを編集",
         "saveAndSubmit": "保存して送信",
-        "ExtractURL": "URLから抽出"
+        "ExtractURL": "URLから抽出",
+        "inputTokens": "入力",
+        "outputTokens": "出力",
+        "totalTokens": "合計",
+        "estimatedCost": "費用",
+        "costUnavailable": "利用不可",
+        "cachedInputTokens": "キャッシュ読取",
+        "cacheWriteTokens": "キャッシュ書込",
+        "pricingRule": "料金ルール"
     },
     "examples": {
         "title": "AI でダイアグラムを作成",

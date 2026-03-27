@@ -1,7 +1,5 @@
 "use client"
 
-import type { UIMessage } from "ai"
-
 import {
     Check,
     ChevronDown,
@@ -34,6 +32,7 @@ import Image from "@/components/image-with-basepath"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import type { ChatMessageMetadata, ChatUIMessage } from "@/lib/chat-metadata"
 import {
     applyDiagramOperations,
     convertToLegalXml,
@@ -119,7 +118,7 @@ function splitTextIntoFileSections(text: string): TextSection[] {
     return sections
 }
 
-const getMessageTextContent = (message: UIMessage): string => {
+const getMessageTextContent = (message: ChatUIMessage): string => {
     if (!message.parts) return ""
     return message.parts
         .filter((part) => part.type === "text")
@@ -128,7 +127,7 @@ const getMessageTextContent = (message: UIMessage): string => {
 }
 
 // Get only the user's original text, excluding appended file content
-const getUserOriginalText = (message: UIMessage): string => {
+const getUserOriginalText = (message: ChatUIMessage): string => {
     const fullText = getMessageTextContent(message)
     // Strip out [PDF: ...], [File: ...], and [URL: ...] sections that were appended
     const filePattern = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
@@ -143,7 +142,7 @@ interface SessionMetadata {
 }
 
 interface ChatMessageDisplayProps {
-    messages: UIMessage[]
+    messages: ChatUIMessage[]
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
     processedToolCallsRef: MutableRefObject<Set<string>>
@@ -159,6 +158,97 @@ interface ChatMessageDisplayProps {
     loadedMessageIdsRef?: MutableRefObject<Set<string>>
     validationStates?: Record<string, ValidationState>
     onImproveWithSuggestions?: (feedback: string) => void
+}
+
+function formatTokenCount(value: number): string {
+    return new Intl.NumberFormat().format(value)
+}
+
+function formatUsdCost(value: number): string {
+    if (value === 0) {
+        return "$0.00"
+    }
+
+    if (value < 0.0001) {
+        return "<$0.0001"
+    }
+
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: value < 1 ? 4 : 2,
+        maximumFractionDigits: value < 1 ? 4 : 2,
+    }).format(value)
+}
+
+function UsageSummary({
+    metadata,
+    dict,
+}: {
+    metadata: ChatMessageMetadata
+    dict: ReturnType<typeof useDictionary>
+}) {
+    const usage = metadata.usage
+    if (!usage) return null
+
+    const stats = [
+        {
+            label: dict.chat.inputTokens,
+            value: formatTokenCount(usage.inputTokens),
+        },
+        {
+            label: dict.chat.outputTokens,
+            value: formatTokenCount(usage.outputTokens),
+        },
+        {
+            label: dict.chat.totalTokens,
+            value: formatTokenCount(usage.totalTokens),
+        },
+        {
+            label: dict.chat.estimatedCost,
+            value:
+                usage.costAvailable && usage.estimatedCostUsd !== undefined
+                    ? formatUsdCost(usage.estimatedCostUsd)
+                    : dict.chat.costUnavailable,
+        },
+    ]
+
+    const hasCachedTokens =
+        (usage.cachedInputTokens ?? 0) > 0 || (usage.cacheWriteTokens ?? 0) > 0
+
+    return (
+        <div className="mt-3 rounded-xl border border-border/50 bg-background/70 px-3 py-2.5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {stats.map((stat) => (
+                    <div
+                        key={stat.label}
+                        className="rounded-lg bg-muted/60 px-2.5 py-2"
+                    >
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {stat.label}
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-foreground">
+                            {stat.value}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {hasCachedTokens && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                    {dict.chat.cachedInputTokens}:{" "}
+                    {formatTokenCount(usage.cachedInputTokens ?? 0)}
+                    {" · "}
+                    {dict.chat.cacheWriteTokens}:{" "}
+                    {formatTokenCount(usage.cacheWriteTokens ?? 0)}
+                </div>
+            )}
+            {usage.costAvailable && usage.pricingSource && (
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                    {dict.chat.pricingRule}: {usage.pricingSource}
+                </div>
+            )}
+        </div>
+    )
 }
 
 export function ChatMessageDisplay({
@@ -672,6 +762,9 @@ export function ChatMessageDisplay({
                                     .slice(messageIndex + 1)
                                     .every((m) => m.role !== "user"))
                         const isEditing = editingMessageId === message.id
+                        const messageMetadata = message.metadata as
+                            | ChatMessageMetadata
+                            | undefined
                         // Skip animation for loaded messages (from session restore)
                         const isRestoredMessage =
                             loadedMessageIdsRef?.current.has(message.id) ??
@@ -1250,6 +1343,13 @@ export function ChatMessageDisplay({
                                             )
                                         })()
                                     )}
+                                    {message.role === "assistant" &&
+                                        messageMetadata?.usage && (
+                                            <UsageSummary
+                                                metadata={messageMetadata}
+                                                dict={dict}
+                                            />
+                                        )}
                                     {/* Action buttons for assistant messages */}
                                     {message.role === "assistant" && (
                                         <div className="flex items-center gap-1 mt-2">

@@ -58,7 +58,15 @@
         "clickToEdit": "Click to edit",
         "editMessage": "Edit message",
         "saveAndSubmit": "Save & Submit",
-        "ExtractURL": "Extract from URL"
+        "ExtractURL": "Extract from URL",
+        "inputTokens": "Input",
+        "outputTokens": "Output",
+        "totalTokens": "Total",
+        "estimatedCost": "Cost",
+        "costUnavailable": "Unavailable",
+        "cachedInputTokens": "Cache read",
+        "cacheWriteTokens": "Cache write",
+        "pricingRule": "Pricing rule"
     },
     "examples": {
         "title": "Create diagrams with AI",

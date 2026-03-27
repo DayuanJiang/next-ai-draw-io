@@ -65,7 +65,12 @@ function getConfigPath(): string {
 export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | null> {
     // Priority 1: AI_MODELS_CONFIG env var (JSON string) - for cloud deployments
     const envConfig = process.env.AI_MODELS_CONFIG
-    if (envConfig && envConfig.trim().length > 0) {
+    if (
+        envConfig &&
+        envConfig !== "undefined" &&
+        envConfig !== "null" &&
+        envConfig.trim().length > 0
+    ) {
         try {
             const json = JSON.parse(envConfig)
             return ServerModelsConfigSchema.parse(json)

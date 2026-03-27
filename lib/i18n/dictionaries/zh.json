@@ -58,7 +58,15 @@
         "clickToEdit": "点击编辑",
         "editMessage": "编辑消息",
         "saveAndSubmit": "保存并提交",
-        "ExtractURL": "从 URL 提取"
+        "ExtractURL": "从 URL 提取",
+        "inputTokens": "输入",
+        "outputTokens": "输出",
+        "totalTokens": "总计",
+        "estimatedCost": "费用",
+        "costUnavailable": "暂不可用",
+        "cachedInputTokens": "缓存读取",
+        "cacheWriteTokens": "缓存写入",
+        "pricingRule": "计费规则"
     },
     "examples": {
         "title": "用 AI 创建图表",

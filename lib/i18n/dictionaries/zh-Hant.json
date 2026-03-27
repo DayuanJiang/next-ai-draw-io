@@ -58,7 +58,15 @@
         "clickToEdit": "點擊編輯",
         "editMessage": "編輯訊息",
         "saveAndSubmit": "儲存並提交",
-        "ExtractURL": "從 URL 擷取"
+        "ExtractURL": "從 URL 擷取",
+        "inputTokens": "輸入",
+        "outputTokens": "輸出",
+        "totalTokens": "總計",
+        "estimatedCost": "費用",
+        "costUnavailable": "暫不可用",
+        "cachedInputTokens": "快取讀取",
+        "cacheWriteTokens": "快取寫入",
+        "pricingRule": "計費規則"
     },
     "examples": {
         "title": "用 AI 建立圖表",
