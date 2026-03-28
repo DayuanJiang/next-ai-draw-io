@@ -345,11 +345,12 @@ export async function POST(req: Request) {
                 break
             }
 
-            // GLM, Qwen, Kimi, Qiniu - OpenAI compatible
+            // GLM, Qwen, Kimi, Qiniu, Novita - OpenAI compatible
             case "glm":
             case "qwen":
             case "kimi":
-            case "qiniu": {
+            case "qiniu":
+            case "novita": {
                 const baseURL =
                     baseUrl ||
                     PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||
