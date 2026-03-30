@@ -279,7 +279,7 @@ function SettingsContent({
     }
 
     return (
-        <DialogContent className="sm:max-w-lg p-0 gap-0">
+        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
             <DialogHeader className="px-6 pt-6 pb-4">
                 <DialogTitle>{dict.settings.title}</DialogTitle>
@@ -289,7 +289,7 @@ function SettingsContent({
             </DialogHeader>
 
             {/* Content */}
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-6 overflow-y-auto flex-1 scrollbar-thin">
                 <div className="divide-y divide-border-subtle">
                     {/* API Keys & Models */}
                     {onOpenModelConfig && (

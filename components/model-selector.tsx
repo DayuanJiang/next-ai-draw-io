@@ -199,7 +199,7 @@ export function ModelSelector({
                     />
                     <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
                         <div className="flex-1 min-h-0 overflow-hidden">
-                            <ModelSelectorList className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                            <ModelSelectorList className="overflow-y-auto scrollbar-thin">
                                 <ModelSelectorEmpty>
                                     {displayModels.length === 0 &&
                                     models.length > 0
