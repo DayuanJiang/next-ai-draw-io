@@ -28,6 +28,7 @@ export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
     "qwen",
     "kimi",
     "qiniu",
+    "novita",
 ])
 
 /**
@@ -98,6 +99,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "qiniu",
     "kimi",
     "minimax",
+    "novita",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -520,7 +522,8 @@ function buildProviderOptions(
         case "glm":
         case "qwen":
         case "kimi":
-        case "qiniu": {
+        case "qiniu":
+        case "novita": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
@@ -555,6 +558,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     qiniu: "QINIU_API_KEY",
     kimi: "KIMI_API_KEY",
     minimax: "MINIMAX_API_KEY",
+    novita: "NOVITA_API_KEY",
 }
 
 /**
@@ -1258,7 +1262,8 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "glm":
         case "qwen":
         case "qiniu":
-        case "kimi": {
+        case "kimi":
+        case "novita": {
             const envVar = PROVIDER_ENV_VARS[provider]
             if (!envVar) {
                 throw new Error(
@@ -1285,7 +1290,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita`,
             )
     }
 
