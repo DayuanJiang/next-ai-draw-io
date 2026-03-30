@@ -98,6 +98,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "qiniu",
     "kimi",
     "minimax",
+    "custom",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -555,6 +556,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     qiniu: "QINIU_API_KEY",
     kimi: "KIMI_API_KEY",
     minimax: "MINIMAX_API_KEY",
+    custom: null,
 }
 
 /**
@@ -1275,6 +1277,31 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 ),
                 PROVIDER_INFO[provider]?.defaultBaseUrl,
             )
+            const customProvider = createOpenAI({
+                apiKey,
+                baseURL,
+            })
+            model = customProvider.chat(modelId)
+            break
+        }
+
+        case "custom": {
+            // Custom provider - requires baseUrl from client, uses OpenAI-compatible API
+            const apiKey = overrides?.apiKey
+            const baseURL = overrides?.baseUrl
+
+            if (!baseURL) {
+                throw new Error(
+                    "Custom provider requires a base URL. Please configure it in Settings.",
+                )
+            }
+
+            if (!apiKey) {
+                throw new Error(
+                    "Custom provider requires an API key. Please configure it in Settings.",
+                )
+            }
+
             const customProvider = createOpenAI({
                 apiKey,
                 baseURL,

@@ -373,6 +373,25 @@ export async function POST(req: Request) {
                 break
             }
 
+            case "custom": {
+                // Custom provider - requires baseUrl, uses OpenAI-compatible API
+                if (!baseUrl) {
+                    return NextResponse.json(
+                        {
+                            valid: false,
+                            error: "Base URL is required for custom provider",
+                        },
+                        { status: 400 },
+                    )
+                }
+                const openai = createOpenAI({
+                    apiKey,
+                    baseURL: baseUrl,
+                })
+                model = openai.chat(modelId)
+                break
+            }
+
             default:
                 return NextResponse.json(
                     { valid: false, error: `Unknown provider: ${provider}` },
