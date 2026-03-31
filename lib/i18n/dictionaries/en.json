@@ -303,7 +303,8 @@
         "searchPlaceholder": "Search templates...",
         "searchNoResults": "No templates match your search",
         "pin": "Pin to top",
-        "unpin": "Unpin from top"
+        "unpin": "Unpin from top",
+        "saveAsTemplate": "Save as Template"
     },
     "validation": {
         "title": "Validate Diagram",
