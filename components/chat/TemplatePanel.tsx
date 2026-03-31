@@ -1,13 +1,14 @@
 "use client"
 
 import { Bookmark, FileText, Plus } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useDictionary } from "@/hooks/use-dictionary"
 import {
     getAllTemplates,
     sortTemplates,
     type Template,
 } from "@/lib/template-storage"
+import { TemplateCreateDialog } from "./TemplateCreateDialog"
 
 interface TemplatePanelProps {
     setInput: (input: string) => void
@@ -36,19 +37,27 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
     const dict = useDictionary()
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
+    const [createDialogOpen, setCreateDialogOpen] = useState(false)
+
+    const loadTemplates = useCallback(async () => {
+        const result = await getAllTemplates()
+        setTemplates(sortTemplates(result))
+        setLoading(false)
+    }, [])
 
     useEffect(() => {
         let mounted = true
-        getAllTemplates().then((result) => {
-            if (mounted) {
-                setTemplates(sortTemplates(result))
-                setLoading(false)
-            }
+        loadTemplates().then(() => {
+            if (!mounted) return
         })
         return () => {
             mounted = false
         }
-    }, [])
+    }, [loadTemplates])
+
+    const handleCreateSuccess = () => {
+        loadTemplates()
+    }
 
     // Empty state: no templates
     if (!loading && templates.length === 0) {
@@ -75,15 +84,17 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                     <button
                         type="button"
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                        onClick={() => {
-                            // For now, create a template prompt placeholder
-                            // Full creation flow will be implemented in US-004
-                            setInput("")
-                        }}
+                        onClick={() => setCreateDialogOpen(true)}
                     >
                         <Plus className="w-4 h-4" />
                         {dict.templates.createFirst}
                     </button>
+
+                    <TemplateCreateDialog
+                        open={createDialogOpen}
+                        onOpenChange={setCreateDialogOpen}
+                        onSuccess={handleCreateSuccess}
+                    />
                 </div>
             </div>
         )
@@ -102,9 +113,19 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
             </div>
 
             <div className="space-y-3">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
-                    {dict.templates.myTemplates}
-                </p>
+                <div className="flex items-center justify-between px-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {dict.templates.myTemplates}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setCreateDialogOpen(true)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                    >
+                        <Plus className="w-3 h-3" />
+                        {dict.templates.createButton}
+                    </button>
+                </div>
 
                 <div className="grid gap-2">
                     {loading
@@ -190,6 +211,12 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                           ))}
                 </div>
             </div>
+
+            <TemplateCreateDialog
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+                onSuccess={handleCreateSuccess}
+            />
         </div>
     )
 }

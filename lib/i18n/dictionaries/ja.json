@@ -350,5 +350,32 @@
         "allModelsShown": "すべてのモデルを表示（未検証を含む）",
         "unvalidatedModelWarning": "このモデルは検証されていません",
         "serverDefaultModel": "サーバーデフォルトモデル"
+    },
+    "templates": {
+        "title": "マイテンプレート",
+        "subtitle": "素早いダイアグラム作成のための個人的なプロンプトライブラリ",
+        "emptyTitle": "テンプレートがありません",
+        "emptyDescription": "最初のテンプレートを作成して、個人的なプロンプトライブラリを構築しましょう",
+        "createFirst": "最初のテンプレートを作成",
+        "neverUsed": "未使用",
+        "usedCount": "{count} 回使用",
+        "myTemplates": "マイテンプレート",
+        "createTitle": "テンプレート作成",
+        "createDescription": "再利用のためにプロンプトを保存します。テンプレートを使用すると、一般的なワークフローを素早く開始できます。",
+        "promptLabel": "プロンプト",
+        "promptPlaceholder": "作成するダイアグラムを説明してください...",
+        "promptRequired": "プロンプトは必須です",
+        "titleLabel": "タイトル",
+        "titlePlaceholder": "タイトルを入力",
+        "titleHint": "空欄の場合はプロンプトの最初の20文字が使用されます",
+        "descriptionLabel": "説明",
+        "descriptionPlaceholder": "このテンプレートの説明を追加",
+        "tagsLabel": "タグ",
+        "tagsPlaceholder": "ダイアグラム, フローチャート, アーキテクチャ",
+        "tagsHint": "タグをカンマで区切ります",
+        "pinnedLabel": "テンプレートをピン留め",
+        "pinnedHint": "ピン留めされたテンプレートはリストの上部に表示されます",
+        "createButton": "テンプレート作成",
+        "createFailed": "テンプレートの作成に失敗しました。もう一度お試しください。 "
     }
 }

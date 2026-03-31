@@ -3,7 +3,7 @@ import { nanoid } from "nanoid"
 
 // Constants
 const DB_NAME = "next-ai-drawio"
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = "sessions"
 const MIGRATION_FLAG = "next-ai-drawio-migrated-to-idb"
 const MAX_SESSIONS = 50
@@ -37,11 +37,36 @@ export interface SessionMetadata {
     thumbnailDataUrl?: string
 }
 
+// Template type for DBSchema (full type is in template-storage.ts)
+interface TemplateSchema {
+    id: string
+    title: string
+    prompt: string
+    description?: string
+    tags?: string[]
+    createdAt: number
+    updatedAt: number
+    clickCount: number
+    runCount: number
+    lastUsedAt: number
+    pinned: boolean
+}
+
 interface ChatSessionDB extends DBSchema {
     sessions: {
         key: string
         value: ChatSession
         indexes: { "by-updated": number }
+    }
+    templates: {
+        key: string
+        value: TemplateSchema
+        indexes: {
+            "by-updated": number
+            "by-pinned": number
+            "by-run-count": number
+            "by-last-used": number
+        }
     }
 }
 
@@ -85,7 +110,24 @@ async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
                     })
                     store.createIndex("by-updated", "updatedAt")
                 }
-                // Future migrations: if (oldVersion < 2) { ... }
+                // Version 2: templates store (added by template-storage.ts)
+                // Note: We also need to include this here to ensure the upgrade
+                // callback properly handles all migrations when opening from this file
+                if (oldVersion < 2) {
+                    // Check if templates store already exists (created by template-storage.ts)
+                    if (!db.objectStoreNames.contains("templates")) {
+                        const templateStore = db.createObjectStore(
+                            "templates",
+                            {
+                                keyPath: "id",
+                            },
+                        )
+                        templateStore.createIndex("by-updated", "updatedAt")
+                        templateStore.createIndex("by-pinned", "pinned")
+                        templateStore.createIndex("by-run-count", "runCount")
+                        templateStore.createIndex("by-last-used", "lastUsedAt")
+                    }
+                }
             },
             terminated() {
                 resetDBPromise()
