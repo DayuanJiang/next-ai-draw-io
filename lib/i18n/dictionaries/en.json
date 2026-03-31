@@ -290,7 +290,14 @@
         "pinnedLabel": "Pin Template",
         "pinnedHint": "Pinned templates appear at the top of the list",
         "createButton": "Create Template",
-        "createFailed": "Failed to create template. Please try again."
+        "createFailed": "Failed to create template. Please try again.",
+        "editTitle": "Edit Template",
+        "editDescription": "Update your template content and settings.",
+        "updateFailed": "Failed to update template. Please try again.",
+        "duplicate": "Duplicate",
+        "deleteTitle": "Delete this template?",
+        "deleteDescription": "This will permanently delete this template. This action cannot be undone.",
+        "actionsLabel": "Actions"
     },
     "validation": {
         "title": "Validate Diagram",
