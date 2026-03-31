@@ -3,6 +3,7 @@
 import type { UIMessage } from "ai"
 
 import {
+    BookmarkPlus,
     Check,
     ChevronDown,
     ChevronUp,
@@ -26,6 +27,7 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ChatLobby } from "@/components/chat/ChatLobby"
+import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
 import { ToolCallCard } from "@/components/chat/ToolCallCard"
 import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import type { ValidationState } from "@/components/chat/ValidationCard"
@@ -243,6 +245,10 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
+    // Track "Save as Template" dialog
+    const [saveAsTemplateMessageId, setSaveAsTemplateMessageId] = useState<
+        string | null
+    >(null)
 
     const setCopyState = (
         messageId: string,
@@ -755,8 +761,42 @@ export function ChatMessageDisplay({
                                                     <Copy className="h-3.5 w-3.5" />
                                                 )}
                                             </button>
+                                            {/* Save as Template button - only for user messages */}
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setSaveAsTemplateMessageId(
+                                                        message.id,
+                                                    )
+                                                }
+                                                className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
+                                                title={
+                                                    dict.templates
+                                                        ?.saveAsTemplate ||
+                                                    "Save as Template"
+                                                }
+                                            >
+                                                <BookmarkPlus className="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     )}
+
+                                {/* Save as Template Dialog */}
+                                {saveAsTemplateMessageId === message.id && (
+                                    <TemplateCreateDialog
+                                        open={true}
+                                        onOpenChange={(open) => {
+                                            if (!open)
+                                                setSaveAsTemplateMessageId(null)
+                                        }}
+                                        onSuccess={() => {
+                                            setSaveAsTemplateMessageId(null)
+                                        }}
+                                        initialPrompt={getUserOriginalText(
+                                            message,
+                                        )}
+                                    />
+                                )}
                                 <div className="max-w-[85%] min-w-0">
                                     {/* Reasoning blocks - displayed first for assistant messages */}
                                     {message.role === "assistant" &&

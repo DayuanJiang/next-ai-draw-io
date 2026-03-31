@@ -1,7 +1,7 @@
 "use client"
 
 import { Bookmark, Plus } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -37,16 +37,15 @@ export function TemplateCreateDialog({
     const dict = useDictionary()
     const [title, setTitle] = useState("")
     const [description, setDescription] = useState("")
-    const [prompt, setPrompt] = useState(initialPrompt)
+    const [prompt, setPrompt] = useState("")
     const [tags, setTags] = useState("")
     const [pinned, setPinned] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
-    // Reset form when dialog opens
-    const handleOpenChange = (newOpen: boolean) => {
-        if (newOpen) {
-            // Reset form when opening
+    // Reset form when dialog opens with the latest initialPrompt
+    useEffect(() => {
+        if (open) {
             setTitle("")
             setDescription("")
             setPrompt(initialPrompt)
@@ -54,8 +53,7 @@ export function TemplateCreateDialog({
             setPinned(false)
             setError(null)
         }
-        onOpenChange(newOpen)
-    }
+    }, [open, initialPrompt])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -97,7 +95,7 @@ export function TemplateCreateDialog({
     }
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
