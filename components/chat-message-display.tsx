@@ -159,6 +159,10 @@ interface ChatMessageDisplayProps {
     loadedMessageIdsRef?: MutableRefObject<Set<string>>
     validationStates?: Record<string, ValidationState>
     onImproveWithSuggestions?: (feedback: string) => void
+    onSendTemplate?: (
+        template: import("@/lib/template-storage").Template,
+    ) => void
+    currentInput?: string
 }
 
 export function ChatMessageDisplay({
@@ -178,6 +182,8 @@ export function ChatMessageDisplay({
     loadedMessageIdsRef,
     validationStates = {},
     onImproveWithSuggestions,
+    onSendTemplate,
+    currentInput = "",
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
@@ -650,6 +656,8 @@ export function ChatMessageDisplay({
                     onDeleteSession={onDeleteSession}
                     setInput={setInput}
                     setFiles={setFiles}
+                    onSendTemplate={onSendTemplate}
+                    currentInput={currentInput}
                     dict={dict}
                 />
             ) : messages.length === 0 ? null : (

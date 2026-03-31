@@ -383,6 +383,9 @@
         "duplicate": "複製",
         "deleteTitle": "このテンプレートを削除しますか？",
         "deleteDescription": "このテンプレートは完全に削除されます。この操作は取り消せません。",
+        "confirmSendTitle": "現在の入力を置き換えますか？",
+        "confirmSendDescription": "未送信のコンテンツがあります。このテンプレートを送信すると置き換えられます。",
+        "confirmSendButton": "テンプレートを送信",
         "actionsLabel": "操作"
     }
 }
