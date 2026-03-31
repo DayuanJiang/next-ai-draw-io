@@ -297,6 +297,9 @@
         "duplicate": "複製",
         "deleteTitle": "刪除此範本？",
         "deleteDescription": "此操作將永久刪除該範本，無法復原。",
+        "confirmSendTitle": "取代目前輸入？",
+        "confirmSendDescription": "您有未傳送的內容。傳送此範本將取代它。",
+        "confirmSendButton": "傳送範本",
         "actionsLabel": "操作"
     },
     "validation": {

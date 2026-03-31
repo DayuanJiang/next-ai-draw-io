@@ -297,6 +297,9 @@
         "duplicate": "Duplicate",
         "deleteTitle": "Delete this template?",
         "deleteDescription": "This will permanently delete this template. This action cannot be undone.",
+        "confirmSendTitle": "Replace current input?",
+        "confirmSendDescription": "You have unsent content in the input. Sending this template will replace it.",
+        "confirmSendButton": "Send Template",
         "actionsLabel": "Actions"
     },
     "validation": {

@@ -17,6 +17,8 @@ import {
     deleteTemplate,
     duplicateTemplate,
     getAllTemplates,
+    incrementClickCount,
+    incrementRunCount,
     sortTemplates,
     type Template,
 } from "@/lib/template-storage"
@@ -25,6 +27,8 @@ import { TemplateEditDialog } from "./TemplateEditDialog"
 
 interface TemplatePanelProps {
     setInput: (input: string) => void
+    onSendTemplate?: (template: Template) => void
+    currentInput?: string
 }
 
 function formatLastUsed(timestamp: number, neverUsedText: string): string {
@@ -46,7 +50,11 @@ function formatLastUsed(timestamp: number, neverUsedText: string): string {
     })
 }
 
-export function TemplatePanel({ setInput }: TemplatePanelProps) {
+export function TemplatePanel({
+    setInput,
+    onSendTemplate,
+    currentInput = "",
+}: TemplatePanelProps) {
     const dict = useDictionary()
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
@@ -57,6 +65,8 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
     const [templateToDelete, setTemplateToDelete] = useState<Template | null>(
         null,
     )
+    const [confirmSendDialogOpen, setConfirmSendDialogOpen] = useState(false)
+    const [templateToSend, setTemplateToSend] = useState<Template | null>(null)
 
     const loadTemplates = useCallback(async () => {
         const result = await getAllTemplates()
@@ -107,6 +117,51 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
         }
         setDeleteDialogOpen(false)
         setTemplateToDelete(null)
+    }
+
+    // Handle template card click - send directly or show confirmation
+    const handleTemplateClick = async (template: Template) => {
+        // Always increment click count when user interacts with template
+        await incrementClickCount(template.id)
+
+        // If there's unsent content in the input, show confirmation dialog
+        if (currentInput.trim()) {
+            setTemplateToSend(template)
+            setConfirmSendDialogOpen(true)
+            return
+        }
+
+        // No unsent content, send directly
+        await sendTemplate(template)
+    }
+
+    // Actually send the template
+    const sendTemplate = async (template: Template) => {
+        if (onSendTemplate) {
+            // Increment run count and update lastUsedAt
+            await incrementRunCount(template.id)
+            // Reload to show updated stats
+            loadTemplates()
+            // Call the send callback
+            onSendTemplate(template)
+        } else {
+            // Fallback: just fill the input if no send callback provided
+            setInput(template.prompt)
+        }
+        setConfirmSendDialogOpen(false)
+        setTemplateToSend(null)
+    }
+
+    // Handle confirmation dialog - user confirmed to send template
+    const handleConfirmSend = async () => {
+        if (!templateToSend) return
+        await sendTemplate(templateToSend)
+    }
+
+    // Handle cancel - close dialog without sending
+    const handleCancelSend = () => {
+        setConfirmSendDialogOpen(false)
+        setTemplateToSend(null)
     }
 
     // Empty state: no templates
@@ -195,27 +250,31 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                               </div>
                           ))
                         : templates.map((template) => (
+                              // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested action buttons which causes hydration error
                               <div
                                   key={template.id}
-                                  className="group w-full text-left p-4 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm"
+                                  className="group w-full text-left p-4 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm cursor-pointer"
+                                  onClick={() => handleTemplateClick(template)}
+                                  onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault()
+                                          handleTemplateClick(template)
+                                      }
+                                  }}
+                                  role="button"
+                                  tabIndex={0}
                               >
                                   <div className="flex items-start gap-3">
-                                      <button
-                                          type="button"
-                                          onClick={() =>
-                                              setInput(template.prompt)
-                                          }
-                                          className="flex-1 min-w-0"
+                                      <div
+                                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                                              template.pinned
+                                                  ? "bg-primary/20 group-hover:bg-primary/25"
+                                                  : "bg-primary/10 group-hover:bg-primary/15"
+                                          }`}
                                       >
-                                          <div
-                                              className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors mb-2 ${
-                                                  template.pinned
-                                                      ? "bg-primary/20 group-hover:bg-primary/25"
-                                                      : "bg-primary/10 group-hover:bg-primary/15"
-                                              }`}
-                                          >
-                                              <FileText className="w-4 h-4 text-primary" />
-                                          </div>
+                                          <FileText className="w-4 h-4 text-primary" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2">
                                               <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
                                                   {template.title}
@@ -259,7 +318,7 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                                                       </span>
                                                   )}
                                           </div>
-                                      </button>
+                                      </div>
                                       {/* Actions - visible on hover */}
                                       <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                           <button
@@ -343,6 +402,34 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                             className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400"
                         >
                             {dict.common.delete}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Confirm Send Dialog - when there's unsent input */}
+            <AlertDialog
+                open={confirmSendDialogOpen}
+                onOpenChange={setConfirmSendDialogOpen}
+            >
+                <AlertDialogContent className="max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {dict.templates.confirmSendTitle ||
+                                "Replace current input?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {dict.templates.confirmSendDescription ||
+                                "You have unsent content in the input. Sending this template will replace it."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={handleCancelSend}>
+                            {dict.common.cancel}
+                        </AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmSend}>
+                            {dict.templates.confirmSendButton ||
+                                "Send Template"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

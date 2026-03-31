@@ -21,6 +21,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import type { Template } from "@/lib/template-storage"
 
 interface SessionMetadata {
     id: string
@@ -35,6 +36,8 @@ interface ChatLobbyProps {
     onDeleteSession?: (id: string) => void
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
+    onSendTemplate?: (template: Template) => void
+    currentInput?: string
     dict: {
         sessionHistory?: {
             recentChats?: string
@@ -82,6 +85,8 @@ export function ChatLobby({
     onDeleteSession,
     setInput,
     setFiles: _setFiles,
+    onSendTemplate,
+    currentInput = "",
     dict,
 }: ChatLobbyProps) {
     // Track whether templates section is expanded (collapsed by default when there's history)
@@ -96,7 +101,13 @@ export function ChatLobby({
 
     if (!hasHistory) {
         // Show template library when no history
-        return <TemplatePanel setInput={setInput} />
+        return (
+            <TemplatePanel
+                setInput={setInput}
+                onSendTemplate={onSendTemplate}
+                currentInput={currentInput}
+            />
+        )
     }
 
     // Show history + collapsible examples when there are sessions
@@ -224,7 +235,11 @@ export function ChatLobby({
                 </button>
                 {templatesExpanded && (
                     <div className="mt-2">
-                        <TemplatePanel setInput={setInput} />
+                        <TemplatePanel
+                            setInput={setInput}
+                            onSendTemplate={onSendTemplate}
+                            currentInput={currentInput}
+                        />
                     </div>
                 )}
             </div>

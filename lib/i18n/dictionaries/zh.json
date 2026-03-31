@@ -297,6 +297,9 @@
         "duplicate": "复制",
         "deleteTitle": "删除此模板？",
         "deleteDescription": "此操作将永久删除该模板，无法撤销。",
+        "confirmSendTitle": "替换当前输入？",
+        "confirmSendDescription": "您有未发送的内容。发送此模板将替换它。",
+        "confirmSendButton": "发送模板",
         "actionsLabel": "操作"
     },
     "validation": {
