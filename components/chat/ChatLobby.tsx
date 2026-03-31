@@ -9,7 +9,7 @@ import {
     X,
 } from "lucide-react"
 import { useState } from "react"
-import ExamplePanel from "@/components/chat-example-panel"
+import { TemplatePanel } from "@/components/chat/TemplatePanel"
 import Image from "@/components/image-with-basepath"
 import {
     AlertDialog,
@@ -44,8 +44,9 @@ interface ChatLobbyProps {
             deleteTitle?: string
             deleteDescription?: string
         }
-        examples?: {
-            quickExamples?: string
+        templates?: {
+            title?: string
+            myTemplates?: string
         }
         common: {
             delete: string
@@ -80,11 +81,11 @@ export function ChatLobby({
     onSelectSession,
     onDeleteSession,
     setInput,
-    setFiles,
+    setFiles: _setFiles,
     dict,
 }: ChatLobbyProps) {
-    // Track whether examples section is expanded (collapsed by default when there's history)
-    const [examplesExpanded, setExamplesExpanded] = useState(false)
+    // Track whether templates section is expanded (collapsed by default when there's history)
+    const [templatesExpanded, setTemplatesExpanded] = useState(false)
     // Delete confirmation dialog state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
@@ -94,8 +95,8 @@ export function ChatLobby({
     const hasHistory = sessions.length > 0
 
     if (!hasHistory) {
-        // Show full examples when no history
-        return <ExamplePanel setInput={setInput} setFiles={setFiles} />
+        // Show template library when no history
+        return <TemplatePanel setInput={setInput} />
     }
 
     // Show history + collapsible examples when there are sessions
@@ -207,29 +208,23 @@ export function ChatLobby({
                 </div>
             </div>
 
-            {/* Collapsible Examples Section */}
+            {/* Collapsible My Templates Section */}
             <div className="border-t border-border/50 pt-4">
                 <button
                     type="button"
-                    onClick={() => setExamplesExpanded(!examplesExpanded)}
+                    onClick={() => setTemplatesExpanded(!templatesExpanded)}
                     className="w-full flex items-center justify-between px-1 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
                 >
-                    <span>
-                        {dict.examples?.quickExamples || "Quick Examples"}
-                    </span>
-                    {examplesExpanded ? (
+                    <span>{dict.templates?.myTemplates || "My Templates"}</span>
+                    {templatesExpanded ? (
                         <ChevronUp className="w-4 h-4" />
                     ) : (
                         <ChevronDown className="w-4 h-4" />
                     )}
                 </button>
-                {examplesExpanded && (
+                {templatesExpanded && (
                     <div className="mt-2">
-                        <ExamplePanel
-                            setInput={setInput}
-                            setFiles={setFiles}
-                            minimal
-                        />
+                        <TemplatePanel setInput={setInput} />
                     </div>
                 )}
             </div>
