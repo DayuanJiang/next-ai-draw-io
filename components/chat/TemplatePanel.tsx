@@ -3,13 +3,15 @@
 import {
     Bookmark,
     Copy,
+    Download,
     Edit2,
     FileText,
     Plus,
     Search,
     Trash2,
+    Upload,
 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -24,13 +26,16 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import {
     deleteTemplate,
     duplicateTemplate,
+    exportTemplates,
     getAllTemplates,
+    importTemplates,
     incrementClickCount,
     incrementRunCount,
     searchTemplates,
     sortTemplates,
     type Template,
     updateTemplate,
+    validateImportData,
 } from "@/lib/template-storage"
 import { TemplateCreateDialog } from "./TemplateCreateDialog"
 import { TemplateEditDialog } from "./TemplateEditDialog"
@@ -78,6 +83,11 @@ export function TemplatePanel({
     const [confirmSendDialogOpen, setConfirmSendDialogOpen] = useState(false)
     const [templateToSend, setTemplateToSend] = useState<Template | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [importMessage, setImportMessage] = useState<{
+        type: "success" | "error"
+        text: string
+    } | null>(null)
 
     const loadTemplates = useCallback(async () => {
         const result = await getAllTemplates()
@@ -189,6 +199,105 @@ export function TemplatePanel({
         setTemplateToSend(null)
     }
 
+    // Export templates to JSON file
+    const handleExport = () => {
+        if (templates.length === 0) {
+            setImportMessage({
+                type: "error",
+                text: dict.templates.exportEmpty || "No templates to export",
+            })
+            return
+        }
+
+        try {
+            const exportData = exportTemplates(templates)
+            const json = JSON.stringify(exportData, null, 2)
+            const blob = new Blob([json], { type: "application/json" })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `templates-${new Date().toISOString().split("T")[0]}.json`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+
+            setImportMessage({
+                type: "success",
+                text: dict.templates.exportSuccess.replace(
+                    "{count}",
+                    String(templates.length),
+                ),
+            })
+            setTimeout(() => setImportMessage(null), 3000)
+        } catch (error) {
+            console.error("Failed to export templates:", error)
+            setImportMessage({
+                type: "error",
+                text: `Export failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            })
+        }
+    }
+
+    // Import templates from JSON file
+    const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) {
+            setImportMessage({
+                type: "error",
+                text:
+                    dict.templates.importNoFile || "Please select a JSON file",
+            })
+            return
+        }
+
+        try {
+            const text = await file.text()
+            const data = JSON.parse(text)
+
+            // Validate import data
+            const validation = validateImportData(data)
+            if (!validation.valid) {
+                setImportMessage({
+                    type: "error",
+                    text: dict.templates.importFailed.replace(
+                        "{error}",
+                        validation.error || "Invalid data",
+                    ),
+                })
+                return
+            }
+
+            // Import templates with dedup-append strategy
+            const result = await importTemplates(data.templates, templates)
+
+            // Reload template list
+            await loadTemplates()
+
+            setImportMessage({
+                type: "success",
+                text: dict.templates.importSuccess
+                    .replace("{imported}", String(result.imported))
+                    .replace("{skipped}", String(result.skipped)),
+            })
+            setTimeout(() => setImportMessage(null), 5000)
+        } catch (error) {
+            console.error("Failed to import templates:", error)
+            setImportMessage({
+                type: "error",
+                text: dict.templates.importFailed.replace(
+                    "{error}",
+                    error instanceof Error ? error.message : "Unknown error",
+                ),
+            })
+        } finally {
+            // Reset file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""
+            }
+        }
+    }
+
     // Empty state: no templates at all
     if (!loading && templates.length === 0) {
         return (
@@ -268,6 +377,49 @@ export function TemplatePanel({
                         className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-card focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
                     />
                 </div>
+
+                {/* Import/Export buttons */}
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleExport}
+                        disabled={templates.length === 0}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={dict.templates.exportTemplates}
+                    >
+                        <Download className="w-3.5 h-3.5" />
+                        {dict.templates.exportTemplates}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title={dict.templates.importTemplates}
+                    >
+                        <Upload className="w-3.5 h-3.5" />
+                        {dict.templates.importTemplates}
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/json,.json"
+                        onChange={handleImport}
+                        className="hidden"
+                    />
+                </div>
+
+                {/* Import message */}
+                {importMessage && (
+                    <div
+                        className={`text-xs px-3 py-2 rounded-lg ${
+                            importMessage.type === "success"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        }`}
+                    >
+                        {importMessage.text}
+                    </div>
+                )}
 
                 <div className="grid gap-2">
                     {loading
