@@ -1,14 +1,27 @@
 "use client"
 
-import { Bookmark, FileText, Plus } from "lucide-react"
+import { Bookmark, Copy, Edit2, FileText, Plus, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useDictionary } from "@/hooks/use-dictionary"
 import {
+    deleteTemplate,
+    duplicateTemplate,
     getAllTemplates,
     sortTemplates,
     type Template,
 } from "@/lib/template-storage"
 import { TemplateCreateDialog } from "./TemplateCreateDialog"
+import { TemplateEditDialog } from "./TemplateEditDialog"
 
 interface TemplatePanelProps {
     setInput: (input: string) => void
@@ -38,6 +51,12 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [editDialogOpen, setEditDialogOpen] = useState(false)
+    const [templateToEdit, setTemplateToEdit] = useState<Template | null>(null)
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [templateToDelete, setTemplateToDelete] = useState<Template | null>(
+        null,
+    )
 
     const loadTemplates = useCallback(async () => {
         const result = await getAllTemplates()
@@ -57,6 +76,37 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
 
     const handleCreateSuccess = () => {
         loadTemplates()
+    }
+
+    const handleEditSuccess = () => {
+        loadTemplates()
+    }
+
+    const handleEdit = (template: Template) => {
+        setTemplateToEdit(template)
+        setEditDialogOpen(true)
+    }
+
+    const handleDuplicate = async (template: Template) => {
+        const duplicated = await duplicateTemplate(template.id)
+        if (duplicated) {
+            loadTemplates()
+        }
+    }
+
+    const handleDeleteClick = (template: Template) => {
+        setTemplateToDelete(template)
+        setDeleteDialogOpen(true)
+    }
+
+    const handleDeleteConfirm = async () => {
+        if (!templateToDelete) return
+        const success = await deleteTemplate(templateToDelete.id)
+        if (success) {
+            loadTemplates()
+        }
+        setDeleteDialogOpen(false)
+        setTemplateToDelete(null)
     }
 
     // Empty state: no templates
@@ -145,23 +195,27 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                               </div>
                           ))
                         : templates.map((template) => (
-                              <button
+                              <div
                                   key={template.id}
-                                  type="button"
-                                  onClick={() => setInput(template.prompt)}
                                   className="group w-full text-left p-4 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm"
                               >
                                   <div className="flex items-start gap-3">
-                                      <div
-                                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                                              template.pinned
-                                                  ? "bg-primary/20 group-hover:bg-primary/25"
-                                                  : "bg-primary/10 group-hover:bg-primary/15"
-                                          }`}
+                                      <button
+                                          type="button"
+                                          onClick={() =>
+                                              setInput(template.prompt)
+                                          }
+                                          className="flex-1 min-w-0"
                                       >
-                                          <FileText className="w-4 h-4 text-primary" />
-                                      </div>
-                                      <div className="min-w-0 flex-1">
+                                          <div
+                                              className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors mb-2 ${
+                                                  template.pinned
+                                                      ? "bg-primary/20 group-hover:bg-primary/25"
+                                                      : "bg-primary/10 group-hover:bg-primary/15"
+                                              }`}
+                                          >
+                                              <FileText className="w-4 h-4 text-primary" />
+                                          </div>
                                           <div className="flex items-center gap-2">
                                               <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
                                                   {template.title}
@@ -205,9 +259,48 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                                                       </span>
                                                   )}
                                           </div>
+                                      </button>
+                                      {/* Actions - visible on hover */}
+                                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                          <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  handleEdit(template)
+                                              }}
+                                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                                              title={dict.common.edit}
+                                          >
+                                              <Edit2 className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  handleDuplicate(template)
+                                              }}
+                                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                                              title={
+                                                  dict.templates.duplicate ||
+                                                  "Duplicate"
+                                              }
+                                          >
+                                              <Copy className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  handleDeleteClick(template)
+                                              }}
+                                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                              title={dict.common.delete}
+                                          >
+                                              <Trash2 className="w-4 h-4" />
+                                          </button>
                                       </div>
                                   </div>
-                              </button>
+                              </div>
                           ))}
                 </div>
             </div>
@@ -217,6 +310,43 @@ export function TemplatePanel({ setInput }: TemplatePanelProps) {
                 onOpenChange={setCreateDialogOpen}
                 onSuccess={handleCreateSuccess}
             />
+
+            <TemplateEditDialog
+                open={editDialogOpen}
+                onOpenChange={setEditDialogOpen}
+                template={templateToEdit}
+                onSuccess={handleEditSuccess}
+            />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+            >
+                <AlertDialogContent className="max-w-sm">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {dict.templates.deleteTitle ||
+                                "Delete this template?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {dict.templates.deleteDescription ||
+                                "This will permanently delete this template. This action cannot be undone."}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>
+                            {dict.common.cancel}
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteConfirm}
+                            className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400"
+                        >
+                            {dict.common.delete}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

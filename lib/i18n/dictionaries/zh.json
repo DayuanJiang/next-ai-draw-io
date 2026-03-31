@@ -290,7 +290,14 @@
         "pinnedLabel": "置顶模板",
         "pinnedHint": "置顶的模板会显示在列表顶部",
         "createButton": "创建模板",
-        "createFailed": "创建模板失败，请重试。 "
+        "createFailed": "创建模板失败，请重试。",
+        "editTitle": "编辑模板",
+        "editDescription": "更新模板内容和设置。",
+        "updateFailed": "更新模板失败，请重试。",
+        "duplicate": "复制",
+        "deleteTitle": "删除此模板？",
+        "deleteDescription": "此操作将永久删除该模板，无法撤销。",
+        "actionsLabel": "操作"
     },
     "validation": {
         "title": "验证图表",

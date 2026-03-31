@@ -290,7 +290,14 @@
         "pinnedLabel": "釘選範本",
         "pinnedHint": "釘選的範本會顯示在清單頂部",
         "createButton": "建立範本",
-        "createFailed": "建立範本失敗，請重試。 "
+        "createFailed": "建立範本失敗，請重試。",
+        "editTitle": "編輯範本",
+        "editDescription": "更新範本內容和設定。",
+        "updateFailed": "更新範本失敗，請重試。",
+        "duplicate": "複製",
+        "deleteTitle": "刪除此範本？",
+        "deleteDescription": "此操作將永久刪除該範本，無法復原。",
+        "actionsLabel": "操作"
     },
     "validation": {
         "title": "驗證圖表",

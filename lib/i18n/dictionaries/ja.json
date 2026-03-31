@@ -376,6 +376,13 @@
         "pinnedLabel": "テンプレートをピン留め",
         "pinnedHint": "ピン留めされたテンプレートはリストの上部に表示されます",
         "createButton": "テンプレート作成",
-        "createFailed": "テンプレートの作成に失敗しました。もう一度お試しください。 "
+        "createFailed": "テンプレートの作成に失敗しました。もう一度お試しください。",
+        "editTitle": "テンプレート編集",
+        "editDescription": "テンプレートの内容と設定を更新します。",
+        "updateFailed": "テンプレートの更新に失敗しました。もう一度お試しください。",
+        "duplicate": "複製",
+        "deleteTitle": "このテンプレートを削除しますか？",
+        "deleteDescription": "このテンプレートは完全に削除されます。この操作は取り消せません。",
+        "actionsLabel": "操作"
     }
 }
