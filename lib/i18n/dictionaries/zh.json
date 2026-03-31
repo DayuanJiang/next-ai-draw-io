@@ -300,7 +300,10 @@
         "confirmSendTitle": "替换当前输入？",
         "confirmSendDescription": "您有未发送的内容。发送此模板将替换它。",
         "confirmSendButton": "发送模板",
-        "actionsLabel": "操作"
+        "searchPlaceholder": "搜索 templates...",
+        "searchNoResults": "No templates match your search",
+        "pin": "Pin to top",
+        "unpin": "Unpin from top"
     },
     "validation": {
         "title": "验证图表",

@@ -1,6 +1,14 @@
 "use client"
 
-import { Bookmark, Copy, Edit2, FileText, Plus, Trash2 } from "lucide-react"
+import {
+    Bookmark,
+    Copy,
+    Edit2,
+    FileText,
+    Plus,
+    Search,
+    Trash2,
+} from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import {
     AlertDialog,
@@ -19,8 +27,10 @@ import {
     getAllTemplates,
     incrementClickCount,
     incrementRunCount,
+    searchTemplates,
     sortTemplates,
     type Template,
+    updateTemplate,
 } from "@/lib/template-storage"
 import { TemplateCreateDialog } from "./TemplateCreateDialog"
 import { TemplateEditDialog } from "./TemplateEditDialog"
@@ -67,12 +77,18 @@ export function TemplatePanel({
     )
     const [confirmSendDialogOpen, setConfirmSendDialogOpen] = useState(false)
     const [templateToSend, setTemplateToSend] = useState<Template | null>(null)
+    const [searchQuery, setSearchQuery] = useState("")
 
     const loadTemplates = useCallback(async () => {
         const result = await getAllTemplates()
         setTemplates(sortTemplates(result))
         setLoading(false)
     }, [])
+
+    // Filter templates by search query
+    const filteredTemplates = searchQuery.trim()
+        ? searchTemplates(templates, searchQuery)
+        : templates
 
     useEffect(() => {
         let mounted = true
@@ -117,6 +133,15 @@ export function TemplatePanel({
         }
         setDeleteDialogOpen(false)
         setTemplateToDelete(null)
+    }
+
+    const handleTogglePin = async (template: Template) => {
+        const updated = await updateTemplate(template.id, {
+            pinned: !template.pinned,
+        })
+        if (updated) {
+            loadTemplates()
+        }
     }
 
     // Handle template card click - send directly or show confirmation
@@ -164,7 +189,7 @@ export function TemplatePanel({
         setTemplateToSend(null)
     }
 
-    // Empty state: no templates
+    // Empty state: no templates at all
     if (!loading && templates.length === 0) {
         return (
             <div className="py-6 px-2 animate-fade-in">
@@ -232,6 +257,18 @@ export function TemplatePanel({
                     </button>
                 </div>
 
+                {/* Search bar */}
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={dict.templates.searchPlaceholder}
+                        className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border/60 bg-card focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
+                    />
+                </div>
+
                 <div className="grid gap-2">
                     {loading
                         ? // Loading skeleton
@@ -249,118 +286,161 @@ export function TemplatePanel({
                                   </div>
                               </div>
                           ))
-                        : templates.map((template) => (
-                              // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested action buttons which causes hydration error
-                              <div
-                                  key={template.id}
-                                  className="group w-full text-left p-4 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm cursor-pointer"
-                                  onClick={() => handleTemplateClick(template)}
-                                  onKeyDown={(e) => {
-                                      if (e.key === "Enter" || e.key === " ") {
-                                          e.preventDefault()
-                                          handleTemplateClick(template)
-                                      }
-                                  }}
-                                  role="button"
-                                  tabIndex={0}
-                              >
-                                  <div className="flex items-start gap-3">
-                                      <div
-                                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                                              template.pinned
-                                                  ? "bg-primary/20 group-hover:bg-primary/25"
-                                                  : "bg-primary/10 group-hover:bg-primary/15"
-                                          }`}
-                                      >
-                                          <FileText className="w-4 h-4 text-primary" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2">
-                                              <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
-                                                  {template.title}
-                                              </h3>
-                                              {template.pinned && (
-                                                  <Bookmark className="w-3 h-3 text-primary fill-primary shrink-0" />
-                                              )}
-                                          </div>
-                                          {template.description && (
-                                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                                                  {template.description}
-                                              </p>
-                                          )}
-                                          <div className="flex items-center gap-3 mt-1.5">
-                                              {template.runCount > 0 ? (
-                                                  <span className="text-[11px] text-muted-foreground">
-                                                      {dict.templates.usedCount.replace(
-                                                          "{count}",
-                                                          String(
-                                                              template.runCount,
-                                                          ),
-                                                      )}
-                                                  </span>
-                                              ) : (
-                                                  <span className="text-[11px] text-muted-foreground">
-                                                      {dict.templates.neverUsed}
-                                                  </span>
-                                              )}
-                                              <span className="text-[11px] text-muted-foreground">
-                                                  {formatLastUsed(
-                                                      template.lastUsedAt,
-                                                      dict.templates.neverUsed,
-                                                  )}
-                                              </span>
-                                              {template.tags &&
-                                                  template.tags.length > 0 && (
-                                                      <span className="text-[11px] text-muted-foreground truncate">
-                                                          {template.tags
-                                                              .slice(0, 3)
-                                                              .join(", ")}
-                                                      </span>
-                                                  )}
-                                          </div>
-                                      </div>
-                                      {/* Actions - visible on hover */}
-                                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                          <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  handleEdit(template)
-                                              }}
-                                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                                              title={dict.common.edit}
-                                          >
-                                              <Edit2 className="w-4 h-4" />
-                                          </button>
-                                          <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  handleDuplicate(template)
-                                              }}
-                                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                                              title={
-                                                  dict.templates.duplicate ||
-                                                  "Duplicate"
-                                              }
-                                          >
-                                              <Copy className="w-4 h-4" />
-                                          </button>
-                                          <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  handleDeleteClick(template)
-                                              }}
-                                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                                              title={dict.common.delete}
-                                          >
-                                              <Trash2 className="w-4 h-4" />
-                                          </button>
-                                      </div>
-                                  </div>
-                              </div>
-                          ))}
+                        : filteredTemplates.length === 0
+                          ? // Search empty state
+                            !loading && (
+                                <div className="flex flex-col items-center justify-center py-6 px-4">
+                                    <Search className="w-8 h-8 text-muted-foreground/40 mb-2" />
+                                    <p className="text-sm text-muted-foreground text-center">
+                                        {dict.templates.searchNoResults}
+                                    </p>
+                                </div>
+                            )
+                          : filteredTemplates.map((template) => (
+                                // biome-ignore lint/a11y/useSemanticElements: Cannot use button - has nested action buttons which causes hydration error
+                                <div
+                                    key={template.id}
+                                    className="group w-full text-left p-4 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 hover:shadow-sm cursor-pointer"
+                                    onClick={() =>
+                                        handleTemplateClick(template)
+                                    }
+                                    onKeyDown={(e) => {
+                                        if (
+                                            e.key === "Enter" ||
+                                            e.key === " "
+                                        ) {
+                                            e.preventDefault()
+                                            handleTemplateClick(template)
+                                        }
+                                    }}
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div
+                                            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                                                template.pinned
+                                                    ? "bg-primary/20 group-hover:bg-primary/25"
+                                                    : "bg-primary/10 group-hover:bg-primary/15"
+                                            }`}
+                                        >
+                                            <FileText className="w-4 h-4 text-primary" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                                    {template.title}
+                                                </h3>
+                                                {template.pinned && (
+                                                    <Bookmark className="w-3 h-3 text-primary fill-primary shrink-0" />
+                                                )}
+                                            </div>
+                                            {template.description && (
+                                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                                    {template.description}
+                                                </p>
+                                            )}
+                                            <div className="flex items-center gap-3 mt-1.5">
+                                                {template.runCount > 0 ? (
+                                                    <span className="text-[11px] text-muted-foreground">
+                                                        {dict.templates.usedCount.replace(
+                                                            "{count}",
+                                                            String(
+                                                                template.runCount,
+                                                            ),
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[11px] text-muted-foreground">
+                                                        {
+                                                            dict.templates
+                                                                .neverUsed
+                                                        }
+                                                    </span>
+                                                )}
+                                                <span className="text-[11px] text-muted-foreground">
+                                                    {formatLastUsed(
+                                                        template.lastUsedAt,
+                                                        dict.templates
+                                                            .neverUsed,
+                                                    )}
+                                                </span>
+                                                {template.tags &&
+                                                    template.tags.length >
+                                                        0 && (
+                                                        <span className="text-[11px] text-muted-foreground truncate">
+                                                            {template.tags
+                                                                .slice(0, 3)
+                                                                .join(", ")}
+                                                        </span>
+                                                    )}
+                                            </div>
+                                        </div>
+                                        {/* Actions - visible on hover */}
+                                        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleTogglePin(template)
+                                                }}
+                                                className={`p-1.5 rounded-lg transition-all ${
+                                                    template.pinned
+                                                        ? "text-primary hover:text-primary/80 hover:bg-primary/10"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                }`}
+                                                title={
+                                                    template.pinned
+                                                        ? dict.templates
+                                                              .unpin || "Unpin"
+                                                        : dict.templates.pin ||
+                                                          "Pin"
+                                                }
+                                            >
+                                                <Bookmark
+                                                    className={`w-4 h-4 ${template.pinned ? "fill-current" : ""}`}
+                                                />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleEdit(template)
+                                                }}
+                                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                                                title={dict.common.edit}
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleDuplicate(template)
+                                                }}
+                                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                                                title={
+                                                    dict.templates.duplicate ||
+                                                    "Duplicate"
+                                                }
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleDeleteClick(template)
+                                                }}
+                                                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                                title={dict.common.delete}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                 </div>
             </div>
 

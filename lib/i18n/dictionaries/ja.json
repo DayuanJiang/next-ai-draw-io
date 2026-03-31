@@ -386,6 +386,9 @@
         "confirmSendTitle": "現在の入力を置き換えますか？",
         "confirmSendDescription": "未送信のコンテンツがあります。このテンプレートを送信すると置き換えられます。",
         "confirmSendButton": "テンプレートを送信",
-        "actionsLabel": "操作"
+        "searchPlaceholder": "Search templates...",
+        "searchNoResults": "No templates match your search",
+        "pin": "Pin to top",
+        "unpin": "Unpin from top"
     }
 }

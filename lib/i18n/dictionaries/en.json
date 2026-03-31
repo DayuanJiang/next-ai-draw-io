@@ -300,7 +300,10 @@
         "confirmSendTitle": "Replace current input?",
         "confirmSendDescription": "You have unsent content in the input. Sending this template will replace it.",
         "confirmSendButton": "Send Template",
-        "actionsLabel": "Actions"
+        "searchPlaceholder": "Search templates...",
+        "searchNoResults": "No templates match your search",
+        "pin": "Pin to top",
+        "unpin": "Unpin from top"
     },
     "validation": {
         "title": "Validate Diagram",
