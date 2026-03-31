@@ -302,8 +302,9 @@
         "confirmSendButton": "发送模板",
         "searchPlaceholder": "搜索 templates...",
         "searchNoResults": "No templates match your search",
-        "pin": "Pin to top",
-        "unpin": "Unpin from top"
+        "pin": "置顶",
+        "unpin": "取消置顶",
+        "saveAsTemplate": "保存为模板"
     },
     "validation": {
         "title": "验证图表",
