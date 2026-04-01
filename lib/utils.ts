@@ -316,28 +316,278 @@ export function convertToLegalXml(xmlString: string): string {
 }
 
 /**
+ * Extract all page names from an mxfile XML.
+ * @param xml - The mxfile XML string
+ * @returns Array of page names
+ */
+export function extractPageNames(xml: string): string[] {
+    const names: string[] = []
+    const diagramRegex = /<diagram[^>]+name="([^"]+)"/g
+    let match
+    while ((match = diagramRegex.exec(xml)) !== null) {
+        names.push(match[1])
+    }
+    return names
+}
+
+/**
+ * Ensure page name is unique by adding suffix if needed.
+ * @param existingXml - The existing mxfile XML (may be empty)
+ * @param proposedName - The proposed page name
+ * @returns Unique page name
+ */
+export function ensureUniquePageName(existingXml: string, proposedName: string): string {
+    if (!existingXml || !existingXml.includes('<diagram')) {
+        return proposedName
+    }
+
+    const existingNames = extractPageNames(existingXml)
+    if (!existingNames.includes(proposedName)) {
+        return proposedName
+    }
+
+    let counter = 2
+    while (existingNames.includes(`${proposedName} (${counter})`)) {
+        counter++
+    }
+    return `${proposedName} (${counter})`
+}
+
+/**
+ * Check if the diagram canvas is blank (only contains root cells).
+ * @param xml - The diagram XML string
+ * @returns true if canvas is blank
+ */
+export function isBlankCanvas(xml: string): boolean {
+    if (!xml || !xml.trim()) return true
+
+    // Count mxCell elements
+    const cellMatches = xml.match(/<mxCell/g)
+
+    // Blank canvas has only 2 cells (id="0" and id="1")
+    return !cellMatches || cellMatches.length <= 2
+}
+
+/**
+ * Renumber cell IDs in a diagram to avoid conflicts with existing IDs.
+ * Also updates all parent, source, and target references.
+ * @param diagramContent - The content inside <diagram>...</diagram>
+ * @param existingIds - Set of IDs already used in the mxfile
+ * @param idOffset - Offset to add to all new IDs (to ensure uniqueness)
+ * @returns Renumbered diagram content with updated references
+ */
+function renumberDiagramCellIds(
+    diagramContent: string,
+    existingIds: Set<string>,
+    idOffset: number,
+): string {
+    // Extract all cell IDs from the new diagram content
+    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
+    const newIds = new Set<string>()
+    let idMatch
+
+    // Find all IDs used in the new content
+    while ((idMatch = idPattern.exec(diagramContent)) !== null) {
+        newIds.add(idMatch[1])
+    }
+
+    // Build a mapping from old IDs to new IDs for IDs that conflict
+    const idMapping = new Map<string, string>()
+    for (const oldId of newIds) {
+        if (existingIds.has(oldId) || oldId === "0" || oldId === "1") {
+            // Skip root cell IDs - they should remain as 0 and 1
+            if (oldId === "0" || oldId === "1") continue
+            // Generate new ID by adding offset
+            const numericId = parseInt(oldId, 10)
+            if (!isNaN(numericId)) {
+                const newId = String(numericId + idOffset)
+                idMapping.set(oldId, newId)
+            }
+        }
+    }
+
+    // If no conflicts, return unchanged
+    if (idMapping.size === 0) {
+        return diagramContent
+    }
+
+    console.log(`[wrapWithMxFile] Renumbering ${idMapping.size} conflicting cell IDs with offset ${idOffset}`)
+    console.log(`[wrapWithMxFile] ID mapping:`, Object.fromEntries(idMapping))
+
+    // Apply the renumbering to all ID references
+    let result = diagramContent
+
+    // Replace cell IDs (id="X" attributes)
+    for (const [oldId, newId] of idMapping) {
+        const idAttrPattern = new RegExp(`\\bid\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+        result = result.replace(idAttrPattern, `id="${newId}"`)
+    }
+
+    // Replace parent references (parent="X" attributes)
+    for (const [oldId, newId] of idMapping) {
+        const parentPattern = new RegExp(`parent\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+        result = result.replace(parentPattern, `parent="${newId}"`)
+    }
+
+    // Replace source references (source="X" attributes in edges)
+    for (const [oldId, newId] of idMapping) {
+        const sourcePattern = new RegExp(`source\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+        result = result.replace(sourcePattern, `source="${newId}"`)
+    }
+
+    // Replace target references (target="X" attributes in edges)
+    for (const [oldId, newId] of idMapping) {
+        const targetPattern = new RegExp(`target\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+        result = result.replace(targetPattern, `target="${newId}"`)
+    }
+
+    return result
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Extract all cell IDs from an mxfile XML (excluding root cells 0 and 1)
+ */
+function extractExistingCellIds(mxfileXml: string): Set<string> {
+    const ids = new Set<string>()
+    // Match id="X" or id='X' patterns
+    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
+    let match
+    while ((match = idPattern.exec(mxfileXml)) !== null) {
+        const id = match[1]
+        // Skip root cells and page IDs
+        if (id !== "0" && id !== "1" && !id.startsWith("page-")) {
+            ids.add(id)
+        }
+    }
+    return ids
+}
+
+/**
+ * Find the maximum numeric cell ID in an mxfile
+ */
+function findMaxCellId(mxfileXml: string): number {
+    let maxId = 1
+    const idPattern = /\bid\s*=\s*["'](\d+)["']/gi
+    let match
+    while ((match = idPattern.exec(mxfileXml)) !== null) {
+        const id = parseInt(match[1], 10)
+        if (!isNaN(id) && id > maxId) {
+            maxId = id
+        }
+    }
+    return maxId
+}
+
+/**
  * Wrap XML content with the full mxfile structure required by draw.io.
  * Always adds root cells (id="0" and id="1") automatically.
  * If input already contains root cells, they are removed to avoid duplication.
  * LLM should only generate mxCell elements starting from id="2".
  * @param xml - The XML string (bare mxCells, <root>, <mxGraphModel>, or full <mxfile>)
+ * @param options - Optional configuration
+ * @param options.pageName - Name for the diagram page (default: "Page-1")
+ * @param options.existingXml - Existing mxfile XML to append to (creates new page)
  * @returns Full mxfile-wrapped XML string with root cells included
  */
-export function wrapWithMxFile(xml: string): string {
-    const ROOT_CELLS = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
-
-    if (!xml || !xml.trim()) {
-        return `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${ROOT_CELLS}</root></mxGraphModel></diagram></mxfile>`
+export function normalizeMxfileForDiagramLoad(xml: string): string {
+    if (
+        !xml ||
+        !xml.includes("<mxfile") ||
+        xml.includes("<diagram") ||
+        !xml.includes("<mxGraphModel")
+    ) {
+        return xml
     }
 
-    // Already has full structure
-    if (xml.includes("<mxfile")) {
+    const graphModelMatch = xml.match(/<mxGraphModel[\s\S]*?<\/mxGraphModel>/i)
+    if (!graphModelMatch) {
         return xml
+    }
+
+    return `<mxfile><diagram name="Page-1" id="page-1">${graphModelMatch[0]}</diagram></mxfile>`
+}
+
+export function wrapWithMxFile(
+    xml: string,
+    options?: {
+        pageName?: string
+        existingXml?: string
+    }
+): string {
+    const ROOT_CELLS = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+    const pageName = options?.pageName || "Page-1"
+    const existingXml = options?.existingXml
+
+    // draw.io export sometimes returns <mxfile><mxGraphModel>...</mxGraphModel></mxfile>
+    // without wrapping it in a <diagram>. Normalize it so multi-page append works.
+    const existingXmlForAppend = existingXml
+        ? normalizeMxfileForDiagramLoad(existingXml)
+        : existingXml
+
+    // Debug logging for multi-page support
+    console.log("[wrapWithMxFile] Called with:", {
+        xmlLength: xml?.length || 0,
+        hasMxfile: xml?.includes("<mxfile") || false,
+        hasMxGraphModel: xml?.includes("<mxGraphModel") || false,
+        pageName,
+        hasExistingXml: !!existingXmlForAppend,
+        existingXmlLength: existingXmlForAppend?.length || 0,
+        existingPageCount: (existingXmlForAppend?.match(/<diagram /g) || []).length,
+    })
+
+    if (!xml || !xml.trim()) {
+        console.log("[wrapWithMxFile] Empty XML, creating new mxfile")
+        return `<mxfile><diagram name="${pageName}" id="page-1"><mxGraphModel><root>${ROOT_CELLS}</root></mxGraphModel></diagram></mxfile>`
+    }
+
+    // Already has full structure - this shouldn't happen if AI follows tool description
+    // But if it does, extract the inner content (mxCell elements) and process properly
+    if (xml.includes("<mxfile")) {
+        console.log("[wrapWithMxFile] Input has <mxfile> structure")
+        // If there's no existingXml, return as-is (single page diagram)
+        if (!existingXmlForAppend) {
+            console.log("[wrapWithMxFile] No existingXml, returning input as-is")
+            return xml
+        }
+        // If there's existingXml, extract the new diagram content and append as new page
+        // Extract all <diagram> elements from the input xml (there should be one)
+        const diagramMatch = xml.match(/<diagram[^>]*>[\s\S]*?<\/diagram>/gi)
+        if (diagramMatch && diagramMatch.length > 0) {
+            // Use the first diagram as the new page
+            let newDiagram = diagramMatch[0]
+            console.log("[wrapWithMxFile] Extracted new diagram from input, length:", newDiagram.length)
+
+            // Renumber cell IDs to avoid conflicts with existing pages
+            const existingIds = extractExistingCellIds(existingXmlForAppend)
+            const maxId = findMaxCellId(existingXmlForAppend)
+            console.log("[wrapWithMxFile] Existing IDs count:", existingIds.size, "maxId:", maxId)
+            newDiagram = renumberDiagramCellIds(newDiagram, existingIds, maxId)
+
+            // Generate unique page name
+            const pageId = `page-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            const namedDiagram = newDiagram
+                .replace(/name="[^"]*"/, `name="${pageName}"`)
+                .replace(/id="[^"]*"/, `id="${pageId}"`)
+            const result = existingXmlForAppend.replace('</mxfile>', `${namedDiagram}</mxfile>`)
+            console.log("[wrapWithMxFile] Appended new page, result page count:", (result.match(/<diagram /g) || []).length)
+            return result
+        }
+        // Fallback: if extraction failed, return existingXml unchanged
+        console.warn("[wrapWithMxFile] Failed to extract diagram from input, returning existingXml")
+        return existingXmlForAppend || ""
     }
 
     // Has mxGraphModel but not mxfile
     if (xml.includes("<mxGraphModel")) {
-        return `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
+        console.log("[wrapWithMxFile] Input has <mxGraphModel> only, wrapping in mxfile")
+        return `<mxfile><diagram name="${pageName}" id="page-1">${xml}</diagram></mxfile>`
     }
 
     // Has <root> wrapper - extract inner content
@@ -367,7 +617,81 @@ export function wrapWithMxFile(xml: string): string {
         .replace(/<mxCell[^>]*\bid=["']1["'][^>]*(?:\/>|><\/mxCell>)/g, "")
         .trim()
 
-    return `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel></diagram></mxfile>`
+    // Create new diagram element
+    const pageId = `page-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    let newDiagram = `<diagram name="${pageName}" id="${pageId}"><mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel></diagram>`
+
+    // If existingXml provided, append new diagram to it with proper ID renumbering
+    if (existingXmlForAppend && existingXmlForAppend.includes('<mxfile')) {
+        console.log("[wrapWithMxFile] Has existingXml, appending new page")
+        // Renumber cell IDs in the new diagram to avoid conflicts
+        const existingIds = extractExistingCellIds(existingXmlForAppend)
+        const maxId = findMaxCellId(existingXmlForAppend)
+        console.log("[wrapWithMxFile] Existing IDs count:", existingIds.size, "maxId:", maxId)
+        newDiagram = renumberDiagramCellIds(newDiagram, existingIds, maxId)
+
+        // Insert new diagram before closing </mxfile> tag
+        const result = existingXmlForAppend.replace('</mxfile>', `${newDiagram}</mxfile>`)
+        console.log("[wrapWithMxFile] Appended new page, result page count:", (result.match(/<diagram /g) || []).length)
+        return result
+    }
+
+    // Otherwise create new mxfile with single diagram
+    console.log("[wrapWithMxFile] No existingXml, creating new mxfile with single page")
+    return `<mxfile>${newDiagram}</mxfile>`
+}
+
+function countDiagramPages(xml: string): number {
+    return (xml.match(/<diagram\b/g) || []).length
+}
+
+export function chooseMoreCompleteDiagramXml(params: {
+    preferredXml: string
+    fallbackXml: string
+}): string {
+    const preferredXml = params.preferredXml || ""
+    const fallbackXml = params.fallbackXml || ""
+
+    if (!fallbackXml) return preferredXml
+    if (!preferredXml) return fallbackXml
+
+    return countDiagramPages(fallbackXml) > countDiagramPages(preferredXml)
+        ? fallbackXml
+        : preferredXml
+}
+
+export function buildDisplayDiagramXml(params: {
+    newCells: string
+    pageName?: string
+    currentXml?: string
+}): string {
+    const currentXml = params.currentXml || ""
+
+    // No current XML: create a fresh single-page mxfile.
+    if (!currentXml) {
+        return wrapWithMxFile(params.newCells, {
+            pageName: params.pageName || "Diagram",
+        })
+    }
+
+    const normalizedCurrent = normalizeMxfileForDiagramLoad(currentXml)
+    const hasMxfile = normalizedCurrent.includes("<mxfile")
+
+    // Blank canvas: fill current page (preserve existing Page-1 name/id).
+    if (hasMxfile && isBlankCanvas(normalizedCurrent)) {
+        return replaceNodes(normalizedCurrent, params.newCells)
+    }
+
+    const pageName = params.pageName || "Diagram"
+    const finalPageName = hasMxfile
+        ? ensureUniquePageName(normalizedCurrent, pageName)
+        : pageName
+
+    // Non-blank: append a new page preserving existing pages.
+    return wrapWithMxFile(params.newCells, {
+        pageName: finalPageName,
+        existingXml: hasMxfile ? normalizedCurrent : undefined,
+    })
 }
 
 /**
@@ -383,9 +707,11 @@ export function replaceNodes(currentXML: string, nodes: string): string {
     }
 
     try {
+        const normalizedCurrentXml = normalizeMxfileForDiagramLoad(currentXML)
+
         // Parse the XML strings to create DOM objects
         const parser = new DOMParser()
-        const currentDoc = parser.parseFromString(currentXML, "text/xml")
+        const currentDoc = parser.parseFromString(normalizedCurrentXml, "text/xml")
 
         // Handle nodes input - if it doesn't contain <root>, wrap it
         let nodesString = nodes
@@ -767,8 +1093,12 @@ function checkDuplicateIds(xml: string): string | null {
         const id = idMatch[1]
         ids.set(id, (ids.get(id) || 0) + 1)
     }
+    // Filter out structural duplicate IDs that are expected in multi-page diagrams:
+    // - "0" and "1" are root cell IDs that appear in each page
+    // - "page-N" are diagram page IDs
+    const structuralDuplicates = new Set(["0", "1", "page-1", "page-2", "page-3"])
     const duplicateIds = Array.from(ids.entries())
-        .filter(([, count]) => count > 1)
+        .filter(([id, count]) => count > 1 && !structuralDuplicates.has(id))
         .map(([id, count]) => `'${id}' (${count}x)`)
     if (duplicateIds.length > 0) {
         return `Invalid XML: Found duplicate ID(s): ${duplicateIds.slice(0, 3).join(", ")}. All id attributes must be unique.`
@@ -1532,6 +1862,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
 
     // 12. Fix duplicate IDs by appending suffix
+    // Also update all parent, source, and target references to maintain consistency
     const seenIds = new Map<string, number>()
     const duplicateIds: string[] = []
 
@@ -1548,9 +1879,17 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         if (count > 1) duplicateIds.push(id)
     }
 
-    // Second pass: rename duplicates (keep first occurrence, rename others)
+    // Second pass: rename duplicates and build mapping (keep first occurrence, rename others)
     if (duplicateIds.length > 0) {
         const idCounters = new Map<string, number>()
+        const idMapping = new Map<string, string>() // oldId -> newId
+
+        // First, identify all the new IDs needed
+        for (const dupId of duplicateIds) {
+            idCounters.set(dupId, 0)
+        }
+
+        // Second pass: actually rename and build mapping
         fixed = fixed.replace(/\bid\s*=\s*["']([^"']+)["']/gi, (match, id) => {
             if (!duplicateIds.includes(id)) return match
 
@@ -1561,9 +1900,27 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 
             // Rename subsequent occurrences
             const newId = `${id}_dup${count}`
+            idMapping.set(id, newId)
             return match.replace(id, newId)
         })
-        fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s)`)
+
+        // Third pass: update parent, source, and target references
+        // Only update references to IDs that were actually renamed
+        for (const [oldId, newId] of idMapping) {
+            // Update parent references
+            const parentPattern = new RegExp(`parent\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+            fixed = fixed.replace(parentPattern, `parent="${newId}"`)
+
+            // Update source references (edges)
+            const sourcePattern = new RegExp(`source\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+            fixed = fixed.replace(sourcePattern, `source="${newId}"`)
+
+            // Update target references (edges)
+            const targetPattern = new RegExp(`target\\s*=\\s*["']${escapeRegex(oldId)}["']`, "gi")
+            fixed = fixed.replace(targetPattern, `target="${newId}"`)
+        }
+
+        fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s) and updated references`)
     }
 
     // 9. Fix empty id attributes by generating unique IDs

@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import type { MutableRefObject } from "react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import {
@@ -40,6 +40,7 @@ import {
     replaceNodes,
     validateAndFixXml,
 } from "@/lib/utils"
+import { shouldApplyStreamingDisplayDiagramPreview, shouldReplayDisplayDiagramTool } from "@/lib/chat-helpers"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -154,7 +155,7 @@ interface ChatMessageDisplayProps {
     onImproveWithSuggestions?: (feedback: string) => void
 }
 
-export function ChatMessageDisplay({
+export const ChatMessageDisplay = memo(function ChatMessageDisplay({
     messages,
     setInput,
     setFiles,
@@ -463,6 +464,18 @@ export function ChatMessageDisplay({
                                 state === "input-streaming" ||
                                 state === "input-available"
                             ) {
+                                // Streaming preview uses replaceNodes on the current page.
+                                // For display_diagram, this would overwrite existing content when we actually want a new page.
+                                // Only allow preview when canvas is effectively empty (or for cached examples).
+                                if (
+                                    !shouldApplyStreamingDisplayDiagramPreview({
+                                        toolCallId,
+                                        chartXml: chartXML,
+                                    })
+                                ) {
+                                    return
+                                }
+
                                 // Debounce streaming updates - queue the XML and process after delay
                                 pendingXmlRef.current = xml
 
@@ -498,8 +511,12 @@ export function ChatMessageDisplay({
                                     debounceTimeoutRef.current = null
                                     pendingXmlRef.current = null
                                 }
-                                // Show toast only if final XML is malformed
-                                handleDisplayChart(xml, true)
+                                // Only replay cached example tool calls here.
+                                // Real display_diagram calls are already applied in useDiagramToolHandlers
+                                // via full mxfile XML; replaying input.xml here would replace the canvas/page set.
+                                if (shouldReplayDisplayDiagramTool(toolCallId)) {
+                                    handleDisplayChart(xml, true)
+                                }
                                 processedToolCalls.current.add(toolCallId)
                                 // Clean up the ref entry - tool is complete, no longer needed
                                 lastProcessedXmlRef.current.delete(toolCallId)
@@ -1335,4 +1352,4 @@ export function ChatMessageDisplay({
             <div ref={messagesEndRef} />
         </ScrollArea>
     )
-}
+})

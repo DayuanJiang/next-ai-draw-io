@@ -5,7 +5,7 @@
     "private": true,
     "main": "dist-electron/main/index.js",
     "scripts": {
-        "dev": "next dev --turbopack --port 9000",
+        "dev": "next dev --turbopack --port 9002",
         "build": "next build",
         "start": "next start --port 6001",
         "lint": "biome lint .",
@@ -32,7 +32,7 @@
     },
     "dependencies": {
         "@ai-sdk/amazon-bedrock": "^4.0.1",
-        "@ai-sdk/anthropic": "^3.0.0",
+        "@ai-sdk/anthropic": "^2.0.71",
         "@ai-sdk/azure": "^3.0.0",
         "@ai-sdk/deepseek": "^2.0.0",
         "@ai-sdk/gateway": "^3.0.0",
@@ -127,6 +127,7 @@
         "@types/turndown": "^5.0.6",
         "@vitejs/plugin-react": "^5.1.2",
         "@vitest/coverage-v8": "^4.0.16",
+        "baseline-browser-mapping": "^2.10.7",
         "concurrently": "^9.2.1",
         "cross-env": "^10.1.0",
         "electron": "^39.2.7",

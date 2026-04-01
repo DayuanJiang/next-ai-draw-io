@@ -324,21 +324,31 @@ export function ModelConfigDialog({
                     ? `${window.location.origin}/api/edgeai`
                     : selectedProvider.baseUrl
 
+                const requestBody = {
+                    provider: selectedProvider.provider,
+                    apiKey: selectedProvider.apiKey,
+                    baseUrl,
+                    modelId: model.modelId,
+                    // AWS Bedrock credentials
+                    awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                    awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
+                    awsRegion: selectedProvider.awsRegion,
+                    // Vertex AI credentials (Express Mode)
+                    vertexApiKey: selectedProvider.vertexApiKey,
+                }
+
+                console.log("[validate-model] Request body:", {
+                    provider: requestBody.provider,
+                    hasApiKey: !!requestBody.apiKey,
+                    apiKeyPrefix: requestBody.apiKey?.substring(0, 10),
+                    baseUrl: requestBody.baseUrl,
+                    modelId: requestBody.modelId,
+                })
+
                 const response = await fetch("/api/validate-model", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        provider: selectedProvider.provider,
-                        apiKey: selectedProvider.apiKey,
-                        baseUrl,
-                        modelId: model.modelId,
-                        // AWS Bedrock credentials
-                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
-                        awsRegion: selectedProvider.awsRegion,
-                        // Vertex AI credentials (Express Mode)
-                        vertexApiKey: selectedProvider.vertexApiKey,
-                    }),
+                    body: JSON.stringify(requestBody),
                 })
                 const data = await response.json()
 

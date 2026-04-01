@@ -19,6 +19,7 @@ import {
 } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
+    filterHistoricalDiagramToolMessages,
     isMinimalDiagram,
     replaceHistoricalToolInputs,
     validateFileParts,
@@ -37,8 +38,9 @@ import {
 import { findServerModelById } from "@/lib/server-model-config"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
+import { isValidAccessCode, getAccessCodes } from "@/lib/access-code"
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 // Helper function to create cached stream response
 function createCachedStreamResponse(xml: string): Response {
@@ -73,13 +75,9 @@ function createCachedStreamResponse(xml: string): Response {
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
     // Check for access code
-    const accessCodes =
-        process.env.ACCESS_CODE_LIST?.split(",")
-            .map((code) => code.trim())
-            .filter(Boolean) || []
-    if (accessCodes.length > 0) {
+    if (getAccessCodes().size > 0) {
         const accessCodeHeader = req.headers.get("x-access-code")
-        if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
+        if (!isValidAccessCode(accessCodeHeader)) {
             return Response.json(
                 {
                     error: "Invalid or missing access code. Please configure it in Settings.",
@@ -90,6 +88,22 @@ async function handleChatRequest(req: Request): Promise<Response> {
     }
 
     const { messages, xml, previousXml, sessionId } = await req.json()
+
+    // Debug: Log raw messages from client
+    console.log("[Client Messages] Raw messages count:", messages.length)
+    messages.forEach((msg: any, idx: number) => {
+        const contentTypes = Array.isArray(msg.content)
+            ? msg.content.map((c: any) => c.type).join(",")
+            : typeof msg.content
+        console.log(`  [${idx}] role=${msg.role}, content types: ${contentTypes}`)
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
+            msg.content.forEach((c: any, cIdx: number) => {
+                if (c.type === "tool-call" || c.type === "tool_use") {
+                    console.log(`    [${cIdx}] tool-call: ${c.toolName || c.name}, id=${c.id}`)
+                }
+            })
+        }
+    })
 
     // Get user ID for Langfuse tracking and quota
     const userId = getUserIdFromRequest(req)
@@ -239,9 +253,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         getAIModel(clientOverrides)
 
     // Check if model supports prompt caching
-    const shouldCache = supportsPromptCaching(modelId)
+    // Disable for custom baseURL (proxy may not support new system array format)
+    const isCustomBaseUrl = clientOverrides.baseUrl && clientOverrides.baseUrl.trim() !== ""
+    const shouldCache = supportsPromptCaching(modelId) && !isCustomBaseUrl
     console.log(
-        `[Prompt Caching] ${shouldCache ? "ENABLED" : "DISABLED"} for model: ${modelId}`,
+        `[Prompt Caching] ${shouldCache ? "ENABLED" : "DISABLED"} for model: ${modelId}${isCustomBaseUrl ? " (disabled for custom baseURL)" : ""}`,
     )
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
@@ -251,6 +267,14 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const fileParts =
         lastUserMessage?.parts?.filter((part: any) => part.type === "file") ||
         []
+
+    // Debug: Log file parts
+    console.log("[fileParts] count:", fileParts.length)
+    if (fileParts.length > 0) {
+        fileParts.forEach((fp: any, idx: number) => {
+            console.log(`  [${idx}] type=${fp.type}, hasUrl=${!!fp.url}, urlLength=${fp.url?.length || 0}`)
+        })
+    }
 
     // Check if user is sending images to a model that doesn't support them
     // AI SDK silently drops unsupported parts, so we need to catch this early
@@ -269,38 +293,46 @@ async function handleChatRequest(req: Request): Promise<Response> {
 ${userInputText}
 """`
 
-    // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = await convertToModelMessages(messages)
+    // Limit message history to avoid excessive token usage
+    // Keep at most MAX_HISTORY_MESSAGES, always starting with a user message
+    let maxHistory = Number(process.env.MAX_CHAT_HISTORY_MESSAGES || 50)
+    let limitedMessages = messages
+    if (messages.length > maxHistory) {
+        limitedMessages = messages.slice(-maxHistory)
+        // Ensure the first message is a user message (API contract)
+        const firstUserIdx = limitedMessages.findIndex((m: any) => m.role === "user")
+        if (firstUserIdx > 0) {
+            limitedMessages = limitedMessages.slice(firstUserIdx)
+        }
+    }
 
-    // DEBUG: Log incoming messages structure
-    console.log("[route.ts] Incoming messages count:", messages.length)
-    messages.forEach((msg: any, idx: number) => {
-        console.log(
-            `[route.ts] Message ${idx} role:`,
-            msg.role,
-            "parts count:",
-            msg.parts?.length,
-        )
-        if (msg.parts) {
-            msg.parts.forEach((part: any, partIdx: number) => {
-                if (
-                    part.type === "tool-invocation" ||
-                    part.type === "tool-result"
-                ) {
-                    console.log(`[route.ts]   Part ${partIdx}:`, {
-                        type: part.type,
-                        toolName: part.toolName,
-                        hasInput: !!part.input,
-                        inputType: typeof part.input,
-                        inputKeys:
-                            part.input && typeof part.input === "object"
-                                ? Object.keys(part.input)
-                                : null,
+    // Filter historical diagram tool messages before replaying history back to the model.
+    // These tools mutate the local canvas and should not influence later turns.
+    const filteredMessages = filterHistoricalDiagramToolMessages(limitedMessages)
+
+    // Convert UIMessages to ModelMessages and add system message
+    const modelMessages = await convertToModelMessages(filteredMessages)
+
+    // Debug: Log modelMessages structure after conversion
+    console.log("[convertToModelMessages] Result count:", modelMessages.length)
+    modelMessages.forEach((msg: any, idx: number) => {
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
+            msg.content.forEach((c: any, cIdx: number) => {
+                if (c.type === "tool-call" || c.type === "tool_use") {
+                    console.log(`  [${idx}].content[${cIdx}] tool-call:`, {
+                        type: c.type,
+                        toolName: c.toolName || c.name,
+                        hasInput: !!c.input,
+                        inputKeys: c.input ? Object.keys(c.input) : [],
+                        hasToolUse: !!c.tool_use,
+                        toolUseInputKeys: c.tool_use?.input ? Object.keys(c.tool_use.input) : [],
                     })
                 }
             })
         }
     })
+
+    console.log(`[route.ts] Messages: ${messages.length} total, ${limitedMessages.length} after history limit, ${filteredMessages.length} after diagram tool filtering`)
 
     // Replace historical tool call XML with placeholders to reduce tokens
     // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
@@ -325,16 +357,19 @@ ${userInputText}
                 return msg
             }
             const filteredContent = msg.content.filter((part: any) => {
-                if (part.type === "tool-call") {
-                    // Check if input is a valid object (not null, undefined, or empty)
-                    if (
-                        !part.input ||
-                        typeof part.input !== "object" ||
-                        Object.keys(part.input).length === 0
-                    ) {
+                if (part.type === "tool-call" || part.type === "tool_use") {
+                    // Check for valid input in either UIMessage format (part.input) or ModelMessage format (part.tool_use.input)
+                    // Only ONE of them needs to be valid, not both
+                    const input = part.input
+                    const toolUseInput = part.tool_use?.input
+
+                    const hasValidInput = input && typeof input === "object" && Object.keys(input).length > 0
+                    const hasValidToolUseInput = toolUseInput && typeof toolUseInput === "object" && Object.keys(toolUseInput).length > 0
+
+                    if (!hasValidInput && !hasValidToolUseInput) {
                         console.warn(
                             `[route.ts] Filtering out tool-call with invalid input:`,
-                            { toolName: part.toolName, input: part.input },
+                            { toolName: part.toolName, input: part.input, toolUseInput: part.tool_use?.input },
                         )
                         return false
                     }
@@ -345,29 +380,25 @@ ${userInputText}
         })
         .filter((msg: any) => msg.content && msg.content.length > 0)
 
-    // DEBUG: Log modelMessages structure (what's being sent to AI)
     console.log("[route.ts] Model messages count:", enhancedMessages.length)
-    enhancedMessages.forEach((msg: any, idx: number) => {
-        console.log(
-            `[route.ts] ModelMsg ${idx} role:`,
-            msg.role,
-            "content count:",
-            msg.content?.length,
-        )
-        if (msg.content) {
+
+    console.log("[enhancedMessages] Tool-calls in history:")
+    enhancedMessages.forEach((msg: any, idx) => {
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
             msg.content.forEach((part: any, partIdx: number) => {
-                if (part.type === "tool-call" || part.type === "tool-result") {
-                    console.log(`[route.ts]   Content ${partIdx}:`, {
+                if (part.type === "tool-call" || part.type === "tool_use") {
+                    console.log(`  msg[${idx}].content[${partIdx}]:`, {
                         type: part.type,
-                        toolName: part.toolName,
+                        toolName: part.toolName || part.name,
                         hasInput: !!part.input,
                         inputType: typeof part.input,
-                        inputValue:
-                            part.input === undefined
-                                ? "undefined"
-                                : part.input === null
-                                  ? "null"
-                                  : "object",
+                        inputKeys: part.input && typeof part.input === "object" ? Object.keys(part.input) : "N/A",
+                        hasToolUse: !!part.tool_use,
+                        hasToolUseInput: !!part.tool_use?.input,
+                        toolUseInputType: typeof part.tool_use?.input,
+                        toolUseInputIsObject: part.tool_use?.input && typeof part.tool_use.input === "object",
+                        // Show first 100 chars of input if it's a string
+                        inputPreview: typeof part.input === "string" ? part.input.substring(0, 100) : JSON.stringify(part.input)?.substring(0, 100),
                     })
                 }
             })
@@ -385,10 +416,12 @@ ${userInputText}
 
             // Add image parts back
             for (const filePart of fileParts) {
+                // Log image info for debugging
+                console.log("[Image part] type:", filePart.type, "url length:", filePart.url?.length, "url prefix:", filePart.url?.substring(0, 50))
                 contentParts.push({
                     type: "image",
-                    image: filePart.url,
-                    mimeType: filePart.mediaType,
+                    image: filePart.url, // AI SDK supports URL string for image
+                    mediaType: filePart.mediaType, // Fixed: use mediaType instead of mimeType
                 })
             }
 
@@ -397,6 +430,15 @@ ${userInputText}
                 { ...lastModelMessage, content: contentParts },
             ]
         }
+    }
+
+    // Debug: Log last user message content to verify images are included
+    const lastEnhancedMsg = enhancedMessages[enhancedMessages.length - 1]
+    if (lastEnhancedMsg?.role === "user" && Array.isArray(lastEnhancedMsg.content)) {
+        console.log("[Last user message] content parts count:", lastEnhancedMsg.content.length)
+        lastEnhancedMsg.content.forEach((part: any, idx: number) => {
+            console.log(`  [${idx}] type=${part.type}, hasImage=${!!part.image}, imageLength=${part.image?.length || 0}`)
+        })
     }
 
     // Add cache point to the last assistant message in conversation history
@@ -417,43 +459,235 @@ ${userInputText}
         }
     }
 
+    // Transform messages for MiniMax compatibility
+    // MiniMax may not support the new tool_use.input format, so we remove tool_use and use input directly
+    const transformedMessages = isCustomBaseUrl
+        ? enhancedMessages.map((msg: any) => {
+            if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+                return msg
+            }
+            const transformedContent = msg.content.map((part: any) => {
+                if (part.type === "tool-call") {
+                    // Remove tool_use field and use input directly
+                    const { tool_use, ...rest } = part
+                    return {
+                        ...rest,
+                        input: part.input || (tool_use?.input),
+                    }
+                }
+                return part
+            })
+            return { ...msg, content: transformedContent }
+        })
+        : enhancedMessages
+
+    // Debug: Log transformed messages for MiniMax
+    if (isCustomBaseUrl) {
+        console.log("[transformedMessages] Tool-calls after transformation:")
+        transformedMessages.forEach((msg: any, idx) => {
+            if (msg.role === "assistant" && Array.isArray(msg.content)) {
+                msg.content.forEach((part: any, partIdx: number) => {
+                    if (part && typeof part === 'object' && (part.type === "tool-call" || part.type === "tool_use")) {
+                        console.log(`  msg[${idx}].content[${partIdx}]:`, {
+                            type: part.type,
+                            toolName: part.toolName || part.name,
+                            toolCallId: part.id || part.tool_call_id,
+                            inputType: typeof part.input,
+                            inputKeys: part.input && typeof part.input === "object" ? Object.keys(part.input) : "N/A",
+                            hasToolUse: !!part.tool_use,
+                            toolUseInputExists: !!part.tool_use?.input,
+                        })
+                    }
+                })
+            }
+            // Log tool messages to see tool_call_id
+            if (msg.role === "tool" && Array.isArray(msg.content)) {
+                msg.content.forEach((part: any, partIdx: number) => {
+                    if (part && typeof part === 'object' && part.type === "tool-result") {
+                        console.log(`  TOOL msg[${idx}].content[${partIdx}]:`, {
+                            type: part.type,
+                            toolName: part.toolName,
+                            toolCallId: part.tool_call_id,
+                            hasContent: !!part.content,
+                        })
+                    }
+                })
+            }
+        })
+    }
+
     // System messages with multiple cache breakpoints for optimal caching:
     // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
     // This allows: if only user message changes, both system caches are reused
     //              if XML changes, instruction cache is still reused
-    const systemMessages = [
+
+    // For custom baseURL (proxy), merge system messages into a single string
+    // to avoid the array format that may not be supported
+    const xmlContext = `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`
+
+    const systemMessages = shouldCache ? [
         // Cache breakpoint 1: Instructions (rarely change)
         {
             role: "system" as const,
             content: systemMessage,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
+            providerOptions: {
+                bedrock: { cachePoint: { type: "default" } },
+            },
         },
         // Cache breakpoint 2: Previous and Current diagram XML context
         {
             role: "system" as const,
-            content: `${previousXml ? `Previous diagram XML (before user's last message):\n"""xml\n${previousXml}\n"""\n\n` : ""}Current diagram XML (AUTHORITATIVE - the source of truth):\n"""xml\n${xml || ""}\n"""\n\nIMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`,
-            ...(shouldCache && {
-                providerOptions: {
-                    bedrock: { cachePoint: { type: "default" } },
-                },
-            }),
+            content: xmlContext,
+            providerOptions: {
+                bedrock: { cachePoint: { type: "default" } },
+            },
+        },
+    ] : [
+        // For custom baseURL: single system message (string format)
+        {
+            role: "system" as const,
+            content: `${systemMessage}\n\n${xmlContext}`,
         },
     ]
 
-    const allMessages = [...systemMessages, ...enhancedMessages]
+    // Build messages array - include system messages when using custom baseURL (for MiniMax compatibility)
+    // When isCustomBaseUrl=true, we include system as a regular message rather than using the system parameter
+    const allMessages = shouldCache
+        ? [...systemMessages, ...transformedMessages]
+        : isCustomBaseUrl
+            ? [{ role: "system" as const, content: `${systemMessage}\n\n${xmlContext}` }, ...transformedMessages]
+            : transformedMessages // For standard providers, don't include system in messages
+
+    // Debug: Log shouldCache and system format
+    console.log("[shouldCache DEBUG]:", {
+        shouldCache,
+        modelId,
+        isCustomBaseUrl,
+        supportsPromptCaching_result: modelId && (
+            modelId.includes("claude") ||
+            modelId.includes("anthropic") ||
+            modelId.startsWith("us.anthropic") ||
+            modelId.startsWith("eu.anthropic")
+        )
+    })
+    console.log("[system content type]:", Array.isArray(allMessages[0]?.content) ? "array" : typeof allMessages[0]?.content)
+    console.log("[allMessages.length]:", allMessages.length)
+    console.log("[allMessages[0] role]:", allMessages[0]?.role)
+    console.log("[allMessages[0] content]:", typeof allMessages[0]?.content, allMessages[0]?.content ? (Array.isArray(allMessages[0]?.content) ? `array(${allMessages[0].content.length})` : `string(${allMessages[0].content.length})`) : "undefined")
+
+    // Debug: Log ALL messages' tool calls with full input details
+    console.log("[streamText] Full message structure check:")
+    allMessages.forEach((msg: any, idx) => {
+        console.log(`  Message ${idx}: role=${msg.role}, content type=${typeof msg.content}, isArray=${Array.isArray(msg.content)}`)
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
+            msg.content.forEach((part: any, partIdx: number) => {
+                if (part.type === "tool-call") {
+                    console.log(`    content[${partIdx}] tool-call:`, {
+                        toolName: part.toolName,
+                        inputType: typeof part.input,
+                        inputIsObject: part.input && typeof part.input === "object",
+                        inputKeys: part.input && typeof part.input === "object" ? Object.keys(part.input) : "N/A",
+                        toolUseExists: !!part.tool_use,
+                        toolUseInputType: typeof part.tool_use?.input,
+                        toolUseInputIsObject: part.tool_use?.input && typeof part.tool_use.input === "object",
+                        toolUseInputKeys: part.tool_use?.input && typeof part.tool_use.input === "object" ? Object.keys(part.tool_use.input) : "N/A",
+                        // Show actual input value (truncated if string)
+                        inputPreview: typeof part.input === "string" ? part.input.substring(0, 100) + "..." : JSON.stringify(part.input)?.substring(0, 100),
+                    })
+                }
+            })
+        }
+        // Log image parts in user messages
+        if (msg.role === "user" && Array.isArray(msg.content)) {
+            msg.content.forEach((part: any, partIdx: number) => {
+                if (part.type === "image") {
+                    console.log(`    content[${partIdx}] IMAGE: url length=${part.image?.length || 0}, url prefix=${part.image?.substring(0, 50)}`)
+                }
+            })
+        }
+    })
+    allMessages.forEach((msg: any, idx) => {
+        if (msg.role === "assistant" && Array.isArray(msg.content)) {
+            msg.content.forEach((part: any, partIdx: number) => {
+                if (part.type === "tool-call") {
+                    console.log(`  msg[${idx}].content[${partIdx}]:`, {
+                        type: part.type,
+                        toolName: part.toolName,
+                        hasInput: !!part.input,
+                        inputType: typeof part.input,
+                        inputKeys: part.input ? Object.keys(part.input) : [],
+                        hasToolUse: !!part.tool_use,
+                        hasToolUseInput: !!part.tool_use?.input,
+                        toolUseInputType: typeof part.tool_use?.input,
+                        toolUseInputKeys: part.tool_use?.input ? Object.keys(part.tool_use.input) : [],
+                    })
+                }
+            })
+        }
+    })
+
+    // Debug: Log the request details before sending
+    console.log("[streamText] About to call streamText with:")
+    console.log("  system type:", !shouldCache ? "string" : "array (from messages)")
+    console.log("  system length:", !shouldCache ? (systemMessage.length + xmlContext.length) : "N/A")
+    console.log("  messages count:", allMessages.length)
+    console.log("  first message role:", allMessages[0]?.role)
+    console.log("  has tool_use in messages:", allMessages.some((m: any) =>
+        m.role === "assistant" && m.content?.some?.((c: any) => c.tool_use)
+    ))
+
+    // Log full message structure including all content blocks
+    console.log("[streamText] Full allMessages structure:")
+    allMessages.forEach((msg: any, idx) => {
+        console.log(`  [${idx}] role=${msg.role}, content type=${typeof msg.content}, isArray=${Array.isArray(msg.content)}`)
+        if (Array.isArray(msg.content)) {
+            msg.content.forEach((part: any, pIdx: number) => {
+                if (part && typeof part === 'object') {
+                    const logEntry: any = {
+                        type: part.type,
+                        toolName: part.toolName || part.name || 'N/A'
+                    }
+                    if (part.type === 'tool-call' || part.type === 'tool_use') {
+                        logEntry.id = part.id
+                        logEntry.inputType = typeof part.input
+                    }
+                    if (part.type === 'tool-result') {
+                        logEntry.tool_call_id = part.tool_call_id
+                        logEntry.toolName = part.toolName
+                    }
+                    console.log(`    [${pIdx}]`, logEntry)
+                }
+            })
+        }
+    })
+
+    console.log("[streamText] Request details:", {
+        modelId,
+        provider: clientOverrides.provider,
+        messageCount: allMessages.length,
+        hasTools: true,
+        toolNames: ["display_diagram", "edit_diagram", "append_diagram", "get_shape_library"],
+        firstMessageType: typeof allMessages[0]?.content,
+        lastMessageType: typeof allMessages[allMessages.length - 1]?.content,
+        useSystemParam: !shouldCache,
+    })
 
     const result = streamText({
         model,
         ...(process.env.MAX_OUTPUT_TOKENS && {
             maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
         }),
+        // For custom baseURL: system is now included directly in messages array (as role: "system")
+        // For standard providers with caching: system is passed via systemMessages array
+        // For standard providers without caching: use system parameter
+        ...(shouldCache && !isCustomBaseUrl && {
+            system: systemMessage,
+        }),
         stopWhen: stepCountIs(5),
         // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
+        // DISABLED for MiniMax (custom baseUrl) because MiniMax doesn't accept tool_use.input format
+        ...(isCustomBaseUrl ? {} : {
         experimental_repairToolCall: async ({ toolCall, error }) => {
             // DEBUG: Log what we're trying to repair
             console.log(`[repairToolCall] Tool: ${toolCall.toolName}`)
@@ -484,43 +718,34 @@ ${userInputText}
                             '$1=\\"$2\\"',
                         )
                     }
-                    // Use jsonrepair to fix truncated JSON
+                    // Use jsonrepair to fix truncated JSON, then parse it back to object
                     const repairedInput = jsonrepair(inputToRepair)
                     console.log(
-                        `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
+                        `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}, repaired length: ${repairedInput.length}`,
                     )
-                    return { ...toolCall, input: repairedInput }
+                    // jsonrepair returns a string, so we need to parse it back to an object
+                    const parsedInput = JSON.parse(repairedInput)
+                    console.log(
+                        `[repairToolCall] Parsed input type: ${typeof parsedInput}, isObject: ${typeof parsedInput === "object"}, keys: ${typeof parsedInput === "object" ? Object.keys(parsedInput) : "N/A"}`,
+                    )
+                    // Remove tool_use if present (MiniMax doesn't accept it) and only use input
+                    const toolCallAny = toolCall as any
+                    const { tool_use, ...rest } = toolCallAny
+                    return { ...rest, input: parsedInput }
                 } catch (repairError) {
                     console.warn(
                         `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
                         repairError,
                     )
-                    // Return a placeholder input to avoid API errors in multi-step
-                    // The tool will fail gracefully on client side
-                    if (toolCall.toolName === "edit_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                operations: [],
-                                _error: "JSON repair failed - no operations to apply",
-                            },
-                        }
-                    }
-                    if (toolCall.toolName === "display_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                xml: "",
-                                _error: "JSON repair failed - empty diagram",
-                            },
-                        }
-                    }
+                    // Return null to skip this tool call when repair fails
+                    // This is safer than sending potentially invalid data to the API
+                    console.log(`[repairToolCall] Skipping tool call ${toolCall.toolName} due to repair failure`)
                     return null
                 }
             }
             // Don't attempt to repair other errors (like NoSuchToolError)
             return null
-        },
+        }}),
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
         ...(headers && { headers }),
@@ -549,13 +774,18 @@ ${userInputText}
                     (totalUsage.outputTokens || 0) +
                     (totalUsage.cachedInputTokens || 0) +
                     (totalUsage.inputTokenDetails?.cacheWriteTokens || 0)
-                recordTokenUsage(userId, totalTokens)
+                recordTokenUsage(userId, totalTokens).catch((err) => {
+                    console.error("[chat] Failed to record token usage:", err?.message || err)
+                })
             }
         },
         tools: {
             // Client-side tool that will be executed on the client
             display_diagram: {
-                description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
+                description: `Display a diagram on draw.io. Creates a NEW PAGE by default to preserve existing content.
+
+IMPORTANT: You MUST provide a descriptive page name based on the diagram content.
+Examples: "AWS Architecture", "User Login Flow", "Database Schema", "System Overview"
 
 VALIDATION RULES (XML will be rejected if violated):
 1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
@@ -585,11 +815,17 @@ Example (generate ONLY this - no wrapper tags):
 Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
 - For animated connectors, add "flowAnimation=1" to edge style.
+- Each diagram is saved as a separate page in the same .drawio file
+- **IMPORTANT: When the user asks to create a NEW diagram (not edit existing), ALWAYS call display_diagram to create a NEW PAGE. The existing diagram content will be PRESERVED as other pages.**
+- Users can switch between pages using the tabs at the bottom of the editor
 `,
                 inputSchema: z.object({
                     xml: z
                         .string()
                         .describe("XML string to be displayed on draw.io"),
+                    pageName: z
+                        .string()
+                        .describe("Descriptive name for this diagram page based on its content (e.g., 'AWS Architecture', 'User Flow')"),
                 }),
             },
             edit_diagram: {
@@ -723,20 +959,31 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         }),
     })
 
-    return result.toUIMessageStreamResponse({
-        sendReasoning: true,
-        messageMetadata: ({ part }) => {
-            if (part.type === "finish") {
-                const usage = (part as any).totalUsage
-                // AI SDK 6 provides totalTokens directly
-                return {
-                    totalTokens: usage?.totalTokens ?? 0,
-                    finishReason: (part as any).finishReason,
+    try {
+        return result.toUIMessageStreamResponse({
+            sendReasoning: true,
+            messageMetadata: ({ part }) => {
+                if (part.type === "finish") {
+                    const usage = (part as any).totalUsage
+                    // AI SDK 6 provides totalTokens directly
+                    return {
+                        totalTokens: usage?.totalTokens ?? 0,
+                        finishReason: (part as any).finishReason,
+                    }
                 }
-            }
-            return undefined
-        },
-    })
+                return undefined
+            },
+        })
+    } catch (streamError) {
+        // Handle stream errors (e.g., client disconnected)
+        console.error("[chat] Stream error:", streamError)
+        // Return a minimal error response instead of throwing
+        // This prevents the 500 error from propagating
+        if (streamError instanceof Error && streamError.message.includes("pipe")) {
+            return new Response("Error: Client disconnected", { status: 499 })
+        }
+        throw streamError
+    }
 }
 
 // Helper to categorize errors and return appropriate response
@@ -747,6 +994,18 @@ function handleError(error: unknown): Response {
 
     // Check for specific AI SDK error types
     if (APICallError.isInstance(error)) {
+        // Special handling for context window exceeded errors
+        const errorMessage = error.message.toLowerCase()
+        if (errorMessage.includes("context window") || errorMessage.includes("context window exceeds")) {
+            return Response.json(
+                {
+                    error: "对话历史太长，超过了模型的上下文窗口限制。请减少对话历史或开启新对话。",
+                    type: "context_limit",
+                    suggestion: "您可以在设置中减少对话历史长度，或开始新的对话。",
+                },
+                { status: 400 },
+            )
+        }
         return Response.json(
             {
                 error: error.message,

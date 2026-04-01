@@ -1,11 +1,10 @@
+import { getAccessCodes } from "@/lib/access-code"
+
 export async function POST(req: Request) {
-    const accessCodes =
-        process.env.ACCESS_CODE_LIST?.split(",")
-            .map((code) => code.trim())
-            .filter(Boolean) || []
+    const codes = getAccessCodes()
 
     // If no access codes configured, verification always passes
-    if (accessCodes.length === 0) {
+    if (codes.size === 0) {
         return Response.json({
             valid: true,
             message: "No access code required",
@@ -21,7 +20,7 @@ export async function POST(req: Request) {
         )
     }
 
-    if (!accessCodes.includes(accessCodeHeader)) {
+    if (!codes.has(accessCodeHeader)) {
         return Response.json(
             { valid: false, message: "Invalid access code" },
             { status: 401 },

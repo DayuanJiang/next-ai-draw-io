@@ -38,7 +38,7 @@
         "sendMessage": "发送消息",
         "clearConversation": "清除对话",
         "diagramHistory": "图表历史",
-        "saveDiagram": "保存图表",
+        "saveDiagram": "导出图表（.drawio / PNG / SVG）",
         "uploadFile": "上传文件（图片、PDF、文本）",
         "minimalStyle": "简约",
         "styledMode": "精致",
@@ -130,8 +130,16 @@
         "formats": {
             "drawio": "Draw.io XML",
             "png": "PNG 图片",
-            "svg": "SVG 图片"
+            "svg": "SVG 图片",
+            "emf": "EMF（PowerPoint 兼容）",
+            "emfDescription": "在 PowerPoint 中作为矢量图形组插入",
+            "emfTooltip": "适用于 PowerPoint 2016 及以上版本",
+            "pptx": "PPTX（可编辑形状）",
+            "pptxDescription": "每个形状均可在 PowerPoint 中独立编辑",
+            "pptxTooltip": "适用于 PowerPoint 2013 及以上版本"
         },
+        "pptxDegradedWarning": "以下形状已降级为图片：{shapes}",
+        "fileSizeWarning": "文件大小超过 50MB，可能影响 PowerPoint 性能",
         "savedSuccessfully": "保存成功！"
     },
     "history": {

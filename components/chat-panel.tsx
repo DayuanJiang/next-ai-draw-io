@@ -39,7 +39,7 @@ import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { cn, formatXML, isRealDiagram } from "@/lib/utils"
+import { cn, chooseMoreCompleteDiagramXml, formatXML, isRealDiagram } from "@/lib/utils"
 import type { ValidationState } from "./chat/ValidationCard"
 import { ChatMessageDisplay } from "./chat-message-display"
 import { DevXmlSimulator } from "./dev-xml-simulator"
@@ -339,7 +339,7 @@ export default function ChatPanel({
         onValidationStateChange: handleValidationStateChange,
     })
 
-    const { messages, sendMessage, addToolOutput, status, error, setMessages } =
+    const { messages, sendMessage, addToolOutput, status, error, setMessages, stop } =
         useChat({
             transport: new DefaultChatTransport({
                 api: getApiEndpoint("/api/chat"),
@@ -809,6 +809,10 @@ export default function ChatPanel({
 
             try {
                 let chartXml = await onFetchChart()
+                chartXml = chooseMoreCompleteDiagramXml({
+                    preferredXml: formatXML(chartXml),
+                    fallbackXml: chartXMLRef.current,
+                })
                 chartXml = formatXML(chartXml)
 
                 // Update ref directly to avoid race condition with React's async state update
@@ -1357,6 +1361,7 @@ export default function ChatPanel({
                     status={status}
                     onSubmit={onFormSubmit}
                     onChange={handleInputChange}
+                    onStop={stop}
                     files={files}
                     onFileChange={handleFileChange}
                     pdfData={pdfData}

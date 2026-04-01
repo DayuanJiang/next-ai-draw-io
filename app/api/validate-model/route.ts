@@ -9,6 +9,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
+import { createOpenAICompatibleFetch } from "@/lib/openai-compatible-fetch"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 
 export const runtime = "nodejs"
@@ -91,15 +92,28 @@ export async function POST(req: Request) {
                 const openai = createOpenAI({
                     apiKey,
                     ...(baseUrl && { baseURL: baseUrl }),
+                    ...(baseUrl && {
+                        fetch: createOpenAICompatibleFetch(),
+                    }),
                 })
                 model = openai.chat(modelId)
                 break
             }
 
             case "anthropic": {
+                console.log("[validate-model] Anthropic config:", {
+                    hasApiKey: !!apiKey,
+                    apiKeyPrefix: apiKey?.substring(0, 10),
+                    apiKeyLength: apiKey?.length,
+                    baseUrl,
+                    modelId,
+                })
                 const anthropic = createAnthropic({
-                    apiKey,
+                    apiKey: apiKey || "dummy-key", // Ensure apiKey is never undefined
                     baseURL: baseUrl || "https://api.anthropic.com/v1",
+                    headers: {
+                        "anthropic-version": "2023-06-01",
+                    },
                 })
                 model = anthropic(modelId)
                 break
@@ -127,6 +141,9 @@ export async function POST(req: Request) {
                 const azure = createOpenAI({
                     apiKey,
                     baseURL: baseUrl,
+                    ...(baseUrl && {
+                        fetch: createOpenAICompatibleFetch(),
+                    }),
                 })
                 model = azure.chat(modelId)
                 break
@@ -168,6 +185,7 @@ export async function POST(req: Request) {
                 const sf = createOpenAI({
                     apiKey,
                     baseURL: baseUrl || "https://api.siliconflow.cn/v1",
+                    fetch: createOpenAICompatibleFetch(),
                 })
                 model = sf.chat(modelId)
                 break
@@ -197,6 +215,7 @@ export async function POST(req: Request) {
                 const edgeone = createOpenAI({
                     apiKey: "edgeone", // EdgeOne doesn't require API key
                     baseURL: baseUrl || "/api/edgeai",
+                    fetch: createOpenAICompatibleFetch(),
                     headers: {
                         cookie: cookieHeader,
                     },
@@ -210,6 +229,7 @@ export async function POST(req: Request) {
                 const sglang = createOpenAI({
                     apiKey: apiKey || "not-needed",
                     baseURL: baseUrl || "http://127.0.0.1:8000/v1",
+                    fetch: createOpenAICompatibleFetch(),
                 })
                 model = sglang.chat(modelId)
                 break
@@ -233,6 +253,7 @@ export async function POST(req: Request) {
                     const doubao = createOpenAI({
                         apiKey,
                         baseURL: doubaoBaseUrl,
+                        fetch: createOpenAICompatibleFetch(),
                     })
                     model = doubao.chat(modelId)
                 }
@@ -339,6 +360,12 @@ export async function POST(req: Request) {
                 error.message.includes("Unauthorized")
             ) {
                 errorMessage = "Invalid API key"
+            } else if (
+                error.message.includes("403") ||
+                error.message.includes("permission_error") ||
+                error.message.includes("Forbidden")
+            ) {
+                errorMessage = "Permission denied - API key may not have access to this model, or the proxy service is blocking the request"
             } else if (
                 error.message.includes("404") ||
                 error.message.includes("not found")

@@ -5,6 +5,9 @@ import { getUserIdFromRequest } from "@/lib/user-id"
 import { checkAndIncrementRequest, isQuotaEnabled } from "@/lib/dynamo-quota-manager"
 import { generateDiagramXML } from "@/lib/diagram-generator"
 import { renderDiagramToImage } from "@/lib/diagram-renderer"
+import { taskQueue } from "@/lib/task-queue"
+import { validateAccessCode } from "@/lib/access-code"
+import type { ClientOverrides } from "@/lib/ai-providers"
 
 export const maxDuration = 120
 
@@ -15,23 +18,23 @@ const requestSchema = z.object({
         width: z.number().min(100).max(4096).optional(),
         height: z.number().min(100).max(4096).optional(),
     }).optional(),
+    model: z.object({
+        provider: z.string().optional(),
+        modelId: z.string().optional(),
+        apiKey: z.string().optional(),
+        baseUrl: z.string().optional(),
+        awsAccessKeyId: z.string().optional(),
+        awsSecretAccessKey: z.string().optional(),
+        awsRegion: z.string().optional(),
+        awsSessionToken: z.string().optional(),
+        vertexApiKey: z.string().optional(),
+    }).optional(),
 })
 
 export async function POST(req: NextRequest) {
     // Check access code if configured
-    const accessCodes = process.env.ACCESS_CODE_LIST?.split(",")
-        .map((code) => code.trim())
-        .filter(Boolean) || []
-
-    if (accessCodes.length > 0) {
-        const accessCodeHeader = req.headers.get("x-access-code")
-        if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
-            return NextResponse.json(
-                { error: "Invalid or missing access code" },
-                { status: 401 }
-            )
-        }
-    }
+    const accessCodeError = validateAccessCode(req)
+    if (accessCodeError) return accessCodeError
 
     // Parse and validate request body
     let body
@@ -47,12 +50,12 @@ export async function POST(req: NextRequest) {
     const validation = requestSchema.safeParse(body)
     if (!validation.success) {
         return NextResponse.json(
-            { error: "Invalid request", details: validation.error.errors },
+            { error: "Invalid request", details: validation.error.issues },
             { status: 400 }
         )
     }
 
-    const { description, format, options } = validation.data
+    const { description, format, options, model } = validation.data
 
     // Check quota if enabled
     if (isQuotaEnabled()) {
@@ -74,8 +77,21 @@ export async function POST(req: NextRequest) {
     // Create task
     const task = taskManager.createTask(format, description, options)
 
-    // Process task asynchronously
-    processTask(task.taskId, description, format, options).catch((error) => {
+    // Build model overrides from request
+    const modelOverrides: ClientOverrides | undefined = model ? {
+        provider: model.provider,
+        modelId: model.modelId,
+        apiKey: model.apiKey,
+        baseUrl: model.baseUrl,
+        awsAccessKeyId: model.awsAccessKeyId,
+        awsSecretAccessKey: model.awsSecretAccessKey,
+        awsRegion: model.awsRegion,
+        awsSessionToken: model.awsSessionToken,
+        vertexApiKey: model.vertexApiKey,
+    } : undefined
+
+    // Process task asynchronously with queue
+    taskQueue.add(() => processTask(task.taskId, description, format, options, modelOverrides)).catch((error) => {
         console.error(`[generate-diagram] Task ${task.taskId} failed:`, error)
         taskManager.updateTask(task.taskId, {
             status: "failed",
@@ -95,15 +111,22 @@ async function processTask(
     taskId: string,
     description: string,
     format: "xml" | "png" | "svg",
-    options?: { width?: number; height?: number }
+    options?: { width?: number; height?: number },
+    modelOverrides?: ClientOverrides
 ): Promise<void> {
     try {
+        const task = taskManager.getTask(taskId)
+        if (task?.status === "cancelled") return
+
         taskManager.updateTask(taskId, {
             status: "processing",
             progress: 10,
         })
 
-        const xml = await generateDiagramXML(description)
+        const xml = await generateDiagramXML(description, modelOverrides)
+
+        const taskAfterGen = taskManager.getTask(taskId)
+        if (taskAfterGen?.status === "cancelled") return
 
         taskManager.updateTask(taskId, {
             progress: 50,
@@ -119,6 +142,9 @@ async function processTask(
         }
 
         const { url, size } = await renderDiagramToImage(taskId, xml, format, options)
+
+        const taskAfterRender = taskManager.getTask(taskId)
+        if (taskAfterRender?.status === "cancelled") return
 
         taskManager.updateTask(taskId, {
             status: "completed",

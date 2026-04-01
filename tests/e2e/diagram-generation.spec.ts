@@ -8,11 +8,54 @@ import {
     expect,
     getChatInput,
     sendMessage,
+    sleep,
     test,
     waitForComplete,
     waitForCompleteCount,
+    waitForText,
 } from "./lib/fixtures"
-import { createMockSSEResponse } from "./lib/helpers"
+import { createMockSSEResponse, createTextOnlyResponse } from "./lib/helpers"
+
+function createClientToolCallSSEResponse(params: {
+    xml: string
+    text: string
+    toolName?: string
+    pageName?: string
+}) {
+    const messageId = `msg_${Date.now()}`
+    const toolCallId = `call_${Date.now()}`
+    const textId = `text_${Date.now()}`
+    const toolName = params.toolName || "display_diagram"
+
+    const events = [
+        { type: "start", messageId },
+        { type: "text-start", id: textId },
+        { type: "text-delta", id: textId, delta: params.text },
+        { type: "text-end", id: textId },
+        { type: "tool-input-start", toolCallId, toolName },
+        {
+            type: "tool-input-available",
+            toolCallId,
+            toolName,
+            input: {
+                xml: params.xml,
+                ...(params.pageName ? { pageName: params.pageName } : {}),
+            },
+        },
+        {
+            type: "tool-output-available",
+            toolCallId,
+            output: "Successfully displayed the diagram",
+        },
+        { type: "finish" },
+    ]
+
+    return (
+        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
+        "data: [DONE]\n\n"
+    )
+}
+
 
 test.describe("Diagram Generation", () => {
     test.beforeEach(async ({ page }) => {
@@ -27,7 +70,7 @@ test.describe("Diagram Generation", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
+        await page.goto("/", { waitUntil: "domcontentloaded" })
         await page
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })
@@ -64,6 +107,79 @@ test.describe("Diagram Generation", () => {
             page.locator('text="I\'ll create a diagram for you."'),
         ).toBeVisible({ timeout: 10000 })
     })
+
+    test("preserves the first page when generating a second diagram in the same session", async ({
+        page,
+    }) => {
+        let requestCount = 0
+        let xmlAfterFirst = ""
+        let xmlAfterSecond = ""
+
+        await page.unroute("**/api/chat")
+        await page.route("**/api/chat", async (route) => {
+            requestCount += 1
+            const body = route.request().postDataJSON() as
+                | { xml?: string }
+                | undefined
+
+            if (requestCount === 2) {
+                xmlAfterFirst = body?.xml || ""
+                console.log(
+                    `[preserves-first-page] request 2 xml preview: ${xmlAfterFirst.slice(0, 300)}`,
+                )
+            }
+
+            if (requestCount === 3) {
+                xmlAfterSecond = body?.xml || ""
+                console.log(
+                    `[preserves-first-page] request 3 xml preview: ${xmlAfterSecond.slice(0, 300)}`,
+                )
+            }
+
+            const responseBody =
+                requestCount === 1
+                    ? createClientToolCallSSEResponse({
+                          xml: CAT_DIAGRAM_XML,
+                          text: "I'll create a diagram for you.",
+                          pageName: "Page A",
+                      })
+                    : requestCount === 2
+                      ? createClientToolCallSSEResponse({
+                            xml: FLOWCHART_XML,
+                            text: "I'll create a diagram for you.",
+                            pageName: "Page B",
+                        })
+                      : createTextOnlyResponse("ok")
+
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: responseBody,
+            })
+        })
+
+        await sendMessage(page, "Draw a cat")
+        await waitForComplete(page)
+        await sleep(800)
+
+        await sendMessage(page, "Create a flowchart")
+        await waitForCompleteCount(page, 2)
+        await sleep(800)
+
+        await sendMessage(page, "ping")
+        await waitForText(page, "ok")
+
+        // After the first diagram, draw.io export may be <mxfile><mxGraphModel>...</mxGraphModel></mxfile>
+        // (no <diagram> wrapper). We assert we at least exported an mxfile.
+        // NOTE: some environments may export an empty-ish mxGraphModel while the diagram is still rendering.
+        expect(xmlAfterFirst).toContain("<mxfile")
+
+        // After the second diagram, we expect a true multi-page mxfile with 2 <diagram> pages.
+        expect(xmlAfterSecond).toContain("<mxfile")
+        expect((xmlAfterSecond.match(/<diagram\b/g) || []).length).toBe(2)
+        expect(xmlAfterSecond).toContain('id="cat-head"')
+        expect(xmlAfterSecond).toContain('id="start"')
+    })
 })
 
 test.describe("Diagram Edit", () => {
@@ -79,7 +195,7 @@ test.describe("Diagram Edit", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
+        await page.goto("/", { waitUntil: "domcontentloaded" })
         await page
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })
@@ -110,7 +226,7 @@ test.describe("Diagram Append", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
+        await page.goto("/", { waitUntil: "domcontentloaded" })
         await page
             .locator("iframe")
             .waitFor({ state: "visible", timeout: 30000 })

@@ -8,8 +8,11 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies with retry and timeout settings
+RUN npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retries 5 && \
+    npm ci --prefer-offline --no-audit
 
 # Stage 2: Build application
 FROM node:24-alpine AS builder

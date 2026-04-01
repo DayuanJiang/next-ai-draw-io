@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select"
 import { useDictionary } from "@/hooks/use-dictionary"
 
-export type ExportFormat = "drawio" | "png" | "svg"
+export type ExportFormat = "drawio" | "png" | "svg" | "emf" | "pptx"
 
 interface SaveDialogProps {
     open: boolean

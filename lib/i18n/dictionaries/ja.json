@@ -130,8 +130,16 @@
         "formats": {
             "drawio": "Draw.io XML",
             "png": "PNG 画像",
-            "svg": "SVG 画像"
+            "svg": "SVG 画像",
+            "emf": "EMF（PowerPoint 互換）",
+            "emfDescription": "PowerPoint にベクターグループとして挿入",
+            "emfTooltip": "PowerPoint 2016 以降に対応",
+            "pptx": "PPTX（編集可能な図形）",
+            "pptxDescription": "各図形を PowerPoint で個別に編集できます",
+            "pptxTooltip": "PowerPoint 2013 以降に対応"
         },
+        "pptxDegradedWarning": "以下の図形は画像にダウングレードされました：{shapes}",
+        "fileSizeWarning": "ファイルサイズが 50MB を超えており、PowerPoint のパフォーマンスに影響する可能性があります",
         "savedSuccessfully": "保存完了！"
     },
     "history": {

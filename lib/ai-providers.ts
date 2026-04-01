@@ -9,6 +9,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
+import { createOpenAICompatibleFetch } from "@/lib/openai-compatible-fetch"
 import type { ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
@@ -723,7 +724,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             if (baseURL) {
                 // Custom base URL = third-party proxy, use Chat Completions API
                 // for compatibility (most proxies don't support /responses endpoint)
-                const customOpenAI = createOpenAI({ apiKey, baseURL })
+                const customOpenAI = createOpenAI({
+                    apiKey,
+                    baseURL,
+                    fetch: createOpenAICompatibleFetch(),
+                })
                 model = customOpenAI.chat(modelId)
             } else if (overrides?.apiKey) {
                 // Custom API key but official OpenAI endpoint, use Responses API
@@ -748,14 +753,64 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 serverBaseUrl,
                 "https://api.anthropic.com/v1",
             )
-            const customProvider = createAnthropic({
-                apiKey,
+
+            // Debug logging
+            console.log("[AI Provider] Anthropic config:", {
+                hasApiKey: !!apiKey,
+                apiKeyPrefix: apiKey?.substring(0, 10),
+                apiKeyLength: apiKey?.length,
+                apiKeyFull: apiKey, // 临时显示完整 Key 用于调试
                 baseURL,
-                headers: ANTHROPIC_BETA_HEADERS,
+                modelId,
+            })
+
+            // Create custom fetch to log requests and remove beta headers for proxy
+            const customFetch: typeof fetch = async (url, init) => {
+                // Remove anthropic-beta headers for custom baseURL (proxy may not support them)
+                if (init?.headers) {
+                    const headers = new Headers(init.headers as HeadersInit)
+
+                    // Remove beta headers that may cause 403 with proxy
+                    headers.delete('anthropic-beta')
+
+                    // Log the modified headers
+                    console.log("[Anthropic Request] URL:", url)
+                    console.log("[Anthropic Request] Headers (after removing beta):", Object.fromEntries(headers.entries()))
+                    console.log("[Anthropic Request] Body (first 500 chars):",
+                        typeof init?.body === 'string' ? init.body.substring(0, 500) : init?.body
+                    )
+
+                    // Create new init with modified headers
+                    init = {
+                        ...init,
+                        headers: headers,
+                    }
+                }
+
+                const response = await fetch(url, init)
+
+                console.log("[Anthropic Response] Status:", response.status)
+                console.log("[Anthropic Response] Headers:", Object.fromEntries(response.headers.entries()))
+
+                // Note: Don't read/consume the response body for logging here
+                // because it interferes with streaming responses and can cause errors
+                // when the other side closes the connection
+
+                return response
+            }
+
+            // For custom baseURL (proxy), ensure API key is passed correctly
+            // Don't use beta headers for custom baseURL (proxy may not support them)
+            const customProvider = createAnthropic({
+                apiKey: apiKey || "dummy-key", // Ensure apiKey is never undefined
+                baseURL,
+                headers: {
+                    "anthropic-version": "2023-06-01",
+                    // Don't include anthropic-beta headers for custom baseURL
+                },
+                fetch: customFetch,
             })
             model = customProvider(modelId)
-            // Add beta headers for fine-grained tool streaming
-            headers = ANTHROPIC_BETA_HEADERS
             break
         }
 
@@ -904,6 +959,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const siliconflowProvider = createOpenAI({
                 apiKey,
                 baseURL,
+                fetch: createOpenAICompatibleFetch(),
             })
             model = siliconflowProvider.chat(modelId)
             break
@@ -1059,6 +1115,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const edgeoneProvider = createOpenAI({
                 apiKey: "edgeone", // Dummy key - EdgeOne doesn't require API key
                 baseURL,
+                fetch: createOpenAICompatibleFetch(),
                 // Pass cookies for EdgeOne Pages authentication (eo_token, eo_time)
                 ...(overrides?.headers && { headers: overrides.headers }),
             })
@@ -1093,6 +1150,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 const doubaoProvider = createOpenAI({
                     apiKey,
                     baseURL,
+                    fetch: createOpenAICompatibleFetch(),
                 })
                 model = doubaoProvider.chat(modelId)
             }
@@ -1114,6 +1172,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const modelscopeProvider = createOpenAI({
                 apiKey,
                 baseURL,
+                fetch: createOpenAICompatibleFetch(),
             })
             model = modelscopeProvider.chat(modelId)
             break

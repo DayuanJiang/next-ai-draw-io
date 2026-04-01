@@ -1,23 +1,36 @@
 "use client"
+import { Download } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
+import { SaveDialog } from "@/components/save-dialog"
 import {
     ResizableHandle,
     ResizablePanel,
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { isRealDiagram } from "@/lib/utils"
 
 const drawioBaseUrl =
     process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        onDrawioLoad,
+        resetDrawioReady,
+        showSaveDialog,
+        setShowSaveDialog,
+        saveDiagramToFile,
+        chartXML,
+    } = useDiagram()
+    const dict = useDictionary()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
@@ -185,6 +198,18 @@ export default function Home() {
                                     </span>
                                 </div>
                             )}
+                            {/* 浮动导出按钮 */}
+                            {isDrawioReady && isRealDiagram(chartXML) && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSaveDialog(true)}
+                                    title={dict.chat.saveDiagram}
+                                    className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background/90 border border-border shadow-md text-sm text-foreground hover:bg-accent transition-colors backdrop-blur-sm"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    {dict.save.title}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </ResizablePanel>
@@ -225,6 +250,19 @@ export default function Home() {
                     </div>
                 </ResizablePanel>
             </ResizablePanelGroup>
+            <SaveDialog
+                open={showSaveDialog}
+                onOpenChange={setShowSaveDialog}
+                defaultFilename="diagram"
+                onSave={(filename, format) =>
+                    saveDiagramToFile(
+                        filename,
+                        format,
+                        undefined,
+                        dict.save.savedSuccessfully,
+                    )
+                }
+            />
         </div>
     )
 }

@@ -1,4 +1,7 @@
 import { saveDiagramImage } from "./diagram-storage"
+import { browserPool } from "./browser-pool"
+
+const allowedResources = new Set(['document', 'script', 'xhr', 'fetch'])
 
 export async function renderDiagramToImage(
   taskId: string,
@@ -6,30 +9,20 @@ export async function renderDiagramToImage(
   format: "png" | "svg",
   options?: { width?: number; height?: number }
 ): Promise<{ url: string; size: number }> {
-  // 配置 Puppeteer 以支持 serverless 环境
-  const isProduction = process.env.NODE_ENV === "production"
-
-  let browser
-  if (isProduction) {
-    // 生产环境：使用 puppeteer-core + chromium
-    const puppeteerCore = await import("puppeteer-core")
-    const chromium = await import("@sparticuz/chromium")
-    browser = await puppeteerCore.default.launch({
-      args: chromium.default.args,
-      executablePath: await chromium.default.executablePath(),
-      headless: chromium.default.headless,
-    })
-  } else {
-    // 开发环境：使用完整的 puppeteer（自带 Chrome）
-    const puppeteer = await import("puppeteer")
-    browser = await puppeteer.default.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      headless: true,
-    })
-  }
+  const browser = await browserPool.getBrowser()
+  const page = await browser.newPage()
 
   try {
-    const page = await browser.newPage()
+    // 禁用不必要的资源加载以加快速度
+    await page.setRequestInterception(true)
+    page.on('request', (req) => {
+      if (allowedResources.has(req.resourceType())) {
+        req.continue()
+      } else {
+        req.abort()
+      }
+    })
+
     await page.setViewport({
       width: options?.width || 1920,
       height: options?.height || 1080,
@@ -37,14 +30,24 @@ export async function renderDiagramToImage(
 
     const drawioUrl =
       process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net"
+    const fullUrl = `${drawioUrl}/?embed=1&proto=json&spin=1`
 
-    // 使用简化的 URL 参数，确保 iframe 能够正确加载
-    await page.goto(`${drawioUrl}/?embed=1&proto=json&spin=1`, {
-      timeout: 30000,
-      waitUntil: 'networkidle0',
-    })
+    try {
+      await page.goto(fullUrl, {
+        timeout: 60000,
+        waitUntil: 'domcontentloaded',
+      })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("[diagram-renderer] 页面加载失败:", message)
+      throw error
+    }
 
-    await page.waitForSelector("iframe", { timeout: 10000 })
+    // 等待 iframe 出现
+    const iframeHandle = await page.waitForSelector("iframe", { timeout: 15000 })
+    if (!iframeHandle) {
+      throw new Error("Draw.io 页面中没有找到 iframe 元素")
+    }
 
     await page.evaluate((diagramXml) => {
       const iframe = document.querySelector("iframe") as HTMLIFrameElement
@@ -54,14 +57,14 @@ export async function renderDiagramToImage(
       )
     }, xml)
 
-    // 等待图表渲染完成（使用超时保护）
+    // 等待图表渲染完成
     await page.waitForFunction(
       () => {
         const iframe = document.querySelector("iframe") as HTMLIFrameElement
         const svg = iframe?.contentDocument?.querySelector("svg")
         return svg && svg.children.length > 0
       },
-      { timeout: 10000 }
+      { timeout: 15000 }
     )
 
     let buffer: Buffer
@@ -80,13 +83,13 @@ export async function renderDiagramToImage(
       buffer = Buffer.from(svg, "utf-8")
     }
 
-    saveDiagramImage(taskId, buffer, format)
+    await saveDiagramImage(taskId, buffer, format)
 
     return {
       url: `/api/generate-diagram/${taskId}/download`,
       size: buffer.length,
     }
   } finally {
-    await browser.close()
+    await page.close()
   }
 }

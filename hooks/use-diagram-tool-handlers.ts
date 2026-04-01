@@ -7,7 +7,10 @@ import type {
 } from "@/components/chat/ValidationCard"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
-import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
+import {
+    buildDisplayDiagramXml,
+    isMxCellXmlComplete,
+} from "@/lib/utils"
 
 const DEBUG = process.env.NODE_ENV === "development"
 
@@ -127,7 +130,7 @@ export function useDiagramToolHandlers({
         toolCall: ToolCall,
         addToolOutput: AddToolOutputFn,
     ) => {
-        const { xml } = toolCall.input as { xml: string }
+        const { xml, pageName } = toolCall.input as { xml: string; pageName?: string }
 
         // DEBUG: Log raw input to diagnose false truncation detection
         if (DEBUG) {
@@ -136,6 +139,7 @@ export function useDiagramToolHandlers({
                 xml.slice(-100),
             )
             console.log("[display_diagram] XML length:", xml.length)
+            console.log("[display_diagram] Page name:", pageName)
         }
 
         // Check if XML is truncated (incomplete mxCell indicates truncated output)
@@ -174,8 +178,57 @@ NEXT STEP: Call append_diagram with the continuation XML.
         const finalXml = xml
         partialXmlRef.current = "" // Reset any partial from previous truncation
 
-        // Wrap raw XML with full mxfile structure for draw.io
-        const fullXml = wrapWithMxFile(finalXml)
+        // Get current diagram XML for multi-page support
+        // Priority: chartXMLRef (instant) > onFetchChart (async, may timeout)
+        // chartXMLRef should always have the current state after loadDiagram/display
+        let currentXml = chartXMLRef.current || ""
+        let xmlSource: "ref" | "fetch" = "ref"
+
+        // Only fetch if chartXMLRef is empty (first diagram or ref not yet updated)
+        if (!currentXml) {
+            if (DEBUG) {
+                console.log("[display_diagram] chartXMLRef is empty, fetching from draw.io...")
+            }
+            try {
+                currentXml = await onFetchChart(false) // Don't save to history
+                xmlSource = "fetch"
+            } catch (error) {
+                console.warn("[display_diagram] Failed to fetch current XML:", error)
+                // Keep currentXml as empty string if both fail
+            }
+        }
+
+        if (DEBUG) {
+            console.log("[display_diagram] XML source:", xmlSource, "length:", currentXml.length)
+        }
+
+        const fullXml = buildDisplayDiagramXml({
+            newCells: finalXml,
+            pageName,
+            currentXml,
+        })
+
+        if (DEBUG) {
+            console.log("[display_diagram] fullXml page count:", (fullXml.match(/<diagram /g) || []).length)
+            console.log("[display_diagram] fullXml first 200 chars:", fullXml.substring(0, 200))
+            console.log("[display_diagram] fullXml last 200 chars:", fullXml.slice(-200))
+        }
+
+        // Debug: Show what currentXml contains (before wrapping)
+        if (DEBUG && currentXml) {
+            console.log("[display_diagram] currentXml page count:", (currentXml.match(/<diagram /g) || []).length)
+        }
+
+        if (DEBUG) {
+            console.log("[display_diagram] fullXml page count:", (fullXml.match(/<diagram /g) || []).length)
+            console.log("[display_diagram] fullXml first 200 chars:", fullXml.substring(0, 200))
+            console.log("[display_diagram] fullXml last 200 chars:", fullXml.slice(-200))
+        }
+
+        // Debug: Show what currentXml contains (before wrapping)
+        if (DEBUG && currentXml) {
+            console.log("[display_diagram] currentXml page count:", (currentXml.match(/<diagram /g) || []).length)
+        }
 
         // loadDiagram validates and returns error if invalid
         const validationError = onDisplayChart(fullXml)
@@ -490,7 +543,7 @@ Please check cell IDs and retry, or use display_diagram to regenerate.`,
         }
     }
 
-    const handleAppendDiagram = (
+    const handleAppendDiagram = async (
         toolCall: ToolCall,
         addToolOutput: AddToolOutputFn,
     ) => {
@@ -534,7 +587,19 @@ Start your continuation with the NEXT character after where it stopped.`,
             const finalXml = partialXmlRef.current
             partialXmlRef.current = "" // Reset
 
-            const fullXml = wrapWithMxFile(finalXml)
+            let currentXml = chartXMLRef.current || ""
+            if (!currentXml) {
+                try {
+                    currentXml = await onFetchChart(false)
+                } catch (error) {
+                    console.warn("[append_diagram] Failed to fetch current XML:", error)
+                }
+            }
+
+            const fullXml = buildDisplayDiagramXml({
+                newCells: finalXml,
+                currentXml,
+            })
             const validationError = onDisplayChart(fullXml)
 
             if (validationError) {

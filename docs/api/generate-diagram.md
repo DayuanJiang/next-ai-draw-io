@@ -26,6 +26,17 @@ x-access-code: your-access-code
   "options": {
     "width": 1920,   // 可选，图片宽度
     "height": 1080   // 可选，图片高度
+  },
+  "model": {
+    "provider": "google",       // 可选，AI 提供商
+    "modelId": "gemini-2.0-flash",  // 可选，模型 ID
+    "apiKey": "your-api-key",   // 可选，API Key（使用自定义 provider 时必填）
+    "baseUrl": "https://...",   // 可选，自定义接口地址
+    "awsAccessKeyId": "...",    // 可选，AWS Bedrock
+    "awsSecretAccessKey": "...",
+    "awsRegion": "us-east-1",
+    "awsSessionToken": "...",
+    "vertexApiKey": "..."       // 可选，Vertex AI Express Mode
   }
 }
 ```

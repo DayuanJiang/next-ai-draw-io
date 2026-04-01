@@ -1,24 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { taskManager } from "@/lib/task-manager"
 import { getDiagramImage } from "@/lib/diagram-storage"
+import { validateAccessCode } from "@/lib/access-code"
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const accessCodes = process.env.ACCESS_CODE_LIST?.split(",")
-    .map((code) => code.trim())
-    .filter(Boolean) || []
-
-  if (accessCodes.length > 0) {
-    const accessCodeHeader = req.headers.get("x-access-code")
-    if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
-      return NextResponse.json(
-        { error: "Invalid or missing access code" },
-        { status: 401 }
-      )
-    }
-  }
+  const accessCodeError = validateAccessCode(req)
+  if (accessCodeError) return accessCodeError
 
   const { taskId } = await params
   const task = taskManager.getTask(taskId)
@@ -44,7 +34,15 @@ export async function GET(
     )
   }
 
-  const imageBuffer = getDiagramImage(taskId, task.format)
+  // Only png and svg are supported for download
+  if (task.format !== "png" && task.format !== "svg") {
+    return NextResponse.json(
+      { error: `Format "${task.format}" does not support download` },
+      { status: 400 }
+    )
+  }
+
+  const imageBuffer = await getDiagramImage(taskId, task.format)
 
   if (!imageBuffer) {
     return NextResponse.json(
@@ -55,10 +53,12 @@ export async function GET(
 
   const contentType = task.format === "png" ? "image/png" : "image/svg+xml"
 
-  return new NextResponse(imageBuffer, {
+  return new NextResponse(new Uint8Array(imageBuffer), {
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="${params.taskId}.${task.format}"`,
+      "Content-Disposition": `attachment; filename="${taskId}.${task.format}"`,
+      "Cache-Control": "public, max-age=86400, immutable",
+      "ETag": `"${taskId}"`,
     },
   })
 }

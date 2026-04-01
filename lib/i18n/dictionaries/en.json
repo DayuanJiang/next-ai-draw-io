@@ -130,8 +130,16 @@
         "formats": {
             "drawio": "Draw.io XML",
             "png": "PNG Image",
-            "svg": "SVG Image"
+            "svg": "SVG Image",
+            "emf": "EMF (PowerPoint Compatible)",
+            "emfDescription": "Insert as editable vector group in PowerPoint",
+            "emfTooltip": "Compatible with PowerPoint 2016 and above",
+            "pptx": "PPTX (Editable Shapes)",
+            "pptxDescription": "Each shape can be independently edited in PowerPoint",
+            "pptxTooltip": "Compatible with PowerPoint 2013 and above"
         },
+        "pptxDegradedWarning": "The following shapes were downgraded to images: {shapes}",
+        "fileSizeWarning": "File size exceeds 50MB, may affect PowerPoint performance",
         "savedSuccessfully": "Saved successfully!"
     },
     "history": {

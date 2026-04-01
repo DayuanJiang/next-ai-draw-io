@@ -1,9 +1,9 @@
 import { streamText } from "ai"
-import { getAIModel } from "@/lib/ai-providers"
+import { getAIModel, type ClientOverrides } from "@/lib/ai-providers"
 import { getSystemPrompt } from "@/lib/system-prompts"
 
-export async function generateDiagramXML(description: string): Promise<string> {
-    const { model, providerOptions, headers, modelId } = getAIModel()
+export async function generateDiagramXML(description: string, overrides?: ClientOverrides): Promise<string> {
+    const { model, providerOptions, headers, modelId } = getAIModel(overrides)
     const systemPrompt = getSystemPrompt(modelId, true)
 
     const result = streamText({
@@ -14,10 +14,11 @@ export async function generateDiagramXML(description: string): Promise<string> {
         ...(headers && { headers }),
     })
 
-    let fullText = ""
+    const chunks: string[] = []
     for await (const chunk of result.textStream) {
-        fullText += chunk
+        chunks.push(chunk)
     }
+    const fullText = chunks.join("")
 
     // 尝试从 Markdown 代码块中提取 XML
     let xmlContent = fullText
@@ -36,7 +37,7 @@ export async function generateDiagramXML(description: string): Promise<string> {
     if (xmlContent.includes("<mxCell")) {
         const wrappedXml = `<mxfile host="app.diagrams.net" modified="2026-02-11T00:00:00.000Z" agent="AI" version="24.0.0">
   <diagram name="Page-1" id="1">
-    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="1422" dy="794" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>

@@ -7,8 +7,10 @@ import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
+    chooseMoreCompleteDiagramXml,
     extractDiagramXML,
     isRealDiagram,
+    normalizeMxfileForDiagramLoad,
     validateAndFixXml,
 } from "../lib/utils"
 
@@ -60,6 +62,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const hasDiagramRestoredRef = useRef<boolean>(false)
     // Track latest chartXML for restoration after remount
     const chartXMLRef = useRef<string>("")
+    // Track if we're currently loading a new diagram (to prevent export from overwriting multi-page content)
+    const loadingDiagramRef = useRef<boolean>(false)
 
     const onDrawioLoad = () => {
         // Only set ready state once to prevent infinite loops
@@ -185,11 +189,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         chart: string,
         skipValidation?: boolean,
     ): string | null => {
-        let xmlToLoad = chart
+        let xmlToLoad = normalizeMxfileForDiagramLoad(chart)
 
         // Validate XML structure before loading (unless skipped for internal use)
         if (!skipValidation) {
-            const validation = validateAndFixXml(chart)
+            const validation = validateAndFixXml(xmlToLoad)
             if (!validation.valid) {
                 console.warn(
                     "[loadDiagram] Validation error:",
@@ -207,14 +211,38 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             }
         }
 
+        // Count pages in the XML
+        const pageCount = (xmlToLoad.match(/<diagram /g) || []).length
+        console.log(`[loadDiagram] Loading diagram with ${pageCount} page(s), XML length: ${xmlToLoad.length}`)
+
+        // Additional validation: check if XML has minimum required structure
+        if (!xmlToLoad.includes('<mxfile') || !xmlToLoad.includes('<diagram')) {
+            console.error("[loadDiagram] Invalid XML structure - missing mxfile or diagram tag")
+            return "Invalid XML structure"
+        }
+
+        // Mark that we're loading a new diagram to prevent export events from overwriting multi-page content
+        loadingDiagramRef.current = true
+
         // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
         setChartXML(xmlToLoad)
+        // Sync chartXMLRef immediately to ensure it's available for tool handlers
+        chartXMLRef.current = xmlToLoad
 
         if (drawioRef.current) {
+            console.log("[loadDiagram] Calling drawioRef.current.load()")
             drawioRef.current.load({
                 xml: xmlToLoad,
             })
+        } else {
+            console.warn("[loadDiagram] drawioRef.current is null, cannot load diagram")
         }
+
+        // Reset loading flag after a short delay (draw.io fires export event during load)
+        // This prevents the export event from overwriting the multi-page content we just loaded
+        setTimeout(() => {
+            loadingDiagramRef.current = false
+        }, 500)
 
         return null
     }
@@ -239,7 +267,63 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             }
         }
 
-        const extractedXML = extractDiagramXML(data.data)
+        // Extract XML from SVG - handle both data:image/svg+xml;base64,... and raw SVG formats
+        let extractedXML: string
+        let xmlSource: "extracted" | "raw" = "raw"
+        try {
+            extractedXML = extractDiagramXML(data.data)
+            xmlSource = "extracted"
+        } catch (extractError) {
+            // If extraction fails, check if data.data is already valid XML/mxfile
+            console.warn("[handleDiagramExport] XML extraction failed, trying raw data:", extractError)
+            extractedXML = data.data // Use raw data as fallback
+            xmlSource = "raw"
+        }
+
+        // Validate extracted content - must contain mxfile or mxGraphModel
+        if (!extractedXML || typeof extractedXML !== "string") {
+            console.error("[handleDiagramExport] Extracted content is not a string")
+            return
+        }
+
+        // Skip if the content is too short to be a valid diagram (likely empty/invalid data)
+        if (extractedXML.length < 100) {
+            console.warn("[handleDiagramExport] Extracted XML too short, skipping:", extractedXML.length, "chars")
+            return
+        }
+
+        // If content is mxGraphModel (without mxfile wrapper), wrap it
+        if (!extractedXML.includes("<mxfile") && extractedXML.includes("<mxGraphModel")) {
+            console.log("[handleDiagramExport] Wrapping mxGraphModel in mxfile (source:", xmlSource, ")")
+            extractedXML = `<mxfile>${extractedXML}</mxfile>`
+        }
+
+            extractedXML = normalizeMxfileForDiagramLoad(extractedXML)
+
+        extractedXML = chooseMoreCompleteDiagramXml({
+            preferredXml: extractedXML,
+            fallbackXml: chartXMLRef.current,
+        })
+
+        // Final validation - must have mxfile
+        if (!extractedXML.includes("<mxfile")) {
+            console.error("[handleDiagramExport] Cannot extract valid XML from draw.io export. Raw data starts with:", extractedXML?.substring(0, 200))
+            return
+        }
+
+        // If we're currently loading a new diagram (triggered by loadDiagram), don't update chartXMLRef
+        // This prevents export events from overwriting multi-page content with single-page content
+        // This prevents export events from overwriting multi-page content with single-page content
+        if (loadingDiagramRef.current) {
+            console.log("[handleDiagramExport] Skipping chartXMLRef update during load")
+            // Still resolve the promise if there was one waiting
+            if (resolverRef.current) {
+                resolverRef.current(extractedXML)
+                resolverRef.current = null
+            }
+            return
+        }
+
         setChartXML(extractedXML)
         setLatestSvg(data.data)
 
@@ -287,7 +371,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Map format to draw.io export format
+        // Note: "emf" and "pptx" are not supported by draw.io export, they are
+        // converted server-side from SVG
         const drawioFormat = format === "drawio" ? "xmlsvg" : format
+
+        // Valid draw.io export formats
+        const validDrawioFormats = ["xmlsvg", "png", "svg"] as const
 
         // Set up the resolver before triggering export
         saveResolverRef.current = {
@@ -358,7 +447,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Export diagram - callback will be handled in handleDiagramExport
-        drawioRef.current.exportDiagram({ format: drawioFormat })
+        // Only call exportDiagram for valid draw.io formats (emf/pptx handled server-side)
+        if (validDrawioFormats.includes(drawioFormat as "xmlsvg" | "png" | "svg")) {
+            drawioRef.current.exportDiagram({ format: drawioFormat as "xmlsvg" | "png" | "svg" })
+        } else {
+            console.warn(`[saveDiagramToFile] Format "${format}" not supported for draw.io export, skipping`)
+        }
     }
 
     // Log save event to Langfuse (just flags the trace, doesn't send content)

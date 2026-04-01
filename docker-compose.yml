@@ -1,17 +1,29 @@
 services:
   drawio:
     image: jgraph/drawio:latest
-    ports: ["8080:8080"]
+    container_name: drawio
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   next-ai-draw-io:
     build:
       context: .
       args:
-        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
-        # Uncomment below for subdirectory deployment
-        # - NEXT_PUBLIC_BASE_PATH=/nextaidrawio
-    ports: ["3000:3000"]
-    env_file: .env
-    # environment:
-    #   # For subdirectory deployment, uncomment and set your path:
-    #   NEXT_PUBLIC_BASE_PATH: /nextaidrawio
-    depends_on: [drawio]
+        - NEXT_PUBLIC_DRAWIO_BASE_URL=http://drawio:8080
+    container_name: next-ai-draw-io
+    ports:
+      - "9000:3000"
+    env_file: .env.local
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080npm
+    depends_on:
+      drawio:
+        condition: service_healthy
+    restart: unless-stopped

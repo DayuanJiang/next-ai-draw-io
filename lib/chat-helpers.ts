@@ -1,5 +1,13 @@
+import { isBlankCanvas } from "@/lib/utils"
+
 // Shared helper functions for chat route
 // Exported for testing
+
+const DIAGRAM_TOOL_NAMES = new Set([
+    "display_diagram",
+    "edit_diagram",
+    "append_diagram",
+])
 
 // File upload limits (must match client-side)
 export const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -45,6 +53,105 @@ export function validateFileParts(messages: any[]): {
 export function isMinimalDiagram(xml: string): boolean {
     const stripped = xml.replace(/\s/g, "")
     return !stripped.includes('id="2"')
+}
+
+function isDiagramToolName(toolName: unknown): boolean {
+    return typeof toolName === "string" && DIAGRAM_TOOL_NAMES.has(toolName)
+}
+
+function getDiagramToolNameFromPart(part: any): string | null {
+    if (!part || typeof part !== "object") return null
+
+    if (part.type === "tool-call") {
+        return typeof part.toolName === "string" ? part.toolName : null
+    }
+
+    if (part.type === "tool_use") {
+        return typeof part.name === "string" ? part.name : null
+    }
+
+    if (part.type === "tool-result") {
+        return typeof part.toolName === "string" ? part.toolName : null
+    }
+
+    if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+        return part.type.slice("tool-".length)
+    }
+
+    return null
+}
+
+function shouldKeepDiagramHistoryPart(part: any): boolean {
+    const toolName = getDiagramToolNameFromPart(part)
+    return !isDiagramToolName(toolName)
+}
+
+// Remove historical diagram tool messages from model history.
+// These tools mutate the local draw.io canvas and should not be replayed back to the model
+// in later turns, otherwise the model may emit duplicate draw calls and overwrite pages.
+export function filterHistoricalDiagramToolMessages(messages: any[]): any[] {
+    return messages
+        .map((msg) => {
+            if (msg.role === "assistant") {
+                if (Array.isArray(msg.content)) {
+                    const filteredContent = msg.content.filter((part: any) =>
+                        shouldKeepDiagramHistoryPart(part),
+                    )
+                    return { ...msg, content: filteredContent }
+                }
+
+                if (Array.isArray(msg.parts)) {
+                    const filteredParts = msg.parts.filter((part: any) =>
+                        shouldKeepDiagramHistoryPart(part),
+                    )
+                    return { ...msg, parts: filteredParts }
+                }
+            }
+
+            if (msg.role === "tool") {
+                if (Array.isArray(msg.content)) {
+                    const filteredContent = msg.content.filter((part: any) =>
+                        shouldKeepDiagramHistoryPart(part),
+                    )
+                    return { ...msg, content: filteredContent }
+                }
+
+                if (Array.isArray(msg.parts)) {
+                    const filteredParts = msg.parts.filter((part: any) =>
+                        shouldKeepDiagramHistoryPart(part),
+                    )
+                    return { ...msg, parts: filteredParts }
+                }
+            }
+
+            return msg
+        })
+        .filter((msg) => {
+            if (Array.isArray(msg.content)) {
+                return msg.content.length > 0
+            }
+            if (Array.isArray(msg.parts)) {
+                return msg.parts.length > 0
+            }
+            return true
+        })
+}
+
+export function shouldReplayDisplayDiagramTool(toolCallId: unknown): boolean {
+    return typeof toolCallId === "string" && toolCallId.startsWith("cached-")
+}
+
+export function shouldApplyStreamingDisplayDiagramPreview(params: {
+    toolCallId: unknown
+    chartXml: unknown
+}): boolean {
+    // Only allow streaming preview for cached examples (no tool handler execution)
+    if (shouldReplayDisplayDiagramTool(params.toolCallId)) return true
+
+    // If the current canvas is not blank, display_diagram should create a NEW page.
+    // Streaming preview uses replaceNodes on the current page and would overwrite existing content.
+    const chartXml = typeof params.chartXml === "string" ? params.chartXml : ""
+    return isBlankCanvas(chartXml)
 }
 
 // Helper function to replace historical tool call XML with placeholders
