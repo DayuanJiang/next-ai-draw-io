@@ -304,7 +304,14 @@
         "searchNoResults": "No templates match your search",
         "pin": "置顶",
         "unpin": "取消置顶",
-        "saveAsTemplate": "保存为模板"
+        "saveAsTemplate": "保存为模板",
+        "exportTemplates": "导出模板",
+        "importTemplates": "导入模板",
+        "exportEmpty": "没有可导出的模板",
+        "exportSuccess": "成功导出 {count} 个模板",
+        "importNoFile": "请选择一个 JSON 文件",
+        "importFailed": "导入失败：{error}",
+        "importSuccess": "成功导入 {count} 个模板"
     },
     "validation": {
         "title": "验证图表",
