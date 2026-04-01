@@ -390,6 +390,13 @@
         "searchNoResults": "No templates match your search",
         "pin": "Pin to top",
         "unpin": "Unpin from top",
-        "saveAsTemplate": "テンプレートとして保存"
+        "saveAsTemplate": "テンプレートとして保存",
+        "exportTemplates": "テンプレートをエクスポート",
+        "importTemplates": "テンプレートをインポート",
+        "exportEmpty": "エクスポートするテンプレートがありません",
+        "exportSuccess": "{count} 件のテンプレートをエクスポートしました",
+        "importNoFile": "JSON ファイルを選択してください",
+        "importFailed": "インポートに失敗しました：{error}",
+        "importSuccess": "{count} 件のテンプレートをインポートしました"
     }
 }

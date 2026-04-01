@@ -304,7 +304,14 @@
         "searchNoResults": "No templates match your search",
         "pin": "置頂",
         "unpin": "取消置頂",
-        "saveAsTemplate": "儲存為範本"
+        "saveAsTemplate": "儲存為範本",
+        "exportTemplates": "匯出範本",
+        "importTemplates": "匯入範本",
+        "exportEmpty": "沒有可匯出的範本",
+        "exportSuccess": "成功匯出 {count} 個範本",
+        "importNoFile": "請選擇一個 JSON 檔案",
+        "importFailed": "匯入失敗：{error}",
+        "importSuccess": "成功匯入 {count} 個範本"
     },
     "validation": {
         "title": "驗證圖表",

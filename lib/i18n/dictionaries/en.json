@@ -304,7 +304,14 @@
         "searchNoResults": "No templates match your search",
         "pin": "Pin to top",
         "unpin": "Unpin from top",
-        "saveAsTemplate": "Save as Template"
+        "saveAsTemplate": "Save as Template",
+        "exportTemplates": "Export Templates",
+        "importTemplates": "Import Templates",
+        "exportEmpty": "No templates to export",
+        "exportSuccess": "Exported {count} template(s) successfully",
+        "importNoFile": "Please select a JSON file",
+        "importFailed": "Import failed: {error}",
+        "importSuccess": "Imported {count} template(s) successfully"
     },
     "validation": {
         "title": "Validate Diagram",
