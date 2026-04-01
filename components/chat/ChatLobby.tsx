@@ -94,8 +94,14 @@ export function ChatLobby({
     const hasHistory = sessions.length > 0
 
     if (!hasHistory) {
-        // Show full examples when no history
-        return <ExamplePanel setInput={setInput} setFiles={setFiles} />
+        // Show full examples when there is no history (and NEXT_PUBLIC_SELFHOSTED !== "true")
+        return (
+            <ExamplePanel
+                setInput={setInput}
+                setFiles={setFiles}
+                minimal={process.env.NEXT_PUBLIC_SELFHOSTED === "true"}
+            />
+        )
     }
 
     // Show history + collapsible examples when there are sessions

@@ -70,11 +70,11 @@ function ExampleCard({
 export default function ExamplePanel({
     setInput,
     setFiles,
-    minimal = false,
+    minimal,
 }: {
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
-    minimal?: boolean
+    minimal: boolean
 }) {
     const dict = useDictionary()
 
