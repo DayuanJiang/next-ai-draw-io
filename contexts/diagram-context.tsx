@@ -296,7 +296,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Map format to draw.io export format
-        const drawioFormat = format === "drawio" ? "xmlsvg" : format
+        const drawioFormat = format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
 
         // Set up the resolver before triggering export
         saveResolverRef.current = {
@@ -315,6 +315,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     fileContent = xmlContent
                     mimeType = "application/xml"
                     extension = ".drawio"
+                } else if (format === "xmlsvg") {
+                    // Editable SVG: save raw xmlsvg content (SVG with embedded draw.io XML)
+                    fileContent = exportData
+                    mimeType = "image/svg+xml"
+                    extension = ".svg"
                 } else if (format === "png") {
                     // PNG data comes as base64 data URL
                     fileContent = exportData
