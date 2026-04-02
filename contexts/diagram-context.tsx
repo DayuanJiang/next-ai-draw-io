@@ -314,17 +314,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     mimeType = "image/png"
                     extension = ".png"
                 } else if (format === "xmlsvg") {
-                    // Editable SVG: decode base64 data URL and save as SVG
-                    let svgContent = exportData
-                    if (svgContent.startsWith("data:image/svg+xml;base64,")) {
-                        // Decode base64 to get the actual SVG content
-                        const base64Data = svgContent.replace(
-                            "data:image/svg+xml;base64,",
-                            "",
-                        )
-                        svgContent = atob(base64Data)
-                    }
-                    fileContent = svgContent
+                    // Editable SVG: pass data URL directly (like PNG)
+                    fileContent = exportData
                     mimeType = "image/svg+xml"
                     extension = ".drawio.svg"
                 } else {
