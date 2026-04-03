@@ -440,7 +440,12 @@ ${userInputText}
     // because open-source model chat templates (Qwen, Llama, etc.) typically reject multiple system messages
     const isCustomOpenAIEndpoint =
         resolvedProvider === "openai" &&
-        !!(baseUrl || process.env.OPENAI_BASE_URL)
+        !!(
+            baseUrl ||
+            process.env.OPENAI_BASE_URL ||
+            (serverModelConfig.baseUrlEnv &&
+                process.env[serverModelConfig.baseUrlEnv])
+        )
     const isSingleSystemProvider =
         SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider) || isCustomOpenAIEndpoint
 
