@@ -436,7 +436,18 @@ ${userInputText}
     // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
     // Some providers (e.g. MiniMax) don't support multiple system messages
     // Merge them into a single system message for compatibility
-    const isSingleSystemProvider = SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider)
+    // Also merge for OpenAI-compatible providers with custom base URLs (e.g. vLLM, LMStudio)
+    // because open-source model chat templates (Qwen, Llama, etc.) typically reject multiple system messages
+    const isCustomOpenAIEndpoint =
+        resolvedProvider === "openai" &&
+        !!(
+            baseUrl ||
+            process.env.OPENAI_BASE_URL ||
+            (serverModelConfig.baseUrlEnv &&
+                process.env[serverModelConfig.baseUrlEnv])
+        )
+    const isSingleSystemProvider =
+        SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider) || isCustomOpenAIEndpoint
 
     const xmlContext = `${
         previousXml
