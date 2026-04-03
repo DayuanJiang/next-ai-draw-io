@@ -425,10 +425,16 @@ export async function importTemplates(
 
         const now = Date.now()
         const newTemplate: Template = {
-            ...t,
             id: nanoid(),
-            createdAt: t.createdAt || now,
+            title: String(t.title || ""),
+            prompt: String(t.prompt || ""),
+            description: t.description ? String(t.description) : undefined,
+            createdAt: typeof t.createdAt === "number" ? t.createdAt : now,
             updatedAt: now,
+            clickCount: typeof t.clickCount === "number" ? t.clickCount : 0,
+            runCount: typeof t.runCount === "number" ? t.runCount : 0,
+            lastUsedAt: typeof t.lastUsedAt === "number" ? t.lastUsedAt : 0,
+            pinned: typeof t.pinned === "boolean" ? t.pinned : false,
         }
         try {
             await withDB(async (db) => {

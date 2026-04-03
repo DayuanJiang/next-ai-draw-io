@@ -74,7 +74,7 @@ export function TemplateEditDialog({
         try {
             const updates: Partial<Omit<Template, "id" | "createdAt">> = {
                 prompt: trimmedPrompt,
-                title: title.trim() || undefined,
+                title: title.trim() || template.title,
                 description: description.trim() || undefined,
                 pinned,
             }

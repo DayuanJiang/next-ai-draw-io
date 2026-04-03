@@ -976,21 +976,18 @@ export default function ChatPanel({
     // Handle sending a template directly (called from TemplatePanel)
     const handleSendTemplate = useCallback(
         async (template: { prompt: string }) => {
-            // Set the template prompt as input
-            setInput(template.prompt)
-            // Clear any existing files
-            setFiles([])
-            setUrlData(new Map())
+            flushSync(() => {
+                setInput(template.prompt)
+                setFiles([])
+                setUrlData(new Map())
+            })
 
-            // Wait for state to update then submit
-            setTimeout(() => {
-                const formElement = document.getElementById(
-                    "chat-form",
-                ) as HTMLFormElement | null
-                if (formElement) {
-                    formElement.requestSubmit()
-                }
-            }, 0)
+            const formElement = document.getElementById(
+                "chat-form",
+            ) as HTMLFormElement | null
+            if (formElement) {
+                formElement.requestSubmit()
+            }
         },
         [setInput, setFiles, setUrlData],
     )
