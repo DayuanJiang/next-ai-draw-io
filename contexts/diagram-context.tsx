@@ -65,6 +65,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         if (hasCalledOnLoadRef.current) return
         hasCalledOnLoadRef.current = true
         setIsDrawioReady(true)
+        // Restore diagram after remount (e.g., theme/UI change)
+        if (drawioRef.current && isRealDiagram(chartXMLRef.current)) {
+            drawioRef.current.load({ xml: chartXMLRef.current })
+        }
     }
 
     const resetDrawioReady = () => {
@@ -76,24 +80,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         chartXMLRef.current = chartXML
     }, [chartXML])
-
-    // Restore diagram when DrawIO becomes ready after remount (e.g., theme/UI change)
-    // Also restore when chartXML changes while DrawIO is ready (e.g., session loaded after iframe ready)
-    const lastRestoredXmlRef = useRef<string>("")
-    useEffect(() => {
-        if (!isDrawioReady || !drawioRef.current) return
-        // Only load if we have a real diagram and it's different from what we already loaded
-        if (
-            isRealDiagram(chartXML) &&
-            chartXML !== lastRestoredXmlRef.current
-        ) {
-            lastRestoredXmlRef.current = chartXML
-            drawioRef.current.load({ xml: chartXML })
-        } else if (!isRealDiagram(chartXML)) {
-            // Reset when diagram is cleared so a future restore can re-load the same XML.
-            lastRestoredXmlRef.current = ""
-        }
-    }, [isDrawioReady, chartXML])
 
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
