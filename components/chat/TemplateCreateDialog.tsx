@@ -38,7 +38,6 @@ export function TemplateCreateDialog({
     const [title, setTitle] = useState("")
     const [description, setDescription] = useState("")
     const [prompt, setPrompt] = useState("")
-    const [tags, setTags] = useState("")
     const [pinned, setPinned] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -49,7 +48,6 @@ export function TemplateCreateDialog({
             setTitle("")
             setDescription("")
             setPrompt(initialPrompt)
-            setTags("")
             setPinned(false)
             setError(null)
         }
@@ -72,10 +70,6 @@ export function TemplateCreateDialog({
                 prompt: trimmedPrompt,
                 title: title.trim() || undefined,
                 description: description.trim() || undefined,
-                tags: tags
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean),
                 pinned,
             }
 
@@ -96,7 +90,7 @@ export function TemplateCreateDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] overflow-hidden">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -120,7 +114,7 @@ export function TemplateCreateDialog({
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 placeholder={dict.templates.promptPlaceholder}
-                                className="min-h-[100px] resize-none"
+                                className="min-h-[100px] resize-none break-all"
                                 required
                             />
                         </div>
@@ -158,22 +152,6 @@ export function TemplateCreateDialog({
                                 }
                                 className="min-h-[60px] resize-none"
                             />
-                        </div>
-
-                        {/* Tags field - optional */}
-                        <div className="space-y-2">
-                            <Label htmlFor="tags" className="text-foreground">
-                                {dict.templates.tagsLabel}
-                            </Label>
-                            <Input
-                                id="tags"
-                                value={tags}
-                                onChange={(e) => setTags(e.target.value)}
-                                placeholder={dict.templates.tagsPlaceholder}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                {dict.templates.tagsHint}
-                            </p>
                         </div>
 
                         {/* Pinned switch */}

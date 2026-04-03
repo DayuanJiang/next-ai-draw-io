@@ -1,5 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import type { Template } from "./template-storage"
 
 // Constants
 const DB_NAME = "next-ai-drawio"
@@ -37,21 +38,6 @@ export interface SessionMetadata {
     thumbnailDataUrl?: string
 }
 
-// Template type for DBSchema (full type is in template-storage.ts)
-interface TemplateSchema {
-    id: string
-    title: string
-    prompt: string
-    description?: string
-    tags?: string[]
-    createdAt: number
-    updatedAt: number
-    clickCount: number
-    runCount: number
-    lastUsedAt: number
-    pinned: boolean
-}
-
 interface ChatSessionDB extends DBSchema {
     sessions: {
         key: string
@@ -60,7 +46,7 @@ interface ChatSessionDB extends DBSchema {
     }
     templates: {
         key: string
-        value: TemplateSchema
+        value: Template
         indexes: {
             "by-updated": number
             "by-pinned": number

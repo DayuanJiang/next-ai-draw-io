@@ -35,7 +35,6 @@ interface ChatLobbyProps {
     onSelectSession: (id: string) => void
     onDeleteSession?: (id: string) => void
     setInput: (input: string) => void
-    setFiles: (files: File[]) => void
     onSendTemplate?: (template: Template) => void
     currentInput?: string
     dict: {
@@ -84,7 +83,6 @@ export function ChatLobby({
     onSelectSession,
     onDeleteSession,
     setInput,
-    setFiles: _setFiles,
     onSendTemplate,
     currentInput = "",
     dict,

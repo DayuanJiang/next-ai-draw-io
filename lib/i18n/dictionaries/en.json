@@ -284,9 +284,6 @@
         "titleHint": "Leave empty to use the first 20 characters of prompt",
         "descriptionLabel": "Description",
         "descriptionPlaceholder": "Add a description for this template",
-        "tagsLabel": "Tags",
-        "tagsPlaceholder": "diagram, flowchart, architecture",
-        "tagsHint": "Separate tags with commas",
         "pinnedLabel": "Pin Template",
         "pinnedHint": "Pinned templates appear at the top of the list",
         "createButton": "Create Template",
@@ -295,6 +292,7 @@
         "editDescription": "Update your template content and settings.",
         "updateFailed": "Failed to update template. Please try again.",
         "duplicate": "Duplicate",
+        "copySuffix": "(copy)",
         "deleteTitle": "Delete this template?",
         "deleteDescription": "This will permanently delete this template. This action cannot be undone.",
         "confirmSendTitle": "Replace current input?",
@@ -311,7 +309,7 @@
         "exportSuccess": "Exported {count} template(s) successfully",
         "importNoFile": "Please select a JSON file",
         "importFailed": "Import failed: {error}",
-        "importSuccess": "Imported {count} template(s) successfully"
+        "importSuccess": "Imported {imported} template(s), skipped {skipped} duplicate(s)"
     },
     "validation": {
         "title": "Validate Diagram",

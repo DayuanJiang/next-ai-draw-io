@@ -76,11 +76,3 @@ ai-models.json
 # local backups
 *.bak
 .gstack/
-
-# local agent/IDE config & scripts (not for upstream)
-.agents/
-.claude/
-.cursor/
-scripts/
-screenshots/
-AGENTS.md

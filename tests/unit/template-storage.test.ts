@@ -113,7 +113,6 @@ describe("searchTemplates", () => {
             title: "Flowchart",
             prompt: "Create a flowchart",
             description: "Basic flowchart template",
-            tags: ["diagram", "flow"],
             createdAt: 1000,
             updatedAt: 1000,
             clickCount: 0,
@@ -126,7 +125,6 @@ describe("searchTemplates", () => {
             title: "ER Diagram",
             prompt: "Design a database",
             description: "Entity relationship diagram",
-            tags: ["database"],
             createdAt: 1000,
             updatedAt: 1000,
             clickCount: 0,
@@ -164,12 +162,6 @@ describe("searchTemplates", () => {
         expect(result[0].id).toBe("2")
     })
 
-    it("searches by tag", () => {
-        const result = searchTemplates(templates, "database")
-        expect(result).toHaveLength(1)
-        expect(result[0].id).toBe("2")
-    })
-
     it("is case-insensitive", () => {
         const result = searchTemplates(templates, "FLOWCHART")
         expect(result).toHaveLength(1)
@@ -181,7 +173,7 @@ describe("searchTemplates", () => {
         expect(result).toHaveLength(0)
     })
 
-    it("handles templates without tags or description", () => {
+    it("handles templates without description", () => {
         const result = searchTemplates(templates, "network")
         expect(result).toHaveLength(1)
         expect(result[0].id).toBe("3")

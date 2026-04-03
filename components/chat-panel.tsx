@@ -983,11 +983,9 @@ export default function ChatPanel({
             setUrlData(new Map())
 
             // Wait for state to update then submit
-            // Use setTimeout to ensure React state update completes
             setTimeout(() => {
-                // Create a synthetic form submit event
-                const formElement = document.querySelector(
-                    "form",
+                const formElement = document.getElementById(
+                    "chat-form",
                 ) as HTMLFormElement | null
                 if (formElement) {
                     formElement.requestSubmit()

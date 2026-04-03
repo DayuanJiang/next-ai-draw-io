@@ -661,7 +661,6 @@ export function ChatMessageDisplay({
                     onSelectSession={onSelectSession || (() => {})}
                     onDeleteSession={onDeleteSession}
                     setInput={setInput}
-                    setFiles={setFiles}
                     onSendTemplate={onSendTemplate}
                     currentInput={currentInput}
                     dict={dict}

@@ -442,6 +442,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
         return (
             <form
+                id="chat-form"
                 onSubmit={onSubmit}
                 className={`w-full transition-all duration-200 ${
                     isDragging

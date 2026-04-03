@@ -12,7 +12,6 @@ export interface Template {
     title: string
     prompt: string
     description?: string
-    tags?: string[]
     createdAt: number
     updatedAt: number
     clickCount: number
@@ -99,21 +98,23 @@ async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
         dbPromise = openDB<TemplateDB>(DB_NAME, DB_VERSION, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
-                    // Create sessions store if it doesn't exist (shouldn't normally happen
-                    // since session-storage.ts opens at version 1, but handle edge case)
-                    const sessionStore = db.createObjectStore("sessions", {
-                        keyPath: "id",
-                    })
-                    sessionStore.createIndex("by-updated", "updatedAt")
+                    if (!db.objectStoreNames.contains("sessions")) {
+                        const sessionStore = db.createObjectStore("sessions", {
+                            keyPath: "id",
+                        })
+                        sessionStore.createIndex("by-updated", "updatedAt")
+                    }
                 }
                 if (oldVersion < 2) {
-                    const templateStore = db.createObjectStore(STORE_NAME, {
-                        keyPath: "id",
-                    })
-                    templateStore.createIndex("by-updated", "updatedAt")
-                    templateStore.createIndex("by-pinned", "pinned")
-                    templateStore.createIndex("by-run-count", "runCount")
-                    templateStore.createIndex("by-last-used", "lastUsedAt")
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        const templateStore = db.createObjectStore(STORE_NAME, {
+                            keyPath: "id",
+                        })
+                        templateStore.createIndex("by-updated", "updatedAt")
+                        templateStore.createIndex("by-pinned", "pinned")
+                        templateStore.createIndex("by-run-count", "runCount")
+                        templateStore.createIndex("by-last-used", "lastUsedAt")
+                    }
                 }
             },
             terminated() {
@@ -188,7 +189,6 @@ export async function createTemplate(
         title: input.title?.trim() || generateDefaultTitle(prompt),
         prompt,
         description: input.description?.trim() || undefined,
-        tags: input.tags?.filter(Boolean) || undefined,
         createdAt: now,
         updatedAt: now,
         clickCount: 0,
@@ -247,7 +247,10 @@ export async function deleteTemplate(id: string): Promise<boolean> {
     }
 }
 
-export async function duplicateTemplate(id: string): Promise<Template | null> {
+export async function duplicateTemplate(
+    id: string,
+    copySuffix = "(copy)",
+): Promise<Template | null> {
     if (!isIndexedDBAvailable()) return null
     try {
         return await withDB(async (db) => {
@@ -258,7 +261,7 @@ export async function duplicateTemplate(id: string): Promise<Template | null> {
             const duplicate: Template = {
                 ...existing,
                 id: nanoid(),
-                title: `${existing.title} (copy)`,
+                title: `${existing.title} ${copySuffix}`,
                 createdAt: now,
                 updatedAt: now,
                 clickCount: 0,
@@ -321,10 +324,7 @@ export function searchTemplates(
         const titleMatch = t.title.toLowerCase().includes(lowerQuery)
         const descMatch =
             t.description?.toLowerCase().includes(lowerQuery) ?? false
-        const tagsMatch =
-            t.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery)) ??
-            false
-        return titleMatch || descMatch || tagsMatch
+        return titleMatch || descMatch
     })
 }
 
@@ -450,7 +450,6 @@ export function createEmptyTemplateInput(): TemplateCreateInput {
         prompt: "",
         title: "",
         description: "",
-        tags: [],
         pinned: false,
     }
 }
