@@ -973,6 +973,25 @@ export default function ChatPanel({
         pathname,
     ])
 
+    // Handle sending a template directly (called from TemplatePanel)
+    const handleSendTemplate = useCallback(
+        async (template: { prompt: string }) => {
+            flushSync(() => {
+                setInput(template.prompt)
+                setFiles([])
+                setUrlData(new Map())
+            })
+
+            const formElement = document.getElementById(
+                "chat-form",
+            ) as HTMLFormElement | null
+            if (formElement) {
+                formElement.requestSubmit()
+            }
+        },
+        [setInput, setFiles, setUrlData],
+    )
+
     const handleInputChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) => {
@@ -1376,6 +1395,8 @@ export default function ChatPanel({
                     loadedMessageIdsRef={loadedMessageIdsRef}
                     validationStates={validationStates}
                     onImproveWithSuggestions={handleImproveWithSuggestions}
+                    onSendTemplate={handleSendTemplate}
+                    currentInput={input}
                 />
             </main>
 
