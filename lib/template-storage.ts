@@ -2,8 +2,8 @@ import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
 
 // Constants
-const DB_NAME = "next-ai-drawio"
-const DB_VERSION = 2
+const DB_NAME = "next-ai-drawio-templates"
+const DB_VERSION = 1
 const STORE_NAME = "templates"
 
 // Types
@@ -34,14 +34,6 @@ export type TemplateCreateInput = Pick<Template, "prompt"> &
     >
 
 interface TemplateDB extends DBSchema {
-    sessions: {
-        key: string
-        value: {
-            id: string
-            [key: string]: unknown
-        }
-        indexes: { "by-updated": number }
-    }
     templates: {
         key: string
         value: Template
@@ -98,14 +90,6 @@ async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
         dbPromise = openDB<TemplateDB>(DB_NAME, DB_VERSION, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
-                    if (!db.objectStoreNames.contains("sessions")) {
-                        const sessionStore = db.createObjectStore("sessions", {
-                            keyPath: "id",
-                        })
-                        sessionStore.createIndex("by-updated", "updatedAt")
-                    }
-                }
-                if (oldVersion < 2) {
                     if (!db.objectStoreNames.contains(STORE_NAME)) {
                         const templateStore = db.createObjectStore(STORE_NAME, {
                             keyPath: "id",
