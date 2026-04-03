@@ -129,7 +129,12 @@
         "disabled": "已禁用",
         "customSystemMessage": "自定义系统消息",
         "customSystemMessageDescription": "添加自定义指令，将附加到 AI 的系统提示末尾。",
-        "customSystemMessagePlaceholder": "例如：图表始终使用蓝色配色方案..."
+        "customSystemMessagePlaceholder": "例如：图表始终使用蓝色配色方案...",
+        "panelVisibility": "大厅面板",
+        "panelVisibilityDescription": "选择在聊天大厅显示哪些面板。",
+        "showRecentChats": "最近聊天",
+        "showMyTemplates": "我的模板",
+        "showQuickExamples": "快速示例"
     },
     "save": {
         "title": "保存图表",

@@ -2,7 +2,7 @@
 
 import { ChevronRight, Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -114,6 +114,20 @@ function SettingsContent({
     const [currentLang, setCurrentLang] = useState("en")
     const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
 
+    // Panel visibility state
+    const [showRecentChats, setShowRecentChats] = useState(true)
+    const [showMyTemplates, setShowMyTemplates] = useState(true)
+    const [showQuickExamples, setShowQuickExamples] = useState(true)
+
+    const handlePanelToggle = useCallback(
+        (key: string, value: boolean, setter: (v: boolean) => void) => {
+            setter(value)
+            localStorage.setItem(key, String(value))
+            window.dispatchEvent(new CustomEvent("panelVisibilityChange"))
+        },
+        [],
+    )
+
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
     const [httpsProxy, setHttpsProxy] = useState("")
@@ -163,6 +177,17 @@ function SettingsContent({
                 STORAGE_KEYS.sendShortcut,
             )
             setSendShortcut(storedSendShortcut || "ctrl-enter")
+
+            setShowRecentChats(
+                localStorage.getItem(STORAGE_KEYS.showRecentChats) !== "false",
+            )
+            setShowMyTemplates(
+                localStorage.getItem(STORAGE_KEYS.showMyTemplates) !== "false",
+            )
+            setShowQuickExamples(
+                localStorage.getItem(STORAGE_KEYS.showQuickExamples) !==
+                    "false",
+            )
 
             setError("")
 
@@ -440,6 +465,63 @@ function SettingsContent({
                                     ? dict.chat.minimalStyle
                                     : dict.chat.styledMode}
                             </span>
+                        </div>
+                    </SettingItem>
+
+                    {/* Panel Visibility */}
+                    <SettingItem
+                        label={dict.settings.panelVisibility}
+                        description={dict.settings.panelVisibilityDescription}
+                    >
+                        <div className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-recent-chats"
+                                    checked={showRecentChats}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showRecentChats,
+                                            v,
+                                            setShowRecentChats,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showRecentChats}
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-my-templates"
+                                    checked={showMyTemplates}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showMyTemplates,
+                                            v,
+                                            setShowMyTemplates,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showMyTemplates}
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-quick-examples"
+                                    checked={showQuickExamples}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showQuickExamples,
+                                            v,
+                                            setShowQuickExamples,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showQuickExamples}
+                                </span>
+                            </label>
                         </div>
                     </SettingItem>
 

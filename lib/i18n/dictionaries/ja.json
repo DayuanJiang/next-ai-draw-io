@@ -129,7 +129,12 @@
         "disabled": "無効",
         "customSystemMessage": "カスタムシステムメッセージ",
         "customSystemMessageDescription": "AIのシステムプロンプトに追加されるカスタム指示を入力します。",
-        "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用..."
+        "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用...",
+        "panelVisibility": "ロビーパネル",
+        "panelVisibilityDescription": "チャットロビーに表示するパネルを選択します。",
+        "showRecentChats": "最近のチャット",
+        "showMyTemplates": "マイテンプレート",
+        "showQuickExamples": "クイック例"
     },
     "save": {
         "title": "ダイアグラムを保存",

@@ -30,4 +30,9 @@ export const STORAGE_KEYS = {
 
     // Custom system message
     customSystemMessage: "next-ai-draw-io-custom-system-message",
+
+    // Panel visibility
+    showRecentChats: "next-ai-draw-io-show-recent-chats",
+    showMyTemplates: "next-ai-draw-io-show-my-templates",
+    showQuickExamples: "next-ai-draw-io-show-quick-examples",
 } as const

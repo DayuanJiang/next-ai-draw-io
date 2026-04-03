@@ -129,7 +129,12 @@
         "disabled": "已停用",
         "customSystemMessage": "自訂系統訊息",
         "customSystemMessageDescription": "新增自訂指示，將附加到 AI 的系統提示末尾。",
-        "customSystemMessagePlaceholder": "例如：圖表始終使用藍色配色方案..."
+        "customSystemMessagePlaceholder": "例如：圖表始終使用藍色配色方案...",
+        "panelVisibility": "大廳面板",
+        "panelVisibilityDescription": "選擇在聊天大廳顯示哪些面板。",
+        "showRecentChats": "最近聊天",
+        "showMyTemplates": "我的範本",
+        "showQuickExamples": "快速範例"
     },
     "save": {
         "title": "儲存圖表",

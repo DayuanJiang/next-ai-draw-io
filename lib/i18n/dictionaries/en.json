@@ -129,7 +129,12 @@
         "disabled": "Disabled",
         "customSystemMessage": "Custom System Message",
         "customSystemMessageDescription": "Add custom instructions appended to the AI's system prompt.",
-        "customSystemMessagePlaceholder": "e.g., Always use blue color scheme for diagrams..."
+        "customSystemMessagePlaceholder": "e.g., Always use blue color scheme for diagrams...",
+        "panelVisibility": "Lobby Panels",
+        "panelVisibilityDescription": "Choose which panels to show on the chat lobby.",
+        "showRecentChats": "Recent Chats",
+        "showMyTemplates": "My Templates",
+        "showQuickExamples": "Quick Examples"
     },
     "save": {
         "title": "Save Diagram",
