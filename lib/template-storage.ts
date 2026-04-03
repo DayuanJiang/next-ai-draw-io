@@ -394,10 +394,10 @@ export function validateImportData(data: unknown): {
                 error: `Template at index ${i} has missing or empty prompt`,
             }
         }
-        if (typeof template.title !== "string") {
+        if (typeof template.title !== "string" || !template.title.trim()) {
             return {
                 valid: false,
-                error: `Template at index ${i} has missing or invalid title`,
+                error: `Template at index ${i} has missing or empty title`,
             }
         }
     }
@@ -426,8 +426,10 @@ export async function importTemplates(
         const now = Date.now()
         const newTemplate: Template = {
             id: nanoid(),
-            title: String(t.title || ""),
-            prompt: String(t.prompt || ""),
+            title:
+                String(t.title || "").trim() ||
+                generateDefaultTitle(String(t.prompt || "")),
+            prompt: String(t.prompt || "").trim(),
             description: t.description ? String(t.description) : undefined,
             createdAt: typeof t.createdAt === "number" ? t.createdAt : now,
             updatedAt: now,

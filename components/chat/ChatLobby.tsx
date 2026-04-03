@@ -125,14 +125,19 @@ export function ChatLobby({
     const hasHistory = sessions.length > 0
 
     if (!hasHistory) {
-        // Show template library when no history
-        return (
-            <TemplatePanel
-                setInput={setInput}
-                onSendTemplate={onSendTemplate}
-                currentInput={currentInput}
-            />
-        )
+        if (panelVisibility.myTemplates) {
+            return (
+                <TemplatePanel
+                    setInput={setInput}
+                    onSendTemplate={onSendTemplate}
+                    currentInput={currentInput}
+                />
+            )
+        }
+        if (panelVisibility.quickExamples) {
+            return <ExamplePanel setInput={setInput} setFiles={setFiles} />
+        }
+        return null
     }
 
     // Show history + collapsible examples when there are sessions

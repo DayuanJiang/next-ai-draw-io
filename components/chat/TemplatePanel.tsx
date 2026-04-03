@@ -62,7 +62,7 @@ function formatLastUsed(timestamp: number, neverUsedText: string): string {
         if (diffDays < 7) return rtf.format(-diffDays, "day")
     } catch {
         // Fallback if Intl.RelativeTimeFormat is not available
-        if (diffMins < 1) return neverUsedText
+        if (diffMins < 1) return "<1m ago"
         if (diffMins < 60) return `${diffMins}m ago`
         if (diffHours < 24) return `${diffHours}h ago`
         if (diffDays < 7) return `${diffDays}d ago`
@@ -110,13 +110,7 @@ export function TemplatePanel({
         : templates
 
     useEffect(() => {
-        let mounted = true
-        loadTemplates().then(() => {
-            if (!mounted) return
-        })
-        return () => {
-            mounted = false
-        }
+        loadTemplates()
     }, [loadTemplates])
 
     const handleCreateSuccess = () => {
