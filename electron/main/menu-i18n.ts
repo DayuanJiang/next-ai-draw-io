@@ -33,6 +33,7 @@ export interface MenuTranslations {
     help: string
     documentation: string
     reportIssue: string
+    checkForUpdates: string
 }
 
 const translations: Record<MenuLocale, MenuTranslations> = {
@@ -62,6 +63,7 @@ const translations: Record<MenuLocale, MenuTranslations> = {
         help: "Help",
         documentation: "Documentation",
         reportIssue: "Report Issue",
+        checkForUpdates: "Check for Updates...",
     },
 
     zh: {
@@ -90,6 +92,7 @@ const translations: Record<MenuLocale, MenuTranslations> = {
         help: "帮助",
         documentation: "文档",
         reportIssue: "报告问题",
+        checkForUpdates: "检查更新...",
     },
 
     ja: {
@@ -118,6 +121,7 @@ const translations: Record<MenuLocale, MenuTranslations> = {
         help: "ヘルプ",
         documentation: "ドキュメント",
         reportIssue: "問題を報告",
+        checkForUpdates: "アップデートを確認...",
     },
 
     "zh-Hant": {
@@ -146,6 +150,7 @@ const translations: Record<MenuLocale, MenuTranslations> = {
         help: "說明",
         documentation: "文件",
         reportIssue: "回報問題",
+        checkForUpdates: "檢查更新...",
     },
 }
 

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron"
 
 /**
  * Expose safe APIs to the renderer process
@@ -31,4 +31,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getUserLocale: () => ipcRenderer.invoke("get-user-locale"),
     setUserLocale: (locale: string) =>
         ipcRenderer.invoke("set-user-locale", locale),
+
+    // Auto-update
+    onUpdateStatus: (callback: (data: UpdateStatusData) => void) => {
+        const handler = (_event: IpcRendererEvent, data: UpdateStatusData) =>
+            callback(data)
+        ipcRenderer.on("update-status", handler)
+        return () => ipcRenderer.removeListener("update-status", handler)
+    },
+    startDownload: () => ipcRenderer.invoke("updater:start-download"),
 })
