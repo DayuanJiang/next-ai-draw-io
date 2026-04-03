@@ -10,11 +10,28 @@
  */
 
 import { createHash } from "node:crypto"
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import {
+    createReadStream,
+    existsSync,
+    readdirSync,
+    readFileSync,
+    statSync,
+    writeFileSync,
+} from "node:fs"
 import { join } from "node:path"
 
 const RELEASE_DIR = "release"
 const SIGNED_DIR = "release-signed"
+
+// Verify directories exist
+if (!existsSync(RELEASE_DIR)) {
+    console.error(`Error: ${RELEASE_DIR}/ directory does not exist`)
+    process.exit(1)
+}
+if (!existsSync(SIGNED_DIR)) {
+    console.error(`Error: ${SIGNED_DIR}/ directory does not exist`)
+    process.exit(1)
+}
 
 // Find all latest*.yml files
 const ymlFiles = readdirSync(RELEASE_DIR).filter(
@@ -26,13 +43,25 @@ if (ymlFiles.length === 0) {
     process.exit(0)
 }
 
+/**
+ * Compute SHA-512 hash of a file using streaming (avoids loading large exe into memory)
+ */
+function hashFile(filePath) {
+    return new Promise((resolve, reject) => {
+        const hash = createHash("sha512")
+        const stream = createReadStream(filePath)
+        stream.on("data", (chunk) => hash.update(chunk))
+        stream.on("end", () => resolve(hash.digest("base64")))
+        stream.on("error", reject)
+    })
+}
+
 // Build a map of signed exe filenames to their hash and size
 const signedFiles = new Map()
 for (const f of readdirSync(SIGNED_DIR)) {
     if (!f.endsWith(".exe")) continue
     const filePath = join(SIGNED_DIR, f)
-    const buffer = readFileSync(filePath)
-    const sha512 = createHash("sha512").update(buffer).digest("base64")
+    const sha512 = await hashFile(filePath)
     const size = statSync(filePath).size
     signedFiles.set(f, { sha512, size })
 }

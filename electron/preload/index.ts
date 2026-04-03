@@ -1,5 +1,13 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron"
 
+// Locally defined to avoid dependency on electron.d.ts compilation scope
+type UpdateStatus =
+    | { status: "available"; version: string }
+    | { status: "available-manual"; version: string; url: string }
+    | { status: "downloading"; percent: number }
+    | { status: "downloaded" }
+    | { status: "error"; message: string }
+
 /**
  * Expose safe APIs to the renderer process
  */
@@ -33,8 +41,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
         ipcRenderer.invoke("set-user-locale", locale),
 
     // Auto-update
-    onUpdateStatus: (callback: (data: UpdateStatusData) => void) => {
-        const handler = (_event: IpcRendererEvent, data: UpdateStatusData) =>
+    onUpdateStatus: (callback: (data: UpdateStatus) => void) => {
+        const handler = (_event: IpcRendererEvent, data: UpdateStatus) =>
             callback(data)
         ipcRenderer.on("update-status", handler)
         return () => ipcRenderer.removeListener("update-status", handler)

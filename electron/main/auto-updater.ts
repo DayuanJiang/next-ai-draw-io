@@ -28,10 +28,12 @@ function supportsAutoUpdate(): boolean {
 /**
  * Compare two semver-like version strings numerically.
  * Returns true if remote > local.
+ * Strips prerelease/build metadata (e.g., "1.2.3-beta.1" → "1.2.3").
  */
 function isNewerVersion(remote: string, local: string): boolean {
-    const r = remote.replace(/^v/, "").split(".").map(Number)
-    const l = local.replace(/^v/, "").split(".").map(Number)
+    const strip = (v: string) => v.replace(/^v/, "").split("-")[0].split("+")[0]
+    const r = strip(remote).split(".").map(Number)
+    const l = strip(local).split(".").map(Number)
     const len = Math.max(r.length, l.length)
     for (let i = 0; i < len; i++) {
         const rv = r[i] || 0
@@ -77,6 +79,7 @@ function checkGitHubRelease(manual: boolean) {
                 return
             }
 
+            res.setEncoding("utf8")
             let body = ""
             res.on("data", (chunk: string) => {
                 body += chunk
@@ -211,11 +214,8 @@ function doCheck(manual: boolean) {
     }
 
     if (supportsAutoUpdate()) {
-        autoUpdater.checkForUpdates().catch((err) => {
-            console.error("checkForUpdates failed:", err)
-            isChecking = false
-        })
-        // For manual check, show "up to date" if no update found
+        // For manual check, register listeners BEFORE triggering check
+        // to avoid race where event fires before listeners are attached
         if (manual) {
             const onNotAvailable = () => {
                 dialog.showMessageBox({
@@ -226,7 +226,6 @@ function doCheck(manual: boolean) {
                 })
                 cleanup()
             }
-            // Clean up listeners when either event fires, preventing stale listeners
             const onAvailable = () => cleanup()
             const onError = () => cleanup()
             const cleanup = () => {
@@ -238,6 +237,10 @@ function doCheck(manual: boolean) {
             autoUpdater.once("update-available", onAvailable)
             autoUpdater.once("error", onError)
         }
+        autoUpdater.checkForUpdates().catch((err) => {
+            console.error("checkForUpdates failed:", err)
+            isChecking = false
+        })
     } else {
         checkGitHubRelease(manual)
     }
