@@ -451,13 +451,3 @@ export async function importTemplates(
 
     return { imported, skipped }
 }
-
-// Helper: Create an empty template input
-export function createEmptyTemplateInput(): TemplateCreateInput {
-    return {
-        prompt: "",
-        title: "",
-        description: "",
-        pinned: false,
-    }
-}

@@ -32,7 +32,6 @@ import {
     incrementClickCount,
     incrementRunCount,
     searchTemplates,
-    sortTemplates,
     type Template,
     updateTemplate,
     validateImportData,
@@ -100,7 +99,7 @@ export function TemplatePanel({
 
     const loadTemplates = useCallback(async () => {
         const result = await getAllTemplates()
-        setTemplates(sortTemplates(result))
+        setTemplates(result)
         setLoading(false)
     }, [])
 
@@ -478,16 +477,8 @@ export function TemplatePanel({
                                     <div className="relative shrink-0">
                                         <div className="text-[11px] text-muted-foreground whitespace-nowrap group-hover:invisible">
                                             {template.runCount > 0
-                                                ? dict.templates.usedCount.replace(
-                                                      "{count}",
-                                                      String(template.runCount),
-                                                  )
+                                                ? `${dict.templates.usedCount.replace("{count}", String(template.runCount))} · ${formatLastUsed(template.lastUsedAt, dict.templates.neverUsed)}`
                                                 : dict.templates.neverUsed}
-                                            {" · "}
-                                            {formatLastUsed(
-                                                template.lastUsedAt,
-                                                dict.templates.neverUsed,
-                                            )}
                                         </div>
                                         <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                                             <button

@@ -114,7 +114,7 @@ export function TemplateCreateDialog({
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 placeholder={dict.templates.promptPlaceholder}
-                                className="min-h-[100px] resize-none break-all"
+                                className="min-h-[100px] resize-none break-words"
                                 required
                             />
                         </div>
