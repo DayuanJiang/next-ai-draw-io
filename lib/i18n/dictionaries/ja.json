@@ -76,8 +76,7 @@
         "creativeDescription": "楽しくてクリエイティブなものを描く",
         "cachedNote": "例はキャッシュされ、即座に応答します",
         "mcpServer": "MCP サーバー",
-        "mcpDescription": "Claude Desktop、VS Code、Cursor で使用",
-        "preview": "プレビュー"
+        "mcpDescription": "Claude Desktop、VS Code、Cursor で使用"
     },
     "settings": {
         "title": "設定",

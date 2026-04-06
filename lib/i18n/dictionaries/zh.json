@@ -76,8 +76,7 @@
         "creativeDescription": "绘制有趣且富有创意的内容",
         "cachedNote": "示例已缓存，可即时响应",
         "mcpServer": "MCP 服务器",
-        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用",
-        "preview": "预览"
+        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用"
     },
     "settings": {
         "title": "设置",
