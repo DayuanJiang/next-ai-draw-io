@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目次](#目次)
   - [例](#例)
   - [機能](#機能)
-  - [MCPサーバー（プレビュー）](#mcpサーバープレビュー)
+  - [MCPサーバー](#mcpサーバー)
     - [Claude Code CLI](#claude-code-cli)
   - [はじめに](#はじめに)
     - [オンラインで試す](#オンラインで試す)
@@ -96,9 +96,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
 -   **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
 
-## MCPサーバー（プレビュー）
-
-> **プレビュー機能**：この機能は実験的であり、安定しない可能性があります。
+## MCPサーバー
 
 MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 

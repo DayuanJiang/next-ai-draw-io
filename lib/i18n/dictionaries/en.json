@@ -76,8 +76,7 @@
         "creativeDescription": "Draw something fun and creative",
         "cachedNote": "Examples are cached for instant response",
         "mcpServer": "MCP Server",
-        "mcpDescription": "Use in Claude Desktop, VS Code & Cursor",
-        "preview": "PREVIEW"
+        "mcpDescription": "Use in Claude Desktop, VS Code & Cursor"
     },
     "settings": {
         "title": "Settings",

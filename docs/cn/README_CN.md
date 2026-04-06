@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目录](#目录)
   - [示例](#示例)
   - [功能特性](#功能特性)
-  - [MCP服务器（预览）](#mcp服务器预览)
+  - [MCP服务器](#mcp服务器)
     - [Claude Code CLI](#claude-code-cli)
   - [快速开始](#快速开始)
     - [在线试用](#在线试用)
@@ -98,9 +98,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **云架构图支持**：专门支持生成云架构图（AWS、GCP、Azure）
 -   **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
 
-## MCP服务器（预览）
-
-> **预览功能**：此功能为实验性功能，可能不稳定。
+## MCP服务器
 
 通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
 

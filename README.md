@@ -31,7 +31,7 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
   - [Table of Contents](#table-of-contents)
   - [Examples](#examples)
   - [Features](#features)
-  - [MCP Server (Preview)](#mcp-server-preview)
+  - [MCP Server](#mcp-server)
     - [Claude Code CLI](#claude-code-cli)
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
@@ -99,9 +99,7 @@ Here are some example prompts and their generated diagrams:
 -   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
-## MCP Server (Preview)
-
-> **Preview Feature**: This feature is experimental and may not be stable.
+## MCP Server
 
 Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
 
