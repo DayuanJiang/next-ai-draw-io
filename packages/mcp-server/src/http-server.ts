@@ -155,7 +155,7 @@ export function startHttpServer(port = 6002): Promise<number> {
             }
         })
 
-        server.listen(port, () => {
+        server.listen(port, "127.0.0.1", () => {
             serverPort = port
             log.info(`HTTP server running on http://localhost:${port}`)
             resolve(port)
