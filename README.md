@@ -63,24 +63,36 @@ Here are some example prompts and their generated diagrams:
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>GCP architecture diagram</strong><br />
-      <p><strong>Prompt:</strong> Generate a GCP architecture diagram with **GCP icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
-      <img src="./public/gcp_demo.svg" alt="GCP Architecture Diagram" width="480" />
+      <strong>ResNet50 Model Architecture</strong><br />
+      <p><strong>Prompt:</strong> Give me an **animated** architecture diagram of the ResNet50 model.</p>
+      <img src="./public/resnet50.svg" alt="ResNet50 Model Architecture" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>AWS architecture diagram</strong><br />
-      <p><strong>Prompt:</strong> Generate a AWS architecture diagram with **AWS icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
-      <img src="./public/aws_demo.svg" alt="AWS Architecture Diagram" width="480" />
+      <strong>RAG Technique Diagram</strong><br />
+      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
+      <img src="./public/rag_prod.svg" alt="RAG Architecture Diagram" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>Azure architecture diagram</strong><br />
-      <p><strong>Prompt:</strong> Generate a Azure architecture diagram with **Azure icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
-      <img src="./public/azure_demo.svg" alt="Azure Architecture Diagram" width="480" />
+      <strong>Authentication using React and AWS</strong><br />
+      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
+      <img src="./public/auth.svg" alt="Authentication Architecture Diagram" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>Cat sketch prompt</strong><br />
+      <strong>Agile Scrum Process</strong><br />
+      <p><strong>Prompt:</strong> Generate agile scrum workflow diagram for software development team.</p>
+      <img src="./public/agile_scrum.svg" alt="Agile Scrum Diagram" width="480" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Open Innovation</strong><br />
+      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
+      <img src="./public/inno.svg" alt="Open Innovation Diagram" width="480" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Cat sketch</strong><br />
       <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
       <img src="./public/cat_demo.svg" alt="Cat Drawing" width="240" />
     </td>
