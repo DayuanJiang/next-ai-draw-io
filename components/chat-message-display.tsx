@@ -417,6 +417,7 @@ export function ChatMessageDisplay({
 
     // Track previous message count to detect bulk loads vs streaming
     const prevMessageCountRef = useRef(0)
+    const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
         if (messagesEndRef.current && messages.length > 0) {
@@ -430,8 +431,17 @@ export function ChatMessageDisplay({
                 return
             }
 
-            // Single message added - smooth scroll
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+            // Throttle scroll during streaming to avoid layout thrashing
+            // Leading + trailing: scroll immediately, then once more after cooldown
+            if (!scrollThrottleRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+                scrollThrottleRef.current = setTimeout(() => {
+                    scrollThrottleRef.current = null
+                    messagesEndRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                    })
+                }, 150)
+            }
         }
     }, [messages])
 
