@@ -432,10 +432,14 @@ export function ChatMessageDisplay({
             }
 
             // Throttle scroll during streaming to avoid layout thrashing
+            // Leading + trailing: scroll immediately, then once more after cooldown
             if (!scrollThrottleRef.current) {
                 messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
                 scrollThrottleRef.current = setTimeout(() => {
                     scrollThrottleRef.current = null
+                    messagesEndRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                    })
                 }, 150)
             }
         }
