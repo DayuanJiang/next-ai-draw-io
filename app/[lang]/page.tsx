@@ -100,12 +100,8 @@ export default function Home() {
     const handleDrawioAutoSave = useCallback(
         (data: { xml?: string }) => {
             handleDiagramAutoSave(data)
-            // Only suppress modified state when persistence is available
-            if (canPersist) {
-                drawioRef.current?.status({ message: "", modified: false })
-            }
         },
-        [canPersist, drawioRef, handleDiagramAutoSave],
+        [handleDiagramAutoSave],
     )
 
     const handleDarkModeChange = () => {
