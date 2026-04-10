@@ -107,8 +107,8 @@ export function ChatLobby({
     currentInput = "",
     dict,
 }: ChatLobbyProps) {
-    const [templatesExpanded, setTemplatesExpanded] = useState(false)
-    const [examplesExpanded, setExamplesExpanded] = useState(false)
+    const [templatesExpanded, setTemplatesExpanded] = useState(true)
+    const [examplesExpanded, setExamplesExpanded] = useState(true)
     const [panelVisibility, setPanelVisibility] = useState(getPanelVisibility)
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
@@ -125,19 +125,25 @@ export function ChatLobby({
     const hasHistory = sessions.length > 0
 
     if (!hasHistory) {
-        if (panelVisibility.myTemplates) {
-            return (
-                <TemplatePanel
-                    setInput={setInput}
-                    onSendTemplate={onSendTemplate}
-                    currentInput={currentInput}
-                />
-            )
+        if (!panelVisibility.myTemplates && !panelVisibility.quickExamples) {
+            return null
         }
-        if (panelVisibility.quickExamples) {
-            return <ExamplePanel setInput={setInput} setFiles={setFiles} />
-        }
-        return null
+        return (
+            <div className="animate-fade-in">
+                {panelVisibility.myTemplates && (
+                    <TemplatePanel
+                        setInput={setInput}
+                        onSendTemplate={onSendTemplate}
+                        currentInput={currentInput}
+                    />
+                )}
+                {panelVisibility.quickExamples && (
+                    <div className={panelVisibility.myTemplates ? "mt-6" : ""}>
+                        <ExamplePanel setInput={setInput} setFiles={setFiles} />
+                    </div>
+                )}
+            </div>
+        )
     }
 
     // Show history + collapsible examples when there are sessions
