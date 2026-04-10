@@ -195,7 +195,22 @@ export function ToolCallCard({
             {input && isExpanded && (
                 <div className="px-4 py-3 border-t border-border/40 bg-muted/20">
                     {typeof input === "object" && input.xml ? (
-                        <CodeBlock code={input.xml} language="xml" />
+                        state === "input-streaming" ||
+                        state === "input-available" ? (
+                            <pre
+                                className="text-[11px] leading-relaxed overflow-x-auto overflow-y-auto max-h-48 scrollbar-thin break-all whitespace-pre-wrap"
+                                style={{
+                                    fontFamily:
+                                        "var(--font-mono), ui-monospace, monospace",
+                                    margin: 0,
+                                    padding: 0,
+                                }}
+                            >
+                                {input.xml}
+                            </pre>
+                        ) : (
+                            <CodeBlock code={input.xml} language="xml" />
+                        )
                     ) : typeof input === "object" &&
                       input.operations &&
                       Array.isArray(input.operations) ? (
