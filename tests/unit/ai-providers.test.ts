@@ -200,6 +200,8 @@ describe("supportsImageInput", () => {
 
     it("returns true for Qwen vision models", () => {
         expect(supportsImageInput("qwen-vl")).toBe(true)
+        expect(supportsImageInput("Qwen3.5")).toBe(true)
+        expect(supportsImageInput("qwen3.5")).toBe(true)
         expect(supportsImageInput("qwen3.5-plus")).toBe(true)
         expect(supportsImageInput("qwen3.5-flash")).toBe(true)
         expect(supportsImageInput("qwen3-vl-plus")).toBe(true)
