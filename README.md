@@ -63,26 +63,14 @@ Here are some example prompts and their generated diagrams:
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>ResNet50 Model Architecture</strong><br />
-      <p><strong>Prompt:</strong> Give me an **animated** architecture diagram of the ResNet50 model.</p>
-      <img src="./public/resnet50.svg" alt="ResNet50 Model Architecture" width="480" />
-    </td>
-    <td width="50%" valign="top">
       <strong>RAG Technique Diagram</strong><br />
       <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
       <img src="./public/rag_prod.svg" alt="RAG Architecture Diagram" width="480" />
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <strong>Authentication using React and AWS</strong><br />
       <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
       <img src="./public/auth.svg" alt="Authentication Architecture Diagram" width="480" />
-    </td>
-    <td width="50%" valign="top">
-      <strong>Agile Scrum Process</strong><br />
-      <p><strong>Prompt:</strong> Generate agile scrum workflow diagram for software development team.</p>
-      <img src="./public/agile_scrum.svg" alt="Agile Scrum Diagram" width="480" />
     </td>
   </tr>
   <tr>

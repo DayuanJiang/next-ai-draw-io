@@ -62,26 +62,14 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>ResNet50模型架构</strong><br />
-      <p><strong>Prompt:</strong> Give me an **animated** architecture diagram of the ResNet50 model.</p>
-      <img src="../../public/resnet50.svg" alt="ResNet50模型架构图" width="480" />
-    </td>
-    <td width="50%" valign="top">
       <strong>RAG技术图</strong><br />
       <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
       <img src="../../public/rag_prod.svg" alt="RAG架构图" width="480" />
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <strong>React和AWS认证流程</strong><br />
       <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
       <img src="../../public/auth.svg" alt="认证架构图" width="480" />
-    </td>
-    <td width="50%" valign="top">
-      <strong>敏捷Scrum流程</strong><br />
-      <p><strong>Prompt:</strong> Generate agile scrum workflow diagram for software development team.</p>
-      <img src="../../public/agile_scrum.svg" alt="敏捷Scrum流程图" width="480" />
     </td>
   </tr>
   <tr>
