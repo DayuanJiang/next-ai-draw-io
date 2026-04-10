@@ -175,92 +175,102 @@ export default function AboutCN() {
                     </p>
 
                     <div className="space-y-8">
-                        {/* Animated Transformer */}
+                        {/* ResNet50 Architecture */}
                         <div className="text-center">
                             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                动画Transformer连接器
+                                ResNet50模型架构动画
                             </h3>
                             <p className="text-gray-600 mb-4">
                                 <strong>提示词：</strong> 给我一个带有
                                 <strong>动画连接器</strong>的Transformer架构图。
                             </p>
-                            <Image
-                                src="/animated_connectors.svg"
-                                alt="带动画连接器的Transformer架构"
-                                width={480}
-                                height={360}
-                                className="mx-auto"
-                            />
+                            <div className="bg-neutral-950 rounded-lg p-4 inline-block">
+                                <Image
+                                    src="/resnet50.svg"
+                                    alt="ResNet50模型架构图"
+                                    width={480}
+                                    height={360}
+                                    className="mx-auto"
+                                />
+                            </div>
                         </div>
 
-                        {/* Cloud Architecture Grid */}
+                        {/* Diagram Grid */}
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    GCP架构图
+                                    RAG技术图
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 使用
-                                    <strong>GCP图标</strong>
-                                    生成一个GCP架构图。用户连接到托管在实例上的前端。
+                                    <strong>提示词：</strong>为
+                                    <strong>聊天应用</strong>
+                                    生成一个RAG架构图。使用连接图展示数据摄取流程。
                                 </p>
-                                <Image
-                                    src="/gcp_demo.svg"
-                                    alt="GCP架构图"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/rag_prod.svg"
+                                        alt="RAG架构图"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    AWS架构图
+                                    React和AWS认证流程
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 使用
-                                    <strong>AWS图标</strong>
-                                    生成一个AWS架构图。用户连接到托管在实例上的前端。
+                                    <strong>提示词：</strong>
+                                    使用React和<strong>AWS</strong>
+                                    生成认证流程图。使用无服务器架构。
                                 </p>
-                                <Image
-                                    src="/aws_demo.svg"
-                                    alt="AWS架构图"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/auth.svg"
+                                        alt="认证架构图"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Azure架构图
+                                    敏捷Scrum流程
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong> 使用
-                                    <strong>Azure图标</strong>
-                                    生成一个Azure架构图。用户连接到托管在实例上的前端。
+                                    <strong>提示词：</strong>
+                                    为软件开发团队生成敏捷Scrum工作流程图。
                                 </p>
-                                <Image
-                                    src="/azure_demo.svg"
-                                    alt="Azure架构图"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/agile_scrum.svg"
+                                        alt="敏捷Scrum流程图"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    猫咪素描
+                                    开放式创新
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong>{" "}
-                                    给我画一只可爱的猫。
+                                    <strong>提示词：</strong>
+                                    创建Henry
+                                    Chesbrough的开放式创新模型可视化图。
                                 </p>
-                                <Image
-                                    src="/cat_demo.svg"
-                                    alt="猫咪绘图"
-                                    width={240}
-                                    height={240}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/inno.svg"
+                                        alt="开放式创新图"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
