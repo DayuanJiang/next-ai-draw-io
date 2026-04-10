@@ -181,8 +181,9 @@ export default function AboutCN() {
                                 ResNet50模型架构动画
                             </h3>
                             <p className="text-gray-600 mb-4">
-                                <strong>提示词：</strong> 给我一个带有
-                                <strong>动画连接器</strong>的Transformer架构图。
+                                <strong>Prompt:</strong> Give me an{" "}
+                                <strong>animated</strong> architecture diagram
+                                of the ResNet50 model.
                             </p>
                             <div className="bg-neutral-950 rounded-lg p-4 inline-block">
                                 <Image
@@ -202,9 +203,10 @@ export default function AboutCN() {
                                     RAG技术图
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong>为
-                                    <strong>聊天应用</strong>
-                                    生成一个RAG架构图。使用连接图展示数据摄取流程。
+                                    <strong>Prompt:</strong> Generate a RAG
+                                    architecture diagram for{" "}
+                                    <strong>chat application</strong>. Use
+                                    connected diagram for data ingestion
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
@@ -221,9 +223,10 @@ export default function AboutCN() {
                                     React和AWS认证流程
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong>
-                                    使用React和<strong>AWS</strong>
-                                    生成认证流程图。使用无服务器架构。
+                                    <strong>Prompt:</strong> Generate
+                                    authentication process using React with{" "}
+                                    <strong>AWS</strong>. Use Serverless
+                                    architecture.
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
@@ -240,8 +243,9 @@ export default function AboutCN() {
                                     敏捷Scrum流程
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong>
-                                    为软件开发团队生成敏捷Scrum工作流程图。
+                                    <strong>Prompt:</strong> Generate agile
+                                    scrum workflow diagram for software
+                                    development team.
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
@@ -258,9 +262,9 @@ export default function AboutCN() {
                                     开放式创新
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>提示词：</strong>
-                                    创建Henry
-                                    Chesbrough的开放式创新模型可视化图。
+                                    <strong>Prompt:</strong> Create
+                                    visualization of Henry Chesbrough&apos;s
+                                    Open Innovation model.
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image

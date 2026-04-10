@@ -189,8 +189,8 @@ export default function About() {
                             </h3>
                             <p className="text-gray-600 mb-4">
                                 <strong>Prompt:</strong> Give me an{" "}
-                                <strong>animated connector</strong> diagram of
-                                transformer&apos;s architecture.
+                                <strong>animated</strong> architecture diagram
+                                of the ResNet50 model.
                             </p>
                             <div className="bg-neutral-950 rounded-lg p-4 inline-block">
                                 <Image

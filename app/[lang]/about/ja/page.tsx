@@ -174,9 +174,9 @@ export default function AboutJA() {
                                 ResNet50モデルアーキテクチャアニメーション
                             </h3>
                             <p className="text-gray-600 mb-4">
-                                <strong>プロンプト：</strong>{" "}
-                                <strong>アニメーションコネクタ</strong>
-                                付きのTransformerアーキテクチャ図を作成してください。
+                                <strong>Prompt:</strong> Give me an{" "}
+                                <strong>animated</strong> architecture diagram
+                                of the ResNet50 model.
                             </p>
                             <div className="bg-neutral-950 rounded-lg p-4 inline-block">
                                 <Image
@@ -196,9 +196,10 @@ export default function AboutJA() {
                                     RAG技術ダイアグラム
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong>{" "}
-                                    <strong>チャットアプリケーション</strong>
-                                    のRAGアーキテクチャ図を生成してください。データ取り込みに接続図を使用。
+                                    <strong>Prompt:</strong> Generate a RAG
+                                    architecture diagram for{" "}
+                                    <strong>chat application</strong>. Use
+                                    connected diagram for data ingestion
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
@@ -215,9 +216,10 @@ export default function AboutJA() {
                                     ReactとAWSによる認証
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong> Reactと
-                                    <strong>AWS</strong>
-                                    を使用した認証プロセスを生成してください。サーバーレスアーキテクチャを使用。
+                                    <strong>Prompt:</strong> Generate
+                                    authentication process using React with{" "}
+                                    <strong>AWS</strong>. Use Serverless
+                                    architecture.
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
@@ -234,8 +236,9 @@ export default function AboutJA() {
                                     アジャイルスクラムプロセス
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong>{" "}
-                                    ソフトウェア開発チームのためのアジャイルスクラムワークフロー図を生成してください。
+                                    <strong>Prompt:</strong> Generate agile
+                                    scrum workflow diagram for software
+                                    development team.
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
@@ -252,8 +255,9 @@ export default function AboutJA() {
                                     オープンイノベーション
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong> Henry
-                                    Chesbroughのオープンイノベーションモデルの可視化を作成してください。
+                                    <strong>Prompt:</strong> Create
+                                    visualization of Henry Chesbrough&apos;s
+                                    Open Innovation model.
                                 </p>
                                 <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
                                     <Image
