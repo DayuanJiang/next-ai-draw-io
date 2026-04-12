@@ -272,6 +272,10 @@ export default function ChatPanel({
     const autoRetryCountRef = useRef(0)
     // Ref to track continuation retry count (for truncation handling)
     const continuationRetryCountRef = useRef(0)
+    // Ref to permanently block auto-retry after limit is reached until user sends new message.
+    // This prevents the retry counter from being reset mid-stream (when hasToolErrors briefly
+    // returns false during streaming) and immediately restarting the retry cycle.
+    const retryExhaustedRef = useRef(false)
 
     // Ref to accumulate partial XML when output is truncated due to maxOutputTokens
     // When partialXmlRef.current.length > 0, we're in continuation mode
@@ -451,6 +455,15 @@ export default function ChatPanel({
         },
         onFinish: () => {},
         sendAutomaticallyWhen: ({ messages }) => {
+            // If the retry limit was already hit for this user turn, block all
+            // further auto-sends until the user explicitly sends a new message.
+            // This prevents the retry cycle from restarting after the counter is
+            // reset mid-stream (when hasToolErrors briefly returns false during
+            // streaming of the retry response).
+            if (retryExhaustedRef.current) {
+                return false
+            }
+
             const isInContinuationMode = partialXmlRef.current.length > 0
 
             const shouldRetry = hasToolErrors(
@@ -458,9 +471,12 @@ export default function ChatPanel({
             )
 
             if (!shouldRetry) {
-                // No error, reset retry count and clear state
-                autoRetryCountRef.current = 0
-                continuationRetryCountRef.current = 0
+                // No tool errors — clear continuation state but do NOT reset
+                // autoRetryCountRef here. Resetting it mid-stream (while the AI
+                // is still generating a retry response) would allow the counter
+                // to restart from zero and bypass the MAX_AUTO_RETRY_COUNT limit.
+                // The counter is reset in sendChatMessage when the user explicitly
+                // initiates a new message.
                 partialXmlRef.current = ""
                 return false
             }
@@ -476,7 +492,7 @@ export default function ChatPanel({
                             max: MAX_CONTINUATION_RETRY_COUNT,
                         }),
                     )
-                    continuationRetryCountRef.current = 0
+                    retryExhaustedRef.current = true
                     partialXmlRef.current = ""
                     return false
                 }
@@ -489,7 +505,7 @@ export default function ChatPanel({
                             max: MAX_AUTO_RETRY_COUNT,
                         }),
                     )
-                    autoRetryCountRef.current = 0
+                    retryExhaustedRef.current = true
                     partialXmlRef.current = ""
                     return false
                 }
@@ -1062,6 +1078,7 @@ export default function ChatPanel({
         // Reset all retry/continuation state on user-initiated message
         autoRetryCountRef.current = 0
         continuationRetryCountRef.current = 0
+        retryExhaustedRef.current = false
         partialXmlRef.current = ""
 
         const config = getSelectedAIConfig()
