@@ -255,13 +255,19 @@ export function sanitizeMessage(message: unknown): StoredMessage | null {
         })
     }
 
+    let metadata: ChatMessageMetadata | undefined
+    if (msg.metadata && typeof msg.metadata === "object") {
+        try {
+            metadata = structuredClone(msg.metadata as ChatMessageMetadata)
+        } catch {
+            metadata = undefined
+        }
+    }
+
     return {
         id: msg.id as string,
         role: role as "user" | "assistant" | "system",
-        metadata:
-            msg.metadata && typeof msg.metadata === "object"
-                ? structuredClone(msg.metadata as ChatMessageMetadata)
-                : undefined,
+        metadata,
         parts,
     }
 }

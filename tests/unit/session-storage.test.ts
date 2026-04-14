@@ -33,4 +33,24 @@ describe("sanitizeMessage", () => {
             },
         })
     })
+
+    it("drops non-cloneable metadata instead of throwing", () => {
+        expect(() =>
+            sanitizeMessage({
+                id: "assistant-2",
+                role: "assistant",
+                metadata: { bad: () => "not cloneable" },
+                parts: [{ type: "text", text: "Done" }],
+            }),
+        ).not.toThrow()
+
+        const sanitized = sanitizeMessage({
+            id: "assistant-2",
+            role: "assistant",
+            metadata: { bad: () => "not cloneable" },
+            parts: [{ type: "text", text: "Done" }],
+        })
+
+        expect(sanitized?.metadata).toBeUndefined()
+    })
 })

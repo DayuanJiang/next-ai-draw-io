@@ -6,7 +6,7 @@ import { PROVIDER_INFO } from "@/lib/types/model-config"
 
 export const ProviderNameSchema: z.ZodType<ProviderName> = z
     .string()
-    .refine((val): val is ProviderName => val in PROVIDER_INFO, {
+    .refine((val): val is ProviderName => Object.hasOwn(PROVIDER_INFO, val), {
         message: "Invalid provider name",
     })
 
