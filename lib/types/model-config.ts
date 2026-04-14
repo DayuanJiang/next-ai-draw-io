@@ -21,6 +21,7 @@ export type ProviderName =
     | "qiniu"
     | "kimi"
     | "minimax"
+    | "novita"
 
 export interface ModelPricingConfig {
     inputPricePerMillionUsd?: string
@@ -108,6 +109,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     doubao: "bytedance",
     modelscope: "modelscope",
     minimax: "minimax",
+    novita: "novita",
 }
 
 // Provider metadata
@@ -185,6 +187,10 @@ export const PROVIDER_INFO: Record<
     minimax: {
         label: "MiniMax",
         defaultBaseUrl: "https://api.minimaxi.com/anthropic",
+    },
+    novita: {
+        label: "Novita AI",
+        defaultBaseUrl: "https://api.novita.ai/openai",
     },
 }
 
@@ -356,6 +362,12 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "MiniMax-M2.7-highspeed",
         "MiniMax-M2.5",
         "MiniMax-M2.5-highspeed",
+    ],
+    novita: [
+        // Novita AI models (OpenAI-compatible API)
+        "moonshotai/kimi-k2.5",
+        "zai-org/glm-5",
+        "minimax/minimax-m2.5",
     ],
 }
 

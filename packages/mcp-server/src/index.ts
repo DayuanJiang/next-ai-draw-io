@@ -155,19 +155,22 @@ server.registerTool(
 server.registerTool(
     "create_new_diagram",
     {
-        description: `Create a NEW diagram from mxGraphModel XML. Use this when creating a diagram from scratch or replacing the current diagram entirely.
+        description: `Create a NEW diagram from mxGraphModel XML. ONLY use this when creating a diagram from scratch.
+
+⚠️ DO NOT use this tool to modify an existing diagram — it will DESTROY all existing content and user changes. Use edit_diagram instead for ANY modifications to an existing diagram.
 
 CRITICAL: You MUST provide the 'xml' argument in EVERY call. Do NOT call this tool without xml.
 
 When to use this tool:
-- Creating a new diagram from scratch
-- Replacing the current diagram with a completely different one
-- Major structural changes that require regenerating the diagram
+- Creating a new diagram from scratch (no existing diagram)
+- The user explicitly asks to "start over" or "create a new diagram"
 
-When to use edit_diagram instead:
-- Small modifications to existing diagram
-- Adding/removing individual elements
-- Changing labels, colors, or positions
+When to use edit_diagram instead (ALWAYS prefer edit_diagram if a diagram already exists):
+- ANY modifications to an existing diagram
+- Adding/removing/moving elements
+- Changing labels, colors, styles, or positions
+- Restructuring or reorganizing existing content
+- Adding new elements to an existing diagram
 
 XML FORMAT - Full mxGraphModel structure:
 <mxGraphModel>

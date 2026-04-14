@@ -1,6 +1,7 @@
 "use client"
 
 import {
+    BookmarkPlus,
     Check,
     ChevronDown,
     ChevronUp,
@@ -24,6 +25,7 @@ import {
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
 import { ChatLobby } from "@/components/chat/ChatLobby"
+import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
 import { ToolCallCard } from "@/components/chat/ToolCallCard"
 import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import type { ValidationState } from "@/components/chat/ValidationCard"
@@ -158,6 +160,10 @@ interface ChatMessageDisplayProps {
     loadedMessageIdsRef?: MutableRefObject<Set<string>>
     validationStates?: Record<string, ValidationState>
     onImproveWithSuggestions?: (feedback: string) => void
+    onSendTemplate?: (
+        template: import("@/lib/template-storage").Template,
+    ) => void
+    currentInput?: string
 }
 
 function formatTokenCount(value: number): string {
@@ -268,6 +274,8 @@ export function ChatMessageDisplay({
     loadedMessageIdsRef,
     validationStates = {},
     onImproveWithSuggestions,
+    onSendTemplate,
+    currentInput = "",
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
@@ -327,6 +335,10 @@ export function ChatMessageDisplay({
     const [expandedPdfSections, setExpandedPdfSections] = useState<
         Record<string, boolean>
     >({})
+    // Track "Save as Template" dialog
+    const [saveAsTemplateMessageId, setSaveAsTemplateMessageId] = useState<
+        string | null
+    >(null)
 
     const setCopyState = (
         messageId: string,
@@ -495,6 +507,7 @@ export function ChatMessageDisplay({
 
     // Track previous message count to detect bulk loads vs streaming
     const prevMessageCountRef = useRef(0)
+    const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
         if (messagesEndRef.current && messages.length > 0) {
@@ -508,8 +521,17 @@ export function ChatMessageDisplay({
                 return
             }
 
-            // Single message added - smooth scroll
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+            // Throttle scroll during streaming to avoid layout thrashing
+            // Leading + trailing: scroll immediately, then once more after cooldown
+            if (!scrollThrottleRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+                scrollThrottleRef.current = setTimeout(() => {
+                    scrollThrottleRef.current = null
+                    messagesEndRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                    })
+                }, 150)
+            }
         }
     }, [messages])
 
@@ -740,6 +762,8 @@ export function ChatMessageDisplay({
                     onDeleteSession={onDeleteSession}
                     setInput={setInput}
                     setFiles={setFiles}
+                    onSendTemplate={onSendTemplate}
+                    currentInput={currentInput}
                     dict={dict}
                 />
             ) : messages.length === 0 ? null : (
@@ -840,8 +864,42 @@ export function ChatMessageDisplay({
                                                     <Copy className="h-3.5 w-3.5" />
                                                 )}
                                             </button>
+                                            {/* Save as Template button - only for user messages */}
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setSaveAsTemplateMessageId(
+                                                        message.id,
+                                                    )
+                                                }
+                                                className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
+                                                title={
+                                                    dict.templates
+                                                        ?.saveAsTemplate ||
+                                                    "Save as Template"
+                                                }
+                                            >
+                                                <BookmarkPlus className="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     )}
+
+                                {/* Save as Template Dialog */}
+                                {saveAsTemplateMessageId === message.id && (
+                                    <TemplateCreateDialog
+                                        open={true}
+                                        onOpenChange={(open) => {
+                                            if (!open)
+                                                setSaveAsTemplateMessageId(null)
+                                        }}
+                                        onSuccess={() => {
+                                            setSaveAsTemplateMessageId(null)
+                                        }}
+                                        initialPrompt={getUserOriginalText(
+                                            message,
+                                        )}
+                                    />
+                                )}
                                 <div className="max-w-[85%] min-w-0">
                                     {/* Reasoning blocks - displayed first for assistant messages */}
                                     {message.role === "assistant" &&

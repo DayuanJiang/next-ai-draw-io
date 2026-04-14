@@ -75,3 +75,4 @@ ai-models.json
 
 # local backups
 *.bak
+.gstack/

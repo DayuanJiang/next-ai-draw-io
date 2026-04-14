@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目次](#目次)
   - [例](#例)
   - [機能](#機能)
-  - [MCPサーバー（プレビュー）](#mcpサーバープレビュー)
+  - [MCPサーバー](#mcpサーバー)
     - [Claude Code CLI](#claude-code-cli)
   - [はじめに](#はじめに)
     - [オンラインで試す](#オンラインで試す)
@@ -54,31 +54,31 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   <tr>
     <td colspan="2" valign="top" align="center">
       <strong>アニメーションTransformerコネクタ</strong><br />
-      <p><strong>プロンプト：</strong> **アニメーションコネクタ**付きのTransformerアーキテクチャ図を作成してください。</p>
+      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
       <img src="../../public/animated_connectors.svg" alt="アニメーションコネクタ付きTransformerアーキテクチャ" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>GCPアーキテクチャ図</strong><br />
-      <p><strong>プロンプト：</strong> **GCPアイコン**を使用してGCPアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../../public/gcp_demo.svg" alt="GCPアーキテクチャ図" width="480" />
+      <strong>RAG技術ダイアグラム</strong><br />
+      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
+      <img src="../../public/rag_prod.svg" alt="RAGアーキテクチャ図" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>AWSアーキテクチャ図</strong><br />
-      <p><strong>プロンプト：</strong> **AWSアイコン**を使用してAWSアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../../public/aws_demo.svg" alt="AWSアーキテクチャ図" width="480" />
+      <strong>ReactとAWSによる認証</strong><br />
+      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
+      <img src="../../public/auth.svg" alt="認証アーキテクチャ図" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>Azureアーキテクチャ図</strong><br />
-      <p><strong>プロンプト：</strong> **Azureアイコン**を使用してAzureアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../../public/azure_demo.svg" alt="Azureアーキテクチャ図" width="480" />
+      <strong>オープンイノベーション</strong><br />
+      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
+      <img src="../../public/inno.svg" alt="オープンイノベーション図" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>猫のスケッチ</strong><br />
-      <p><strong>プロンプト：</strong> かわいい猫を描いてください。</p>
+      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
       <img src="../../public/cat_demo.svg" alt="猫の絵" width="240" />
     </td>
   </tr>
@@ -96,9 +96,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
 -   **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
 
-## MCPサーバー（プレビュー）
-
-> **プレビュー機能**：この機能は実験的であり、安定しない可能性があります。
+## MCPサーバー
 
 MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 

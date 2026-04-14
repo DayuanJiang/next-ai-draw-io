@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目录](#目录)
   - [示例](#示例)
   - [功能特性](#功能特性)
-  - [MCP服务器（预览）](#mcp服务器预览)
+  - [MCP服务器](#mcp服务器)
     - [Claude Code CLI](#claude-code-cli)
   - [快速开始](#快速开始)
     - [在线试用](#在线试用)
@@ -56,31 +56,31 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   <tr>
     <td colspan="2" valign="top" align="center">
       <strong>动画Transformer连接器</strong><br />
-      <p><strong>提示词：</strong> 给我一个带有**动画连接器**的Transformer架构图。</p>
+      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
       <img src="../../public/animated_connectors.svg" alt="带动画连接器的Transformer架构" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>GCP架构图</strong><br />
-      <p><strong>提示词：</strong> 使用**GCP图标**生成一个GCP架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="../../public/gcp_demo.svg" alt="GCP架构图" width="480" />
+      <strong>RAG技术图</strong><br />
+      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
+      <img src="../../public/rag_prod.svg" alt="RAG架构图" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>AWS架构图</strong><br />
-      <p><strong>提示词：</strong> 使用**AWS图标**生成一个AWS架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="../../public/aws_demo.svg" alt="AWS架构图" width="480" />
+      <strong>React和AWS认证流程</strong><br />
+      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
+      <img src="../../public/auth.svg" alt="认证架构图" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>Azure架构图</strong><br />
-      <p><strong>提示词：</strong> 使用**Azure图标**生成一个Azure架构图。在这个图中，用户连接到托管在实例上的前端。</p>
-      <img src="../../public/azure_demo.svg" alt="Azure架构图" width="480" />
+      <strong>开放式创新</strong><br />
+      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
+      <img src="../../public/inno.svg" alt="开放式创新图" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>猫咪素描</strong><br />
-      <p><strong>提示词：</strong> 给我画一只可爱的猫。</p>
+      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
       <img src="../../public/cat_demo.svg" alt="猫咪绘图" width="240" />
     </td>
   </tr>
@@ -98,9 +98,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **云架构图支持**：专门支持生成云架构图（AWS、GCP、Azure）
 -   **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
 
-## MCP服务器（预览）
-
-> **预览功能**：此功能为实验性功能，可能不稳定。
+## MCP服务器
 
 通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
 

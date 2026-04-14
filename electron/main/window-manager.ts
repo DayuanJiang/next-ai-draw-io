@@ -66,7 +66,11 @@ export function createWindow(serverUrl: string): BrowserWindow {
 
     // Handle page title updates
     mainWindow.webContents.on("page-title-updated", (event, title) => {
-        if (title && !title.includes("localhost")) {
+        if (
+            title &&
+            !title.includes("localhost") &&
+            !title.includes("127.0.0.1")
+        ) {
             mainWindow?.setTitle(title)
         } else {
             event.preventDefault()
