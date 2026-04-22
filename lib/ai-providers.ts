@@ -913,10 +913,10 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.baseUrl,
                 serverBaseUrl,
             )
-            // Only use server's resourceName if user is NOT providing their own API key
-            const resourceName = overrides?.apiKey
-                ? undefined
-                : process.env.AZURE_RESOURCE_NAME
+            // Only use server's resourceName when no baseURL is available.
+            // resourceName is an endpoint component (not a credential), so it is
+            // safe to use as a fallback even when the user brings their own API key.
+            const resourceName = !baseURL ? process.env.AZURE_RESOURCE_NAME : undefined
             // Azure requires either baseURL or resourceName to construct the endpoint
             // resourceName constructs: https://{resourceName}.openai.azure.com/openai/v1{path}
             if (baseURL || resourceName || overrides?.apiKey) {
