@@ -405,7 +405,7 @@ export function ModelConfigDialog({
                             </span>
                         </div>
 
-                        <ScrollArea className="flex-1 px-2">
+                        <ScrollArea className="flex-1 px-2 min-h-0">
                             <div className="space-y-1 pb-2">
                                 {config.providers.length === 0 ? (
                                     <div className="px-3 py-8 text-center">

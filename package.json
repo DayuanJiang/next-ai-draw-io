@@ -145,5 +145,9 @@
         "@openrouter/ai-sdk-provider": {
             "ai": "^6.0.1"
         }
-    }
+    },
+    "trustedDependencies": [
+        "protobufjs",
+        "unrs-resolver"
+    ]
 }
