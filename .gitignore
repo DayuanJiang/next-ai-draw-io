@@ -76,4 +76,6 @@ ai-models.json
 # local backups
 *.bak
 
+# ignore bun lock
+bun.lockb
 bun.lock
