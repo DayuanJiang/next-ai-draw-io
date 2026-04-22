@@ -10,6 +10,11 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import {
+    DEFAULT_DRAWIO_THEME,
+    DRAWIO_THEMES,
+    type DrawioTheme,
+} from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { isIndexedDBUsable } from "@/lib/session-storage"
 
@@ -27,7 +32,7 @@ export default function Home() {
     const currentLang = (pathname.split("/")[1] || i18n.defaultLocale) as Locale
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
-    const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
+    const [drawioUi, setDrawioUi] = useState<DrawioTheme>(DEFAULT_DRAWIO_THEME)
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
@@ -55,8 +60,10 @@ export default function Home() {
             }
         }
 
-        const savedUi = localStorage.getItem("drawio-theme")
-        if (savedUi === "min" || savedUi === "sketch") {
+        const savedUi = localStorage.getItem(
+            "drawio-theme",
+        ) as DrawioTheme | null
+        if (savedUi && DRAWIO_THEMES.includes(savedUi)) {
             setDrawioUi(savedUi)
         }
 
@@ -113,8 +120,7 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    const handleDrawioUiChange = () => {
-        const newUi = drawioUi === "min" ? "sketch" : "min"
+    const handleDrawioUiChange = (newUi: DrawioTheme) => {
         localStorage.setItem("drawio-theme", newUi)
         setDrawioUi(newUi)
         setIsDrawioReady(false)
@@ -264,7 +270,7 @@ export default function Home() {
                                 isVisible={isChatVisible}
                                 onToggleVisibility={toggleChatPanel}
                                 drawioUi={drawioUi}
-                                onToggleDrawioUi={handleDrawioUiChange}
+                                onDrawioUiChange={handleDrawioUiChange}
                                 darkMode={darkMode}
                                 onToggleDarkMode={handleDarkModeChange}
                                 isMobile={isMobile}
