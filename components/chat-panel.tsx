@@ -25,6 +25,7 @@ import Image from "@/components/image-with-basepath"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { useDiagram } from "@/contexts/diagram-context"
+import { useAutoUpdate } from "@/hooks/use-auto-update"
 import { useDiagramToolHandlers } from "@/hooks/use-diagram-tool-handlers"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
@@ -1253,10 +1254,22 @@ export default function ChatPanel({
         sendChatMessage(newParts, savedXml, previousXml, sessionId)
     }
 
+    // Auto-update listener (must be before early return so it's always active)
+    useAutoUpdate()
+
     // Collapsed view (desktop only)
     if (!isVisible && !isMobile) {
         return (
             <div className="h-full flex flex-col items-center pt-4 bg-card border border-border/30 rounded-xl">
+                <Toaster
+                    position="bottom-left"
+                    richColors
+                    expand
+                    toastOptions={{
+                        style: { maxWidth: "480px" },
+                        duration: 2000,
+                    }}
+                />
                 <ButtonWithTooltip
                     tooltipContent={dict.nav.showPanel}
                     variant="ghost"

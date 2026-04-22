@@ -6,6 +6,7 @@ import {
     type MenuItemConstructorOptions,
     shell,
 } from "electron"
+import { checkForUpdatesManual } from "./auto-updater"
 import {
     applyPresetToEnv,
     getAllPresets,
@@ -156,6 +157,11 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     template.push({
         label: t.help,
         submenu: [
+            {
+                label: t.checkForUpdates,
+                click: () => checkForUpdatesManual(),
+            },
+            { type: "separator" },
             {
                 label: t.documentation,
                 click: async () => {
