@@ -200,10 +200,19 @@ describe("supportsImageInput", () => {
 
     it("returns true for Qwen vision models", () => {
         expect(supportsImageInput("qwen-vl")).toBe(true)
+        expect(supportsImageInput("Qwen3.5")).toBe(true)
+        expect(supportsImageInput("qwen3.5")).toBe(true)
         expect(supportsImageInput("qwen3.5-plus")).toBe(true)
         expect(supportsImageInput("qwen3.5-flash")).toBe(true)
         expect(supportsImageInput("qwen3-vl-plus")).toBe(true)
         expect(supportsImageInput("qwen3-vl-flash")).toBe(true)
+    })
+
+    it("returns true for QvQ (Qwen Visual QA) models including OpenRouter-prefixed names", () => {
+        expect(supportsImageInput("qvq-72b-preview")).toBe(true)
+        expect(supportsImageInput("qvq-max")).toBe(true)
+        expect(supportsImageInput("qwen/qvq-72b-preview")).toBe(true)
+        expect(supportsImageInput("qwen/qvq-max")).toBe(true)
     })
 
     it("returns false for GLM text models", () => {

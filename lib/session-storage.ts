@@ -1,9 +1,10 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import type { Template } from "./template-storage"
 
 // Constants
 const DB_NAME = "next-ai-drawio"
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = "sessions"
 const MIGRATION_FLAG = "next-ai-drawio-migrated-to-idb"
 const MAX_SESSIONS = 50
@@ -43,10 +44,47 @@ interface ChatSessionDB extends DBSchema {
         value: ChatSession
         indexes: { "by-updated": number }
     }
+    templates: {
+        key: string
+        value: Template
+        indexes: {
+            "by-updated": number
+            "by-pinned": number
+            "by-run-count": number
+            "by-last-used": number
+        }
+    }
 }
 
 // Database singleton
 let dbPromise: Promise<IDBPDatabase<ChatSessionDB>> | null = null
+const resetDBPromise = () => {
+    dbPromise = null
+}
+
+const isClosingError = (error: unknown): boolean => {
+    return (
+        error instanceof DOMException &&
+        error.name === "InvalidStateError" &&
+        /closing/i.test(error.message)
+    )
+}
+
+const withDB = async <T>(
+    action: (db: IDBPDatabase<ChatSessionDB>) => Promise<T>,
+): Promise<T> => {
+    try {
+        const db = await getDB()
+        return await action(db)
+    } catch (error) {
+        if (isClosingError(error)) {
+            resetDBPromise()
+            const db = await getDB()
+            return await action(db)
+        }
+        throw error
+    }
+}
 
 async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
     if (!dbPromise) {
@@ -58,9 +96,42 @@ async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
                     })
                     store.createIndex("by-updated", "updatedAt")
                 }
-                // Future migrations: if (oldVersion < 2) { ... }
+                // Version 2: templates store (added by template-storage.ts)
+                // Note: We also need to include this here to ensure the upgrade
+                // callback properly handles all migrations when opening from this file
+                if (oldVersion < 2) {
+                    // Check if templates store already exists (created by template-storage.ts)
+                    if (!db.objectStoreNames.contains("templates")) {
+                        const templateStore = db.createObjectStore(
+                            "templates",
+                            {
+                                keyPath: "id",
+                            },
+                        )
+                        templateStore.createIndex("by-updated", "updatedAt")
+                        templateStore.createIndex("by-pinned", "pinned")
+                        templateStore.createIndex("by-run-count", "runCount")
+                        templateStore.createIndex("by-last-used", "lastUsedAt")
+                    }
+                }
+            },
+            terminated() {
+                resetDBPromise()
             },
         })
+        dbPromise
+            .then((db) => {
+                db.onversionchange = () => {
+                    db.close()
+                    resetDBPromise()
+                }
+                db.onclose = () => {
+                    resetDBPromise()
+                }
+            })
+            .catch(() => {
+                resetDBPromise()
+            })
     }
     return dbPromise
 }
@@ -75,31 +146,46 @@ export function isIndexedDBAvailable(): boolean {
     }
 }
 
+// Check if IndexedDB is actually usable (not just present).
+// Note: Do NOT close the db here - getDB() returns a shared singleton connection
+// that other code depends on.
+export async function isIndexedDBUsable(): Promise<boolean> {
+    if (!isIndexedDBAvailable()) return false
+    try {
+        await getDB()
+        return true
+    } catch {
+        return false
+    }
+}
+
 // CRUD Operations
 export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
     if (!isIndexedDBAvailable()) return []
     try {
-        const db = await getDB()
-        const tx = db.transaction(STORE_NAME, "readonly")
-        const index = tx.store.index("by-updated")
-        const metadata: SessionMetadata[] = []
+        return await withDB(async (db) => {
+            const tx = db.transaction(STORE_NAME, "readonly")
+            const index = tx.store.index("by-updated")
+            const metadata: SessionMetadata[] = []
 
-        // Use cursor to read only metadata fields (avoids loading full messages/XML)
-        let cursor = await index.openCursor(null, "prev") // newest first
-        while (cursor) {
-            const s = cursor.value
-            metadata.push({
-                id: s.id,
-                title: s.title,
-                createdAt: s.createdAt,
-                updatedAt: s.updatedAt,
-                messageCount: s.messages.length,
-                hasDiagram: !!s.diagramXml && s.diagramXml.trim().length > 0,
-                thumbnailDataUrl: s.thumbnailDataUrl,
-            })
-            cursor = await cursor.continue()
-        }
-        return metadata
+            // Use cursor to read only metadata fields (avoids loading full messages/XML)
+            let cursor = await index.openCursor(null, "prev") // newest first
+            while (cursor) {
+                const s = cursor.value
+                metadata.push({
+                    id: s.id,
+                    title: s.title,
+                    createdAt: s.createdAt,
+                    updatedAt: s.updatedAt,
+                    messageCount: s.messages.length,
+                    hasDiagram:
+                        !!s.diagramXml && s.diagramXml.trim().length > 0,
+                    thumbnailDataUrl: s.thumbnailDataUrl,
+                })
+                cursor = await cursor.continue()
+            }
+            return metadata
+        })
     } catch (error) {
         console.error("Failed to get session metadata:", error)
         return []
@@ -109,8 +195,9 @@ export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
 export async function getSession(id: string): Promise<ChatSession | null> {
     if (!isIndexedDBAvailable()) return null
     try {
-        const db = await getDB()
-        return (await db.get(STORE_NAME, id)) || null
+        return await withDB(async (db) => {
+            return (await db.get(STORE_NAME, id)) || null
+        })
     } catch (error) {
         console.error("Failed to get session:", error)
         return null
@@ -120,8 +207,9 @@ export async function getSession(id: string): Promise<ChatSession | null> {
 export async function saveSession(session: ChatSession): Promise<boolean> {
     if (!isIndexedDBAvailable()) return false
     try {
-        const db = await getDB()
-        await db.put(STORE_NAME, session)
+        await withDB(async (db) => {
+            await db.put(STORE_NAME, session)
+        })
         return true
     } catch (error) {
         // Handle quota exceeded
@@ -133,8 +221,9 @@ export async function saveSession(session: ChatSession): Promise<boolean> {
             await deleteOldestSession()
             // Retry once
             try {
-                const db = await getDB()
-                await db.put(STORE_NAME, session)
+                await withDB(async (db) => {
+                    await db.put(STORE_NAME, session)
+                })
                 return true
             } catch (retryError) {
                 console.error(
@@ -153,8 +242,9 @@ export async function saveSession(session: ChatSession): Promise<boolean> {
 export async function deleteSession(id: string): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
-        const db = await getDB()
-        await db.delete(STORE_NAME, id)
+        await withDB(async (db) => {
+            await db.delete(STORE_NAME, id)
+        })
     } catch (error) {
         console.error("Failed to delete session:", error)
     }
@@ -163,8 +253,9 @@ export async function deleteSession(id: string): Promise<void> {
 export async function getSessionCount(): Promise<number> {
     if (!isIndexedDBAvailable()) return 0
     try {
-        const db = await getDB()
-        return await db.count(STORE_NAME)
+        return await withDB(async (db) => {
+            return await db.count(STORE_NAME)
+        })
     } catch (error) {
         console.error("Failed to get session count:", error)
         return 0
@@ -174,14 +265,15 @@ export async function getSessionCount(): Promise<number> {
 export async function deleteOldestSession(): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
-        const db = await getDB()
-        const tx = db.transaction(STORE_NAME, "readwrite")
-        const index = tx.store.index("by-updated")
-        const cursor = await index.openCursor()
-        if (cursor) {
-            await cursor.delete()
-        }
-        await tx.done
+        await withDB(async (db) => {
+            const tx = db.transaction(STORE_NAME, "readwrite")
+            const index = tx.store.index("by-updated")
+            const cursor = await index.openCursor()
+            if (cursor) {
+                await cursor.delete()
+            }
+            await tx.done
+        })
     } catch (error) {
         console.error("Failed to delete oldest session:", error)
     }

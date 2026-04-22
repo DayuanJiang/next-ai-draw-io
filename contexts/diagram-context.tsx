@@ -20,9 +20,10 @@ interface DiagramContextType {
     loadDiagram: (chart: string, skipValidation?: boolean) => string | null
     handleExport: () => void
     handleExportWithoutHistory: () => void
-    resolverRef: React.Ref<((value: string) => void) | null>
-    drawioRef: React.Ref<DrawIoEmbedRef | null>
+    resolverRef: React.MutableRefObject<((value: string) => void) | null>
+    drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>
     handleDiagramExport: (data: any) => void
+    handleDiagramAutoSave: (data: { xml?: string }) => void
     clearDiagram: () => void
     saveDiagramToFile: (
         filename: string,
@@ -56,8 +57,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const pngResolverRef = useRef<((value: string) => void) | null>(null)
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false)
-    // Track if diagram has been restored after DrawIO remount (e.g., theme change)
-    const hasDiagramRestoredRef = useRef<boolean>(false)
     // Track latest chartXML for restoration after remount
     const chartXMLRef = useRef<string>("")
 
@@ -66,6 +65,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         if (hasCalledOnLoadRef.current) return
         hasCalledOnLoadRef.current = true
         setIsDrawioReady(true)
+        // Restore diagram after remount (e.g., theme/UI change)
+        if (drawioRef.current && isRealDiagram(chartXMLRef.current)) {
+            drawioRef.current.load({ xml: chartXMLRef.current })
+        }
     }
 
     const resetDrawioReady = () => {
@@ -77,24 +80,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         chartXMLRef.current = chartXML
     }, [chartXML])
-
-    // Restore diagram when DrawIO becomes ready after remount (e.g., theme/UI change)
-    useEffect(() => {
-        // Reset restore flag when DrawIO is not ready (preparing for next restore cycle)
-        if (!isDrawioReady) {
-            hasDiagramRestoredRef.current = false
-            return
-        }
-        // Only restore once per ready cycle
-        if (hasDiagramRestoredRef.current) return
-        hasDiagramRestoredRef.current = true
-
-        // Restore diagram from ref if we have one
-        const xmlToRestore = chartXMLRef.current
-        if (isRealDiagram(xmlToRestore) && drawioRef.current) {
-            drawioRef.current.load({ xml: xmlToRestore })
-        }
-    }, [isDrawioReady])
 
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
@@ -234,7 +219,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             saveResolverRef.current = { resolver: null, format: null }
             // For non-xmlsvg formats, skip XML extraction as it will fail
             // Only drawio (which uses xmlsvg internally) has the content attribute
-            if (format === "png" || format === "svg") {
+            // xmlsvg is saved directly as SVG file, no need for extraction
+            if (format === "png" || format === "svg" || format === "xmlsvg") {
                 return
             }
         }
@@ -267,6 +253,16 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    const handleDiagramAutoSave = (data: { xml?: string }) => {
+        if (!data?.xml) return
+        // Don't overwrite a pending restore - if we have a real diagram in state
+        // but DrawIO isn't ready yet, it means we're waiting to restore
+        if (!isDrawioReady && isRealDiagram(chartXML)) {
+            return
+        }
+        setChartXML(data.xml)
+    }
+
     const clearDiagram = () => {
         const emptyDiagram = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
         // Skip validation for trusted internal template (loadDiagram also sets chartXML)
@@ -287,7 +283,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Map format to draw.io export format
-        const drawioFormat = format === "drawio" ? "xmlsvg" : format
+        const drawioFormat =
+            format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
 
         // Set up the resolver before triggering export
         saveResolverRef.current = {
@@ -311,8 +308,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     fileContent = exportData
                     mimeType = "image/png"
                     extension = ".png"
+                } else if (format === "xmlsvg") {
+                    // Editable SVG: pass data URL directly (like PNG)
+                    fileContent = exportData
+                    mimeType = "image/svg+xml"
+                    extension = ".drawio.svg"
                 } else {
-                    // SVG format
+                    // SVG format (view-only)
                     fileContent = exportData
                     mimeType = "image/svg+xml"
                     extension = ".svg"
@@ -391,6 +393,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 resolverRef,
                 drawioRef,
                 handleDiagramExport,
+                handleDiagramAutoSave,
                 clearDiagram,
                 saveDiagramToFile,
                 getThumbnailSvg,

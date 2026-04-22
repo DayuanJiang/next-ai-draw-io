@@ -1,6 +1,7 @@
 "use client"
 
 import {
+    BookmarkPlus,
     Download,
     History,
     Image as ImageIcon,
@@ -19,6 +20,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
+import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
 import { ErrorToast } from "@/components/error-toast"
 import { HistoryDialog } from "@/components/history-dialog"
 import { ModelSelector } from "@/components/model-selector"
@@ -236,6 +238,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
         const [showHistory, setShowHistory] = useState(false)
         const [showUrlDialog, setShowUrlDialog] = useState(false)
+        const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false)
         const [isExtractingUrl, setIsExtractingUrl] = useState(false)
         const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
         // Allow retry when there's an error (even if status is still "streaming" or "submitted")
@@ -439,6 +442,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
         return (
             <form
+                id="chat-form"
                 onSubmit={onSubmit}
                 className={`w-full transition-all duration-200 ${
                     isDragging
@@ -538,6 +542,18 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                                 </ButtonWithTooltip>
                             )}
 
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowSaveAsTemplate(true)}
+                                disabled={isDisabled || !input.trim()}
+                                tooltipContent={dict.templates.saveAsTemplate}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <BookmarkPlus className="h-4 w-4" />
+                            </ButtonWithTooltip>
+
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -610,6 +626,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                         isExtracting={isExtractingUrl}
                     />
                 )}
+                <TemplateCreateDialog
+                    open={showSaveAsTemplate}
+                    onOpenChange={setShowSaveAsTemplate}
+                    onSuccess={() => setShowSaveAsTemplate(false)}
+                    initialPrompt={input.trim()}
+                />
             </form>
         )
     },
