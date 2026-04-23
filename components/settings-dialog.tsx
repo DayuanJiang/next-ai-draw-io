@@ -134,8 +134,11 @@ function SettingsContent({
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
 
     useEffect(() => {
-        // Only fetch if not cached in localStorage
-        if (getStoredAccessCodeRequired() !== null) return
+        // Re-fetch config whenever the dialog opens to ensure we always show
+        // the access code input if the server requires it. This fixes the case
+        // where a stale localStorage cache (from before ACCESS_CODE_LIST was
+        // configured) would hide the access code input.
+        if (!open) return
 
         fetch(getApiEndpoint("/api/config"))
             .then((res) => {
@@ -151,10 +154,9 @@ function SettingsContent({
                 setAccessCodeRequired(required)
             })
             .catch(() => {
-                // Don't cache on error - allow retry on next mount
-                setAccessCodeRequired(false)
+                // Keep existing cached value on error
             })
-    }, [])
+    }, [open])
 
     // Detect current language from pathname
     useEffect(() => {
