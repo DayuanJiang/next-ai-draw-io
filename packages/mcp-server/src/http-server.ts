@@ -695,7 +695,7 @@ function getHtmlPage(sessionId: string): string {
                     // unrelated exports (autosave SVG, sync XML)
                     if (pendingMcpExport) {
                         const d = msg.data;
-                        const isPng = pendingMcpExport === 'png' && (d.startsWith('data:image/png') || (typeof d === 'string' && d.length > 100 && !d.startsWith('<')));
+                        const isPng = pendingMcpExport === 'png' && (d.startsWith('data:image/png') || (typeof d === 'string' && d.length > 100 && !d.startsWith('<') && !d.startsWith('data:')));
                         const isSvg = pendingMcpExport === 'svg' && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
                         if (isPng || isSvg) {
                             pendingMcpExport = null;
