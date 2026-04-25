@@ -24,6 +24,7 @@ import {
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
+import type { ChatMessageMetadata } from "@/lib/chat-metadata"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
@@ -35,6 +36,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import { buildUsageMetadata, parsePricingHeaders } from "@/lib/model-pricing"
 import { findServerModelById } from "@/lib/server-model-config"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
@@ -44,10 +46,17 @@ export const maxDuration = 120
 // Helper function to create cached stream response
 function createCachedStreamResponse(xml: string): Response {
     const toolCallId = `cached-${Date.now()}`
+    const messageMetadata: ChatMessageMetadata = {
+        provider: "cache",
+        modelId: "cached-response",
+    }
 
     const stream = createUIMessageStream({
         execute: async ({ writer }) => {
-            writer.write({ type: "start" })
+            writer.write({
+                type: "start",
+                messageMetadata,
+            })
             writer.write({
                 type: "tool-input-start",
                 toolCallId,
@@ -64,7 +73,19 @@ function createCachedStreamResponse(xml: string): Response {
                 toolName: "display_diagram",
                 input: { xml },
             })
-            writer.write({ type: "finish" })
+            writer.write({
+                type: "finish",
+                messageMetadata: {
+                    finishReason: "stop",
+                    usage: {
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        totalTokens: 0,
+                        estimatedCostUsd: 0,
+                        costAvailable: true,
+                    },
+                } satisfies ChatMessageMetadata,
+            })
         },
     })
 
@@ -179,6 +200,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const provider = req.headers.get("x-ai-provider")
     let baseUrl = req.headers.get("x-ai-base-url")
     const selectedModelId = req.headers.get("x-selected-model-id")
+    const requestPricing = parsePricingHeaders(req.headers)
 
     // For EdgeOne provider, construct full URL from request origin
     // because createOpenAI needs absolute URL, not relative path
@@ -777,13 +799,19 @@ Call this tool to get shape names and usage syntax for a specific library.`,
     return result.toUIMessageStreamResponse({
         sendReasoning: true,
         messageMetadata: ({ part }) => {
+            if (part.type === "start") {
+                return {
+                    provider: resolvedProvider,
+                    modelId,
+                } satisfies ChatMessageMetadata
+            }
+
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage
-                // AI SDK 6 provides totalTokens directly
                 return {
-                    totalTokens: usage?.totalTokens ?? 0,
                     finishReason: (part as any).finishReason,
-                }
+                    usage: buildUsageMetadata(usage, requestPricing),
+                } satisfies ChatMessageMetadata
             }
             return undefined
         },

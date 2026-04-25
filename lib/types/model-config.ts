@@ -23,8 +23,15 @@ export type ProviderName =
     | "minimax"
     | "novita"
 
+export interface ModelPricingConfig {
+    inputPricePerMillionUsd?: string
+    outputPricePerMillionUsd?: string
+    cachedInputPricePerMillionUsd?: string
+    cacheWritePricePerMillionUsd?: string
+}
+
 // Individual model configuration
-export interface ModelConfig {
+export interface ModelConfig extends ModelPricingConfig {
     id: string // UUID for this model
     modelId: string // e.g., "gpt-4o", "claude-sonnet-4-5"
     validated?: boolean // Has this model been validated
@@ -59,7 +66,7 @@ export interface MultiModelConfig {
 }
 
 // Flattened model for dropdown display
-export interface FlattenedModel {
+export interface FlattenedModel extends ModelPricingConfig {
     id: string // Model config UUID or synthetic server ID (e.g., "server:provider:modelId")
     modelId: string // Actual model ID
     provider: ProviderName
@@ -422,6 +429,12 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 awsSessionToken: provider.awsSessionToken,
                 // Vertex AI fields
                 vertexApiKey: provider.vertexApiKey,
+                inputPricePerMillionUsd: model.inputPricePerMillionUsd,
+                outputPricePerMillionUsd: model.outputPricePerMillionUsd,
+                cachedInputPricePerMillionUsd:
+                    model.cachedInputPricePerMillionUsd,
+                cacheWritePricePerMillionUsd:
+                    model.cacheWritePricePerMillionUsd,
 
                 validated: model.validated,
                 source: "user",

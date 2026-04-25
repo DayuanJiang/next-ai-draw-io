@@ -58,7 +58,15 @@
         "clickToEdit": "Click to edit",
         "editMessage": "Edit message",
         "saveAndSubmit": "Save & Submit",
-        "ExtractURL": "Extract from URL"
+        "ExtractURL": "Extract from URL",
+        "inputTokens": "Input",
+        "outputTokens": "Output",
+        "totalTokens": "Total",
+        "estimatedCost": "Cost",
+        "costUnavailable": "Unavailable",
+        "cachedInputTokens": "Cache read",
+        "cacheWriteTokens": "Cache write",
+        "pricingRule": "Pricing rule"
     },
     "examples": {
         "title": "Create diagrams with AI",
@@ -373,6 +381,11 @@
         "customModelId": "Custom model ID...",
         "allAdded": "All added",
         "suggested": "Suggested",
+        "pricingHint": "These values stay in your browser and are used only for estimated cost display. Leave cache prices blank to fall back to the input price.",
+        "inputPricePerMillionUsd": "Input / 1M tokens (USD)",
+        "outputPricePerMillionUsd": "Output / 1M tokens (USD)",
+        "cachedInputPricePerMillionUsd": "Cache read / 1M (optional)",
+        "cacheWritePricePerMillionUsd": "Cache write / 1M (optional)",
         "noModelsConfigured": "No models configured",
         "modelIdEmpty": "Model ID cannot be empty",
         "modelIdExists": "This model ID already exists",
