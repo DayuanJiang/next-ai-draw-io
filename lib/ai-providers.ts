@@ -913,10 +913,10 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.baseUrl,
                 serverBaseUrl,
             )
-            // Only use server's resourceName if user is NOT providing their own API key
-            const resourceName = overrides?.apiKey
-                ? undefined
-                : process.env.AZURE_RESOURCE_NAME
+            // Only use server's resourceName when no baseURL is available.
+            // resourceName is an endpoint component (not a credential), so it is
+            // safe to use as a fallback even when the user brings their own API key.
+            const resourceName = !baseURL ? process.env.AZURE_RESOURCE_NAME : undefined
             // Azure requires either baseURL or resourceName to construct the endpoint
             // resourceName constructs: https://{resourceName}.openai.azure.com/openai/v1{path}
             if (baseURL || resourceName || overrides?.apiKey) {
@@ -1262,7 +1262,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "glm":
         case "qwen":
         case "qiniu":
-        case "kimi":
         case "novita": {
             const envVar = PROVIDER_ENV_VARS[provider]
             if (!envVar) {
@@ -1285,6 +1284,23 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 baseURL,
             })
             model = customProvider.chat(modelId)
+            break
+        }
+
+        case "kimi": {
+            const apiKey = resolveApiKey(overrides, "KIMI_API_KEY")
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                resolveBaseUrlEnv(overrides, "KIMI_BASE_URL"),
+                PROVIDER_INFO["kimi"]?.defaultBaseUrl,
+            )
+            // Use createDeepSeek to properly handle reasoning_content for Kimi
+            // thinking models (e.g., kimi-k2.6). Kimi's API uses the same
+            // reasoning_content field as DeepSeek, so this provider correctly
+            // captures and replays reasoning in multi-turn conversations.
+            const customProvider = createDeepSeek({ apiKey, baseURL })
+            model = customProvider(modelId)
             break
         }
 

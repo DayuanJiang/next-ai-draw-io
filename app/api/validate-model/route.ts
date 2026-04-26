@@ -4,6 +4,7 @@ import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
 import { createGateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createVertex } from "@ai-sdk/google-vertex"
+import { createAzure } from "@ai-sdk/azure"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
@@ -126,11 +127,11 @@ export async function POST(req: Request) {
             }
 
             case "azure": {
-                const azure = createOpenAI({
+                const azureClient = createAzure({
                     apiKey,
-                    baseURL: baseUrl,
+                    ...(baseUrl && { baseURL: baseUrl }),
                 })
-                model = azure.chat(modelId)
+                model = azureClient(modelId)
                 break
             }
 
