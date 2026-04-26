@@ -1262,7 +1262,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "glm":
         case "qwen":
         case "qiniu":
-        case "kimi":
         case "novita": {
             const envVar = PROVIDER_ENV_VARS[provider]
             if (!envVar) {
@@ -1285,6 +1284,23 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 baseURL,
             })
             model = customProvider.chat(modelId)
+            break
+        }
+
+        case "kimi": {
+            const apiKey = resolveApiKey(overrides, "KIMI_API_KEY")
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                resolveBaseUrlEnv(overrides, "KIMI_BASE_URL"),
+                PROVIDER_INFO["kimi"]?.defaultBaseUrl,
+            )
+            // Use createDeepSeek to properly handle reasoning_content for Kimi
+            // thinking models (e.g., kimi-k2.6). Kimi's API uses the same
+            // reasoning_content field as DeepSeek, so this provider correctly
+            // captures and replays reasoning in multi-turn conversations.
+            const customProvider = createDeepSeek({ apiKey, baseURL })
+            model = customProvider(modelId)
             break
         }
 
