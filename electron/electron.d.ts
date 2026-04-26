@@ -101,8 +101,8 @@ declare global {
 }
 
 export type {
-    ConfigPreset,
     ApplyPresetResult,
+    ConfigPreset,
     ProxyConfig,
     SetProxyResult,
     SetUserLocaleResult,
