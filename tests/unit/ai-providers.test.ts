@@ -245,6 +245,67 @@ vi.mock("ollama-ai-provider-v2", () => {
     return { createOllama: mockCreateOllama, ollama: mockOllama }
 })
 
+vi.mock("@ai-sdk/deepseek", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateDeepSeek = vi.fn(() => mockProviderFn)
+    const mockDeepseek = vi.fn(() => mockModel)
+    return { createDeepSeek: mockCreateDeepSeek, deepseek: mockDeepseek }
+})
+
+describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
+    let createDeepSeekMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.KIMI_API_KEY = process.env.KIMI_API_KEY
+        savedEnv.KIMI_BASE_URL = process.env.KIMI_BASE_URL
+        delete process.env.KIMI_BASE_URL
+
+        const mod = await import("@ai-sdk/deepseek")
+        createDeepSeekMock = mod.createDeepSeek as ReturnType<typeof vi.fn>
+        createDeepSeekMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.KIMI_API_KEY = savedEnv.KIMI_API_KEY
+        process.env.KIMI_BASE_URL = savedEnv.KIMI_BASE_URL
+    })
+
+    it("uses createDeepSeek with Kimi default base URL for reasoning_content support", () => {
+        process.env.KIMI_API_KEY = "test-kimi-key"
+
+        getAIModel({
+            provider: "kimi",
+            apiKey: "test-kimi-key",
+            modelId: "moonshot-v1-8k",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://api.moonshot.cn/v1",
+            }),
+        )
+    })
+
+    it("uses custom base URL when provided for kimi provider", () => {
+        process.env.KIMI_API_KEY = "test-kimi-key"
+
+        getAIModel({
+            provider: "kimi",
+            apiKey: "test-kimi-key",
+            baseUrl: "https://custom-kimi-endpoint.com/v1",
+            modelId: "kimi-k2.6",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://custom-kimi-endpoint.com/v1",
+            }),
+        )
+    })
+})
+
 describe("Ollama API key security", () => {
     let createOllamaMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
