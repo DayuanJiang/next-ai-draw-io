@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/dayuanjiang-next-ai-draw-io-badge.png)](https://mseep.ai/app/dayuanjiang-next-ai-draw-io)
+
 # Next AI Draw.io
 
 <div align="center">
