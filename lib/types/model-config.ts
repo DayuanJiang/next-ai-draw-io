@@ -22,6 +22,7 @@ export type ProviderName =
     | "kimi"
     | "minimax"
     | "novita"
+    | "claudecode"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -103,6 +104,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     modelscope: "modelscope",
     minimax: "minimax",
     novita: "novita",
+    claudecode: "anthropic",
 }
 
 // Provider metadata
@@ -184,6 +186,9 @@ export const PROVIDER_INFO: Record<
     novita: {
         label: "Novita AI",
         defaultBaseUrl: "https://api.novita.ai/openai",
+    },
+    claudecode: {
+        label: "Claude Code (Local CLI)",
     },
 }
 
@@ -361,6 +366,17 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "moonshotai/kimi-k2.5",
         "zai-org/glm-5",
         "minimax/minimax-m2.5",
+    ],
+    claudecode: [
+        // Aliases accepted by the local `claude` CLI (uses your existing
+        // Claude Code login - no API key needed).
+        "default",
+        "sonnet",
+        "opus",
+        "haiku",
+        "claude-sonnet-4-5",
+        "claude-opus-4-5",
+        "claude-haiku-4-5",
     ],
 }
 
