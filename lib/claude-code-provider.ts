@@ -87,6 +87,8 @@ interface FlattenedPrompt {
     conversation: string
 }
 
+const SYSTEM_PROMPT_ARG_LIMIT = 60_000
+
 function partsToText(
     parts: ReadonlyArray<{ type: string; [k: string]: unknown }>,
 ): { text: string; warnings: string[] } {
@@ -186,20 +188,43 @@ function extractDiagramXml(text: string): string | null {
 interface SpawnConfig {
     bin: string
     modelId: string
+    systemPrompt: string
+    userPrompt: string
     abortSignal?: AbortSignal
 }
 
-function spawnClaude(prompt: string, config: SpawnConfig) {
+function spawnClaude(config: SpawnConfig) {
+    // Replace Claude Code's default system prompt with ours so the CLI skips
+    // CLAUDE.md auto-discovery, auto-memory, and other dynamic-prompt work
+    // that would otherwise add seconds of cold-start latency per request.
+    // For very large system prompts that would blow argv limits we fall back
+    // to passing it as part of stdin alongside the user message.
     const args = ["--print", "--no-session-persistence"]
     if (config.modelId && config.modelId.toLowerCase() !== "default") {
         args.push("--model", config.modelId)
     }
-    args.push(prompt)
+
+    const sysFitsInArgv = config.systemPrompt.length <= SYSTEM_PROMPT_ARG_LIMIT
+    let stdinPayload: string
+    if (sysFitsInArgv) {
+        args.push("--system-prompt", config.systemPrompt)
+        stdinPayload = config.userPrompt
+    } else {
+        // Concatenate but mark the boundary clearly so the model still
+        // recognises the system instructions.
+        stdinPayload = `${config.systemPrompt}\n\n${config.userPrompt}`
+    }
 
     const proc = spawn(config.bin, args, {
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         env: process.env,
     })
+
+    proc.stdin?.on("error", () => {
+        // Ignore EPIPE — the close handler will surface a meaningful error
+        // via stderr / exit code if the process actually crashed.
+    })
+    proc.stdin?.end(stdinPayload)
 
     config.abortSignal?.addEventListener(
         "abort",
@@ -246,13 +271,12 @@ export function createClaudeCodeModel(
         callOptions: LanguageModelV3CallOptions,
     ): Promise<LanguageModelV3StreamResult> {
         const { flattened, warnings } = flattenPrompt(callOptions.prompt)
-        const fullPrompt = flattened.conversation
-            ? `${flattened.systemText}\n\n${flattened.conversation}`
-            : flattened.systemText
 
-        const proc = spawnClaude(fullPrompt, {
+        const proc = spawnClaude({
             bin,
             modelId,
+            systemPrompt: flattened.systemText,
+            userPrompt: flattened.conversation || flattened.systemText,
             abortSignal: callOptions.abortSignal,
         })
 
