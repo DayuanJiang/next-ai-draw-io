@@ -1,5 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import type { ChatMessageMetadata } from "@/lib/chat-metadata"
 import type { Template } from "./template-storage"
 
 // Constants
@@ -25,6 +26,7 @@ export interface ChatSession {
 export interface StoredMessage {
     id: string
     role: "user" | "assistant" | "system"
+    metadata?: ChatMessageMetadata
     parts: Array<{ type: string; [key: string]: unknown }>
 }
 
@@ -345,9 +347,19 @@ export function sanitizeMessage(message: unknown): StoredMessage | null {
         })
     }
 
+    let metadata: ChatMessageMetadata | undefined
+    if (msg.metadata && typeof msg.metadata === "object") {
+        try {
+            metadata = structuredClone(msg.metadata as ChatMessageMetadata)
+        } catch {
+            metadata = undefined
+        }
+    }
+
     return {
         id: msg.id as string,
         role: role as "user" | "assistant" | "system",
+        metadata,
         parts,
     }
 }

@@ -10,13 +10,23 @@ export function createMockSSEResponse(
     xml: string,
     text: string,
     toolName = "display_diagram",
+    messageMetadata?: {
+        start?: Record<string, unknown>
+        finish?: Record<string, unknown>
+    },
 ) {
     const messageId = `msg_${Date.now()}`
     const toolCallId = `call_${Date.now()}`
     const textId = `text_${Date.now()}`
 
     const events = [
-        { type: "start", messageId },
+        {
+            type: "start",
+            messageId,
+            ...(messageMetadata?.start && {
+                messageMetadata: messageMetadata.start,
+            }),
+        },
         { type: "text-start", id: textId },
         { type: "text-delta", id: textId, delta: text },
         { type: "text-end", id: textId },
@@ -27,7 +37,12 @@ export function createMockSSEResponse(
             toolCallId,
             output: "Successfully displayed the diagram",
         },
-        { type: "finish" },
+        {
+            type: "finish",
+            ...(messageMetadata?.finish && {
+                messageMetadata: messageMetadata.finish,
+            }),
+        },
     ]
 
     return (

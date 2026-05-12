@@ -386,6 +386,10 @@ export function getSelectedAIConfig(): {
     selectedModelId: string
     // Vertex AI credentials (Express Mode)
     vertexApiKey: string
+    inputPricePerMillionUsd: string
+    outputPricePerMillionUsd: string
+    cachedInputPricePerMillionUsd: string
+    cacheWritePricePerMillionUsd: string
 } {
     const empty = {
         accessCode: "",
@@ -399,6 +403,10 @@ export function getSelectedAIConfig(): {
         awsSessionToken: "",
         selectedModelId: "",
         vertexApiKey: "",
+        inputPricePerMillionUsd: "",
+        outputPricePerMillionUsd: "",
+        cachedInputPricePerMillionUsd: "",
+        cacheWritePricePerMillionUsd: "",
     }
 
     if (typeof window === "undefined") return empty
@@ -423,6 +431,10 @@ export function getSelectedAIConfig(): {
             awsSessionToken: "",
             selectedModelId: "",
             vertexApiKey: "",
+            inputPricePerMillionUsd: "",
+            outputPricePerMillionUsd: "",
+            cachedInputPricePerMillionUsd: "",
+            cacheWritePricePerMillionUsd: "",
         }
     }
 
@@ -478,5 +490,21 @@ export function getSelectedAIConfig(): {
         selectedModelId: config.selectedModelId || "",
         // Vertex AI credentials (Express Mode)
         vertexApiKey: model.vertexApiKey || "",
+        inputPricePerMillionUsd:
+            typeof model.inputPricePerMillionUsd === "string"
+                ? model.inputPricePerMillionUsd
+                : "",
+        outputPricePerMillionUsd:
+            typeof model.outputPricePerMillionUsd === "string"
+                ? model.outputPricePerMillionUsd
+                : "",
+        cachedInputPricePerMillionUsd:
+            typeof model.cachedInputPricePerMillionUsd === "string"
+                ? model.cachedInputPricePerMillionUsd
+                : "",
+        cacheWritePricePerMillionUsd:
+            typeof model.cacheWritePricePerMillionUsd === "string"
+                ? model.cacheWritePricePerMillionUsd
+                : "",
     }
 }

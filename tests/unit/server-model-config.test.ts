@@ -46,6 +46,22 @@ describe("ServerModelsConfigSchema", () => {
         ).toThrow()
     })
 
+    it("rejects inherited object keys as provider names", () => {
+        const invalidConfig = {
+            providers: [
+                {
+                    name: "Prototype Provider",
+                    provider: "toString" as any,
+                    models: ["model-1"],
+                },
+            ],
+        }
+
+        expect(() =>
+            ServerModelsConfigSchema.parse(invalidConfig as any),
+        ).toThrow()
+    })
+
     it("accepts apiKeyEnv as single string", () => {
         const config: ServerModelsConfig = {
             providers: [

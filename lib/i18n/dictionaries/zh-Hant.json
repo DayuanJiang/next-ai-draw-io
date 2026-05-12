@@ -58,7 +58,15 @@
         "clickToEdit": "點擊編輯",
         "editMessage": "編輯訊息",
         "saveAndSubmit": "儲存並提交",
-        "ExtractURL": "從 URL 擷取"
+        "ExtractURL": "從 URL 擷取",
+        "inputTokens": "輸入",
+        "outputTokens": "輸出",
+        "totalTokens": "總計",
+        "estimatedCost": "費用",
+        "costUnavailable": "暫不可用",
+        "cachedInputTokens": "快取讀取",
+        "cacheWriteTokens": "快取寫入",
+        "pricingRule": "計費規則"
     },
     "examples": {
         "title": "用 AI 建立圖表",
@@ -373,6 +381,11 @@
         "customModelId": "自訂模型 ID...",
         "allAdded": "已全部新增",
         "suggested": "推薦",
+        "pricingHint": "這些價格只會保存在你的瀏覽器中，僅用於生成後的費用估算。快取價格留空時會回退到輸入價格。",
+        "inputPricePerMillionUsd": "輸入 / 每 1M Tokens (USD)",
+        "outputPricePerMillionUsd": "輸出 / 每 1M Tokens (USD)",
+        "cachedInputPricePerMillionUsd": "快取讀取 / 每 1M（可選）",
+        "cacheWritePricePerMillionUsd": "快取寫入 / 每 1M（可選）",
         "noModelsConfigured": "尚未配置模型",
         "modelIdEmpty": "模型 ID 不能為空",
         "modelIdExists": "此模型 ID 已存在",

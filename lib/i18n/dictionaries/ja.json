@@ -58,7 +58,15 @@
         "clickToEdit": "クリックして編集",
         "editMessage": "メッセージを編集",
         "saveAndSubmit": "保存して送信",
-        "ExtractURL": "URLから抽出"
+        "ExtractURL": "URLから抽出",
+        "inputTokens": "入力",
+        "outputTokens": "出力",
+        "totalTokens": "合計",
+        "estimatedCost": "費用",
+        "costUnavailable": "利用不可",
+        "cachedInputTokens": "キャッシュ読取",
+        "cacheWriteTokens": "キャッシュ書込",
+        "pricingRule": "料金ルール"
     },
     "examples": {
         "title": "AI でダイアグラムを作成",
@@ -327,6 +335,11 @@
         "customModelId": "カスタムモデル ID...",
         "allAdded": "すべて追加済み",
         "suggested": "おすすめ",
+        "pricingHint": "これらの価格はブラウザ内だけに保存され、生成後の概算コスト表示にのみ使われます。キャッシュ価格を空欄にすると入力価格を使います。",
+        "inputPricePerMillionUsd": "入力 / 100万トークン (USD)",
+        "outputPricePerMillionUsd": "出力 / 100万トークン (USD)",
+        "cachedInputPricePerMillionUsd": "キャッシュ読み取り / 100万 (任意)",
+        "cacheWritePricePerMillionUsd": "キャッシュ書き込み / 100万 (任意)",
         "noModelsConfigured": "モデルが設定されていません",
         "modelIdEmpty": "モデル ID は空にできません",
         "modelIdExists": "このモデル ID は既に存在します",

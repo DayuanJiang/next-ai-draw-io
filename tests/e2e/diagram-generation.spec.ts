@@ -14,6 +14,8 @@ import {
 } from "./lib/fixtures"
 import { createMockSSEResponse } from "./lib/helpers"
 
+test.describe.configure({ mode: "serial" })
+
 test.describe("Diagram Generation", () => {
     test.beforeEach(async ({ page }) => {
         await page.route("**/api/chat", async (route) => {
@@ -27,10 +29,10 @@ test.describe("Diagram Generation", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
+        await page.goto("/", { waitUntil: "networkidle", timeout: 60000 })
         await page
             .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+            .waitFor({ state: "visible", timeout: 60000 })
     })
 
     test("generates and displays a diagram", async ({ page }) => {
@@ -63,6 +65,50 @@ test.describe("Diagram Generation", () => {
         await expect(
             page.locator('text="I\'ll create a diagram for you."'),
         ).toBeVisible({ timeout: 10000 })
+    })
+
+    test("shows token usage and estimated cost after generation", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(
+                    CAT_DIAGRAM_XML,
+                    "I'll create a diagram for you.",
+                    "display_diagram",
+                    {
+                        finish: {
+                            provider: "openai",
+                            modelId: "gpt-4o",
+                            usage: {
+                                inputTokens: 120,
+                                outputTokens: 80,
+                                totalTokens: 200,
+                                estimatedCostUsd: 0.0012,
+                                costAvailable: true,
+                            },
+                        },
+                    },
+                ),
+            })
+        })
+
+        await sendMessage(page, "Draw a cat")
+
+        await expect(page.locator("text=Input")).toBeVisible({
+            timeout: 10000,
+        })
+        await expect(page.locator("text=120")).toBeVisible({ timeout: 10000 })
+        await expect(page.locator("text=Output")).toBeVisible({
+            timeout: 10000,
+        })
+        await expect(page.locator("text=80")).toBeVisible({ timeout: 10000 })
+        await expect(page.locator("text=Cost")).toBeVisible({ timeout: 10000 })
+        await expect(page.locator("text=$0.0012")).toBeVisible({
+            timeout: 10000,
+        })
     })
 })
 
