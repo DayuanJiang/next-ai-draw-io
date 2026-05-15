@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import type { DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
 
@@ -63,8 +64,8 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    drawioUi: string
-    onDrawioUiChange: (theme: string) => void
+    drawioUi: DrawioTheme
+    onDrawioUiChange: (theme: DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     minimalStyle?: boolean
@@ -436,10 +437,13 @@ function SettingsContent({
                     >
                         <Select
                             value={drawioUi}
-                            onValueChange={onDrawioUiChange}
+                            onValueChange={(v) =>
+                                onDrawioUiChange(v as DrawioTheme)
+                            }
                         >
                             <SelectTrigger
                                 id="drawio-ui-select"
+                                aria-label={dict.settings.drawioStyle}
                                 className="w-[120px] h-9 rounded-xl"
                             >
                                 <SelectValue />
@@ -447,10 +451,18 @@ function SettingsContent({
                             <SelectContent>
                                 <SelectItem value="kennedy">Kennedy</SelectItem>
                                 <SelectItem value="atlas">Atlas</SelectItem>
-                                <SelectItem value="dark">Dark</SelectItem>
-                                <SelectItem value="min">Minimal</SelectItem>
-                                <SelectItem value="sketch">Sketch</SelectItem>
-                                <SelectItem value="simple">Simple</SelectItem>
+                                <SelectItem value="dark">
+                                    {dict.settings.themeDark}
+                                </SelectItem>
+                                <SelectItem value="min">
+                                    {dict.settings.themeMinimal}
+                                </SelectItem>
+                                <SelectItem value="sketch">
+                                    {dict.settings.themeSketch}
+                                </SelectItem>
+                                <SelectItem value="simple">
+                                    {dict.settings.themeSimple}
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </SettingItem>

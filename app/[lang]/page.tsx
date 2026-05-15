@@ -10,12 +10,9 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { type DrawioTheme, isDrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { isIndexedDBUsable } from "@/lib/session-storage"
-
-/** All supported Draw.io UI themes */
-const DRAWIO_THEMES = ["kennedy", "atlas", "dark", "min", "sketch", "simple"] as const
-type DrawioTheme = (typeof DRAWIO_THEMES)[number]
 
 export default function Home() {
     const {
@@ -60,11 +57,8 @@ export default function Home() {
         }
 
         const savedUi = localStorage.getItem("drawio-theme")
-        if (
-            savedUi &&
-            (DRAWIO_THEMES as readonly string[]).includes(savedUi)
-        ) {
-            setDrawioUi(savedUi as DrawioTheme)
+        if (isDrawioTheme(savedUi)) {
+            setDrawioUi(savedUi)
         }
 
         const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
@@ -222,7 +216,8 @@ export default function Home() {
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,
-                                            dark: darkMode,
+                                            dark:
+                                                darkMode || drawioUi === "dark",
                                             lang: currentLang,
                                             // Enable offline mode in Electron to disable external service calls
                                             ...(isElectron && {
