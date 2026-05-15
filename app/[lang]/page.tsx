@@ -13,6 +13,10 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { isIndexedDBUsable } from "@/lib/session-storage"
 
+/** All supported Draw.io UI themes */
+const DRAWIO_THEMES = ["kennedy", "atlas", "dark", "min", "sketch", "simple"] as const
+type DrawioTheme = (typeof DRAWIO_THEMES)[number]
+
 export default function Home() {
     const {
         drawioRef,
@@ -27,7 +31,7 @@ export default function Home() {
     const currentLang = (pathname.split("/")[1] || i18n.defaultLocale) as Locale
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
-    const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
+    const [drawioUi, setDrawioUi] = useState<DrawioTheme>("min")
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
@@ -56,8 +60,11 @@ export default function Home() {
         }
 
         const savedUi = localStorage.getItem("drawio-theme")
-        if (savedUi === "min" || savedUi === "sketch") {
-            setDrawioUi(savedUi)
+        if (
+            savedUi &&
+            (DRAWIO_THEMES as readonly string[]).includes(savedUi)
+        ) {
+            setDrawioUi(savedUi as DrawioTheme)
         }
 
         const savedDarkMode = localStorage.getItem("next-ai-draw-io-dark-mode")
@@ -113,10 +120,9 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    const handleDrawioUiChange = () => {
-        const newUi = drawioUi === "min" ? "sketch" : "min"
-        localStorage.setItem("drawio-theme", newUi)
-        setDrawioUi(newUi)
+    const handleDrawioUiChange = (theme: DrawioTheme) => {
+        localStorage.setItem("drawio-theme", theme)
+        setDrawioUi(theme)
         setIsDrawioReady(false)
         resetDrawioReady()
     }
@@ -264,7 +270,7 @@ export default function Home() {
                                 isVisible={isChatVisible}
                                 onToggleVisibility={toggleChatPanel}
                                 drawioUi={drawioUi}
-                                onToggleDrawioUi={handleDrawioUiChange}
+                                onDrawioUiChange={handleDrawioUiChange}
                                 darkMode={darkMode}
                                 onToggleDarkMode={handleDarkModeChange}
                                 isMobile={isMobile}

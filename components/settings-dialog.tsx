@@ -63,8 +63,8 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    drawioUi: "min" | "sketch"
-    onToggleDrawioUi: () => void
+    drawioUi: string
+    onDrawioUiChange: (theme: string) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     minimalStyle?: boolean
@@ -90,7 +90,7 @@ function SettingsContent({
     open,
     onOpenChange,
     drawioUi,
-    onToggleDrawioUi,
+    onDrawioUiChange,
     darkMode,
     onToggleDarkMode,
     minimalStyle = false,
@@ -432,23 +432,27 @@ function SettingsContent({
                     {/* Draw.io Style */}
                     <SettingItem
                         label={dict.settings.drawioStyle}
-                        description={`${dict.settings.drawioStyleDescription} ${
-                            drawioUi === "min"
-                                ? dict.settings.minimal
-                                : dict.settings.sketch
-                        }`}
+                        description={dict.settings.drawioStyleDescription}
                     >
-                        <Button
-                            id="drawio-ui"
-                            variant="outline"
-                            onClick={onToggleDrawioUi}
-                            className="h-9 w-[120px] rounded-xl border-border-subtle hover:bg-interactive-hover font-normal"
+                        <Select
+                            value={drawioUi}
+                            onValueChange={onDrawioUiChange}
                         >
-                            {dict.settings.switchTo}{" "}
-                            {drawioUi === "min"
-                                ? dict.settings.sketch
-                                : dict.settings.minimal}
-                        </Button>
+                            <SelectTrigger
+                                id="drawio-ui-select"
+                                className="w-[120px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="kennedy">Kennedy</SelectItem>
+                                <SelectItem value="atlas">Atlas</SelectItem>
+                                <SelectItem value="dark">Dark</SelectItem>
+                                <SelectItem value="min">Minimal</SelectItem>
+                                <SelectItem value="sketch">Sketch</SelectItem>
+                                <SelectItem value="simple">Simple</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </SettingItem>
 
                     {/* Diagram Style */}
