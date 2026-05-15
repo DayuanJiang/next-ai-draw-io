@@ -103,6 +103,7 @@
         "themeDescription": "界面和 DrawIO 画布的深色/浅色模式。",
         "drawioStyle": "DrawIO 样式",
         "drawioStyleDescription": "画布样式",
+        "themeDefault": "默认",
         "themeDark": "深色",
         "themeMinimal": "简约",
         "themeSketch": "草图",

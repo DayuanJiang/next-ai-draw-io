@@ -103,6 +103,7 @@
         "themeDescription": "インターフェースと DrawIO キャンバスのダーク/ライトモード。",
         "drawioStyle": "DrawIO スタイル",
         "drawioStyleDescription": "キャンバススタイル",
+        "themeDefault": "デフォルト",
         "themeDark": "ダーク",
         "themeMinimal": "ミニマル",
         "themeSketch": "スケッチ",

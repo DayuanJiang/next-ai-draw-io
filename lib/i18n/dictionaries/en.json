@@ -103,6 +103,7 @@
         "themeDescription": "Dark/Light mode for interface and DrawIO canvas.",
         "drawioStyle": "DrawIO Style",
         "drawioStyleDescription": "Canvas style",
+        "themeDefault": "Default",
         "themeDark": "Dark",
         "themeMinimal": "Minimal",
         "themeSketch": "Sketch",

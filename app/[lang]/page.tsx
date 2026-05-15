@@ -28,7 +28,7 @@ export default function Home() {
     const currentLang = (pathname.split("/")[1] || i18n.defaultLocale) as Locale
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
-    const [drawioUi, setDrawioUi] = useState<DrawioTheme>("min")
+    const [drawioUi, setDrawioUi] = useState<DrawioTheme>("kennedy")
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)

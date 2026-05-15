@@ -449,7 +449,9 @@ function SettingsContent({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="kennedy">Kennedy</SelectItem>
+                                <SelectItem value="kennedy">
+                                    {dict.settings.themeDefault}
+                                </SelectItem>
                                 <SelectItem value="atlas">Atlas</SelectItem>
                                 <SelectItem value="dark">
                                     {dict.settings.themeDark}
