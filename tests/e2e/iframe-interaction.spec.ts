@@ -34,8 +34,8 @@ test.describe("Iframe Interaction", () => {
         // Draw.io menu items should be accessible
         await expect(
             frame
-                .locator('text="Diagram"')
-                .or(frame.locator('[title*="Diagram"]')),
+                .locator('[title*="Diagram"]')
+                .first(),
         ).toBeVisible({ timeout: 10000 })
     })
 
