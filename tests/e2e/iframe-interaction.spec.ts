@@ -32,11 +32,9 @@ test.describe("Iframe Interaction", () => {
         const frame = getIframeContent(page)
 
         // Draw.io menu items should be accessible
-        await expect(
-            frame
-                .locator('[title*="Diagram"]')
-                .first(),
-        ).toBeVisible({ timeout: 10000 })
+        await expect(frame.locator('[title*="Diagram"]').first()).toBeVisible({
+            timeout: 10000,
+        })
     })
 
     test("diagram XML is rendered in iframe after generation", async ({
