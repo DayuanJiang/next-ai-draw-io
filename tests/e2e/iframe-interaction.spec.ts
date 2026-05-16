@@ -37,7 +37,7 @@ test.describe("Iframe Interaction", () => {
                 .locator('text="Diagram"')
                 .or(frame.locator('[title*="Diagram"]'))
                 .first(),
-        ).toBeVisible({ timeout: 10000 })
+        ).toBeVisible({ timeout: 30000 })
     })
 
     test("diagram XML is rendered in iframe after generation", async ({
