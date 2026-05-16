@@ -36,6 +36,7 @@ test.describe("Iframe Interaction", () => {
             frame
                 .locator('text="Diagram"')
                 .or(frame.locator('[title*="Diagram"]'))
+                .filter({ visible: true })
                 .first(),
         ).toBeVisible({ timeout: 30000 })
     })
