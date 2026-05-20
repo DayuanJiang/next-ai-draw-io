@@ -9,6 +9,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
+import { createClaudeCodeModel } from "@/lib/claude-code-provider"
 import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
@@ -100,6 +101,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "kimi",
     "minimax",
     "novita",
+    "claudecode",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -559,6 +561,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     kimi: "KIMI_API_KEY",
     minimax: "MINIMAX_API_KEY",
     novita: "NOVITA_API_KEY",
+    claudecode: null, // Uses local `claude` CLI login - no key needed
 }
 
 /**
@@ -1259,6 +1262,17 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "claudecode": {
+            // Wraps the local `claude` CLI as an AI SDK provider.
+            // Auth is delegated to the user's existing Claude Code login
+            // (or ANTHROPIC_API_KEY if set). No baseUrl / apiKey is used
+            // by this provider — those overrides are ignored.
+            model = createClaudeCodeModel(modelId, {
+                cliPath: process.env.CLAUDE_CODE_BIN,
+            })
+            break
+        }
+
         case "glm":
         case "qwen":
         case "qiniu":
@@ -1306,7 +1320,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, claudecode`,
             )
     }
 
