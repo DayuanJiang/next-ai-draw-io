@@ -573,7 +573,15 @@ function detectProvider(): ProviderName | null {
             // Skip ollama - it doesn't require credentials
             continue
         }
-        if (process.env[envVar]) {
+        // Anthropic accepts ANTHROPIC_AUTH_TOKEN (Bearer auth) as alternative to ANTHROPIC_API_KEY
+        const hasCredential =
+            provider === "anthropic"
+                ? !!(
+                      process.env.ANTHROPIC_API_KEY ||
+                      process.env.ANTHROPIC_AUTH_TOKEN
+                  )
+                : !!process.env[envVar]
+        if (hasCredential) {
             // Azure requires additional config (baseURL or resourceName)
             if (provider === "azure") {
                 const hasBaseUrl = !!process.env.AZURE_BASE_URL
@@ -615,13 +623,26 @@ function validateProviderCredentials(
         return
     }
 
-    // Use custom env var name if provided, otherwise use default
-    const requiredVar = customApiKeyEnv || PROVIDER_ENV_VARS[provider]
-    if (requiredVar && !process.env[requiredVar]) {
-        throw new Error(
-            `${requiredVar} environment variable is required for ${provider} provider. ` +
-                `Please set it in your .env.local file.`,
+    // Anthropic accepts ANTHROPIC_AUTH_TOKEN (Bearer auth) as alternative to ANTHROPIC_API_KEY
+    if (provider === "anthropic" && !customApiKeyEnv) {
+        const hasCredential = !!(
+            process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN
         )
+        if (!hasCredential) {
+            throw new Error(
+                `ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable is required for anthropic provider. ` +
+                    `Please set one in your .env.local file.`,
+            )
+        }
+    } else {
+        // Use custom env var name if provided, otherwise use default
+        const requiredVar = customApiKeyEnv || PROVIDER_ENV_VARS[provider]
+        if (requiredVar && !process.env[requiredVar]) {
+            throw new Error(
+                `${requiredVar} environment variable is required for ${provider} provider. ` +
+                    `Please set it in your .env.local file.`,
+            )
+        }
     }
 
     // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition to API key
@@ -845,8 +866,16 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 serverBaseUrl,
                 "https://api.anthropic.com/v1",
             )
+            // Anthropic supports two auth methods (mutually exclusive):
+            // - apiKey: sends as `x-api-key` header
+            // - authToken: sends as `Authorization: Bearer <token>` header
+            // Prefer apiKey if present (including client overrides); fall back
+            // to ANTHROPIC_AUTH_TOKEN env var only when no apiKey is available.
+            const authToken = !apiKey
+                ? process.env.ANTHROPIC_AUTH_TOKEN
+                : undefined
             const customProvider = createAnthropic({
-                apiKey,
+                ...(authToken ? { authToken } : { apiKey }),
                 baseURL,
                 headers: ANTHROPIC_BETA_HEADERS,
             })
