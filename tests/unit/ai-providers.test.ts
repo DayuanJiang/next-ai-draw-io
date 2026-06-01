@@ -180,11 +180,14 @@ describe("supportsImageInput", () => {
         expect(supportsImageInput("moonshot-v1-128k")).toBe(false)
     })
 
-    it("returns false for MiniMax text models", () => {
+    it("returns false for MiniMax M2 text models", () => {
         expect(supportsImageInput("MiniMax-M2.7")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2.5")).toBe(false)
+        expect(supportsImageInput("MiniMax-M2.7-highspeed")).toBe(false)
         expect(supportsImageInput("MiniMax-M2")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2.5-highspeed")).toBe(false)
+    })
+
+    it("returns true for MiniMax M3 (supports image input)", () => {
+        expect(supportsImageInput("MiniMax-M3")).toBe(true)
     })
 
     it("returns false for DeepSeek text models", () => {

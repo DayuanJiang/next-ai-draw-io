@@ -1361,8 +1361,12 @@ export function supportsImageInput(modelId: string): boolean {
         return false
     }
 
-    // MiniMax text models (MiniMax-M2.x series are text-only)
-    if (lowerModelId.includes("minimax") && !hasVisionIndicator) {
+    // MiniMax text models (MiniMax-M2.x series are text-only; M3 supports image input)
+    if (
+        lowerModelId.includes("minimax") &&
+        !hasVisionIndicator &&
+        !lowerModelId.includes("m3")
+    ) {
         return false
     }
 

@@ -230,7 +230,7 @@ MiniMax supports two API formats:
 
 ```bash
 MINIMAX_API_KEY=your_api_key
-AI_MODEL=MiniMax-M2.7
+AI_MODEL=MiniMax-M3
 ```
 
 Optional configuration:
