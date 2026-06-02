@@ -53,6 +53,13 @@ ANTHROPIC_API_KEY=your_api_key
 AI_MODEL=claude-sonnet-4-5-20250514
 ```
 
+または、Bearer 認証トークンを使用することもできます（OAuth スタイルのトークンを発行するゲートウェイ経由で利用する場合など）。`ANTHROPIC_AUTH_TOKEN` は `Authorization: Bearer <token>` ヘッダーで送信され、`ANTHROPIC_API_KEY` は `x-api-key` ヘッダーで送信されます。両者は排他的なので、いずれか一方のみを設定してください:
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
 任意のカスタムエンドポイント:
 
 ```bash

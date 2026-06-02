@@ -68,6 +68,13 @@ ANTHROPIC_API_KEY=your_api_key
 AI_MODEL=claude-sonnet-4-5-20250514
 ```
 
+Or use a Bearer auth token instead of an API key (e.g. when going through a gateway that issues OAuth-style tokens). `ANTHROPIC_AUTH_TOKEN` is sent as `Authorization: Bearer <token>`, while `ANTHROPIC_API_KEY` is sent as `x-api-key`. The two are mutually exclusive — set only one:
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
 Optional custom endpoint:
 
 ```bash

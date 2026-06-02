@@ -53,6 +53,13 @@ ANTHROPIC_API_KEY=your_api_key
 AI_MODEL=claude-sonnet-4-5-20250514
 ```
 
+或者使用 Bearer 认证令牌（例如通过会下发 OAuth 风格 token 的网关时）。`ANTHROPIC_AUTH_TOKEN` 会作为 `Authorization: Bearer <token>` 头发送，而 `ANTHROPIC_API_KEY` 会作为 `x-api-key` 头发送。两者互斥，只能设置其中之一：
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
 可选的自定义端点：
 
 ```bash

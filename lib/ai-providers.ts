@@ -630,7 +630,7 @@ function validateProviderCredentials(
         )
         if (!hasCredential) {
             throw new Error(
-                `ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable is required for anthropic provider. ` +
+                `Either ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable is required for anthropic provider. ` +
                     `Please set one in your .env.local file.`,
             )
         }
