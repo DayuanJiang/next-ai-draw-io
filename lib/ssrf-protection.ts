@@ -11,7 +11,10 @@ export function isPrivateUrl(urlString: string): boolean {
         const url = new URL(urlString)
         // Strip a trailing dot so FQDN forms like "localhost." (which still
         // resolve to 127.0.0.1) cannot bypass the equality checks below.
-        const hostname = url.hostname.toLowerCase().replace(/\.$/, "")
+        const hostname = url.hostname
+            .toLowerCase()
+            .replace(/^\[|\]$/g, "")
+            .replace(/\.$/, "")
 
         // Block localhost
         if (
@@ -20,6 +23,19 @@ export function isPrivateUrl(urlString: string): boolean {
             hostname === "::1"
         ) {
             return true
+        }
+
+        // Block IPv6 loopback, unique-local, link-local, and IPv4-mapped hosts.
+        if (hostname.includes(":")) {
+            if (
+                hostname === "0:0:0:0:0:0:0:1" ||
+                hostname.startsWith("fc") ||
+                hostname.startsWith("fd") ||
+                hostname.startsWith("fe80:") ||
+                hostname.startsWith("::ffff:")
+            ) {
+                return true
+            }
         }
 
         // Block AWS/cloud metadata endpoints
