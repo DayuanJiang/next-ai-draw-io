@@ -20,21 +20,26 @@ export function isPrivateUrl(urlString: string): boolean {
         if (
             hostname === "localhost" ||
             hostname === "127.0.0.1" ||
-            hostname === "::1"
+            hostname === "::1" ||
+            hostname === "::"
         ) {
             return true
         }
 
-        // Block IPv6 loopback, unique-local, link-local, and IPv4-mapped hosts.
+        // Block IPv6 unique-local (fc00::/7), link-local (fe80::/10),
+        // and IPv4-mapped (::ffff:0:0/96) hosts.
         if (hostname.includes(":")) {
             if (
-                hostname === "0:0:0:0:0:0:0:1" ||
                 hostname.startsWith("fc") ||
                 hostname.startsWith("fd") ||
-                hostname.startsWith("fe80:") ||
                 hostname.startsWith("::ffff:")
             ) {
                 return true
+            }
+            const linkLocal = hostname.match(/^fe([0-9a-f]{2}):/)
+            if (linkLocal) {
+                const high = parseInt(linkLocal[1], 16)
+                if (high >= 0x80 && high <= 0xbf) return true
             }
         }
 
