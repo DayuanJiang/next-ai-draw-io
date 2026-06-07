@@ -119,8 +119,74 @@ function checkDuplicateAttributes(xml: string): string | null {
     return null
 }
 
-/** Check for duplicate IDs in XML */
+/**
+ * Check for duplicate IDs in XML.
+ *
+ * For multi-page documents (<mxfile> with multiple <diagram> children), cell
+ * IDs are unique **within a page**, not across the whole document — drawio
+ * legitimately reuses "0" and "1" for the root cells of every page. So we
+ * scope the cell-ID uniqueness check per <diagram>, and additionally check
+ * that the <diagram> ids themselves are unique.
+ *
+ * The legacy regex-based check is kept as a fallback for non-mxfile inputs
+ * and for XML that won't DOM-parse.
+ */
 function checkDuplicateIds(xml: string): string | null {
+    // The DOM-aware path only matters for <mxfile> wrappers; for legacy
+    // bare <mxGraphModel> inputs (the overwhelming majority of historic
+    // traffic), the cheap regex fallback at the bottom is enough. A quick
+    // string check avoids paying the DOMParser cost on every call.
+    const mightBeMxFile = /<mxfile[\s>]/i.test(xml)
+
+    // Try DOM-aware, page-scoped check first when the input looks mxfile-ish.
+    if (mightBeMxFile)
+        try {
+            const doc = new DOMParser().parseFromString(xml, "text/xml")
+            if (!doc.querySelector("parsererror")) {
+                const rootEl = doc.documentElement
+                if (rootEl && rootEl.tagName === "mxfile") {
+                    const diagrams = doc.querySelectorAll("diagram")
+
+                    // 1) <diagram> ids must be unique across the file.
+                    const diagramIds = new Map<string, number>()
+                    diagrams.forEach((d) => {
+                        const id = d.getAttribute("id")
+                        if (id)
+                            diagramIds.set(id, (diagramIds.get(id) || 0) + 1)
+                    })
+                    const dupDiagrams = Array.from(diagramIds.entries())
+                        .filter(([, c]) => c > 1)
+                        .map(([id]) => `'${id}'`)
+                    if (dupDiagrams.length > 0) {
+                        return `Invalid XML: Found duplicate <diagram> id(s): ${dupDiagrams.slice(0, 3).join(", ")}. Each page must have a unique id.`
+                    }
+
+                    // 2) Within each page, mxCell ids must be unique.
+                    for (let i = 0; i < diagrams.length; i++) {
+                        const diagram = diagrams[i]
+                        const pageId =
+                            diagram.getAttribute("id") || `(index ${i})`
+                        const cells = diagram.querySelectorAll("mxCell")
+                        const cellIds = new Map<string, number>()
+                        cells.forEach((c) => {
+                            const id = c.getAttribute("id")
+                            if (id) cellIds.set(id, (cellIds.get(id) || 0) + 1)
+                        })
+                        const dups = Array.from(cellIds.entries())
+                            .filter(([, c]) => c > 1)
+                            .map(([id, count]) => `'${id}' (${count}x)`)
+                        if (dups.length > 0) {
+                            return `Invalid XML: Found duplicate cell ID(s) in page "${pageId}": ${dups.slice(0, 3).join(", ")}. All mxCell ids must be unique within a page.`
+                        }
+                    }
+                    return null
+                }
+            }
+        } catch {
+            // fall through to regex
+        }
+
+    // Legacy regex-based check for bare <mxGraphModel> and parse-error cases.
     const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
     const ids = new Map<string, number>()
     let idMatch
@@ -770,35 +836,46 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push(`Fixed ${trueNestedFixed} true nested mxCell(s)`)
     }
 
-    // 22. Fix duplicate IDs by appending suffix
-    const seenIds = new Map<string, number>()
-    const duplicateIds: string[] = []
+    // 22. Fix duplicate IDs by appending suffix.
+    // Skipped for multi-page <mxfile> documents — cell ids "0" and "1" repeat
+    // across pages legitimately (every page has its own <root> with id="0"/"1"
+    // sentinel cells). Renaming them would break drawio's parent references.
+    // For mxfile inputs, duplicate-id validation is page-scoped in
+    // checkDuplicateIds() and a true duplicate produces a hard error rather
+    // than a silent rename.
+    if (!/<mxfile[\s>]/i.test(fixed)) {
+        const seenIds = new Map<string, number>()
+        const duplicateIds: string[] = []
 
-    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
-    let idMatch
-    while ((idMatch = idPattern.exec(fixed)) !== null) {
-        const id = idMatch[1]
-        seenIds.set(id, (seenIds.get(id) || 0) + 1)
-    }
+        const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
+        let idMatch
+        while ((idMatch = idPattern.exec(fixed)) !== null) {
+            const id = idMatch[1]
+            seenIds.set(id, (seenIds.get(id) || 0) + 1)
+        }
 
-    for (const [id, count] of seenIds) {
-        if (count > 1) duplicateIds.push(id)
-    }
+        for (const [id, count] of seenIds) {
+            if (count > 1) duplicateIds.push(id)
+        }
 
-    if (duplicateIds.length > 0) {
-        const idCounters = new Map<string, number>()
-        fixed = fixed.replace(/\bid\s*=\s*["']([^"']+)["']/gi, (match, id) => {
-            if (!duplicateIds.includes(id)) return match
+        if (duplicateIds.length > 0) {
+            const idCounters = new Map<string, number>()
+            fixed = fixed.replace(
+                /\bid\s*=\s*["']([^"']+)["']/gi,
+                (match, id) => {
+                    if (!duplicateIds.includes(id)) return match
 
-            const count = idCounters.get(id) || 0
-            idCounters.set(id, count + 1)
+                    const count = idCounters.get(id) || 0
+                    idCounters.set(id, count + 1)
 
-            if (count === 0) return match
+                    if (count === 0) return match
 
-            const newId = `${id}_dup${count}`
-            return match.replace(id, newId)
-        })
-        fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s)`)
+                    const newId = `${id}_dup${count}`
+                    return match.replace(id, newId)
+                },
+            )
+            fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s)`)
+        }
     }
 
     // 23. Fix empty id attributes

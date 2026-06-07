@@ -1,7 +1,13 @@
 /**
  * ID-based diagram operations
- * Copied from lib/utils.ts to avoid cross-package imports
+ *
+ * The xmlContent argument may be either a bare <mxGraphModel> (legacy) or a
+ * full <mxfile> with one or more <diagram> pages. For mxfile inputs, an
+ * optional pageSelector identifies which page to edit; when omitted, the
+ * first page is targeted (the "active page by convention" — see pages.ts).
  */
+
+import { findPageElement, hasPageSelector, type PageSelector } from "./pages.js"
 
 export interface DiagramOperation {
     operation: "update" | "add" | "delete"
@@ -22,15 +28,18 @@ export interface ApplyOperationsResult {
 
 /**
  * Apply diagram operations (update/add/delete) using ID-based lookup.
- * This replaces the text-matching approach with direct DOM manipulation.
  *
- * @param xmlContent - The full mxfile XML content
- * @param operations - Array of operations to apply
- * @returns Object with result XML and any errors
+ * @param xmlContent - The diagram XML. May be either a bare <mxGraphModel> or
+ *                     a full <mxfile> with one or more <diagram> children.
+ * @param operations - Array of operations to apply.
+ * @param pageSelector - Optional page selector for multi-page docs. Defaults
+ *                       to the first page.
+ * @returns Object with result XML (same shape as input) and any per-op errors.
  */
 export function applyDiagramOperations(
     xmlContent: string,
     operations: DiagramOperation[],
+    pageSelector?: PageSelector,
 ): ApplyOperationsResult {
     const errors: OperationError[] = []
 
@@ -53,22 +62,75 @@ export function applyDiagramOperations(
         }
     }
 
-    // Find the root element (inside mxGraphModel)
-    const root = doc.querySelector("root")
-    if (!root) {
-        return {
-            result: xmlContent,
-            errors: [
-                {
-                    type: "update",
-                    cellId: "",
-                    message: "Could not find <root> element in XML",
-                },
-            ],
+    // Locate the <root> element to operate on.
+    //
+    // - For <mxfile> input: resolve the page via pageSelector, then dive into
+    //   its <root>. This scopes querySelectorAll calls below to one page so
+    //   cells on other pages aren't accidentally matched.
+    // - For bare <mxGraphModel> input: use the document's only <root>.
+    let root: Element | null
+    if (doc.documentElement?.tagName === "mxfile") {
+        const found = findPageElement(doc as unknown as Document, pageSelector)
+        if (!found) {
+            const selDesc = hasPageSelector(pageSelector)
+                ? ` matching selector ${JSON.stringify(pageSelector)}`
+                : ""
+            return {
+                result: xmlContent,
+                errors: [
+                    {
+                        type: "update",
+                        cellId: "",
+                        message: `Page${selDesc} not found in <mxfile>`,
+                    },
+                ],
+            }
+        }
+        root = found.element.querySelector("root")
+        if (!root) {
+            const pageId =
+                found.element.getAttribute("id") || `(index ${found.index})`
+            return {
+                result: xmlContent,
+                errors: [
+                    {
+                        type: "update",
+                        cellId: "",
+                        message: `Page "${pageId}" has no <root> element`,
+                    },
+                ],
+            }
+        }
+    } else {
+        if (hasPageSelector(pageSelector)) {
+            return {
+                result: xmlContent,
+                errors: [
+                    {
+                        type: "update",
+                        cellId: "",
+                        message:
+                            "Page selector provided but document is not multi-page (no <mxfile> wrapper). Use create_new_diagram with a full <mxfile> first, or omit the page selector.",
+                    },
+                ],
+            }
+        }
+        root = doc.querySelector("root")
+        if (!root) {
+            return {
+                result: xmlContent,
+                errors: [
+                    {
+                        type: "update",
+                        cellId: "",
+                        message: "Could not find <root> element in XML",
+                    },
+                ],
+            }
         }
     }
 
-    // Build a map of cell IDs to elements
+    // Build a map of cell IDs to elements (scoped to the resolved page).
     const cellMap = new Map<string, Element>()
     root.querySelectorAll("mxCell").forEach((cell) => {
         const id = cell.getAttribute("id")
@@ -208,7 +270,9 @@ export function applyDiagramOperations(
                 cellsToDelete.add(cellId)
 
                 // Find children (cells where parent === cellId)
-                const children = root.querySelectorAll(
+                // Scoped to `root` so other pages' cells with the same parent id
+                // (notably "1") are never touched.
+                const children = root!.querySelectorAll(
                     `mxCell[parent="${cellId}"]`,
                 )
                 children.forEach((child) => {

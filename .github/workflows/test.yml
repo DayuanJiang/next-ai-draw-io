@@ -28,6 +28,16 @@ jobs:
       - name: Run unit tests
         run: npm run test -- --run
 
+      # The MCP server package ships its own vitest because its DOM polyfill
+      # (linkedom) needs `environment: node`, while the root vitest uses jsdom
+      # for the Next.js app. Install + run its tests separately so CI catches
+      # multi-page mxfile regressions.
+      - name: Install MCP server dependencies
+        run: npm --prefix packages/mcp-server ci
+
+      - name: Run MCP server unit tests
+        run: npm --prefix packages/mcp-server test
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest

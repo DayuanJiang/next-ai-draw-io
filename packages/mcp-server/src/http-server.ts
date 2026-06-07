@@ -791,15 +791,21 @@ function getHtmlPage(sessionId: string): string {
                     currentVersion = s.version;
                     loadDiagram(s.xml, true);
                 }
-                // Handle export request from MCP server (png/svg) - after version update
+                // Handle export request from MCP server (png/svg) - after
+                // version update. The server-side export_diagram tool drives
+                // page-targeted exports via the load-then-export dance, so by
+                // the time we see exportFormat set the iframe is already
+                // displaying the correct page (either the user's chosen tab
+                // or, for a page-targeted call, the single-page projection
+                // pushed by the server moments earlier).
                 if (s.exportFormat && !pendingMcpExport && isReady) {
                     pendingMcpExport = s.exportFormat;
                     const exportOpts = s.exportFormat === 'png'
                         ? { action: 'export', format: 'png', scale: 2 }
                         : { action: 'export', format: 'svg' };
                     iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
-                    // Timeout: reset if draw.io never responds
-                    setTimeout(() => { if (pendingMcpExport) { pendingMcpExport = null; } }, 8000);
+                    // Timeout: reset if draw.io never responds.
+                    setTimeout(() => { if (pendingMcpExport) { pendingMcpExport = null; } }, 10000);
                 }
             } catch {}
         }
@@ -839,7 +845,11 @@ function getHtmlPage(sessionId: string): string {
             saveConfirmBtn.textContent = 'Exporting...';
 
             if (format === 'drawio') {
-                // Use lastXml directly instead of requesting export (avoids race with SVG exports)
+                // Use lastXml directly instead of requesting export (avoids race with SVG exports).
+                // session.xml is canonically <mxfile> after the multi-page refactor,
+                // so no wrapper injection is needed. The legacy fallback below
+                // remains only for documents that somehow slipped past
+                // normalisation (e.g. an older session loaded from external state).
                 let xmlData = lastXml || '';
                 if (xmlData && !xmlData.includes('<mxfile')) {
                     xmlData = '<mxfile host="mcp"><diagram name="Page-1">' + xmlData + '</diagram></mxfile>';
