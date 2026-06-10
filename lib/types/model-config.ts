@@ -9,6 +9,7 @@ export type ProviderName =
     | "bedrock"
     | "ollama"
     | "openrouter"
+    | "aihubmix"
     | "deepseek"
     | "siliconflow"
     | "sglang"
@@ -93,6 +94,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     azure: "azure",
     bedrock: "amazon-bedrock",
     openrouter: "openrouter",
+    aihubmix: "aihubmix",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
     sglang: "openai", // SGLang is OpenAI-compatible
@@ -135,6 +137,10 @@ export const PROVIDER_INFO: Record<
     openrouter: {
         label: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
+    },
+    aihubmix: {
+        label: "AIHubMix",
+        defaultBaseUrl: "https://aihubmix.com/v1",
     },
     deepseek: {
         label: "DeepSeek",
@@ -307,6 +313,21 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "qwen/qwen3-coder",
         // MiniMax
         "minimax/minimax-m3",
+    ],
+    aihubmix: [
+        // Anthropic Claude
+        "claude-sonnet-4-5-20250929",
+        "claude-opus-4-5-20251101",
+        // OpenAI
+        "gpt-5.1",
+        "gpt-4.1",
+        "gpt-4o",
+        // Google Gemini
+        "gemini-3-pro",
+        "gemini-2.5-pro",
+        // DeepSeek
+        "deepseek-v3.2",
+        "deepseek-chat",
     ],
     deepseek: [
         "deepseek-v4-pro",

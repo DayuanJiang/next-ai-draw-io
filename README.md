@@ -209,6 +209,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   AIHubMix
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope

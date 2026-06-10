@@ -1,4 +1,4 @@
-import { Cloud } from "lucide-react"
+import { Cloud, Sparkles } from "lucide-react"
 import type { ComponentProps, ElementRef, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import {
@@ -174,6 +174,9 @@ export const ModelSelectorLogo = ({
     // Use Lucide icon for bedrock since models.dev doesn't have a good AWS icon
     if (provider === "amazon-bedrock") {
         return <Cloud className={cn("size-4", className)} />
+    }
+    if (provider === "aihubmix") {
+        return <Sparkles className={cn("size-4", className)} />
     }
 
     return (

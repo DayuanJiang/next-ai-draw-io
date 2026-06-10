@@ -204,6 +204,7 @@ npm run dev
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   AIHubMix
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope

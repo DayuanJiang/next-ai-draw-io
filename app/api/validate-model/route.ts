@@ -5,11 +5,15 @@ import { createGateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI } from "@ai-sdk/openai"
+import { createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
-import { normalizeMiniMaxBaseURL } from "@/lib/ai-providers"
+import {
+    isAihubmixStandardBaseURL,
+    normalizeMiniMaxBaseURL,
+} from "@/lib/ai-providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
@@ -150,6 +154,25 @@ export async function POST(req: Request) {
                     ...(baseUrl && { baseURL: baseUrl }),
                 })
                 model = openrouter(modelId)
+                break
+            }
+
+            case "aihubmix": {
+                const defaultBaseURL = PROVIDER_INFO.aihubmix.defaultBaseUrl
+
+                if (
+                    isAihubmixStandardBaseURL(baseUrl) ||
+                    baseUrl === defaultBaseURL
+                ) {
+                    const aihubmix = createAihubmix({ apiKey })
+                    model = aihubmix(modelId)
+                } else {
+                    const aihubmixCompatible = createOpenAI({
+                        apiKey,
+                        baseURL: baseUrl,
+                    })
+                    model = aihubmixCompatible.chat(modelId)
+                }
                 break
             }
 

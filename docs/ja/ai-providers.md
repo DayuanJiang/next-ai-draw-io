@@ -46,6 +46,21 @@ AI_MODEL=gpt-4o
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+### AIHubMix
+
+AIHubMix は、単一の API キーで Claude、GPT、Gemini、DeepSeek などのモデルへのアクセスを提供します。
+
+```bash
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+任意のカスタムエンドポイント:
+
+```bash
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
 ### Anthropic
 
 ```bash
@@ -300,7 +315,7 @@ QINIU_BASE_URL=https://your-custom-endpoint
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
+AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
 ```
 
 ## サーバーサイドマルチモデル設定
@@ -389,4 +404,5 @@ TEMPERATURE=0  # より決定論的な出力（ダイアグラムに推奨）
 -   **最高の体験**: 画像からダイアグラムを生成する機能には、ビジョン（画像認識）をサポートするモデル（GPT-4o, Claude, Gemini）を使用してください
 -   **低コスト**: DeepSeek は競争力のある価格を提供しています
 -   **プライバシー**: 完全にローカルなオフライン操作には Ollama を使用してください（強力なハードウェアが必要です）
+-   **統合アクセス**: AIHubMix は単一の API キーで Claude、GPT、Gemini、DeepSeek などのモデルへのアクセスを提供します
 -   **柔軟性**: OpenRouter は単一の API で多数のモデルへのアクセスを提供します

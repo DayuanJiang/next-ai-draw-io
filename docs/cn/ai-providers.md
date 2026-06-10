@@ -46,6 +46,21 @@ AI_MODEL=gpt-4o
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+### AIHubMix
+
+AIHubMix 通过单个 API Key 聚合 Claude、GPT、Gemini、DeepSeek 等模型。
+
+```bash
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+可选的自定义端点：
+
+```bash
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
 ### Anthropic
 
 ```bash
@@ -300,7 +315,7 @@ QINIU_BASE_URL=https://your-custom-endpoint
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
+AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
 ```
 
 ## 服务端多模型配置
@@ -389,4 +404,5 @@ TEMPERATURE=0  # 输出更具确定性（推荐用于图表）
 -   **最佳体验**：使用支持视觉的模型（GPT-4o, Claude, Gemini）以获得图像转图表功能
 -   **经济实惠**：DeepSeek 提供具有竞争力的价格
 -   **隐私保护**：使用 Ollama 进行完全本地、离线的操作（需要强大的硬件支持）
+-   **聚合访问**：AIHubMix 通过单个 API Key 提供 Claude、GPT、Gemini、DeepSeek 等模型
 -   **灵活性**：OpenRouter 通过单一 API 提供对众多模型的访问

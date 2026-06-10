@@ -6,6 +6,7 @@ import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI, openai } from "@ai-sdk/openai"
+import { aihubmix, createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
@@ -57,6 +58,18 @@ export function normalizeMiniMaxBaseURL(rawUrl: string): {
     return { baseURL, isAnthropicCompatible }
 }
 
+export function isAihubmixStandardBaseURL(
+    rawUrl: string | null | undefined,
+): boolean {
+    if (!rawUrl) return true
+
+    const baseURL = rawUrl.replace(/\/+$/, "")
+    return (
+        baseURL === "https://aihubmix.com" ||
+        baseURL === "https://aihubmix.com/v1"
+    )
+}
+
 export interface ClientOverrides {
     provider?: string | null
     baseUrl?: string | null
@@ -86,6 +99,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "azure",
     "bedrock",
     "openrouter",
+    "aihubmix",
     "deepseek",
     "siliconflow",
     "sglang",
@@ -513,6 +527,7 @@ function buildProviderOptions(
 
         case "deepseek":
         case "openrouter":
+        case "aihubmix":
         case "siliconflow":
         case "sglang":
         case "gateway":
@@ -546,6 +561,7 @@ const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     azure: "AZURE_API_KEY",
     ollama: null, // No credentials needed for local Ollama
     openrouter: "OPENROUTER_API_KEY",
+    aihubmix: "AIHUBMIX_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
@@ -662,7 +678,7 @@ function validateProviderCredentials(
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, modelscope)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, modelscope)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -674,6 +690,7 @@ function validateProviderCredentials(
  * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
  * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to https://ollama.com/api)
  * - OPENROUTER_API_KEY: OpenRouter API key
+ * - AIHUBMIX_API_KEY: AIHubMix API key
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  * - SILICONFLOW_API_KEY: SiliconFlow API key
@@ -761,6 +778,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                         `- GOOGLE_GENERATIVE_AI_API_KEY for Google\n` +
                         `- AWS_ACCESS_KEY_ID for Bedrock\n` +
                         `- OPENROUTER_API_KEY for OpenRouter\n` +
+                        `- AIHUBMIX_API_KEY for AIHubMix\n` +
                         `- AZURE_API_KEY for Azure\n` +
                         `- SILICONFLOW_API_KEY for SiliconFlow\n` +
                         `- SGLANG_API_KEY for SGLang\n` +
@@ -1000,6 +1018,39 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 ...(baseURL && { baseURL }),
             })
             model = openrouter(modelId)
+            break
+        }
+
+        case "aihubmix": {
+            const apiKey = resolveApiKey(overrides, "AIHUBMIX_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "AIHUBMIX_BASE_URL",
+            )
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.aihubmix.defaultBaseUrl,
+            )
+            const defaultBaseURL = PROVIDER_INFO.aihubmix.defaultBaseUrl
+
+            if (
+                isAihubmixStandardBaseURL(baseURL) ||
+                baseURL === defaultBaseURL
+            ) {
+                const aihubmixProvider =
+                    overrides?.apiKey || apiKey
+                        ? createAihubmix({ apiKey })
+                        : aihubmix
+                model = aihubmixProvider(modelId)
+            } else {
+                const aihubmixCompatibleProvider = createOpenAI({
+                    apiKey,
+                    baseURL,
+                })
+                model = aihubmixCompatibleProvider.chat(modelId)
+            }
             break
         }
 
@@ -1322,7 +1373,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.apiKey,
                 overrides?.baseUrl,
                 resolveBaseUrlEnv(overrides, "KIMI_BASE_URL"),
-                PROVIDER_INFO["kimi"]?.defaultBaseUrl,
+                PROVIDER_INFO.kimi?.defaultBaseUrl,
             )
             // Use createDeepSeek to properly handle reasoning_content for Kimi
             // thinking models (e.g., kimi-k2.6). Kimi's API uses the same
@@ -1335,7 +1386,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita`,
             )
     }
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     getAIModel,
+    isAihubmixStandardBaseURL,
     resolveBaseURL,
     supportsImageInput,
     supportsPromptCaching,
@@ -254,6 +255,68 @@ vi.mock("@ai-sdk/deepseek", () => {
     const mockCreateDeepSeek = vi.fn(() => mockProviderFn)
     const mockDeepseek = vi.fn(() => mockModel)
     return { createDeepSeek: mockCreateDeepSeek, deepseek: mockDeepseek }
+})
+
+vi.mock("@aihubmix/ai-sdk-provider", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateAihubmix = vi.fn(() => mockProviderFn)
+    const mockAihubmix = vi.fn(() => mockModel)
+    return { aihubmix: mockAihubmix, createAihubmix: mockCreateAihubmix }
+})
+
+describe("AIHubMix provider", () => {
+    let createAihubmixMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.AIHUBMIX_API_KEY = process.env.AIHUBMIX_API_KEY
+        savedEnv.AIHUBMIX_BASE_URL = process.env.AIHUBMIX_BASE_URL
+        delete process.env.AIHUBMIX_BASE_URL
+
+        const mod = await import("@aihubmix/ai-sdk-provider")
+        createAihubmixMock = mod.createAihubmix as ReturnType<typeof vi.fn>
+        createAihubmixMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.AIHUBMIX_API_KEY = savedEnv.AIHUBMIX_API_KEY
+        process.env.AIHUBMIX_BASE_URL = savedEnv.AIHUBMIX_BASE_URL
+    })
+
+    it("uses AIHUBMIX_API_KEY for server configured AIHubMix", () => {
+        process.env.AIHUBMIX_API_KEY = "server-aihubmix-key"
+
+        getAIModel({
+            provider: "aihubmix",
+            modelId: "claude-sonnet-4-5-20250929",
+        })
+
+        expect(createAihubmixMock).toHaveBeenCalledWith({
+            apiKey: "server-aihubmix-key",
+        })
+    })
+
+    it("uses client BYOK API key for AIHubMix", () => {
+        getAIModel({
+            provider: "aihubmix",
+            apiKey: "client-aihubmix-key",
+            modelId: "gpt-5.1",
+        })
+
+        expect(createAihubmixMock).toHaveBeenCalledWith({
+            apiKey: "client-aihubmix-key",
+        })
+    })
+
+    it("recognizes AIHubMix standard endpoints", () => {
+        expect(isAihubmixStandardBaseURL(undefined)).toBe(true)
+        expect(isAihubmixStandardBaseURL("https://aihubmix.com")).toBe(true)
+        expect(isAihubmixStandardBaseURL("https://aihubmix.com/v1/")).toBe(true)
+        expect(isAihubmixStandardBaseURL("https://proxy.example.com/v1")).toBe(
+            false,
+        )
+    })
 })
 
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {

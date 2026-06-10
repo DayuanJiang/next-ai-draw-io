@@ -87,6 +87,9 @@ function ProviderLogo({
     if (provider === "doubao") {
         return <Sparkles className={cn("size-4", className)} />
     }
+    if (provider === "aihubmix") {
+        return <Sparkles className={cn("size-4", className)} />
+    }
 
     const logoName = PROVIDER_LOGO_MAP[provider] || provider
     return (

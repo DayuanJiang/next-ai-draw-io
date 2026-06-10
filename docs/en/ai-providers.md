@@ -61,6 +61,21 @@ Optional custom endpoint (for OpenAI-compatible services):
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+### AIHubMix
+
+AIHubMix provides access to Claude, GPT, Gemini, DeepSeek, and other models through a single API key.
+
+```bash
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+Optional custom endpoint:
+
+```bash
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
 ### Anthropic
 
 ```bash
@@ -315,7 +330,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
+AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
 ```
 
 ## Server-Side Multi-Model Configuration
@@ -404,4 +419,5 @@ When unset, the model uses its default behavior.
 -   **Best experience**: Use models with vision support (GPT-4o, Claude, Gemini) for image-to-diagram features
 -   **Budget-friendly**: DeepSeek offers competitive pricing
 -   **Privacy**: Use Ollama for fully local, offline operation (requires powerful hardware)
+-   **Aggregated access**: AIHubMix provides Claude, GPT, Gemini, DeepSeek, and other models with one API key
 -   **Flexibility**: OpenRouter provides access to many models through a single API
