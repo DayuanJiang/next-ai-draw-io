@@ -52,6 +52,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
+import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 import {
@@ -169,6 +170,14 @@ export function ModelConfigDialog({
         modelId: string
         message: string
     } | null>(null)
+    const [dynamicSuggestedModels, setDynamicSuggestedModels] = useState<
+        Partial<Record<ProviderName, string[]>>
+    >({})
+    const [loadedSuggestedProviders, setLoadedSuggestedProviders] = useState<
+        Partial<Record<ProviderName, boolean>>
+    >({})
+    const [loadingSuggestedProvider, setLoadingSuggestedProvider] =
+        useState<ProviderName | null>(null)
 
     const {
         config,
@@ -194,10 +203,68 @@ export function ModelConfigDialog({
         }
     }, [])
 
+    useEffect(() => {
+        if (
+            !open ||
+            selectedProvider?.provider !== "aihubmix" ||
+            loadedSuggestedProviders.aihubmix
+        ) {
+            return
+        }
+
+        let cancelled = false
+        setLoadingSuggestedProvider("aihubmix")
+
+        fetch(getApiEndpoint("/api/aihubmix-models"))
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load models: ${response.status}`)
+                }
+                return response.json()
+            })
+            .then((data: { models?: unknown }) => {
+                if (cancelled || !Array.isArray(data.models)) {
+                    return
+                }
+
+                const models = data.models.filter(
+                    (model): model is string => typeof model === "string",
+                )
+                if (models.length > 0) {
+                    setDynamicSuggestedModels((current) => ({
+                        ...current,
+                        aihubmix: models,
+                    }))
+                }
+            })
+            .catch((error) => {
+                console.warn("Failed to load AIHubMix models:", error)
+            })
+            .finally(() => {
+                if (cancelled) {
+                    return
+                }
+
+                setLoadedSuggestedProviders((current) => ({
+                    ...current,
+                    aihubmix: true,
+                }))
+                setLoadingSuggestedProvider(null)
+            })
+
+        return () => {
+            cancelled = true
+        }
+    }, [open, selectedProvider?.provider, loadedSuggestedProviders.aihubmix])
+
     // Get suggested models for current provider
     const suggestedModels = selectedProvider
-        ? SUGGESTED_MODELS[selectedProvider.provider] || []
+        ? dynamicSuggestedModels[selectedProvider.provider] ||
+          SUGGESTED_MODELS[selectedProvider.provider] ||
+          []
         : []
+    const isLoadingSuggestedModels =
+        selectedProvider?.provider === loadingSuggestedProvider
 
     // Filter out already-added models from suggestions
     const existingModelIds =
@@ -1348,21 +1415,26 @@ export function ModelConfigDialog({
                                                         }
                                                     }}
                                                     disabled={
+                                                        isLoadingSuggestedModels ||
                                                         availableSuggestions.length ===
-                                                        0
+                                                            0
                                                     }
                                                 >
                                                     <SelectTrigger className="w-28 h-8 rounded-lg hover:bg-interactive-hover">
-                                                        <span className="text-xs">
-                                                            {availableSuggestions.length ===
-                                                            0
-                                                                ? dict
-                                                                      .modelConfig
-                                                                      .allAdded
-                                                                : dict
-                                                                      .modelConfig
-                                                                      .suggested}
-                                                        </span>
+                                                        {isLoadingSuggestedModels ? (
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <span className="text-xs">
+                                                                {availableSuggestions.length ===
+                                                                0
+                                                                    ? dict
+                                                                          .modelConfig
+                                                                          .allAdded
+                                                                    : dict
+                                                                          .modelConfig
+                                                                          .suggested}
+                                                            </span>
+                                                        )}
                                                     </SelectTrigger>
                                                     <SelectContent className="max-h-72">
                                                         {availableSuggestions.map(

@@ -6,6 +6,31 @@ import {
     supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
+import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
+
+describe("extractAihubmixModelIds", () => {
+    it("extracts unique chat model IDs from the AIHubMix model list payload", () => {
+        const models = extractAihubmixModelIds({
+            data: [
+                { model_id: "claude-sonnet-4-5-20250929", types: "llm" },
+                { model_id: "gpt-5.1", types: "llm" },
+                { model_id: "gpt-5.1", types: "llm" },
+                { model_id: "gpt-image-2", types: "image_generation,llm" },
+                { model_id: "cohere-rerank-v4.0", types: "rerank" },
+                { model_id: "", types: "llm" },
+                { types: "llm" },
+            ],
+        })
+
+        expect(models).toEqual(["claude-sonnet-4-5-20250929", "gpt-5.1"])
+    })
+
+    it("returns an empty list for malformed payloads", () => {
+        expect(extractAihubmixModelIds({ data: null })).toEqual([])
+        expect(extractAihubmixModelIds({})).toEqual([])
+        expect(extractAihubmixModelIds(null)).toEqual([])
+    })
+})
 
 describe("resolveBaseURL", () => {
     const SERVER_BASE_URL = "https://server-proxy.example.com"
