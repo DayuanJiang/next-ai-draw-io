@@ -88,9 +88,6 @@ function ProviderLogo({
     if (provider === "doubao") {
         return <Sparkles className={cn("size-4", className)} />
     }
-    if (provider === "aihubmix") {
-        return <Sparkles className={cn("size-4", className)} />
-    }
 
     const logoName = PROVIDER_LOGO_MAP[provider] || provider
     return (
@@ -272,6 +269,11 @@ export function ModelConfigDialog({
     const availableSuggestions = suggestedModels.filter(
         (modelId) => !existingModelIds.includes(modelId),
     )
+    const emptyStateSuggestions = selectedProvider
+        ? (SUGGESTED_MODELS[selectedProvider.provider] || [])
+              .filter((modelId) => !existingModelIds.includes(modelId))
+              .slice(0, 4)
+        : []
 
     // Handle adding a new provider
     const handleAddProvider = (providerType: ProviderName) => {
@@ -1463,7 +1465,12 @@ export function ModelConfigDialog({
                                             0 ? (
                                                 <div className="p-6 text-center h-full flex flex-col items-center justify-center">
                                                     <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface-2 mb-3">
-                                                        <Sparkles className="h-5 w-5 text-muted-foreground" />
+                                                        <ProviderLogo
+                                                            provider={
+                                                                selectedProvider.provider
+                                                            }
+                                                            className="size-5 text-muted-foreground"
+                                                        />
                                                     </div>
                                                     <p className="text-sm text-muted-foreground">
                                                         {
@@ -1471,6 +1478,36 @@ export function ModelConfigDialog({
                                                                 .noModelsConfigured
                                                         }
                                                     </p>
+                                                    {emptyStateSuggestions.length >
+                                                        0 && (
+                                                        <div className="mt-4 flex max-w-full flex-wrap items-center justify-center gap-2">
+                                                            {emptyStateSuggestions.map(
+                                                                (modelId) => (
+                                                                    <Button
+                                                                        key={
+                                                                            modelId
+                                                                        }
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 max-w-[220px] rounded-lg px-2 font-mono text-[11px]"
+                                                                        onClick={() =>
+                                                                            handleAddModel(
+                                                                                modelId,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Plus className="h-3 w-3 shrink-0" />
+                                                                        <span className="truncate">
+                                                                            {
+                                                                                modelId
+                                                                            }
+                                                                        </span>
+                                                                    </Button>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="divide-y divide-border-subtle">
