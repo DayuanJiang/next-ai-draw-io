@@ -319,6 +319,7 @@ describe("AIHubMix provider", () => {
 
         expect(createAihubmixMock).toHaveBeenCalledWith({
             apiKey: "server-aihubmix-key",
+            appCode: "MSBS9675",
         })
     })
 
@@ -331,6 +332,7 @@ describe("AIHubMix provider", () => {
 
         expect(createAihubmixMock).toHaveBeenCalledWith({
             apiKey: "client-aihubmix-key",
+            appCode: "MSBS9675",
         })
     })
 

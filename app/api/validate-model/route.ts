@@ -11,6 +11,7 @@ import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
 import {
+    AIHUBMIX_APP_CODE,
     isAihubmixStandardBaseURL,
     normalizeMiniMaxBaseURL,
 } from "@/lib/ai-providers"
@@ -164,7 +165,10 @@ export async function POST(req: Request) {
                     isAihubmixStandardBaseURL(baseUrl) ||
                     baseUrl === defaultBaseURL
                 ) {
-                    const aihubmix = createAihubmix({ apiKey })
+                    const aihubmix = createAihubmix({
+                        apiKey,
+                        appCode: AIHUBMIX_APP_CODE,
+                    })
                     model = aihubmix(modelId)
                 } else {
                     const aihubmixCompatible = createOpenAI({

@@ -14,6 +14,8 @@ import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
 
+export const AIHUBMIX_APP_CODE = "MSBS9675"
+
 interface ModelConfig {
     model: any
     providerOptions?: any
@@ -1041,7 +1043,10 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             ) {
                 const aihubmixProvider =
                     overrides?.apiKey || apiKey
-                        ? createAihubmix({ apiKey })
+                        ? createAihubmix({
+                              apiKey,
+                              appCode: AIHUBMIX_APP_CODE,
+                          })
                         : aihubmix
                 model = aihubmixProvider(modelId)
             } else {
