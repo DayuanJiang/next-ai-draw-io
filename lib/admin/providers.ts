@@ -45,6 +45,16 @@ export const AdminProviderSchema = z.object({
 
 export const AdminProvidersSchema = z.array(AdminProviderSchema)
 
+// Stored shape: secrets are plain strings (never {isSet} markers, which
+// only exist in transit). Used to validate ADMIN_PROVIDERS on load so a
+// hand-edited/corrupted value can't slip a marker object past maskSecret.
+const StoredAdminProviderSchema = AdminProviderSchema.extend({
+    apiKey: z.string().optional(),
+    awsAccessKeyId: z.string().optional(),
+    awsSecretAccessKey: z.string().optional(),
+    vertexApiKey: z.string().optional(),
+})
+
 export type AdminProviderInput = z.infer<typeof AdminProviderSchema>
 
 // Stored form: secrets are plain strings
@@ -95,7 +105,7 @@ export function loadAdminProviders(): StoredAdminProvider[] {
         // Validate each entry's shape — a malformed/hand-edited value must
         // not reach runtime code that assumes provider/models exist.
         return parsed.flatMap((entry) => {
-            const result = AdminProviderSchema.safeParse(entry)
+            const result = StoredAdminProviderSchema.safeParse(entry)
             return result.success ? [result.data as StoredAdminProvider] : []
         })
     } catch {

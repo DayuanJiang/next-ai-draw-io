@@ -57,11 +57,20 @@ describe("loadSettings", () => {
         expect(loadSettings()).toEqual({ GOOD: "ok" })
     })
 
-    it("returns empty object when values is null or an array", () => {
+    it("returns empty object when values is null", () => {
         fs.writeFileSync(
             process.env.SETTINGS_FILE!,
             JSON.stringify({ version: 1, values: null }),
         )
+        expect(loadSettings()).toEqual({})
+    })
+
+    it("returns empty object when values is an array (no numeric keys)", () => {
+        fs.writeFileSync(
+            process.env.SETTINGS_FILE!,
+            JSON.stringify({ version: 1, values: ["a", "b"] }),
+        )
+        // Without the Array.isArray guard this would yield { "0": "a", ... }
         expect(loadSettings()).toEqual({})
     })
 })

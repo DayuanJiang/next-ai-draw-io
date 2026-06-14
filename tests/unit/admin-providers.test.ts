@@ -7,6 +7,7 @@ import {
     adminProvidersToConfig,
     deriveEnvUpdates,
     loadAdminProviders,
+    maskAdminProviders,
     mergeSecrets,
     type StoredAdminProvider,
     validateAdminProviders,
@@ -341,6 +342,22 @@ describe("loadAdminProviders", () => {
         expect(loadAdminProviders()).toHaveLength(1)
     })
 
+    it("round-trips a bedrock provider with multiple string secrets", () => {
+        const bedrock = provider({
+            provider: "bedrock",
+            apiKey: undefined,
+            awsAccessKeyId: "AKIA123",
+            awsSecretAccessKey: "secret",
+            awsRegion: "us-west-2",
+            models: ["claude-x"],
+        })
+        saveSettings({ [ADMIN_PROVIDERS_KEY]: JSON.stringify([bedrock]) })
+        const loaded = loadAdminProviders()
+        expect(loaded).toHaveLength(1)
+        expect(loaded[0].awsAccessKeyId).toBe("AKIA123")
+        expect(loaded[0].awsSecretAccessKey).toBe("secret")
+    })
+
     it("drops malformed entries and keeps valid ones", () => {
         saveSettings({
             [ADMIN_PROVIDERS_KEY]: JSON.stringify([
@@ -363,5 +380,19 @@ describe("loadAdminProviders", () => {
     it("returns [] on invalid JSON", () => {
         saveSettings({ [ADMIN_PROVIDERS_KEY]: "{ broken" })
         expect(loadAdminProviders()).toEqual([])
+    })
+
+    it("drops entries whose secret is an {isSet} marker, not a string", () => {
+        // A hand-edited file could hold a transit-only marker object; if it
+        // slipped through, maskSecret() would throw on a non-string value.
+        saveSettings({
+            [ADMIN_PROVIDERS_KEY]: JSON.stringify([
+                { ...provider(), apiKey: { isSet: true, hint: "…1234" } },
+            ]),
+        })
+        const loaded = loadAdminProviders()
+        expect(loaded).toEqual([])
+        // Masking the loaded list must not throw
+        expect(() => maskAdminProviders(loaded)).not.toThrow()
     })
 })

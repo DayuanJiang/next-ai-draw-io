@@ -182,8 +182,10 @@ function ProviderDetail({
                 disabled={disabled}
                 onChange={(field, value) => onUpdate({ [field]: value })}
                 renderSecret={({ field, id }) => (
+                    // Bare id keeps the shared component's <Label htmlFor={id}>
+                    // associated; only one ProviderDetail is mounted at a time.
                     <SecretInput
-                        id={`${id}-${provider.id}`}
+                        id={id}
                         keepOnEmpty
                         value={provider[field]}
                         disabled={disabled}

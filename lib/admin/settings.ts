@@ -33,11 +33,14 @@ export function loadSettings(): Record<string, string> {
         // hold null/arrays/numbers that would otherwise be overlaid onto
         // process.env and coerce to junk like "[object Object]".
         const values: Record<string, string> = {}
-        const raw_values =
-            parsed && typeof parsed.values === "object" && parsed.values
+        const rawValues =
+            parsed &&
+            typeof parsed.values === "object" &&
+            parsed.values &&
+            !Array.isArray(parsed.values)
                 ? parsed.values
                 : {}
-        for (const [key, value] of Object.entries(raw_values)) {
+        for (const [key, value] of Object.entries(rawValues)) {
             if (typeof value === "string") values[key] = value
         }
         cachedSettings = values
