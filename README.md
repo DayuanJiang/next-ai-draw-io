@@ -25,6 +25,102 @@ A Next.js web application that integrates AI capabilities with draw.io diagrams.
 https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
 
 
+---
+
+## ⚡ Power next-ai-draw-io with Atlas Cloud
+
+<div align="center">
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io">
+    <img src="./public/atlas-cloud-logo.png" alt="Atlas Cloud" height="60" />
+  </a>
+  <br/>
+  <strong>Drop-in OpenAI-compatible backend · 59+ models · No code changes needed</strong>
+</div>
+
+[Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io) is an OpenAI-compatible inference platform that lets you run next-ai-draw-io against DeepSeek, Qwen, GLM, Kimi, MiniMax, Gemini, Claude, GPT-5, and 50+ more models — all via a single API key, with no changes to the application code.
+
+**Quick setup** — copy `.env.example` to `.env.local` and set:
+
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=<your-atlascloud-key>
+OPENAI_BASE_URL=https://api.atlascloud.ai/v1
+OPENAI_ORGANIZATION=
+AI_MODEL=deepseek-ai/deepseek-v4-pro
+```
+
+> **Important:** `deepseek-ai/deepseek-v4-pro` and other reasoning models require `max_tokens ≥ 512` to avoid empty responses. The application already passes a sensible default; if you override it, keep it at 512 or above.
+
+Get your free API key and free coding-plan credits → [atlascloud.ai/console/coding-plan](https://www.atlascloud.ai/console/coding-plan)
+
+<details>
+<summary>59 available models on Atlas Cloud</summary>
+
+| Model ID |
+|----------|
+| `deepseek-ai/DeepSeek-V3-0324` |
+| `qwen/qwen3-32b` |
+| `deepseek-ai/deepseek-r1-0528` |
+| `moonshotai/Kimi-K2-Instruct` |
+| `Qwen/Qwen3-Coder` |
+| `Qwen/Qwen3-235B-A22B-Instruct-2507` |
+| `deepseek-ai/DeepSeek-V3.1` |
+| `moonshotai/Kimi-K2-Instruct-0905` |
+| `Qwen/Qwen3-Next-80B-A3B-Instruct` |
+| `Qwen/Qwen3-Next-80B-A3B-Thinking` |
+| `Qwen/Qwen3-30B-A3B-Instruct-2507` |
+| `deepseek-ai/DeepSeek-V3.1-Terminus` |
+| `deepseek-ai/DeepSeek-V3.2-Exp` |
+| `zai-org/GLM-4.6` |
+| `MiniMaxAI/MiniMax-M2` |
+| `Qwen/Qwen3-VL-235B-A22B-Instruct` |
+| `moonshotai/Kimi-K2-Thinking` |
+| `google/gemini-2.5-flash` |
+| `google/gemini-2.5-flash-preview-202509` |
+| `google/gemini-2.5-flash-lite` |
+| `google/gemini-2.5-flash-lite-preview-202509` |
+| `openai/gpt-5.1` |
+| `openai/gpt-5.1-chat` |
+| `openai/gpt-5.1-codex` |
+| `openai/gpt-5.1-codex-mini` |
+| `openai/gpt-4o` |
+| `openai/gpt-4o-mini` |
+| `openai/gpt-4.1` |
+| `openai/gpt-4.1-mini` |
+| `openai/gpt-4.1-nano` |
+| `openai/o1` |
+| `openai/o3` |
+| `openai/o3-mini` |
+| `openai/o4-mini` |
+| `openai/o3-pro` |
+| `anthropic/claude-sonnet-4-20250514` |
+| `anthropic/claude-haiku-4.5-20251001` |
+| `anthropic/claude-sonnet-4.5-20250929` |
+| `anthropic/claude-opus-4.1-20250805` |
+| `anthropic/claude-opus-4-20250514` |
+| `deepseek-ai/deepseek-v3.2` |
+| `openai/gpt-5` |
+| `openai/gpt-5-chat` |
+| `openai/gpt-5-codex` |
+| `openai/gpt-5-mini` |
+| `openai/gpt-5-nano` |
+| `openai/gpt-5-pro` |
+| `openai/gpt-5.1-codex-max` |
+| `openai/gpt-5.2` |
+| `openai/gpt-5.2-chat` |
+| `google/gemini-2.5-pro` |
+| `anthropic/claude-opus-4.5-20251101` |
+| `google/gemini-3-flash-preview` |
+| `zai-org/glm-4.7` |
+| `minimaxai/minimax-m2.1` |
+| `google/gemini-2.0-flash` |
+| `google/gemini-2.0-flash-lite` |
+| `qwen/qwen3-8b` |
+| `qwen/qwen3-235b-a22b-thinking-2507` |
+
+</details>
+
+---
 
 ## Table of Contents
 - [Next AI Draw.io](#next-ai-drawio)
@@ -202,6 +298,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 
 ## Multi-Provider Support
 
+-   [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io) (OpenAI-compatible, 59+ models)
 -   [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)
 -   AWS Bedrock (default)
 -   OpenAI
