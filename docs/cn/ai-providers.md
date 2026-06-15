@@ -404,5 +404,4 @@ TEMPERATURE=0  # 输出更具确定性（推荐用于图表）
 -   **最佳体验**：使用支持视觉的模型（GPT-4o, Claude, Gemini）以获得图像转图表功能
 -   **经济实惠**：DeepSeek 提供具有竞争力的价格
 -   **隐私保护**：使用 Ollama 进行完全本地、离线的操作（需要强大的硬件支持）
--   **聚合访问**：AIHubMix 通过单个 API Key 提供 Claude、GPT、Gemini、DeepSeek 等模型
 -   **灵活性**：OpenRouter 通过单一 API 提供对众多模型的访问

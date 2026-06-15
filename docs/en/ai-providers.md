@@ -419,5 +419,4 @@ When unset, the model uses its default behavior.
 -   **Best experience**: Use models with vision support (GPT-4o, Claude, Gemini) for image-to-diagram features
 -   **Budget-friendly**: DeepSeek offers competitive pricing
 -   **Privacy**: Use Ollama for fully local, offline operation (requires powerful hardware)
--   **Aggregated access**: AIHubMix provides Claude, GPT, Gemini, DeepSeek, and other models with one API key
 -   **Flexibility**: OpenRouter provides access to many models through a single API
