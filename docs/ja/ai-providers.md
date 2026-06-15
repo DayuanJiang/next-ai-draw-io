@@ -336,6 +336,17 @@ AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["
 
 プロジェクトルートに `ai-models.json` ファイルを作成します（または `AI_MODELS_CONFIG_PATH` でパスを指定）。
 
+**方法3：`AI_MODEL` をカンマ区切りで指定**（単一プロバイダーの簡易設定）
+
+同一プロバイダー内の複数モデルだけを公開したい場合は、`AI_MODEL` にカンマ区切りで列挙できます。最初のモデルがデフォルトになります。
+
+```bash
+AI_PROVIDER=doubao
+AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+```
+
+これは等価な `ai-models.json` の簡易表記です。複数のプロバイダーや、カスタム `apiKeyEnv` / `baseUrlEnv` を使う場合は、方法1または方法2を使ってください。
+
 ### 設定例
 
 ```json

@@ -225,7 +225,7 @@ All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
 ### Server-Side Multi-Model Configuration
 
-Administrators can configure multiple server-side models that are available to all users without requiring personal API keys. Configure via `AI_MODELS_CONFIG` environment variable (JSON string) or `ai-models.json` file.
+Administrators can configure multiple server-side models that are available to all users without requiring personal API keys. Configure via `AI_MODELS_CONFIG` environment variable (JSON string) or `ai-models.json` file. For a single-provider quick setup, list comma-separated model IDs in `AI_MODEL`.
 
 ### Admin Panel
 

@@ -336,6 +336,17 @@ AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["
 
 在项目根目录创建 `ai-models.json` 文件（或通过 `AI_MODELS_CONFIG_PATH` 指定路径）。
 
+**方式三：`AI_MODEL` 用逗号分隔**（单 provider 的快速配置）
+
+如果只需要暴露同一 provider 下的多个模型，可以直接在 `AI_MODEL` 里用逗号分隔。第一个模型会作为默认值。
+
+```bash
+AI_PROVIDER=doubao
+AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+```
+
+这是等价 `ai-models.json` 的简写形式。如果需要配置多个 provider，或自定义 `apiKeyEnv` / `baseUrlEnv`，请使用方式一或方式二。
+
 ### 配置示例
 
 ```json

@@ -159,6 +159,44 @@ describe("loadFlattenedServerModels", () => {
         expect(defaultModel.modelId).toBe("gpt-4o") // First model of default provider
     })
 
+    it("falls back to comma-separated AI_MODEL when no other config is set", async () => {
+        process.env.AI_MODELS_CONFIG = ""
+        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
+        process.env.AI_PROVIDER = "openai"
+        process.env.AI_MODEL = "gpt-4o, gpt-4o-mini, gpt-4o"
+
+        const models = await loadFlattenedServerModels()
+
+        // Trims, deduplicates, and preserves order
+        expect(models.map((m) => m.modelId)).toEqual(["gpt-4o", "gpt-4o-mini"])
+        expect(models.every((m) => m.provider === "openai")).toBe(true)
+
+        // First model is marked default (provider has default: true)
+        const defaults = models.filter((m) => m.isDefault)
+        expect(defaults.length).toBe(1)
+        expect(defaults[0].modelId).toBe("gpt-4o")
+    })
+
+    it("does not synthesize when AI_MODEL has no comma", async () => {
+        process.env.AI_MODELS_CONFIG = ""
+        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
+        process.env.AI_PROVIDER = "openai"
+        process.env.AI_MODEL = "gpt-4o"
+
+        const models = await loadFlattenedServerModels()
+        expect(models).toEqual([])
+    })
+
+    it("does not synthesize when AI_PROVIDER is unset", async () => {
+        process.env.AI_MODELS_CONFIG = ""
+        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
+        delete process.env.AI_PROVIDER
+        process.env.AI_MODEL = "gpt-4o, gpt-4o-mini"
+
+        const models = await loadFlattenedServerModels()
+        expect(models).toEqual([])
+    })
+
     it("preserves apiKeyEnv array in flattened models for load balancing", async () => {
         const config: ServerModelsConfig = {
             providers: [

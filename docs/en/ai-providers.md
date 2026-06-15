@@ -351,6 +351,17 @@ AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["
 
 Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PATH` to a custom location).
 
+**Option 3: Comma-separated `AI_MODEL`** (quick setup, single provider)
+
+If you only need multiple models from one provider, list them in `AI_MODEL` separated by commas. The first model is treated as the default.
+
+```bash
+AI_PROVIDER=doubao
+AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+```
+
+This is shorthand for the equivalent `ai-models.json`. For multiple providers or custom `apiKeyEnv` / `baseUrlEnv`, use Option 1 or 2 instead.
+
 ### Example Configuration
 
 ```json

@@ -62,6 +62,53 @@ function getConfigPath(): string {
     return path.join(process.cwd(), "ai-models.json")
 }
 
+/**
+ * Synthesize a config from a comma-separated AI_MODEL value (Priority 3 fallback).
+ * Lets users expose multiple models without authoring AI_MODELS_CONFIG / ai-models.json.
+ * Triggers only when AI_MODEL contains a comma AND AI_PROVIDER is set to a known provider.
+ */
+function configFromCommaSeparatedAiModel(): ServerModelsConfig | null {
+    const aiModel = process.env.AI_MODEL
+    if (!aiModel || !aiModel.includes(",")) return null
+
+    const aiProvider = process.env.AI_PROVIDER
+    if (!aiProvider) {
+        console.warn(
+            "[server-model-config] AI_MODEL contains commas but AI_PROVIDER is not set; " +
+                "skipping multi-model fallback. Set AI_PROVIDER, or use AI_MODELS_CONFIG / ai-models.json.",
+        )
+        return null
+    }
+    if (!(aiProvider in PROVIDER_INFO)) {
+        console.warn(
+            `[server-model-config] AI_PROVIDER="${aiProvider}" is not a known provider; skipping multi-model fallback.`,
+        )
+        return null
+    }
+
+    const models = Array.from(
+        new Set(
+            aiModel
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0),
+        ),
+    )
+    if (models.length === 0) return null
+
+    const providerName = aiProvider as ProviderName
+    return {
+        providers: [
+            {
+                name: PROVIDER_INFO[providerName]?.label || providerName,
+                provider: providerName,
+                models,
+                default: true,
+            },
+        ],
+    }
+}
+
 export async function loadEnvServerModelsConfig(): Promise<ServerModelsConfig | null> {
     // Priority 1: AI_MODELS_CONFIG env var (JSON string) - for cloud deployments
     const envConfig = process.env.AI_MODELS_CONFIG
@@ -85,15 +132,17 @@ export async function loadEnvServerModelsConfig(): Promise<ServerModelsConfig | 
         const json = JSON.parse(jsonStr)
         return ServerModelsConfigSchema.parse(json)
     } catch (err: any) {
-        if (err?.code === "ENOENT") {
+        if (err?.code !== "ENOENT") {
+            console.error(
+                "[server-model-config] Failed to load ai-models.json:",
+                err,
+            )
             return null
         }
-        console.error(
-            "[server-model-config] Failed to load ai-models.json:",
-            err,
-        )
-        return null
     }
+
+    // Priority 3: AI_MODEL with comma-separated values + AI_PROVIDER
+    return configFromCommaSeparatedAiModel()
 }
 
 export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | null> {

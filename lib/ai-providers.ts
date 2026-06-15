@@ -729,8 +729,10 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             (overrides?.provider === "vertexai" && overrides?.vertexApiKey))
     )
 
-    // Use client override if provided, otherwise fall back to env vars
-    const modelId = overrides?.modelId || process.env.AI_MODEL
+    // Use client override if provided, otherwise fall back to env vars.
+    // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
+    const envModel = process.env.AI_MODEL?.split(",")[0]?.trim() || undefined
+    const modelId = overrides?.modelId || envModel
 
     if (!modelId) {
         if (isClientOverride) {
@@ -1490,7 +1492,9 @@ export function supportsImageInput(modelId: string): boolean {
  * Throws if the model doesn't support image input.
  */
 export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
-    const modelId = process.env.VALIDATION_MODEL || process.env.AI_MODEL
+    // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
+    const envFallback = process.env.AI_MODEL?.split(",")[0]?.trim() || undefined
+    const modelId = process.env.VALIDATION_MODEL || envFallback
 
     if (!modelId) {
         throw new Error(
