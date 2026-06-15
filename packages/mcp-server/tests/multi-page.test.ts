@@ -44,6 +44,7 @@ import {
     listPagesFromDoc,
     normalizeToMxfile,
     parseMxfile,
+    projectPage,
     renamePageInDoc,
     serializeMxfile,
 } from "../src/pages.js"
@@ -378,6 +379,10 @@ describe("diagram-operations.ts — page-targeted edits (AC3)", () => {
         )
         expect(errors).toHaveLength(1)
         expect(errors[0].message).toMatch(/Page.*not found/i)
+        // Page-level errors carry an empty cellId — edit_diagram relies on
+        // this to distinguish "nothing applied" from per-cell warnings and
+        // return a hard error instead of a false success.
+        expect(errors[0].cellId).toBe("")
     })
 
     it("delete on page 2 does NOT touch page 1's mxCell with the same id", () => {
@@ -426,16 +431,27 @@ describe("export_diagram — single-page projection (regression for selectPage b
     // active tab regardless of the page selector — two visually different
     // pages would yield byte-identical PNGs.
     //
-    // The current implementation builds a single-page <mxfile> projection
-    // server-side and loads it into the iframe BEFORE triggering export.
-    // These tests pin the pure projection logic so a future refactor can't
-    // silently re-introduce the multi-page drift.
+    // The current implementation builds a single-page <mxfile> projection via
+    // the shared pages.ts:projectPage helper and hands it to the browser
+    // bridge to load BEFORE triggering export. These tests pin that helper so
+    // a future refactor can't silently re-introduce the multi-page drift.
     function projectSinglePage(fullMxfile: string, sel: any): string {
-        const doc = parseMxfile(fullMxfile)!
-        const found = findPageElement(doc, sel)!
-        const serializer = new XMLSerializer()
-        return `<mxfile host="app.diagrams.net">${serializer.serializeToString(found.element)}</mxfile>`
+        const result = projectPage(fullMxfile, sel)
+        if (!result.ok) throw new Error(`projection failed: ${result.reason}`)
+        return result.xml
     }
+
+    it("returns a parse error for a non-mxfile source", () => {
+        const result = projectPage(BARE_MODEL_ONE_CELL, { page_id: "x" })
+        expect(result.ok).toBe(false)
+        if (!result.ok) expect(result.reason).toBe("parse")
+    })
+
+    it("returns a notfound error for an unknown page", () => {
+        const result = projectPage(TWO_PAGE_MXFILE, { page_id: "ghost" })
+        expect(result.ok).toBe(false)
+        if (!result.ok) expect(result.reason).toBe("notfound")
+    })
 
     it("projects only the requested page when targeted by id", () => {
         const projected = projectSinglePage(TWO_PAGE_MXFILE, {

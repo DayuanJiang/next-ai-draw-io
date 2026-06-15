@@ -47,6 +47,7 @@ import {
 import { addHistory } from "./history.js"
 import {
     getState,
+    requestExport,
     requestSync,
     setState,
     shutdown,
@@ -57,12 +58,12 @@ import { log } from "./logger.js"
 import {
     addPageToDoc,
     deletePageFromDoc,
-    findPageElement,
     hasPageSelector,
     listPagesFromDoc,
     normalizeToMxfile,
     type PageSelector,
     parseMxfile,
+    projectPage,
     renamePageInDoc,
     serializeMxfile,
 } from "./pages.js"
@@ -93,12 +94,14 @@ const server = new McpServer({
 const pageSelectorSchema = {
     page_id: z
         .string()
+        .min(1)
         .optional()
         .describe(
             "Target a page by its id (as returned by list_pages or add_page). Wins over page_name and page_index when multiple are set.",
         ),
     page_name: z
         .string()
+        .min(1)
         .optional()
         .describe(
             'Target a page by its display name (e.g. "CNN"). Used only when page_id is not set.',
@@ -500,10 +503,14 @@ server.registerTool(
                 }
             }
 
-            // Fetch latest state from browser
+            // Fetch latest state from browser. Re-normalise to mxfile: the
+            // embed/sync path can hand back a bare <mxGraphModel>, and adopting
+            // it verbatim would silently strip a multi-page document down to
+            // one page on the next write.
             const browserState = getState(currentSession.id)
             if (browserState?.xml) {
-                currentSession.xml = browserState.xml
+                currentSession.xml =
+                    normalizeToMxfile(browserState.xml) ?? browserState.xml
                 log.info("Fetched latest diagram state from browser")
             }
 
@@ -526,13 +533,6 @@ server.registerTool(
             })
             log.info(
                 `Editing diagram with ${operations.length} operation(s) on ${describeSelector(pageSelector)}`,
-            )
-
-            // Save before editing (with cached SVG from browser)
-            addHistory(
-                currentSession.id,
-                currentSession.xml,
-                browserState?.svg || "",
             )
 
             // Validate and auto-fix new_xml for each operation
@@ -569,6 +569,33 @@ server.registerTool(
                     .join("\n")
                 log.warn(`Edit had ${errors.length} error(s): ${errorMessages}`)
             }
+
+            // A page-level error (empty cellId — e.g. the selector matched no
+            // page, or the page had no <root>) means NOTHING was applied and
+            // `result` is the unchanged input. Surface it as a hard error
+            // instead of persisting a no-op and reporting success, so the
+            // caller doesn't build on a wrong assumption.
+            const pageError = errors.find((e) => e.cellId === "")
+            if (pageError) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: ${pageError.message}`,
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            // Save the pre-edit state for undo (with cached SVG from browser).
+            // Done only now that we know the edit applied — a page-level error
+            // returns above without leaving a phantom history entry.
+            addHistory(
+                currentSession.id,
+                currentSession.xml,
+                browserState?.svg || "",
+            )
 
             // Update state
             currentSession.xml = result
@@ -653,10 +680,13 @@ server.registerTool(
             // Mark that get_diagram was called (for edit_diagram workflow check)
             currentSession.lastGetDiagramTime = Date.now()
 
-            // Fetch latest state from browser
+            // Fetch latest state from browser, re-normalising to mxfile so a
+            // bare <mxGraphModel> pushed back by the embed/sync path doesn't
+            // strip page structure (see edit_diagram for the same guard).
             const browserState = getState(currentSession.id)
             if (browserState?.xml) {
-                currentSession.xml = browserState.xml
+                currentSession.xml =
+                    normalizeToMxfile(browserState.xml) ?? browserState.xml
             }
 
             if (!currentSession.xml) {
@@ -682,7 +712,7 @@ server.registerTool(
                 : "No <mxfile> wrapper detected (legacy single-page session)."
 
             // No selector → return full mxfile
-            if (!hasPageSelector(pageSelector) || !doc) {
+            if (!hasPageSelector(pageSelector)) {
                 return {
                     content: [
                         {
@@ -694,27 +724,26 @@ server.registerTool(
             }
 
             // Selector → return a single-page projection
-            const found = findPageElement(doc, pageSelector)
-            if (!found) {
+            const projection = projectPage(currentSession.xml, pageSelector)
+            if (!projection.ok) {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Error: Page ${describeSelector(pageSelector)} not found.\n\n${pageList}`,
+                            text:
+                                projection.reason === "parse"
+                                    ? `Error: a page selector was given but the current session XML could not be parsed as a multi-page <mxfile> (it may be a legacy single-page document or malformed), so it has no addressable pages.\n\n${pageList}`
+                                    : `Error: Page ${describeSelector(pageSelector)} not found.\n\n${pageList}`,
                         },
                     ],
                     isError: true,
                 }
             }
-            // Serialise just the matched diagram, re-wrapped as a single-page mxfile
-            const serializer = new XMLSerializer()
-            const diagramXml = serializer.serializeToString(found.element)
-            const projected = `<mxfile host="app.diagrams.net">${diagramXml}</mxfile>`
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Page ${found.index} ("${found.element.getAttribute("name") || ""}"):\n\n${projected}\n\n${pageList}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}`,
                     },
                 ],
             }
@@ -741,7 +770,7 @@ server.registerTool(
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
             "- .drawio with a page selector: writes a single-page <mxfile> containing only that page.\n" +
             "- .png / .svg with NO page selector: exports the currently active page in the browser.\n" +
-            "- .png / .svg with a page selector: temporarily loads a single-page projection of that page into the browser, captures the rendered image, then restores the full document. The user will see a brief tab-flicker (~3-4s) but the exported image is guaranteed to be the requested page.",
+            "- .png / .svg with a page selector: temporarily loads a single-page projection of that page into the browser, captures the rendered image, then restores the full document. The user will see a brief tab-flicker (~1-2s) but the exported image is guaranteed to be the requested page.",
         inputSchema: {
             ...pageSelectorSchema,
             path: z
@@ -814,32 +843,25 @@ server.registerTool(
 
                 let outXml = currentSession.xml
                 if (hasPageSelector(pageSelector)) {
-                    const doc = parseMxfile(currentSession.xml)
-                    if (!doc) {
+                    const projection = projectPage(
+                        currentSession.xml,
+                        pageSelector,
+                    )
+                    if (!projection.ok) {
                         return {
                             content: [
                                 {
                                     type: "text",
-                                    text: "Error: Cannot parse current session XML as <mxfile>; cannot project a single page.",
+                                    text:
+                                        projection.reason === "parse"
+                                            ? "Error: Cannot parse current session XML as <mxfile>; cannot project a single page."
+                                            : `Error: Page ${describeSelector(pageSelector)} not found for export.`,
                                 },
                             ],
                             isError: true,
                         }
                     }
-                    const found = findPageElement(doc, pageSelector)
-                    if (!found) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Error: Page ${describeSelector(pageSelector)} not found for export.`,
-                                },
-                            ],
-                            isError: true,
-                        }
-                    }
-                    const serializer = new XMLSerializer()
-                    outXml = `<mxfile host="app.diagrams.net">${serializer.serializeToString(found.element)}</mxfile>`
+                    outXml = projection.xml
                 }
 
                 await fs.writeFile(absolutePath, outXml, "utf-8")
@@ -878,108 +900,62 @@ server.registerTool(
             }
 
             // -----------------------------------------------------------------
-            // Page-targeted PNG/SVG export — "load + export + restore" dance.
+            // Page-targeted PNG/SVG export.
             //
-            // drawio's JSON embed protocol does NOT expose a working
-            // `selectPage` action, so we cannot ask the iframe to switch tabs
-            // from JavaScript. Instead, when the caller requests a specific
-            // page, we:
-            //   1. Build a single-page <mxfile> containing only the target
-            //      page's <diagram> (a projection).
-            //   2. Push the projection into the transient state so the
-            //      browser-side poll loop reloads the iframe with that
-            //      single-page document on its next tick (<=2s + ~500ms
-            //      drawio render).
-            //   3. After waiting for that load to settle, set
-            //      state.exportFormat — the browser then fires the export
-            //      action against the now-rendered single-page document.
-            //   4. Once the export data is captured, push the ORIGINAL
-            //      <mxfile> back so the user's multi-tab view is restored.
-            //
-            // Cost: a visible "tab flicker" lasting roughly 3-5 seconds.
-            // Benefit: correctness — the exported image is guaranteed to be
-            // the requested page, not whatever tab happened to be active.
+            // drawio's JSON embed protocol has no working `selectPage` action,
+            // so to export a specific page we build a single-page <mxfile>
+            // projection and hand it to the browser bridge alongside the export
+            // request. The bridge loads the projection, waits for draw.io's own
+            // render, exports, then reloads the user's real document — entirely
+            // browser-side. The canonical session state is never mutated here,
+            // so there is no restore race and no concurrent-edit clobbering.
             // -----------------------------------------------------------------
-            let originalXml: string | null = null
+            let projectionXml: string | undefined
+            if (hasPageSelector(pageSelector)) {
+                const projection = projectPage(currentSession.xml, pageSelector)
+                if (!projection.ok) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    projection.reason === "parse"
+                                        ? "Error: Cannot parse current session XML as <mxfile>; cannot target page for export."
+                                        : `Error: Page ${describeSelector(pageSelector)} not found for export.`,
+                            },
+                        ],
+                        isError: true,
+                    }
+                }
+                projectionXml = projection.xml
+            }
+
+            // Ask the browser to export (optionally via a page projection) and
+            // poll for the resulting image data.
+            requestExport(
+                currentSession.id,
+                detectedFormat as "png" | "svg",
+                projectionXml,
+            )
+
+            // A projection export does an extra load + render round-trip in the
+            // browser, so give it a longer window. Re-read the live store entry
+            // each tick: setState() (from a concurrent autosave or tool call)
+            // replaces the Map entry with a new object, so a captured reference
+            // would go stale and never observe the browser's exportData.
+            const timeoutMs = projectionXml ? 15000 : 10000
+            const start = Date.now()
             let exportData: string | undefined
-            try {
-                if (hasPageSelector(pageSelector)) {
-                    const doc = parseMxfile(currentSession.xml)
-                    if (!doc) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "Error: Cannot parse current session XML as <mxfile>; cannot target page for export.",
-                                },
-                            ],
-                            isError: true,
-                        }
-                    }
-                    const found = findPageElement(doc, pageSelector)
-                    if (!found) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Error: Page ${describeSelector(pageSelector)} not found for export.`,
-                                },
-                            ],
-                            isError: true,
-                        }
-                    }
-
-                    // Build the single-page projection.
-                    const serializer = new XMLSerializer()
-                    const projection = `<mxfile host="app.diagrams.net">${serializer.serializeToString(found.element)}</mxfile>`
-
-                    // Stash the original so we can restore it after export.
-                    originalXml = currentSession.xml
-
-                    // Push the projection. setState bumps the version, so the
-                    // browser's next poll (within 2s) will see version > local
-                    // and reload the iframe with the projection.
-                    setState(currentSession.id, projection)
-                    currentSession.xml = projection
-                    currentSession.version++
-
-                    // Wait for the browser to: poll (worst case 2s) + load + drawio
-                    // render (~500ms). 3 seconds is a safe lower bound. If the
-                    // browser is slow we'll just time out at export-wait below.
-                    await new Promise((r) => setTimeout(r, 3000))
-                }
-
-                state.exportFormat = detectedFormat as "png" | "svg"
-                state.exportData = undefined
-
-                // Wait for the browser to produce the export data. Allow a longer
-                // window when we did the projection dance because the browser has
-                // already burned ~3s on the load.
-                const timeoutMs = originalXml ? 15000 : 10000
-                const start = Date.now()
-                while (Date.now() - start < timeoutMs) {
-                    if (state.exportData) break
-                    await new Promise((r) => setTimeout(r, 200))
-                }
-                exportData = state.exportData as string | undefined
-                state.exportData = undefined
-                state.exportFormat = undefined
-            } finally {
-                // Restoration of the multi-page document MUST run even if an
-                // exception was thrown between projection-push and export-wait
-                // — otherwise the user's session is left holding the
-                // single-page projection and their other pages look lost.
-                if (originalXml) {
-                    try {
-                        setState(currentSession.id, originalXml)
-                        currentSession.xml = originalXml
-                        currentSession.version++
-                    } catch (restoreErr) {
-                        log.error(
-                            `Failed to restore original mxfile after export: ${(restoreErr as Error).message}`,
-                        )
-                    }
-                }
+            while (Date.now() - start < timeoutMs) {
+                exportData = getState(currentSession.id)?.exportData
+                if (exportData) break
+                await new Promise((r) => setTimeout(r, 200))
+            }
+            const live = getState(currentSession.id)
+            if (live) {
+                live.exportData = undefined
+                live.exportFormat = undefined
+                live.exportXml = undefined
             }
 
             if (!exportData) {
@@ -987,7 +963,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: originalXml
+                            text: projectionXml
                                 ? "Error: Export timed out after loading the single-page projection. The browser may be closed or unresponsive."
                                 : "Error: Export timed out. Make sure the browser tab is open and the diagram is loaded.",
                         },
@@ -1178,6 +1154,7 @@ server.registerTool(
                 ),
             id: z
                 .string()
+                .min(1)
                 .optional()
                 .describe(
                     "Optional explicit page id. If omitted the server generates one. Must be unique across pages.",

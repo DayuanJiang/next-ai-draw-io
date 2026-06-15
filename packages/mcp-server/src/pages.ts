@@ -125,6 +125,35 @@ export function serializeMxfile(doc: Document): string {
     return serializer.serializeToString(doc)
 }
 
+export type PageProjection =
+    | { ok: true; xml: string; index: number; name: string }
+    | { ok: false; reason: "parse" | "notfound" }
+
+/**
+ * Project a single page out of an mxfile string into a standalone one-page
+ * <mxfile>. Used by get_diagram and export_diagram so the three call sites
+ * share one parse → find → serialise path.
+ *
+ * Returns { ok:false, reason:"parse" } if the xml isn't a parseable mxfile,
+ * or { ok:false, reason:"notfound" } if the selector matches no page.
+ */
+export function projectPage(
+    xml: string,
+    selector: PageSelector,
+): PageProjection {
+    const doc = parseMxfile(xml)
+    if (!doc) return { ok: false, reason: "parse" }
+    const found = findPageElement(doc, selector)
+    if (!found) return { ok: false, reason: "notfound" }
+    const serializer = new XMLSerializer()
+    return {
+        ok: true,
+        xml: `<mxfile host="app.diagrams.net">${serializer.serializeToString(found.element)}</mxfile>`,
+        index: found.index,
+        name: found.element.getAttribute("name") || "",
+    }
+}
+
 /** Walk every <diagram> child of <mxfile> and return summary info. */
 export function listPagesFromDoc(doc: Document): PageInfo[] {
     const diagrams = doc.querySelectorAll("diagram")
