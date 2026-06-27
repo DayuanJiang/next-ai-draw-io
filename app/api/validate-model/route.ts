@@ -56,7 +56,7 @@ export async function POST(req: Request) {
         }
 
         // SECURITY: Block SSRF attacks via custom baseUrl
-        if (baseUrl && !allowPrivateUrls() && isPrivateUrl(baseUrl)) {
+        if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
             return NextResponse.json(
                 { valid: false, error: "Invalid base URL" },
                 { status: 400 },

@@ -1,4 +1,4 @@
-import { extract } from "@extractus/article-extractor"
+import { extractFromHtml } from "@extractus/article-extractor"
 import { NextResponse } from "next/server"
 import TurndownService from "turndown"
 import { isPrivateUrl } from "@/lib/ssrf-protection"
@@ -31,21 +31,31 @@ export async function POST(req: Request) {
         // SSRF protection: parse-url has no use case for fetching internal
         // hosts, so private URLs are always rejected. ALLOW_PRIVATE_URLS only
         // governs LLM provider baseUrl overrides (validate-model, chat).
-        if (isPrivateUrl(url)) {
+        if (await isPrivateUrl(url)) {
             return NextResponse.json(
                 { error: "Cannot access private/internal URLs" },
                 { status: 400 },
             )
         }
-        const headController = new AbortController()
-        const headTimeout = setTimeout(() => headController.abort(), 3000)
+        // Fetch the page ourselves so we control redirect handling. The
+        // article-extractor library follows redirects internally and ignores a
+        // `redirect` option, which would let a public URL 302 to an internal
+        // host and bypass the SSRF check above. `redirect: "error"` rejects any
+        // redirect outright.
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+            controller.abort()
+        }, EXTRACT_TIMEOUT_MS)
+
+        let html: string
         try {
-            const headResponse = await fetch(url, {
-                method: "HEAD",
+            const response = await fetch(url, {
                 headers: { "User-Agent": USER_AGENT },
-                signal: headController.signal,
+                redirect: "error",
+                signal: controller.signal,
             })
-            const contentType = headResponse.headers.get("content-type")
+
+            const contentType = response.headers.get("content-type")
             if (contentType?.includes("application/pdf")) {
                 return NextResponse.json(
                     {
@@ -54,27 +64,15 @@ export async function POST(req: Request) {
                     { status: 422 },
                 )
             }
-        } catch (err) {
-            console.warn(
-                "HEAD pre-check failed, proceeding with extraction:",
-                err,
-            )
-        } finally {
-            clearTimeout(headTimeout)
-        }
 
-        // Extract article content with timeout to avoid tying up server resources
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => {
-            controller.abort()
-        }, EXTRACT_TIMEOUT_MS)
+            if (!response.ok) {
+                return NextResponse.json(
+                    { error: "Could not fetch URL content" },
+                    { status: 400 },
+                )
+            }
 
-        let article
-        try {
-            article = await extract(url, undefined, {
-                headers: { "User-Agent": USER_AGENT },
-                signal: controller.signal,
-            })
+            html = await response.text()
         } catch (err: any) {
             if (err?.name === "AbortError") {
                 return NextResponse.json(
@@ -82,10 +80,17 @@ export async function POST(req: Request) {
                     { status: 504 },
                 )
             }
-            throw err
+            // Redirects are rejected with a TypeError ("failed to fetch" /
+            // "unexpected redirect") when redirect: "error" is set.
+            return NextResponse.json(
+                { error: "Could not fetch URL content" },
+                { status: 400 },
+            )
         } finally {
             clearTimeout(timeoutId)
         }
+
+        const article = await extractFromHtml(html, url)
 
         if (!article || !article.content) {
             return NextResponse.json(
