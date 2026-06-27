@@ -15,7 +15,6 @@ import { z } from "zod"
 import {
     getAIModel,
     SINGLE_SYSTEM_PROVIDERS,
-    supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -266,16 +265,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
         lastUserMessage?.parts?.filter((part: any) => part.type === "file") ||
         []
 
-    // Check if user is sending images to a model that doesn't support them
-    // AI SDK silently drops unsupported parts, so we need to catch this early
-    if (fileParts.length > 0 && !supportsImageInput(modelId)) {
-        return Response.json(
-            {
-                error: `The model "${modelId}" does not support image input. Please use a vision-capable model (e.g., GPT-4o, Claude, Gemini) or remove the image.`,
-            },
-            { status: 400 },
-        )
-    }
+    // Note: we used to pre-emptively reject images for models we guessed were
+    // text-only (by name matching). That heuristic misfired on newer models
+    // (see issue #874), so we now let the request through and surface the real
+    // provider error if the model genuinely can't accept images.
 
     // User input only - XML is now in a separate cached system message
     const formattedUserInput = `User input:

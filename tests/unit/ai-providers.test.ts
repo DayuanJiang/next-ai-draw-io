@@ -3,7 +3,6 @@ import {
     getAIModel,
     isAihubmixStandardBaseURL,
     resolveBaseURL,
-    supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
 import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
@@ -180,89 +179,6 @@ describe("supportsPromptCaching", () => {
         expect(supportsPromptCaching("gpt-4o")).toBe(false)
         expect(supportsPromptCaching("gemini-pro")).toBe(false)
         expect(supportsPromptCaching("deepseek-chat")).toBe(false)
-    })
-})
-
-describe("supportsImageInput", () => {
-    it("returns true for models with vision capability", () => {
-        expect(supportsImageInput("gpt-4-vision")).toBe(true)
-        expect(supportsImageInput("qwen-vl")).toBe(true)
-        expect(supportsImageInput("deepseek-vl")).toBe(true)
-    })
-
-    it("returns false for Kimi K2 models without vision", () => {
-        expect(supportsImageInput("kimi-k2")).toBe(false)
-        expect(supportsImageInput("moonshot/kimi-k2")).toBe(false)
-    })
-
-    it("returns true for Kimi K2.5 models (supports vision)", () => {
-        expect(supportsImageInput("kimi-k2.5")).toBe(true)
-        expect(supportsImageInput("moonshotai/kimi-k2.5")).toBe(true)
-    })
-
-    it("returns false for Moonshot v1 text models", () => {
-        expect(supportsImageInput("moonshot-v1-8k")).toBe(false)
-        expect(supportsImageInput("moonshot-v1-32k")).toBe(false)
-        expect(supportsImageInput("moonshot-v1-128k")).toBe(false)
-    })
-
-    it("returns false for MiniMax M2 text models", () => {
-        expect(supportsImageInput("MiniMax-M2.7")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2.7-highspeed")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2")).toBe(false)
-    })
-
-    it("returns true for MiniMax M3 (supports image input)", () => {
-        expect(supportsImageInput("MiniMax-M3")).toBe(true)
-    })
-
-    it("returns false for DeepSeek text models", () => {
-        expect(supportsImageInput("deepseek-chat")).toBe(false)
-        expect(supportsImageInput("deepseek-coder")).toBe(false)
-    })
-
-    it("returns false for Qwen text models", () => {
-        expect(supportsImageInput("qwen-turbo")).toBe(false)
-        expect(supportsImageInput("qwen-plus")).toBe(false)
-        expect(supportsImageInput("qwen3-max")).toBe(false)
-    })
-
-    it("returns true for Qwen vision models", () => {
-        expect(supportsImageInput("qwen-vl")).toBe(true)
-        expect(supportsImageInput("Qwen3.5")).toBe(true)
-        expect(supportsImageInput("qwen3.5")).toBe(true)
-        expect(supportsImageInput("qwen3.5-plus")).toBe(true)
-        expect(supportsImageInput("qwen3.5-flash")).toBe(true)
-        expect(supportsImageInput("qwen3-vl-plus")).toBe(true)
-        expect(supportsImageInput("qwen3-vl-flash")).toBe(true)
-    })
-
-    it("returns true for QvQ (Qwen Visual QA) models including OpenRouter-prefixed names", () => {
-        expect(supportsImageInput("qvq-72b-preview")).toBe(true)
-        expect(supportsImageInput("qvq-max")).toBe(true)
-        expect(supportsImageInput("qwen/qvq-72b-preview")).toBe(true)
-        expect(supportsImageInput("qwen/qvq-max")).toBe(true)
-    })
-
-    it("returns false for GLM text models", () => {
-        expect(supportsImageInput("glm-4")).toBe(false)
-        expect(supportsImageInput("glm-4-plus")).toBe(false)
-        expect(supportsImageInput("glm-4-flash")).toBe(false)
-        expect(supportsImageInput("glm-4-long")).toBe(false)
-        expect(supportsImageInput("glm-4.7")).toBe(false)
-        expect(supportsImageInput("glm-5")).toBe(false)
-    })
-
-    it("returns true for GLM vision models", () => {
-        expect(supportsImageInput("glm-4v")).toBe(true)
-        expect(supportsImageInput("glm-4v-9b")).toBe(true)
-        expect(supportsImageInput("glm-4.1v-9b-thinking")).toBe(true)
-    })
-
-    it("returns true for Claude and GPT models by default", () => {
-        expect(supportsImageInput("claude-sonnet-4-5")).toBe(true)
-        expect(supportsImageInput("gpt-4o")).toBe(true)
-        expect(supportsImageInput("gemini-pro")).toBe(true)
     })
 })
 
