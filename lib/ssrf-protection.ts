@@ -41,6 +41,7 @@ function isPrivateIp(ip: string): boolean {
         if (a === 169 && b === 254) return true // 169.254.0.0/16 (link-local)
         if (a === 127) return true // 127.0.0.0/8 (loopback)
         if (a === 0) return true // 0.0.0.0/8
+        if (a === 100 && b >= 64 && b <= 127) return true // 100.64.0.0/10 (CGNAT, used by some cloud internal networks)
     }
 
     return false

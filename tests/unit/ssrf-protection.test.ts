@@ -31,7 +31,24 @@ describe("isPrivateUrl", () => {
         expect(await isPrivateUrl("http://10.0.0.5/")).toBe(true)
         expect(await isPrivateUrl("http://192.168.1.1/")).toBe(true)
         expect(await isPrivateUrl("http://169.254.169.254/")).toBe(true)
+        expect(await isPrivateUrl("http://0.0.0.0/")).toBe(true)
+        // 100.64.0.0/10 CGNAT (RFC 6598), routable in some cloud internal nets
+        expect(await isPrivateUrl("http://100.64.0.1/")).toBe(true)
+        expect(await isPrivateUrl("http://100.127.255.255/")).toBe(true)
         expect(lookupMock).not.toHaveBeenCalled()
+    })
+
+    it("treats CGNAT boundaries correctly", async () => {
+        // 100.63.x and 100.128.x are outside 100.64.0.0/10 → public
+        lookupMock.mockResolvedValue([{ address: "100.63.255.255", family: 4 }])
+        expect(await isPrivateUrl("http://just-below.example/")).toBe(false)
+        lookupMock.mockResolvedValue([{ address: "100.128.0.1", family: 4 }])
+        expect(await isPrivateUrl("http://just-above.example/")).toBe(false)
+    })
+
+    it("blocks a hostname that resolves to a private IPv6 address", async () => {
+        lookupMock.mockResolvedValue([{ address: "fd00::1", family: 6 }])
+        expect(await isPrivateUrl("http://v6.example.com/")).toBe(true)
     })
 
     it("allows public URLs that resolve to public IPs", async () => {
