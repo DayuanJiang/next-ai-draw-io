@@ -88,6 +88,17 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
         label: "Max Output Tokens",
         min: 1,
     },
+    {
+        key: "MODEL_VALIDATION_MAX_TOKENS",
+        group: "generation",
+        type: "number",
+        label: "Model Validation Max Tokens",
+        description:
+            "Token budget for model test requests. Increase for reasoning models that may emit thinking tokens first.",
+        min: 1,
+        max: 64000,
+        default: "1000",
+    },
 
     // ── Access Control ───────────────────────────────────────────────
     {

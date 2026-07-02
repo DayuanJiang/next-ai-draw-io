@@ -494,6 +494,10 @@
             "MAX_OUTPUT_TOKENS": {
                 "label": "Max Output Tokens"
             },
+            "MODEL_VALIDATION_MAX_TOKENS": {
+                "label": "Model Validation Max Tokens",
+                "description": "Token budget for model test requests. Increase for reasoning models that may emit thinking tokens first."
+            },
             "ACCESS_CODE_LIST": {
                 "label": "Access Codes",
                 "description": "Comma-separated list. Users must enter one to chat. Empty = open access."

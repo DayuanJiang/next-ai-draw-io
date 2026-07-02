@@ -15,6 +15,7 @@ import {
     isAihubmixStandardBaseURL,
     normalizeMiniMaxBaseURL,
 } from "@/lib/ai-providers"
+import { resolveModelValidationMaxTokens } from "@/lib/model-validation"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
@@ -31,6 +32,9 @@ interface ValidateRequest {
     awsRegion?: string
     // Vertex AI specific
     vertexApiKey?: string // Express Mode API key
+    // Optional test token budget override
+    maxTokens?: number
+    max_tokens?: number
 }
 
 export async function POST(req: Request) {
@@ -47,6 +51,11 @@ export async function POST(req: Request) {
             // Note: Express Mode only needs vertexApiKey
             vertexApiKey,
         } = body
+        const validationMaxTokens = resolveModelValidationMaxTokens(
+            body.maxTokens,
+            body.max_tokens,
+            process.env.MODEL_VALIDATION_MAX_TOKENS,
+        )
 
         if (!provider || !modelId) {
             return NextResponse.json(
@@ -299,7 +308,7 @@ export async function POST(req: Request) {
                                 messages: [
                                     { role: "user", content: "Say 'OK'" },
                                 ],
-                                max_tokens: 20,
+                                max_tokens: validationMaxTokens,
                                 stream: true,
                                 enable_thinking: false,
                             }),
@@ -413,7 +422,7 @@ export async function POST(req: Request) {
         await generateText({
             model,
             prompt: "Say 'OK'",
-            maxOutputTokens: 20,
+            maxOutputTokens: validationMaxTokens,
         })
         const responseTime = Date.now() - startTime
 

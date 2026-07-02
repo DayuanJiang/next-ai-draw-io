@@ -494,6 +494,10 @@
             "MAX_OUTPUT_TOKENS": {
                 "label": "最大輸出 token 數"
             },
+            "MODEL_VALIDATION_MAX_TOKENS": {
+                "label": "模型驗證最大 token 數",
+                "description": "模型測試請求的 token 預算。推理模型可能先輸出思考 token，可適當調大。"
+            },
             "ACCESS_CODE_LIST": {
                 "label": "存取碼",
                 "description": "以逗號分隔的清單。使用者需輸入其中之一才能聊天。留空 = 開放存取。"
