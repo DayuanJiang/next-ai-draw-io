@@ -116,6 +116,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "kimi",
     "minimax",
     "novita",
+    "mimo",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -540,7 +541,8 @@ function buildProviderOptions(
         case "qwen":
         case "kimi":
         case "qiniu":
-        case "novita": {
+        case "novita":
+        case "mimo": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
             break
@@ -577,6 +579,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     kimi: "KIMI_API_KEY",
     minimax: "MINIMAX_API_KEY",
     novita: "NOVITA_API_KEY",
+    mimo: "MIMO_API_KEY",
 }
 
 /**
@@ -1346,6 +1349,31 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "mimo": {
+            const apiKey = resolveApiKey(overrides, "MIMO_API_KEY")
+            const serverBaseUrl = resolveBaseUrlEnv(overrides, "MIMO_BASE_URL")
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.mimo.defaultBaseUrl,
+            )
+
+            if (!baseURL) {
+                throw new Error(
+                    "MiMo base URL could not be resolved. Set MIMO_BASE_URL or configure a base URL in settings.",
+                )
+            }
+
+            // MiMo uses OpenAI-compatible API
+            const mimoProvider = createOpenAI({
+                apiKey,
+                baseURL,
+            })
+            model = mimoProvider.chat(modelId)
+            break
+        }
+
         case "glm":
         case "qwen":
         case "qiniu":
@@ -1393,7 +1421,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo`,
             )
     }
 

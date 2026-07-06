@@ -34,7 +34,8 @@
         "glm": "GLM",
         "qwen": "Qwen",
         "kimi": "Kimi",
-        "qiniu": "Qiniu"
+        "qiniu": "Qiniu",
+        "mimo": "MiMo (Xiaomi)"
     },
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",

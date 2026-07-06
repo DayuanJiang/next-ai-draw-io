@@ -34,7 +34,8 @@
         "glm": "GLM",
         "qwen": "Qwen",
         "kimi": "Kimi",
-        "qiniu": "Qiniu"
+        "qiniu": "Qiniu",
+        "mimo": "MiMo (小米)"
     },
     "chat": {
         "placeholder": "描述您的圖表或上傳檔案...",
