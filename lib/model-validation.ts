@@ -7,22 +7,16 @@ export function parseModelValidationMaxTokens(value: unknown): number | null {
     const numeric =
         typeof value === "number" ? value : Number(String(value).trim())
 
-    if (
-        !Number.isFinite(numeric) ||
-        !Number.isInteger(numeric) ||
-        numeric < 1
-    ) {
+    if (!Number.isInteger(numeric) || numeric < 1) {
         return null
     }
 
     return Math.min(numeric, MAX_MODEL_VALIDATION_MAX_TOKENS)
 }
 
-export function resolveModelValidationMaxTokens(...sources: unknown[]): number {
-    for (const source of sources) {
-        const parsed = parseModelValidationMaxTokens(source)
-        if (parsed !== null) return parsed
-    }
-
-    return DEFAULT_MODEL_VALIDATION_MAX_TOKENS
+export function resolveModelValidationMaxTokens(value: unknown): number {
+    return (
+        parseModelValidationMaxTokens(value) ??
+        DEFAULT_MODEL_VALIDATION_MAX_TOKENS
+    )
 }

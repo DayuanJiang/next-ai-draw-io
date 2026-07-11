@@ -8,14 +8,23 @@ import {
 
 describe("model validation token budget", () => {
     it("defaults to a larger reasoning-friendly budget", () => {
-        expect(resolveModelValidationMaxTokens()).toBe(
+        expect(resolveModelValidationMaxTokens(undefined)).toBe(
             DEFAULT_MODEL_VALIDATION_MAX_TOKENS,
         )
     })
 
-    it("prefers the first valid source", () => {
-        expect(resolveModelValidationMaxTokens(2000, 3000)).toBe(2000)
-        expect(resolveModelValidationMaxTokens("bad", "3000")).toBe(3000)
+    it("parses valid env values", () => {
+        expect(resolveModelValidationMaxTokens("2000")).toBe(2000)
+        expect(resolveModelValidationMaxTokens(" 300 ")).toBe(300)
+    })
+
+    it("falls back to the default on invalid values", () => {
+        expect(resolveModelValidationMaxTokens("abc")).toBe(
+            DEFAULT_MODEL_VALIDATION_MAX_TOKENS,
+        )
+        expect(resolveModelValidationMaxTokens("")).toBe(
+            DEFAULT_MODEL_VALIDATION_MAX_TOKENS,
+        )
     })
 
     it("rejects invalid values", () => {

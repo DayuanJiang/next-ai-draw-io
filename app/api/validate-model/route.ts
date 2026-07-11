@@ -32,9 +32,6 @@ interface ValidateRequest {
     awsRegion?: string
     // Vertex AI specific
     vertexApiKey?: string // Express Mode API key
-    // Optional test token budget override
-    maxTokens?: number
-    max_tokens?: number
 }
 
 export async function POST(req: Request) {
@@ -52,8 +49,6 @@ export async function POST(req: Request) {
             vertexApiKey,
         } = body
         const validationMaxTokens = resolveModelValidationMaxTokens(
-            body.maxTokens,
-            body.max_tokens,
             process.env.MODEL_VALIDATION_MAX_TOKENS,
         )
 

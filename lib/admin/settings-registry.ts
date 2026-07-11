@@ -10,6 +10,11 @@
 // - ADMIN_PASSWORD / SETTINGS_FILE: bootstrap values, env-only to avoid lockout
 // - Per-provider reasoning/thinking tuning vars: env-only (see env.example)
 
+import {
+    DEFAULT_MODEL_VALIDATION_MAX_TOKENS,
+    MAX_MODEL_VALIDATION_MAX_TOKENS,
+} from "@/lib/model-validation"
+
 export type SettingType = "string" | "secret" | "number" | "boolean" | "enum"
 
 export interface SettingDef {
@@ -88,17 +93,6 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
         label: "Max Output Tokens",
         min: 1,
     },
-    {
-        key: "MODEL_VALIDATION_MAX_TOKENS",
-        group: "generation",
-        type: "number",
-        label: "Model Validation Max Tokens",
-        description:
-            "Token budget for model test requests. Increase for reasoning models that may emit thinking tokens first.",
-        min: 1,
-        max: 64000,
-        default: "1000",
-    },
 
     // ── Access Control ───────────────────────────────────────────────
     {
@@ -133,6 +127,17 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
         type: "number",
         label: "Validation Timeout (ms)",
         min: 1000,
+    },
+    {
+        key: "MODEL_VALIDATION_MAX_TOKENS",
+        group: "features",
+        type: "number",
+        label: "Model Validation Max Tokens",
+        description:
+            "Token budget for model test requests. Increase for reasoning models that may emit thinking tokens first.",
+        min: 1,
+        max: MAX_MODEL_VALIDATION_MAX_TOKENS,
+        default: String(DEFAULT_MODEL_VALIDATION_MAX_TOKENS),
     },
     {
         key: "ENABLE_HISTORY_XML_REPLACE",
