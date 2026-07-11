@@ -372,26 +372,13 @@ export async function POST(req: Request) {
                 break
             }
 
-            case "mimo": {
-                const mimoBaseUrl =
-                    baseUrl ||
-                    PROVIDER_INFO.mimo?.defaultBaseUrl ||
-                    "https://token-plan-cn.xiaomimimo.com/v1"
-                // MiMo uses OpenAI-compatible API
-                const mimo = createOpenAI({
-                    apiKey,
-                    baseURL: mimoBaseUrl,
-                })
-                model = mimo.chat(modelId)
-                break
-            }
-
-            // GLM, Qwen, Kimi, Qiniu, Novita - OpenAI compatible
+            // GLM, Qwen, Kimi, Qiniu, Novita, MiMo - OpenAI compatible
             case "glm":
             case "qwen":
             case "kimi":
             case "qiniu":
-            case "novita": {
+            case "novita":
+            case "mimo": {
                 const baseURL =
                     baseUrl ||
                     PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||

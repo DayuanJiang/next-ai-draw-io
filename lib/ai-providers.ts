@@ -32,6 +32,7 @@ export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
     "kimi",
     "qiniu",
     "novita",
+    "mimo",
 ])
 
 /**
@@ -1351,26 +1352,18 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         case "mimo": {
             const apiKey = resolveApiKey(overrides, "MIMO_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(overrides, "MIMO_BASE_URL")
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
-                serverBaseUrl,
-                PROVIDER_INFO.mimo.defaultBaseUrl,
+                resolveBaseUrlEnv(overrides, "MIMO_BASE_URL"),
+                PROVIDER_INFO.mimo?.defaultBaseUrl,
             )
-
-            if (!baseURL) {
-                throw new Error(
-                    "MiMo base URL could not be resolved. Set MIMO_BASE_URL or configure a base URL in settings.",
-                )
-            }
-
-            // MiMo uses OpenAI-compatible API
-            const mimoProvider = createOpenAI({
-                apiKey,
-                baseURL,
-            })
-            model = mimoProvider.chat(modelId)
+            // Use createDeepSeek to properly handle reasoning_content for MiMo
+            // thinking models (e.g., mimo-v2.5-pro). MiMo's API requires
+            // reasoning_content to be passed back during multi-turn tool calls
+            // (returns 400 otherwise), same convention as DeepSeek and Kimi.
+            const mimoProvider = createDeepSeek({ apiKey, baseURL })
+            model = mimoProvider(modelId)
             break
         }
 

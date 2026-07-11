@@ -1,4 +1,4 @@
-import { Bot, Cloud, Server, Sparkles } from "lucide-react"
+import { Cloud, Server, Sparkles } from "lucide-react"
 import { PROVIDER_LOGO_MAP, type ProviderName } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -19,9 +19,6 @@ export function ProviderLogo({
     }
     if (provider === "doubao") {
         return <Sparkles className={cn("size-4", className)} />
-    }
-    if (provider === "mimo") {
-        return <Bot className={cn("size-4", className)} />
     }
 
     const logoName = PROVIDER_LOGO_MAP[provider] || provider

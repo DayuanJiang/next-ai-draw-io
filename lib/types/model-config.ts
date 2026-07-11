@@ -204,7 +204,7 @@ export const PROVIDER_INFO: Record<
     },
     mimo: {
         label: "MiMo (Xiaomi)",
-        defaultBaseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+        defaultBaseUrl: "https://api.xiaomimimo.com/v1",
     },
 }
 
@@ -443,7 +443,7 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "moonshotai/kimi-k2.6",
         "deepseek/deepseek-v4-flash",
     ],
-    mimo: ["mimo-v2.5-pro", "mimo-v2-flash"],
+    mimo: ["mimo-v2.5-pro", "mimo-v2.5"],
 }
 
 // Helper to generate UUID
