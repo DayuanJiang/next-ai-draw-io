@@ -372,6 +372,7 @@
         "baseUrlWithExample": "Base URL (optional, e.g. {example})",
         "customEndpoint": "Custom endpoint URL",
         "minimaxBaseUrlHint": "Use /anthropic for Anthropic-compatible API (recommended), or /v1 for OpenAI-compatible API",
+        "mimoBaseUrlHint": "Default works with pay-as-you-go keys (sk-...). Token Plan subscribers (tp-... keys) must set https://token-plan-cn.xiaomimimo.com/v1",
         "models": "Models",
         "customModelId": "Custom model ID...",
         "allAdded": "All added",

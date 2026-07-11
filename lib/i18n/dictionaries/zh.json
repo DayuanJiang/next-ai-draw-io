@@ -372,6 +372,7 @@
         "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "customEndpoint": "自定义端点 URL",
         "minimaxBaseUrlHint": "使用 /anthropic 端点为 Anthropic 兼容 API（推荐），或使用 /v1 端点为 OpenAI 兼容 API",
+        "mimoBaseUrlHint": "默认地址适用于按量付费密钥（sk-...）。Token Plan 订阅用户（tp-... 密钥）请设置为 https://token-plan-cn.xiaomimimo.com/v1",
         "models": "模型",
         "customModelId": "自定义模型 ID...",
         "allAdded": "已全部添加",

@@ -326,6 +326,7 @@
         "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
         "minimaxBaseUrlHint": "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",
+        "mimoBaseUrlHint": "デフォルトは従量課金キー（sk-...）用です。Token Plan 加入者（tp-... キー）は https://token-plan-cn.xiaomimimo.com/v1 を設定してください",
         "models": "モデル",
         "customModelId": "カスタムモデル ID...",
         "allAdded": "すべて追加済み",

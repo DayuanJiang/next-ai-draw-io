@@ -249,6 +249,11 @@ export function ProviderCredentialsFields({
                                 {dict.modelConfig.minimaxBaseUrlHint}
                             </p>
                         )}
+                        {provider === "mimo" && (
+                            <p className="text-xs text-muted-foreground">
+                                {dict.modelConfig.mimoBaseUrlHint}
+                            </p>
+                        )}
                     </div>
                 </>
             )}
