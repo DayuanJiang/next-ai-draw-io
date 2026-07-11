@@ -482,12 +482,11 @@ server.registerTool(
                 }
             }
 
-            // Enforce workflow: require get_diagram to be called first
-            const timeSinceGet = Date.now() - currentSession.lastGetDiagramTime
-            if (timeSinceGet > 30000) {
-                // 30 seconds
+            // Require diagram context without expiring it while the model
+            // reasons. The edit still adopts the latest browser state below.
+            if (currentSession.lastGetDiagramTime === 0) {
                 log.warn(
-                    "edit_diagram called without recent get_diagram - rejecting to prevent data loss",
+                    "edit_diagram called without get_diagram - rejecting to prevent data loss",
                 )
                 return {
                     content: [
