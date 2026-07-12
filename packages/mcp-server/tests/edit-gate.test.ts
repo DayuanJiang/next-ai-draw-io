@@ -80,6 +80,22 @@ describe("checkEditGate", () => {
     it("allows when the store has no live entry to compare against", () => {
         expect(checkEditGate(XML_A, "")).toEqual({ ok: true })
     })
+
+    // A bare <mxGraphModel> push carries no page name, so the gate must not
+    // compare the invented "Page-1" wrapper name against the real one.
+    it("allows a bare mxGraphModel push when the page has a custom name", () => {
+        const seenRenamed = XML_A.replace('name="Page-1"', 'name="Arch"')
+        expect(checkEditGate(seenRenamed, XML_A_BARE)).toEqual({ ok: true })
+    })
+
+    it("still rejects a bare mxGraphModel push whose cells changed", () => {
+        const seenRenamed = XML_A.replace('name="Page-1"', 'name="Arch"')
+        const bareMoved = XML_A_BARE.replace('x="40" y="40"', 'x="300" y="200"')
+        expect(checkEditGate(seenRenamed, bareMoved)).toEqual({
+            ok: false,
+            reason: "stale",
+        })
+    })
 })
 
 describe("contentFingerprint", () => {

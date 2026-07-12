@@ -17,7 +17,7 @@
  * change: the set of pages, each page's name, and each page's cell tree
  * (tags + sorted attributes + text). Byte equality is kept as a fast path.
  */
-import { normalizeToMxfile, parseMxfile } from "./pages.js"
+import { isMxGraphModel, normalizeToMxfile, parseMxfile } from "./pages.js"
 
 export type EditGateResult =
     | { ok: true }
@@ -52,14 +52,19 @@ function canonicalizeElement(el: Element): string {
  * <mxGraphModel> fingerprints identically to its single-page mxfile wrapping.
  * Unparseable input falls back to the trimmed raw string, degrading to the
  * plain string comparison.
+ *
+ * `includeNames=false` drops page names from the fingerprint — used when the
+ * other side of a comparison is a bare <mxGraphModel>, which carries no page
+ * name at all (normalizeToMxfile would invent "Page-1", falsely mismatching
+ * any real page name).
  */
-export function contentFingerprint(xml: string): string {
+export function contentFingerprint(xml: string, includeNames = true): string {
     const normalized = normalizeToMxfile(xml)
     const doc = normalized ? parseMxfile(normalized) : null
     if (!doc) return xml.trim()
     const pages: string[] = []
     doc.querySelectorAll("diagram").forEach((d) => {
-        const name = d.getAttribute("name") || ""
+        const name = includeNames ? d.getAttribute("name") || "" : ""
         const root = d.querySelector("root")
         // No <root> means the page content is not plain XML (e.g. draw.io's
         // compressed format) — fingerprint the raw text instead.
@@ -81,11 +86,17 @@ export function checkEditGate(
     // edits): force a re-fetch so update/delete operations don't build on
     // stale cell contents. An empty liveXml means the store has no entry to
     // compare against, so there is nothing newer to have missed.
-    if (
-        liveXml &&
-        liveXml !== lastSeenXml &&
-        contentFingerprint(liveXml) !== contentFingerprint(lastSeenXml)
-    )
-        return { ok: false, reason: "stale" }
+    if (liveXml && liveXml !== lastSeenXml) {
+        // A bare <mxGraphModel> on either side carries no page name, so
+        // comparing names would mismatch against anything not called
+        // "Page-1". Compare cell trees only in that case.
+        const includeNames =
+            !isMxGraphModel(liveXml) && !isMxGraphModel(lastSeenXml)
+        if (
+            contentFingerprint(liveXml, includeNames) !==
+            contentFingerprint(lastSeenXml, includeNames)
+        )
+            return { ok: false, reason: "stale" }
+    }
     return { ok: true }
 }
