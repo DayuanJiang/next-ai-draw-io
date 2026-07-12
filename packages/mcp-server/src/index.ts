@@ -55,6 +55,7 @@ import {
     startHttpServer,
     waitForSync,
 } from "./http-server.js"
+import { parseDrawioFileContent } from "./load-diagram.js"
 import { log } from "./logger.js"
 import {
     addPageToDoc,
@@ -163,6 +164,10 @@ server.prompt(
 ## Creating a New Diagram
 1. Call start_session to open the browser preview
 2. Use create_new_diagram with either a bare <mxGraphModel> (single page) or a full <mxfile> with one or more <diagram> children (multi-page)
+
+## Opening an Existing .drawio File
+- Use load_diagram with the file path — the server reads and decompresses the file itself; don't read it and pass the XML through create_new_diagram
+- After loading, call get_diagram once before editing (you haven't seen the file's cell IDs yet)
 
 ## Working with Multiple Pages
 - Use list_pages to discover existing pages (id, name, index)
@@ -413,6 +418,123 @@ COMMON STYLES:
             const message =
                 error instanceof Error ? error.message : String(error)
             log.error("create_new_diagram failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+// Tool: load_diagram
+server.registerTool(
+    "load_diagram",
+    {
+        description:
+            "Load a .drawio file from disk into the current session, REPLACING the entire diagram (all pages). " +
+            "The server reads the file directly — you do NOT need to read the file yourself or pass its XML through create_new_diagram. " +
+            "Handles both plain-XML and draw.io's compressed save format.\n\n" +
+            "After loading, call get_diagram before edit_diagram — you haven't seen the file's cell IDs or structure yet.",
+        inputSchema: {
+            path: z
+                .string()
+                .describe(
+                    "Path to the .drawio file to load (e.g., ./diagram.drawio)",
+                ),
+        },
+    },
+    async ({ path }) => {
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            const fs = await import("node:fs/promises")
+            const nodePath = await import("node:path")
+            const absolutePath = nodePath.resolve(path)
+
+            let content: string
+            try {
+                content = await fs.readFile(absolutePath, "utf-8")
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e)
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: Cannot read file ${absolutePath}: ${msg}`,
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+
+            const loaded = parseDrawioFileContent(content)
+            if (!loaded.ok) {
+                return {
+                    content: [{ type: "text", text: `Error: ${loaded.error}` }],
+                    isError: true,
+                }
+            }
+            const xml = loaded.xml
+
+            log.info(
+                `Loading diagram from ${absolutePath} (${xml.length} chars)`,
+            )
+
+            // Save the user's current state before replacing (same flow as
+            // create_new_diagram).
+            const browserState = getState(currentSession.id)
+            if (browserState?.xml) {
+                currentSession.xml = browserState.xml
+            }
+            if (currentSession.xml) {
+                addHistory(
+                    currentSession.id,
+                    currentSession.xml,
+                    browserState?.svg || "",
+                )
+            }
+
+            currentSession.xml = xml
+            currentSession.version++
+            setState(currentSession.id, xml)
+            // Deliberately NOT marking the loaded XML as seen: the model only
+            // supplied a path, so it doesn't know the file's cell IDs. The
+            // edit gate will require one get_diagram before edits.
+            currentSession.lastSeenXml = ""
+
+            addHistory(currentSession.id, xml, "")
+
+            const doc = parseMxfile(xml)
+            const pages = doc ? listPagesFromDoc(doc) : []
+            const pageSummary =
+                pages.length > 0
+                    ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
+                    : "no pages parsed"
+
+            log.info(`Diagram loaded from file (${pageSummary})`)
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Diagram loaded from ${absolutePath}!\n\nThe diagram is now visible in your browser.\n\n${pageSummary}\n\nCall get_diagram before edit_diagram — you haven't seen this file's cell IDs yet.`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("load_diagram failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,

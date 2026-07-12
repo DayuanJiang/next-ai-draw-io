@@ -116,9 +116,14 @@ Use the standard MCP configuration with:
 |------|-------------|
 | `start_session` | Opens browser with real-time diagram preview |
 | `create_new_diagram` | Create a new diagram from XML (requires `xml` argument) |
+| `load_diagram` | Load a `.drawio` file from disk into the session (handles compressed files) |
 | `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells) |
 | `get_diagram` | Get the current diagram XML |
-| `export_diagram` | Save diagram to a `.drawio` file |
+| `export_diagram` | Save diagram to a `.drawio`, `.png`, or `.svg` file |
+| `list_pages` | List every page (tab) with id, name, index, and cell count |
+| `add_page` | Append a new page without touching existing ones |
+| `rename_page` | Rename a page |
+| `delete_page` | Delete a page (refuses to delete the last one) |
 
 ## How It Works
 

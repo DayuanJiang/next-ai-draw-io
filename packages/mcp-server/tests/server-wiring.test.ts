@@ -31,6 +31,7 @@ const tsxBin = path.resolve(
 const EXPECTED_TOOLS = [
     "start_session",
     "create_new_diagram",
+    "load_diagram",
     "edit_diagram",
     "get_diagram",
     "export_diagram",
