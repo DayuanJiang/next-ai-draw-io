@@ -714,10 +714,9 @@ server.registerTool(
                 }
             }
 
-            // The model is now looking at the current state. Record the RAW
-            // store value (not the normalised form) — the edit_diagram gate
-            // compares against the raw store, so both sides must match
-            // byte-for-byte.
+            // The model is now looking at the current state. Record the raw
+            // store value — the gate's fast path is plain string equality
+            // against the store, with a structural comparison as fallback.
             currentSession.lastSeenXml = browserState?.xml || currentSession.xml
 
             const pageSelector = pickPageSelector({
