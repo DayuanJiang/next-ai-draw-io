@@ -1,0 +1,67 @@
+name: Publish MCP Server
+
+# Publishes @next-ai-drawio/mcp-server to npm via OIDC trusted publishing
+# (no token, no OTP). Triggers when packages/mcp-server changes on main;
+# skips silently if the package.json version is already on npm — so a
+# release is just "bump the version in a PR and merge".
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/mcp-server/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing
+
+concurrency:
+  group: publish-mcp
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/mcp-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
+          cache-dependency-path: packages/mcp-server/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing requires npm >= 11.5.1
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Check if version is already published
+        id: version
+        run: |
+          LOCAL=$(node -p "require('./package.json').version")
+          if npm view "@next-ai-drawio/mcp-server@${LOCAL}" version >/dev/null 2>&1; then
+            echo "Version ${LOCAL} already on npm - nothing to publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version ${LOCAL} not on npm - publishing"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.version.outputs.publish == 'true'
+        run: npm ci
+
+      - name: Test
+        if: steps.version.outputs.publish == 'true'
+        run: npm test
+
+      - name: Publish to npm
+        if: steps.version.outputs.publish == 'true'
+        run: npm publish
