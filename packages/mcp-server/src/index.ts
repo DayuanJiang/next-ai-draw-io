@@ -170,15 +170,11 @@ server.prompt(
 - Use rename_page / delete_page for management
 - edit_diagram, get_diagram, and export_diagram all accept optional page_id / page_name / page_index — when omitted they target the first page
 
-## Adding Elements to an Existing Page
-1. Use edit_diagram with "add" operation, optionally with a page selector
-2. Provide a unique cell_id and complete mxCell XML
-3. Usually no need to call get_diagram first - the server fetches latest state automatically. But if the user edited the diagram in the browser since you last saw it, edit_diagram will ask you to call get_diagram once before retrying
-
-## Modifying or Deleting Existing Elements
-1. FIRST call get_diagram to see current cell IDs and page structure
-2. THEN call edit_diagram with "update" or "delete" operations
-3. For update, provide the cell_id and complete new mxCell XML
+## Editing a Page (add / update / delete cells)
+1. Call edit_diagram with your operations, optionally with a page selector
+2. If you don't know the current cell IDs or structure, call get_diagram first
+3. For add/update, provide the cell_id and complete mxCell XML
+4. No need to call get_diagram before every edit: the server rejects the edit (with no side effects) if the user changed the diagram in the browser since you last saw it, and tells you to call get_diagram once and retry
 
 ## Important Notes
 - create_new_diagram REPLACES the entire document, including ALL pages - only use for new diagrams. Use add_page to add a tab without losing existing content.
@@ -431,13 +427,13 @@ server.registerTool(
     {
         description:
             "Edit a specific page in the current diagram by ID-based operations (update/add/delete cells).\n\n" +
-            "⚠️ REQUIRED: You MUST call get_diagram BEFORE this tool!\n" +
-            "This fetches the latest state from the browser including any manual user edits.\n" +
-            "Skipping get_diagram WILL cause user's changes to be LOST.\n\n" +
-            "Workflow:\n" +
-            "1. Call get_diagram to see current cell IDs, page structure, and active page\n" +
-            "2. Use the returned XML to construct your edit operations\n" +
-            "3. Call edit_diagram with your operations and (optionally) a page selector\n\n" +
+            "Freshness: the server remembers the last diagram state you have seen, and rejects this call " +
+            "only if the user edited the diagram in the browser since then. You do NOT need to call " +
+            "get_diagram before every edit — if your view is stale, the call is rejected (with no side " +
+            "effects) and the error tells you to call get_diagram once and retry.\n\n" +
+            "Call get_diagram first only when you don't know the current diagram content (cell IDs, " +
+            "structure) — e.g. the diagram wasn't created in this conversation, or you're unsure your " +
+            "memory of it is accurate.\n\n" +
             "Multi-page targeting:\n" +
             "- page_id / page_name / page_index are optional; when all omitted, the FIRST page is targeted\n" +
             "- Use list_pages to discover what pages exist\n\n" +
@@ -661,8 +657,9 @@ server.registerTool(
     {
         description:
             "Get the current diagram XML (fetches latest from browser, including user's manual edits). " +
-            "Call this BEFORE edit_diagram if you need to update or delete existing elements, " +
-            "so you can see the current cell IDs, pages, and structure.\n\n" +
+            "Call this when you don't know the current diagram content (cell IDs, pages, structure) — " +
+            "e.g. before editing a diagram you didn't create in this conversation, or after edit_diagram " +
+            "was rejected because the user changed the diagram in the browser.\n\n" +
             "Returns the full <mxfile> by default. If a page selector is provided, returns just that page's <mxGraphModel> embedded in a one-page <mxfile> wrapper.",
         inputSchema: {
             ...pageSelectorSchema,
