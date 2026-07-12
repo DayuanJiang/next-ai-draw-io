@@ -16,6 +16,7 @@ import {
     getAIModel,
     SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
+    supportsTemperature,
 } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
@@ -253,6 +254,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
     console.log(
         `[Prompt Caching] ${shouldCache ? "ENABLED" : "DISABLED"} for model: ${modelId}`,
     )
+
+    const configuredTemperature = process.env.TEMPERATURE
+    const temperature = supportsTemperature(modelId)
+        ? configuredTemperature
+        : undefined
+    if (configuredTemperature !== undefined && temperature === undefined) {
+        console.log(
+            `[Temperature] SKIPPED for model: ${modelId} (parameter is not supported)`,
+        )
+    }
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
     const systemMessage = getSystemPrompt(modelId, minimalStyle)
@@ -762,8 +773,8 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                 },
             },
         },
-        ...(process.env.TEMPERATURE !== undefined && {
-            temperature: parseFloat(process.env.TEMPERATURE),
+        ...(temperature !== undefined && {
+            temperature: parseFloat(temperature),
         }),
     })
 
