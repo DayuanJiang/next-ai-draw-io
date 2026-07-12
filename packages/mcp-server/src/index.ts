@@ -36,6 +36,7 @@ class XMLSerializerPolyfill {
 }
 ;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
 
+import { createRequire } from "node:module"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
@@ -89,10 +90,17 @@ let currentSession: {
     lastSeenXml: string
 } | null = null
 
-// Create MCP server
+// Create MCP server. The version reported in the MCP handshake is read from
+// package.json so it can never drift from the published npm version again
+// (it sat hardcoded at stale values for most of this package's history).
+// Both src/ (tsx dev) and dist/ (published build) live one level below the
+// package root, so the relative path works in either runtime.
+const require = createRequire(import.meta.url)
+const packageVersion: string = require("../package.json").version
+
 const server = new McpServer({
     name: "next-ai-drawio",
-    version: "0.3.0",
+    version: packageVersion,
 })
 
 // Shared Zod schema fragment for page-targeting parameters.
