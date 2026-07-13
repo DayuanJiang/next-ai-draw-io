@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { cn, isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
+import {
+    cn,
+    isMxCellXmlComplete,
+    selectDiagramXMLAfterExport,
+    wrapWithMxFile,
+} from "@/lib/utils"
 
 describe("isMxCellXmlComplete", () => {
     it("returns false for empty/null input", () => {
@@ -67,6 +72,29 @@ describe("wrapWithMxFile", () => {
     it("handles whitespace in input", () => {
         const result = wrapWithMxFile("   ")
         expect(result).toContain("<mxfile>")
+    })
+})
+
+describe("selectDiagramXMLAfterExport", () => {
+    it("preserves the full multi-page XML returned by draw.io", () => {
+        const fullDocument =
+            '<mxfile><diagram id="one"/><diagram id="two"/></mxfile>'
+        const exportedPage = "<mxGraphModel><root/></mxGraphModel>"
+
+        expect(selectDiagramXMLAfterExport(fullDocument, exportedPage)).toBe(
+            fullDocument,
+        )
+    })
+
+    it("falls back to the exported page for older events without XML", () => {
+        const exportedPage = "<mxGraphModel><root/></mxGraphModel>"
+
+        expect(selectDiagramXMLAfterExport(undefined, exportedPage)).toBe(
+            exportedPage,
+        )
+        expect(selectDiagramXMLAfterExport("  ", exportedPage)).toBe(
+            exportedPage,
+        )
     })
 })
 

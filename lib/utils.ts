@@ -1673,6 +1673,13 @@ export function validateAndFixXml(xml: string): {
     }
 }
 
+export function selectDiagramXMLAfterExport(
+    fullDiagramXML: string | undefined,
+    exportedPageXML: string,
+): string {
+    return fullDiagramXML?.trim() ? fullDiagramXML : exportedPageXML
+}
+
 export function extractDiagramXML(xml_svg_string: string): string {
     try {
         // 1. Parse the SVG string (using built-in DOMParser in a browser-like environment)

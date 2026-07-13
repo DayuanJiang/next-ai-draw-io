@@ -2,13 +2,14 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useRef, useState } from "react"
-import type { DrawIoEmbedRef } from "react-drawio"
+import type { DrawIoEmbedRef, EventExport } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
     extractDiagramXML,
     isRealDiagram,
+    selectDiagramXMLAfterExport,
     validateAndFixXml,
 } from "../lib/utils"
 
@@ -22,7 +23,7 @@ interface DiagramContextType {
     handleExportWithoutHistory: () => void
     resolverRef: React.MutableRefObject<((value: string) => void) | null>
     drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>
-    handleDiagramExport: (data: any) => void
+    handleDiagramExport: (data: EventExport) => void
     handleDiagramAutoSave: (data: { xml?: string }) => void
     clearDiagram: () => void
     saveDiagramToFile: (
@@ -83,7 +84,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
-        resolver: ((data: string) => void) | null
+        resolver: ((data: string, fullDiagramXML?: string) => void) | null
         format: ExportFormat | null
     }>({ resolver: null, format: null })
 
@@ -204,7 +205,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         return null
     }
 
-    const handleDiagramExport = (data: any) => {
+    const handleDiagramExport = (data: EventExport) => {
         // Handle PNG export for VLM validation
         if (pngResolverRef.current && data.data?.startsWith("data:image/png")) {
             pngResolverRef.current(data.data)
@@ -215,7 +216,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Handle save to file if requested (process raw data before extraction)
         if (saveResolverRef.current.resolver) {
             const format = saveResolverRef.current.format
-            saveResolverRef.current.resolver(data.data)
+            saveResolverRef.current.resolver(data.data, data.xml)
             saveResolverRef.current = { resolver: null, format: null }
             // For non-xmlsvg formats, skip XML extraction as it will fail
             // Only drawio (which uses xmlsvg internally) has the content attribute
@@ -226,7 +227,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         const extractedXML = extractDiagramXML(data.data)
-        setChartXML(extractedXML)
+        setChartXML(selectDiagramXMLAfterExport(data.xml, extractedXML))
         setLatestSvg(data.data)
 
         // Only add to history if this was a user-initiated export
@@ -288,14 +289,16 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
         // Set up the resolver before triggering export
         saveResolverRef.current = {
-            resolver: (exportData: string) => {
+            resolver: (exportData: string, fullDiagramXML?: string) => {
                 let fileContent: string | Blob
                 let mimeType: string
                 let extension: string
 
                 if (format === "drawio") {
-                    // Extract XML from SVG for .drawio format
-                    const xml = extractDiagramXML(exportData)
+                    // Prefer the complete document from the export event so all pages are saved.
+                    const xml = fullDiagramXML?.trim()
+                        ? fullDiagramXML
+                        : extractDiagramXML(exportData)
                     let xmlContent = xml
                     if (!xml.includes("<mxfile")) {
                         xmlContent = `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
