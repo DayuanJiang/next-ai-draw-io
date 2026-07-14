@@ -106,6 +106,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "deepseek",
     "siliconflow",
     "sglang",
+    "lmstudio",
     "gateway",
     "edgeone",
     "ollama",
@@ -534,6 +535,7 @@ function buildProviderOptions(
         case "aihubmix":
         case "siliconflow":
         case "sglang":
+        case "lmstudio":
         case "gateway":
         case "modelscope":
         case "doubao":
@@ -570,6 +572,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
+    lmstudio: null, // No credentials needed for local LM Studio server
     gateway: "AI_GATEWAY_API_KEY",
     edgeone: null, // No credentials needed - uses EdgeOne Edge AI
     doubao: "DOUBAO_API_KEY",
@@ -718,6 +721,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone" &&
+        overrides?.provider !== "lmstudio" &&
         !(overrides?.provider === "ollama" && !process.env.OLLAMA_API_KEY)
     ) {
         throw new Error(
@@ -1108,6 +1112,27 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "lmstudio": {
+            // LM Studio runs a local OpenAI-compatible server. It needs no real
+            // API key; a placeholder satisfies the SDK (which requires a
+            // non-empty key). Base URL defaults to the LM Studio local server.
+            const apiKey =
+                resolveApiKey(overrides, "LMSTUDIO_API_KEY") || "lm-studio"
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "LMSTUDIO_BASE_URL",
+            )
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.lmstudio.defaultBaseUrl,
+            )
+            const lmstudioProvider = createOpenAI({ apiKey, baseURL })
+            model = lmstudioProvider.chat(modelId)
+            break
+        }
+
         case "sglang": {
             const apiKey = resolveApiKey(overrides, "SGLANG_API_KEY")
             const serverBaseUrl = resolveBaseUrlEnv(
@@ -1414,7 +1439,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, lmstudio, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo`,
             )
     }
 

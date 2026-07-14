@@ -84,7 +84,12 @@ export async function POST(req: Request) {
                     { status: 400 },
                 )
             }
-        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
+        } else if (
+            provider !== "ollama" &&
+            provider !== "edgeone" &&
+            provider !== "lmstudio" &&
+            !apiKey
+        ) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -252,6 +257,16 @@ export async function POST(req: Request) {
                     baseURL: baseUrl || "http://127.0.0.1:8000/v1",
                 })
                 model = sglang.chat(modelId)
+                break
+            }
+
+            case "lmstudio": {
+                // LM Studio is OpenAI-compatible (local server, no API key)
+                const lmstudio = createOpenAI({
+                    apiKey: apiKey || "lm-studio",
+                    baseURL: baseUrl || "http://localhost:1234/v1",
+                })
+                model = lmstudio.chat(modelId)
                 break
             }
 

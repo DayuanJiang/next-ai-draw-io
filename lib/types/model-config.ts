@@ -13,6 +13,7 @@ export type ProviderName =
     | "deepseek"
     | "siliconflow"
     | "sglang"
+    | "lmstudio"
     | "gateway"
     | "edgeone"
     | "doubao"
@@ -94,6 +95,7 @@ export const FIXED_CRED_PROVIDERS: ProviderName[] = [
     "bedrock",
     "vertexai",
     "ollama",
+    "lmstudio",
 ]
 
 // Map provider names to models.dev logo names
@@ -108,6 +110,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     deepseek: "deepseek",
     siliconflow: "siliconflow",
     sglang: "openai", // SGLang is OpenAI-compatible
+    lmstudio: "openai", // LM Studio is OpenAI-compatible
     gateway: "vercel",
     edgeone: "tencent-cloud",
     vertexai: "google",
@@ -164,6 +167,10 @@ export const PROVIDER_INFO: Record<
     sglang: {
         label: "SGLang",
         defaultBaseUrl: "http://127.0.0.1:8000/v1",
+    },
+    lmstudio: {
+        label: "LM Studio",
+        defaultBaseUrl: "http://localhost:1234/v1",
     },
     gateway: {
         label: "AI Gateway",

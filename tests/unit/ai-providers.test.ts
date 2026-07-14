@@ -206,6 +206,17 @@ vi.mock("@aihubmix/ai-sdk-provider", () => {
     return { aihubmix: mockAihubmix, createAihubmix: mockCreateAihubmix }
 })
 
+vi.mock("@ai-sdk/openai", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockChat = vi.fn(() => mockModel)
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateOpenAI = vi.fn(() =>
+        Object.assign(mockProviderFn, { chat: mockChat }),
+    )
+    const mockOpenai = vi.fn(() => mockModel)
+    return { createOpenAI: mockCreateOpenAI, openai: mockOpenai }
+})
+
 describe("AIHubMix provider", () => {
     let createAihubmixMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
@@ -421,5 +432,70 @@ describe("Ollama API key security", () => {
         const callArgs = createOllamaMock.mock.calls[0][0]
         expect(callArgs.baseURL).toBe("https://my-ollama.com")
         expect(callArgs).not.toHaveProperty("headers")
+    })
+})
+
+describe("LM Studio provider (local, no API key)", () => {
+    let createOpenAIMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.LMSTUDIO_API_KEY = process.env.LMSTUDIO_API_KEY
+        savedEnv.LMSTUDIO_BASE_URL = process.env.LMSTUDIO_BASE_URL
+        delete process.env.LMSTUDIO_API_KEY
+        delete process.env.LMSTUDIO_BASE_URL
+
+        const mod = await import("@ai-sdk/openai")
+        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
+        createOpenAIMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.LMSTUDIO_API_KEY = savedEnv.LMSTUDIO_API_KEY
+        process.env.LMSTUDIO_BASE_URL = savedEnv.LMSTUDIO_BASE_URL
+    })
+
+    // The reported gap (#781): OpenAI provider required a key, so LM Studio
+    // (which uses a dummy local key) could not connect. LM Studio must init
+    // without any API key.
+    it("initializes without an API key", () => {
+        expect(() =>
+            getAIModel({ provider: "lmstudio", modelId: "local-model" }),
+        ).not.toThrow()
+    })
+
+    it("defaults to the LM Studio local server with a placeholder key", () => {
+        getAIModel({ provider: "lmstudio", modelId: "local-model" })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "lm-studio",
+            baseURL: "http://localhost:1234/v1",
+        })
+    })
+
+    it("honors a client custom baseUrl without an apiKey (SSRF guard exempts local LM Studio)", () => {
+        expect(() =>
+            getAIModel({
+                provider: "lmstudio",
+                baseUrl: "http://localhost:4321/v1",
+                modelId: "local-model",
+            }),
+        ).not.toThrow()
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "lm-studio",
+            baseURL: "http://localhost:4321/v1",
+        })
+    })
+
+    it("uses LMSTUDIO_BASE_URL when configured", () => {
+        process.env.LMSTUDIO_BASE_URL = "http://192.168.1.50:1234/v1"
+
+        getAIModel({ provider: "lmstudio", modelId: "local-model" })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "lm-studio",
+            baseURL: "http://192.168.1.50:1234/v1",
+        })
     })
 })
