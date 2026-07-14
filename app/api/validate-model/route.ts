@@ -264,7 +264,7 @@ export async function POST(req: Request) {
                 // LM Studio is OpenAI-compatible (local server, no API key)
                 const lmstudio = createOpenAI({
                     apiKey: apiKey || "lm-studio",
-                    baseURL: baseUrl || "http://localhost:1234/v1",
+                    baseURL: baseUrl || PROVIDER_INFO.lmstudio.defaultBaseUrl,
                 })
                 model = lmstudio.chat(modelId)
                 break
