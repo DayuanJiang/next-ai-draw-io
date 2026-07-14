@@ -106,6 +106,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "deepseek",
     "siliconflow",
     "sglang",
+    "lmstudio",
     "gateway",
     "edgeone",
     "ollama",
@@ -534,6 +535,7 @@ function buildProviderOptions(
         case "aihubmix":
         case "siliconflow":
         case "sglang":
+        case "lmstudio":
         case "gateway":
         case "modelscope":
         case "doubao":
@@ -570,6 +572,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
     sglang: "SGLANG_API_KEY",
+    lmstudio: null, // No credentials needed for local LM Studio server
     gateway: "AI_GATEWAY_API_KEY",
     edgeone: null, // No credentials needed - uses EdgeOne Edge AI
     doubao: "DOUBAO_API_KEY",
@@ -711,6 +714,9 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
     // Exception: EdgeOne doesn't require API keys.
+    // LM Studio is always exempt (local server needs no key); its factory never
+    // forwards a server LMSTUDIO_API_KEY to a client-provided base URL, so no
+    // server credential can leak through this path.
     // Ollama is exempt only when no server OLLAMA_API_KEY is configured;
     // when it IS configured, the outer guard also enforces client apiKey for custom baseUrls.
     if (
@@ -718,6 +724,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone" &&
+        overrides?.provider !== "lmstudio" &&
         !(overrides?.provider === "ollama" && !process.env.OLLAMA_API_KEY)
     ) {
         throw new Error(
@@ -1108,6 +1115,31 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "lmstudio": {
+            // LM Studio runs a local OpenAI-compatible server. It needs no real
+            // API key; a placeholder satisfies the SDK (which requires a
+            // non-empty key). Base URL defaults to the LM Studio local server.
+            // SECURITY: when the client provides a custom base URL, only use a
+            // client-supplied key — never fall back to a server LMSTUDIO_API_KEY,
+            // to avoid leaking server credentials to a user-controlled endpoint.
+            const apiKey = overrides?.baseUrl
+                ? overrides?.apiKey || "lm-studio"
+                : resolveApiKey(overrides, "LMSTUDIO_API_KEY") || "lm-studio"
+            const serverBaseUrl = resolveBaseUrlEnv(
+                overrides,
+                "LMSTUDIO_BASE_URL",
+            )
+            const baseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                serverBaseUrl,
+                PROVIDER_INFO.lmstudio.defaultBaseUrl,
+            )
+            const lmstudioProvider = createOpenAI({ apiKey, baseURL })
+            model = lmstudioProvider.chat(modelId)
+            break
+        }
+
         case "sglang": {
             const apiKey = resolveApiKey(overrides, "SGLANG_API_KEY")
             const serverBaseUrl = resolveBaseUrlEnv(
@@ -1414,7 +1446,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo`,
+                `Unknown AI provider: ${provider}. Supported providers: ${Object.keys(PROVIDER_INFO).join(", ")}`,
             )
     }
 

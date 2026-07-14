@@ -22,7 +22,8 @@ export const runtime = "nodejs"
 
 interface ValidateRequest {
     provider: string
-    apiKey: string
+    // Optional: local providers (lmstudio, ollama, edgeone) accept no key.
+    apiKey?: string
     baseUrl?: string
     modelId: string
     // AWS Bedrock specific
@@ -84,7 +85,12 @@ export async function POST(req: Request) {
                     { status: 400 },
                 )
             }
-        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
+        } else if (
+            provider !== "ollama" &&
+            provider !== "edgeone" &&
+            provider !== "lmstudio" &&
+            !apiKey
+        ) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
                 { status: 400 },
@@ -252,6 +258,16 @@ export async function POST(req: Request) {
                     baseURL: baseUrl || "http://127.0.0.1:8000/v1",
                 })
                 model = sglang.chat(modelId)
+                break
+            }
+
+            case "lmstudio": {
+                // LM Studio is OpenAI-compatible (local server, no API key)
+                const lmstudio = createOpenAI({
+                    apiKey: apiKey || "lm-studio",
+                    baseURL: baseUrl || PROVIDER_INFO.lmstudio.defaultBaseUrl,
+                })
+                model = lmstudio.chat(modelId)
                 break
             }
 
