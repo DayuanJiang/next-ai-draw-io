@@ -714,6 +714,9 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
     // Exception: EdgeOne doesn't require API keys.
+    // LM Studio is always exempt (local server needs no key); its factory never
+    // forwards a server LMSTUDIO_API_KEY to a client-provided base URL, so no
+    // server credential can leak through this path.
     // Ollama is exempt only when no server OLLAMA_API_KEY is configured;
     // when it IS configured, the outer guard also enforces client apiKey for custom baseUrls.
     if (
@@ -1443,7 +1446,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, lmstudio, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo`,
+                `Unknown AI provider: ${provider}. Supported providers: ${Object.keys(PROVIDER_INFO).join(", ")}`,
             )
     }
 

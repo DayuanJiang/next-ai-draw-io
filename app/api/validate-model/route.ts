@@ -22,7 +22,8 @@ export const runtime = "nodejs"
 
 interface ValidateRequest {
     provider: string
-    apiKey: string
+    // Optional: local providers (lmstudio, ollama, edgeone) accept no key.
+    apiKey?: string
     baseUrl?: string
     modelId: string
     // AWS Bedrock specific
