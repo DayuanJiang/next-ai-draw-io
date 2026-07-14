@@ -508,4 +508,21 @@ describe("LM Studio provider (local, no API key)", () => {
             baseURL: "http://192.168.1.50:1234/v1",
         })
     })
+
+    // SECURITY: a server-side LMSTUDIO_API_KEY must never be sent to a
+    // client-supplied base URL (credential-exfiltration guard).
+    it("does not leak a server LMSTUDIO_API_KEY to a client-provided base URL", () => {
+        process.env.LMSTUDIO_API_KEY = "server-secret-key"
+
+        getAIModel({
+            provider: "lmstudio",
+            baseUrl: "http://evil.example.com/v1",
+            modelId: "local-model",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "lm-studio", // placeholder, NOT the server key
+            baseURL: "http://evil.example.com/v1",
+        })
+    })
 })

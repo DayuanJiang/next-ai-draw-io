@@ -1116,8 +1116,12 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             // LM Studio runs a local OpenAI-compatible server. It needs no real
             // API key; a placeholder satisfies the SDK (which requires a
             // non-empty key). Base URL defaults to the LM Studio local server.
-            const apiKey =
-                resolveApiKey(overrides, "LMSTUDIO_API_KEY") || "lm-studio"
+            // SECURITY: when the client provides a custom base URL, only use a
+            // client-supplied key — never fall back to a server LMSTUDIO_API_KEY,
+            // to avoid leaking server credentials to a user-controlled endpoint.
+            const apiKey = overrides?.baseUrl
+                ? overrides?.apiKey || "lm-studio"
+                : resolveApiKey(overrides, "LMSTUDIO_API_KEY") || "lm-studio"
             const serverBaseUrl = resolveBaseUrlEnv(
                 overrides,
                 "LMSTUDIO_BASE_URL",
