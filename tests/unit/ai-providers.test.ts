@@ -451,8 +451,18 @@ describe("LM Studio provider (local, no API key)", () => {
     })
 
     afterEach(() => {
-        process.env.LMSTUDIO_API_KEY = savedEnv.LMSTUDIO_API_KEY
-        process.env.LMSTUDIO_BASE_URL = savedEnv.LMSTUDIO_BASE_URL
+        // Assigning `undefined` to a process.env property coerces it to the
+        // string "undefined" (truthy), so delete when the saved value was unset.
+        if (savedEnv.LMSTUDIO_API_KEY === undefined) {
+            delete process.env.LMSTUDIO_API_KEY
+        } else {
+            process.env.LMSTUDIO_API_KEY = savedEnv.LMSTUDIO_API_KEY
+        }
+        if (savedEnv.LMSTUDIO_BASE_URL === undefined) {
+            delete process.env.LMSTUDIO_BASE_URL
+        } else {
+            process.env.LMSTUDIO_BASE_URL = savedEnv.LMSTUDIO_BASE_URL
+        }
     })
 
     // The reported gap (#781): OpenAI provider required a key, so LM Studio
