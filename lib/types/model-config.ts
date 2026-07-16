@@ -9,6 +9,7 @@ export type ProviderName =
     | "bedrock"
     | "ollama"
     | "openrouter"
+    | "requesty"
     | "aihubmix"
     | "deepseek"
     | "siliconflow"
@@ -104,6 +105,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     azure: "azure",
     bedrock: "amazon-bedrock",
     openrouter: "openrouter",
+    requesty: "requesty",
     aihubmix: "aihubmix",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
@@ -148,6 +150,10 @@ export const PROVIDER_INFO: Record<
     openrouter: {
         label: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
+    },
+    requesty: {
+        label: "Requesty",
+        defaultBaseUrl: "https://router.requesty.ai/v1",
     },
     aihubmix: {
         label: "AIHubMix",
@@ -328,6 +334,12 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "qwen/qwen3-coder",
         // MiniMax
         "minimax/minimax-m3",
+    ],
+    requesty: [
+        // OpenAI
+        "openai/gpt-4o-mini",
+        // Anthropic
+        "anthropic/claude-sonnet-4-5",
     ],
     aihubmix: [
         // Fallback list. The settings UI loads the live model list from AIHubMix when available.
