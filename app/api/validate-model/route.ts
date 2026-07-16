@@ -158,6 +158,18 @@ export async function POST(req: Request) {
                 break
             }
 
+            case "requesty": {
+                const requesty = createOpenAI({
+                    apiKey,
+                    baseURL:
+                        baseUrl ||
+                        PROVIDER_INFO.requesty.defaultBaseUrl ||
+                        "https://router.requesty.ai/v1",
+                })
+                model = requesty.chat(modelId)
+                break
+            }
+
             case "aihubmix": {
                 const defaultBaseURL = PROVIDER_INFO.aihubmix.defaultBaseUrl
 

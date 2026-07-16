@@ -286,6 +286,7 @@ function getProviderLabel(provider) {
         azure: "Azure OpenAI",
         bedrock: "AWS Bedrock",
         openrouter: "OpenRouter",
+        requesty: "Requesty",
         deepseek: "DeepSeek",
         siliconflow: "SiliconFlow",
         modelscope: "ModelScope",
