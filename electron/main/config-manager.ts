@@ -349,6 +349,10 @@ const PROVIDER_ENV_MAP: Record<string, { apiKey: string; baseUrl: string }> = {
         apiKey: "OPENROUTER_API_KEY",
         baseUrl: "OPENROUTER_BASE_URL",
     },
+    requesty: {
+        apiKey: "REQUESTY_API_KEY",
+        baseUrl: "REQUESTY_BASE_URL",
+    },
     deepseek: { apiKey: "DEEPSEEK_API_KEY", baseUrl: "DEEPSEEK_BASE_URL" },
     siliconflow: {
         apiKey: "SILICONFLOW_API_KEY",
