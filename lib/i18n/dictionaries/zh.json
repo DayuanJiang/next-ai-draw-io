@@ -494,10 +494,6 @@
             "MAX_OUTPUT_TOKENS": {
                 "label": "最大输出 token 数"
             },
-            "MODEL_VALIDATION_MAX_TOKENS": {
-                "label": "模型验证最大 token 数",
-                "description": "模型测试请求的 token 预算。推理模型可能先输出思考 token，可适当调大。"
-            },
             "ACCESS_CODE_LIST": {
                 "label": "访问码",
                 "description": "以逗号分隔的列表。用户需输入其中之一才能聊天。留空 = 开放访问。"

@@ -494,10 +494,6 @@
             "MAX_OUTPUT_TOKENS": {
                 "label": "最大出力トークン数"
             },
-            "MODEL_VALIDATION_MAX_TOKENS": {
-                "label": "モデル検証の最大トークン数",
-                "description": "モデルテストリクエストのトークン予算。推論モデルが先に思考トークンを出す場合は増やしてください。"
-            },
             "ACCESS_CODE_LIST": {
                 "label": "アクセスコード",
                 "description": "カンマ区切りのリスト。チャットにはいずれかの入力が必要です。空 = オープンアクセス。"
