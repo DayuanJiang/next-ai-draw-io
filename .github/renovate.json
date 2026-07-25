@@ -1,0 +1,41 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": ["config:recommended"],
+    "schedule": ["after 10am on the first day of the month"],
+    "timezone": "Asia/Tokyo",
+    "packageRules": [
+        {
+            "matchUpdateTypes": ["minor", "patch"],
+            "matchPackagePatterns": ["*"],
+            "groupName": "minor and patch dependencies",
+            "automerge": true
+        },
+        {
+            "matchUpdateTypes": ["major"],
+            "matchPackagePatterns": ["*"],
+            "groupName": "major dependencies",
+            "automerge": false
+        },
+        {
+            "matchPackagePatterns": ["@ai-sdk/*"],
+            "groupName": "AI SDK packages"
+        },
+        {
+            "matchPackagePatterns": ["@radix-ui/*"],
+            "groupName": "Radix UI packages"
+        },
+        {
+            "matchPackagePatterns": ["electron", "electron-builder"],
+            "groupName": "Electron packages",
+            "automerge": false
+        },
+        {
+            "matchPackagePatterns": ["@ai-sdk/*", "ai", "next"],
+            "groupName": "Core framework packages",
+            "automerge": false
+        }
+    ],
+    "vulnerabilityAlerts": {
+        "enabled": true
+    }
+}

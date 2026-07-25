@@ -1,0 +1,81 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+packages/*/node_modules
+packages/*/dist
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+/playwright-report/
+/test-results/
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+push-via-ec2.sh
+.claude/
+.playwright-mcp/
+# Cloudflare
+.dev.vars
+.open-next/
+.wrangler/
+.env*.local
+
+# Electron
+/dist-electron/
+/release/
+/electron-standalone/
+# Draw.io static files (downloaded during CI build)
+public/drawio/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+
+CLAUDE.md
+.spec-workflow
+
+# edgeone
+.edgeone
+opencode.json
+ai-models.json
+
+# local backups
+*.bak
+.gstack/
+
+# admin panel settings (contains secrets)
+data/
