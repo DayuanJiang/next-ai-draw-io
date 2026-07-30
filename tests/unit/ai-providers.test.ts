@@ -206,6 +206,16 @@ vi.mock("@aihubmix/ai-sdk-provider", () => {
     return { aihubmix: mockAihubmix, createAihubmix: mockCreateAihubmix }
 })
 
+vi.mock("@ai-sdk/openai", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockChat = vi.fn(() => mockModel)
+    const mockProviderFn = vi.fn(() => mockModel) as any
+    mockProviderFn.chat = mockChat
+    const mockCreateOpenAI = vi.fn(() => mockProviderFn)
+    const mockOpenai = vi.fn(() => mockModel)
+    return { createOpenAI: mockCreateOpenAI, openai: mockOpenai }
+})
+
 describe("AIHubMix provider", () => {
     let createAihubmixMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
@@ -259,6 +269,54 @@ describe("AIHubMix provider", () => {
         expect(isAihubmixStandardBaseURL("https://proxy.example.com/v1")).toBe(
             false,
         )
+    })
+})
+
+describe("Atlas Cloud provider", () => {
+    let createOpenAIMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY
+        savedEnv.ATLASCLOUD_BASE_URL = process.env.ATLASCLOUD_BASE_URL
+        delete process.env.ATLASCLOUD_BASE_URL
+
+        const mod = await import("@ai-sdk/openai")
+        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
+        createOpenAIMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.ATLASCLOUD_API_KEY = savedEnv.ATLASCLOUD_API_KEY
+        process.env.ATLASCLOUD_BASE_URL = savedEnv.ATLASCLOUD_BASE_URL
+    })
+
+    it("uses Atlas Cloud default endpoint with ATLASCLOUD_API_KEY", () => {
+        process.env.ATLASCLOUD_API_KEY = "server-atlas-key"
+
+        getAIModel({
+            provider: "atlascloud",
+            modelId: "qwen/qwen3.5-flash",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "server-atlas-key",
+            baseURL: "https://api.atlascloud.ai/v1",
+        })
+    })
+
+    it("uses custom Atlas Cloud base URL when provided", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "client-atlas-key",
+            baseURL: "https://proxy.example.com/v1",
+        })
     })
 })
 
