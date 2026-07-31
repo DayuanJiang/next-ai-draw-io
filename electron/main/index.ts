@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { buildAppMenu } from "./app-menu"
+import { initAutoUpdater } from "./auto-updater"
 import { getCurrentPresetEnv } from "./config-manager"
 import { loadEnvFile } from "./env-loader"
 import { registerIpcHandlers } from "./ipc-handlers"
@@ -58,6 +59,11 @@ if (!gotTheLock) {
 
             // Create main window
             createWindow(serverUrl)
+
+            // Initialize auto-updater (production only)
+            if (!isDev) {
+                initAutoUpdater()
+            }
         } catch (error) {
             console.error("Failed to start application:", error)
             dialog.showErrorBox(

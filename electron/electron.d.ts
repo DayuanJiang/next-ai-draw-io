@@ -2,6 +2,14 @@
  * Type declarations for Electron API exposed via preload script
  */
 
+/** Update status data sent from main process */
+type UpdateStatusData =
+    | { status: "available"; version: string }
+    | { status: "available-manual"; version: string; url: string }
+    | { status: "downloading"; percent: number }
+    | { status: "downloaded" }
+    | { status: "error"; message: string }
+
 /** Configuration preset interface */
 interface ConfigPreset {
     id: string
@@ -74,6 +82,12 @@ declare global {
             >
             /** Set user's preferred locale */
             setUserLocale: (locale: string) => Promise<SetUserLocaleResult>
+            /** Listen for update status events from main process */
+            onUpdateStatus: (
+                callback: (data: UpdateStatusData) => void,
+            ) => () => void
+            /** Start downloading the available update */
+            startDownload: () => Promise<void>
         }
 
         /** Settings window Electron API */

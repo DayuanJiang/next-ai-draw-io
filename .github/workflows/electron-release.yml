@@ -105,9 +105,14 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: release-signed
 
-      - name: Upload signed artifacts to release
+      - name: Fix latest.yml with signed exe hashes
+        run: node scripts/fix-latest-yml.mjs
+
+      - name: Upload signed artifacts and update metadata to release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-signed/*.exe
+          files: |
+            release-signed/*.exe
+            release/latest*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
