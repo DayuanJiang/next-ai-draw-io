@@ -9,6 +9,7 @@ export type ProviderName =
     | "bedrock"
     | "ollama"
     | "openrouter"
+    | "orcarouter"
     | "aihubmix"
     | "deepseek"
     | "siliconflow"
@@ -105,6 +106,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     azure: "azure",
     bedrock: "amazon-bedrock",
     openrouter: "openrouter",
+    orcarouter: "openai", // OrcaRouter is OpenAI-compatible
     aihubmix: "aihubmix",
     deepseek: "deepseek",
     siliconflow: "siliconflow",
@@ -150,6 +152,10 @@ export const PROVIDER_INFO: Record<
     openrouter: {
         label: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
+    },
+    orcarouter: {
+        label: "OrcaRouter",
+        defaultBaseUrl: "https://api.orcarouter.ai/v1",
     },
     aihubmix: {
         label: "AIHubMix",
@@ -332,6 +338,31 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         // Qwen
         "qwen/qwen3.7-max",
         "qwen/qwen3-coder",
+        // MiniMax
+        "minimax/minimax-m3",
+    ],
+    orcarouter: [
+        // Anthropic
+        "anthropic/claude-opus-4.8",
+        "anthropic/claude-sonnet-4.6",
+        "anthropic/claude-haiku-4.5",
+        // OpenAI
+        "openai/gpt-5.5",
+        "openai/gpt-5.4",
+        "openai/gpt-5.4-mini",
+        // Google
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3.5-flash",
+        "google/gemini-3.1-flash-lite",
+        // xAI
+        "grok/grok-4.3",
+        // DeepSeek
+        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash",
+        // Qwen
+        "qwen/qwen3-max",
+        // Moonshot AI
+        "kimi/kimi-k2.6",
         // MiniMax
         "minimax/minimax-m3",
     ],

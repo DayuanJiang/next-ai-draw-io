@@ -102,6 +102,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "azure",
     "bedrock",
     "openrouter",
+    "orcarouter",
     "aihubmix",
     "deepseek",
     "siliconflow",
@@ -532,6 +533,7 @@ function buildProviderOptions(
 
         case "deepseek":
         case "openrouter":
+        case "orcarouter":
         case "aihubmix":
         case "siliconflow":
         case "sglang":
@@ -568,6 +570,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     azure: "AZURE_API_KEY",
     ollama: null, // No credentials needed for local Ollama
     openrouter: "OPENROUTER_API_KEY",
+    orcarouter: "ORCAROUTER_API_KEY",
     aihubmix: "AIHUBMIX_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
     siliconflow: "SILICONFLOW_API_KEY",
@@ -687,7 +690,7 @@ function validateProviderCredentials(
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, modelscope)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, orcarouter, aihubmix, deepseek, siliconflow, sglang, gateway, modelscope)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -699,6 +702,8 @@ function validateProviderCredentials(
  * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
  * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to https://ollama.com/api)
  * - OPENROUTER_API_KEY: OpenRouter API key
+ * - ORCAROUTER_API_KEY: OrcaRouter API key
+ * - ORCAROUTER_BASE_URL: OrcaRouter endpoint (optional, defaults to https://api.orcarouter.ai/v1)
  * - AIHUBMIX_API_KEY: AIHubMix API key
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
@@ -789,6 +794,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                         `- GOOGLE_GENERATIVE_AI_API_KEY for Google\n` +
                         `- AWS_ACCESS_KEY_ID for Bedrock\n` +
                         `- OPENROUTER_API_KEY for OpenRouter\n` +
+                        `- ORCAROUTER_API_KEY for OrcaRouter\n` +
                         `- AIHUBMIX_API_KEY for AIHubMix\n` +
                         `- AZURE_API_KEY for Azure\n` +
                         `- SILICONFLOW_API_KEY for SiliconFlow\n` +
@@ -1374,7 +1380,8 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "qwen":
         case "qiniu":
         case "novita":
-        case "atlascloud": {
+        case "atlascloud":
+        case "orcarouter": {
             const envVar = PROVIDER_ENV_VARS[provider]
             if (!envVar) {
                 throw new Error(
@@ -1418,7 +1425,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, orcarouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud`,
             )
     }
 
