@@ -360,7 +360,8 @@
         "unvalidatedModelWarning": "このモデルは検証されていません",
         "serverDefaultModel": "サーバーデフォルトモデル",
         "showValue": "値を表示",
-        "hideValue": "値を非表示"
+        "hideValue": "値を非表示",
+        "thinkingMode": "思考モード"
     },
     "templates": {
         "title": "マイテンプレート",

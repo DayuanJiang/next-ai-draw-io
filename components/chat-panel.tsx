@@ -1082,6 +1082,11 @@ export default function ChatPanel({
                             "x-ai-api-key": config.aiApiKey,
                         }),
                         ...(config.aiModel && { "x-ai-model": config.aiModel }),
+                        ...(config.thinkingEnabled !== undefined && {
+                            "x-ai-thinking-enabled": String(
+                                config.thinkingEnabled,
+                            ),
+                        }),
                         // AWS Bedrock credentials
                         ...(config.awsAccessKeyId && {
                             "x-aws-access-key-id": config.awsAccessKeyId,

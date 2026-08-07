@@ -216,6 +216,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
         baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
         modelId: req.headers.get("x-ai-model"),
+        thinkingEnabled:
+            req.headers.get("x-ai-thinking-enabled") === "true"
+                ? true
+                : req.headers.get("x-ai-thinking-enabled") === "false"
+                  ? false
+                  : undefined,
         // AWS Bedrock credentials
         awsAccessKeyId: req.headers.get("x-aws-access-key-id"),
         awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),

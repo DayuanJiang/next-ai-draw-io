@@ -406,7 +406,8 @@
         "unvalidatedModelWarning": "This model has not been validated",
         "serverDefaultModel": "Server default model",
         "showValue": "Show value",
-        "hideValue": "Hide value"
+        "hideValue": "Hide value",
+        "thinkingMode": "Thinking mode"
     },
     "admin": {
         "title": "Admin Settings",

@@ -406,7 +406,8 @@
         "unvalidatedModelWarning": "此模型尚未验证",
         "serverDefaultModel": "服务器默认模型",
         "showValue": "显示值",
-        "hideValue": "隐藏值"
+        "hideValue": "隐藏值",
+        "thinkingMode": "思考模式"
     },
     "admin": {
         "title": "管理员设置",

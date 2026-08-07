@@ -56,6 +56,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
+import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
 import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
@@ -1138,6 +1139,52 @@ export function ModelConfigDialog({
                                                                         }}
                                                                         className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                     />
+                                                                    {supportsThinkingToggle(
+                                                                        selectedProvider.provider,
+                                                                        model.modelId,
+                                                                    ) && (
+                                                                        <div className="flex shrink-0 items-center gap-1.5">
+                                                                            <Label
+                                                                                htmlFor={`thinking-${model.id}`}
+                                                                                className="cursor-pointer text-[11px] text-muted-foreground"
+                                                                            >
+                                                                                {
+                                                                                    dict
+                                                                                        .modelConfig
+                                                                                        .thinkingMode
+                                                                                }
+                                                                            </Label>
+                                                                            <Switch
+                                                                                id={`thinking-${model.id}`}
+                                                                                checked={
+                                                                                    model.thinkingEnabled ??
+                                                                                    true
+                                                                                }
+                                                                                onCheckedChange={(
+                                                                                    thinkingEnabled,
+                                                                                ) => {
+                                                                                    if (
+                                                                                        selectedProviderId &&
+                                                                                        model.thinkingEnabled !==
+                                                                                            thinkingEnabled
+                                                                                    ) {
+                                                                                        updateModel(
+                                                                                            selectedProviderId,
+                                                                                            model.id,
+                                                                                            {
+                                                                                                thinkingEnabled,
+                                                                                            },
+                                                                                        )
+                                                                                    }
+                                                                                }}
+                                                                                aria-label={
+                                                                                    dict
+                                                                                        .modelConfig
+                                                                                        .thinkingMode
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                    )}
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon"

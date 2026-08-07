@@ -32,6 +32,8 @@ export interface ModelConfig {
     modelId: string // e.g., "gpt-4o", "claude-sonnet-4-5"
     validated?: boolean // Has this model been validated
     validationError?: string // Error message if validation failed
+    // Explicit per-model override. Undefined preserves legacy/provider defaults.
+    thinkingEnabled?: boolean
 }
 
 // Provider configuration
@@ -82,6 +84,7 @@ export interface FlattenedModel {
     source?: "user" | "server"
     // Whether this model is the server default (matches AI_MODEL env var)
     isDefault?: boolean
+    thinkingEnabled?: boolean
     // Custom env var name(s) for server models
     // Can be a single string or array of strings for load balancing
     apiKeyEnv?: string | string[]
@@ -515,6 +518,7 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 validated: model.validated,
                 source: "user",
                 isDefault: false,
+                thinkingEnabled: model.thinkingEnabled,
             })
         }
     }
