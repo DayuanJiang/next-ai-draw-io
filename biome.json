@@ -7,7 +7,7 @@
     },
     "files": {
         "ignoreUnknown": false,
-        "includes": ["**", "!public/**/*.svg"]
+        "includes": ["**", "!public"]
     },
     "formatter": {
         "enabled": true,

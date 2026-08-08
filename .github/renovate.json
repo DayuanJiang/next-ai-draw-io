@@ -33,6 +33,11 @@
             "matchPackagePatterns": ["@ai-sdk/*", "ai", "next"],
             "groupName": "Core framework packages",
             "automerge": false
+        },
+        {
+            "matchPackageNames": ["@biomejs/biome"],
+            "groupName": "Biome",
+            "automerge": false
         }
     ],
     "vulnerabilityAlerts": {
