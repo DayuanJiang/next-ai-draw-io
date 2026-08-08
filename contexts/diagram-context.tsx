@@ -9,7 +9,6 @@ import { getApiEndpoint } from "@/lib/base-path"
 import {
     extractDiagramXML,
     isRealDiagram,
-    selectDiagramXMLAfterExport,
     validateAndFixXml,
 } from "../lib/utils"
 
@@ -226,8 +225,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             }
         }
 
+        // Don't write chartXML here: exports don't change the diagram, and
+        // data.xml from xmlsvg exports has compressed <diagram> payloads that
+        // would break edit_diagram/display_diagram. Autosave keeps chartXML
+        // up to date with the full uncompressed multi-page document (#879).
         const extractedXML = extractDiagramXML(data.data)
-        setChartXML(selectDiagramXMLAfterExport(data.xml, extractedXML))
         setLatestSvg(data.data)
 
         // Only add to history if this was a user-initiated export
