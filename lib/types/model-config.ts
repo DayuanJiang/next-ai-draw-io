@@ -24,6 +24,7 @@ export type ProviderName =
     | "minimax"
     | "novita"
     | "mimo"
+    | "atlascloud"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -116,6 +117,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     minimax: "minimax",
     novita: "novita",
     mimo: "xiaomi",
+    atlascloud: "openai",
 }
 
 // Provider metadata
@@ -205,6 +207,10 @@ export const PROVIDER_INFO: Record<
     mimo: {
         label: "MiMo (Xiaomi)",
         defaultBaseUrl: "https://api.xiaomimimo.com/v1",
+    },
+    atlascloud: {
+        label: "Atlas Cloud",
+        defaultBaseUrl: "https://api.atlascloud.ai/v1",
     },
 }
 
@@ -444,6 +450,7 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "deepseek/deepseek-v4-flash",
     ],
     mimo: ["mimo-v2.5-pro", "mimo-v2.5"],
+    atlascloud: ["qwen/qwen3.5-flash", "deepseek-ai/deepseek-v4-pro"],
 }
 
 // Helper to generate UUID

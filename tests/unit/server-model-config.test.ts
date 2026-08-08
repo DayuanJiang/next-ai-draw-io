@@ -39,6 +39,22 @@ describe("ServerModelsConfigSchema", () => {
         expect(() => ServerModelsConfigSchema.parse(config)).not.toThrow()
     })
 
+    it("accepts Atlas Cloud provider names", () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "Atlas Cloud Server",
+                    provider: "atlascloud",
+                    models: ["qwen/qwen3.5-flash"],
+                    apiKeyEnv: "ATLASCLOUD_API_KEY",
+                    baseUrlEnv: "ATLASCLOUD_BASE_URL",
+                },
+            ],
+        }
+
+        expect(() => ServerModelsConfigSchema.parse(config)).not.toThrow()
+    })
+
     it("rejects invalid provider names", () => {
         const invalidConfig = {
             providers: [
