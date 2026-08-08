@@ -830,10 +830,6 @@ export default function ChatPanel({
                 let chartXml = await onFetchChart()
                 chartXml = formatXML(chartXml)
 
-                // Update ref directly to avoid race condition with React's async state update
-                // This ensures edit_diagram has the correct XML before AI responds
-                chartXMLRef.current = chartXml
-
                 // Build user text by concatenating input with pre-extracted text
                 // (Backend only reads first text part, so we must combine them)
                 const parts: any[] = []
