@@ -23,6 +23,7 @@ import {
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
+import { OperationSchema, searchStencils } from "@/lib/diagram-engine"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
@@ -698,8 +699,55 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
                         ),
                 }),
             },
+            restructure_diagram: {
+                description: `Build or edit a CLOUD ARCHITECTURE diagram (AWS) by declaring STRUCTURE. The engine computes every coordinate.
+
+PREFER THIS over display_diagram/edit_diagram for AWS architecture diagrams. You declare what nests inside what; layout, sizing, alignment and arrow routing are computed. Containers always fit their contents and siblings never overlap, so the usual layout problems cannot occur.
+
+Never write coordinates, mxCell XML, or style strings. Look icon names up with search_stencils first — an invented name is rejected with suggestions.
+
+Operations are applied in order, so you can add a container and fill it in the same call:
+{"operations":[
+  {"op":"add_container","id":"vpc","label":"VPC 10.0.0.0/16","dir":"col","gname":"group_vpc"},
+  {"op":"add_icon","id":"alb","parent":"vpc","name":"application_load_balancer","label":"ALB"},
+  {"op":"add_icon","id":"ec2","parent":"vpc","name":"ec2","label":"EC2"},
+  {"op":"link","source":"alb","target":"ec2","label":"route","step":1}
+]}
+
+Editing an existing diagram: the structure is re-read from the canvas each time, INCLUDING anything the user moved or recoloured by hand. To add one service, send one operation — do not re-send the diagram.
+
+Containers: dir "row" puts children side by side, "col" stacks them. An empty label makes an invisible grouping wrapper (use it to group columns without drawing another frame). gname is an AWS group stencil (group_region, group_vpc, group_availability_zone, group_subnet, group_account) — omit it for a plain titled frame. add_grid packs children into cols columns; use it to pack 3-8 related icons into one labelled area box rather than giving each its own frame.`,
+                inputSchema: z.object({
+                    operations: z
+                        .array(OperationSchema)
+                        .describe("Structural operations, applied in order"),
+                }),
+            },
+            search_stencils: {
+                description: `Find AWS stencil names for restructure_diagram. Returns names and official colours — call this before naming an icon, and batch the whole diagram's lookups into as few calls as possible.`,
+                inputSchema: z.object({
+                    query: z
+                        .string()
+                        .describe(
+                            "Service name or keyword, e.g. 's3' or 'nat gateway'",
+                        ),
+                    kind: z
+                        .enum(["icon", "group"])
+                        .optional()
+                        .describe(
+                            "Restrict to service icons or container frames",
+                        ),
+                    limit: z.number().optional(),
+                }),
+                execute: async ({ query, kind, limit }) => {
+                    const hits = searchStencils(query, { kind, limit })
+                    if (hits.length === 0)
+                        return `No stencil matches "${query}". Try a shorter or more general term.`
+                    return JSON.stringify(hits)
+                },
+            },
             get_shape_library: {
-                description: `Get draw.io shape/icon library documentation with style syntax and shape names.
+                description: `Get draw.io shape/icon library documentation with style syntax and shape names. Use this for NON-AWS diagrams (flowcharts, BPMN, sequence, mind maps, UI mockups) that go through display_diagram. For AWS architecture, use search_stencils + restructure_diagram instead.
 
 Available libraries:
 - Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce

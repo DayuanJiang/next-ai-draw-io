@@ -5,9 +5,11 @@ import type {
     ValidationState,
     ValidationStatus,
 } from "@/components/chat/ValidationCard"
+import type { Operation } from "@/lib/diagram-engine"
+import { restructureDiagram } from "@/lib/diagram-engine"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
-import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
+import { isMxCellXmlComplete, isRealDiagram, wrapWithMxFile } from "@/lib/utils"
 
 const DEBUG = process.env.NODE_ENV === "development"
 
@@ -120,6 +122,8 @@ export function useDiagramToolHandlers({
             await handleEditDiagram(toolCall, addToolOutput)
         } else if (toolCall.toolName === "append_diagram") {
             handleAppendDiagram(toolCall, addToolOutput)
+        } else if (toolCall.toolName === "restructure_diagram") {
+            await handleRestructureDiagram(toolCall, addToolOutput)
         }
     }
 
@@ -574,6 +578,72 @@ ${partialXmlRef.current.slice(-500)}
 Continue from EXACTLY where you stopped.`,
             })
         }
+    }
+
+    /**
+     * Structural editing. The model sends operations against the tree; the engine
+     * re-derives that tree from whatever is on the canvas right now — including anything
+     * the user moved or recoloured by hand — applies the operations, recomputes every
+     * coordinate, and returns new XML.
+     *
+     * Nothing about the tree is stored between calls, so there is no second copy of the
+     * state to drift out of sync with the canvas.
+     */
+    const handleRestructureDiagram = async (
+        toolCall: ToolCall,
+        addToolOutput: AddToolOutputFn,
+    ) => {
+        const { operations } = toolCall.input as { operations: Operation[] }
+
+        // Read the live canvas, not the last thing we generated: the user may have
+        // edited it since.
+        let currentXml = ""
+        try {
+            currentXml = await onFetchChart(false)
+        } catch {
+            currentXml = chartXMLRef.current ?? ""
+        }
+        if (!isRealDiagram(currentXml)) currentXml = ""
+
+        const result = restructureDiagram(currentXml, operations)
+
+        if (result.errors.length > 0 || !result.xml) {
+            addToolOutput({
+                tool: "restructure_diagram",
+                toolCallId: toolCall.toolCallId,
+                state: "output-error",
+                errorText: `Could not apply the operations:
+${result.errors.map((e) => `- ${e}`).join("\n")}
+
+Structure as it stands:
+${result.outline}
+
+Fix the operations and call restructure_diagram again.`,
+            })
+            return
+        }
+
+        const loadError = onDisplayChart(result.xml)
+        if (loadError) {
+            addToolOutput({
+                tool: "restructure_diagram",
+                toolCallId: toolCall.toolCallId,
+                state: "output-error",
+                errorText: `The diagram was built but draw.io rejected it: ${loadError}`,
+            })
+            return
+        }
+
+        // Report the outline rather than the XML: it is what the model needs to name ids
+        // in the next call, at a fraction of the tokens.
+        const notes = result.warnings.length
+            ? `\n\nNotes:\n${result.warnings.map((w) => `- ${w}`).join("\n")}`
+            : ""
+        addToolOutput({
+            tool: "restructure_diagram",
+            toolCallId: toolCall.toolCallId,
+            output: `Diagram updated.\n\n${result.outline}${notes}`,
+        })
     }
 
     return { handleToolCall }
