@@ -28,6 +28,7 @@
  * `pool()` primitive; sequence and radial are original to this repository.
  */
 
+import { resolveShape } from "./shapes"
 import { type Role, roleMetrics } from "./theme"
 import type {
     ContainerNode,
@@ -212,7 +213,18 @@ function visibleText(label: string): string {
 export function autoBoxSize(
     label: string,
     role?: Role,
+    shape?: string,
 ): { w: number; h: number } {
+    const spec = shape ? resolveShape(shape)?.spec : undefined
+    // A glyph shape (umlActor…) has a fixed figure with the label below it: the slot is
+    // the figure plus a line of text, and the text length does not scale the figure.
+    if (spec?.labelOutside && spec.glyph) {
+        const text = visibleText(label)
+        return {
+            w: Math.max(spec.glyph.w + 20, Math.min(160, text.length * 7 + 16)),
+            h: spec.glyph.h + 22,
+        }
+    }
     const r = roleMetrics(role)
     const maxW = Math.round(260 * Math.max(1, r.charScale))
     const explicit = visibleText(label).split("\n")
@@ -233,7 +245,13 @@ export function autoBoxSize(
         0,
     )
     const lineH = Math.round(r.fontSize * 1.6)
-    return { w, h: Math.max(r.minH, lines * lineH + 26) }
+    const h = Math.max(r.minH, lines * lineH + 26)
+    // A non-rectangular outline inscribes a smaller text area than its bounding box —
+    // a rhombus exactly half — so the box grows by the shape's measured factor.
+    // Verified in the real editor: the same sentence overflows a 1.0× rhombus and fits
+    // a 1.5× one.
+    const s = spec?.textScale ?? 1
+    return { w: Math.round(w * s), h: Math.round(h * s) }
 }
 
 /**
@@ -432,7 +450,7 @@ function measure(
         return { node: n, rect: { x: 0, y: 0, ...s }, children: [] }
     }
     if (n.kind === "box") {
-        const auto = autoBoxSize(n.label, n.role)
+        const auto = autoBoxSize(n.label, n.role, n.shape)
         return {
             node: n,
             rect: { x: 0, y: 0, w: n.w ?? auto.w, h: n.h ?? auto.h },

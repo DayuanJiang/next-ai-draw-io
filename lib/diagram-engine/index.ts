@@ -25,7 +25,8 @@ import {
 } from "./operations"
 import { parseDiagram } from "./parse"
 import { renderDiagram } from "./render"
-import type { DiagramTree } from "./types"
+import { nearestShape, resolveShape } from "./shapes"
+import { type DiagramTree, walkTree } from "./types"
 
 export interface RestructureResult {
     /** New canvas XML, or null when the request could not be carried out. */
@@ -83,6 +84,24 @@ export function restructureDiagram(
         errors.push(
             `"${bad.name}" (node ${bad.id}) is not in the stencil catalog.${hint}`,
         )
+    }
+
+    // Shape tokens: an injection-capable token is an error; an unknown-but-safe one
+    // passes through (draw.io degrades it to a rectangle) but gets a warning, so a typo
+    // is a one-turn fix instead of a silently rectangular "cyclinder" forever.
+    for (const n of walkTree(applied.tree)) {
+        if (n.kind !== "box" || !n.shape || n.shape === "box") continue
+        const resolved = resolveShape(n.shape)
+        if (!resolved) {
+            errors.push(
+                `shape "${n.shape}" (node ${n.id}) contains characters that are not allowed in a shape token.`,
+            )
+        } else if (resolved.passthrough) {
+            const near = nearestShape(n.shape)
+            warnings.push(
+                `shape "${n.shape}" (node ${n.id}) is not in the engine's catalog — passed through to draw.io, which renders unknown shapes as rectangles.${near ? ` Did you mean "${near}"?` : ""}`,
+            )
+        }
     }
 
     if (errors.length > 0)

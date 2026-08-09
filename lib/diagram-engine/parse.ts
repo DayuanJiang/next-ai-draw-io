@@ -25,6 +25,7 @@ import { extractDiagramXML } from "@/lib/utils"
 import {
     type Direction,
     hasMarkers,
+    isAutoSized,
     isLaneChrome,
     isPinned,
     MARKER,
@@ -358,6 +359,12 @@ function roleOf(style: string): Role | undefined {
 /** The semantic zone stamped on a cell, if any. */
 function zoneOf(style: string): string | undefined {
     const v = readMarker(style, MARKER.group)
+    return v ? decodeURIComponent(v) : undefined
+}
+
+/** The declared shape token stamped on a cell, if any. */
+function shapeOf(style: string): string | undefined {
+    const v = readMarker(style, MARKER.shape)
     return v ? decodeURIComponent(v) : undefined
 }
 
@@ -1069,19 +1076,29 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
             const headH = lifeline
                 ? Number(styleValue(c.style, "size") ?? "44")
                 : undefined
+            // An engine-measured box must NOT read its size back as a fixed size:
+            // that would freeze the first layout's measurement, so a later label or
+            // shape change would keep the stale box instead of re-measuring. A pinned
+            // node is the exception — the user froze it, geometry and all.
+            const auto = isAutoSized(c.style) && !pinned
             const node: BoxNode = {
                 kind: "box",
                 id: c.id,
                 label: c.value,
-                w: c.geo ? Math.round(c.geo.w) : undefined,
+                w: auto ? undefined : c.geo ? Math.round(c.geo.w) : undefined,
                 h: lifeline
                     ? Math.round(headH && headH > 0 ? headH : 44)
-                    : c.geo
-                      ? Math.round(c.geo.h)
-                      : undefined,
+                    : auto
+                      ? undefined
+                      : c.geo
+                        ? Math.round(c.geo.h)
+                        : undefined,
                 fill: styleValue(c.style, "fillColor"),
                 stroke: styleValue(c.style, "strokeColor"),
-                shape: boxShape(c.style),
+                // The declared token wins: appearance-based reverse mapping cannot
+                // distinguish aliases (decision vs diamond) or identify a passed-through
+                // token whose style is just `shape=<name>`.
+                shape: shapeOf(c.style) ?? boxShape(c.style),
                 role: roleOf(c.style),
                 group: zoneOf(c.style),
                 ...flexOf(c.style),

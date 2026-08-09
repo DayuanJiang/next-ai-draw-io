@@ -64,6 +64,18 @@ export const MARKER = {
     role: "dai_role",
     /** The node's semantic zone, whose hue ramp colours it. */
     group: "dai_group",
+    /**
+     * The declared shape token, verbatim. Appearance-based reverse mapping is ambiguous
+     * (aliases, rotated variants, styles with no unique shape= token), so the round trip
+     * carries the declaration itself.
+     */
+    shape: "dai_shape",
+    /**
+     * Marks a node's size as engine-computed rather than user-fixed. Without it, the
+     * w/h read back from the canvas would freeze the first layout's measurement: change
+     * the label and the box would keep the old size instead of re-measuring.
+     */
+    auto: "dai_auto",
     /** Share of the parent's leftover flow-axis space — flex-grow. */
     grow: "dai_grow",
     /** Cross-axis position within the parent: "start" | "center" | "end". */
@@ -386,6 +398,21 @@ export function stampRole(style: string, role: string): string {
 /** Stamp the node's semantic zone, replacing any previous one. */
 export function stampGroup(style: string, group: string): string {
     return append(style, MARKER.group, encodeURIComponent(group))
+}
+
+/** Stamp the declared shape token, so the round trip carries the declaration itself. */
+export function stampShape(style: string, shape: string): string {
+    return append(style, MARKER.shape, encodeURIComponent(shape))
+}
+
+/** Mark a node's size as engine-computed, so a re-layout re-measures it. */
+export function stampAuto(style: string): string {
+    return append(style, MARKER.auto, 1)
+}
+
+/** Was this node's size computed by the engine (vs fixed by the user or the model)? */
+export function isAutoSized(style: string): boolean {
+    return readMarker(style, MARKER.auto) === "1"
 }
 
 type FlexAlign = "start" | "center" | "end" | "stretch"

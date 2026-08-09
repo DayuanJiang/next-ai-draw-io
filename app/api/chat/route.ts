@@ -790,7 +790,7 @@ Loops are fine — an arrow back to an earlier step is drawn as a loop. So are a
 
 Replaces the whole diagram, because one new arrow can change which row several nodes belong in. To edit afterwards, use restructure_diagram with the ids from the outline this returns.
 
-Shapes: "decision" for a branch (diamond), "terminator" for a start or end point, "data" for input or output, "document" for a report, "round" for a soft-edged step, "box" (default) for a plain step. Set icon instead of shape to draw a node as a catalog icon — look the name up with search_stencils first.
+Shapes say what a node IS: "decision" for a branch (diamond), "terminator" for a start or end point, "data" for input or output, "document" for a report, "round" for a soft-edged step, "cylinder" for a database, "queue" for a message queue, "person" for an actor or user, "cloud" for an external system, "hexagon" for a service, "ellipse" for a concept, "box" (default) for a plain step. Any other draw.io shape token also works verbatim. Set icon instead of shape to draw a node as a catalog icon — look the name up with search_stencils first.
 
 Grouping: when the nodes fall into natural zones (remote vs local, frontend vs backend, roles, phases), set the same group name on each zone's nodes. The engine colours each group consistently from its own palette. Name groups by meaning; never pick hex colours.`,
                 inputSchema: z.object({
@@ -800,15 +800,11 @@ Grouping: when the nodes fall into natural zones (remote vs local, frontend vs b
                                 id: z.string(),
                                 label: z.string(),
                                 shape: z
-                                    .enum([
-                                        "box",
-                                        "decision",
-                                        "terminator",
-                                        "round",
-                                        "data",
-                                        "document",
-                                    ])
-                                    .optional(),
+                                    .string()
+                                    .optional()
+                                    .describe(
+                                        "What the node IS: decision, terminator, round, data, document, cylinder (database), queue, person (actor), cloud (external), hexagon (service), ellipse. Any draw.io shape token also works",
+                                    ),
                                 icon: z
                                     .string()
                                     .optional()

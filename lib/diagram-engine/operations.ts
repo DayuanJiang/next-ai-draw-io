@@ -86,17 +86,10 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .optional()
             .describe("Border colour; pair it with fill"),
         shape: z
-            .enum([
-                "box",
-                "decision",
-                "terminator",
-                "round",
-                "data",
-                "document",
-            ])
+            .string()
             .optional()
             .describe(
-                "Flowchart outline: decision=diamond, terminator=start/end, data=input/output, document=report. Omit for a plain rectangle",
+                "What the node IS, drawn as its conventional outline. Catalog: decision/diamond, terminator (start/end), round, data (input/output), document, cylinder (database), queue, person (actor/user), cloud (external system), hexagon (service), ellipse (concept), callout (note), step (pipeline stage), note, card, process, tape, cube. Any other draw.io shape token also works verbatim. Omit for a plain rectangle",
             ),
         grow: z
             .number()
@@ -260,6 +253,36 @@ export const OperationSchema = z.discriminatedUnion("op", [
         op: z.literal("set_label"),
         id: z.string(),
         label: z.string(),
+    }),
+    z.object({
+        op: z.literal("set_shape"),
+        id: z.string(),
+        shape: z
+            .string()
+            .describe("New shape token; 'box' resets to a plain rectangle"),
+    }),
+    z.object({
+        op: z.literal("set_role"),
+        id: z.string(),
+        role: z
+            .enum([
+                "banner",
+                "heading",
+                "body",
+                "callout",
+                "good",
+                "bad",
+                "metric",
+                "muted",
+            ])
+            .describe("New information role; 'body' resets to the default"),
+    }),
+    z.object({
+        op: z.literal("set_group"),
+        id: z.string(),
+        group: z
+            .string()
+            .describe("New semantic zone; empty string removes the zone"),
     }),
     z.object({
         op: z.literal("set_dir"),
@@ -576,6 +599,50 @@ export function applyOperations(
                     break
                 }
                 node.label = op.label
+                break
+            }
+
+            case "set_shape": {
+                const node = findNode(tree, op.id)
+                if (!node || node.kind !== "box") {
+                    errors.push(`set_shape: "${op.id}" is not a box`)
+                    break
+                }
+                // The verbatim style is last render's composition with the OLD shape
+                // baked in; keeping it would override the new declaration entirely.
+                if (op.shape === "box") delete node.shape
+                else node.shape = op.shape
+                delete node.style
+                delete node.w
+                delete node.h
+                break
+            }
+
+            case "set_role": {
+                const node = findNode(tree, op.id)
+                if (!node || (node.kind !== "box" && node.kind !== "group")) {
+                    errors.push(
+                        `set_role: "${op.id}" is not a box or container`,
+                    )
+                    break
+                }
+                if (op.role === "body") delete node.role
+                else node.role = op.role
+                delete node.style
+                break
+            }
+
+            case "set_group": {
+                const node = findNode(tree, op.id)
+                if (!node || (node.kind !== "box" && node.kind !== "group")) {
+                    errors.push(
+                        `set_group: "${op.id}" is not a box or container`,
+                    )
+                    break
+                }
+                if (op.group === "") delete node.group
+                else node.group = op.group
+                delete node.style
                 break
             }
 

@@ -32,19 +32,14 @@ export interface PoolCell {
 export type Align = "start" | "center" | "end" | "stretch"
 
 /**
- * The outline a flowchart box is drawn with.
+ * What a box IS, drawn as its conventional outline.
  *
- * Flowchart notation is conventional, not decorative: a reader takes a diamond to mean a
- * branch and a stadium to mean an entry or exit point. Rendering every step as the same
- * rectangle throws that away.
+ * Open vocabulary: catalog names ("cylinder", "decision", "person"…) get full engine
+ * support — correct perimeter, text sized to fit the outline. Any other draw.io shape
+ * token passes through verbatim and degrades to a rectangle if the editor does not
+ * know it. See shapes.ts.
  */
-export type BoxShape =
-    | "box"
-    | "decision"
-    | "terminator"
-    | "round"
-    | "data"
-    | "document"
+export type BoxShape = string
 
 /** A catalog icon: a real stencil, drawn at a fixed glyph size with a label below. */
 export interface IconNode {

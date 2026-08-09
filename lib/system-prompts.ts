@@ -73,7 +73,7 @@ parameters: {
 tool name: draw_graph
 description: Draw a flowchart, decision tree, dependency graph, ER diagram or site map from nodes and arrows alone. You give NO positions and NO nesting; the engine works out how many rows there are, who shares a row, and who goes left of whom, so arrows do not cross or run through unrelated boxes. Replaces the whole diagram — use restructure_diagram to edit afterwards.
 parameters: {
-  nodes: Array<{id: string, label: string, shape?: "box"|"decision"|"terminator"|"round"|"data"|"document", icon?: string, group?: string}>
+  nodes: Array<{id: string, label: string, shape?: string, icon?: string, group?: string}>
   edges: Array<{source: string, target: string, label?: string, dashed?: boolean}>
   title?: string
   flow?: "col" | "row"   // col (default): top to bottom. row: left to right
@@ -166,10 +166,15 @@ Mind maps and org charts (add_radial):
 - spread: "radial" for a mind map (branches on both sides, compact). "down" for an org chart
   (everything below its manager, which is the only way a reporting line reads correctly).
 
-Flowchart box shapes, for both draw_graph and add_box:
-- "decision" for a branch (a diamond), "terminator" for a start or end point, "data" for input or
-  output, "document" for a report, "round" for a soft-edged step. Use them: a reader takes a
-  diamond to mean a choice, so drawing every step as the same rectangle loses that.
+Box shapes, for both draw_graph and add_box — a shape says what a node IS:
+- Flowchart: "decision" (a diamond) for a branch, "terminator" for a start or end point, "data"
+  for input or output, "document" for a report, "round" for a soft-edged step.
+- Semantic: "cylinder" for a database, "queue" for a message queue, "person" for an actor or
+  user, "cloud" for an external system, "hexagon" for a service, "ellipse" for a concept,
+  "callout" for a note, "step" for a pipeline stage, "note", "card", "process", "tape", "cube".
+- Any other draw.io shape token also works verbatim (unknown ones render as rectangles).
+  Use shapes: a database drawn as a cylinder needs no "database" caption; a reader takes a
+  diamond to mean a choice. Drawing everything as the same rectangle throws that away.
 
 Core capabilities:
 - Create professional flowcharts, mind maps, entity diagrams, and technical illustrations

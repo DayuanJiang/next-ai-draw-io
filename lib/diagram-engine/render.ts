@@ -23,6 +23,7 @@ import {
 } from "./layout"
 import {
     isInvisible,
+    stampAuto,
     stampCell,
     stampContainer,
     stampFlex,
@@ -34,11 +35,12 @@ import {
     stampRadial,
     stampRole,
     stampSequence,
+    stampShape,
 } from "./markers"
 import { type RoutedEdge, routeEdges } from "./route"
+import { mergeStyle, resolveShape } from "./shapes"
 import { hueOf, NEUTRAL, themedStyle } from "./theme"
 import {
-    type BoxShape,
     type DiagramNode,
     type DiagramTree,
     isContainer,
@@ -87,27 +89,6 @@ const TITLE_STYLE =
     "text;html=1;align=center;fontStyle=1;fontSize=14;fontColor=light-dark(#232F3E,#E8E8E8);"
 const EDGE_STYLE =
     "edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=light-dark(#1B2733,#CFE0F0);strokeColor=light-dark(#1A1A1A,#E0E0E0);strokeWidth=1;"
-
-/**
- * Flowchart outlines, as mxGraph draws them.
- *
- * All six are core mxGraph shapes, not stencils from a shape library, so they render
- * without the catalog and without any extra dependency. The notation is conventional: a
- * reader takes a diamond to mean a branch and a stadium to mean a start or end point, so
- * drawing every step as the same rectangle loses information the shape was carrying.
- */
-const BOX_SHAPES: Record<BoxShape, string> = {
-    box: "rounded=0;",
-    round: "rounded=1;arcSize=12;",
-    /** Decision — a diamond. */
-    decision: "rhombus;",
-    /** Start or end — a stadium. draw.io draws `rounded=1` at arcSize 50 as a full stadium. */
-    terminator: "rounded=1;arcSize=50;",
-    /** Input or output — a parallelogram. */
-    data: "shape=parallelogram;perimeter=parallelogramPerimeter;fixedSize=1;size=14;",
-    /** A document or report — a rectangle with a wavy bottom edge. */
-    document: "shape=document;boundedLbl=1;",
-}
 
 // ---- swimlane pool chrome ----
 
@@ -172,21 +153,34 @@ function styleFor(
     }
 
     if (n.kind === "box") {
-        let base = n.style ?? FALLBACK_BOX
-        if (!n.style) {
-            // Order matters, later keys win in draw.io: outline, then the theme's
-            // composition of role x hue, then explicit colours on top of everything.
-            if (n.shape) base += BOX_SHAPES[n.shape]
-            if (n.role || n.group)
-                base += themedStyle(n.role ?? "body", hue(n.group), "leaf")
-            if (n.fill) base += `fillColor=${n.fill};`
-            if (n.stroke) base += `strokeColor=${n.stroke};`
-            if (n.bold) base += "fontStyle=1;"
+        let base: string
+        if (n.style) {
+            base = n.style
+        } else {
+            // Structured merge, ownership by fragment order: the fallback's neutral
+            // look, the shape's geometry keys, the theme's colour/type keys, explicit
+            // colours last. Each key ends up in the style exactly once — a theme that
+            // says rounded=1 cannot leave a contradictory duplicate on a rhombus.
+            const shape = n.shape ? resolveShape(n.shape) : null
+            base = mergeStyle(
+                FALLBACK_BOX,
+                shape?.spec.style,
+                n.role || n.group
+                    ? themedStyle(n.role ?? "body", hue(n.group), "leaf")
+                    : undefined,
+                n.fill ? `fillColor=${n.fill};` : undefined,
+                n.stroke ? `strokeColor=${n.stroke};` : undefined,
+                n.bold ? "fontStyle=1;" : undefined,
+            )
         }
         let stamped = stampLeaf(base, "box")
+        if (n.shape && n.shape !== "box") stamped = stampShape(stamped, n.shape)
         if (n.role && n.role !== "body") stamped = stampRole(stamped, n.role)
         if (n.group) stamped = stampGroup(stamped, n.group)
         stamped = stampFlex(stamped, { grow: n.grow, align: n.align })
+        // Engine-measured (no explicit w/h): mark it, so the parser re-measures next
+        // time instead of freezing this layout's numbers as a fixed size.
+        if (n.w == null && n.h == null) stamped = stampAuto(stamped)
         return n.cell ? stampCell(stamped, n.cell) : stamped
     }
 
