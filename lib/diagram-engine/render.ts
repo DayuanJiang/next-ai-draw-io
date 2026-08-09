@@ -10,6 +10,7 @@
 
 import { flatten, ICON_SIZE, layoutForest, type Placed } from "./layout"
 import { stampContainer, stampLeaf } from "./markers"
+import { type RoutedEdge, routeEdges } from "./route"
 import type { DiagramNode, DiagramTree, LinkSpec, Rect } from "./types"
 
 /** Escape the five characters that would break an XML attribute. */
@@ -104,6 +105,31 @@ function styleFor(n: DiagramNode, resolve: StyleResolver | undefined): string {
  * outside it. Emitting the padded slot would both stretch the glyph and — because the
  * padding depends on the label length — make the size grow on every round-trip.
  */
+/**
+ * The rectangle a node actually occupies in the XML.
+ *
+ * For everything except an icon this is the slot layout measured. An icon's slot is wider
+ * and taller than the glyph, to leave room for the label underneath, but the cell itself
+ * is the glyph square centred in that slot.
+ *
+ * The router has to use this, not the slot: a slot is roughly twice the glyph's width, so
+ * collision tests against slots both miss real overlaps and invent false ones.
+ */
+export function cellRect(
+    n: DiagramNode,
+    slot: Rect,
+    defaultGlyph: number,
+): Rect {
+    if (n.kind !== "icon") return slot
+    const glyph = n.size ?? defaultGlyph
+    return {
+        x: Math.round(slot.x + (slot.w - glyph) / 2),
+        y: slot.y,
+        w: glyph,
+        h: glyph,
+    }
+}
+
 function vertexXml(
     n: DiagramNode,
     rect: Rect,
@@ -114,16 +140,7 @@ function vertexXml(
 ): string {
     const ox = parentRect?.x ?? 0
     const oy = parentRect?.y ?? 0
-    let box = rect
-    if (n.kind === "icon") {
-        const glyph = n.size ?? defaultGlyph
-        box = {
-            x: Math.round(rect.x + (rect.w - glyph) / 2),
-            y: rect.y,
-            w: glyph,
-            h: glyph,
-        }
-    }
+    const box = cellRect(n, rect, defaultGlyph)
     return (
         `<mxCell id="${esc(n.id)}" value="${esc("label" in n ? n.label : "")}"` +
         ` style="${styleFor(n, resolve)}" vertex="1" parent="${esc(parent)}">` +
@@ -132,31 +149,51 @@ function vertexXml(
     )
 }
 
+/** The label an edge renders, with its step number prefixed. */
+function edgeLabel(l: LinkSpec): string {
+    if (l.step == null) return l.label ?? ""
+    return l.label ? `${l.step}. ${l.label}` : `${l.step}.`
+}
+
 /**
- * One `<mxCell>` for an edge.
+ * One `<mxCell>` for an edge, carrying the route the router computed.
  *
- * No waypoints: draw.io's own orthogonal router recomputes the route from the terminals
- * on every edit, so a user who moves a node never has to re-link an arrow. Freezing a
- * pre-computed route would look better on first open and then deform the moment anyone
- * touched the diagram — the wrong trade for an editor.
+ * Connection points are always written. They are fractions of the terminal's bounds, so
+ * draw.io recomputes them from live geometry on every edit — they follow a node when the
+ * user drags it. Without them draw.io picks the side itself, knowing only the two
+ * terminals and nothing about the other icons, which is how arrows end up running through
+ * unrelated shapes and stacking several on one point.
+ *
+ * Waypoints are absolute, so draw.io keeps them after a drag and the route deforms. They
+ * are written only when the router says they are load-bearing: a labelled bend (the label
+ * sits at the path midpoint and needs a straight segment under it) or a deliberate detour
+ * around something a straight line would have hit.
  */
-function edgeXml(l: LinkSpec, index: number): string {
-    const label =
-        l.step != null
-            ? l.label
-                ? `${l.step}. ${l.label}`
-                : `${l.step}.`
-            : (l.label ?? "")
+function edgeXml(l: LinkSpec, index: number, route?: RoutedEdge): string {
+    const label = edgeLabel(l)
     let style = l.style ?? EDGE_STYLE
     if (!l.style) {
         if (l.dashed) style += "dashed=1;"
         if (label) style += "labelBackgroundColor=light-dark(#FFFFFF,#0B0F14);"
     }
+    if (route)
+        style +=
+            `exitX=${route.exit.x};exitY=${route.exit.y};exitDx=0;exitDy=0;` +
+            `entryX=${route.entry.x};entryY=${route.entry.y};entryDx=0;entryDy=0;`
     const id = l.id ?? `ed${index + 1}`
+    const points =
+        route?.freeze && route.waypoints.length
+            ? `<Array as="points">${route.waypoints
+                  .map(
+                      (p) =>
+                          `<mxPoint x="${Math.round(p.x)}" y="${Math.round(p.y)}"/>`,
+                  )
+                  .join("")}</Array>`
+            : ""
     return (
         `<mxCell id="${esc(id)}" value="${esc(label)}" style="${style}" edge="1" parent="1"` +
         ` source="${esc(l.source)}" target="${esc(l.target)}">` +
-        `<mxGeometry relative="1" as="geometry"/>` +
+        `<mxGeometry relative="1" as="geometry">${points}</mxGeometry>` +
         `</mxCell>`
     )
 }
@@ -186,8 +223,14 @@ export function renderDiagram(
     })
 
     const flat = flatten(roots)
+    const glyph = opts.iconSize ?? ICON_SIZE
+    // Slot rectangles, for positioning children relative to their parent.
     const rectById = new Map<string, Rect>()
     for (const f of flat) rectById.set(f.node.id, f.rect)
+    // Emitted-cell rectangles, which is what the router must see.
+    const cellById = new Map<string, Rect>()
+    for (const f of flat)
+        cellById.set(f.node.id, cellRect(f.node, f.rect, glyph))
 
     const cells: string[] = []
 
@@ -199,7 +242,6 @@ export function renderDiagram(
         )
 
     // Parents come before children (flatten guarantees it), which draw.io requires.
-    const glyph = opts.iconSize ?? ICON_SIZE
     for (const f of flat) {
         const parentRect =
             f.parent === "1" ? null : (rectById.get(f.parent) ?? null)
@@ -227,15 +269,46 @@ export function renderDiagram(
     const known = new Set(flat.map((f) => f.node.id))
     for (const c of tree.foreign) known.add(c.id)
     const dangling: string[] = []
-    let emitted = 0
+    const drawable: LinkSpec[] = []
     for (const l of tree.links) {
         if (!known.has(l.source) || !known.has(l.target)) {
             if (!known.has(l.source)) dangling.push(l.source)
             if (!known.has(l.target)) dangling.push(l.target)
             continue
         }
-        cells.push(edgeXml(l, emitted++))
+        drawable.push(l)
     }
+
+    // Route with the whole page in view. Only leaf shapes are obstacles: an edge from
+    // outside a VPC to something inside it has to cross the VPC's border, so a container
+    // frame must not block it.
+    const obstacles = new Set(
+        flat
+            .filter((f) => f.node.kind === "icon" || f.node.kind === "box")
+            .map((f) => f.node.id),
+    )
+    // Frames are passable but not free to ignore: a line that runs alongside a border, or
+    // cuts through a frame only one of its endpoints belongs to, reads as a mistake even
+    // though it hits nothing.
+    const frames = new Set(
+        flat
+            .filter((f) => f.node.kind === "group" || f.node.kind === "grid")
+            .map((f) => f.node.id),
+    )
+    const routes = routeEdges(
+        drawable.map((l, i) => ({
+            id: l.id ?? `ed${i + 1}`,
+            source: l.source,
+            target: l.target,
+            hasLabel: edgeLabel(l) !== "",
+        })),
+        cellById,
+        obstacles,
+        frames,
+    )
+    drawable.forEach((l, i) => {
+        cells.push(edgeXml(l, i, routes[i]))
+    })
 
     const model =
         `<mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1"` +
