@@ -36,6 +36,11 @@ export const MARKER = {
     cols: "dai_cols",
     /** Set by the user to freeze a node's position across re-layouts. */
     pin: "dai_pin",
+    /**
+     * A catalog icon's name. Needed because an Azure or GCP icon's style is an embedded
+     * base64 image with no name anywhere in it, so the style alone cannot identify it.
+     */
+    name: "dai_name",
 } as const
 
 export type NodeKind = "group" | "grid" | "icon" | "box" | "title"
@@ -53,6 +58,22 @@ export type Direction = "row" | "col" | "grid"
  */
 const CONTAINER_TOKENS =
     "container=1;pointerEvents=0;collapsible=0;recursiveResize=0;"
+
+/**
+ * A container that groups children for layout but should not be visible.
+ *
+ * The reference project solves this with a "phantom": a wrapper that participates in
+ * layout and then emits NO cell, reparenting its children onto the nearest visible
+ * ancestor. That makes the round-trip lossy by construction — the wrapper's direction
+ * and grouping are simply absent from the XML, so re-deriving the tree cannot recover
+ * them. Measured on the reference project's own build_vpc.mjs: a phantom erased a
+ * container's "col" direction, leaving children in a 2-D arrangement that can only be
+ * read back as a grid.
+ *
+ * So we emit a real cell and make it invisible instead. One extra cell per wrapper,
+ * in exchange for structure that survives being read back.
+ */
+const INVISIBLE_TOKENS = "fillColor=none;strokeColor=none;"
 
 /** Read a marker's raw value out of a style string. Last occurrence wins, as draw.io does. */
 export function readMarker(style: string, key: string): string | null {
@@ -127,10 +148,13 @@ export function stampContainer(
         dir: Direction
         gap: number
         cols?: number
+        /** Layout-only wrapper: emit a real cell, but draw nothing. */
+        invisible?: boolean
     },
 ): string {
     let s = style.endsWith(";") || style === "" ? style : `${style};`
     s += CONTAINER_TOKENS
+    if (opts.invisible) s += INVISIBLE_TOKENS
     s = append(s, MARKER.kind, opts.kind)
     s = append(s, MARKER.dir, opts.dir)
     s = append(s, MARKER.gap, Math.round(opts.gap))
@@ -139,12 +163,30 @@ export function stampContainer(
     return s
 }
 
-/** Stamp a leaf (icon or box) with its kind, so the parser need not infer it. */
+/**
+ * Is this an invisible layout wrapper? Both colours set to `none` and no group
+ * stencil — a visible frame always has a stroke or a stencil.
+ */
+export function isInvisible(style: string): boolean {
+    if (/grIcon=/.test(style)) return false
+    const fill = readMarker(style, "fillColor")
+    const stroke = readMarker(style, "strokeColor")
+    return fill === "none" && stroke === "none"
+}
+
+/**
+ * Stamp a leaf with its kind, so the parser need not infer it.
+ *
+ * For an icon, also record the catalog name: an Azure or GCP icon's style is an embedded
+ * base64 image with no name in it, so the style alone cannot identify which icon it is.
+ */
 export function stampLeaf(
     style: string,
     kind: "icon" | "box" | "title",
+    opts: { name?: string } = {},
 ): string {
-    return append(style, MARKER.kind, kind)
+    const s = append(style, MARKER.kind, kind)
+    return opts.name ? append(s, MARKER.name, opts.name) : s
 }
 
 /** Strip every `dai_*` marker — for exporting a clean file, or comparing styles. */

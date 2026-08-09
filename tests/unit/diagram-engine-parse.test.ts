@@ -135,9 +135,17 @@ describe("parseDiagram on real engine output", () => {
         //
         // This is why our engine must not have phantoms: a wrapper that emits no cell
         // makes the round-trip lossy by construction. See task #5.
-        expect(findNode(tree, "vpc")?.kind).toBe("grid")
+        //
+        // The parser does not guess a direction here. It keeps the container and warns
+        // that the arrangement is two-dimensional, so the caller knows a re-layout will
+        // move these children rather than discovering it afterwards.
         expect(findParent(tree, "az_a")?.id).toBe("vpc")
         expect(findNode(tree, "azs")).toBeNull()
+        expect(
+            warnings.some(
+                (w) => w.includes("vpc") && w.includes("two dimensions"),
+            ),
+        ).toBe(true)
     })
 
     it("classifies resourceIcon cells as icons and recovers their catalog name", () => {
@@ -186,8 +194,11 @@ describe("parseDiagram on real engine output", () => {
         expect(needsAdoption).toBe(true)
     })
 
-    it("parses without warnings on a well-formed single page", () => {
-        expect(warnings).toEqual([])
+    it("warns only about the phantom-flattened container, nothing else", () => {
+        // The single warning is the 2-D arrangement the phantom left behind; a
+        // well-formed page produces no other complaint.
+        expect(warnings).toHaveLength(1)
+        expect(warnings[0]).toContain("two dimensions")
     })
 
     it("assigns every cell exactly once — no duplicates, nothing lost", () => {
