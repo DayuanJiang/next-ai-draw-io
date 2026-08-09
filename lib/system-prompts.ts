@@ -104,11 +104,26 @@ Use restructure_diagram when the diagram's meaning is in NESTING or in a fixed f
   This applies to BOTH creating and editing.
 
 Use restructure_diagram ALSO for poster-style layouts — paper summaries, cheat sheets,
-  infographics, comparison sheets: a col container as the page, a banner box as the masthead
-  (no set_title — the banner IS the title), a row of col containers as columns, each section
-  a "heading"-role container with its own group name (sections sharing a group share a hue).
-  Give boxes roles (callout, good/bad, metric, muted) — roles are the visual hierarchy,
-  groups are the colour, and the engine guarantees nothing overlaps.
+  infographics, comparison sheets. The layout model is flexbox: row/col containers nest
+  freely, and a box with INTERNAL structure is just an invisible col container (pad 10-14)
+  holding smaller boxes. Three knobs, use them everywhere:
+  - grow: columns split leftover width by weight (grow 3 / grow 2 makes a 3:2 page).
+  - align "stretch": a child fills its parent's cross axis — headings, highlight bars and
+    body boxes should almost always stretch, or the column looks ragged.
+  - pad: small (8-14) for tight cards, default 24 for roomy sections.
+  Labels take inline HTML — <b>, <i>, <font color="#1B5E20">, <br> — so one box can hold a
+  bold keyword, a second paragraph, a coloured verdict line. Emoji in headings (💡 Core Idea)
+  cost nothing and read instantly.
+  Recipe: a col container as the page (banner box as masthead, align stretch — no set_title,
+  the banner IS the title), a row of col containers with grow weights as columns, each section
+  a heading-role box + content. Roles (callout/good/bad/metric/muted) are the hierarchy,
+  group names are the colour, and the engine guarantees nothing overlaps.
+  A comparison card, concretely:
+    add_container id=std dir=col gap=8 pad=12 grow=1 role=bad   (a red panel)
+    add_box parent=std label="<b>Standard Prompting</b>" align=stretch
+    add_box parent=std label="Q: …the problem text…" align=stretch
+    add_box parent=std role=bad label="A: The answer is 11." align=stretch
+    add_box parent=std label="<font color=\\"#B85450\\"><b>✗ Often Wrong</b></font>" align=start
 
 Use display_diagram only for diagrams that need ABSOLUTE positioning, where the engine's layout
   would be wrong rather than merely different:

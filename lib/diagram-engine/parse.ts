@@ -29,6 +29,7 @@ import {
     isPinned,
     MARKER,
     type NodeKind,
+    readAlign,
     readCell,
     readDir,
     readIntMarker,
@@ -358,6 +359,19 @@ function roleOf(style: string): Role | undefined {
 function zoneOf(style: string): string | undefined {
     const v = readMarker(style, MARKER.group)
     return v ? decodeURIComponent(v) : undefined
+}
+
+/** The flex fields stamped on a cell, as sparse properties ready to spread. */
+function flexOf(style: string): {
+    grow?: number
+    align?: "start" | "end" | "stretch"
+} {
+    const grow = readIntMarker(style, MARKER.grow)
+    const align = readAlign(style)
+    return {
+        ...(grow !== null && grow > 0 ? { grow } : {}),
+        ...(align ? { align } : {}),
+    }
 }
 
 function boxShape(style: string): BoxShape | undefined {
@@ -1070,6 +1084,7 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
                 shape: boxShape(c.style),
                 role: roleOf(c.style),
                 group: zoneOf(c.style),
+                ...flexOf(c.style),
                 // A lifeline's style is chrome the renderer rebuilds, so keeping it verbatim
                 // would re-emit a lifeline that no longer matches the new message count.
                 style: lifeline ? undefined : c.style,
@@ -1215,12 +1230,15 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
             }
             return node
         }
+        const markedPad = readIntMarker(c.style, MARKER.pad)
         const node: GroupNode = {
             kind: "group",
             ...common,
             dir: dir === "col" ? "col" : "row",
             role: roleOf(c.style),
             group: zoneOf(c.style),
+            ...flexOf(c.style),
+            ...(markedPad !== null ? { pad: markedPad } : {}),
         }
         return node
     }

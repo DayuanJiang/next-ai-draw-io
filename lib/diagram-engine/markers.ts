@@ -64,6 +64,12 @@ export const MARKER = {
     role: "dai_role",
     /** The node's semantic zone, whose hue ramp colours it. */
     group: "dai_group",
+    /** Share of the parent's leftover flow-axis space — flex-grow. */
+    grow: "dai_grow",
+    /** Cross-axis position within the parent: "start" | "center" | "end". */
+    align: "dai_align",
+    /** A container's interior padding, px. */
+    pad: "dai_pad",
     /**
      * Marks a cell as chrome the engine draws and owns: a pool's lane bands, its label
      * columns, its milestone strip. The parser must not read these back as nodes — they are
@@ -380,6 +386,28 @@ export function stampRole(style: string, role: string): string {
 /** Stamp the node's semantic zone, replacing any previous one. */
 export function stampGroup(style: string, group: string): string {
     return append(style, MARKER.group, encodeURIComponent(group))
+}
+
+type FlexAlign = "start" | "center" | "end" | "stretch"
+
+/** Stamp the flex fields a node carries, so a round-trip preserves them. */
+export function stampFlex(
+    style: string,
+    opts: { grow?: number; align?: FlexAlign; pad?: number },
+): string {
+    let s = style
+    if (opts.grow != null && opts.grow > 0)
+        s = append(s, MARKER.grow, opts.grow)
+    if (opts.align && opts.align !== "center")
+        s = append(s, MARKER.align, opts.align)
+    if (opts.pad != null) s = append(s, MARKER.pad, Math.round(opts.pad))
+    return s
+}
+
+/** Read the align marker back. Anything unrecognised means the default (center). */
+export function readAlign(style: string): Exclude<FlexAlign, "center"> | null {
+    const v = readMarker(style, MARKER.align)
+    return v === "start" || v === "end" || v === "stretch" ? v : null
 }
 
 /** Strip every `dai_*` marker — for exporting a clean file, or comparing styles. */

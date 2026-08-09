@@ -26,6 +26,12 @@ export interface PoolCell {
 }
 
 /**
+ * Cross-axis behaviour of a child inside a row/col group, CSS's align-items per child:
+ * pin to either edge, centre (the default), or stretch to fill the axis.
+ */
+export type Align = "start" | "center" | "end" | "stretch"
+
+/**
  * The outline a flowchart box is drawn with.
  *
  * Flowchart notation is conventional, not decorative: a reader takes a diamond to mean a
@@ -73,6 +79,10 @@ export interface BoxNode {
     role?: Role
     /** Semantic zone name; every node sharing a group gets the same hue ramp. */
     group?: string
+    /** Share of the parent's leftover flow-axis space, like flex-grow. 0/absent = natural size. */
+    grow?: number
+    /** Cross-axis behaviour within the parent. Absent = center; stretch = fill it. */
+    align?: Align
     /** Flowchart outline. Absent means a plain rectangle. */
     shape?: BoxShape
     style?: string
@@ -109,6 +119,12 @@ export interface GroupNode {
     role?: Role
     /** Semantic zone name; the panel takes this hue's tint. */
     group?: string
+    /** Share of the parent's leftover flow-axis space, like flex-grow. */
+    grow?: number
+    /** Cross-axis behaviour within the parent. Absent = center; stretch = fill it. */
+    align?: Align
+    /** Interior padding, px. Absent = the default (24). */
+    pad?: number
     style?: string
     pinned?: boolean
     rect?: Rect

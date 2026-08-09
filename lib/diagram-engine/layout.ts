@@ -43,6 +43,23 @@ import { isContainer } from "./types"
 export const ICON_SIZE = 48
 /** Interior padding of a container. */
 const PAD = 24
+
+/** A group's interior padding: its own `pad` when declared, the default otherwise. */
+function padOf(n: ContainerNode): number {
+    return n.kind === "group" && n.pad != null ? Math.max(0, n.pad) : PAD
+}
+
+/** The flex-grow weight a node declared, 0 when none. */
+function growOf(n: DiagramNode): number {
+    const g = (n.kind === "box" || n.kind === "group") && n.grow
+    return typeof g === "number" && g > 0 ? g : 0
+}
+
+/** The cross-axis alignment a node declared. */
+function alignOf(n: DiagramNode): "start" | "center" | "end" | "stretch" {
+    const a = (n.kind === "box" || n.kind === "group") && n.align
+    return a === "start" || a === "end" || a === "stretch" ? a : "center"
+}
 /** Height of a container's title strip. Zero when it has no label — an empty strip
  *  reads as a dead band at the top of the frame. */
 const HEADER = 36
@@ -173,6 +190,20 @@ export interface Placed {
 export type LayoutLinks = { source: string; target: string; step?: number }[]
 
 /**
+ * Reduce a label to the text draw.io will actually lay out.
+ *
+ * Labels may carry inline HTML (every style has `html=1`): a <br> is a line break, any
+ * other tag is invisible markup around visible text. Measuring the raw string counted
+ * `<font color="#B85450">` as thirty characters of text, making rich boxes twice as
+ * wide as their content.
+ */
+function visibleText(label: string): string {
+    return String(label ?? "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/?(?:b|i|u|s|sub|sup|font|span|div)(?:\s[^<>]*)?>/gi, "")
+}
+
+/**
  * Intrinsic size of a text box: widest wrapped line by line count.
  *
  * The role scales the estimate: a banner sets 20px type and a footnote 9px, and layout has
@@ -184,7 +215,7 @@ export function autoBoxSize(
 ): { w: number; h: number } {
     const r = roleMetrics(role)
     const maxW = Math.round(260 * Math.max(1, r.charScale))
-    const explicit = String(label ?? "").split("\n")
+    const explicit = visibleText(label).split("\n")
     const longest = Math.max(1, ...explicit.map((l) => l.length))
     const w = Math.min(
         maxW,
@@ -531,6 +562,7 @@ function measure(
     }
 
     // group: row or col
+    const pad = padOf(n)
     if (n.dir === "row") {
         const tallest = Math.max(0, ...kids.map((k) => k.rect.h))
         // Only a group stretches to match its siblings. A leaf keeps its natural size,
@@ -541,13 +573,13 @@ function measure(
         for (const k of kids)
             if (k.node.kind === "group") k.rect.h = Math.max(k.rect.h, tallest)
         const w =
-            PAD * 2 +
+            pad * 2 +
             kids.reduce((s, k) => s + k.rect.w, 0) +
             gap * Math.max(0, kids.length - 1)
-        const h = head + PAD * 2 + Math.max(0, ...kids.map((k) => k.rect.h))
+        const h = head + pad * 2 + Math.max(0, ...kids.map((k) => k.rect.h))
         return {
             node: n,
-            rect: { x: 0, y: 0, w: Math.max(w, titleFloor(n.label, PAD)), h },
+            rect: { x: 0, y: 0, w: Math.max(w, titleFloor(n.label, pad)), h },
             children: kids,
         }
     }
@@ -556,15 +588,15 @@ function measure(
     // Only a group stretches — same reasoning as the row branch above.
     for (const k of kids)
         if (k.node.kind === "group") k.rect.w = Math.max(k.rect.w, widest)
-    const w = PAD * 2 + Math.max(0, ...kids.map((k) => k.rect.w))
+    const w = pad * 2 + Math.max(0, ...kids.map((k) => k.rect.w))
     const h =
         head +
-        PAD * 2 +
+        pad * 2 +
         kids.reduce((s, k) => s + k.rect.h, 0) +
         gap * Math.max(0, kids.length - 1)
     return {
         node: n,
-        rect: { x: 0, y: 0, w: Math.max(w, titleFloor(n.label, PAD)), h },
+        rect: { x: 0, y: 0, w: Math.max(w, titleFloor(n.label, pad)), h },
         children: kids,
     }
 }
@@ -585,10 +617,11 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
     if (!isContainer(n)) return
 
     const head = headerFor(n)
-    const innerX = p.rect.x + PAD
-    const innerTop = p.rect.y + head + PAD
-    const innerW = p.rect.w - PAD * 2
-    const innerH = p.rect.h - head - PAD * 2
+    const pad = n.kind === "group" ? padOf(n) : PAD
+    const innerX = p.rect.x + pad
+    const innerTop = p.rect.y + head + pad
+    const innerW = p.rect.w - pad * 2
+    const innerH = p.rect.h - head - pad * 2
     const kids = p.children
 
     if (n.kind === "grid") {
@@ -654,9 +687,27 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
     const content = sizes.reduce((s, v) => s + v, 0)
     const extent = alongRow ? innerW : innerH
     const k = kids.length
-    const slack = Math.max(0, extent - content - n.gap * (k - 1))
+    let slack = Math.max(0, extent - content - n.gap * (k - 1))
+
+    // flex-grow: children with a weight split the leftover space between them, TeX's
+    // glue. This runs before the gap stretch below — declared weights are a statement
+    // about where the slack should go, and padding it into the gaps instead would
+    // silently override that statement.
+    const weights = kids.map((kid) => growOf(kid.node))
+    const totalWeight = weights.reduce((s, v) => s + v, 0)
+    if (totalWeight > 0 && slack > 0) {
+        kids.forEach((kid, i) => {
+            const extra = (slack * weights[i]) / totalWeight
+            if (alongRow) kid.rect.w += extra
+            else kid.rect.h += extra
+        })
+        slack = 0
+    }
+
     const gap = k > 1 ? n.gap + Math.min(n.gap, slack / (k - 1)) : n.gap
-    const span = content + gap * Math.max(0, k - 1)
+    const span =
+        kids.reduce((s, kid) => s + (alongRow ? kid.rect.w : kid.rect.h), 0) +
+        gap * Math.max(0, k - 1)
     let cur = (alongRow ? innerX : innerTop) + Math.max(0, (extent - span) / 2)
 
     for (const kid of kids) {
@@ -664,15 +715,23 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
         // heading spans its column. Measured at its text width, then widened here — the
         // container's size still comes from the widest ordinary child.
         const kn = kid.node
+        const a = alignOf(kn)
         const stretches =
-            kn.kind === "box" && kn.role && roleMetrics(kn.role).stretch
+            a === "stretch" ||
+            (kn.kind === "box" && kn.role && roleMetrics(kn.role).stretch)
+        // Cross-axis position: centred unless the child asked for an edge.
+        const cross = (room: number, size: number): number => {
+            if (a === "start") return 0
+            if (a === "end") return Math.max(0, room - size)
+            return (room - size) / 2
+        }
         if (alongRow) {
             if (stretches) kid.rect.h = innerH
-            place(kid, cur, innerTop + (innerH - kid.rect.h) / 2, links)
+            place(kid, cur, innerTop + cross(innerH, kid.rect.h), links)
             cur += kid.rect.w + gap
         } else {
             if (stretches) kid.rect.w = innerW
-            place(kid, innerX + (innerW - kid.rect.w) / 2, cur, links)
+            place(kid, innerX + cross(innerW, kid.rect.w), cur, links)
             cur += kid.rect.h + gap
         }
     }

@@ -98,6 +98,18 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .describe(
                 "Flowchart outline: decision=diamond, terminator=start/end, data=input/output, document=report. Omit for a plain rectangle",
             ),
+        grow: z
+            .number()
+            .optional()
+            .describe(
+                "Flex-grow weight: this box takes that share of the parent's leftover space along its stacking axis. Omit for natural size",
+            ),
+        align: z
+            .enum(["start", "center", "end", "stretch"])
+            .optional()
+            .describe(
+                "Cross-axis position in the parent: start/end pin to an edge, stretch fills the axis (a divider or highlight bar spanning its card). Default center",
+            ),
         lane: z
             .number()
             .optional()
@@ -148,6 +160,24 @@ export const OperationSchema = z.discriminatedUnion("op", [
                 "Group stencil name, e.g. 'group_vpc'; omit for a plain frame",
             ),
         gap: z.number().optional(),
+        pad: z
+            .number()
+            .optional()
+            .describe(
+                "Interior padding px (default 24). Small values make tight cards; nest containers for internal structure",
+            ),
+        grow: z
+            .number()
+            .optional()
+            .describe(
+                "Flex-grow weight: this container takes that share of the parent's leftover space. E.g. two columns with grow 2 and 1 split the width 2:1",
+            ),
+        align: z
+            .enum(["start", "center", "end", "stretch"])
+            .optional()
+            .describe(
+                "Cross-axis position in the parent: start/end pin to an edge, stretch fills. Default center",
+            ),
         after: z.string().optional(),
     }),
     z.object({
@@ -414,6 +444,10 @@ export function applyOperations(
                         ...(op.stroke ? { stroke: op.stroke } : {}),
                         ...(op.role ? { role: op.role } : {}),
                         ...(op.group ? { group: op.group } : {}),
+                        ...(op.grow && op.grow > 0 ? { grow: op.grow } : {}),
+                        ...(op.align && op.align !== "center"
+                            ? { align: op.align }
+                            : {}),
                         ...cellOf(op),
                     }
                 else if (op.op === "add_container")
@@ -427,6 +461,11 @@ export function applyOperations(
                         children: [],
                         ...(op.role ? { role: op.role } : {}),
                         ...(op.group ? { group: op.group } : {}),
+                        ...(op.grow && op.grow > 0 ? { grow: op.grow } : {}),
+                        ...(op.align && op.align !== "center"
+                            ? { align: op.align }
+                            : {}),
+                        ...(op.pad != null ? { pad: Math.max(0, op.pad) } : {}),
                     }
                 else if (op.op === "add_grid")
                     node = {

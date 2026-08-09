@@ -25,6 +25,7 @@ import {
     isInvisible,
     stampCell,
     stampContainer,
+    stampFlex,
     stampGroup,
     stampLane,
     stampLeaf,
@@ -35,7 +36,7 @@ import {
     stampSequence,
 } from "./markers"
 import { type RoutedEdge, routeEdges } from "./route"
-import { hueOf, NEUTRAL, type Role, themedStyle } from "./theme"
+import { hueOf, NEUTRAL, themedStyle } from "./theme"
 import {
     type BoxShape,
     type DiagramNode,
@@ -57,6 +58,14 @@ export function esc(s: string): string {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;")
 }
+
+// NOTE ON RICH TEXT: a label may carry inline HTML — <b>, <i>, <font color>, <br>,
+// <span> — and needs no special handling here. `esc()` writes it into the value
+// attribute as entities, the XML parser decodes them back, and because every style
+// carries `html=1` draw.io renders the tags. That is exactly how hand-written rich
+// labels have always worked; the editor sanitises HTML labels itself. The one place
+// tags DO need handling is the measure pass (layout.ts autoBoxSize), which must not
+// count markup as text.
 
 /** Resolve a catalog name to a style. Injected so the engine does not own the catalog. */
 export type StyleResolver = (
@@ -177,6 +186,7 @@ function styleFor(
         let stamped = stampLeaf(base, "box")
         if (n.role && n.role !== "body") stamped = stampRole(stamped, n.role)
         if (n.group) stamped = stampGroup(stamped, n.group)
+        stamped = stampFlex(stamped, { grow: n.grow, align: n.align })
         return n.cell ? stampCell(stamped, n.cell) : stamped
     }
 
@@ -218,6 +228,8 @@ function styleFor(
     }
     if (groupRole && groupRole !== "body") base = stampRole(base, groupRole)
     if (zone) base = stampGroup(base, zone)
+    if (n.kind === "group")
+        base = stampFlex(base, { grow: n.grow, align: n.align, pad: n.pad })
     return stampContainer(base, {
         kind: n.kind,
         dir: n.kind === "grid" ? "grid" : n.dir,
