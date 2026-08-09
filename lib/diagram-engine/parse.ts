@@ -36,6 +36,7 @@ import {
     readList,
     readMarker,
 } from "./markers"
+import { isRole, type Role } from "./theme"
 import type {
     BoxNode,
     BoxShape,
@@ -347,6 +348,18 @@ function looksLikeText(style: string): boolean {
 }
 
 /** The flowchart outline a box is drawn with, read back from its style. */
+/** The information role stamped on a cell, if any. */
+function roleOf(style: string): Role | undefined {
+    const v = readMarker(style, MARKER.role)
+    return isRole(v) ? v : undefined
+}
+
+/** The semantic zone stamped on a cell, if any. */
+function zoneOf(style: string): string | undefined {
+    const v = readMarker(style, MARKER.group)
+    return v ? decodeURIComponent(v) : undefined
+}
+
 function boxShape(style: string): BoxShape | undefined {
     const shape = styleValue(style, "shape")
     if (shape === "parallelogram") return "data"
@@ -1055,6 +1068,8 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
                 fill: styleValue(c.style, "fillColor"),
                 stroke: styleValue(c.style, "strokeColor"),
                 shape: boxShape(c.style),
+                role: roleOf(c.style),
+                group: zoneOf(c.style),
                 // A lifeline's style is chrome the renderer rebuilds, so keeping it verbatim
                 // would re-emit a lifeline that no longer matches the new message count.
                 style: lifeline ? undefined : c.style,
@@ -1204,6 +1219,8 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
             kind: "group",
             ...common,
             dir: dir === "col" ? "col" : "row",
+            role: roleOf(c.style),
+            group: zoneOf(c.style),
         }
         return node
     }

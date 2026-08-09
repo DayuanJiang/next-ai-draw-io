@@ -702,7 +702,9 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
             restructure_diagram: {
                 description: `Build or edit a diagram by declaring STRUCTURE. The engine computes every coordinate.
 
-PREFER THIS over display_diagram/edit_diagram whenever the diagram's meaning is in nesting or in a fixed frame: cloud architecture, swimlane/BPMN, sequence diagrams, mind maps, org charts. You declare what contains what; layout, sizing, alignment and arrow routing are computed. Containers always fit their contents and siblings never overlap, so the usual layout problems cannot occur.
+PREFER THIS over display_diagram/edit_diagram whenever the diagram's meaning is in nesting or in a fixed frame: cloud architecture, swimlane/BPMN, sequence diagrams, mind maps, org charts — AND poster-style layouts: paper summaries, cheat sheets, infographics, comparison sheets. You declare what contains what; layout, sizing, alignment and arrow routing are computed. Containers always fit their contents and siblings never overlap, so the usual layout problems cannot occur.
+
+For a POSTER (paper summary, cheat sheet): one col container as the page; a banner box as the masthead (do NOT also use set_title — the banner IS the title); a muted box for the byline; a row container holding 2-4 col containers as columns; each section is a container with role "heading" holding its items. Give each section a distinct group name — sections sharing a group share a hue, so groups are how the poster gets its colour. Use roles on boxes: callout for the core idea, good/bad for verdict pairs, metric for the headline number, muted for fine print.
 
 Never write coordinates, mxCell XML, or style strings. Look AWS icon names up with search_stencils first — an invented name is rejected with suggestions.
 
@@ -816,6 +818,21 @@ Grouping: when the nodes fall into natural zones (remote vs local, frontend vs b
                                     .optional()
                                     .describe(
                                         "Semantic group name, e.g. 'remote' or 'local'. Nodes sharing a group get the same colour from the engine's palette — never pick colours yourself",
+                                    ),
+                                role: z
+                                    .enum([
+                                        "banner",
+                                        "heading",
+                                        "body",
+                                        "callout",
+                                        "good",
+                                        "bad",
+                                        "metric",
+                                        "muted",
+                                    ])
+                                    .optional()
+                                    .describe(
+                                        "What this node IS: heading, callout (must-not-miss), good/bad (verdict), metric (key number), muted (fine print). The theme styles it",
                                     ),
                             }),
                         )

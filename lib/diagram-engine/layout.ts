@@ -28,6 +28,7 @@
  * `pool()` primitive; sequence and radial are original to this repository.
  */
 
+import { type Role, roleMetrics } from "./theme"
 import type {
     ContainerNode,
     DiagramNode,
@@ -171,14 +172,37 @@ export interface Placed {
  */
 export type LayoutLinks = { source: string; target: string; step?: number }[]
 
-/** Intrinsic size of a text box: widest wrapped line by line count. */
-export function autoBoxSize(label: string): { w: number; h: number } {
-    const lines = String(label ?? "").split("\n")
-    const longest = Math.max(1, ...lines.map((l) => l.length))
-    return {
-        w: Math.min(260, Math.max(120, Math.round(longest * CHAR_W + 28))),
-        h: Math.max(44, lines.length * 18 + 26),
-    }
+/**
+ * Intrinsic size of a text box: widest wrapped line by line count.
+ *
+ * The role scales the estimate: a banner sets 20px type and a footnote 9px, and layout has
+ * to reserve what render will draw or the text overflows its cell.
+ */
+export function autoBoxSize(
+    label: string,
+    role?: Role,
+): { w: number; h: number } {
+    const r = roleMetrics(role)
+    const maxW = Math.round(260 * Math.max(1, r.charScale))
+    const explicit = String(label ?? "").split("\n")
+    const longest = Math.max(1, ...explicit.map((l) => l.length))
+    const w = Math.min(
+        maxW,
+        Math.max(120, Math.round(longest * CHAR_W * r.charScale + 28)),
+    )
+    // Count the lines the text ACTUALLY occupies: draw.io wraps at the box width, so a
+    // long line becomes several. Estimating by explicit newlines alone left the box one
+    // line tall while the text wrapped to six — and overflowed straight out of it.
+    const charsPerLine = Math.max(
+        8,
+        Math.floor((w - 28) / (CHAR_W * r.charScale)),
+    )
+    const lines = explicit.reduce(
+        (sum, l) => sum + Math.max(1, Math.ceil(l.length / charsPerLine)),
+        0,
+    )
+    const lineH = Math.round(r.fontSize * 1.6)
+    return { w, h: Math.max(r.minH, lines * lineH + 26) }
 }
 
 /**
@@ -377,7 +401,7 @@ function measure(
         return { node: n, rect: { x: 0, y: 0, ...s }, children: [] }
     }
     if (n.kind === "box") {
-        const auto = autoBoxSize(n.label)
+        const auto = autoBoxSize(n.label, n.role)
         return {
             node: n,
             rect: { x: 0, y: 0, w: n.w ?? auto.w, h: n.h ?? auto.h },
@@ -636,10 +660,18 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
     let cur = (alongRow ? innerX : innerTop) + Math.max(0, (extent - span) / 2)
 
     for (const kid of kids) {
+        // A stretching role fills the cross axis: a masthead spans its page, a section
+        // heading spans its column. Measured at its text width, then widened here — the
+        // container's size still comes from the widest ordinary child.
+        const kn = kid.node
+        const stretches =
+            kn.kind === "box" && kn.role && roleMetrics(kn.role).stretch
         if (alongRow) {
+            if (stretches) kid.rect.h = innerH
             place(kid, cur, innerTop + (innerH - kid.rect.h) / 2, links)
             cur += kid.rect.w + gap
         } else {
+            if (stretches) kid.rect.w = innerW
             place(kid, innerX + (innerW - kid.rect.w) / 2, cur, links)
             cur += kid.rect.h + gap
         }

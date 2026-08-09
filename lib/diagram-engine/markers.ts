@@ -60,6 +60,10 @@ export const MARKER = {
     step: "dai_step",
     /** How a radial container fans its branches out: "radial" or "down". */
     spread: "dai_spread",
+    /** The node's information role (banner, heading, callout…), for the round trip. */
+    role: "dai_role",
+    /** The node's semantic zone, whose hue ramp colours it. */
+    group: "dai_group",
     /**
      * Marks a cell as chrome the engine draws and owns: a pool's lane bands, its label
      * columns, its milestone strip. The parser must not read these back as nodes — they are
@@ -203,9 +207,24 @@ export function isPinned(style: string): boolean {
     return s !== "" && s !== "0" && s !== "false"
 }
 
-/** Append `key=value;`, ensuring the style ends with a separator first. */
+/**
+ * Append `key=value;`, replacing any existing occurrence of the key first.
+ *
+ * Styles are re-stamped on every render, and a style recovered from the canvas already
+ * carries last render's markers — blindly appending grew the string by one duplicate per
+ * round-trip, unboundedly. Duplicates resolve last-wins in draw.io so nothing ever LOOKED
+ * wrong, which is why it went unnoticed until a byte-identity test caught it.
+ *
+ * Only `dai_*` keys are cleaned. mxGraph keys are appended verbatim because last-wins is
+ * load-bearing there: the container tokens rely on appending `container=1` after a catalog
+ * style that may say `container=0`.
+ */
 function append(style: string, key: string, value: string | number): string {
-    const base = style.endsWith(";") || style === "" ? style : `${style};`
+    const cleaned = key.startsWith("dai_")
+        ? style.replace(new RegExp(`(?:^|(?<=;))${key}=[^;]*;`, "g"), "")
+        : style
+    const base =
+        cleaned.endsWith(";") || cleaned === "" ? cleaned : `${cleaned};`
     return `${base}${key}=${value};`
 }
 
@@ -351,6 +370,16 @@ export function stampLeaf(
 ): string {
     const s = append(style, MARKER.kind, kind)
     return opts.name ? append(s, MARKER.name, opts.name) : s
+}
+
+/** Stamp the node's information role, replacing any previous one. */
+export function stampRole(style: string, role: string): string {
+    return append(style, MARKER.role, role)
+}
+
+/** Stamp the node's semantic zone, replacing any previous one. */
+export function stampGroup(style: string, group: string): string {
+    return append(style, MARKER.group, encodeURIComponent(group))
 }
 
 /** Strip every `dai_*` marker — for exporting a clean file, or comparing styles. */

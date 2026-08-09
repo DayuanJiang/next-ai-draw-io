@@ -23,8 +23,7 @@
  */
 
 import type { Operation } from "./operations"
-import { groupColour } from "./render"
-import type { BoxShape } from "./types"
+import type { BoxShape, Role } from "./types"
 
 /** A node in the graph the caller wants drawn. */
 export interface GraphNode {
@@ -40,6 +39,8 @@ export interface GraphNode {
      * caller names the grouping and never touches a colour.
      */
     group?: string
+    /** Information role (heading, callout, metric…); the theme decides how it looks. */
+    role?: Role
 }
 
 /** An arrow. Direction matters: it is what determines the layering. */
@@ -309,19 +310,8 @@ export function graphToOperations(
         },
     ]
     const byId = new Map(nodes.map((n) => [n.id, n]))
-    // Groups become colours here, in order of first appearance, so "the second group named
-    // is green" holds for every diagram the engine draws. The caller only names groups.
-    const groupIndex = new Map<string, number>()
-    for (const n of nodes)
-        if (n.group && !groupIndex.has(n.group))
-            groupIndex.set(n.group, groupIndex.size)
-
     const add = (id: string, parent: string): Operation => {
         const n = byId.get(id) as GraphNode
-        const colour =
-            n.group !== undefined
-                ? groupColour(groupIndex.get(n.group) ?? 0)
-                : null
         return n.icon
             ? {
                   op: "add_icon",
@@ -336,9 +326,8 @@ export function graphToOperations(
                   parent,
                   label: n.label,
                   ...(n.shape && n.shape !== "box" ? { shape: n.shape } : {}),
-                  ...(colour
-                      ? { fill: colour.fill, stroke: colour.stroke }
-                      : {}),
+                  ...(n.role && n.role !== "body" ? { role: n.role } : {}),
+                  ...(n.group ? { group: n.group } : {}),
               }
     }
 

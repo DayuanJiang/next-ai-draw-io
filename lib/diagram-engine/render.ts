@@ -25,14 +25,17 @@ import {
     isInvisible,
     stampCell,
     stampContainer,
+    stampGroup,
     stampLane,
     stampLeaf,
     stampPool,
     stampPoolDecoration,
     stampRadial,
+    stampRole,
     stampSequence,
 } from "./markers"
 import { type RoutedEdge, routeEdges } from "./route"
+import { hueOf, NEUTRAL, type Role, themedStyle } from "./theme"
 import {
     type BoxShape,
     type DiagramNode,
@@ -64,31 +67,10 @@ export type StyleResolver = (
 const FALLBACK_BOX =
     "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5A6B7B;fontColor=#1A1A1A;fontSize=11;verticalAlign=middle;"
 
-/**
- * The palette for semantic groups: paired fill/stroke, assigned to group names in order of
- * first appearance.
- *
- * The engine owns these hex values and the model never sees them — it only names groups
- * ("remote", "local", "temp"), which is the judgement it is actually good at. Letting the
- * model pick colours per diagram produced mismatched saturations and a different look every
- * time; a fixed palette is what makes two diagrams from the same engine look related.
- *
- * All six fills are low-saturation tints that keep #1A1A1A text readable, each with a
- * darker stroke of the same hue, deliberately quieter than the near-black edge lines so
- * colour reads as grouping rather than emphasis.
- */
-const GROUP_PALETTE: { fill: string; stroke: string }[] = [
-    { fill: "#DAE8FC", stroke: "#6C8EBF" }, // blue
-    { fill: "#D5E8D4", stroke: "#82B366" }, // green
-    { fill: "#FFE6CC", stroke: "#D79B00" }, // orange
-    { fill: "#E1D5E7", stroke: "#9673A6" }, // purple
-    { fill: "#F8CECC", stroke: "#B85450" }, // red
-    { fill: "#FFF2CC", stroke: "#D6B656" }, // yellow
-]
-
-/** fill/stroke for the n-th distinct group. Wraps: a 7th group reuses the 1st colour. */
+/** fill/stroke for the n-th distinct group — the theme's hue ramp, tint and base steps. */
 export function groupColour(index: number): { fill: string; stroke: string } {
-    return GROUP_PALETTE[index % GROUP_PALETTE.length]
+    const h = hueOf(index)
+    return { fill: h.tint, stroke: h.base }
 }
 const FALLBACK_FRAME =
     "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;fontColor=#1A1A1A;fontSize=12;fontStyle=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;"
@@ -160,7 +142,16 @@ export interface RenderOptions {
  * what is already on the canvas, including any colour the user changed by hand. We only
  * re-stamp the markers on top, so layout parameters stay current.
  */
-function styleFor(n: DiagramNode, resolve: StyleResolver | undefined): string {
+/** The hue ramp for a node's group, or the neutral ramp. Assigned in document order. */
+export type HueResolver = (
+    group: string | undefined,
+) => ReturnType<typeof hueOf>
+
+function styleFor(
+    n: DiagramNode,
+    resolve: StyleResolver | undefined,
+    hue: HueResolver = () => NEUTRAL,
+): string {
     if (n.kind === "title") return TITLE_STYLE
 
     if (n.kind === "icon") {
@@ -174,14 +165,18 @@ function styleFor(n: DiagramNode, resolve: StyleResolver | undefined): string {
     if (n.kind === "box") {
         let base = n.style ?? FALLBACK_BOX
         if (!n.style) {
-            // The outline comes first: BOX_SHAPES carries `rounded=`, which the fallback
-            // also sets, and appending lets the shape's value win.
+            // Order matters, later keys win in draw.io: outline, then the theme's
+            // composition of role x hue, then explicit colours on top of everything.
             if (n.shape) base += BOX_SHAPES[n.shape]
+            if (n.role || n.group)
+                base += themedStyle(n.role ?? "body", hue(n.group), "leaf")
             if (n.fill) base += `fillColor=${n.fill};`
             if (n.stroke) base += `strokeColor=${n.stroke};`
             if (n.bold) base += "fontStyle=1;"
         }
-        const stamped = stampLeaf(base, "box")
+        let stamped = stampLeaf(base, "box")
+        if (n.role && n.role !== "body") stamped = stampRole(stamped, n.role)
+        if (n.group) stamped = stampGroup(stamped, n.group)
         return n.cell ? stampCell(stamped, n.cell) : stamped
     }
 
@@ -210,12 +205,19 @@ function styleFor(n: DiagramNode, resolve: StyleResolver | undefined): string {
     // the structure survives a round-trip, but draw nothing. This replaces the
     // reference project's "phantom", which emitted no cell and therefore lost the
     // wrapper's direction and grouping on the way back.
-    const invisible = !n.gname && !n.label && !n.fill && !n.stroke
+    const groupRole = n.kind === "group" ? n.role : undefined
+    const zone = n.kind === "group" ? n.group : undefined
+    const invisible =
+        !n.gname && !n.label && !n.fill && !n.stroke && !groupRole && !zone
     let base = n.style ?? fromCatalog ?? FALLBACK_FRAME
     if (!n.style && !fromCatalog) {
+        if (groupRole || zone)
+            base += themedStyle(groupRole ?? "heading", hue(zone), "container")
         if (n.fill) base += `fillColor=${n.fill};`
         if (n.stroke) base += `strokeColor=${n.stroke};`
     }
+    if (groupRole && groupRole !== "body") base = stampRole(base, groupRole)
+    if (zone) base = stampGroup(base, zone)
     return stampContainer(base, {
         kind: n.kind,
         dir: n.kind === "grid" ? "grid" : n.dir,
@@ -269,13 +271,14 @@ function vertexXml(
     parentRect: Rect | null,
     resolve: StyleResolver | undefined,
     defaultGlyph: number,
+    hue: HueResolver = () => NEUTRAL,
 ): string {
     const ox = parentRect?.x ?? 0
     const oy = parentRect?.y ?? 0
     const box = cellRect(n, rect, defaultGlyph)
     return (
         `<mxCell id="${esc(n.id)}" value="${esc("label" in n ? n.label : "")}"` +
-        ` style="${styleFor(n, resolve)}" vertex="1" parent="${esc(parent)}">` +
+        ` style="${styleFor(n, resolve, hue)}" vertex="1" parent="${esc(parent)}">` +
         `<mxGeometry x="${box.x - ox}" y="${box.y - oy}" width="${box.w}" height="${box.h}" as="geometry"/>` +
         `</mxCell>`
     )
@@ -748,6 +751,21 @@ export function renderDiagram(
         }
     }
 
+    // Groups become hues here, in document order, so "the second zone named is green"
+    // holds for every diagram the engine draws. The caller only ever names zones.
+    const groupIndex = new Map<string, number>()
+    for (const f of flat) {
+        const g =
+            f.node.kind === "box" || f.node.kind === "group"
+                ? f.node.group
+                : undefined
+        if (g && !groupIndex.has(g)) groupIndex.set(g, groupIndex.size)
+    }
+    const hue: HueResolver = (g) =>
+        g !== undefined && groupIndex.has(g)
+            ? hueOf(groupIndex.get(g) as number)
+            : NEUTRAL
+
     // Parents come before children (flatten guarantees it), which draw.io requires.
     for (const f of flat) {
         // A lifeline cell already carries its participant's label and geometry.
@@ -764,6 +782,7 @@ export function renderDiagram(
                 parentRect,
                 opts.resolveStyle,
                 glyph,
+                hue,
             ),
         )
         const own = chrome.get(f.node.id)

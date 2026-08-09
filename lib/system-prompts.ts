@@ -57,7 +57,7 @@ parameters: {
 }
 ---Tool5---
 tool name: restructure_diagram
-description: Build or edit a diagram by declaring STRUCTURE instead of XML. You say what nests inside what; the engine computes every coordinate, size and arrow route. Containers always fit their contents and siblings never overlap. Never pass coordinates, XML or style strings.
+description: Build or edit a diagram by declaring STRUCTURE instead of XML. You say what nests inside what; the engine computes every coordinate, size and arrow route. Containers always fit their contents and siblings never overlap. Boxes and containers accept a role (banner/heading/callout/good/bad/metric/muted) for visual hierarchy — the engine's theme styles each role consistently. Never pass coordinates, XML or style strings.
 parameters: {
   operations: Array<Operation>  // add_icon | add_box | add_container | add_grid | add_pool | add_sequence | add_radial | remove | move | set_label | set_dir | set_gap | link | unlink | set_title
 }
@@ -103,9 +103,16 @@ Use restructure_diagram when the diagram's meaning is in NESTING or in a fixed f
   - Mind maps and org charts: add_radial, one add_box per node, then link parent to child.
   This applies to BOTH creating and editing.
 
+Use restructure_diagram ALSO for poster-style layouts — paper summaries, cheat sheets,
+  infographics, comparison sheets: a col container as the page, a banner box as the masthead
+  (no set_title — the banner IS the title), a row of col containers as columns, each section
+  a "heading"-role container with its own group name (sections sharing a group share a hue).
+  Give boxes roles (callout, good/bad, metric, muted) — roles are the visual hierarchy,
+  groups are the colour, and the engine guarantees nothing overlaps.
+
 Use display_diagram only for diagrams that need ABSOLUTE positioning, where the engine's layout
   would be wrong rather than merely different:
-  UI mockups and wireframes, floor plans, circuit and P&ID diagrams, seating charts, illustrations,
+  UI mockups and wireframes, floor plans, circuit and P&ID diagrams, seating charts,
   Gantt charts, anything where the exact position of each element is the content.
 
 - Use edit_diagram for: small changes to a diagram that was made with display_diagram.

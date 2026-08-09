@@ -9,8 +9,10 @@
  */
 
 import type { Direction } from "./markers"
+import type { Role } from "./theme"
 
 export type { Direction } from "./markers"
+export type { Role } from "./theme"
 
 /**
  * Which cell of a swimlane pool a node sits in.
@@ -67,6 +69,10 @@ export interface BoxNode {
     fill?: string
     stroke?: string
     bold?: boolean
+    /** What this node IS in the information hierarchy; the theme decides how that looks. */
+    role?: Role
+    /** Semantic zone name; every node sharing a group gets the same hue ramp. */
+    group?: string
     /** Flowchart outline. Absent means a plain rectangle. */
     shape?: BoxShape
     style?: string
@@ -99,6 +105,10 @@ export interface GroupNode {
     children: DiagramNode[]
     fill?: string
     stroke?: string
+    /** Section role; a themed panel for its children. */
+    role?: Role
+    /** Semantic zone name; the panel takes this hue's tint. */
+    group?: string
     style?: string
     pinned?: boolean
     rect?: Rect

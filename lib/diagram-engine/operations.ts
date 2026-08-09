@@ -54,6 +54,27 @@ export const OperationSchema = z.discriminatedUnion("op", [
         id: z.string(),
         parent: z.string().optional(),
         label: z.string(),
+        role: z
+            .enum([
+                "banner",
+                "heading",
+                "body",
+                "callout",
+                "good",
+                "bad",
+                "metric",
+                "muted",
+            ])
+            .optional()
+            .describe(
+                "What this IS: banner=masthead, heading=section title, callout=must-not-miss, good/bad=verdict, metric=key number, muted=fine print. The theme decides how each looks",
+            ),
+        group: z
+            .string()
+            .optional()
+            .describe(
+                "Semantic zone name; nodes and panels sharing a group get the same hue from the engine's palette. Never pick colours",
+            ),
         fill: z
             .string()
             .optional()
@@ -98,6 +119,27 @@ export const OperationSchema = z.discriminatedUnion("op", [
         label: z
             .string()
             .describe("Frame title; empty string means invisible wrapper"),
+        role: z
+            .enum([
+                "banner",
+                "heading",
+                "body",
+                "callout",
+                "good",
+                "bad",
+                "metric",
+                "muted",
+            ])
+            .optional()
+            .describe(
+                "Section role: heading=titled tinted panel, banner=masthead strip, good/bad=verdict panel",
+            ),
+        group: z
+            .string()
+            .optional()
+            .describe(
+                "Semantic zone name; the panel and everything sharing this group take one hue",
+            ),
         dir: z.enum(["row", "col"]).describe("How children stack"),
         gname: z
             .string()
@@ -370,6 +412,8 @@ export function applyOperations(
                             : {}),
                         ...(op.fill ? { fill: op.fill } : {}),
                         ...(op.stroke ? { stroke: op.stroke } : {}),
+                        ...(op.role ? { role: op.role } : {}),
+                        ...(op.group ? { group: op.group } : {}),
                         ...cellOf(op),
                     }
                 else if (op.op === "add_container")
@@ -381,6 +425,8 @@ export function applyOperations(
                         dir: op.dir,
                         gap: op.gap ?? 20,
                         children: [],
+                        ...(op.role ? { role: op.role } : {}),
+                        ...(op.group ? { group: op.group } : {}),
                     }
                 else if (op.op === "add_grid")
                     node = {
