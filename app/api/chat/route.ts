@@ -600,7 +600,7 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         tools: {
             // Client-side tool that will be executed on the client
             display_diagram: {
-                description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
+                description: `Display a diagram by writing raw draw.io XML yourself. This is the EXCEPTION, for diagrams whose exact positions are the content (UI mockups, floor plans, circuit/P&ID, seating charts, Gantt, illustrations). For flowcharts and anything nodes-and-arrows use draw_graph; for nesting-based diagrams (cloud architecture, swimlanes, sequence, mind maps) use restructure_diagram. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
 
 VALIDATION RULES (XML will be rejected if violated):
 1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
@@ -764,7 +764,7 @@ BOX SHAPES: add_box takes shape — "decision" for a branch (diamond), "terminat
             draw_graph: {
                 description: `Draw a FLOWCHART or other arrow-driven diagram from nodes and arrows alone. Give NO positions and NO nesting.
 
-USE THIS FOR: flowcharts, decision trees, process and approval flows, CI/CD pipelines, state machines, dependency graphs, ER diagrams, site maps, data-flow diagrams.
+USE THIS FOR: flowcharts, decision trees, process and approval flows, CI/CD pipelines, state machines, git/branching workflows, dependency graphs, ER diagrams, site maps, data-flow diagrams, and any "illustrate how X works" where X is a sequence of steps or states.
 
 The engine reads the arrows to work out how many rows the diagram has, which nodes share a row, and who goes left of whom — chosen to keep arrows from crossing each other or running through unrelated boxes. Do NOT lay these out yourself with nested containers or XML: declaring a flowchart as nesting puts every step in one column, so each branch has to jump over the step beside it.
 
@@ -857,7 +857,7 @@ Shapes: "decision" for a branch (diamond), "terminator" for a start or end point
                 },
             },
             get_shape_library: {
-                description: `Get draw.io shape/icon library documentation with style syntax and shape names. Use this for NON-AWS diagrams (flowcharts, BPMN, sequence, mind maps, UI mockups) that go through display_diagram. For AWS architecture, use search_stencils + restructure_diagram instead.
+                description: `Get draw.io shape/icon library documentation with style syntax and shape names. Use this before writing raw XML with display_diagram (UI mockups, floor plans, and other absolute-position diagrams). Flowcharts go through draw_graph and AWS architecture through search_stencils + restructure_diagram - neither needs this.
 
 Available libraries:
 - Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
