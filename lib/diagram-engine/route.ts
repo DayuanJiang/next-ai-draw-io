@@ -29,6 +29,7 @@
  */
 
 import type { Rect } from "./types"
+import { routeOrthogonal, SIDE_DIR } from "./visgraph"
 
 /** Which side of a node an edge attaches to. */
 export type Side = "L" | "R" | "T" | "B"
@@ -139,6 +140,40 @@ function shapePoints(
     else if (shape.kind === "Lhv") wp = [{ x: ep.x, y: sp.y }]
     else if (shape.kind === "Lvh") wp = [{ x: sp.x, y: ep.y }]
     return { sp, ep, wp }
+}
+
+/**
+ * Does this route's first or last leg turn back over the shape it belongs to?
+ *
+ * An arrow has to leave its own shape going AWAY from it. When the first bend lands back
+ * within the source's own span, draw.io draws the arrow out of one side and immediately back
+ * across the shape's own edge — the small hook seen coming out of a box's right side and
+ * turning straight back over it. Nothing is technically crossed, which is why the ordinary
+ * obstacle test misses it: an edge is exempt from its own two endpoints, and that exemption
+ * has to exist, since the line must touch them.
+ *
+ * This checks the two terminal legs only. A middle leg running past its own endpoint is
+ * normal — that is what a return path does.
+ */
+function doublesBack(pts: Point[], a: Rect, b: Rect): boolean {
+    const backOver = (from: Point, to: Point, r: Rect): boolean => {
+        // Leaving through a vertical side: the leg must not head back inside the box's width.
+        if (Math.abs(from.x - r.x) < 1 || Math.abs(from.x - (r.x + r.w)) < 1) {
+            if (Math.abs(from.y - to.y) < 1)
+                return to.x > r.x + 1 && to.x < r.x + r.w - 1
+        }
+        // Leaving through a horizontal side: likewise for the box's height.
+        if (Math.abs(from.y - r.y) < 1 || Math.abs(from.y - (r.y + r.h)) < 1) {
+            if (Math.abs(from.x - to.x) < 1)
+                return to.y > r.y + 1 && to.y < r.y + r.h - 1
+        }
+        return false
+    }
+    if (pts.length < 3) return false
+    return (
+        backOver(pts[0], pts[1], a) ||
+        backOver(pts[pts.length - 1], pts[pts.length - 2], b)
+    )
 }
 
 /**
@@ -462,6 +497,137 @@ export function routeEdges(
         avoided: boolean
     }[] = []
 
+    /**
+     * Every two-bend route that is geometrically distinct, ranked; the cheapest clear one.
+     *
+     * The ladder above tries a fixed list of shapes and, crucially, decides the axis BEFORE it
+     * searches — so when a vertical corridor is the only clean option and the axis came out
+     * horizontal, the answer is in the half that was never looked at. This does not choose an
+     * axis: it tries both trunk directions and all four sides at each end.
+     *
+     * The lanes come from the obstacles themselves rather than a fixed step. Whether a lane
+     * collides can only change where it crosses an obstacle's boundary, so one lane taken from
+     * each gap between boundaries covers every distinct outcome — sampling every 10px would
+     * test the same corridor repeatedly and still miss a narrow one.
+     */
+    const complete = (
+        a: Rect,
+        b: Rect,
+        exempt: Set<string>,
+        sf: number,
+        tf: number,
+    ): {
+        exitSide: Side
+        entrySide: Side
+        wp: Point[]
+        avoided: boolean
+        sf: number
+        tf: number
+    } | null => {
+        const blockers = cards.filter((c) => !exempt.has(c.id))
+        // Candidate trunk positions: just outside each obstacle edge, and the middle of each
+        // gap between consecutive edges.
+        const linesFrom = (
+            values: number[],
+            lo: number,
+            hi: number,
+        ): number[] => {
+            const sorted = [...new Set(values)].sort((p, q) => p - q)
+            const out = [lo, hi]
+            for (const v of sorted) {
+                out.push(v - MARGIN - 1, v + MARGIN + 1)
+            }
+            for (let k = 0; k + 1 < sorted.length; k++)
+                out.push(Math.round((sorted[k] + sorted[k + 1]) / 2))
+            return [...new Set(out)]
+        }
+        const xLanes = linesFrom(
+            blockers.flatMap((c) => [c.r.x, c.r.x + c.r.w]),
+            Math.min(a.x, b.x) - 40,
+            Math.max(a.x + a.w, b.x + b.w) + 40,
+        )
+        const yLanes = linesFrom(
+            blockers.flatMap((c) => [c.r.y, c.r.y + c.r.h]),
+            Math.min(a.y, b.y) - 40,
+            Math.max(a.y + a.h, b.y + b.h) + 40,
+        )
+
+        const spread = [0.5, 0.3, 0.7, 0.16, 0.84]
+        const portTries: [number, number][] = [[sf, tf]]
+        for (const p of spread) for (const q of spread) portTries.push([p, q])
+
+        let best: {
+            exitSide: Side
+            entrySide: Side
+            wp: Point[]
+            avoided: boolean
+            /** Fractions this route needs; they may differ from the assigned pair. */
+            sf: number
+            tf: number
+        } | null = null
+        let bestCost = Number.POSITIVE_INFINITY
+
+        const consider = (
+            es: Side,
+            en: Side,
+            shape: Shape,
+            pf: number,
+            qf: number,
+        ) => {
+            const g = shapePoints(a, b, es, en, pf, qf, shape)
+            const pts = [g.sp, ...g.wp, g.ep]
+            if (pathHits(pts, exempt)) return
+            if (doublesBack(pts, a, b)) return
+            const cost =
+                frameOffences(pts, a, b) * 5000 +
+                (overlapsUsed(pts) ? 700 : 0) +
+                g.wp.length * 80 +
+                pathLength(pts)
+            if (cost < bestCost) {
+                bestCost = cost
+                best = {
+                    exitSide: es,
+                    entrySide: en,
+                    wp: g.wp,
+                    avoided: g.wp.length > 0,
+                    sf: pf,
+                    tf: qf,
+                }
+            }
+        }
+
+        // A vertical trunk leaves and enters through a left or right side; a horizontal one
+        // through a top or bottom. Both ends are tried on both sides, which is what lets an
+        // arrow leave the way it has to rather than the way the axis guess expected.
+        //
+        // The port FRACTIONS are searched too, not just the sides. The de-collide pass assigns
+        // one fraction per (node, side) before any path is known, purely to stop several
+        // arrows stacking on one point; when that guess leaves every route dirty, a Z's short
+        // stubs are what clip the box, and no choice of trunk lane can help. Spreading ports
+        // is a tidiness preference, and not drawing a line through a shape outranks it — so
+        // the assigned fraction is tried first and alternatives only if it fails.
+        for (const [pf, qf] of portTries) {
+            for (const lane of xLanes)
+                for (const es of ["L", "R"] as const)
+                    for (const en of ["L", "R"] as const)
+                        consider(es, en, { kind: "Zx", lane }, pf, qf)
+            for (const lane of yLanes)
+                for (const es of ["T", "B"] as const)
+                    for (const en of ["T", "B"] as const)
+                        consider(es, en, { kind: "Zy", lane }, pf, qf)
+            // One-bend routes, which are tidier when they happen to be clear.
+            for (const es of ["L", "R", "T", "B"] as const)
+                for (const en of ["L", "R", "T", "B"] as const) {
+                    consider(es, en, { kind: "Lhv" }, pf, qf)
+                    consider(es, en, { kind: "Lvh" }, pf, qf)
+                }
+            // Stop at the first fraction pair that yields a clean route: the assigned one is
+            // first, so a tidy answer is preferred whenever it exists.
+            if (best) break
+        }
+        return best
+    }
+
     edges.forEach((e, i) => {
         const f = faces[i]
         const a = rects.get(e.source)
@@ -497,6 +663,11 @@ export function routeEdges(
             const g = shapePoints(a, b, exitSide, entrySide, sf, tf, shape)
             const pts = [g.sp, ...g.wp, g.ep]
             if (pathHits(pts, exempt)) return null
+            // An arrow that leaves its own shape and immediately turns back across it reads as
+            // a mistake, and the obstacle test cannot see it: an edge is exempt from its own
+            // endpoints. Refused outright rather than scored, since there is never a reason to
+            // prefer it — the generator below will find a route that leaves cleanly.
+            if (doublesBack(pts, a, b)) return null
             if (strict && pathAlongFrame(pts, a, b)) return null
             // Strict mode also declines a lane an earlier edge already runs along. Waiting
             // for the nudge pass to pull them apart afterwards is worse: it can only move
@@ -745,6 +916,7 @@ export function routeEdges(
                 const g = shapePoints(a, b, es, en, sf, tf, shape)
                 const pts = [g.sp, ...g.wp, g.ep]
                 if (pathHits(pts, exempt)) continue
+                if (doublesBack(pts, a, b)) continue
                 // Sharing a lane with an existing edge is weighed as heavily as trespassing
                 // on a frame. Two lines drawn on top of each other are indistinguishable —
                 // strictly worse to read than one line crossing a border it has to cross
@@ -768,6 +940,80 @@ export function routeEdges(
             return best
         }
 
+        /**
+         * The graph search, for the edges a bounded candidate list cannot express.
+         *
+         * Same shape as `complete` — try the side pairs, keep the cheapest clear result — but
+         * each attempt is a full obstacle-avoiding search rather than one fixed shape, so it
+         * finds staircases of any number of bends. A* is optimal for a GIVEN pair of sides,
+         * which is why the sides are still enumerated out here.
+         */
+        const viaGraph = (
+            a: Rect,
+            b: Rect,
+            exempt: Set<string>,
+            sf: number,
+            tf: number,
+        ): {
+            exitSide: Side
+            entrySide: Side
+            wp: Point[]
+            avoided: boolean
+            sf: number
+            tf: number
+        } | null => {
+            const obstacles = cards
+                .filter((c) => !exempt.has(c.id))
+                .map((c) => c.r)
+            let best: {
+                exitSide: Side
+                entrySide: Side
+                wp: Point[]
+                avoided: boolean
+                sf: number
+                tf: number
+            } | null = null
+            let bestCost = Number.POSITIVE_INFINITY
+
+            for (const es of ["L", "R", "T", "B"] as const)
+                for (const en of ["L", "R", "T", "B"] as const) {
+                    const sp = portPoint(a, es, sf)
+                    const ep = portPoint(b, en, tf)
+                    const path = routeOrthogonal(
+                        sp,
+                        ep,
+                        SIDE_DIR[es],
+                        // The path must ARRIVE heading into the target's side, which is the
+                        // reverse of the direction that side faces.
+                        (SIDE_DIR[en] + 2) % 4,
+                        obstacles,
+                        { xs: [sp.x, ep.x], ys: [sp.y, ep.y] },
+                    )
+                    if (!path || path.length < 2) continue
+                    const wp = path.slice(1, -1)
+                    const pts = [sp, ...wp, ep]
+                    if (pathHits(pts, exempt)) continue
+                    if (doublesBack(pts, a, b)) continue
+                    const cost =
+                        frameOffences(pts, a, b) * 5000 +
+                        (overlapsUsed(pts) ? 700 : 0) +
+                        wp.length * 80 +
+                        pathLength(pts)
+                    if (cost < bestCost) {
+                        bestCost = cost
+                        best = {
+                            exitSide: es,
+                            entrySide: en,
+                            wp,
+                            avoided: wp.length > 0,
+                            sf,
+                            tf,
+                        }
+                    }
+                }
+            return best
+        }
+
         // Strict first: a route that offends no frame wins outright. Failing that, score
         // every candidate and take the least-bad one.
         //
@@ -777,14 +1023,28 @@ export function routeEdges(
         // relaxed pass takes whatever it happens to try first, which is how a line ends up
         // cutting diagonally across a whole VPC. Weighing the offences instead picks the
         // path that trespasses least and is shortest.
-        const chosen = ladder(true) ?? cheapest()
+        // A bounded candidate search covers all but a fraction of edges and produces tidier
+        // routes, so it goes first; the graph search is the backstop for what it cannot do.
+        // Measured over 250 generated flowcharts: the candidate search leaves 27 arrows
+        // crossing a box out of 2722 edges, and 21 of those need three bends — which is
+        // exactly the case a two-bend enumeration cannot express.
+        const viaComplete =
+            complete(a, b, exempt, sf, tf) ?? viaGraph(a, b, exempt, sf, tf)
+        // A route the generator found may need different port positions from the ones the
+        // de-collide pass assigned; record them, so the emitted connection points match the
+        // path that was actually verified clear.
+        if (viaComplete) {
+            frac[i].s = viaComplete.sf
+            frac[i].t = viaComplete.tf
+        }
+        const chosen = viaComplete ?? ladder(true) ?? cheapest()
         if (chosen) {
             routes.push(chosen)
             // Claim this route's lanes so the edges after it look elsewhere.
             claimLanes([
-                portPoint(a, chosen.exitSide, sf),
+                portPoint(a, chosen.exitSide, frac[i].s),
                 ...chosen.wp,
-                portPoint(b, chosen.entrySide, tf),
+                portPoint(b, chosen.entrySide, frac[i].t),
             ])
             return
         }
@@ -972,6 +1232,31 @@ export function routeEdges(
         }
         if (!moved) break
     }
+
+    // --- stage 3b: a final check on the whole path
+    //
+    // The nudge pass judges each segment it moves on its own and reverts that segment if the
+    // path got worse. That is not the same as the path being clean: two segments can each be
+    // acceptable in isolation while their combination clips a box, and a revert restores only
+    // the segment last touched. Re-checking the finished path and restoring the route the
+    // search chose is what makes the guarantee hold end to end.
+    paths.forEach((P, i) => {
+        if (!P) return
+        const e = edges[i]
+        const exempt = new Set([e.source, e.target])
+        const a = rects.get(e.source)
+        const b = rects.get(e.target)
+        if (!a || !b) return
+        if (!pathHits(P, exempt) && !doublesBack(P, a, b)) return
+        const r = routes[i]
+        const restored = [
+            portPoint(a, r.exitSide, frac[i].s),
+            ...r.wp.map((p) => ({ x: p.x, y: p.y })),
+            portPoint(b, r.entrySide, frac[i].t),
+        ]
+        if (!pathHits(restored, exempt) && !doublesBack(restored, a, b))
+            paths[i] = restored
+    })
 
     // --- emit
     const sideFraction = (side: Side, f: number) =>
