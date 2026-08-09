@@ -60,7 +60,12 @@ function signature(t: DiagramTree): string {
     const line = (n: DiagramNode, depth: number): string[] => {
         const pad = "  ".repeat(depth)
         if (!isContainer(n)) return [`${pad}${n.kind} ${n.id}`]
-        const meta = n.kind === "grid" ? `cols=${n.cols}` : `dir=${n.dir}`
+        const meta =
+            n.kind === "grid"
+                ? `cols=${n.cols}`
+                : n.kind === "group"
+                  ? `dir=${n.dir}`
+                  : n.kind
         return [
             `${pad}${n.kind} ${n.id} ${meta} gap=${n.gap}`,
             ...n.children.flatMap((c) => line(c, depth + 1)),
@@ -294,9 +299,9 @@ describe("labels and content survive", () => {
                     ? `shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.${name};fillColor=none;strokeColor=#8C4FFF;verticalAlign=top;align=left;`
                     : null,
         })
-        expect(
-            (findNode(parseDiagram(xml).tree, "v") as ContainerNode).gname,
-        ).toBe("group_vpc")
+        expect((findNode(parseDiagram(xml).tree, "v") as GroupNode).gname).toBe(
+            "group_vpc",
+        )
     })
 })
 

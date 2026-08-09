@@ -6,7 +6,12 @@ import type {
     ValidationStatus,
 } from "@/components/chat/ValidationCard"
 import type { Operation } from "@/lib/diagram-engine"
-import { restructureDiagram } from "@/lib/diagram-engine"
+import {
+    drawGraph,
+    type GraphEdge,
+    type GraphNode,
+    restructureDiagram,
+} from "@/lib/diagram-engine"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete, isRealDiagram, wrapWithMxFile } from "@/lib/utils"
@@ -124,6 +129,8 @@ export function useDiagramToolHandlers({
             handleAppendDiagram(toolCall, addToolOutput)
         } else if (toolCall.toolName === "restructure_diagram") {
             await handleRestructureDiagram(toolCall, addToolOutput)
+        } else if (toolCall.toolName === "draw_graph") {
+            await handleDrawGraph(toolCall, addToolOutput)
         }
     }
 
@@ -641,6 +648,61 @@ Fix the operations and call restructure_diagram again.`,
             : ""
         addToolOutput({
             tool: "restructure_diagram",
+            toolCallId: toolCall.toolCallId,
+            output: `Diagram updated.\n\n${result.outline}${notes}`,
+        })
+    }
+
+    /**
+     * draw_graph: build a flowchart from nodes and arrows, with no positions given.
+     *
+     * The current canvas is deliberately NOT read. Which row a node belongs in depends on
+     * every arrow in the graph, so one new edge can move half the diagram — there is no
+     * meaningful way to merge a new graph into an existing layout. The model edits afterwards
+     * through restructure_diagram, which does read the canvas.
+     */
+    const handleDrawGraph = async (
+        toolCall: ToolCall,
+        addToolOutput: AddToolOutputFn,
+    ) => {
+        const { nodes, edges, title, flow } = toolCall.input as {
+            nodes: GraphNode[]
+            edges: GraphEdge[]
+            title?: string
+            flow?: "col" | "row"
+        }
+
+        const result = drawGraph(nodes ?? [], edges ?? [], { title, flow })
+
+        if (result.errors.length > 0 || !result.xml) {
+            addToolOutput({
+                tool: "draw_graph",
+                toolCallId: toolCall.toolCallId,
+                state: "output-error",
+                errorText: `Could not draw the graph:
+${result.errors.map((e) => `- ${e}`).join("\n")}
+
+Fix the nodes or edges and call draw_graph again.`,
+            })
+            return
+        }
+
+        const loadError = onDisplayChart(result.xml)
+        if (loadError) {
+            addToolOutput({
+                tool: "draw_graph",
+                toolCallId: toolCall.toolCallId,
+                state: "output-error",
+                errorText: `The diagram was built but draw.io rejected it: ${loadError}`,
+            })
+            return
+        }
+
+        const notes = result.warnings.length
+            ? `\n\nNotes:\n${result.warnings.map((w) => `- ${w}`).join("\n")}`
+            : ""
+        addToolOutput({
+            tool: "draw_graph",
             toolCallId: toolCall.toolCallId,
             output: `Diagram updated.\n\n${result.outline}${notes}`,
         })

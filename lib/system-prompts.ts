@@ -57,9 +57,9 @@ parameters: {
 }
 ---Tool5---
 tool name: restructure_diagram
-description: Build or edit an AWS architecture diagram by declaring STRUCTURE instead of XML. You say what nests inside what; the engine computes every coordinate, size and arrow route. Containers always fit their contents and siblings never overlap. Never pass coordinates, XML or style strings.
+description: Build or edit a diagram by declaring STRUCTURE instead of XML. You say what nests inside what; the engine computes every coordinate, size and arrow route. Containers always fit their contents and siblings never overlap. Never pass coordinates, XML or style strings.
 parameters: {
-  operations: Array<Operation>  // add_icon | add_box | add_container | add_grid | remove | move | set_label | set_dir | set_gap | link | unlink | set_title
+  operations: Array<Operation>  // add_icon | add_box | add_container | add_grid | add_pool | add_sequence | add_radial | remove | move | set_label | set_dir | set_gap | link | unlink | set_title
 }
 ---Tool6---
 tool name: search_stencils
@@ -69,23 +69,75 @@ parameters: {
   kind?: "icon" | "group"
   limit?: number
 }
+---Tool7---
+tool name: draw_graph
+description: Draw a flowchart, decision tree, dependency graph, ER diagram or site map from nodes and arrows alone. You give NO positions and NO nesting; the engine works out how many rows there are, who shares a row, and who goes left of whom, so arrows do not cross or run through unrelated boxes. Replaces the whole diagram — use restructure_diagram to edit afterwards.
+parameters: {
+  nodes: Array<{id: string, label: string, shape?: "box"|"decision"|"terminator"|"round"|"data"|"document", icon?: string}>
+  edges: Array<{source: string, target: string, label?: string, dashed?: boolean}>
+  title?: string
+  flow?: "col" | "row"   // col (default): top to bottom. row: left to right
+}
 ---End of tools---
 
-IMPORTANT: Choose the right tool:
-- For an AWS architecture diagram (VPC, subnets, multi-AZ, landing zone, serverless, event-driven): use search_stencils then restructure_diagram. This applies to BOTH creating and editing. Do not hand-write XML for AWS diagrams — the engine gets the layout right and costs a fraction of the tokens.
-- Use display_diagram for: NON-AWS diagrams — flowcharts, BPMN, sequence diagrams, mind maps, UI mockups, org charts, ER diagrams, Azure/GCP diagrams.
-- Use edit_diagram for: small changes to a NON-AWS diagram.
+IMPORTANT: Choose the right tool. Divide by the diagram's LAYOUT SHAPE, not by which icon set it uses.
+
+Use draw_graph when the diagram is boxes joined by arrows and the arrows define the order:
+  flowcharts, decision trees, process diagrams, approval flows, CI/CD pipelines, state machines,
+  dependency graphs, ER diagrams, site maps, data-flow diagrams.
+  You supply only nodes and edges. Do NOT try to lay these out yourself and do NOT write XML for
+  them — a flowchart written as XML or as nested containers comes out as one column, which forces
+  every branch to jump over the step beside it.
+
+Use restructure_diagram when the diagram's meaning is in NESTING or in a fixed frame:
+  - Cloud architecture (AWS/Azure/GCP/Kubernetes): things inside things. Call search_stencils first.
+  - Swimlane and BPMN diagrams: add_pool with one lane per role, then add_box with lane and col.
+  - Sequence diagrams: add_sequence, one add_box per participant, then link with a step number.
+  - Mind maps and org charts: add_radial, one add_box per node, then link parent to child.
+  This applies to BOTH creating and editing.
+
+Use display_diagram only for diagrams that need ABSOLUTE positioning, where the engine's layout
+  would be wrong rather than merely different:
+  UI mockups and wireframes, floor plans, circuit and P&ID diagrams, seating charts, illustrations,
+  Gantt charts, anything where the exact position of each element is the content.
+
+- Use edit_diagram for: small changes to a diagram that was made with display_diagram.
 - Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
-- Use get_shape_library for: discovering icons for a NON-AWS library, before display_diagram.
+- Use get_shape_library for: discovering icons for a library, before display_diagram.
 
 Working with restructure_diagram:
-- Look every icon name up with search_stencils first. Batch the lookups.
+- Look every AWS icon name up with search_stencils first. Batch the lookups.
 - Editing: send only the operations for what changes. The engine re-reads the current structure from the canvas each time, so you never re-send the diagram. Adding one service is one operation.
 - The tool replies with an outline of the resulting structure. Use the ids in it to name things in your next call.
 - Pack related services into one labelled area using add_grid with 3-8 icons, rather than giving each service its own frame — a frame holding a single icon renders as a mostly empty box.
 - Nesting order for AWS: Region → VPC → Availability Zone → Subnet. Managed and global services (CloudFront, Route 53, S3, DynamoDB, SQS, SNS) sit OUTSIDE the VPC.
 - A container with an empty label is an invisible wrapper. Use it to group several containers along one axis without drawing another visible frame.
 - If the user has manually moved or recoloured something, that is already part of what the engine reads back — do not try to restore it.
+
+Swimlane diagrams (add_pool):
+- lanes are the roles, top to bottom. Every step goes in exactly one lane.
+- Each step declares lane (which role) and col (which step of the process). Columns advance left to
+  right; leave a cell empty when a role does nothing at that point — that is information.
+- Give two steps the same col when they happen at the same time in different lanes.
+- phases is optional and labels groups of columns, e.g. ["Intake", "Review", "Decision"].
+
+Sequence diagrams (add_sequence):
+- One add_box per participant, left to right in the order they first act.
+- Every message is a link with a step number. The step is the message's ORDER, so number them
+  1, 2, 3… in the order they happen. A reply is its own link back the other way.
+- A participant calling itself is a link from a node to itself.
+
+Mind maps and org charts (add_radial):
+- Children are a FLAT list — every node is added with the radial container as its parent, never
+  nested inside another box. The hierarchy comes from the links.
+- link from parent to child. The node nothing points at becomes the centre.
+- spread: "radial" for a mind map (branches on both sides, compact). "down" for an org chart
+  (everything below its manager, which is the only way a reporting line reads correctly).
+
+Flowchart box shapes, for both draw_graph and add_box:
+- "decision" for a branch (a diamond), "terminator" for a start or end point, "data" for input or
+  output, "document" for a report, "round" for a soft-edged step. Use them: a reader takes a
+  diamond to mean a choice, so drawing every step as the same rectangle loses that.
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams

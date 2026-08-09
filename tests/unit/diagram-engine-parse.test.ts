@@ -12,6 +12,7 @@ import {
     type DiagramNode,
     findNode,
     findParent,
+    type GroupNode,
     isContainer,
     walkTree,
 } from "@/lib/diagram-engine/types"
@@ -117,11 +118,11 @@ describe("parseDiagram on real engine output", () => {
     it("classifies AWS group stencils as containers and keeps their stencil name", () => {
         const vpc = findNode(tree, "vpc")
         expect(isContainer(vpc as DiagramNode)).toBe(true)
-        expect((vpc as ContainerNode).gname).toBe("group_vpc")
-        expect((findNode(tree, "az_a") as ContainerNode).gname).toBe(
+        expect((vpc as GroupNode).gname).toBe("group_vpc")
+        expect((findNode(tree, "az_a") as GroupNode).gname).toBe(
             "group_availability_zone",
         )
-        expect((findNode(tree, "pub_a") as ContainerNode).gname).toBe(
+        expect((findNode(tree, "pub_a") as GroupNode).gname).toBe(
             "group_subnet",
         )
     })

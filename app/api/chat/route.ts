@@ -700,11 +700,11 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
                 }),
             },
             restructure_diagram: {
-                description: `Build or edit a CLOUD ARCHITECTURE diagram (AWS) by declaring STRUCTURE. The engine computes every coordinate.
+                description: `Build or edit a diagram by declaring STRUCTURE. The engine computes every coordinate.
 
-PREFER THIS over display_diagram/edit_diagram for AWS architecture diagrams. You declare what nests inside what; layout, sizing, alignment and arrow routing are computed. Containers always fit their contents and siblings never overlap, so the usual layout problems cannot occur.
+PREFER THIS over display_diagram/edit_diagram whenever the diagram's meaning is in nesting or in a fixed frame: cloud architecture, swimlane/BPMN, sequence diagrams, mind maps, org charts. You declare what contains what; layout, sizing, alignment and arrow routing are computed. Containers always fit their contents and siblings never overlap, so the usual layout problems cannot occur.
 
-Never write coordinates, mxCell XML, or style strings. Look icon names up with search_stencils first — an invented name is rejected with suggestions.
+Never write coordinates, mxCell XML, or style strings. Look AWS icon names up with search_stencils first — an invented name is rejected with suggestions.
 
 Operations are applied in order, so you can add a container and fill it in the same call:
 {"operations":[
@@ -716,11 +716,121 @@ Operations are applied in order, so you can add a container and fill it in the s
 
 Editing an existing diagram: the structure is re-read from the canvas each time, INCLUDING anything the user moved or recoloured by hand. To add one service, send one operation — do not re-send the diagram.
 
-Containers: dir "row" puts children side by side, "col" stacks them. An empty label makes an invisible grouping wrapper (use it to group columns without drawing another frame). gname is an AWS group stencil (group_region, group_vpc, group_availability_zone, group_subnet, group_account) — omit it for a plain titled frame. add_grid packs children into cols columns; use it to pack 3-8 related icons into one labelled area box rather than giving each its own frame.`,
+CONTAINERS — pick by what the diagram means:
+
+add_container: children stacked along one axis. dir "row" side by side, "col" one above the next. An empty label makes an invisible grouping wrapper (use it to group columns without drawing another frame). gname is an AWS group stencil (group_region, group_vpc, group_availability_zone, group_subnet, group_account) — omit it for a plain titled frame.
+
+add_grid: packs children into cols columns. Use it to pack 3-8 related icons into one labelled area rather than giving each its own frame.
+
+add_pool: a SWIMLANE diagram. lanes are the roles, top to bottom. Each step is an add_box with lane (which role owns it) and col (which step of the process it is); columns advance left to right and an empty cell means that role does nothing at that point. Two steps with the same col happen at the same time. phases optionally labels groups of columns.
+{"operations":[
+  {"op":"add_pool","id":"p","label":"Expense claim","lanes":["Employee","Manager","Finance"],"phases":["Submit","Review","Pay"]},
+  {"op":"add_box","id":"fill","parent":"p","label":"Fill form","lane":0,"col":0,"shape":"terminator"},
+  {"op":"add_box","id":"rev","parent":"p","label":"Review","lane":1,"col":1},
+  {"op":"add_box","id":"ok","parent":"p","label":"Approved?","lane":1,"col":2,"shape":"decision"},
+  {"op":"add_box","id":"pay","parent":"p","label":"Pay out","lane":2,"col":3},
+  {"op":"link","source":"fill","target":"rev"},{"op":"link","source":"rev","target":"ok"},
+  {"op":"link","source":"ok","target":"pay","label":"yes"}
+]}
+
+add_sequence: a SEQUENCE diagram. One add_box per participant, left to right in the order they first act; the engine draws each one's lifeline. Every message is a link with a step number giving its order — number them 1, 2, 3… as they happen, and make a reply its own link back. A participant calling itself is a link from a node to itself.
+{"operations":[
+  {"op":"add_sequence","id":"s","label":"Login flow"},
+  {"op":"add_box","id":"u","parent":"s","label":"User"},
+  {"op":"add_box","id":"api","parent":"s","label":"API"},
+  {"op":"add_box","id":"db","parent":"s","label":"Database"},
+  {"op":"link","source":"u","target":"api","label":"POST /login","step":1},
+  {"op":"link","source":"api","target":"db","label":"find user","step":2},
+  {"op":"link","source":"db","target":"api","label":"user record","step":3},
+  {"op":"link","source":"api","target":"u","label":"JWT","step":4}
+]}
+
+add_radial: a MIND MAP or ORG CHART. Add every node with the radial container as its parent — a FLAT list, never nested inside another box — and let the links carry the hierarchy: link parent to child. The node nothing points at becomes the centre. spread "radial" fans branches out both sides (a mind map); "down" hangs everything below its parent (an org chart, where a reporting line only reads correctly downwards).
+{"operations":[
+  {"op":"add_radial","id":"o","label":"","spread":"down"},
+  {"op":"add_box","id":"ceo","parent":"o","label":"CEO"},
+  {"op":"add_box","id":"cto","parent":"o","label":"CTO"},
+  {"op":"add_box","id":"lead","parent":"o","label":"Platform Lead"},
+  {"op":"link","source":"ceo","target":"cto"},{"op":"link","source":"cto","target":"lead"}
+]}
+
+BOX SHAPES: add_box takes shape — "decision" for a branch (diamond), "terminator" for a start/end point, "data" for input or output, "document" for a report, "round" for a soft-edged step. Use them; a reader takes a diamond to mean a choice.`,
                 inputSchema: z.object({
                     operations: z
                         .array(OperationSchema)
                         .describe("Structural operations, applied in order"),
+                }),
+            },
+            draw_graph: {
+                description: `Draw a FLOWCHART or other arrow-driven diagram from nodes and arrows alone. Give NO positions and NO nesting.
+
+USE THIS FOR: flowcharts, decision trees, process and approval flows, CI/CD pipelines, state machines, dependency graphs, ER diagrams, site maps, data-flow diagrams.
+
+The engine reads the arrows to work out how many rows the diagram has, which nodes share a row, and who goes left of whom — chosen to keep arrows from crossing each other or running through unrelated boxes. Do NOT lay these out yourself with nested containers or XML: declaring a flowchart as nesting puts every step in one column, so each branch has to jump over the step beside it.
+
+Loops are fine — an arrow back to an earlier step is drawn as a loop. So are arrows that skip ahead several steps.
+
+{"nodes":[
+  {"id":"start","label":"Order received","shape":"terminator"},
+  {"id":"check","label":"Amount > $1000?","shape":"decision"},
+  {"id":"mgr","label":"Manager approval"},
+  {"id":"auto","label":"Auto-approve"},
+  {"id":"ship","label":"Ship order"}
+],"edges":[
+  {"source":"start","target":"check"},
+  {"source":"check","target":"mgr","label":"yes"},
+  {"source":"check","target":"auto","label":"no"},
+  {"source":"mgr","target":"ship"},
+  {"source":"auto","target":"ship"}
+],"title":"Order Approval"}
+
+Replaces the whole diagram, because one new arrow can change which row several nodes belong in. To edit afterwards, use restructure_diagram with the ids from the outline this returns.
+
+Shapes: "decision" for a branch (diamond), "terminator" for a start or end point, "data" for input or output, "document" for a report, "round" for a soft-edged step, "box" (default) for a plain step. Set icon instead of shape to draw a node as a catalog icon — look the name up with search_stencils first.`,
+                inputSchema: z.object({
+                    nodes: z
+                        .array(
+                            z.object({
+                                id: z.string(),
+                                label: z.string(),
+                                shape: z
+                                    .enum([
+                                        "box",
+                                        "decision",
+                                        "terminator",
+                                        "round",
+                                        "data",
+                                        "document",
+                                    ])
+                                    .optional(),
+                                icon: z
+                                    .string()
+                                    .optional()
+                                    .describe(
+                                        "Catalog stencil name; draws this node as an icon",
+                                    ),
+                            }),
+                        )
+                        .describe("Every box in the diagram"),
+                    edges: z
+                        .array(
+                            z.object({
+                                source: z.string(),
+                                target: z.string(),
+                                label: z.string().optional(),
+                                dashed: z.boolean().optional(),
+                            }),
+                        )
+                        .describe(
+                            "Arrows. Direction matters — it sets the order of the diagram",
+                        ),
+                    title: z.string().optional(),
+                    flow: z
+                        .enum(["col", "row"])
+                        .optional()
+                        .describe(
+                            "col (default): top to bottom. row: left to right",
+                        ),
                 }),
             },
             search_stencils: {

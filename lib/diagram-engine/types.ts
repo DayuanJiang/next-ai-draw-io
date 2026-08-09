@@ -12,6 +12,32 @@ import type { Direction } from "./markers"
 
 export type { Direction } from "./markers"
 
+/**
+ * Which cell of a swimlane pool a node sits in.
+ *
+ * `lane` indexes the role band, `col` the position along the flow. Cells are sparse:
+ * nothing has to fill lane 1 column 3 for lane 2 column 3 to exist.
+ */
+export interface PoolCell {
+    lane: number
+    col: number
+}
+
+/**
+ * The outline a flowchart box is drawn with.
+ *
+ * Flowchart notation is conventional, not decorative: a reader takes a diamond to mean a
+ * branch and a stadium to mean an entry or exit point. Rendering every step as the same
+ * rectangle throws that away.
+ */
+export type BoxShape =
+    | "box"
+    | "decision"
+    | "terminator"
+    | "round"
+    | "data"
+    | "document"
+
 /** A catalog icon: a real stencil, drawn at a fixed glyph size with a label below. */
 export interface IconNode {
     kind: "icon"
@@ -27,6 +53,8 @@ export interface IconNode {
     pinned?: boolean
     /** Absolute geometry, when recovered from XML. Only meaningful for a pinned node. */
     rect?: Rect
+    /** Position within a `pool` parent. Ignored elsewhere. */
+    cell?: PoolCell
 }
 
 /** A plain labelled rectangle, for things the catalog has no icon for. */
@@ -39,9 +67,13 @@ export interface BoxNode {
     fill?: string
     stroke?: string
     bold?: boolean
+    /** Flowchart outline. Absent means a plain rectangle. */
+    shape?: BoxShape
     style?: string
     pinned?: boolean
     rect?: Rect
+    /** Position within a `pool` parent. Ignored elsewhere. */
+    cell?: PoolCell
 }
 
 /** A page title. At most one per diagram; laid out outside the tree flow. */
@@ -88,7 +120,90 @@ export interface GridNode {
     rect?: Rect
 }
 
-export type ContainerNode = GroupNode | GridNode
+/**
+ * A swimlane pool: a sparse grid of (lane, column) cells.
+ *
+ * `lanes` names the role bands. Each child declares which cell it occupies, and empty
+ * cells stay empty — that is the whole point of a swimlane diagram, where a step belongs
+ * to exactly one role and the columns show the order things happen in.
+ *
+ * `phases` is an optional band of milestone labels above the columns.
+ */
+export interface PoolNode {
+    kind: "pool"
+    id: string
+    label: string
+    /** Role names, one per band. */
+    lanes: string[]
+    /** Milestone labels spanning the columns. Empty means no milestone band. */
+    phases: string[]
+    /** "horizontal": lanes stack downwards, flow left to right. "vertical": the mirror. */
+    orientation: "horizontal" | "vertical"
+    gap: number
+    children: DiagramNode[]
+    style?: string
+    pinned?: boolean
+    rect?: Rect
+}
+
+/**
+ * A sequence diagram: participants across the top, lifelines hanging below them.
+ *
+ * Children are the participant heads, in left-to-right order. The messages are ordinary
+ * links whose `step` gives the vertical order — so the same `link` operation that draws
+ * an arrow in a flowchart draws a message here.
+ *
+ * The engine emits the lifelines as separate cells; they are not nodes, because nothing
+ * ever attaches to a lifeline directly.
+ */
+export interface SequenceNode {
+    kind: "sequence"
+    id: string
+    label: string
+    /** Horizontal distance between participant centres. */
+    gap: number
+    /** Vertical distance between consecutive messages. */
+    step: number
+    children: DiagramNode[]
+    style?: string
+    pinned?: boolean
+    rect?: Rect
+}
+
+/**
+ * A mind map or org chart: a root with branches radiating from it.
+ *
+ * Children are a FLAT list of every node in the map. The hierarchy comes from the links —
+ * an arrow from A to B means B is a branch of A — not from nesting.
+ *
+ * That is not a shortcut, it is the only thing that works: a branch of a mind map is a
+ * labelled box that also has sub-branches, and a box cannot hold children. Reading the
+ * hierarchy from the arrows also matches what the diagram means, since in a mind map or an
+ * org chart the arrows ARE the structure.
+ *
+ * `spread: "radial"` fans branches out on both sides of the centre, which is what a mind
+ * map wants. `spread: "down"` puts every branch below the centre, which is what an org
+ * chart wants: a reporting line only reads correctly downwards.
+ */
+export interface RadialNode {
+    kind: "radial"
+    id: string
+    label: string
+    spread: "radial" | "down"
+    /** Distance from a parent's edge to its children. */
+    gap: number
+    children: DiagramNode[]
+    style?: string
+    pinned?: boolean
+    rect?: Rect
+}
+
+export type ContainerNode =
+    | GroupNode
+    | GridNode
+    | PoolNode
+    | SequenceNode
+    | RadialNode
 export type LeafNode = IconNode | BoxNode | TitleNode
 export type DiagramNode = ContainerNode | LeafNode
 
@@ -139,11 +254,32 @@ export interface ForeignCell {
 }
 
 export function isContainer(n: DiagramNode): n is ContainerNode {
-    return n.kind === "group" || n.kind === "grid"
+    return (
+        n.kind === "group" ||
+        n.kind === "grid" ||
+        n.kind === "pool" ||
+        n.kind === "sequence" ||
+        n.kind === "radial"
+    )
 }
 
 export function isLeaf(n: DiagramNode): n is LeafNode {
     return !isContainer(n)
+}
+
+/**
+ * A container that can carry a catalog group stencil and a hand-set fill or stroke.
+ *
+ * The specialised containers draw their own chrome — a pool paints lane bands, a sequence
+ * paints lifelines — so a stencil frame or an arbitrary fill would fight what they emit.
+ */
+export function hasStencilFrame(n: DiagramNode): n is GroupNode | GridNode {
+    return n.kind === "group" || n.kind === "grid"
+}
+
+/** A container whose children stack along one axis, so `dir` is meaningful. */
+export function isDirectional(n: DiagramNode): n is GroupNode {
+    return n.kind === "group"
 }
 
 /** Depth-first walk over a node and its descendants. */

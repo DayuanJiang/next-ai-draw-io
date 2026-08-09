@@ -12,6 +12,12 @@
 
 import { checkNames, resolveStyle } from "./catalog"
 import {
+    type GraphEdge,
+    type GraphNode,
+    type GraphOptions,
+    graphToOperations,
+} from "./graph"
+import {
     applyOperations,
     collectNames,
     type Operation,
@@ -99,6 +105,69 @@ export function restructureDiagram(
     }
 }
 
+/**
+ * Draw a flowchart, dependency graph, ER diagram or site map from nodes and arrows alone.
+ *
+ * The model gives no positions and no nesting — just what the boxes are and what points at
+ * what. The engine works out how many rows there are, who shares a row, and who goes left
+ * of whom, then hands the result to the same layout and edge router the architecture
+ * diagrams use.
+ *
+ * This exists because declaring a flowchart as nesting does not work: six steps declared in
+ * their natural order become one column, and every branch then has to jump over the step
+ * beside it. The layering has to come from the arrows, and only the engine can see all of
+ * them at once.
+ *
+ * Replaces the whole diagram rather than adding to it: the layer assignment depends on every
+ * arrow, so one new edge can move half the nodes. Editing afterwards goes through
+ * `restructureDiagram` as usual.
+ */
+export function drawGraph(
+    nodes: GraphNode[],
+    edges: GraphEdge[],
+    opts: RestructureOptions & GraphOptions & { title?: string } = {},
+): RestructureResult {
+    if (nodes.length === 0)
+        return {
+            xml: null,
+            outline: "",
+            errors: ["draw_graph: no nodes — nothing to draw."],
+            warnings: [],
+        }
+
+    const dupes = nodes
+        .map((n) => n.id)
+        .filter((id, i, all) => all.indexOf(id) !== i)
+    if (dupes.length > 0)
+        return {
+            xml: null,
+            outline: "",
+            errors: [
+                `draw_graph: duplicate node id(s): ${[...new Set(dupes)].join(", ")}.`,
+            ],
+            warnings: [],
+        }
+
+    const graph = graphToOperations(nodes, edges, opts)
+    const warnings: string[] = []
+    if (graph.unknownEndpoints.length)
+        warnings.push(
+            `Dropped edge(s) naming nodes that were not in the node list: ${graph.unknownEndpoints.join(", ")}.`,
+        )
+    if (graph.backEdges.length)
+        warnings.push(
+            `Loop(s) drawn but not used for ordering: ${graph.backEdges
+                .map((e) => `${e.source}→${e.target}`)
+                .join(", ")}.`,
+        )
+
+    const ops: Operation[] = opts.title
+        ? [{ op: "set_title", title: opts.title }, ...graph.operations]
+        : graph.operations
+    const result = restructureDiagram("", ops, opts)
+    return { ...result, warnings: [...warnings, ...result.warnings] }
+}
+
 /** Read the current canvas structure without changing it. */
 export function describeDiagram(
     currentXml: string,
@@ -114,6 +183,12 @@ export function describeDiagram(
 }
 
 export { CATALOG_SIZE, lookupStencil, searchStencils } from "./catalog"
+export {
+    type GraphEdge,
+    type GraphNode,
+    type GraphOptions,
+    graphToOperations,
+} from "./graph"
 export { type Operation, OperationSchema } from "./operations"
 export { parseDiagram } from "./parse"
 export { renderDiagram } from "./render"

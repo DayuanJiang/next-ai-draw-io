@@ -8,17 +8,26 @@ lib/diagram-engine/ — layout and rendering
 --------------------------------------------------------------------------------
 
 The declarative layout algorithm (bottom-up measure, top-down place, sibling
-size equalisation) and the mxCell/style emission in `lib/diagram-engine/layout.ts`
-and `lib/diagram-engine/render.ts` are derived from drawio-ai-kit:
+size equalisation), the swimlane-pool geometry, and the mxCell/style emission in
+`lib/diagram-engine/layout.ts` and `lib/diagram-engine/render.ts` are derived
+from drawio-ai-kit:
 
     https://github.com/sparklabx/drawio-ai-kit
     Copyright (c) sparklabx
     Licensed under the MIT License
 
-The XML→tree reverse parser (`lib/diagram-engine/parse.ts`), the style-marker
-scheme (`markers.ts`), the structural-operations layer (`operations.ts`) and the
-invisible-container approach that replaces that project's "phantom" nodes are
-original to this repository.
+Original to this repository:
+
+  - the XML→tree reverse parser (`parse.ts`), which that project does not have
+  - the style-marker scheme (`markers.ts`) that lets structure survive a
+    round-trip through the draw.io editor
+  - the structural-operations layer (`operations.ts`)
+  - the invisible-container approach that replaces that project's "phantom" nodes
+  - the edge router (`route.ts`)
+  - the graph→layers pass (`graph.ts`): layer assignment, cycle breaking and
+    barycentre crossing reduction, which turn a flat node/arrow list into a
+    flowchart
+  - the sequence-diagram and radial (mind map / org chart) layouts
 
 --------------------------------------------------------------------------------
 lib/diagram-engine/data/aws-stencils.json — stencil catalog

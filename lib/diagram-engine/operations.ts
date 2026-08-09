@@ -17,7 +17,9 @@ import {
     type DiagramTree,
     findNode,
     findParent,
+    hasStencilFrame,
     isContainer,
+    isDirectional,
     type LinkSpec,
     walkTree,
 } from "./types"
@@ -32,6 +34,18 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .describe("Container id to add into; omit for top level"),
         name: z.string().describe("Catalog stencil name, e.g. 's3' or 'ec2'"),
         label: z.string().optional(),
+        lane: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which lane (0-based row) this belongs to",
+            ),
+        col: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which column (0-based step) this sits in",
+            ),
         after: z
             .string()
             .optional()
@@ -42,6 +56,31 @@ export const OperationSchema = z.discriminatedUnion("op", [
         id: z.string(),
         parent: z.string().optional(),
         label: z.string(),
+        shape: z
+            .enum([
+                "box",
+                "decision",
+                "terminator",
+                "round",
+                "data",
+                "document",
+            ])
+            .optional()
+            .describe(
+                "Flowchart outline: decision=diamond, terminator=start/end, data=input/output, document=report. Omit for a plain rectangle",
+            ),
+        lane: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which lane (0-based row) this belongs to",
+            ),
+        col: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which column (0-based step) this sits in",
+            ),
         after: z.string().optional(),
     }),
     z.object({
@@ -67,6 +106,58 @@ export const OperationSchema = z.discriminatedUnion("op", [
         parent: z.string().optional(),
         label: z.string(),
         cols: z.number().describe("Number of columns"),
+        gap: z.number().optional(),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_pool"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string().describe("Pool title, e.g. the process name"),
+        lanes: z
+            .array(z.string())
+            .describe(
+                "Role names, one per lane, top to bottom. Steps go in these lanes via add_box lane/col",
+            ),
+        phases: z
+            .array(z.string())
+            .optional()
+            .describe("Milestone labels spanning the columns; omit for none"),
+        orientation: z
+            .enum(["horizontal", "vertical"])
+            .optional()
+            .describe(
+                "horizontal (default): lanes stack down, flow goes right",
+            ),
+        gap: z.number().optional(),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_sequence"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string().describe("Diagram title; empty string for none"),
+        gap: z
+            .number()
+            .optional()
+            .describe("Horizontal spacing between participants"),
+        step: z
+            .number()
+            .optional()
+            .describe("Vertical spacing between messages"),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_radial"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string().describe("Frame title; empty string for none"),
+        spread: z
+            .enum(["radial", "down"])
+            .optional()
+            .describe(
+                "radial (default): branches on both sides, for a mind map. down: everything below the centre, for an org chart",
+            ),
         gap: z.number().optional(),
         after: z.string().optional(),
     }),
@@ -118,6 +209,12 @@ export const OperationSchema = z.discriminatedUnion("op", [
         op: z.literal("unlink"),
         source: z.string(),
         target: z.string(),
+        step: z
+            .number()
+            .optional()
+            .describe(
+                "Remove only the edge with this step number; omit to remove every edge between the two",
+            ),
     }),
     z.object({
         op: z.literal("set_title"),
@@ -131,6 +228,34 @@ export interface ApplyResult {
     tree: DiagramTree
     /** One entry per operation that could not be applied, in order. */
     errors: string[]
+}
+
+/**
+ * The pool cell an add operation declared, if any.
+ *
+ * `lane` alone is enough — a step in a lane with no column given goes to column 0 — so the
+ * cell is recorded whenever either is present rather than requiring both.
+ */
+function cellOf(op: { lane?: number; col?: number }): {
+    cell?: { lane: number; col: number }
+} {
+    if (op.lane == null && op.col == null) return {}
+    return {
+        cell: {
+            lane: Math.max(0, Math.round(op.lane ?? 0)),
+            col: Math.max(0, Math.round(op.col ?? 0)),
+        },
+    }
+}
+
+/** Are these two nodes participants of the same sequence diagram? */
+function sameSequence(tree: DiagramTree, a: string, b: string): boolean {
+    for (const n of walkTree(tree)) {
+        if (n.kind !== "sequence") continue
+        const ids = new Set(n.children.map((c) => c.id))
+        if (ids.has(a) && ids.has(b)) return true
+    }
+    return false
 }
 
 /** Insert into a child list, after a named sibling or at the end. */
@@ -205,7 +330,10 @@ export function applyOperations(
             case "add_icon":
             case "add_box":
             case "add_container":
-            case "add_grid": {
+            case "add_grid":
+            case "add_pool":
+            case "add_sequence":
+            case "add_radial": {
                 if (exists(op.id)) {
                     errors.push(`${op.op}: id "${op.id}" is already taken`)
                     break
@@ -222,9 +350,18 @@ export function applyOperations(
                         id: op.id,
                         name: op.name,
                         label: op.label ?? "",
+                        ...cellOf(op),
                     }
                 else if (op.op === "add_box")
-                    node = { kind: "box", id: op.id, label: op.label }
+                    node = {
+                        kind: "box",
+                        id: op.id,
+                        label: op.label,
+                        ...(op.shape && op.shape !== "box"
+                            ? { shape: op.shape }
+                            : {}),
+                        ...cellOf(op),
+                    }
                 else if (op.op === "add_container")
                     node = {
                         kind: "group",
@@ -235,7 +372,7 @@ export function applyOperations(
                         gap: op.gap ?? 20,
                         children: [],
                     }
-                else
+                else if (op.op === "add_grid")
                     node = {
                         kind: "grid",
                         id: op.id,
@@ -243,6 +380,41 @@ export function applyOperations(
                         label: op.label,
                         cols: Math.max(1, op.cols),
                         gap: op.gap ?? 14,
+                        children: [],
+                    }
+                else if (op.op === "add_pool") {
+                    if (op.lanes.length === 0) {
+                        errors.push(
+                            `add_pool: "${op.id}" needs at least one lane — a swimlane diagram with no roles has nothing to divide`,
+                        )
+                        break
+                    }
+                    node = {
+                        kind: "pool",
+                        id: op.id,
+                        label: op.label,
+                        lanes: op.lanes,
+                        phases: op.phases ?? [],
+                        orientation: op.orientation ?? "horizontal",
+                        gap: op.gap ?? 40,
+                        children: [],
+                    }
+                } else if (op.op === "add_sequence")
+                    node = {
+                        kind: "sequence",
+                        id: op.id,
+                        label: op.label,
+                        gap: op.gap ?? 60,
+                        step: Math.max(24, op.step ?? 44),
+                        children: [],
+                    }
+                else
+                    node = {
+                        kind: "radial",
+                        id: op.id,
+                        label: op.label,
+                        spread: op.spread ?? "radial",
+                        gap: op.gap ?? 40,
                         children: [],
                     }
                 insert(list, node, op.after)
@@ -318,9 +490,13 @@ export function applyOperations(
                     errors.push(`set_dir: "${op.id}" is not a container`)
                     break
                 }
-                if (node.kind === "grid") {
+                if (!isDirectional(node)) {
+                    // A grid, pool, sequence or radial container arranges its children by its
+                    // own rule; "row or column" is not a property they have.
                     errors.push(
-                        `set_dir: "${op.id}" is a grid — change its column count instead`,
+                        node.kind === "grid"
+                            ? `set_dir: "${op.id}" is a grid — change its column count instead`
+                            : `set_dir: "${op.id}" is a ${node.kind}, which arranges its children by its own rule and has no row/column direction`,
                     )
                     break
                 }
@@ -347,9 +523,16 @@ export function applyOperations(
                     errors.push(`link: no node with id "${op.target}"`)
                     break
                 }
-                const dup = tree.links.some(
-                    (l) => l.source === op.source && l.target === op.target,
-                )
+                // A second arrow between the same pair is normally a mistake — two identical
+                // lines drawn on top of each other — EXCEPT between two participants of a
+                // sequence diagram, where a back-and-forth conversation is the whole point.
+                // There the messages are distinguished by their step, not by their endpoints.
+                const conversation = sameSequence(tree, op.source, op.target)
+                const dup =
+                    !conversation &&
+                    tree.links.some(
+                        (l) => l.source === op.source && l.target === op.target,
+                    )
                 if (dup) {
                     errors.push(
                         `link: "${op.source}" → "${op.target}" already exists`,
@@ -366,12 +549,22 @@ export function applyOperations(
 
             case "unlink": {
                 const before = tree.links.length
+                // With a step given, remove only that message: two participants of a sequence
+                // diagram can exchange several, and dropping all of them would delete messages
+                // the caller did not ask about.
                 tree.links = tree.links.filter(
-                    (l) => !(l.source === op.source && l.target === op.target),
+                    (l) =>
+                        !(
+                            l.source === op.source &&
+                            l.target === op.target &&
+                            (op.step == null || l.step === op.step)
+                        ),
                 )
                 if (tree.links.length === before)
                     errors.push(
-                        `unlink: no edge from "${op.source}" to "${op.target}"`,
+                        op.step == null
+                            ? `unlink: no edge from "${op.source}" to "${op.target}"`
+                            : `unlink: no edge from "${op.source}" to "${op.target}" with step ${op.step}`,
                     )
                 break
             }
@@ -393,10 +586,28 @@ export function collectNames(
     for (const n of walkTree(tree)) {
         if (n.kind === "icon" && n.name)
             out.push({ id: n.id, name: n.name, kind: "icon" })
-        else if (isContainer(n) && n.gname)
+        else if (hasStencilFrame(n) && n.gname)
             out.push({ id: n.id, name: n.gname, kind: "group" })
     }
     return out
+}
+
+/** How a container arranges its children, in one short phrase for the outline. */
+function containerMeta(n: ContainerNode): string {
+    switch (n.kind) {
+        case "grid":
+            return `grid cols=${n.cols}`
+        case "pool":
+            return `pool lanes=[${n.lanes.join(" | ")}]${
+                n.phases.length ? ` phases=[${n.phases.join(" | ")}]` : ""
+            }${n.orientation === "vertical" ? " vertical" : ""}`
+        case "sequence":
+            return "sequence"
+        case "radial":
+            return `radial ${n.spread}`
+        default:
+            return n.dir
+    }
 }
 
 /**
@@ -411,16 +622,24 @@ export function outline(tree: DiagramTree): string {
     if (tree.title) lines.push(`title: ${tree.title}`)
     const walk = (n: DiagramNode, depth: number) => {
         const pad = "  ".repeat(depth)
+        // A node inside a pool reports its cell: that is how the model knows which lane a
+        // step ended up in, which is exactly what it needs to move one.
+        const at = (x: DiagramNode) =>
+            (x.kind === "icon" || x.kind === "box") && x.cell
+                ? ` @lane${x.cell.lane},col${x.cell.col}`
+                : ""
         if (n.kind === "icon")
             lines.push(
-                `${pad}${n.id}: icon ${n.name}${n.label ? ` "${n.label}"` : ""}`,
+                `${pad}${n.id}: icon ${n.name}${n.label ? ` "${n.label}"` : ""}${at(n)}`,
             )
-        else if (n.kind === "box") lines.push(`${pad}${n.id}: box "${n.label}"`)
+        else if (n.kind === "box")
+            lines.push(
+                `${pad}${n.id}: box${n.shape ? ` ${n.shape}` : ""} "${n.label}"${at(n)}`,
+            )
         else if (n.kind === "title") lines.push(`${pad}${n.id}: title`)
         else {
-            const meta = n.kind === "grid" ? `grid cols=${n.cols}` : n.dir
             lines.push(
-                `${pad}${n.id}: ${meta}${n.label ? ` "${n.label}"` : " (wrapper)"}`,
+                `${pad}${n.id}: ${containerMeta(n)}${n.label ? ` "${n.label}"` : " (wrapper)"}`,
             )
             for (const c of n.children) walk(c, depth + 1)
         }

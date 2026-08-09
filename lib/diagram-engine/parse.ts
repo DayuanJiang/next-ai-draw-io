@@ -25,15 +25,20 @@ import { extractDiagramXML } from "@/lib/utils"
 import {
     type Direction,
     hasMarkers,
+    isLaneChrome,
     isPinned,
     MARKER,
+    type NodeKind,
+    readCell,
     readDir,
     readIntMarker,
     readKind,
+    readList,
     readMarker,
 } from "./markers"
 import type {
     BoxNode,
+    BoxShape,
     DiagramNode,
     DiagramTree,
     ForeignCell,
@@ -41,7 +46,11 @@ import type {
     GroupNode,
     IconNode,
     LinkSpec,
+    PoolCell,
+    PoolNode,
+    RadialNode,
     Rect,
+    SequenceNode,
 } from "./types"
 
 /** Hard cap on nesting depth, matching the reference project's 50-hop guard. */
@@ -337,6 +346,32 @@ function looksLikeText(style: string): boolean {
     return /(?:^|;)text;/.test(style) || styleValue(style, "text") === "1"
 }
 
+/** The flowchart outline a box is drawn with, read back from its style. */
+function boxShape(style: string): BoxShape | undefined {
+    const shape = styleValue(style, "shape")
+    if (shape === "parallelogram") return "data"
+    if (shape === "document") return "document"
+    if (/(?:^|;)rhombus[;=]/.test(style) || shape === "rhombus")
+        return "decision"
+    if (styleValue(style, "rounded") === "1") {
+        // A stadium and a rounded rectangle differ only in arcSize; draw.io treats 50 as the
+        // maximum, which is what makes the ends semicircular.
+        const arc = Number(styleValue(style, "arcSize") ?? "0")
+        return arc >= 40 ? "terminator" : "round"
+    }
+    return undefined
+}
+
+/**
+ * The lifeline of a sequence diagram participant.
+ *
+ * One cell covers the head and the line below it, so this is the participant itself, not
+ * chrome to be discarded — the head's label is the participant's name.
+ */
+function looksLikeLifeline(style: string): boolean {
+    return styleValue(style, "shape") === "umlLifeline"
+}
+
 /**
  * Classify a cell into a node kind.
  *
@@ -359,10 +394,7 @@ function looksLikeText(style: string): boolean {
  * 429 AWS + 842 Azure/GCP icons as plain boxes: a re-layout would then re-emit them as
  * grey rectangles and the stencils would be gone.
  */
-function classify(
-    c: RawCell,
-    hasChildren: boolean,
-): "group" | "grid" | "icon" | "box" | "title" {
+function classify(c: RawCell, hasChildren: boolean): NodeKind {
     const marked = readKind(c.style)
     if (marked) return marked
     if (hasChildren) return "group"
@@ -642,6 +674,66 @@ function inferLayout(children: RawCell[]): LayoutGuess {
     }
 }
 
+/**
+ * Put a radial container's children in order, centre first.
+ *
+ * The centre is whichever child sits closest to the container's own middle — for a mind map
+ * that is literally true, and for an org chart the root is horizontally centred above
+ * everything. Identifying it by position rather than by document order is what lets the
+ * user drag branches around without the layout picking a new root.
+ *
+ * The branches then read clockwise from the top for a mind map (which is how a reader scans
+ * one) and left to right for an org chart.
+ */
+function orderRadial(
+    kids: RawCell[],
+    own: Rect | null,
+    spread: "radial" | "down",
+): RawCell[] {
+    const placed = kids.filter((k) => k.abs !== null)
+    if (placed.length < 2 || !own) return kids
+
+    const cx = own.x + own.w / 2
+    const cy = own.y + own.h / 2
+    const mid = (k: RawCell) => ({
+        x: (k.abs as Rect).x + (k.abs as Rect).w / 2,
+        y: (k.abs as Rect).y + (k.abs as Rect).h / 2,
+    })
+    const dist2 = (k: RawCell) => {
+        const m = mid(k)
+        return (m.x - cx) ** 2 + (m.y - cy) ** 2
+    }
+    // For "down", the centre is the topmost child, since everything hangs below it. Its
+    // horizontal position is centred but its vertical one is not, so distance to the middle
+    // would pick a second-generation node instead.
+    const centre =
+        spread === "down"
+            ? placed.reduce((best, k) =>
+                  (k.abs as Rect).y < (best.abs as Rect).y ? k : best,
+              )
+            : placed.reduce((best, k) => (dist2(k) < dist2(best) ? k : best))
+
+    const rest = kids.filter((k) => k.id !== centre.id)
+    if (spread === "down")
+        return [
+            centre,
+            ...rest.sort(
+                (a, b) => (a.abs?.x ?? 0) - (b.abs?.x ?? 0) || a.seq - b.seq,
+            ),
+        ]
+
+    // Radial: the renderer puts the first half of the branches on the right and the second
+    // half on the left, top to bottom within each side. Reading them back in that same order
+    // is what keeps a round-trip stable.
+    const right = rest
+        .filter((k) => (k.abs ? mid(k).x >= cx : true))
+        .sort((a, b) => (a.abs?.y ?? 0) - (b.abs?.y ?? 0) || a.seq - b.seq)
+    const left = rest
+        .filter((k) => (k.abs ? mid(k).x < cx : false))
+        .sort((a, b) => (a.abs?.y ?? 0) - (b.abs?.y ?? 0) || a.seq - b.seq)
+    return [centre, ...right, ...left]
+}
+
 /** Median edge-to-edge distance between neighbours along the flow axis. */
 function gapsBetween(ordered: Rect[], dir: Direction): number {
     const gaps: number[] = []
@@ -829,6 +921,44 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
     for (const c of vertices)
         kindOf.set(c.id, classify(c, (childrenOf.get(c.id)?.length ?? 0) > 0))
 
+    /**
+     * Collapse a pool's lane bands, lifting their contents back into the pool.
+     *
+     * The bands exist so draw.io has something to reparent into: dragging a step onto
+     * another role's band is how the user reassigns it, and the band's `dai_lane` marker
+     * says which role that is. But a band is not a node — it is re-derived from the pool's
+     * lane list on every layout — so on the way back its children become children of the
+     * pool, each carrying the lane index of the band it was found in.
+     *
+     * The lane comes from the BAND, overriding whatever `dai_cell` the node still says,
+     * because the band is where the user actually dropped it.
+     */
+    const laneOverride = new Map<string, number>()
+    const chromeIds = new Set<string>()
+    for (const c of vertices) {
+        if (!isLaneChrome(c.style)) continue
+        chromeIds.add(c.id)
+        const lane = readIntMarker(c.style, MARKER.lane)
+        const kids = childrenOf.get(c.id) ?? []
+        const pool = parentOf.get(c.id) ?? ""
+        for (const k of kids) {
+            parentOf.set(k.id, pool)
+            if (lane !== null) laneOverride.set(k.id, lane)
+        }
+        childrenOf.delete(c.id)
+    }
+    if (chromeIds.size > 0) {
+        // Rebuild the child lists now that the bands are out of the parent chain.
+        childrenOf.clear()
+        for (const c of vertices) {
+            if (chromeIds.has(c.id)) continue
+            const p = parentOf.get(c.id) ?? ""
+            const list = childrenOf.get(p)
+            if (list) list.push(c)
+            else childrenOf.set(p, [c])
+        }
+    }
+
     const foreign: ForeignCell[] = []
     const accounted = new Set<string>()
     /** Carry a cell through the round-trip without interpreting it. */
@@ -840,6 +970,20 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
 
     let title: string | undefined
     const ambiguousContainers: string[] = []
+
+    /**
+     * The pool cell a node occupies.
+     *
+     * The band it was found in wins over the marker on the node: the band records where the
+     * user dropped it, the marker records where the last layout put it. When only the marker
+     * exists — the node has not been dragged — that is the answer.
+     */
+    const cellFor = (c: RawCell): PoolCell | undefined => {
+        const marked = readCell(c.style)
+        const lane = laneOverride.get(c.id)
+        if (lane === undefined) return marked ?? undefined
+        return { lane, col: marked?.col ?? 0 }
+    }
 
     const build = (
         c: RawCell,
@@ -885,22 +1029,38 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
                     : undefined,
                 pinned,
                 rect,
+                cell: cellFor(c),
             }
             return node
         }
 
         if (kind === "box") {
+            // A lifeline's cell spans the head AND the line below it. Its natural size is the
+            // head; keeping the full height would make the participant box grow taller on
+            // every round-trip, since the next layout would add another lifeline under it.
+            const lifeline = looksLikeLifeline(c.style)
+            const headH = lifeline
+                ? Number(styleValue(c.style, "size") ?? "44")
+                : undefined
             const node: BoxNode = {
                 kind: "box",
                 id: c.id,
                 label: c.value,
                 w: c.geo ? Math.round(c.geo.w) : undefined,
-                h: c.geo ? Math.round(c.geo.h) : undefined,
+                h: lifeline
+                    ? Math.round(headH && headH > 0 ? headH : 44)
+                    : c.geo
+                      ? Math.round(c.geo.h)
+                      : undefined,
                 fill: styleValue(c.style, "fillColor"),
                 stroke: styleValue(c.style, "strokeColor"),
-                style: c.style,
+                shape: boxShape(c.style),
+                // A lifeline's style is chrome the renderer rebuilds, so keeping it verbatim
+                // would re-emit a lifeline that no longer matches the new message count.
+                style: lifeline ? undefined : c.style,
                 pinned,
                 rect,
+                cell: cellFor(c),
             }
             return node
         }
@@ -913,8 +1073,93 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
             else kids.push(k)
         }
 
-        const markedDir = readDir(c.style)
         const markedGap = readIntMarker(c.style, MARKER.gap)
+        const nextPath = new Set(path).add(c.id)
+
+        // ---- the three specialised containers ----
+        // Each is identified only by its `dai_kind` marker: nothing about the geometry of a
+        // pool distinguishes it from a grid whose cells happen to be full, and guessing wrong
+        // would rearrange the diagram. An imported file has no marker and gets the generic
+        // treatment, which is the safe default.
+        if (kind === "pool") {
+            // Order by column then lane, so the outline reads in the order things happen.
+            const byCell = [...kids].sort((a, b) => {
+                const ca = readCell(a.style)
+                const cb = readCell(b.style)
+                const la = laneOverride.get(a.id) ?? ca?.lane ?? 0
+                const lb = laneOverride.get(b.id) ?? cb?.lane ?? 0
+                const d = (ca?.col ?? 0) - (cb?.col ?? 0)
+                return d !== 0 ? d : la !== lb ? la - lb : a.seq - b.seq
+            })
+            const node: PoolNode = {
+                kind: "pool",
+                id: c.id,
+                label: c.value,
+                lanes: readList(c.style, MARKER.lanes) ?? ["Lane 1"],
+                phases: readList(c.style, MARKER.phases) ?? [],
+                orientation:
+                    readMarker(c.style, MARKER.orient) === "v"
+                        ? "vertical"
+                        : "horizontal",
+                gap: markedGap ?? 40,
+                children: byCell
+                    .map((k) => build(k, depth + 1, nextPath))
+                    .filter((n): n is DiagramNode => n !== null),
+                style: c.style,
+                pinned,
+                rect,
+            }
+            return node
+        }
+
+        if (kind === "sequence") {
+            const node: SequenceNode = {
+                kind: "sequence",
+                id: c.id,
+                label: c.value,
+                gap: markedGap ?? 60,
+                step: Math.max(24, readIntMarker(c.style, MARKER.step) ?? 44),
+                // Participants read left to right — that IS their order.
+                children: orderChildren(kids, "row")
+                    .map((k) => build(k, depth + 1, nextPath))
+                    .filter((n): n is DiagramNode => n !== null),
+                style: c.style,
+                pinned,
+                rect,
+            }
+            return node
+        }
+
+        if (kind === "radial") {
+            const spread =
+                readMarker(c.style, MARKER.spread) === "down"
+                    ? "down"
+                    : "radial"
+            const node: RadialNode = {
+                kind: "radial",
+                id: c.id,
+                label: c.value,
+                spread,
+                gap: markedGap ?? 40,
+                // A flat list, in the order the layout will read it. The hierarchy is in the
+                // arrows, so document order is all the child list has to carry — and keeping
+                // it means a re-layout reproduces the same picture.
+                children: orderRadial(kids, c.abs, spread)
+                    .map((k) => build(k, depth + 1, nextPath))
+                    .filter((n): n is DiagramNode => n !== null),
+                style: c.style,
+                pinned,
+                rect,
+            }
+            return node
+        }
+
+        // ---- group or grid ----
+        // The direction has to be inferred here rather than above, because the specialised
+        // containers arrange their children two-dimensionally on purpose. Running the
+        // inference on a pool or a radial map would warn that "no single direction describes
+        // this arrangement", which is true and not a problem.
+        const markedDir = readDir(c.style)
         const markedCols = readIntMarker(c.style, MARKER.cols)
         const guess =
             markedDir === null || markedGap === null || markedCols === null
@@ -925,7 +1170,6 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
         if (markedDir === null && guess?.ambiguous)
             ambiguousContainers.push(c.id)
 
-        const nextPath = new Set(path).add(c.id)
         const built = orderChildren(kids, dir)
             .map((k) => build(k, depth + 1, nextPath))
             .filter((n): n is DiagramNode => n !== null)
@@ -971,6 +1215,14 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
     // A cell parented to an EDGE is that edge's label; it never belongs in the forest.
     const rootCells: RawCell[] = []
     for (const c of vertices) {
+        // A pool's lane bands and label strips are chrome the renderer rebuilds from the
+        // pool's own lane list. They are the ONE thing deliberately not carried through
+        // verbatim: re-emitting a stale band would leave it at the old size while the new
+        // bands are drawn underneath it.
+        if (chromeIds.has(c.id)) {
+            accounted.add(c.id)
+            continue
+        }
         const p = parentOf.get(c.id) ?? ""
         if (edgeIds.has(p)) continue // handled with the edges below
         if (byId.has(p) && !layers.has(p)) continue // a real child

@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest"
 import {
     hasMarkers,
+    isLaneChrome,
     isPinned,
+    MARKER,
+    readCell,
     readDir,
     readIntMarker,
     readKind,
+    readList,
     readMarker,
+    stampCell,
     stampContainer,
+    stampLane,
     stampLeaf,
+    stampPool,
+    stampPoolDecoration,
+    stampRadial,
+    stampSequence,
     stripMarkers,
 } from "@/lib/diagram-engine/markers"
 
@@ -208,5 +218,129 @@ describe("hasMarkers", () => {
 
     it("is not fooled by a key that merely contains dai_", () => {
         expect(hasMarkers("mydai_dir=row;")).toBe(false)
+    })
+})
+
+describe("pool, sequence and radial markers", () => {
+    it("records a pool's lanes, phases and orientation", () => {
+        const s = stampPool("", {
+            lanes: ["Employee", "Manager"],
+            phases: ["Submit", "Pay"],
+            orientation: "horizontal",
+            gap: 40,
+        })
+        expect(readKind(s)).toBe("pool")
+        expect(readList(s, MARKER.lanes)).toEqual(["Employee", "Manager"])
+        expect(readList(s, MARKER.phases)).toEqual(["Submit", "Pay"])
+        expect(readMarker(s, MARKER.orient)).toBe("h")
+        expect(readIntMarker(s, MARKER.gap)).toBe(40)
+    })
+
+    it("marks a vertical pool", () => {
+        const s = stampPool("", {
+            lanes: ["A"],
+            phases: [],
+            orientation: "vertical",
+            gap: 30,
+        })
+        expect(readMarker(s, MARKER.orient)).toBe("v")
+        expect(readList(s, MARKER.phases)).toEqual([])
+    })
+
+    it("survives a lane name holding a semicolon or an equals sign", () => {
+        // Both delimit a draw.io style string, so an unencoded label would break the cell.
+        const s = stampPool("", {
+            lanes: ["a;b", "c=d", "e\tf"],
+            phases: [],
+            orientation: "horizontal",
+            gap: 10,
+        })
+        expect(readList(s, MARKER.lanes)).toEqual(["a;b", "c=d", "e\tf"])
+        // The style itself must still be one flat token list.
+        expect(s.split(";").filter((t) => t.includes("dai_lanes")).length).toBe(
+            1,
+        )
+    })
+
+    it("does not confuse an empty lane list with no marker at all", () => {
+        const s = stampPool("", {
+            lanes: [],
+            phases: [],
+            orientation: "horizontal",
+            gap: 10,
+        })
+        expect(readList(s, MARKER.lanes)).toEqual([])
+        expect(readList(s, "dai_absent")).toBeNull()
+    })
+
+    it("records a sequence's participant and message spacing", () => {
+        const s = stampSequence("", { gap: 60, step: 44 })
+        expect(readKind(s)).toBe("sequence")
+        expect(readIntMarker(s, MARKER.gap)).toBe(60)
+        expect(readIntMarker(s, MARKER.step)).toBe(44)
+    })
+
+    it("records how a radial container spreads its branches", () => {
+        expect(
+            readMarker(
+                stampRadial("", { spread: "down", gap: 40 }),
+                MARKER.spread,
+            ),
+        ).toBe("down")
+        expect(
+            readMarker(
+                stampRadial("", { spread: "radial", gap: 40 }),
+                MARKER.spread,
+            ),
+        ).toBe("radial")
+        expect(readKind(stampRadial("", { spread: "down", gap: 40 }))).toBe(
+            "radial",
+        )
+    })
+
+    it("records which pool cell a node sits in", () => {
+        expect(readCell(stampCell("", { lane: 2, col: 5 }))).toEqual({
+            lane: 2,
+            col: 5,
+        })
+    })
+
+    it("clamps a negative cell index rather than writing it", () => {
+        expect(readCell(stampCell("", { lane: -1, col: -3 }))).toEqual({
+            lane: 0,
+            col: 0,
+        })
+    })
+
+    it("reads no cell from a style that has none, or a malformed one", () => {
+        expect(readCell(VPC_STYLE)).toBeNull()
+        expect(readCell("dai_cell=notacell;")).toBeNull()
+        expect(readCell("dai_cell=1;")).toBeNull()
+    })
+
+    it("makes a lane band a container so a dragged step reparents into it", () => {
+        const s = stampLane("", 1)
+        expect(s).toContain("container=1")
+        expect(isLaneChrome(s)).toBe(true)
+        expect(readIntMarker(s, MARKER.lane)).toBe(1)
+    })
+
+    it("marks a pool's label strip as chrome that claims no lane", () => {
+        const s = stampPoolDecoration("")
+        expect(isLaneChrome(s)).toBe(true)
+        expect(readIntMarker(s, MARKER.lane)).toBeNull()
+    })
+
+    it("does not mistake an ordinary cell for pool chrome", () => {
+        expect(isLaneChrome(VPC_STYLE)).toBe(false)
+        expect(
+            isLaneChrome(
+                stampContainer(VPC_STYLE, {
+                    kind: "group",
+                    dir: "row",
+                    gap: 8,
+                }),
+            ),
+        ).toBe(false)
     })
 })
