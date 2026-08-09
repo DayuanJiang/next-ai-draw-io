@@ -69,6 +69,18 @@ export function esc(s: string): string {
 // tags DO need handling is the measure pass (layout.ts autoBoxSize), which must not
 // count markup as text.
 
+/**
+ * Is this label a paragraph rather than a short caption?
+ *
+ * Typography's basic rule: labels centre, paragraphs set flush left. The split is by
+ * content — explicit line breaks, or enough text that draw.io will wrap it — because
+ * the model declares WHAT the text is, never how to align it.
+ */
+function isParagraph(label: string): boolean {
+    const plain = label.replace(/<[^<>]+>/g, "")
+    return /\n/.test(label) || /<br/i.test(label) || plain.length > 60
+}
+
 /** Resolve a catalog name to a style. Injected so the engine does not own the catalog. */
 export type StyleResolver = (
     name: string,
@@ -167,6 +179,14 @@ function styleFor(
                 shape?.spec.style,
                 n.role || n.group
                     ? themedStyle(n.role ?? "body", hue(n.group), "leaf")
+                    : undefined,
+                // Typography, decided by the content: a PARAGRAPH sets left and top —
+                // a three-line body floating dead-centre in its box was the poster's
+                // second-ugliest defect — while a short label stays centred. Only for
+                // rectangles: inside a rhombus or a cloud the safe text area is the
+                // middle, which is exactly where centring puts it.
+                isParagraph(n.label) && !n.shape
+                    ? "align=left;verticalAlign=top;spacingLeft=10;spacingRight=10;spacingTop=8;"
                     : undefined,
                 n.fill ? `fillColor=${n.fill};` : undefined,
                 n.stroke ? `strokeColor=${n.stroke};` : undefined,

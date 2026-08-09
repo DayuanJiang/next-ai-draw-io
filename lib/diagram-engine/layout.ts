@@ -722,11 +722,18 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
         slack = 0
     }
 
-    const gap = k > 1 ? n.gap + Math.min(n.gap, slack / (k - 1)) : n.gap
+    // Slack policy differs by axis. A ROW spreads and centres — a flowchart layer
+    // reads as a pyramid, and dead space at the right edge of a row looks like a
+    // mistake. A COLUMN packs to the top and leaves the slack at the bottom: a column
+    // is usually tall because a SIBLING made it tall, and stretching its gaps (or its
+    // boxes, via grow) turns every panel into a huge frame with three lines floating
+    // in the middle — the single ugliest thing in the poster this replaced.
+    const gap =
+        alongRow && k > 1 ? n.gap + Math.min(n.gap, slack / (k - 1)) : n.gap
     const span =
         kids.reduce((s, kid) => s + (alongRow ? kid.rect.w : kid.rect.h), 0) +
         gap * Math.max(0, k - 1)
-    let cur = (alongRow ? innerX : innerTop) + Math.max(0, (extent - span) / 2)
+    let cur = alongRow ? innerX + Math.max(0, (extent - span) / 2) : innerTop
 
     for (const kid of kids) {
         // A stretching role fills the cross axis: a masthead spans its page, a section

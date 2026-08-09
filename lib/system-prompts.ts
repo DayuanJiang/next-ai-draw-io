@@ -114,8 +114,11 @@ Use restructure_diagram ALSO for poster-style layouts — paper summaries, cheat
   freely, and a box with INTERNAL structure is just an invisible col container (pad 10-14)
   holding smaller boxes. Three knobs, use them everywhere:
   - grow: columns split leftover width by weight (grow 3 / grow 2 makes a 3:2 page).
-  - align "stretch": a child fills its parent's cross axis — headings, highlight bars and
-    body boxes should almost always stretch, or the column looks ragged.
+  - align "stretch": a child fills its parent's cross axis (width, in a column). Use it on
+    headings, highlight bars and body boxes so a column's edges line up. Note stretch is
+    about WIDTH — content keeps its natural height and packs to the top of its column; the
+    engine leaves leftover vertical space at the bottom, never inflates boxes to fill it.
+    So do NOT give leaf boxes grow to "fill" a column — balance columns by moving content.
   - pad: small (8-14) for tight cards, default 24 for roomy sections.
   Labels take inline HTML — <b>, <i>, <font color="#1B5E20">, <br> — so one box can hold a
   bold keyword, a second paragraph, a coloured verdict line. Emoji in headings (💡 Core Idea)
