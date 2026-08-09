@@ -436,6 +436,60 @@ export function routeEdges(
         }
     }
 
+    // --- stage 1c: pair opposite edges
+    //
+    // A→B and B→A are one relationship drawn as two arrows — "git add" out, "git reset"
+    // back. Left to the general de-collide they land on port positions chosen for entirely
+    // separate reasons at each end, so one line runs straight while its partner wanders off
+    // through a different corridor. A reader expects a matched pair: two parallel lines a
+    // constant gap apart, one clearly out and one clearly back.
+    //
+    // The two tracks are ABSOLUTE positions in the strip where the boxes overlap — the
+    // corridor's centre ± half a track gap — converted back to a fraction of each box.
+    // Assigning the same fraction to both boxes instead only works when they happen to be
+    // the same size and aligned; on real diagrams it put the two lines 79px apart with a
+    // kink in one of them.
+    const seen = new Map<string, number>()
+    edges.forEach((e, i) => {
+        seen.set(`${e.source}|${e.target}`, i)
+    })
+    const PAIR_GAP = 24
+    const pairedDone = new Set<number>()
+    edges.forEach((e, i) => {
+        if (pairedDone.has(i)) return
+        const j = seen.get(`${e.target}|${e.source}`)
+        if (j === undefined || j === i || pairedDone.has(j)) return
+        const fi = faces[i]
+        const fj = faces[j]
+        const a = rects.get(e.source)
+        const b = rects.get(e.target)
+        if (!fi || !fj || !a || !b) return
+        // Only pair edges that agree on the axis; when they disagree the geometry wants
+        // them apart, and forcing them together would fight the search.
+        if (fi.horiz !== fj.horiz) return
+
+        // The strip both boxes span, on the axis ACROSS the arrows. Two straight parallel
+        // tracks need the corridor to hold them both.
+        const lo = fi.horiz ? Math.max(a.y, b.y) : Math.max(a.x, b.x)
+        const hi = fi.horiz
+            ? Math.min(a.y + a.h, b.y + b.h)
+            : Math.min(a.x + a.w, b.x + b.w)
+        if (hi - lo < PAIR_GAP + 12) return
+
+        const mid = (lo + hi) / 2
+        const t1 = mid - PAIR_GAP / 2
+        const t2 = mid + PAIR_GAP / 2
+        const fracOf = (r: Rect, track: number) =>
+            fi.horiz ? (track - r.y) / r.h : (track - r.x) / r.w
+
+        pairedDone.add(i)
+        pairedDone.add(j)
+        frac[i].s = fracOf(a, t1)
+        frac[i].t = fracOf(b, t1)
+        frac[j].s = fracOf(b, t2)
+        frac[j].t = fracOf(a, t2)
+    })
+
     // --- stage 2: try shapes in order of directness, keep the first that is clear
     //
     // Segments already claimed by a routed edge, so later edges can avoid sharing a lane

@@ -43,6 +43,7 @@ import {
     type Rect,
     type SequenceNode,
 } from "./types"
+import type { Point } from "./visgraph"
 
 /** Escape the five characters that would break an XML attribute. */
 export function esc(s: string): string {
@@ -62,6 +63,33 @@ export type StyleResolver = (
 
 const FALLBACK_BOX =
     "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5A6B7B;fontColor=#1A1A1A;fontSize=11;verticalAlign=middle;"
+
+/**
+ * The palette for semantic groups: paired fill/stroke, assigned to group names in order of
+ * first appearance.
+ *
+ * The engine owns these hex values and the model never sees them — it only names groups
+ * ("remote", "local", "temp"), which is the judgement it is actually good at. Letting the
+ * model pick colours per diagram produced mismatched saturations and a different look every
+ * time; a fixed palette is what makes two diagrams from the same engine look related.
+ *
+ * All six fills are low-saturation tints that keep #1A1A1A text readable, each with a
+ * darker stroke of the same hue, deliberately quieter than the near-black edge lines so
+ * colour reads as grouping rather than emphasis.
+ */
+const GROUP_PALETTE: { fill: string; stroke: string }[] = [
+    { fill: "#DAE8FC", stroke: "#6C8EBF" }, // blue
+    { fill: "#D5E8D4", stroke: "#82B366" }, // green
+    { fill: "#FFE6CC", stroke: "#D79B00" }, // orange
+    { fill: "#E1D5E7", stroke: "#9673A6" }, // purple
+    { fill: "#F8CECC", stroke: "#B85450" }, // red
+    { fill: "#FFF2CC", stroke: "#D6B656" }, // yellow
+]
+
+/** fill/stroke for the n-th distinct group. Wraps: a 7th group reuses the 1st colour. */
+export function groupColour(index: number): { fill: string; stroke: string } {
+    return GROUP_PALETTE[index % GROUP_PALETTE.length]
+}
 const FALLBACK_FRAME =
     "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;fontColor=#1A1A1A;fontSize=12;fontStyle=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;"
 const TITLE_STYLE =
@@ -433,6 +461,103 @@ function edgeLabel(l: LinkSpec): string {
 }
 
 /**
+ * Slide each edge label along its own edge to a spot where it covers nothing.
+ *
+ * A label renders centred on the path midpoint, and on a long edge that midpoint is
+ * frequently on top of something — the edge was routed AROUND the boxes, so its middle
+ * passes exactly the things it avoided, and the router has never known labels exist.
+ * Measured on a git-workflow diagram: four labels sat on unrelated boxes or on each other.
+ *
+ * For each labelled edge, in order of path length (longest first, since they have the
+ * fewest clear spots), positions along the path are tried from the middle outwards; the
+ * first where the label's rectangle overlaps no box and no already-placed label wins.
+ * draw.io expresses the position as the geometry's relative x: −1 at the source, 0 at the
+ * midpoint, +1 at the target.
+ *
+ * The label's size is an estimate (7px per character, one line). That is fine here: the
+ * goal is to stop labels sitting ON things, and a near miss by a few pixels still reads
+ * clearly, where the current midpoint placement puts them dead centre on a box.
+ */
+function placeLabels(
+    edges: { id: string; label: string; path: Point[] }[],
+    boxes: Rect[],
+): Map<string, number> {
+    const placed: Rect[] = []
+    const out = new Map<string, number>()
+
+    const measure = (label: string): { w: number; h: number } => ({
+        w: Math.min(160, label.length * 7 + 8),
+        h: 16,
+    })
+    const pointAt = (path: Point[], t: number): Point => {
+        let total = 0
+        const segs = path.slice(0, -1).map((p, i) => {
+            const len =
+                Math.abs(path[i + 1].x - p.x) + Math.abs(path[i + 1].y - p.y)
+            total += len
+            return { a: p, b: path[i + 1], len }
+        })
+        let at = total * t
+        for (const s of segs) {
+            if (at <= s.len || s === segs[segs.length - 1]) {
+                const f = s.len ? Math.min(1, at / s.len) : 0
+                return {
+                    x: s.a.x + (s.b.x - s.a.x) * f,
+                    y: s.a.y + (s.b.y - s.a.y) * f,
+                }
+            }
+            at -= s.len
+        }
+        return path[0]
+    }
+    const overlaps = (r: Rect, list: Rect[]) =>
+        list.some(
+            (o) =>
+                r.x < o.x + o.w &&
+                o.x < r.x + r.w &&
+                r.y < o.y + o.h &&
+                o.y < r.y + r.h,
+        )
+
+    const byLength = [...edges].sort((p, q) => {
+        const len = (e: { path: Point[] }) =>
+            e.path.reduce(
+                (s, pt, i) =>
+                    i === 0
+                        ? 0
+                        : s +
+                          Math.abs(pt.x - e.path[i - 1].x) +
+                          Math.abs(pt.y - e.path[i - 1].y),
+                0,
+            )
+        return len(q) - len(p)
+    })
+
+    // The midpoint first — it is where a reader expects the label — then nearby spots,
+    // preferring the source half slightly: a label near the arrow's origin still reads as
+    // naming the action.
+    const TRIES = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]
+    for (const e of byLength) {
+        const { w, h } = measure(e.label)
+        let chosen = 0.5
+        for (const t of TRIES) {
+            const c = pointAt(e.path, t)
+            const rect = { x: c.x - w / 2, y: c.y - h / 2, w, h }
+            if (!overlaps(rect, boxes) && !overlaps(rect, placed)) {
+                chosen = t
+                break
+            }
+        }
+        const c = pointAt(e.path, chosen)
+        placed.push({ x: c.x - w / 2, y: c.y - h / 2, w, h })
+        // Even a spot that still overlaps is recorded, so the NEXT label avoids stacking
+        // on top of it — two labels on one point is strictly worse than one on a box.
+        if (chosen !== 0.5) out.set(e.id, chosen * 2 - 1)
+    }
+    return out
+}
+
+/**
  * One `<mxCell>` for an edge, carrying the route the router computed.
  *
  * Connection points are always written. They are fractions of the terminal's bounds, so
@@ -446,7 +571,12 @@ function edgeLabel(l: LinkSpec): string {
  * sits at the path midpoint and needs a straight segment under it) or a deliberate detour
  * around something a straight line would have hit.
  */
-function edgeXml(l: LinkSpec, index: number, route?: RoutedEdge): string {
+function edgeXml(
+    l: LinkSpec,
+    index: number,
+    route?: RoutedEdge,
+    labelAt?: number,
+): string {
     const label = edgeLabel(l)
     let style = l.style ?? EDGE_STYLE
     if (!l.style) {
@@ -467,10 +597,16 @@ function edgeXml(l: LinkSpec, index: number, route?: RoutedEdge): string {
                   )
                   .join("")}</Array>`
             : ""
+    // The geometry's x is the label's position along the path: −1 source, 0 middle, +1
+    // target. Written only when the label had to move off the midpoint to cover nothing.
+    const geo =
+        labelAt !== undefined
+            ? `<mxGeometry x="${labelAt.toFixed(2)}" relative="1" as="geometry">${points}</mxGeometry>`
+            : `<mxGeometry relative="1" as="geometry">${points}</mxGeometry>`
     return (
         `<mxCell id="${esc(id)}" value="${esc(label)}" style="${style}" edge="1" parent="1"` +
         ` source="${esc(l.source)}" target="${esc(l.target)}">` +
-        `<mxGeometry relative="1" as="geometry">${points}</mxGeometry>` +
+        geo +
         `</mxCell>`
     )
 }
@@ -731,8 +867,42 @@ export function renderDiagram(
         obstacles,
         frames,
     )
+    // Where each label goes along its edge. The router only kept LINES off the boxes; a
+    // label sits at the path midpoint, which on a long edge is exactly beside the things
+    // the line was routed around.
+    const labelled = routable
+        .map(({ link: l, index }, i) => {
+            const label = edgeLabel(l)
+            if (!label) return null
+            const a = cellById.get(l.source)
+            const b = cellById.get(l.target)
+            const r = routes[i]
+            if (!a || !b || !r) return null
+            const sp = {
+                x: a.x + r.exit.x * a.w,
+                y: a.y + r.exit.y * a.h,
+            }
+            const ep = {
+                x: b.x + r.entry.x * b.w,
+                y: b.y + r.entry.y * b.h,
+            }
+            return {
+                id: l.id ?? `ed${index + 1}`,
+                label,
+                path: [sp, ...r.waypoints, ep],
+            }
+        })
+        .filter((e): e is { id: string; label: string; path: Point[] } =>
+            Boolean(e),
+        )
+    const labelBoxes = [...obstacles]
+        .map((id) => cellById.get(id))
+        .filter((r): r is Rect => Boolean(r))
+    const labelAt = placeLabels(labelled, labelBoxes)
+
     routable.forEach(({ link, index }, i) => {
-        cells.push(edgeXml(link, index, routes[i]))
+        const id = link.id ?? `ed${index + 1}`
+        cells.push(edgeXml(link, index, routes[i], labelAt.get(id)))
     })
     for (const m of messages)
         cells.push(messageXml(m.link, m.index, m.y, cellById))

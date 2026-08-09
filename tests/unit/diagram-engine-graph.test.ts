@@ -4,6 +4,7 @@ import {
     type GraphEdge,
     type GraphNode,
     graphToOperations,
+    restructureDiagram,
 } from "@/lib/diagram-engine"
 import {
     absoluteRects,
@@ -440,5 +441,236 @@ describe("graphToOperations: arrows leave their own shape cleanly", () => {
         )
         expect(r.errors).toEqual([])
         expect(waypointsInsideBoxes(r.xml as string)).toEqual([])
+    })
+})
+
+/**
+ * Edge labels must not sit on boxes or on each other.
+ *
+ * The router keeps LINES off the boxes, but a label renders at its edge's midpoint — and on
+ * a long edge that midpoint is beside exactly the things the line was routed around. On the
+ * reported git-workflow diagram, four labels sat on unrelated boxes or on other labels.
+ * `placeLabels` slides each label along its own edge to a clear spot, written as the
+ * geometry's relative x.
+ */
+describe("edge labels avoid boxes and each other", () => {
+    it("places every git-workflow label on empty space", () => {
+        const r = drawGraph(
+            [
+                {
+                    id: "remote",
+                    label: "Remote Repository (origin / GitHub)",
+                    shape: "data",
+                },
+                n("work", "Working Directory (edited files)"),
+                n("stage", "Staging Area (index)"),
+                {
+                    id: "stash",
+                    label: "Stash (temporary shelf)",
+                    shape: "round",
+                },
+                n("local", "Local Repository (.git commits)"),
+                {
+                    id: "branch",
+                    label: "Branch / Merge (feature -> main)",
+                    shape: "decision",
+                },
+            ],
+            [
+                e("remote", "work", "git clone"),
+                e("work", "stage", "git add"),
+                {
+                    source: "stage",
+                    target: "work",
+                    label: "git reset",
+                    dashed: true,
+                },
+                e("work", "stash", "git stash"),
+                e("stash", "work", "git stash pop"),
+                e("stage", "local", "git commit"),
+                {
+                    source: "local",
+                    target: "stage",
+                    label: "git checkout",
+                    dashed: true,
+                },
+                e("local", "work", "git pull / merge"),
+                {
+                    source: "remote",
+                    target: "local",
+                    label: "git fetch",
+                    dashed: true,
+                },
+                e("local", "branch", "git branch / checkout -b"),
+                e("branch", "remote", "git push"),
+            ],
+            { title: "Git Operations Overview" },
+        )
+        expect(r.errors).toEqual([])
+        const xml = r.xml as string
+        const rects = absoluteRects(xml)
+        const ids = ["remote", "work", "stage", "stash", "local", "branch"]
+
+        // Recompute each label's rectangle the way draw.io places it: at the geometry's
+        // relative x along the path (−1 source, 0 middle, +1 target).
+        const labels: {
+            id: string
+            x: number
+            y: number
+            w: number
+            h: number
+        }[] = []
+        for (const p of edgePaths(xml, rects)) {
+            if (!p.label) continue
+            const m = xml.match(
+                new RegExp(
+                    `<mxCell id="${p.id}"[^>]*>\\s*<mxGeometry x="(-?[\\d.]+)" relative="1"`,
+                ),
+            )
+            const t = ((m ? Number(m[1]) : 0) + 1) / 2
+            let total = 0
+            const segs = p.points.slice(0, -1).map((pt, i) => {
+                const len =
+                    Math.abs(p.points[i + 1].x - pt.x) +
+                    Math.abs(p.points[i + 1].y - pt.y)
+                total += len
+                return { a: pt, b: p.points[i + 1], len }
+            })
+            let at = total * t
+            let pos = p.points[0]
+            for (const s of segs) {
+                if (at <= s.len || s === segs[segs.length - 1]) {
+                    const f = s.len ? Math.min(1, at / s.len) : 0
+                    pos = {
+                        x: s.a.x + (s.b.x - s.a.x) * f,
+                        y: s.a.y + (s.b.y - s.a.y) * f,
+                    }
+                    break
+                }
+                at -= s.len
+            }
+            const w = Math.min(160, p.label.length * 7 + 8)
+            labels.push({ id: p.id, x: pos.x - w / 2, y: pos.y - 8, w, h: 16 })
+        }
+
+        const bad: string[] = []
+        for (const l of labels) {
+            for (const id of ids) {
+                const b = rectOf(rects, id)
+                if (
+                    l.x < b.x + b.w &&
+                    l.x + l.w > b.x &&
+                    l.y < b.y + b.h &&
+                    l.y + l.h > b.y
+                )
+                    bad.push(`${l.id} label sits on ${id}`)
+            }
+            for (const m of labels)
+                if (
+                    m !== l &&
+                    l.id < m.id &&
+                    l.x < m.x + m.w &&
+                    l.x + l.w > m.x &&
+                    l.y < m.y + m.h &&
+                    l.y + l.h > m.y
+                )
+                    bad.push(`${l.id} label sits on ${m.id} label`)
+        }
+        expect(bad).toEqual([])
+    })
+})
+
+/**
+ * A→B and B→A are one relationship drawn as two arrows, and a reader expects a matched
+ * pair: two parallel lines a constant gap apart. Routed independently they land on port
+ * positions chosen for unrelated reasons, so one line runs straight while its partner
+ * wanders through a different corridor with a kink in it.
+ */
+describe("opposite edges are drawn as a parallel pair", () => {
+    it("gives git add / git reset two straight tracks a constant gap apart", () => {
+        const r = drawGraph(
+            [n("work", "Working Directory"), n("stage", "Staging Area")],
+            [
+                e("work", "stage", "git add"),
+                {
+                    source: "stage",
+                    target: "work",
+                    label: "git reset",
+                    dashed: true,
+                },
+            ],
+        )
+        expect(r.errors).toEqual([])
+        const xml = r.xml as string
+        const rects = absoluteRects(xml)
+        const paths = edgePaths(xml, rects)
+        const fwd = paths.find((p) => p.source === "work")
+        const rev = paths.find((p) => p.source === "stage")
+        if (!fwd || !rev) throw new Error("both edges must render")
+
+        // Both straight: two points, no waypoints.
+        expect(fwd.points).toHaveLength(2)
+        expect(rev.points).toHaveLength(2)
+        // Parallel vertical tracks a constant gap apart.
+        expect(Math.abs(fwd.points[0].x - fwd.points[1].x)).toBeLessThan(1)
+        expect(Math.abs(rev.points[0].x - rev.points[1].x)).toBeLessThan(1)
+        const gap = Math.abs(fwd.points[0].x - rev.points[0].x)
+        expect(gap).toBeGreaterThan(12)
+        expect(gap).toBeLessThan(40)
+    })
+})
+
+/**
+ * Semantic groups: the caller names zones, the engine colours them.
+ *
+ * The model is good at judging which nodes belong together and bad at picking hex colours
+ * that match; letting it choose produced mismatched saturations and a different look per
+ * diagram. So `group` maps to a fixed engine palette in order of first appearance, and the
+ * same grouping always produces the same colours.
+ */
+describe("draw_graph: semantic groups", () => {
+    it("colours nodes by group, consistently, without the caller naming a colour", () => {
+        const r = drawGraph(
+            [
+                { id: "a", label: "A", group: "remote" },
+                { id: "b", label: "B", group: "local" },
+                { id: "c", label: "C", group: "local" },
+                n("d", "D"),
+            ],
+            [e("a", "b"), e("b", "c"), e("c", "d")],
+        )
+        expect(r.errors).toEqual([])
+        const xml = r.xml as string
+        const fillOf = (id: string) => {
+            const m = xml.match(new RegExp(`id="${id}"[^>]*style="([^"]*)"`))
+            return [...(m?.[1] ?? "").matchAll(/fillColor=([^;]*)/g)].pop()?.[1]
+        }
+        // First group named gets the first palette slot; same group, same colour.
+        expect(fillOf("a")).toBe("#DAE8FC")
+        expect(fillOf("b")).toBe("#D5E8D4")
+        expect(fillOf("c")).toBe("#D5E8D4")
+        // No group: the plain white fallback.
+        expect(fillOf("d")).toBe("#FFFFFF")
+    })
+
+    it("group colours survive a round trip through the canvas", () => {
+        const r = drawGraph(
+            [
+                { id: "a", label: "A", group: "g1" },
+                { id: "b", label: "B", group: "g2" },
+            ],
+            [e("a", "b")],
+        )
+        const again = restructureDiagram(r.xml as string, [])
+        const fillOf = (xml: string, id: string) => {
+            const m = xml.match(new RegExp(`id="${id}"[^>]*style="([^"]*)"`))
+            return [...(m?.[1] ?? "").matchAll(/fillColor=([^;]*)/g)].pop()?.[1]
+        }
+        expect(fillOf(again.xml as string, "a")).toBe(
+            fillOf(r.xml as string, "a"),
+        )
+        expect(fillOf(again.xml as string, "b")).toBe(
+            fillOf(r.xml as string, "b"),
+        )
     })
 })

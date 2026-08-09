@@ -73,11 +73,12 @@ parameters: {
 tool name: draw_graph
 description: Draw a flowchart, decision tree, dependency graph, ER diagram or site map from nodes and arrows alone. You give NO positions and NO nesting; the engine works out how many rows there are, who shares a row, and who goes left of whom, so arrows do not cross or run through unrelated boxes. Replaces the whole diagram — use restructure_diagram to edit afterwards.
 parameters: {
-  nodes: Array<{id: string, label: string, shape?: "box"|"decision"|"terminator"|"round"|"data"|"document", icon?: string}>
+  nodes: Array<{id: string, label: string, shape?: "box"|"decision"|"terminator"|"round"|"data"|"document", icon?: string, group?: string}>
   edges: Array<{source: string, target: string, label?: string, dashed?: boolean}>
   title?: string
   flow?: "col" | "row"   // col (default): top to bottom. row: left to right
 }
+Set the same group name on nodes that belong to one zone (remote vs local, frontend vs backend, roles); the engine colours each group consistently. Never pick colours yourself.
 ---End of tools---
 
 ## Choosing the right tool

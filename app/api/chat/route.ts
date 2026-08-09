@@ -786,7 +786,9 @@ Loops are fine — an arrow back to an earlier step is drawn as a loop. So are a
 
 Replaces the whole diagram, because one new arrow can change which row several nodes belong in. To edit afterwards, use restructure_diagram with the ids from the outline this returns.
 
-Shapes: "decision" for a branch (diamond), "terminator" for a start or end point, "data" for input or output, "document" for a report, "round" for a soft-edged step, "box" (default) for a plain step. Set icon instead of shape to draw a node as a catalog icon — look the name up with search_stencils first.`,
+Shapes: "decision" for a branch (diamond), "terminator" for a start or end point, "data" for input or output, "document" for a report, "round" for a soft-edged step, "box" (default) for a plain step. Set icon instead of shape to draw a node as a catalog icon — look the name up with search_stencils first.
+
+Grouping: when the nodes fall into natural zones (remote vs local, frontend vs backend, roles, phases), set the same group name on each zone's nodes. The engine colours each group consistently from its own palette. Name groups by meaning; never pick hex colours.`,
                 inputSchema: z.object({
                     nodes: z
                         .array(
@@ -808,6 +810,12 @@ Shapes: "decision" for a branch (diamond), "terminator" for a start or end point
                                     .optional()
                                     .describe(
                                         "Catalog stencil name; draws this node as an icon",
+                                    ),
+                                group: z
+                                    .string()
+                                    .optional()
+                                    .describe(
+                                        "Semantic group name, e.g. 'remote' or 'local'. Nodes sharing a group get the same colour from the engine's palette — never pick colours yourself",
                                     ),
                             }),
                         )

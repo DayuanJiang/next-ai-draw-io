@@ -54,6 +54,16 @@ export const OperationSchema = z.discriminatedUnion("op", [
         id: z.string(),
         parent: z.string().optional(),
         label: z.string(),
+        fill: z
+            .string()
+            .optional()
+            .describe(
+                "Fill colour, e.g. #DAE8FC. Prefer draw_graph's group field over picking colours",
+            ),
+        stroke: z
+            .string()
+            .optional()
+            .describe("Border colour; pair it with fill"),
         shape: z
             .enum([
                 "box",
@@ -358,6 +368,8 @@ export function applyOperations(
                         ...(op.shape && op.shape !== "box"
                             ? { shape: op.shape }
                             : {}),
+                        ...(op.fill ? { fill: op.fill } : {}),
+                        ...(op.stroke ? { stroke: op.stroke } : {}),
                         ...cellOf(op),
                     }
                 else if (op.op === "add_container")
