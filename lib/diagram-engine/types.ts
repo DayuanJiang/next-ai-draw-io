@@ -267,21 +267,6 @@ export function isLeaf(n: DiagramNode): n is LeafNode {
     return !isContainer(n)
 }
 
-/**
- * A container that can carry a catalog group stencil and a hand-set fill or stroke.
- *
- * The specialised containers draw their own chrome — a pool paints lane bands, a sequence
- * paints lifelines — so a stencil frame or an arbitrary fill would fight what they emit.
- */
-export function hasStencilFrame(n: DiagramNode): n is GroupNode | GridNode {
-    return n.kind === "group" || n.kind === "grid"
-}
-
-/** A container whose children stack along one axis, so `dir` is meaningful. */
-export function isDirectional(n: DiagramNode): n is GroupNode {
-    return n.kind === "group"
-}
-
 /** Depth-first walk over a node and its descendants. */
 export function* walk(n: DiagramNode): Generator<DiagramNode> {
     yield n

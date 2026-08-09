@@ -120,6 +120,9 @@ Swimlane diagrams (add_pool):
   right; leave a cell empty when a role does nothing at that point — that is information.
 - Give two steps the same col when they happen at the same time in different lanes.
 - phases is optional and labels groups of columns, e.g. ["Intake", "Review", "Decision"].
+- orientation defaults to horizontal (lanes stacked down, flow left to right). Set it to
+  "vertical" when the user asks for vertical swimlanes: lanes become columns and the flow
+  runs downwards.
 
 Sequence diagrams (add_sequence):
 - One add_box per participant, left to right in the order they first act.

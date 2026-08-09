@@ -306,9 +306,10 @@ export function stampLane(style: string, lane: number): string {
 /**
  * Stamp a pool's own decoration — a lane-name column or a milestone strip.
  *
- * `dai_lane=-1` marks it as chrome without claiming a lane: it is a label, and a shape
- * dropped on it belongs to no role. It stays a draw.io container only so clicks fall
- * through to whatever is behind it.
+ * `dai_lane=-1` marks it as chrome the renderer rebuilds, so the parser drops it rather
+ * than reading it back as a node. Unlike a lane band it is deliberately NOT a draw.io
+ * container: a step dropped on a label column belongs to no role, and letting it reparent
+ * there would lose the step's lane.
  */
 export function stampPoolDecoration(style: string): string {
     return append(style, MARKER.lane, -1)

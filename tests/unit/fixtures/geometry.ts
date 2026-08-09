@@ -79,7 +79,7 @@ export function rectOf(rects: Map<string, Rect>, id: string): Rect {
 }
 
 /** The page size the renderer declared. */
-export function pageSize(xml: string): { w: number; h: number } {
+function pageSize(xml: string): { w: number; h: number } {
     const m = xml.match(/pageWidth="(\d+)" pageHeight="(\d+)"/)
     return { w: Number(m?.[1] ?? 0), h: Number(m?.[2] ?? 0) }
 }

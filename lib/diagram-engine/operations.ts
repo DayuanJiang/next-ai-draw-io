@@ -17,9 +17,7 @@ import {
     type DiagramTree,
     findNode,
     findParent,
-    hasStencilFrame,
     isContainer,
-    isDirectional,
     type LinkSpec,
     walkTree,
 } from "./types"
@@ -490,7 +488,7 @@ export function applyOperations(
                     errors.push(`set_dir: "${op.id}" is not a container`)
                     break
                 }
-                if (!isDirectional(node)) {
+                if (node.kind !== "group") {
                     // A grid, pool, sequence or radial container arranges its children by its
                     // own rule; "row or column" is not a property they have.
                     errors.push(
@@ -586,7 +584,7 @@ export function collectNames(
     for (const n of walkTree(tree)) {
         if (n.kind === "icon" && n.name)
             out.push({ id: n.id, name: n.name, kind: "icon" })
-        else if (hasStencilFrame(n) && n.gname)
+        else if ((n.kind === "group" || n.kind === "grid") && n.gname)
             out.push({ id: n.id, name: n.gname, kind: "group" })
     }
     return out

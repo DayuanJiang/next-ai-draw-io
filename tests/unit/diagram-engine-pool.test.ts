@@ -216,6 +216,89 @@ describe("swimlane pool: layout", () => {
         expect(escapesParent(r.xml as string)).toEqual([])
     })
 
+    it("keeps the milestone strip inside a VERTICAL pool", () => {
+        // The measure pass reserves the pool's width as padding + content + strip, with no
+        // gap between content and strip. Rendering the strip one gap further out put it
+        // outside the frame — and no earlier test caught it, because every vertical case
+        // omitted phases and every phases case was horizontal.
+        const r = restructureDiagram("", [
+            {
+                op: "add_pool",
+                id: "p",
+                label: "V",
+                lanes: ["A", "B"],
+                phases: ["P1", "P2"],
+                orientation: "vertical",
+            },
+            {
+                op: "add_box",
+                id: "x",
+                parent: "p",
+                label: "X",
+                lane: 0,
+                col: 0,
+            },
+            {
+                op: "add_box",
+                id: "y",
+                parent: "p",
+                label: "Y",
+                lane: 1,
+                col: 0,
+            },
+            {
+                op: "add_box",
+                id: "z",
+                parent: "p",
+                label: "Z",
+                lane: 0,
+                col: 1,
+            },
+        ])
+        expect(r.errors).toEqual([])
+        expect(escapesParent(r.xml as string)).toEqual([])
+        expect(outsidePage(r.xml as string, ["__title"])).toEqual([])
+    })
+
+    it("keeps the milestone strip inside a HORIZONTAL pool", () => {
+        const r = restructureDiagram("", [
+            {
+                op: "add_pool",
+                id: "p",
+                label: "H",
+                lanes: ["A", "B"],
+                phases: ["P1", "P2", "P3"],
+            },
+            {
+                op: "add_box",
+                id: "x",
+                parent: "p",
+                label: "X",
+                lane: 0,
+                col: 0,
+            },
+            {
+                op: "add_box",
+                id: "y",
+                parent: "p",
+                label: "Y",
+                lane: 1,
+                col: 1,
+            },
+            {
+                op: "add_box",
+                id: "z",
+                parent: "p",
+                label: "Z",
+                lane: 0,
+                col: 2,
+            },
+        ])
+        expect(r.errors).toEqual([])
+        expect(escapesParent(r.xml as string)).toEqual([])
+        expect(outsidePage(r.xml as string, ["__title"])).toEqual([])
+    })
+
     it("refuses a pool with no lanes", () => {
         const r = restructureDiagram("", [
             { op: "add_pool", id: "p", label: "x", lanes: [] },

@@ -13,9 +13,12 @@ import {
     ICON_SIZE,
     LANE_LABEL,
     layoutForest,
+    messageCount,
     type Placed,
     POOL_PAD,
+    poolCellOf,
     poolMetrics,
+    type SequenceMetrics,
     sequenceMetrics,
 } from "./layout"
 import {
@@ -29,14 +32,15 @@ import {
     stampSequence,
 } from "./markers"
 import { type RoutedEdge, routeEdges } from "./route"
-import type {
-    BoxShape,
-    DiagramNode,
-    DiagramTree,
-    LinkSpec,
-    PoolNode,
-    Rect,
-    SequenceNode,
+import {
+    type BoxShape,
+    type DiagramNode,
+    type DiagramTree,
+    isContainer,
+    type LinkSpec,
+    type PoolNode,
+    type Rect,
+    type SequenceNode,
 } from "./types"
 
 /** Escape the five characters that would break an XML attribute. */
@@ -96,6 +100,11 @@ const POOL_LABEL_FILL = "#EEF2F7"
 const POOL_FILL = "#FFFFFF"
 const POOL_STROKE = "#5A6B7B"
 
+/** A pool's outer frame: a plain titled rectangle, since the bands supply the structure. */
+const POOL_FRAME_STYLE =
+    `rounded=0;whiteSpace=wrap;html=1;fillColor=${POOL_FILL};strokeColor=${POOL_STROKE};` +
+    `fontColor=#1A1A1A;fontSize=13;fontStyle=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;`
+
 /**
  * A participant head in a sequence diagram: the box at the top of a lifeline.
  *
@@ -148,7 +157,7 @@ function styleFor(n: DiagramNode, resolve: StyleResolver | undefined): string {
     }
 
     if (n.kind === "pool") {
-        return stampPool(n.style ?? poolFrameStyle(), {
+        return stampPool(n.style ?? POOL_FRAME_STYLE, {
             lanes: n.lanes,
             phases: n.phases,
             orientation: n.orientation,
@@ -185,14 +194,6 @@ function styleFor(n: DiagramNode, resolve: StyleResolver | undefined): string {
         cols: n.kind === "grid" ? n.cols : undefined,
         invisible,
     })
-}
-
-/** A pool's outer frame: a plain titled rectangle, since the bands supply the structure. */
-function poolFrameStyle(): string {
-    return (
-        `rounded=0;whiteSpace=wrap;html=1;fillColor=${POOL_FILL};strokeColor=${POOL_STROKE};` +
-        `fontColor=#1A1A1A;fontSize=13;fontStyle=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;`
-    )
 }
 
 const INVISIBLE_FRAME_STYLE =
@@ -249,31 +250,6 @@ function vertexXml(
         `<mxGeometry x="${box.x - ox}" y="${box.y - oy}" width="${box.w}" height="${box.h}" as="geometry"/>` +
         `</mxCell>`
     )
-}
-
-/** The lane a node declared, or 0. */
-function poolLaneOf(n: DiagramNode): number {
-    return (n.kind === "icon" || n.kind === "box") && n.cell
-        ? Math.max(0, n.cell.lane)
-        : 0
-}
-
-/**
- * How many messages a sequence container has.
- *
- * The highest step number, or the message count when the model numbered nothing — either
- * way, one row per message, so the arrows do not stack on a single y.
- */
-function countMessages(
-    n: SequenceNode,
-    links: { source: string; target: string; step?: number }[],
-): number {
-    const own = new Set(n.children.map((c) => c.id))
-    const mine = links.filter((l) => own.has(l.source) && own.has(l.target))
-    const steps = mine
-        .map((l) => l.step)
-        .filter((s): s is number => s != null && s > 0)
-    return Math.max(mine.length, ...(steps.length ? steps : [0]))
 }
 
 /** One chrome cell: a lane band, a label column, a milestone strip, a lifeline. */
@@ -388,7 +364,10 @@ function poolChrome(
                   h: m.phaseLabel,
               }
             : {
-                  x: rect.x + POOL_PAD + m.contentW + n.gap,
+                  // Flush against the content, because that is what the measure pass
+                  // reserved: the pool's width is padding + content + this strip, with no
+                  // gap between the two. Adding one here pushed the strip outside the frame.
+                  x: rect.x + POOL_PAD + m.contentW,
                   y: m.contentY + from * (m.cellH + n.gap),
                   w: m.phaseLabel,
                   h: Math.max(
@@ -426,31 +405,24 @@ function sequenceChrome(
     n: SequenceNode,
     rect: Rect,
     kids: { node: DiagramNode; rect: Rect }[],
-    messages: number,
-): { xml: string[]; replaced: Set<string> } {
-    const m = sequenceMetrics(n, rect, messages)
-    const xml: string[] = []
-    const replaced = new Set<string>()
-    for (const k of kids) {
+    metrics: SequenceMetrics,
+): string[] {
+    return kids.map((k) => {
         const head = k.rect
-        xml.push(
-            chromeXml(
-                k.node.id,
-                n.id,
-                {
-                    x: head.x,
-                    y: head.y,
-                    w: head.w,
-                    h: Math.max(head.h, m.bottom - head.y),
-                },
-                rect,
-                `${LIFELINE_STYLE}size=${Math.round(head.h)};`,
-                "label" in k.node ? k.node.label : "",
-            ),
+        return chromeXml(
+            k.node.id,
+            n.id,
+            {
+                x: head.x,
+                y: head.y,
+                w: head.w,
+                h: Math.max(head.h, metrics.bottom - head.y),
+            },
+            rect,
+            `${LIFELINE_STYLE}size=${Math.round(head.h)};`,
+            "label" in k.node ? k.node.label : "",
         )
-        replaced.add(k.node.id)
-    }
-    return { xml, replaced }
+    })
 }
 
 /** The label an edge renders, with its step number prefixed. */
@@ -615,7 +587,8 @@ export function renderDiagram(
             const { xml, bands } = poolChrome(n, f.rect, kids)
             chrome.set(n.id, xml)
             for (const c of n.children) {
-                const band = bands[Math.min(poolLaneOf(c), bands.length - 1)]
+                const band =
+                    bands[Math.min(poolCellOf(c).lane, bands.length - 1)]
                 if (band) bandOf.set(c.id, { ...band.rect, id: band.id })
             }
         } else if (n.kind === "sequence") {
@@ -625,11 +598,16 @@ export function renderDiagram(
                     (k): k is { node: DiagramNode; rect: Rect } =>
                         k.rect !== undefined,
                 )
-            const count = countMessages(n, tree.links)
-            const { xml, replaced } = sequenceChrome(n, f.rect, kids, count)
-            chrome.set(n.id, xml)
-            for (const id of replaced) asLifeline.add(id)
-            messageYOf.set(n.id, sequenceMetrics(n, f.rect, count).messageY)
+            // One metrics call for both the lifeline heights and the message positions:
+            // computing it twice is how the two would drift apart.
+            const metrics = sequenceMetrics(
+                n,
+                f.rect,
+                messageCount(n, tree.links),
+            )
+            chrome.set(n.id, sequenceChrome(n, f.rect, kids, metrics))
+            for (const k of kids) asLifeline.add(k.node.id)
+            messageYOf.set(n.id, metrics.messageY)
         }
     }
 
@@ -723,16 +701,7 @@ export function renderDiagram(
     // cuts through a frame only one of its endpoints belongs to, reads as a mistake even
     // though it hits nothing.
     const frames = new Set(
-        flat
-            .filter(
-                (f) =>
-                    f.node.kind === "group" ||
-                    f.node.kind === "grid" ||
-                    f.node.kind === "pool" ||
-                    f.node.kind === "sequence" ||
-                    f.node.kind === "radial",
-            )
-            .map((f) => f.node.id),
+        flat.filter((f) => isContainer(f.node)).map((f) => f.node.id),
     )
     const routes = routeEdges(
         routable.map(({ link: l, index }) => ({

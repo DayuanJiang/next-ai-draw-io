@@ -722,7 +722,7 @@ add_container: children stacked along one axis. dir "row" side by side, "col" on
 
 add_grid: packs children into cols columns. Use it to pack 3-8 related icons into one labelled area rather than giving each its own frame.
 
-add_pool: a SWIMLANE diagram. lanes are the roles, top to bottom. Each step is an add_box with lane (which role owns it) and col (which step of the process it is); columns advance left to right and an empty cell means that role does nothing at that point. Two steps with the same col happen at the same time. phases optionally labels groups of columns.
+add_pool: a SWIMLANE diagram. lanes are the roles, top to bottom. Set orientation to "vertical" for vertical swimlanes, where the lanes become columns and the flow runs downwards. Each step is an add_box with lane (which role owns it) and col (which step of the process it is); columns advance left to right and an empty cell means that role does nothing at that point. Two steps with the same col happen at the same time. phases optionally labels groups of columns.
 {"operations":[
   {"op":"add_pool","id":"p","label":"Expense claim","lanes":["Employee","Manager","Finance"],"phases":["Submit","Review","Pay"]},
   {"op":"add_box","id":"fill","parent":"p","label":"Fill form","lane":0,"col":0,"shape":"terminator"},

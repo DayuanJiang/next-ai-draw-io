@@ -46,13 +46,14 @@ export interface GraphEdge {
 export interface GraphOptions {
     /** "col" (default): layers stack downwards. "row": layers run left to right. */
     flow?: "col" | "row"
-    /** Distance between layers. */
-    layerGap?: number
-    /** Distance between nodes within a layer. */
-    nodeGap?: number
-    /** Prefix for the generated layer container ids. */
-    idPrefix?: string
 }
+
+/** Distance between layers. */
+const LAYER_GAP = 48
+/** Distance between nodes within a layer. */
+const NODE_GAP = 60
+/** Prefix for the generated layer container ids. */
+const LAYER_ID = "__layer"
 
 export interface GraphResult {
     operations: Operation[]
@@ -268,7 +269,6 @@ export function graphToOperations(
     const flow = opts.flow ?? "col"
     const ids = nodes.map((n) => n.id)
     const known = new Set(ids)
-    const prefix = opts.idPrefix ?? "__layer"
 
     const unknownEndpoints: string[] = []
     const usable: GraphEdge[] = []
@@ -290,7 +290,7 @@ export function graphToOperations(
     // The flow axis is the OUTER container's direction; a layer runs across it.
     const outerDir = flow
     const layerDir = flow === "col" ? "row" : "col"
-    const root = `${prefix}s`
+    const root = `${LAYER_ID}s`
 
     const operations: Operation[] = [
         {
@@ -298,7 +298,7 @@ export function graphToOperations(
             id: root,
             label: "",
             dir: outerDir,
-            gap: opts.layerGap ?? 48,
+            gap: LAYER_GAP,
         },
     ]
     const byId = new Map(nodes.map((n) => [n.id, n]))
@@ -327,14 +327,14 @@ export function graphToOperations(
             operations.push(add(members[0], root))
             return
         }
-        const band = `${prefix}${i}`
+        const band = `${LAYER_ID}${i}`
         operations.push({
             op: "add_container",
             id: band,
             parent: root,
             label: "",
             dir: layerDir,
-            gap: opts.nodeGap ?? 60,
+            gap: NODE_GAP,
         })
         for (const m of members) operations.push(add(m, band))
     })

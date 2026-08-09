@@ -55,9 +55,9 @@ export const POOL_PAD = 16
 /** Width of the lane-name column (height, when the pool is vertical). */
 export const LANE_LABEL = 110
 /** Height of the milestone band (width, when the pool is vertical). */
-export const PHASE_LABEL = 26
+const PHASE_LABEL = 26
 /** A pool's own title strip. */
-export const POOL_HEADER = 34
+const POOL_HEADER = 34
 /** Vertical padding inside a lane band, so nodes do not touch the band's edges. */
 const LANE_PAD = 14
 
@@ -132,10 +132,8 @@ export function poolMetrics(
     }
 }
 
-/** Where a sequence diagram's lifelines start and how far they run. */
+/** How far a sequence diagram's lifelines run, and where each message sits. */
 export interface SequenceMetrics {
-    /** Top of the lifeline, just under the participant heads. */
-    top: number
     /** Bottom of the lifeline. */
     bottom: number
     /** Vertical position of message N, for N starting at 1. */
@@ -148,10 +146,9 @@ export function sequenceMetrics(
     messages: number,
 ): SequenceMetrics {
     const head = n.label ? HEADER : 0
-    const top = rect.y + head + PAD + HEAD_H
-    const first = top + LIFELINE_TOP
+    // The first message hangs a fixed distance below the participant heads.
+    const first = rect.y + head + PAD + HEAD_H + LIFELINE_TOP
     return {
-        top,
         bottom: first + Math.max(0, messages - 1) * n.step + LIFELINE_TAIL,
         messageY: (step) => first + Math.max(0, step - 1) * n.step,
     }
@@ -162,28 +159,17 @@ export interface Placed {
     node: DiagramNode
     rect: Rect
     children: Placed[]
-    /**
-     * For a node inside a radial container: the extent of its whole subtree across the
-     * branching axis. Measured on the way up, spent on the way down — a parent needs its
-     * children's subtree extents to divide its own span between them.
-     */
-    extent?: number
 }
 
 /**
- * What layout needs to know that the tree alone does not carry.
+ * The arrows layout needs, which the node tree alone does not carry.
  *
  * Three of the five container kinds are laid out from the diagram's arrows, not from
  * nesting: a sequence diagram's messages set how tall the lifelines have to be, and a mind
  * map's hierarchy IS its arrows. Links live on the tree, not on the node, so they are
- * passed in rather than read from a parent pointer.
+ * passed down rather than read from a parent pointer.
  */
-export interface LayoutContext {
-    /** Every link in the diagram, source → target. */
-    links: { source: string; target: string; step?: number }[]
-}
-
-const NO_CONTEXT: LayoutContext = { links: [] }
+export type LayoutLinks = { source: string; target: string; step?: number }[]
 
 /** Intrinsic size of a text box: widest wrapped line by line count. */
 export function autoBoxSize(label: string): { w: number; h: number } {
@@ -217,22 +203,14 @@ function headerFor(n: ContainerNode): number {
 }
 
 /**
- * May this node be stretched to match a sibling's size?
+ * The cell a node occupies inside a pool. Absent means (0,0).
  *
- * Only a `group` may. A leaf keeps its natural size, because stretching an icon distorts
- * the glyph. The three specialised containers compute their interiors from their own rules
- * — lane bands, lifeline positions, ring radii — so forcing one wider leaves dead space
- * inside it rather than filling anything, and forcing one taller detaches its lane bands
- * from the nodes sitting on them.
+ * No clamping needed: `add_icon`/`add_box` clamp at the boundary where the model's numbers
+ * arrive, and the only other way a cell gets set is the parser, whose `dai_cell` pattern
+ * matches digits only. So by here it is already non-negative.
  */
-function stretches(n: DiagramNode): boolean {
-    return n.kind === "group"
-}
-
-/** The cell a node occupies inside a pool. Absent means (0,0). */
-function poolCellOf(n: DiagramNode): { lane: number; col: number } {
-    if ((n.kind === "icon" || n.kind === "box") && n.cell)
-        return { lane: Math.max(0, n.cell.lane), col: Math.max(0, n.cell.col) }
+export function poolCellOf(n: DiagramNode): { lane: number; col: number } {
+    if ((n.kind === "icon" || n.kind === "box") && n.cell) return n.cell
     return { lane: 0, col: 0 }
 }
 
@@ -243,9 +221,9 @@ function poolCellOf(n: DiagramNode): { lane: number; col: number } {
  * Steps are what order the messages vertically, so a diagram whose links carry no step
  * still needs one row per message — otherwise every arrow lands on the same y.
  */
-function messageCount(n: SequenceNode, ctx: LayoutContext): number {
+export function messageCount(n: SequenceNode, links: LayoutLinks): number {
     const own = new Set(n.children.map((c) => c.id))
-    const mine = ctx.links.filter((l) => own.has(l.source) && own.has(l.target))
+    const mine = links.filter((l) => own.has(l.source) && own.has(l.target))
     const steps = mine
         .map((l) => l.step)
         .filter((s): s is number => s != null && s > 0)
@@ -263,8 +241,6 @@ interface RadialTree {
     kids: RadialTree[]
     /** How much room this whole subtree needs across the branching axis. */
     extent: number
-    /** How many generations deep this subtree goes, counting itself as 1. */
-    depth: number
 }
 
 /**
@@ -279,14 +255,14 @@ interface RadialTree {
  */
 function radialHierarchy(
     kids: Placed[],
-    ctx: LayoutContext,
+    links: LayoutLinks,
     across: "w" | "h",
     gap: number,
 ): { root: RadialTree; branches: RadialTree[] } | null {
     if (kids.length === 0) return null
     const own = new Map(kids.map((k) => [k.node.id, k]))
     const parent = new Map<string, string>()
-    for (const l of ctx.links) {
+    for (const l of links) {
         if (!own.has(l.source) || !own.has(l.target)) continue
         if (l.source === l.target) continue
         if (!parent.has(l.target)) parent.set(l.target, l.source)
@@ -312,22 +288,20 @@ function radialHierarchy(
     for (const k of kids) {
         if (k.node.id === rootId) continue
         const up = parent.get(k.node.id)
-        // An orphan, or a node whose parent chain loops back to itself, attaches to the root.
+        // An orphan, or a node whose parent chain loops back on itself, attaches to the root.
+        // `up === k.node.id` cannot happen: self-links are skipped when `parent` is built.
         const attach =
-            up !== undefined && up !== k.node.id && rootOf(k.node.id) === rootId
-                ? up
-                : rootId
+            up !== undefined && rootOf(k.node.id) === rootId ? up : rootId
         const list = childrenOf.get(attach)
         if (list) list.push(k)
         else childrenOf.set(attach, [k])
     }
 
-    const seen = new Set<string>()
+    // No visited-set needed: `parent` records at most one parent per node, so `childrenOf`
+    // is a forest by construction, and `rootOf` above already reattached anything whose
+    // parent chain looped. The recursion cannot revisit a node.
     const build = (p: Placed): RadialTree => {
-        seen.add(p.node.id)
-        const kidTrees = (childrenOf.get(p.node.id) ?? [])
-            .filter((c) => !seen.has(c.node.id))
-            .map(build)
+        const kidTrees = (childrenOf.get(p.node.id) ?? []).map(build)
         const total =
             kidTrees.reduce((s, t) => s + t.extent, 0) +
             gap * Math.max(0, kidTrees.length - 1)
@@ -335,9 +309,6 @@ function radialHierarchy(
             p,
             kids: kidTrees,
             extent: Math.max(p.rect[across], total),
-            depth: kidTrees.length
-                ? 1 + Math.max(...kidTrees.map((t) => t.depth))
-                : 1,
         }
     }
     const root = build(own.get(rootId) as Placed)
@@ -368,10 +339,10 @@ function radialReach(
     along: "w" | "h",
     gap: number,
 ): number {
-    if (side.length === 0) return 0
-    const levels = widestPerLevel(side, along)
-    const generations = Math.max(...side.map((b) => b.depth))
-    return levels.slice(0, generations).reduce((s, v) => s + v + gap, 0)
+    // widestPerLevel writes one entry per generation that exists, so its length IS the depth
+    // of the deepest branch on this side. An empty side yields an empty list, and reducing
+    // that from 0 already gives 0.
+    return widestPerLevel(side, along).reduce((s, v) => s + v + gap, 0)
 }
 
 /**
@@ -398,7 +369,7 @@ function radialSides(branches: RadialTree[]): {
 function measure(
     n: DiagramNode,
     defaultGlyph: number,
-    ctx: LayoutContext = NO_CONTEXT,
+    links: LayoutLinks,
 ): Placed {
     if (n.kind === "icon") {
         const glyph = n.size ?? defaultGlyph
@@ -417,7 +388,7 @@ function measure(
         return { node: n, rect: { x: 0, y: 0, w: 0, h: 30 }, children: [] }
     }
 
-    const kids = n.children.map((c) => measure(c, defaultGlyph, ctx))
+    const kids = n.children.map((c) => measure(c, defaultGlyph, links))
     const head = headerFor(n)
     const gap = n.gap
 
@@ -450,7 +421,7 @@ function measure(
         const m = sequenceMetrics(
             n,
             { x: 0, y: 0, w: 0, h: 0 },
-            messageCount(n, ctx),
+            messageCount(n, links),
         )
         return {
             node: n,
@@ -467,7 +438,7 @@ function measure(
     if (n.kind === "radial") {
         const down = n.spread === "down"
         const across = down ? "w" : "h"
-        const tree = radialHierarchy(kids, ctx, across, n.gap)
+        const tree = radialHierarchy(kids, links, across, n.gap)
         if (!tree)
             return {
                 node: n,
@@ -538,8 +509,13 @@ function measure(
     // group: row or col
     if (n.dir === "row") {
         const tallest = Math.max(0, ...kids.map((k) => k.rect.h))
+        // Only a group stretches to match its siblings. A leaf keeps its natural size,
+        // because stretching an icon distorts the glyph; and a grid, pool, sequence or
+        // radial computes its interior from its own rule, so forcing one bigger leaves dead
+        // space inside rather than filling anything — and for a pool it would detach the
+        // lane bands from the nodes sitting on them.
         for (const k of kids)
-            if (stretches(k.node)) k.rect.h = Math.max(k.rect.h, tallest)
+            if (k.node.kind === "group") k.rect.h = Math.max(k.rect.h, tallest)
         const w =
             PAD * 2 +
             kids.reduce((s, k) => s + k.rect.w, 0) +
@@ -553,8 +529,7 @@ function measure(
     }
 
     const widest = Math.max(0, ...kids.map((k) => k.rect.w))
-    // Only groups stretch: a grid computes its own interior, so forcing it wider would
-    // leave a gap inside it rather than filling the space.
+    // Only a group stretches — same reasoning as the row branch above.
     for (const k of kids)
         if (k.node.kind === "group") k.rect.w = Math.max(k.rect.w, widest)
     const w = PAD * 2 + Math.max(0, ...kids.map((k) => k.rect.w))
@@ -579,12 +554,7 @@ function measure(
  * stretched frame reads as deliberately spaced instead of sparse, and the resulting
  * cluster is centred.
  */
-function place(
-    p: Placed,
-    x: number,
-    y: number,
-    ctx: LayoutContext = NO_CONTEXT,
-): void {
+function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
     p.rect.x = Math.round(x)
     p.rect.y = Math.round(y)
     const n = p.node
@@ -611,7 +581,7 @@ function place(
                 k,
                 cx + (cellW - k.rect.w) / 2,
                 cy + (cellH - k.rect.h) / 2,
-                ctx,
+                links,
             )
         })
         return
@@ -633,7 +603,7 @@ function place(
                 k,
                 cx + (m.cellW - k.rect.w) / 2,
                 cy + (m.cellH - k.rect.h) / 2,
-                ctx,
+                links,
             )
         }
         return
@@ -644,14 +614,14 @@ function place(
         // renderer, so nothing else has to be placed here.
         let cur = innerX
         for (const k of kids) {
-            place(k, cur, innerTop, ctx)
+            place(k, cur, innerTop, links)
             cur += k.rect.w + n.gap
         }
         return
     }
 
     if (n.kind === "radial") {
-        placeRadial(p, n, innerX, innerTop, innerW, innerH, ctx)
+        placeRadial(p, n, innerX, innerTop, innerW, innerH, links)
         return
     }
 
@@ -667,10 +637,10 @@ function place(
 
     for (const kid of kids) {
         if (alongRow) {
-            place(kid, cur, innerTop + (innerH - kid.rect.h) / 2, ctx)
+            place(kid, cur, innerTop + (innerH - kid.rect.h) / 2, links)
             cur += kid.rect.w + gap
         } else {
-            place(kid, innerX + (innerW - kid.rect.w) / 2, cur, ctx)
+            place(kid, innerX + (innerW - kid.rect.w) / 2, cur, links)
             cur += kid.rect.h + gap
         }
     }
@@ -694,12 +664,12 @@ function placeRadial(
     innerTop: number,
     innerW: number,
     innerH: number,
-    ctx: LayoutContext,
+    links: LayoutLinks,
 ): void {
     const down = n.spread === "down"
     const along = down ? "h" : "w"
     const across = down ? "w" : "h"
-    const tree = radialHierarchy(p.children, ctx, across, n.gap)
+    const tree = radialHierarchy(p.children, links, across, n.gap)
     if (!tree) return
     const { root, branches } = tree
     const centre = root.p
@@ -714,7 +684,6 @@ function placeRadial(
      */
     const spread = (
         items: RadialTree[],
-        level: number,
         start: number,
         alongPos: number,
         sign: 1 | -1,
@@ -728,8 +697,8 @@ function placeRadial(
             // On the left side the ring position is the branch's FAR edge, so its own size has
             // to come off to get its origin.
             const a = sign > 0 ? alongPos : alongPos - b.p.rect[along]
-            if (down) place(b.p, mid - b.p.rect.w / 2, a, ctx)
-            else place(b.p, a, mid - b.p.rect.h / 2, ctx)
+            if (down) place(b.p, mid - b.p.rect.w / 2, a, links)
+            else place(b.p, a, mid - b.p.rect.h / 2, links)
 
             if (b.kids.length) {
                 // `alongPos` means the NEAR edge going outwards and the FAR edge coming back,
@@ -737,17 +706,16 @@ function placeRadial(
                 // recursion subtracts the child's own width, so subtracting the ring width as
                 // well would place it a full ring too far out — off the frame.
                 const next = sign > 0 ? a + b.p.rect[along] + n.gap : a - n.gap
-                spread(b.kids, level + 1, mid, next, sign)
+                spread(b.kids, mid, next, sign)
             }
             cur += b.extent + n.gap
         }
     }
 
     if (down) {
-        place(centre, innerX + (innerW - centre.rect.w) / 2, innerTop, ctx)
+        place(centre, innerX + (innerW - centre.rect.w) / 2, innerTop, links)
         spread(
             branches,
-            0,
             centre.rect.x + centre.rect.w / 2,
             centre.rect.y + centre.rect.h + n.gap,
             1,
@@ -766,11 +734,11 @@ function placeRadial(
         centre,
         innerX + radialReach(left, "w", n.gap),
         innerTop + (innerH - centre.rect.h) / 2,
-        ctx,
+        links,
     )
     const midY = centre.rect.y + centre.rect.h / 2
-    spread(right, 0, midY, centre.rect.x + centre.rect.w + n.gap, 1)
-    spread(left, 0, midY, centre.rect.x - n.gap, -1)
+    spread(right, midY, centre.rect.x + centre.rect.w + n.gap, 1)
+    spread(left, midY, centre.rect.x - n.gap, -1)
 }
 
 export interface LayoutResult {
@@ -797,13 +765,13 @@ export function layoutForest(
         gap?: number
         /** The diagram's links. Needed by sequence containers, which size themselves from
          *  the number of messages between their participants. */
-        links?: LayoutContext["links"]
+        links?: LayoutLinks
     } = {},
 ): LayoutResult {
     const glyph = opts.iconSize ?? ICON_SIZE
     const gap = opts.gap ?? 70
-    const ctx: LayoutContext = { links: opts.links ?? [] }
-    const placed = roots.map((r) => measure(r, glyph, ctx))
+    const links: LayoutLinks = opts.links ?? []
+    const placed = roots.map((r) => measure(r, glyph, links))
 
     let cur = ORIGIN.x
     for (const p of placed) {
@@ -811,9 +779,9 @@ export function layoutForest(
         const held =
             n.kind === "title" ? null : n.pinned ? (n.rect ?? null) : null
         if (held) {
-            place(p, held.x, held.y, ctx)
+            place(p, held.x, held.y, links)
         } else {
-            place(p, cur, ORIGIN.y, ctx)
+            place(p, cur, ORIGIN.y, links)
             cur += p.rect.w + gap
         }
     }
