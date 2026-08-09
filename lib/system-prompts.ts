@@ -96,6 +96,12 @@ Use draw_graph when the diagram is boxes joined by arrows and the arrows define 
   them — a flowchart written as XML or as nested containers comes out as one column, which forces
   every branch to jump over the step beside it.
 
+Use restructure_diagram's add_graph when ONE ZONE of a nested diagram is arrow-ordered:
+  an architecture diagram where a zone's contents follow the data flow, a poster column with
+  a small flowchart in it. add_graph takes nodes+edges like draw_graph, lays them out inside
+  its container, and the container joins the outer layout like any node (dir: col flows
+  down, row flows right).
+
 Use restructure_diagram when the diagram's meaning is in NESTING or in a fixed frame:
   - Cloud architecture (AWS/Azure/GCP/Kubernetes): things inside things. Call search_stencils first.
   - Swimlane and BPMN diagrams: add_pool with one lane per role, then add_box with lane and col.

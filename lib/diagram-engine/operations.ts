@@ -11,6 +11,8 @@
  */
 
 import { z } from "zod"
+// A runtime import while graph.ts imports only TYPES from here — no cycle at runtime.
+import { graphToOperations } from "./graph"
 import {
     type ContainerNode,
     type DiagramNode,
@@ -170,6 +172,62 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .optional()
             .describe(
                 "Cross-axis position in the parent: start/end pin to an edge, stretch fills. Default center",
+            ),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_graph"),
+        id: z.string(),
+        parent: z
+            .string()
+            .optional()
+            .describe("Container to embed the graph in; omit for top level"),
+        label: z.string().optional().describe("Frame title; omit for none"),
+        dir: z
+            .enum(["col", "row"])
+            .optional()
+            .describe(
+                "Flow direction: col (default) downwards, row rightwards",
+            ),
+        nodes: z
+            .array(
+                z.object({
+                    id: z.string(),
+                    label: z.string(),
+                    shape: z.string().optional(),
+                    icon: z.string().optional(),
+                    group: z.string().optional(),
+                    role: z
+                        .enum([
+                            "banner",
+                            "heading",
+                            "body",
+                            "callout",
+                            "good",
+                            "bad",
+                            "metric",
+                            "muted",
+                        ])
+                        .optional(),
+                }),
+            )
+            .describe("The graph's nodes"),
+        edges: z
+            .array(
+                z.object({
+                    source: z.string(),
+                    target: z.string(),
+                    label: z.string().optional(),
+                    dashed: z.boolean().optional(),
+                    bold: z.boolean().optional(),
+                    head: z.string().optional(),
+                    tail: z.string().optional(),
+                    headFill: z.boolean().optional(),
+                    tailFill: z.boolean().optional(),
+                }),
+            )
+            .describe(
+                "The arrows. THEY decide the node positions — layering and ordering are computed from them",
             ),
         after: z.string().optional(),
     }),
@@ -459,7 +517,40 @@ export function applyOperations(
 
     const exists = (id: string) => findNode(tree, id) !== null
 
+    // add_graph is a macro: the layered-graph pass (graph.ts) decides which layer each
+    // node belongs to and who stands beside whom, and emits ordinary container/box/link
+    // operations. Expanding it HERE — rather than treating graphs as a special page-level
+    // tool — is what lets a graph sit inside a poster column or an architecture zone and
+    // still participate in the outer flexbox like any other node.
+    const expanded: Operation[] = []
     for (const op of ops) {
+        if (op.op !== "add_graph") {
+            expanded.push(op)
+            continue
+        }
+        const g = graphToOperations(op.nodes, op.edges, {
+            flow: op.dir ?? "col",
+            parent: op.parent,
+            // The graph's own id namespaces the synthetic layer containers, so two
+            // graphs on one page cannot collide on `__layer0`.
+            prefix: op.id,
+            rootId: op.id,
+        })
+        if (g.unknownEndpoints.length)
+            errors.push(
+                `add_graph "${op.id}": edge endpoint(s) not in nodes: ${g.unknownEndpoints.join(", ")}`,
+            )
+        if (op.label || op.after) {
+            const root = g.operations[0]
+            if (root?.op === "add_container") {
+                if (op.label) root.label = op.label
+                if (op.after) root.after = op.after
+            }
+        }
+        expanded.push(...g.operations)
+    }
+
+    for (const op of expanded) {
         switch (op.op) {
             case "add_icon":
             case "add_box":

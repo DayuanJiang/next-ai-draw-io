@@ -61,6 +61,16 @@ export interface GraphEdge {
 export interface GraphOptions {
     /** "col" (default): layers stack downwards. "row": layers run left to right. */
     flow?: "col" | "row"
+    /** Container to embed the graph in; absent means the page. */
+    parent?: string
+    /**
+     * Namespace for the synthetic layer-container ids. Without one, two graphs on one
+     * page would both emit `__layers`/`__layer0` and the second would be rejected as a
+     * duplicate id.
+     */
+    prefix?: string
+    /** Id for the outer container itself; defaults to `${prefix}__layers`. */
+    rootId?: string
 }
 
 /** Distance between layers. */
@@ -305,12 +315,14 @@ export function graphToOperations(
     // The flow axis is the OUTER container's direction; a layer runs across it.
     const outerDir = flow
     const layerDir = flow === "col" ? "row" : "col"
-    const root = `${LAYER_ID}s`
+    const ns = opts.prefix ?? ""
+    const root = opts.rootId ?? `${ns}${LAYER_ID}s`
 
     const operations: Operation[] = [
         {
             op: "add_container",
             id: root,
+            ...(opts.parent ? { parent: opts.parent } : {}),
             label: "",
             dir: outerDir,
             gap: LAYER_GAP,
@@ -344,7 +356,7 @@ export function graphToOperations(
             operations.push(add(members[0], root))
             return
         }
-        const band = `${LAYER_ID}${i}`
+        const band = `${ns}${LAYER_ID}${i}`
         operations.push({
             op: "add_container",
             id: band,
