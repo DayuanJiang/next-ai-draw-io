@@ -842,6 +842,26 @@ Grouping: when the nodes fall into natural zones (remote vs local, frontend vs b
                                 target: z.string(),
                                 label: z.string().optional(),
                                 dashed: z.boolean().optional(),
+                                bold: z
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                        "Thick coloured arrow for THE key relationship; use sparingly",
+                                    ),
+                                head: z
+                                    .string()
+                                    .optional()
+                                    .describe(
+                                        "Arrowhead at the target: block/open/diamond/diamondThin/oval/none, ER: ERone/ERmany/ERoneToMany/ERzeroToMany. UML inheritance: head=block headFill=false",
+                                    ),
+                                tail: z
+                                    .string()
+                                    .optional()
+                                    .describe(
+                                        "Arrowhead at the source, same values. ER 1:N: tail=ERone head=ERoneToMany",
+                                    ),
+                                headFill: z.boolean().optional(),
+                                tailFill: z.boolean().optional(),
                             }),
                         )
                         .describe(

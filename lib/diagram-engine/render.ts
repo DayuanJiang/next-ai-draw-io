@@ -590,6 +590,18 @@ function edgeXml(
     let style = l.style ?? EDGE_STYLE
     if (!l.style) {
         if (l.dashed) style += "dashed=1;"
+        // A bold link is a visual element, not a connector: thick amber with a filled
+        // block head — the "this becomes that" arrow of a comparison.
+        if (l.bold)
+            style +=
+                "strokeWidth=4;strokeColor=#D79B00;endArrow=block;endFill=1;endSize=6;"
+        // Arrowhead vocabulary, passed through to draw.io. Fill is written whenever
+        // the head is: UML composition vs aggregation differ ONLY by fill, so leaving
+        // it to draw.io's per-head default would flip the meaning.
+        if (l.head !== undefined)
+            style += `endArrow=${l.head};endFill=${l.headFill ? 1 : 0};`
+        if (l.tail !== undefined)
+            style += `startArrow=${l.tail};startFill=${l.tailFill ? 1 : 0};`
         if (label) style += "labelBackgroundColor=light-dark(#FFFFFF,#0B0F14);"
     }
     if (route)
@@ -646,7 +658,14 @@ function messageXml(
     const self = l.source === l.target
     let style = l.style ?? EDGE_STYLE
     if (!l.style) {
-        style += "endArrow=block;endFill=1;html=1;"
+        // The declared head wins over the sequence default: an async message drawn
+        // with an open arrow is UML notation, not decoration.
+        style +=
+            l.head !== undefined
+                ? `endArrow=${l.head};endFill=${l.headFill ? 1 : 0};html=1;`
+                : "endArrow=block;endFill=1;html=1;"
+        if (l.tail !== undefined)
+            style += `startArrow=${l.tail};startFill=${l.tailFill ? 1 : 0};`
         if (l.dashed) style += "dashed=1;"
         style += "labelBackgroundColor=light-dark(#FFFFFF,#0B0F14);"
         style += self ? "edgeStyle=orthogonalEdgeStyle;" : "edgeStyle=none;"

@@ -244,6 +244,22 @@ export interface LinkSpec {
     label?: string
     /** Dashed line — replication, sync, policy, lineage. */
     dashed?: boolean
+    /**
+     * A bold arrow: the relationship IS the point — a transformation, the main flow.
+     * Thick and coloured, a visual element rather than a hairline connector.
+     */
+    bold?: boolean
+    /**
+     * Arrowhead at the target / at the source. draw.io endArrow/startArrow tokens:
+     * block, open, diamond, diamondThin, oval, cross, ERone, ERmany, ERoneToMany,
+     * ERzeroToMany, ERzeroToOne, none… Unset means the default (classic at the target,
+     * nothing at the source). `headFill`/`tailFill` distinguish UML composition
+     * (filled diamond) from aggregation (hollow) — conventions where fill IS meaning.
+     */
+    head?: string
+    tail?: string
+    headFill?: boolean
+    tailFill?: boolean
     /** Step number, rendered as an "N. " prefix on the label. */
     step?: number
     /** Verbatim style, when recovered from XML. */

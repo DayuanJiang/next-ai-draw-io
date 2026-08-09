@@ -853,12 +853,20 @@ function toLink(c: RawCell, labelOverride?: string): LinkSpec | null {
     if (!c.source || !c.target) return null
     const raw = (labelOverride ?? c.value).trim()
     const { label, step } = splitStep(raw)
+    const head = styleValue(c.style, "endArrow")
+    const tail = styleValue(c.style, "startArrow")
     return {
         id: c.id,
         source: c.source,
         target: c.target,
         label: label || undefined,
         dashed: styleValue(c.style, "dashed") === "1" || undefined,
+        bold:
+            Number(styleValue(c.style, "strokeWidth") ?? "1") >= 3 || undefined,
+        head,
+        tail,
+        headFill: head ? styleValue(c.style, "endFill") === "1" : undefined,
+        tailFill: tail ? styleValue(c.style, "startFill") === "1" : undefined,
         step,
         style: c.style,
     }

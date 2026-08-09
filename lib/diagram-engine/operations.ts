@@ -296,6 +296,12 @@ export const OperationSchema = z.discriminatedUnion("op", [
     }),
     z.object({
         op: z.literal("link"),
+        id: z
+            .string()
+            .optional()
+            .describe(
+                "Edge id. Required for a second edge between the same two nodes (parallel relationships), so each can be addressed later",
+            ),
         source: z.string(),
         target: z.string(),
         label: z.string().optional(),
@@ -303,6 +309,31 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .boolean()
             .optional()
             .describe("Dashed line — replication, sync, policy"),
+        bold: z
+            .boolean()
+            .optional()
+            .describe(
+                "A thick coloured arrow for THE key relationship — a transformation, the main flow. Use sparingly: one or two per diagram",
+            ),
+        head: z
+            .string()
+            .optional()
+            .describe(
+                "Arrowhead at the target. block/open/diamond/diamondThin/oval/cross/none, ER: ERone/ERmany/ERoneToMany/ERzeroToMany/ERzeroToOne. UML inheritance: head=block headFill=false. Omit for a plain arrow",
+            ),
+        tail: z
+            .string()
+            .optional()
+            .describe(
+                "Arrowhead at the source, same values as head. UML composition: tail=diamondThin tailFill=true. ER 1:N: tail=ERone head=ERoneToMany",
+            ),
+        headFill: z
+            .boolean()
+            .optional()
+            .describe(
+                "Fill the head. Meaning-bearing in UML: filled diamond=composition, hollow=aggregation",
+            ),
+        tailFill: z.boolean().optional(),
         step: z
             .number()
             .optional()
@@ -685,25 +716,52 @@ export function applyOperations(
                     errors.push(`link: no node with id "${op.target}"`)
                     break
                 }
-                // A second arrow between the same pair is normally a mistake — two identical
-                // lines drawn on top of each other — EXCEPT between two participants of a
-                // sequence diagram, where a back-and-forth conversation is the whole point.
-                // There the messages are distinguished by their step, not by their endpoints.
+                // A second arrow between the same pair WITHOUT an id is a mistake — two
+                // identical lines on top of each other. With an id it is a parallel
+                // relationship (an ER diagram's "places" and "cancels" between the same
+                // two entities), addressable separately. Sequence messages are exempt
+                // as before: their identity is the step, not the endpoints.
                 const conversation = sameSequence(tree, op.source, op.target)
                 const dup =
                     !conversation &&
+                    !op.id &&
                     tree.links.some(
                         (l) => l.source === op.source && l.target === op.target,
                     )
                 if (dup) {
                     errors.push(
-                        `link: "${op.source}" → "${op.target}" already exists`,
+                        `link: "${op.source}" → "${op.target}" already exists — give this one an id to draw a second, parallel relationship`,
+                    )
+                    break
+                }
+                if (op.id && tree.links.some((l) => l.id === op.id)) {
+                    errors.push(`link: edge id "${op.id}" is already taken`)
+                    break
+                }
+                // Arrowhead tokens reach the style string; the same charset gate as
+                // shapes keeps `block;dashed=1` from smuggling style keys in.
+                const badHead = [op.head, op.tail].find(
+                    (v) => v !== undefined && !/^[a-zA-Z0-9]+$/.test(v),
+                )
+                if (badHead !== undefined) {
+                    errors.push(
+                        `link: arrowhead "${badHead}" contains characters that are not allowed`,
                     )
                     break
                 }
                 const link: LinkSpec = { source: op.source, target: op.target }
+                if (op.id) link.id = op.id
                 if (op.label) link.label = op.label
                 if (op.dashed) link.dashed = true
+                if (op.bold) link.bold = true
+                if (op.head !== undefined) {
+                    link.head = op.head
+                    link.headFill = op.headFill ?? false
+                }
+                if (op.tail !== undefined) {
+                    link.tail = op.tail
+                    link.tailFill = op.tailFill ?? false
+                }
                 if (op.step != null) link.step = op.step
                 tree.links.push(link)
                 break

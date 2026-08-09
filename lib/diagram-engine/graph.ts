@@ -49,6 +49,13 @@ export interface GraphEdge {
     target: string
     label?: string
     dashed?: boolean
+    /** Thick coloured arrow for THE key relationship. */
+    bold?: boolean
+    /** Arrowhead tokens, passed through — see LinkSpec. */
+    head?: string
+    tail?: string
+    headFill?: boolean
+    tailFill?: boolean
 }
 
 export interface GraphOptions {
@@ -356,6 +363,13 @@ export function graphToOperations(
             target: e.target,
             ...(e.label ? { label: e.label } : {}),
             ...(e.dashed ? { dashed: true } : {}),
+            ...(e.bold ? { bold: true } : {}),
+            ...(e.head !== undefined
+                ? { head: e.head, headFill: e.headFill ?? false }
+                : {}),
+            ...(e.tail !== undefined
+                ? { tail: e.tail, tailFill: e.tailFill ?? false }
+                : {}),
         })
 
     return {
