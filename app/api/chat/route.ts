@@ -493,9 +493,9 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
     const result = streamText({
         model,
         abortSignal: req.signal,
-        ...(process.env.MAX_OUTPUT_TOKENS && {
-            maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10),
-        }),
+        // Must be sent: unset means the provider's own default, and Bedrock's is 4096 —
+        // enough for a small diagram, so larger ones were cut off mid-attribute.
+        maxOutputTokens: Number(process.env.MAX_OUTPUT_TOKENS) || 16000,
         stopWhen: stepCountIs(5),
         // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
         experimental_repairToolCall: async ({ toolCall, error }) => {
