@@ -21,6 +21,15 @@ A Next.js web application that integrates AI capabilities with draw.io diagrams.
 
 > Note: Thanks to <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) sponsorship, the demo site now uses the powerful glm-4.7 model!
 
+<p align="center">
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./public/atlas-cloud-logo-white.svg">
+      <img src="./public/atlas-cloud-logo.svg" alt="Atlas Cloud" width="200">
+    </picture>
+  </a>
+</p>
+
 > 🎁 Thanks to **[Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io)** for sponsoring next-ai-draw-io. Its OpenAI-compatible API gives diagram workflows one provider connection for DeepSeek, Qwen, GLM, Kimi, MiniMax, and more. Budget-friendly access is available through the [Coding Plan](https://www.atlascloud.ai/console/coding-plan).
 
 
