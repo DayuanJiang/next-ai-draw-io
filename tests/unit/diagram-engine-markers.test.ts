@@ -47,10 +47,36 @@ describe("stampContainer", () => {
             dir: "row",
             gap: 30,
         })
-        // Duplicate keys are legal in draw.io and the LAST wins (verified in-browser),
-        // so appending a second container=1 keeps the shape a container.
-        expect(s.match(/container=1/g)?.length).toBe(2)
+        // Stated exactly once. Duplicate keys are legal in draw.io and the last one wins
+        // (verified in-browser), so a second copy was harmless to render — but a container
+        // is re-stamped on EVERY layout, so appending unconditionally grew the style by
+        // another copy per round-trip and the XML never settled.
+        expect(s.match(/container=1/g)?.length).toBe(1)
         expect(readDir(s)).toBe("row")
+    })
+
+    it("re-stamping is idempotent, so a round-trip settles", () => {
+        const once = stampContainer(ACCOUNT_STYLE, {
+            kind: "group",
+            dir: "row",
+            gap: 30,
+        })
+        const twice = stampContainer(once, {
+            kind: "group",
+            dir: "row",
+            gap: 30,
+        })
+        expect(twice).toBe(once)
+    })
+
+    it("corrects a catalog stencil that declares container=0", () => {
+        const s = stampContainer("rounded=0;container=0;fillColor=none;", {
+            kind: "group",
+            dir: "col",
+            gap: 12,
+        })
+        expect(s).not.toContain("container=0")
+        expect(s.match(/container=1/g)?.length).toBe(1)
     })
 
     it("records kind, dir and gap so the parser need not guess", () => {

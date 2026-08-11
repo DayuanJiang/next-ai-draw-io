@@ -80,8 +80,32 @@ export const MARKER = {
     grow: "dai_grow",
     /** Cross-axis position within the parent: "start" | "center" | "end". */
     align: "dai_align",
+    /** How a container spreads children along its own axis — justify-content. */
+    justify: "dai_justify",
+    /** A container's cross-axis default for children that declare no align of their own. */
+    alignItems: "dai_aitems",
+    /** Opted out of the content-width floor when weights divide a row — CSS's min-width:0. */
+    minw0: "dai_minw0",
+    /**
+     * Declared width cap, px.
+     *
+     * Has to be a marker rather than inferred from the drawn width: the two are only equal
+     * when the cap actually bit. A box capped at 400 that happens to be 260 wide would come
+     * back with a 260 cap, and the next re-layout could never let it grow again.
+     */
+    maxw: "dai_maxw",
     /** A container's interior padding, px. */
     pad: "dai_pad",
+    /**
+     * The page's declared width:height, on the default layer's cell.
+     *
+     * Page-level rather than per-node, so it goes on layer "1" — the one cell every
+     * diagram has and draw.io never discards. It cannot be inferred from pageWidth and
+     * pageHeight: those are what the last layout produced, so reading them back would
+     * turn whatever shape a diagram happened to come out as into a standing request to
+     * keep it.
+     */
+    aspect: "dai_aspect",
     /**
      * Marks a cell as chrome the engine draws and owns: a pool's lane bands, its label
      * columns, its milestone strip. The parser must not read these back as nodes — they are
@@ -237,6 +261,36 @@ export function isPinned(style: string): boolean {
  * load-bearing there: the container tokens rely on appending `container=1` after a catalog
  * style that may say `container=0`.
  */
+/**
+ * Set each `key=value;` token of `tokens` on a style, replacing any value already there.
+ *
+ * Matching is per token, not on the whole run: a catalog style may already declare
+ * `container=1` while saying nothing about `pointerEvents`, and re-adding the whole run
+ * because one token was missing is what let these accumulate.
+ *
+ * Exported because the same defect appeared a second time, on EDGES: an edge's style starts
+ * from whatever the canvas held, which already carried the previous pass's `exitX`/`entryX`
+ * port keys, and the router appended a fresh set on top of them every render — 76 characters
+ * per round-trip, without bound. Any code that re-stamps a computed mxGraph key onto a style
+ * recovered from the canvas needs this rather than `+=`.
+ */
+export function appendOnce(style: string, tokens: string): string {
+    let s = style
+    for (const tok of tokens.split(";")) {
+        if (!tok) continue
+        const key = tok.slice(0, tok.indexOf("="))
+        // The key must not be present with ANY value: `container=0` from a catalog stencil
+        // has to be overwritten, which is what appending the correct value does.
+        const has = new RegExp(`(?:^|;)${key}=[^;]*;`).test(s)
+        if (has) {
+            s = s.replace(new RegExp(`(?:^|(?<=;))${key}=[^;]*;`, "g"), "")
+        }
+        s = s.endsWith(";") || s === "" ? s : `${s};`
+        s += `${tok};`
+    }
+    return s
+}
+
 function append(style: string, key: string, value: string | number): string {
     const cleaned = key.startsWith("dai_")
         ? style.replace(new RegExp(`(?:^|(?<=;))${key}=[^;]*;`, "g"), "")
@@ -266,8 +320,14 @@ export function stampContainer(
     },
 ): string {
     let s = style.endsWith(";") || style === "" ? style : `${style};`
-    s += CONTAINER_TOKENS
-    if (opts.invisible) s += INVISIBLE_TOKENS
+    // Appended only when not already there. These are plain mxGraph keys, so `append`'s
+    // de-duplication (which is limited to `dai_*`) does not cover them — and a container
+    // goes through here on EVERY re-layout, so a blind `+=` grew the style string by
+    // another `container=1;pointerEvents=0;collapsible=0;recursiveResize=0;` per round
+    // trip, without bound. Harmless to draw.io, which takes the last value, but the XML
+    // never reached a fixed point and every edit shipped a longer style.
+    s = appendOnce(s, CONTAINER_TOKENS)
+    if (opts.invisible) s = appendOnce(s, INVISIBLE_TOKENS)
     s = append(s, MARKER.kind, opts.kind)
     s = append(s, MARKER.dir, opts.dir)
     s = append(s, MARKER.gap, Math.round(opts.gap))
@@ -416,17 +476,32 @@ export function isAutoSized(style: string): boolean {
 }
 
 type FlexAlign = "start" | "center" | "end" | "stretch"
+type FlexJustify = "start" | "center" | "end" | "between" | "around" | "evenly"
 
 /** Stamp the flex fields a node carries, so a round-trip preserves them. */
 export function stampFlex(
     style: string,
-    opts: { grow?: number; align?: FlexAlign; pad?: number },
+    opts: {
+        grow?: number
+        align?: FlexAlign
+        justify?: FlexJustify
+        alignItems?: FlexAlign
+        maxW?: number
+        minW0?: boolean
+        pad?: number
+    },
 ): string {
     let s = style
     if (opts.grow != null && opts.grow > 0)
         s = append(s, MARKER.grow, opts.grow)
     if (opts.align && opts.align !== "center")
         s = append(s, MARKER.align, opts.align)
+    if (opts.justify && opts.justify !== "start")
+        s = append(s, MARKER.justify, opts.justify)
+    if (opts.alignItems) s = append(s, MARKER.alignItems, opts.alignItems)
+    if (opts.maxW != null && opts.maxW > 0)
+        s = append(s, MARKER.maxw, Math.round(opts.maxW))
+    if (opts.minW0) s = append(s, MARKER.minw0, 1)
     if (opts.pad != null) s = append(s, MARKER.pad, Math.round(opts.pad))
     return s
 }
@@ -435,6 +510,63 @@ export function stampFlex(
 export function readAlign(style: string): Exclude<FlexAlign, "center"> | null {
     const v = readMarker(style, MARKER.align)
     return v === "start" || v === "end" || v === "stretch" ? v : null
+}
+
+/** Read a container's cross-axis default. Null means it declared none. */
+export function readAlignItems(style: string): FlexAlign | null {
+    const v = readMarker(style, MARKER.alignItems)
+    return v === "start" || v === "end" || v === "stretch" || v === "center"
+        ? v
+        : null
+}
+
+/** Read the justify marker back. Anything unrecognised means the default (start). */
+export function readJustify(
+    style: string,
+): Exclude<FlexJustify, "start"> | null {
+    const v = readMarker(style, MARKER.justify)
+    return v === "center" ||
+        v === "end" ||
+        v === "between" ||
+        v === "around" ||
+        v === "evenly"
+        ? v
+        : null
+}
+
+/** Read the declared width cap back, or null when there was none. */
+export function readMaxW(style: string): number | null {
+    const v = Number(readMarker(style, MARKER.maxw))
+    return Number.isFinite(v) && v > 0 ? v : null
+}
+
+/** Did this node opt out of the content-width floor? */
+export function readMinW0(style: string): boolean {
+    return readMarker(style, MARKER.minw0) === "1"
+}
+
+/** The page's declared aspect ratio, stamped on the default layer. */
+export function stampAspect(layerXml: string, aspect: number): string {
+    return layerXml.replace(
+        /<mxCell id="1" parent="0"\/>/,
+        `<mxCell id="1" parent="0" style="${MARKER.aspect}=${aspect};"/>`,
+    )
+}
+
+/**
+ * Read the page's declared aspect back out of a model body.
+ *
+ * Scans for the marker anywhere in the page rather than parsing the layer cell: the
+ * marker name is namespaced, so a match cannot be anything else, and this keeps working
+ * if draw.io ever reorders or reformats that cell.
+ */
+export function readAspect(page: string): number | undefined {
+    const m = new RegExp(`${MARKER.aspect}=([\\d.]+)`).exec(page)
+    if (!m) return undefined
+    const v = Number(m[1])
+    return Number.isFinite(v) && v > 0
+        ? Math.min(4, Math.max(0.25, v))
+        : undefined
 }
 
 /** Strip every `dai_*` marker — for exporting a clean file, or comparing styles. */

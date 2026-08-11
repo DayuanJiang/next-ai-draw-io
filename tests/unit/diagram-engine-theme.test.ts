@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { drawGraph, restructureDiagram } from "@/lib/diagram-engine"
+import { restructureDiagram } from "@/lib/diagram-engine"
 import {
     absoluteRects,
     escapesParent,
@@ -117,18 +117,22 @@ describe("roles", () => {
         expect(third.xml).toBe(again.xml)
     })
 
-    it("draw_graph nodes accept roles too", () => {
-        const r = drawGraph(
-            [
-                { id: "t", label: "Pipeline", role: "heading" },
-                { id: "a", label: "Build" },
-                { id: "warn", label: "Flaky stage", role: "bad" },
-            ],
-            [
-                { source: "t", target: "a" },
-                { source: "a", target: "warn" },
-            ],
-        )
+    it("add_graph nodes accept roles too", () => {
+        const r = restructureDiagram("", [
+            {
+                op: "add_graph",
+                id: "g",
+                nodes: [
+                    { id: "t", label: "Pipeline", role: "heading" },
+                    { id: "a", label: "Build" },
+                    { id: "warn", label: "Flaky stage", role: "bad" },
+                ],
+                edges: [
+                    { source: "t", target: "a" },
+                    { source: "a", target: "warn" },
+                ],
+            },
+        ])
         expect(r.errors).toEqual([])
         expect(last(styleOf(r.xml as string, "warn"), "fillColor")).toBe(
             "#F8CECC",

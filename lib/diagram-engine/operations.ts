@@ -13,6 +13,7 @@
 import { z } from "zod"
 // A runtime import while graph.ts imports only TYPES from here — no cycle at runtime.
 import { graphToOperations } from "./graph"
+import { parseTw, type TwLayout } from "./tw"
 import {
     type ContainerNode,
     type DiagramNode,
@@ -21,6 +22,7 @@ import {
     findParent,
     isContainer,
     type LinkSpec,
+    type TextStyle,
     walkTree,
 } from "./types"
 
@@ -81,7 +83,7 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .string()
             .optional()
             .describe(
-                "Fill colour, e.g. #DAE8FC. Prefer draw_graph's group field over picking colours",
+                "Fill colour, e.g. #DAE8FC. Prefer the group field over picking colours",
             ),
         stroke: z
             .string()
@@ -104,6 +106,18 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .optional()
             .describe(
                 "Cross-axis position in the parent: start/end pin to an edge, stretch fills the axis (a divider or highlight bar spanning its card). Default center",
+            ),
+        maxW: z
+            .number()
+            .optional()
+            .describe(
+                "Hard width cap in px. Long text rewraps to fit instead of stretching the box, so this is what keeps a paragraph from making the whole page a letterbox. Beats grow",
+            ),
+        class: z
+            .string()
+            .optional()
+            .describe(
+                'Tailwind layout classes, e.g. "grow-2 self-stretch max-w-md". Supported: grow / grow-N / flex-N, w-1/3 (a share of the row), w-full, min-w-0, self-start|center|end|stretch, max-w-N or max-w-xs..4xl. NO colour classes — colour comes from role and group. Unknown classes are ignored and reported back',
             ),
         lane: z
             .number()
@@ -172,6 +186,30 @@ export const OperationSchema = z.discriminatedUnion("op", [
             .optional()
             .describe(
                 "Cross-axis position in the parent: start/end pin to an edge, stretch fills. Default center",
+            ),
+        justify: z
+            .enum(["start", "center", "end", "between", "around", "evenly"])
+            .optional()
+            .describe(
+                "How children spread along dir when there is spare room. Default start packs them and leaves the gap at the far end — set between or evenly to spread a short column down its full height instead of leaving a hole at the bottom",
+            ),
+        alignItems: z
+            .enum(["start", "center", "end", "stretch"])
+            .optional()
+            .describe(
+                "Cross-axis default for every child, so cards in a column all span the same width without setting align on each. stretch is what makes a column of cards line up",
+            ),
+        maxW: z
+            .number()
+            .optional()
+            .describe(
+                "Hard width cap in px. Children wrap or shrink to fit rather than run past it. Beats grow",
+            ),
+        class: z
+            .string()
+            .optional()
+            .describe(
+                'Tailwind classes, e.g. "flex-col gap-4 p-4 grow-3 items-stretch justify-between max-w-2xl". LAYOUT: flex-row|flex-col, grow / grow-N / flex-N, w-1/3, w-full, min-w-0 (let a weight shrink this below its own text width — needed on every column when you want an exact ratio), items-* and self-* (start|center|end|stretch), justify-start|center|end|between|around|evenly, gap-N, p-N, max-w-N or max-w-xs..4xl. Spacing is Tailwind\'s 4px scale, so gap-4 is 16px. TEXT (applies to the frame title): font-bold / font-normal, italic, underline, text-xs..text-4xl, text-left|center|right, align-top|middle|bottom, whitespace-nowrap. BORDER: border / border-N, border-dashed / border-dotted / border-solid — a dashed frame reads as planned or logical rather than deployed. NOT accepted: any colour class — colour comes from role and group; the other seven font weights; opacity-*, truncate, rounded-*, shadow-*, outline-*, transforms. Unknown classes are dropped and reported back',
             ),
         after: z.string().optional(),
     }),
@@ -412,6 +450,21 @@ export const OperationSchema = z.discriminatedUnion("op", [
         op: z.literal("set_title"),
         title: z.string(),
     }),
+    z.object({
+        op: z.literal("clear"),
+        keepTitle: z
+            .boolean()
+            .optional()
+            .describe("Keep the page title; default drops it too"),
+    }),
+    z.object({
+        op: z.literal("set_page"),
+        aspect: z
+            .number()
+            .describe(
+                "Target width:height for the whole page. 1 = square, 1.4 = landscape slide, 0.75 = portrait poster, 1.6 = wide architecture diagram. Declare this FIRST on any multi-column diagram: it is what gives the columns a total width to divide, so grow weights and column proportions only take effect once it is set",
+            ),
+    }),
 ])
 
 export type Operation = z.infer<typeof OperationSchema>
@@ -420,6 +473,13 @@ export interface ApplyResult {
     tree: DiagramTree
     /** One entry per operation that could not be applied, in order. */
     errors: string[]
+    /**
+     * Things that were drawn, but not the way they were asked for — an arrow naming a node
+     * that is not in the list, a loop that could not order the layers. Not errors: the
+     * diagram is fine and re-sending it would produce the same result, so failing would
+     * cost a turn and fix nothing.
+     */
+    warnings: string[]
 }
 
 /**
@@ -514,6 +574,50 @@ export function applyOperations(
 ): ApplyResult {
     const tree: DiagramTree = structuredClone(input)
     const errors: string[] = []
+    const warnings: string[] = []
+
+    /**
+     * Resolve an operation's Tailwind class string into layout fields.
+     *
+     * Explicit fields win over classes. Both are accepted because they are the same
+     * vocabulary said two ways, and a caller mixing them — `class: "flex-col gap-4"` plus
+     * `grow: 3` — means the explicit number, not a conflict to reject.
+     *
+     * Unknown classes are collected once per call rather than per operation: a poster
+     * repeating `shadow-lg` on twelve cards should say so once.
+     */
+    const ignoredClasses = new Set<string>()
+    const twOf = (cls: string | undefined): TwLayout | null => {
+        if (!cls?.trim()) return null
+        const parsed = parseTw(cls)
+        for (const c of parsed.ignored) ignoredClasses.add(c)
+        return parsed
+    }
+
+    /**
+     * The presentation overrides a class string asked for, or undefined when it asked for
+     * none. Sparse on purpose: an absent field means "let the role decide", so a class
+     * string that only sets alignment cannot silently reset the type size.
+     */
+    const textOf = (tw: TwLayout | null): TextStyle | undefined => {
+        if (!tw) return undefined
+        const t: TextStyle = {
+            ...(tw.bold != null ? { bold: tw.bold } : {}),
+            ...(tw.italic != null ? { italic: tw.italic } : {}),
+            ...(tw.underline != null ? { underline: tw.underline } : {}),
+            ...(tw.strike != null ? { strike: tw.strike } : {}),
+            ...(tw.fontSize != null ? { size: tw.fontSize } : {}),
+            ...(tw.textAlign ? { align: tw.textAlign } : {}),
+            ...(tw.verticalAlign ? { valign: tw.verticalAlign } : {}),
+            ...(tw.nowrap != null ? { nowrap: tw.nowrap } : {}),
+            ...(tw.borderWidth != null ? { borderWidth: tw.borderWidth } : {}),
+            ...(tw.borderStyle ? { borderStyle: tw.borderStyle } : {}),
+            ...(tw.borderless != null ? { borderless: tw.borderless } : {}),
+            ...(tw.radius != null ? { radius: tw.radius } : {}),
+            ...(tw.shadow != null ? { shadow: tw.shadow } : {}),
+        }
+        return Object.keys(t).length > 0 ? t : undefined
+    }
 
     const exists = (id: string) => findNode(tree, id) !== null
 
@@ -528,6 +632,23 @@ export function applyOperations(
             expanded.push(op)
             continue
         }
+        // Reject a graph that cannot be drawn, rather than emitting a broken one. Both
+        // checks have to happen here: an empty node list would otherwise produce an empty
+        // frame, and a duplicate id would surface as "add_box: id already taken", naming a
+        // synthetic operation the model never wrote.
+        if (op.nodes.length === 0) {
+            errors.push(`add_graph "${op.id}": no nodes — nothing to draw.`)
+            continue
+        }
+        const dupes = op.nodes
+            .map((nd) => nd.id)
+            .filter((id, i, all) => all.indexOf(id) !== i)
+        if (dupes.length > 0) {
+            errors.push(
+                `add_graph "${op.id}": duplicate node id(s): ${[...new Set(dupes)].join(", ")}.`,
+            )
+            continue
+        }
         const g = graphToOperations(op.nodes, op.edges, {
             flow: op.dir ?? "col",
             parent: op.parent,
@@ -536,9 +657,17 @@ export function applyOperations(
             prefix: op.id,
             rootId: op.id,
         })
+        // A stray endpoint is a warning, not an error: the rest of the graph is drawn
+        // correctly, so rejecting it would cost a turn and produce the same diagram.
         if (g.unknownEndpoints.length)
-            errors.push(
-                `add_graph "${op.id}": edge endpoint(s) not in nodes: ${g.unknownEndpoints.join(", ")}`,
+            warnings.push(
+                `Dropped edge(s) naming nodes that were not in the node list: ${g.unknownEndpoints.join(", ")}.`,
+            )
+        if (g.backEdges.length)
+            warnings.push(
+                `Loop(s) drawn but not used for ordering: ${g.backEdges
+                    .map((b) => `${b.source}→${b.target}`)
+                    .join(", ")}.`,
             )
         if (op.label || op.after) {
             const root = g.operations[0]
@@ -577,7 +706,13 @@ export function applyOperations(
                         label: op.label ?? "",
                         ...cellOf(op),
                     }
-                else if (op.op === "add_box")
+                else if (op.op === "add_box") {
+                    // Classes first, then the explicit fields on top: an explicit number is
+                    // the more specific statement of the two.
+                    const tw = twOf(op.class)
+                    const grow = op.grow ?? tw?.grow
+                    const align = op.align ?? tw?.align
+                    const maxW = op.maxW ?? tw?.maxW
                     node = {
                         kind: "box",
                         id: op.id,
@@ -589,30 +724,44 @@ export function applyOperations(
                         ...(op.stroke ? { stroke: op.stroke } : {}),
                         ...(op.role ? { role: op.role } : {}),
                         ...(op.group ? { group: op.group } : {}),
-                        ...(op.grow && op.grow > 0 ? { grow: op.grow } : {}),
-                        ...(op.align && op.align !== "center"
-                            ? { align: op.align }
-                            : {}),
+                        ...(grow && grow > 0 ? { grow } : {}),
+                        ...(align && align !== "center" ? { align } : {}),
+                        ...(maxW && maxW > 0 ? { maxW } : {}),
+                        ...(tw?.minW0 ? { minW0: true } : {}),
+                        ...(textOf(tw) ? { text: textOf(tw) } : {}),
                         ...cellOf(op),
                     }
-                else if (op.op === "add_container")
+                } else if (op.op === "add_container") {
+                    const tw = twOf(op.class)
+                    const grow = op.grow ?? tw?.grow
+                    const align = op.align ?? tw?.align
+                    const justify = op.justify ?? tw?.justify
+                    const alignItems = op.alignItems ?? tw?.alignItems
+                    const maxW = op.maxW ?? tw?.maxW
+                    const pad = op.pad ?? tw?.pad
                     node = {
                         kind: "group",
                         id: op.id,
                         gname: op.gname ?? null,
                         label: op.label,
+                        // `dir` is required on the operation, so a class can only confirm
+                        // it. Reading the class first would let `flex-col` silently override
+                        // a declared `dir: "row"`.
                         dir: op.dir,
-                        gap: op.gap ?? 20,
+                        gap: op.gap ?? tw?.gap ?? 20,
                         children: [],
                         ...(op.role ? { role: op.role } : {}),
                         ...(op.group ? { group: op.group } : {}),
-                        ...(op.grow && op.grow > 0 ? { grow: op.grow } : {}),
-                        ...(op.align && op.align !== "center"
-                            ? { align: op.align }
-                            : {}),
-                        ...(op.pad != null ? { pad: Math.max(0, op.pad) } : {}),
+                        ...(grow && grow > 0 ? { grow } : {}),
+                        ...(align && align !== "center" ? { align } : {}),
+                        ...(justify && justify !== "start" ? { justify } : {}),
+                        ...(alignItems ? { alignItems } : {}),
+                        ...(maxW && maxW > 0 ? { maxW } : {}),
+                        ...(tw?.minW0 ? { minW0: true } : {}),
+                        ...(textOf(tw) ? { text: textOf(tw) } : {}),
+                        ...(pad != null ? { pad: Math.max(0, pad) } : {}),
                     }
-                else if (op.op === "add_grid")
+                } else if (op.op === "add_grid")
                     node = {
                         kind: "grid",
                         id: op.id,
@@ -880,13 +1029,43 @@ export function applyOperations(
                 break
             }
 
+            case "clear": {
+                // Start over. Needed because some diagrams are rebuilt rather than
+                // patched: in a flowchart one new arrow can change which row several
+                // nodes belong in, so there is no meaningful way to merge a new graph
+                // into the old layout.
+                //
+                // `foreign` goes too. Those are cells the parser could not place in the
+                // tree, and keeping them would leave a user's stray annotations floating
+                // over a diagram they no longer refer to.
+                tree.roots = []
+                tree.links = []
+                tree.foreign = []
+                if (!op.keepTitle) tree.title = undefined
+                break
+            }
+
             case "set_title":
                 tree.title = op.title
+                break
+
+            case "set_page":
+                // Clamped rather than rejected: an out-of-range ratio is a slip, and a
+                // diagram 40 times wider than it is tall is never what was meant.
+                tree.aspect = Math.min(4, Math.max(0.25, op.aspect))
                 break
         }
     }
 
-    return { tree, errors }
+    // Names the whole supported vocabulary, not just the group the dropped class looked like
+    // it belonged to: a model that reached for `pt-8` needs to see that padding is `p-N` only,
+    // and one that reached for `shadow-2xl` needs the four rungs that do exist.
+    if (ignoredClasses.size > 0)
+        warnings.push(
+            `Ignored class(es) with no equivalent here: ${[...ignoredClasses].join(", ")}. Supported — layout: flex-row/flex-col, grow/grow-N/flex-N, w-1/N, w-full, min-w-0, items-*, self-*, justify-*, gap-N, p-N, max-w-N/max-w-xs..4xl. Text: font-bold/font-normal, italic, underline, line-through, text-xs..4xl, text-left/center/right, align-top/middle/bottom, whitespace-nowrap. Border: border/border-N, border-solid/dashed/dotted, border-none, rounded/rounded-sm..4xl/rounded-full, shadow-sm/md/lg/xl/shadow-none. Colour comes from role and group; per-side borders and padding (border-l, pt-4) are not available.`,
+        )
+
+    return { tree, errors, warnings }
 }
 
 /** Every icon/group name in a tree, for validating against the catalog. */

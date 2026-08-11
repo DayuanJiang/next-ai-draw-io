@@ -32,6 +32,83 @@ export interface PoolCell {
 export type Align = "start" | "center" | "end" | "stretch"
 
 /**
+ * Presentation a node may override, beyond what its `role` decides.
+ *
+ * The admission test is that draw.io can draw the distinction FAITHFULLY — see tw.ts for the
+ * properties that failed it and why. Most fields here are one style key with one value; a few
+ * (`shadow`, `borderStyle`, the radius trio) expand to a fixed group of keys, which is fine
+ * because the field still names one visual decision. What is not allowed is a field whose
+ * values collapse onto fewer pictures than it promises.
+ *
+ * Kept as one optional object rather than a dozen loose fields so the round-trip has one
+ * thing to carry and the node type does not grow a field per CSS property.
+ *
+ * `role` remains the primary way to say what a node IS; this is for the cases where the
+ * model needs to override one aspect of how it looks.
+ */
+export interface TextStyle {
+    /** Bold. draw.io's fontStyle carries one bold bit, not a weight ladder. */
+    bold?: boolean
+    italic?: boolean
+    underline?: boolean
+    /** Strikethrough — a fourth bit in the same mask, so it combines with the others. */
+    strike?: boolean
+    /** Type size in px. */
+    size?: number
+    /** Horizontal text alignment inside the shape. */
+    align?: "left" | "center" | "right"
+    /** Vertical text alignment inside the shape. */
+    valign?: "top" | "middle" | "bottom"
+    /** Keep the label on one line instead of wrapping it. */
+    nowrap?: boolean
+    /** Border thickness in px. */
+    borderWidth?: number
+    /** Border line style. Dashed and dotted read as "planned", "optional", "logical". */
+    borderStyle?: "solid" | "dashed" | "dotted"
+    /**
+     * Corner radius in px.
+     *
+     * Real pixels, not a percentage: draw.io's `arcSize` is a percentage of the shape by
+     * default, but `absoluteArcSize=1` switches it to absolute units, and it halves the
+     * value, so an 8px radius is emitted as `arcSize=16` (mxShape.getArcSize,
+     * mxShape.js:1172-1189).
+     *
+     * Overrides the radius of a shape that has one of its own: `round` and `terminator` are
+     * rounded rectangles already, and changing how round they are does not change what they
+     * are, so a radius class is allowed to win.
+     */
+    radius?: number
+    /** No border at all — a plain colour field. */
+    borderless?: boolean
+    /**
+     * Drop shadow, as a rung: 1–4 for Tailwind's sm/md/lg/xl, 0 for explicitly none.
+     *
+     * A rung rather than raw offsets because draw.io takes five separate numbers
+     * (`shadowOffsetX/Y`, `shadowBlur`, `shadowColor`, `shadowOpacity` — mxShape.js:505-535)
+     * and letting a caller set them individually is exactly the magic-number freedom this
+     * vocabulary exists to remove.
+     */
+    shadow?: number
+}
+
+/**
+ * How a container spreads its children along its own stacking axis — CSS's
+ * justify-content, and Yoga's six values.
+ *
+ * Until this existed the policy was hard-coded and differed per axis: a row padded its
+ * gaps and centred the result, a column packed to the top and left every spare pixel in
+ * one slab at the bottom. That slab is the empty bottom-left corner of a poster, and
+ * nothing the model could declare would move it.
+ */
+export type Justify =
+    | "start"
+    | "center"
+    | "end"
+    | "between"
+    | "around"
+    | "evenly"
+
+/**
  * What a box IS, drawn as its conventional outline.
  *
  * Open vocabulary: catalog names ("cylinder", "decision", "person"…) get full engine
@@ -78,6 +155,16 @@ export interface BoxNode {
     grow?: number
     /** Cross-axis behaviour within the parent. Absent = center; stretch = fill it. */
     align?: Align
+    /**
+     * Hard cap on width, px. Text rewraps to fit instead of running the box wider, so
+     * this is what stops one long sentence stretching a whole page into a letterbox.
+     * Higher priority than `grow`, matching Yoga's min/max rule.
+     */
+    maxW?: number
+    /** Let a `grow` weight shrink this below its own text width — CSS's `min-width: 0`. */
+    minW0?: boolean
+    /** Presentation overrides: type, alignment, border. Absent means the role decides. */
+    text?: TextStyle
     /** Flowchart outline. Absent means a plain rectangle. */
     shape?: BoxShape
     style?: string
@@ -118,6 +205,22 @@ export interface GroupNode {
     grow?: number
     /** Cross-axis behaviour within the parent. Absent = center; stretch = fill it. */
     align?: Align
+    /** How the children spread along `dir`. Absent = start (packed, no extra spacing). */
+    justify?: Justify
+    /** Cross-axis default for every child that does not declare its own `align`. */
+    alignItems?: Align
+    /** Hard cap on width, px. Children wrap or shrink to fit rather than overflow it. */
+    maxW?: number
+    /**
+     * Let a `grow` weight shrink this below its own content width — CSS's `min-width: 0`.
+     *
+     * Without it a weighted child is floored by its text, which is real flexbox behaviour
+     * (`min-width` defaults to `auto`) but means a declared 2:1 quietly resolves to
+     * whatever the two columns' text allows.
+     */
+    minW0?: boolean
+    /** Presentation overrides: title type, alignment, frame border. */
+    text?: TextStyle
     /** Interior padding, px. Absent = the default (24). */
     pad?: number
     style?: string
@@ -273,6 +376,16 @@ export interface DiagramTree {
     links: LinkSpec[]
     /** Page title, if the diagram has one. */
     title?: string
+    /**
+     * Target width : height of the whole page. 1 is square, 1.6 landscape, 0.7 portrait.
+     *
+     * This is the one number that decides whether a diagram reads as a poster or as a
+     * letterbox, and it cannot be derived: the same content is a legitimate 1-column
+     * portrait or 3-column landscape. So the model declares it, the engine gives the top
+     * level a width to match, and every proportional rule below finally has a share of
+     * something real to divide up.
+     */
+    aspect?: number
     /**
      * Cells the parser could not fit into the tree — a user's own annotation boxes, a
      * legend, shapes from an imported file. Kept verbatim and re-emitted untouched so

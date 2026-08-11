@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 import {
-    drawGraph,
     type GraphEdge,
     type GraphNode,
     graphToOperations,
+    type Operation,
     restructureDiagram,
 } from "@/lib/diagram-engine"
 import {
@@ -19,6 +19,31 @@ const e = (source: string, target: string, label?: string): GraphEdge => ({
     target,
     ...(label ? { label } : {}),
 })
+
+/**
+ * Draw a whole-page graph the way the model does: one `add_graph` with no parent.
+ *
+ * There used to be a `drawGraph` entry point that did only this. It was removed once
+ * `add_graph` covered the same ground with a `parent` argument — one code path instead of
+ * two overlapping ones — and these tests kept their assertions by going through this.
+ */
+function drawGraph(
+    nodes: GraphNode[],
+    edges: GraphEdge[],
+    opts: { title?: string; flow?: "col" | "row" } = {},
+) {
+    const ops: Operation[] = [
+        {
+            op: "add_graph",
+            id: "g",
+            nodes,
+            edges,
+            ...(opts.flow ? { dir: opts.flow } : {}),
+        } as Operation,
+    ]
+    if (opts.title) ops.unshift({ op: "set_title", title: opts.title })
+    return restructureDiagram("", ops)
+}
 
 describe("graphToOperations: layering", () => {
     it("puts a chain in one node per layer", () => {

@@ -31,14 +31,19 @@ import {
     MARKER,
     type NodeKind,
     readAlign,
+    readAlignItems,
+    readAspect,
     readCell,
     readDir,
     readIntMarker,
+    readJustify,
     readKind,
     readList,
     readMarker,
+    readMaxW,
+    readMinW0,
 } from "./markers"
-import { isRole, type Role } from "./theme"
+import { isRole, type Role, roleIsBorderless } from "./theme"
 import type {
     BoxNode,
     BoxShape,
@@ -54,6 +59,7 @@ import type {
     RadialNode,
     Rect,
     SequenceNode,
+    TextStyle,
 } from "./types"
 
 /** Hard cap on nesting depth, matching the reference project's 50-hop guard. */
@@ -293,6 +299,112 @@ function styleValue(style: string, key: string): string | undefined {
     return all.length ? all[all.length - 1][1] : undefined
 }
 
+/**
+ * Read a node's presentation overrides back out of its style.
+ *
+ * No `dai_*` marker needed: these are draw.io's OWN style keys, so the values on the canvas
+ * are the values that were asked for — and if the user changed one in the editor, reading it
+ * back is exactly right.
+ *
+ * Only reports a field when the style says something a plain box would not, because every
+ * cell carries `fontSize` and `verticalAlign` from the fallback style. Treating those as
+ * declared overrides would freeze the theme's defaults onto every node, so a later role
+ * change could no longer alter the type.
+ */
+function textStyleOf(
+    style: string,
+    defaults: {
+        size?: number
+        valign?: string
+        align?: string
+        /**
+         * Whether this node's ROLE already draws it borderless, so `strokeColor=none` is the
+         * theme talking rather than a declared override.
+         *
+         * Needed because two roles emit it themselves: a `banner` leaf is a dark filled slab
+         * with no outline, and `heading`/`muted` are ghost text with neither fill nor stroke
+         * (theme.ts:220, 230). Without this the parser would record every banner as having
+         * explicitly asked for no border, and since `set_role` clears `style` but keeps
+         * `text`, a later change to a bordered role would come back still borderless.
+         */
+        borderless?: boolean
+    },
+): TextStyle | undefined {
+    const t: TextStyle = {}
+
+    // fontStyle is a bitmask: 1 bold, 2 italic, 4 underline, 8 strikethrough.
+    const fs = styleValue(style, "fontStyle")
+    if (fs !== undefined) {
+        const bits = Number(fs)
+        if (Number.isFinite(bits)) {
+            if (bits & 1) t.bold = true
+            if (bits & 2) t.italic = true
+            if (bits & 4) t.underline = true
+            if (bits & 8) t.strike = true
+        }
+    }
+
+    const size = Number(styleValue(style, "fontSize"))
+    if (Number.isFinite(size) && size > 0 && size !== defaults.size)
+        t.size = size
+
+    const align = styleValue(style, "align")
+    if (
+        (align === "left" || align === "center" || align === "right") &&
+        align !== defaults.align
+    )
+        t.align = align
+
+    const valign = styleValue(style, "verticalAlign")
+    if (
+        (valign === "top" || valign === "middle" || valign === "bottom") &&
+        valign !== defaults.valign
+    )
+        t.valign = valign
+
+    if (styleValue(style, "whiteSpace") === "nowrap") t.nowrap = true
+
+    const sw = Number(styleValue(style, "strokeWidth"))
+    if (Number.isFinite(sw) && sw > 1) t.borderWidth = sw
+
+    if (styleValue(style, "dashed") === "1")
+        t.borderStyle = styleValue(style, "dashPattern") ? "dotted" : "dashed"
+
+    if (
+        styleValue(style, "strokeColor") === "none" &&
+        defaults.borderless !== true
+    )
+        t.borderless = true
+
+    // A radius is only recoverable when `absoluteArcSize=1` says the number is pixels. A bare
+    // `arcSize` is a PERCENTAGE of the box, which is what the shape catalog's own `round` and
+    // `terminator` emit — reading those back as a pixel radius would silently convert a
+    // shape's proportional corner into a fixed one on the first round-trip.
+    //
+    // `rounded=0` is NOT read back as a declared `radius: 0`. Nearly every box carries it from
+    // the fallback style, so recording it would freeze square corners onto the node and stop a
+    // later role or shape change from rounding them — the same trap `size` and `align` avoid
+    // by comparing against defaults.
+    if (styleValue(style, "absoluteArcSize") === "1") {
+        const arc = Number(styleValue(style, "arcSize"))
+        if (Number.isFinite(arc) && arc > 0) t.radius = arc / 2
+    }
+
+    // Which rung a shadow came from, recovered from its blur — the one parameter that differs
+    // across all four steps (3/6/15/25). Reading the rung rather than the raw numbers is what
+    // keeps the round-trip a fixed point: re-emitting rung 2 gives back the same five keys.
+    if (styleValue(style, "shadow") === "1") {
+        const blur = Number(styleValue(style, "shadowBlur"))
+        const rung = SHADOW_RUNGS[blur]
+        if (rung !== undefined) t.shadow = rung
+    } else if (styleValue(style, "shadow") === "0") t.shadow = 0
+
+    return Object.keys(t).length > 0 ? t : undefined
+}
+
+/** Blur radius back to the Tailwind rung that produced it. Mirrors render.ts's SHADOW_KEYS. */
+const SHADOW_RUNGS: Record<number, number> = { 3: 1, 6: 2, 15: 3, 25: 4 }
+
 /** Does this style declare a draw.io container? */
 function declaresContainer(style: string): boolean {
     return styleValue(style, "container") === "1"
@@ -372,12 +484,30 @@ function shapeOf(style: string): string | undefined {
 function flexOf(style: string): {
     grow?: number
     align?: "start" | "end" | "stretch"
+    maxW?: number
+    minW0?: boolean
 } {
     const grow = readIntMarker(style, MARKER.grow)
     const align = readAlign(style)
+    const maxW = readMaxW(style)
     return {
         ...(grow !== null && grow > 0 ? { grow } : {}),
         ...(align ? { align } : {}),
+        ...(maxW !== null ? { maxW } : {}),
+        ...(readMinW0(style) ? { minW0: true } : {}),
+    }
+}
+
+/** The container-only flex fields: how children spread, and their cross-axis default. */
+function containerFlexOf(style: string): {
+    justify?: "center" | "end" | "between" | "around" | "evenly"
+    alignItems?: "start" | "center" | "end" | "stretch"
+} {
+    const justify = readJustify(style)
+    const alignItems = readAlignItems(style)
+    return {
+        ...(justify ? { justify } : {}),
+        ...(alignItems ? { alignItems } : {}),
     }
 }
 
@@ -1103,6 +1233,19 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
                         : undefined,
                 fill: styleValue(c.style, "fillColor"),
                 stroke: styleValue(c.style, "strokeColor"),
+                // Read back against the fallback box's own values, so only a real override
+                // is reported — every cell carries fontSize and verticalAlign from that
+                // fallback, and treating those as declared would freeze the theme onto the
+                // node and stop a later role change from altering the type.
+                ...(() => {
+                    const t = textStyleOf(c.style, {
+                        size: 11,
+                        valign: "middle",
+                        align: "center",
+                        borderless: roleIsBorderless(roleOf(c.style), "leaf"),
+                    })
+                    return t ? { text: t } : {}
+                })(),
                 // The declared token wins: appearance-based reverse mapping cannot
                 // distinguish aliases (decision vs diamond) or identify a passed-through
                 // token whose style is just `shape=<name>`.
@@ -1263,6 +1406,19 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
             role: roleOf(c.style),
             group: zoneOf(c.style),
             ...flexOf(c.style),
+            ...containerFlexOf(c.style),
+            // A frame's own defaults differ from a box's: 12px bold title, flush left and
+            // top. Same reasoning as above — compare against those, not against a box's.
+            // No `borderless` default: a themed panel always draws its border, whatever its
+            // role, so `strokeColor=none` on a container is always someone's own request.
+            ...(() => {
+                const t = textStyleOf(c.style, {
+                    size: 12,
+                    valign: "top",
+                    align: "left",
+                })
+                return t ? { text: t } : {}
+            })(),
             ...(markedPad !== null ? { pad: markedPad } : {}),
         }
         return node
@@ -1344,8 +1500,21 @@ export function parseDiagram(xml: string, pageIndex = 0): ParseResult {
             `Children of ${ambiguousContainers.join(", ")} are arranged in two dimensions, which no single direction describes; a re-layout will move them.`,
         )
 
+    // The page proportions come back from a marker, NOT from pageWidth/pageHeight. Those
+    // record the size the last layout happened to produce, which is only the requested
+    // ratio when one was requested at all: reading them back turns an accidental 340x306
+    // page into a standing instruction to keep that shape, and the next re-layout inflates
+    // the diagram to obey it.
+    const aspect = readAspect(page)
+
     return {
-        tree: { roots, links, title, foreign },
+        tree: {
+            roots,
+            links,
+            title,
+            foreign,
+            ...(aspect != null ? { aspect } : {}),
+        },
         needsAdoption: !marked,
         warnings,
     }

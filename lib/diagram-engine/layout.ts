@@ -31,8 +31,10 @@
 import { resolveShape } from "./shapes"
 import { type Role, roleMetrics } from "./theme"
 import type {
+    Align,
     ContainerNode,
     DiagramNode,
+    Justify,
     PoolNode,
     RadialNode,
     Rect,
@@ -56,10 +58,181 @@ function growOf(n: DiagramNode): number {
     return typeof g === "number" && g > 0 ? g : 0
 }
 
-/** The cross-axis alignment a node declared. */
-function alignOf(n: DiagramNode): "start" | "center" | "end" | "stretch" {
-    const a = (n.kind === "box" || n.kind === "group") && n.align
-    return a === "start" || a === "end" || a === "stretch" ? a : "center"
+/**
+ * The cross-axis alignment a node ends up with: its own `align`, else the parent's
+ * `alignItems`, else centred. Same cascade as CSS, where align-self overrides the
+ * container's align-items.
+ */
+function alignOf(n: DiagramNode, parent?: ContainerNode): Align {
+    const own = (n.kind === "box" || n.kind === "group") && n.align
+    if (
+        own === "start" ||
+        own === "end" ||
+        own === "stretch" ||
+        own === "center"
+    )
+        return own
+    const inherited = parent?.kind === "group" ? parent.alignItems : undefined
+    if (
+        inherited === "start" ||
+        inherited === "end" ||
+        inherited === "stretch" ||
+        inherited === "center"
+    )
+        return inherited
+    return "center"
+}
+
+/**
+ * The main-axis distribution a container declared, or null when it declared none.
+ *
+ * Null matters: it selects the engine's original per-axis defaults rather than any value
+ * in this vocabulary. A row centred its children and padded their gaps, a column packed to
+ * the top — neither is expressible as one `Justify`, and both are what every diagram built
+ * before this existed relies on. Declaring `justify` opts out of them.
+ */
+function justifyOf(n: ContainerNode): Justify | null {
+    const j = n.kind === "group" ? n.justify : undefined
+    return j === "start" ||
+        j === "center" ||
+        j === "end" ||
+        j === "between" ||
+        j === "around" ||
+        j === "evenly"
+        ? j
+        : null
+}
+
+/** The width cap a node declared, or Infinity. */
+function maxWOf(n: DiagramNode): number {
+    const m = (n.kind === "box" || n.kind === "group") && n.maxW
+    return typeof m === "number" && m > 0 ? m : Number.POSITIVE_INFINITY
+}
+
+/**
+ * Divide `room` among weighted children, honouring each one's floor and ceiling.
+ *
+ * The naive version — give each child `room * weight / total` and never go below its
+ * content width — overflows: a child whose content is wider than its share keeps the
+ * wider figure, and the total then exceeds what there was to divide, so the last child
+ * hangs out of the frame.
+ *
+ * CSS resolves this by FREEZING any item that cannot take its share and re-dividing the
+ * rest among those that still can, repeating until nothing changes. That is what this
+ * does. It terminates because every round either freezes at least one child or stops.
+ *
+ * Returns the width for each child, in order; a child with no weight keeps its size.
+ */
+function shareOut(
+    sizes: number[],
+    weights: number[],
+    caps: number[],
+    floors: number[],
+    room: number,
+): number[] {
+    const out = [...sizes]
+    const frozen = sizes.map((_, i) => weights[i] <= 0)
+    for (;;) {
+        const liveTotal = weights.reduce(
+            (s, w, i) => s + (frozen[i] ? 0 : w),
+            0,
+        )
+        if (liveTotal <= 0) return out
+        // What is left once everything already settled has taken its width.
+        const rest = room - out.reduce((s, v, i) => s + (frozen[i] ? v : 0), 0)
+        let changed = false
+        for (let i = 0; i < out.length; i++) {
+            if (frozen[i]) continue
+            const share = (rest * weights[i]) / liveTotal
+            // A child cannot go below its own content, and cannot pass a declared cap.
+            // Either way it settles here and the others divide what is left.
+            if (share < floors[i]) {
+                out[i] = floors[i]
+                frozen[i] = true
+                changed = true
+            } else if (share > caps[i]) {
+                out[i] = caps[i]
+                frozen[i] = true
+                changed = true
+            }
+        }
+        if (changed) continue
+        for (let i = 0; i < out.length; i++)
+            if (!frozen[i]) out[i] = (rest * weights[i]) / liveTotal
+        return out
+    }
+}
+
+/**
+ * The narrowest a node may be squeezed to when weights divide a row.
+ *
+ * Its own content width, unless it opted out with `minW0` (CSS's `min-width: 0`), in which
+ * case a weight may take it below that. Matching CSS here is deliberate: `min-width`
+ * defaults to `auto`, so in a browser too a `flex: 2` column stops shrinking at its text
+ * and a declared 2:1 comes out closer to 1.4:1 — surprising, but it is what everyone
+ * writing flexbox already works with.
+ */
+function floorOf(n: DiagramNode, contentW: number): number {
+    const opted = (n.kind === "box" || n.kind === "group") && n.minW0
+    return opted ? 0 : contentW
+}
+
+/**
+ * Does this node need the full width of its parent to mean what it says?
+ *
+ * A row whose children carry `grow` weights does: the weights are shares of the row's
+ * width, so if the row is only as wide as its own content there is nothing to share and
+ * every declared proportion silently comes out 1:1.
+ *
+ * This is where CSS and this engine disagree, and the disagreement is why it has to be
+ * inferred. CSS and Yoga default `align-items` to `stretch`, so a row inside a column
+ * fills that column's width for free. This engine defaults to `center`, which is the
+ * better default for diagrams — a lone icon in a wide frame should sit in the middle, not
+ * be smeared across it — but it means a row of weighted columns gets no width unless
+ * something asks. Declaring weights IS the ask.
+ */
+function needsFullWidth(n: DiagramNode): boolean {
+    return (
+        n.kind === "group" &&
+        n.dir === "row" &&
+        n.children.some((c) => growOf(c) > 0)
+    )
+}
+
+/**
+ * Where the children start, and how much goes between them — CSS's justify-content.
+ *
+ * `slack` is what is left after the children and their base gaps. Returning both the
+ * leading offset and the per-gap addition covers all six values in one place, so the
+ * row and column branches no longer need their own contradictory policies.
+ */
+function distribute(
+    justify: Justify,
+    slack: number,
+    count: number,
+): { lead: number; extraGap: number } {
+    if (slack <= 0 || count === 0) return { lead: 0, extraGap: 0 }
+    switch (justify) {
+        case "center":
+            return { lead: slack / 2, extraGap: 0 }
+        case "end":
+            return { lead: slack, extraGap: 0 }
+        case "between":
+            return count > 1
+                ? { lead: 0, extraGap: slack / (count - 1) }
+                : { lead: 0, extraGap: 0 }
+        case "around": {
+            // Half a share before the first child and after the last, a full share between.
+            const share = slack / count
+            return { lead: share / 2, extraGap: share }
+        }
+        case "evenly": {
+            const share = slack / (count + 1)
+            return { lead: share, extraGap: share }
+        }
+        default:
+            return { lead: 0, extraGap: 0 }
+    }
 }
 /** Height of a container's title strip. Zero when it has no label — an empty strip
  *  reads as a dead band at the top of the frame. */
@@ -180,6 +353,43 @@ export interface Placed {
     children: Placed[]
 }
 
+/** One line of a wrapped row: which children sit on it, and how big it is. */
+interface WrapLine {
+    items: Placed[]
+    width: number
+    height: number
+}
+
+/**
+ * Break a row of children into lines that each fit `room`.
+ *
+ * Greedy, the same rule as a text line-breaker and as CSS flex-wrap: keep adding to the
+ * current line while it fits, otherwise start a new one. A single child wider than the
+ * whole row still gets its own line rather than being dropped.
+ *
+ * Shared by measure and place so both agree on where the breaks fall — computing them
+ * twice from the same input is cheap, keeping two copies in sync is not.
+ */
+function wrapLines(kids: Placed[], room: number, gap: number): WrapLine[] {
+    const lines: WrapLine[] = []
+    let cur: WrapLine | null = null
+    for (const k of kids) {
+        const next = cur ? cur.width + gap + k.rect.w : k.rect.w
+        if (cur && next > room && cur.items.length > 0) {
+            lines.push(cur)
+            cur = null
+        }
+        if (!cur) cur = { items: [k], width: k.rect.w, height: k.rect.h }
+        else {
+            cur.items.push(k)
+            cur.width = next
+            cur.height = Math.max(cur.height, k.rect.h)
+        }
+    }
+    if (cur) lines.push(cur)
+    return lines
+}
+
 /**
  * The arrows layout needs, which the node tree alone does not carry.
  *
@@ -209,11 +419,20 @@ function visibleText(label: string): string {
  *
  * The role scales the estimate: a banner sets 20px type and a footnote 9px, and layout has
  * to reserve what render will draw or the text overflows its cell.
+ *
+ * `atWidth` is the width the box will ACTUALLY be drawn at, when that is already known
+ * (see the reflow pass in `layoutForest`). Height is then counted for that width while
+ * the reported width stays intrinsic — which is what a browser does, and what this was
+ * missing: a paragraph measured at its 260px natural width needs eight lines, the same
+ * paragraph stretched to 750px needs three, and reserving the eight-line height left
+ * every panel with a slab of dead space under its text.
  */
 export function autoBoxSize(
     label: string,
     role?: Role,
     shape?: string,
+    atWidth?: number,
+    maxW?: number,
 ): { w: number; h: number } {
     const spec = shape ? resolveShape(shape)?.spec : undefined
     // A glyph shape (umlActor…) has a fixed figure with the label below it: the slot is
@@ -226,19 +445,35 @@ export function autoBoxSize(
         }
     }
     const r = roleMetrics(role)
-    const maxW = Math.round(260 * Math.max(1, r.charScale))
+    // Two caps: the role's own default, and whatever the model declared. The declared one
+    // is allowed to go BELOW the floor of 120 — capping a box at 90px has to mean 90px,
+    // or the cap silently does nothing on short labels.
+    const roleCap = Math.round(260 * Math.max(1, r.charScale))
+    const declared = maxW != null && maxW > 0 ? maxW : Number.POSITIVE_INFINITY
     const explicit = visibleText(label).split("\n")
     const longest = Math.max(1, ...explicit.map((l) => l.length))
-    const w = Math.min(
-        maxW,
-        Math.max(120, Math.round(longest * CHAR_W * r.charScale + 28)),
+    const natural = Math.max(
+        120,
+        Math.round(longest * CHAR_W * r.charScale + 28),
     )
+    const w = Math.min(declared, roleCap, natural)
+    const s = spec?.textScale ?? 1
     // Count the lines the text ACTUALLY occupies: draw.io wraps at the box width, so a
     // long line becomes several. Estimating by explicit newlines alone left the box one
     // line tall while the text wrapped to six — and overflowed straight out of it.
+    //
+    // Wrapping happens at the DRAWN width, which for a stretched box is wider than the
+    // intrinsic one. `atWidth` carries it; the shape factor is divided back out because
+    // it is applied to the final height below.
+    // A declared cap also bounds the reflow hint: a box capped at 200 never gets to count
+    // its lines as if it had been drawn at 600, however wide its parent turned out.
+    const textW = Math.min(
+        declared,
+        Math.max(w, atWidth != null ? atWidth / s : 0),
+    )
     const charsPerLine = Math.max(
         8,
-        Math.floor((w - 28) / (CHAR_W * r.charScale)),
+        Math.floor((textW - 28) / (CHAR_W * r.charScale)),
     )
     const lines = explicit.reduce(
         (sum, l) => sum + Math.max(1, Math.ceil(l.length / charsPerLine)),
@@ -250,7 +485,6 @@ export function autoBoxSize(
     // a rhombus exactly half — so the box grows by the shape's measured factor.
     // Verified in the real editor: the same sentence overflows a 1.0× rhombus and fits
     // a 1.5× one.
-    const s = spec?.textScale ?? 1
     return { w: Math.round(w * s), h: Math.round(h * s) }
 }
 
@@ -443,6 +677,7 @@ function measure(
     n: DiagramNode,
     defaultGlyph: number,
     links: LayoutLinks,
+    widthHints?: Map<string, number>,
 ): Placed {
     if (n.kind === "icon") {
         const glyph = n.size ?? defaultGlyph
@@ -450,7 +685,15 @@ function measure(
         return { node: n, rect: { x: 0, y: 0, ...s }, children: [] }
     }
     if (n.kind === "box") {
-        const auto = autoBoxSize(n.label, n.role, n.shape)
+        // The hint is the width this box was drawn at last pass; its text rewraps to
+        // that width, so its height has to be counted there.
+        const auto = autoBoxSize(
+            n.label,
+            n.role,
+            n.shape,
+            widthHints?.get(n.id),
+            n.maxW,
+        )
         return {
             node: n,
             rect: { x: 0, y: 0, w: n.w ?? auto.w, h: n.h ?? auto.h },
@@ -461,7 +704,9 @@ function measure(
         return { node: n, rect: { x: 0, y: 0, w: 0, h: 30 }, children: [] }
     }
 
-    const kids = n.children.map((c) => measure(c, defaultGlyph, links))
+    const kids = n.children.map((c) =>
+        measure(c, defaultGlyph, links, widthHints),
+    )
     const head = headerFor(n)
     const gap = n.gap
 
@@ -581,6 +826,9 @@ function measure(
 
     // group: row or col
     const pad = padOf(n)
+    // A declared cap wins over the measured content, so a row of six cards capped at 900
+    // reports 900 and the place pass below has real negative slack to shrink into.
+    const cap = maxWOf(n)
     if (n.dir === "row") {
         const tallest = Math.max(0, ...kids.map((k) => k.rect.h))
         // Only a group stretches to match its siblings. A leaf keeps its natural size,
@@ -590,6 +838,31 @@ function measure(
         // lane bands from the nodes sitting on them.
         for (const k of kids)
             if (k.node.kind === "group") k.rect.h = Math.max(k.rect.h, tallest)
+        // A capped row wraps into as many lines as it takes, so the cap is a real limit
+        // rather than something the content silently overflows. Sized here and positioned
+        // by the same line-breaking in `place`, so measure and place cannot disagree.
+        if (cap < Number.POSITIVE_INFINITY) {
+            const lines = wrapLines(kids, cap - pad * 2, gap)
+            const h =
+                head +
+                pad * 2 +
+                lines.reduce((s, l) => s + l.height, 0) +
+                gap * Math.max(0, lines.length - 1)
+            const widestLine = Math.max(0, ...lines.map((l) => l.width))
+            return {
+                node: n,
+                rect: {
+                    x: 0,
+                    y: 0,
+                    w: Math.max(
+                        Math.min(cap, pad * 2 + widestLine),
+                        titleFloor(n.label, pad),
+                    ),
+                    h,
+                },
+                children: kids,
+            }
+        }
         const w =
             pad * 2 +
             kids.reduce((s, k) => s + k.rect.w, 0) +
@@ -597,7 +870,12 @@ function measure(
         const h = head + pad * 2 + Math.max(0, ...kids.map((k) => k.rect.h))
         return {
             node: n,
-            rect: { x: 0, y: 0, w: Math.max(w, titleFloor(n.label, pad)), h },
+            rect: {
+                x: 0,
+                y: 0,
+                w: Math.max(w, titleFloor(n.label, pad)),
+                h,
+            },
             children: kids,
         }
     }
@@ -606,6 +884,43 @@ function measure(
     // Only a group stretches — same reasoning as the row branch above.
     for (const k of kids)
         if (k.node.kind === "group") k.rect.w = Math.max(k.rect.w, widest)
+    // A row of weighted columns divides a width it does not have yet (see needsFullWidth).
+    // Its share of the extra has to be handed out during MEASURE: `place` runs top-down, so
+    // a child widened there leaves this container already sized for the narrow version, and
+    // the child then sticks out of the frame that is supposed to contain it.
+    //
+    // Distributed by weight rather than to the full interior, because that is the answer
+    // `place` will independently arrive at — the two passes have to agree or the frame is
+    // sized for one arrangement and drawn as another.
+    for (const k of kids) {
+        if (!needsFullWidth(k.node) || k.node.kind !== "group") continue
+        const kp = padOf(k.node)
+        const room =
+            widest - kp * 2 - k.node.gap * Math.max(0, k.children.length - 1)
+        const weights = k.children.map((c) => growOf(c.node))
+        // Unweighted children keep their size and take their width off the top; the rest is
+        // what the weights divide.
+        const fixed = k.children.reduce(
+            (s, c, i) => s + (weights[i] ? 0 : c.rect.w),
+            0,
+        )
+        const widths = shareOut(
+            k.children.map((c) => c.rect.w),
+            weights,
+            k.children.map((c) => maxWOf(c.node)),
+            k.children.map((c) => floorOf(c.node, c.rect.w)),
+            room - fixed,
+        )
+        k.children.forEach((c, i) => {
+            if (weights[i]) c.rect.w = widths[i]
+        })
+        k.rect.w = Math.max(
+            k.rect.w,
+            kp * 2 +
+                k.children.reduce((s, c) => s + c.rect.w, 0) +
+                k.node.gap * Math.max(0, k.children.length - 1),
+        )
+    }
     const w = pad * 2 + Math.max(0, ...kids.map((k) => k.rect.w))
     const h =
         head +
@@ -614,7 +929,12 @@ function measure(
         gap * Math.max(0, kids.length - 1)
     return {
         node: n,
-        rect: { x: 0, y: 0, w: Math.max(w, titleFloor(n.label, pad)), h },
+        rect: {
+            x: 0,
+            y: 0,
+            w: Math.min(cap, Math.max(w, titleFloor(n.label, pad))),
+            h,
+        },
         children: kids,
     }
 }
@@ -628,7 +948,20 @@ function measure(
  * stretched frame reads as deliberately spaced instead of sparse, and the resulting
  * cluster is centred.
  */
-function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
+function place(
+    p: Placed,
+    x: number,
+    y: number,
+    links: LayoutLinks,
+    /**
+     * True when this container's width was decided from outside its own content — the page
+     * aspect gave the top level a width, or an ancestor stretched it. Only then do `grow`
+     * weights read as absolute proportions ("3:1"), because only then is there a total to
+     * take a share OF. It passes down through stretched children: a full-width column that
+     * inherited its width hands that same certainty to the row inside it.
+     */
+    definiteWidth = false,
+): void {
     p.rect.x = Math.round(x)
     p.rect.y = Math.round(y)
     const n = p.node
@@ -701,6 +1034,64 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
     }
 
     const alongRow = n.dir === "row"
+
+    // A capped row that had to WRAP lays each line out like its own row, so the two passes
+    // cannot disagree about where the breaks fall. A capped row that still fits on one line
+    // falls through to the ordinary path below — it is an ordinary row, and skipping that
+    // path would skip `grow`, leaving declared proportions unapplied.
+    const wrapped =
+        alongRow && maxWOf(n) < Number.POSITIVE_INFINITY && kids.length > 0
+            ? wrapLines(kids, innerW, n.gap)
+            : null
+    if (wrapped && wrapped.length > 1) {
+        const lines = wrapped
+        let lineTop = innerTop
+        for (const line of lines) {
+            const used = line.items.reduce((s, k) => s + k.rect.w, 0)
+            const room = Math.max(
+                0,
+                innerW - used - n.gap * (line.items.length - 1),
+            )
+            // A wrapped line follows the same row default as an unwrapped one: centred,
+            // with its gaps padded by up to one extra gap.
+            const declared = justifyOf(n)
+            const { lead, extraGap } = declared
+                ? distribute(declared, room, line.items.length)
+                : line.items.length > 1
+                  ? (() => {
+                        const e = Math.min(
+                            n.gap,
+                            room / (line.items.length - 1),
+                        )
+                        return {
+                            lead: Math.max(
+                                0,
+                                (room - e * (line.items.length - 1)) / 2,
+                            ),
+                            extraGap: e,
+                        }
+                    })()
+                  : { lead: room / 2, extraGap: 0 }
+            let x = innerX + lead
+            for (const kid of line.items) {
+                const a = alignOf(kid.node, n)
+                const off =
+                    a === "start"
+                        ? 0
+                        : a === "end"
+                          ? line.height - kid.rect.h
+                          : a === "stretch"
+                            ? 0
+                            : (line.height - kid.rect.h) / 2
+                if (a === "stretch") kid.rect.h = line.height
+                place(kid, x, lineTop + Math.max(0, off), links)
+                x += kid.rect.w + n.gap + extraGap
+            }
+            lineTop += line.height + n.gap
+        }
+        return
+    }
+
     const sizes = kids.map((k) => (alongRow ? k.rect.w : k.rect.h))
     const content = sizes.reduce((s, v) => s + v, 0)
     const extent = alongRow ? innerW : innerH
@@ -708,42 +1099,107 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
     let slack = Math.max(0, extent - content - n.gap * (k - 1))
 
     // flex-grow: children with a weight split the leftover space between them, TeX's
-    // glue. This runs before the gap stretch below — declared weights are a statement
-    // about where the slack should go, and padding it into the gaps instead would
-    // silently override that statement.
-    const weights = kids.map((kid) => growOf(kid.node))
+    // glue. This runs before the justify distribution below — declared weights are a
+    // statement about where the slack should go, and spreading it into the gaps instead
+    // would silently override that statement.
+    //
+    // A LEAF box never grows along a column: growing its height just inflates a text
+    // box around its own text — the giant hollow panels of an early poster. Along a row
+    // it stays legal (two bars splitting a card's width is real layout), and containers
+    // grow on either axis, since they distribute the space onwards.
+    const weights = kids.map((kid) =>
+        !alongRow && kid.node.kind === "box" ? 0 : growOf(kid.node),
+    )
     const totalWeight = weights.reduce((s, v) => s + v, 0)
     if (totalWeight > 0 && slack > 0) {
-        kids.forEach((kid, i) => {
-            const extra = (slack * weights[i]) / totalWeight
-            if (alongRow) kid.rect.w += extra
-            else kid.rect.h += extra
-        })
-        slack = 0
+        // Along a ROW, when the container's width was set from OUTSIDE (a declared page
+        // aspect, or its own cap), the weights divide the whole track: `grow: 3` beside
+        // `grow: 1` then really is three times as wide, which is what writing those numbers
+        // means and what CSS's `flex: 3` shorthand does by zeroing flex-basis.
+        //
+        // Otherwise only the slack is divided, which is the older contract: the width came
+        // from the content itself, so treating the weights as absolute proportions would
+        // shrink a column below the text already in it.
+        const proportional =
+            alongRow &&
+            (definiteWidth ||
+                needsFullWidth(n) ||
+                maxWOf(n) < Number.POSITIVE_INFINITY)
+        if (proportional) {
+            // The weights divide the whole track. shareOut settles anyone who cannot take
+            // their share — too wide already, or capped — and re-divides among the rest, so
+            // the total never exceeds the room available and no child spills out.
+            const fixed = kids.reduce(
+                (s, kid, i) => s + (weights[i] ? 0 : kid.rect.w),
+                0,
+            )
+            const widths = shareOut(
+                kids.map((kid) => kid.rect.w),
+                weights,
+                kids.map((kid) => maxWOf(kid.node)),
+                kids.map((kid) => floorOf(kid.node, kid.rect.w)),
+                extent - n.gap * (k - 1) - fixed,
+            )
+            kids.forEach((kid, i) => {
+                if (weights[i]) kid.rect.w = widths[i]
+            })
+        } else {
+            kids.forEach((kid, i) => {
+                if (!weights[i]) return
+                const share = (slack * weights[i]) / totalWeight
+                // Never past a declared cap: min/max outranks grow, Yoga's rule too.
+                if (alongRow)
+                    kid.rect.w = Math.min(maxWOf(kid.node), kid.rect.w + share)
+                else kid.rect.h += share
+            })
+        }
+        // Recompute: a child clamped by its cap or its content refused part of its share,
+        // and that remainder is still free space the distribution below has to place.
+        const used = kids.reduce(
+            (s, kid) => s + (alongRow ? kid.rect.w : kid.rect.h),
+            0,
+        )
+        slack = Math.max(0, extent - used - n.gap * (k - 1))
     }
 
-    // Slack policy differs by axis. A ROW spreads and centres — a flowchart layer
-    // reads as a pyramid, and dead space at the right edge of a row looks like a
-    // mistake. A COLUMN packs to the top and leaves the slack at the bottom: a column
-    // is usually tall because a SIBLING made it tall, and stretching its gaps (or its
-    // boxes, via grow) turns every panel into a huge frame with three lines floating
-    // in the middle — the single ugliest thing in the poster this replaced.
-    const gap =
-        alongRow && k > 1 ? n.gap + Math.min(n.gap, slack / (k - 1)) : n.gap
-    const span =
-        kids.reduce((s, kid) => s + (alongRow ? kid.rect.w : kid.rect.h), 0) +
-        gap * Math.max(0, k - 1)
-    let cur = alongRow ? innerX + Math.max(0, (extent - span) / 2) : innerTop
+    // How the remaining slack is spread. A declared `justify` decides it; otherwise the
+    // engine's original per-axis defaults stand, because they are what every diagram built
+    // before `justify` existed was laid out with:
+    //
+    //   ROW — spread the gaps by up to one extra gap, then centre the result. A flowchart
+    //   layer reads as a pyramid, and dead space at the right edge of a row looks like a
+    //   mistake.
+    //   COLUMN — pack to the top and leave the slack at the bottom. A column is usually
+    //   tall because a SIBLING made it tall, and stretching its gaps turns every panel into
+    //   a big frame with three lines floating in the middle.
+    const declared = justifyOf(n)
+    let lead: number
+    let extraGap: number
+    if (declared) {
+        ;({ lead, extraGap } = distribute(declared, slack, k))
+    } else if (alongRow && k > 1) {
+        extraGap = Math.min(n.gap, slack / (k - 1))
+        lead = Math.max(0, (slack - extraGap * (k - 1)) / 2)
+    } else {
+        lead = 0
+        extraGap = 0
+    }
+    const gap = n.gap + extraGap
+    let cur = (alongRow ? innerX : innerTop) + lead
 
     for (const kid of kids) {
         // A stretching role fills the cross axis: a masthead spans its page, a section
         // heading spans its column. Measured at its text width, then widened here — the
         // container's size still comes from the widest ordinary child.
         const kn = kid.node
-        const a = alignOf(kn)
+        const a = alignOf(kn, n)
         const stretches =
             a === "stretch" ||
-            (kn.kind === "box" && kn.role && roleMetrics(kn.role).stretch)
+            (kn.kind === "box" && kn.role && roleMetrics(kn.role).stretch) ||
+            // A row of weighted columns fills this column, whatever the alignment default
+            // says — see needsFullWidth. Only along a column: across a row the cross axis
+            // is height, and a row does not hand its height out proportionally.
+            (!alongRow && needsFullWidth(kn))
         // Cross-axis position: centred unless the child asked for an edge.
         const cross = (room: number, size: number): number => {
             if (a === "start") return 0
@@ -752,11 +1208,28 @@ function place(p: Placed, x: number, y: number, links: LayoutLinks): void {
         }
         if (alongRow) {
             if (stretches) kid.rect.h = innerH
-            place(kid, cur, innerTop + cross(innerH, kid.rect.h), links)
+            // A row's child got its width from the weights above, so if this row's own
+            // width was definite the child's is too.
+            place(
+                kid,
+                cur,
+                innerTop + cross(innerH, kid.rect.h),
+                links,
+                definiteWidth && growOf(kn) > 0,
+            )
             cur += kid.rect.w + gap
         } else {
-            if (stretches) kid.rect.w = innerW
-            place(kid, innerX + cross(innerW, kid.rect.w), cur, links)
+            // Stretching along a column still respects a declared cap.
+            if (stretches) kid.rect.w = Math.min(maxWOf(kn), innerW)
+            // A stretched child fills a width this column already knew, so it inherits
+            // that certainty; an unstretched one is still sized by its own content.
+            place(
+                kid,
+                innerX + cross(innerW, kid.rect.w),
+                cur,
+                links,
+                definiteWidth && stretches,
+            )
             cur += kid.rect.h + gap
         }
     }
@@ -867,6 +1340,12 @@ export interface LayoutResult {
 /** Where the tree starts on the page. Leaves room for a title above it. */
 const ORIGIN = { x: 40, y: 90 }
 const MARGIN = { right: 40, bottom: 50 }
+/**
+ * Area of draw.io's default page (A4 at 850x1100), the yardstick a declared aspect ratio
+ * is measured against. Using the editor's own page size means aspect 1 lands on a square
+ * about one page in area, rather than on some number invented here.
+ */
+const PAGE_AREA = 850 * 1100
 
 /**
  * Lay out a forest of roots side by side and report the page size that fits them.
@@ -882,34 +1361,130 @@ export function layoutForest(
         /** The diagram's links. Needed by sequence containers, which size themselves from
          *  the number of messages between their participants. */
         links?: LayoutLinks
+        /**
+         * Target width : height for the page. When set, the top level is given a width
+         * that lands near it, which is the only way a proportional rule has anything to
+         * divide: without a definite width there is no leftover space, so every `grow`
+         * weight resolves to zero. Yoga's own docs say the same — a container distributes
+         * "any remaining space" among its children, so some space has to remain.
+         */
+        aspect?: number
     } = {},
 ): LayoutResult {
     const glyph = opts.iconSize ?? ICON_SIZE
     const gap = opts.gap ?? 70
     const links: LayoutLinks = opts.links ?? []
-    const placed = roots.map((r) => measure(r, glyph, links))
 
-    let cur = ORIGIN.x
-    for (const p of placed) {
-        const n = p.node
-        const held =
-            n.kind === "title" ? null : n.pinned ? (n.rect ?? null) : null
-        if (held) {
-            place(p, held.x, held.y, links)
-        } else {
-            place(p, cur, ORIGIN.y, links)
-            cur += p.rect.w + gap
+    const run = (hints?: Map<string, number>, target?: number): Placed[] => {
+        // A target page width narrower than the content is a request to WRAP, and wrapping
+        // has to happen during measure — the line breaks change every height. So the cap is
+        // pushed onto the root group before measuring, unless it declared its own.
+        const rootCap = new Map<string, number>()
+        if (target) {
+            for (const r of roots)
+                if (
+                    r.kind === "group" &&
+                    r.dir === "row" &&
+                    !r.pinned &&
+                    r.maxW == null
+                ) {
+                    rootCap.set(r.id, target)
+                    r.maxW = target
+                }
+        }
+        const placed = roots.map((r) => measure(r, glyph, links, hints))
+        // Widen the roots to the target width when they came out narrower. Only a group can
+        // absorb it — a grid, pool, sequence or radial computes its interior from its own
+        // rule, so forcing one wider just adds dead space inside it.
+        if (target) {
+            const own = placed.filter(
+                (p) => p.node.kind !== "title" && !p.node.pinned,
+            )
+            const spread = gap * Math.max(0, own.length - 1)
+            const share = (target - spread) / Math.max(1, own.length)
+            for (const p of own)
+                if (p.node.kind === "group")
+                    p.rect.w = Math.min(
+                        maxWOf(p.node),
+                        Math.max(p.rect.w, share),
+                    )
+        }
+        let cur = ORIGIN.x
+        for (const p of placed) {
+            const n = p.node
+            const held =
+                n.kind === "title" ? null : n.pinned ? (n.rect ?? null) : null
+            if (held) {
+                place(p, held.x, held.y, links)
+            } else {
+                // A target width makes the top level's width definite, which is what lets
+                // grow weights inside it read as proportions of a whole.
+                place(p, cur, ORIGIN.y, links, Boolean(target))
+                cur += p.rect.w + gap
+            }
+        }
+        // Undo only now: `place` needs the cap to break lines in the same places `measure`
+        // did, but `roots` is the caller's tree and must come back exactly as it went in.
+        for (const r of roots)
+            if (rootCap.has(r.id) && r.kind === "group") r.maxW = undefined
+        return placed
+    }
+
+    const extent = (placed: Placed[]) => {
+        let maxX = 0
+        let maxY = 0
+        const visit = (p: Placed) => {
+            maxX = Math.max(maxX, p.rect.x + p.rect.w)
+            maxY = Math.max(maxY, p.rect.y + p.rect.h)
+            p.children.forEach(visit)
+        }
+        placed.forEach(visit)
+        return { maxX, maxY }
+    }
+
+    let placed = run()
+
+    if (opts.aspect && opts.aspect > 0) {
+        // The target width has to come from OUTSIDE the content, or it cannot create the
+        // spare space that proportional rules divide: deriving it from the area the content
+        // already occupies just returns that content's own width back, leaving nothing over.
+        // draw.io's page is the natural external reference — one A4 at 850x1100 — so
+        // width = sqrt(pageArea x aspect) is the first guess.
+        let want = Math.round(Math.sqrt(PAGE_AREA * opts.aspect))
+
+        // Then iterate, because width and height are not independent: widening the page
+        // makes every paragraph rewrap to fewer lines, which SHORTENS it, which changes the
+        // ratio that was being aimed at. One pass therefore lands wide of the mark — asking
+        // for 0.8 gave 1.13. Each round measures what the last width actually produced and
+        // corrects toward the target; three is enough to get inside a few percent, and the
+        // loop stops early once the correction is negligible.
+        //
+        // The hint map is what makes the correction real: it carries the width each box was
+        // drawn at, so its text is re-counted at that width instead of at its intrinsic one.
+        for (let pass = 0; pass < 4; pass++) {
+            placed = run(undefined, want)
+            const hints = new Map<string, number>()
+            const collect = (p: Placed) => {
+                if (p.node.kind === "box") hints.set(p.node.id, p.rect.w)
+                p.children.forEach(collect)
+            }
+            placed.forEach(collect)
+            placed = run(hints, want)
+
+            const { maxX, maxY } = extent(placed)
+            const w = maxX + MARGIN.right
+            const h = maxY + MARGIN.bottom
+            const err = w / h / opts.aspect
+            if (Math.abs(err - 1) < 0.04) break
+            // Geometric correction: to move the ratio by a factor, move the width by its
+            // square root, since shrinking the width lengthens the page and vice versa.
+            const next = Math.round(want / Math.sqrt(err))
+            if (next === want) break
+            want = next
         }
     }
 
-    let maxX = 0
-    let maxY = 0
-    const visit = (p: Placed) => {
-        maxX = Math.max(maxX, p.rect.x + p.rect.w)
-        maxY = Math.max(maxY, p.rect.y + p.rect.h)
-        p.children.forEach(visit)
-    }
-    placed.forEach(visit)
+    const { maxX, maxY } = extent(placed)
 
     return {
         roots: placed,

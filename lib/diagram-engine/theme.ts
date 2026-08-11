@@ -182,6 +182,26 @@ const ROLE_SPECS: Record<Role, RoleSpec> = {
     },
 }
 
+/**
+ * Does this role already draw itself with no border?
+ *
+ * The parser needs this to tell a THEME's `strokeColor=none` from a DECLARED one. A banner is
+ * a dark filled slab and a heading is ghost text; both are borderless because of what they
+ * are, not because anyone asked. Recording that as an explicit override would make it
+ * outlive a later role change, since `set_role` clears a node's style but keeps its text
+ * overrides.
+ *
+ * Leaf only: the container branch of `themedStyle` always draws a border, whatever the role.
+ */
+export function roleIsBorderless(
+    role: Role | undefined,
+    kind: "leaf" | "container",
+): boolean {
+    if (kind === "container") return false
+    const e = ROLE_SPECS[role ?? "body"].emphasis
+    return e === "filled" || e === "ghost"
+}
+
 /** Metrics the measure pass needs, so layout reserves what render will draw. */
 export function roleMetrics(role: Role | undefined): {
     fontSize: number

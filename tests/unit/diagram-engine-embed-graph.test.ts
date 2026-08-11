@@ -95,7 +95,7 @@ describe("add_graph", () => {
         expect(right.w).toBeGreaterThan(right.h)
     })
 
-    it("reports unknown edge endpoints as an error", () => {
+    it("draws the rest of the graph and warns about an unknown edge endpoint", () => {
         const r = restructureDiagram("", [
             {
                 op: "add_graph",
@@ -104,6 +104,10 @@ describe("add_graph", () => {
                 edges: [{ source: "a", target: "ghost" }],
             },
         ])
-        expect(r.errors.join(" ")).toContain("ghost")
+        // A warning, not an error: node "a" is perfectly drawable, and rejecting the whole
+        // call would cost a turn to arrive back at the same diagram.
+        expect(r.errors).toEqual([])
+        expect(r.xml).toBeTruthy()
+        expect(r.warnings.join(" ")).toContain("ghost")
     })
 })

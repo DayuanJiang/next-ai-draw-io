@@ -348,6 +348,35 @@ describe("edges survive", () => {
         })
         expect(renderDiagram(t).xml).not.toContain('as="points"')
     })
+
+    it("an edge's style does not grow across repeated re-layouts", () => {
+        // The router recomputes the connection points every pass, and an edge recovered from
+        // the canvas already carries the previous pass's set. Appending them added 76
+        // characters per round-trip forever. draw.io resolves duplicate keys last-wins, so
+        // the arrow always LOOKED right — only measuring the string catches it.
+        let t = tree([group("f", "row", [icon("a"), icon("b")], "F")], {
+            links: [{ source: "a", target: "b" }],
+        })
+        const styleOfEdge = (xml: string) =>
+            /<mxCell id="ed1"[^>]*style="([^"]*)"/.exec(xml)?.[1] ?? ""
+
+        const lengths: number[] = []
+        const portCounts: number[] = []
+        let xml = ""
+        for (let pass = 0; pass < 4; pass++) {
+            xml = renderDiagram(t).xml
+            const s = styleOfEdge(xml)
+            lengths.push(s.length)
+            portCounts.push((s.match(/exitX=/g) ?? []).length)
+            t = parseDiagram(xml).tree
+        }
+
+        // Same length every pass, and the port keys stated once rather than accumulating.
+        expect(new Set(lengths).size).toBe(1)
+        expect(portCounts).toEqual([1, 1, 1, 1])
+        // Which is what lets the XML itself reach a fixed point.
+        expect(renderDiagram(parseDiagram(xml).tree).xml).toBe(xml)
+    })
 })
 
 describe("foreign cells survive", () => {

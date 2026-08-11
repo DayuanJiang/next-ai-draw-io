@@ -22,7 +22,9 @@ import {
     sequenceMetrics,
 } from "./layout"
 import {
+    appendOnce,
     isInvisible,
+    MARKER,
     stampAuto,
     stampCell,
     stampContainer,
@@ -48,6 +50,7 @@ import {
     type PoolNode,
     type Rect,
     type SequenceNode,
+    type TextStyle,
 } from "./types"
 import type { Point } from "./visgraph"
 
@@ -79,6 +82,77 @@ export function esc(s: string): string {
 function isParagraph(label: string): boolean {
     const plain = label.replace(/<[^<>]+>/g, "")
     return /\n/.test(label) || /<br/i.test(label) || plain.length > 60
+}
+
+/**
+ * The five draw.io shadow parameters per Tailwind rung, keyed by TextStyle.shadow.
+ *
+ * Values are the primary layer of Tailwind's own CSS: `shadow-md` is
+ * `0 4px 6px rgb(0 0 0/0.1)`, so 4px down, 6px of blur, 10% opaque. Tailwind stacks a second
+ * tighter layer on each step; draw.io renders one `drop-shadow()`, so the main layer is what
+ * survives. `shadowColor` is left off deliberately — draw.io's default grey is correct, and
+ * colour belongs to `role` and `group`.
+ */
+const SHADOW_KEYS: Record<number, string> = {
+    1: "shadow=1;shadowOffsetX=0;shadowOffsetY=1;shadowBlur=3;shadowOpacity=10;",
+    2: "shadow=1;shadowOffsetX=0;shadowOffsetY=4;shadowBlur=6;shadowOpacity=10;",
+    3: "shadow=1;shadowOffsetX=0;shadowOffsetY=10;shadowBlur=15;shadowOpacity=10;",
+    4: "shadow=1;shadowOffsetX=0;shadowOffsetY=20;shadowBlur=25;shadowOpacity=10;",
+}
+
+/**
+ * A node's presentation overrides, as draw.io style keys.
+ *
+ * Bold, italic, underline and strikethrough are ONE key: draw.io packs them into `fontStyle`
+ * as a bitmask (1 bold, 2 italic, 4 underline, 8 strikethrough) which you add together.
+ * Writing four separate keys, or writing `fontStyle=1` twice, would leave only the last one
+ * in effect — so the bits are combined here and emitted once.
+ *
+ * `dashPattern` accompanies dotted: `dashed=1` alone gives draw.io's default dash, and the
+ * short-on-long-off pattern is what makes it read as a dotted line rather than a dashed one.
+ *
+ * A radius needs three keys together. `rounded=1` turns corners on at all, `absoluteArcSize=1`
+ * makes the number pixels instead of a percentage of the box, and `arcSize` is DOUBLE the
+ * radius because draw.io halves it on the way in (mxShape.js:1172-1189). All three or none:
+ * `arcSize` alone would be read as a percentage and give a different radius on every box.
+ */
+function textStyleKeys(t: TextStyle | undefined): string | undefined {
+    if (!t) return undefined
+    const parts: string[] = []
+    const bits =
+        (t.bold ? 1 : 0) +
+        (t.italic ? 2 : 0) +
+        (t.underline ? 4 : 0) +
+        (t.strike ? 8 : 0)
+    // Only when something asked. `fontStyle=0` would override a role's own bold.
+    if (
+        t.bold != null ||
+        t.italic != null ||
+        t.underline != null ||
+        t.strike != null
+    )
+        parts.push(`fontStyle=${bits};`)
+    if (t.size != null && t.size > 0) parts.push(`fontSize=${t.size};`)
+    if (t.align) parts.push(`align=${t.align};`)
+    if (t.valign) parts.push(`verticalAlign=${t.valign};`)
+    if (t.nowrap != null)
+        parts.push(`whiteSpace=${t.nowrap ? "nowrap" : "wrap"};`)
+    if (t.borderWidth != null && t.borderWidth > 0)
+        parts.push(`strokeWidth=${t.borderWidth};`)
+    if (t.borderStyle === "dashed") parts.push("dashed=1;")
+    else if (t.borderStyle === "dotted") parts.push("dashed=1;dashPattern=1 3;")
+    else if (t.borderStyle === "solid") parts.push("dashed=0;")
+    // `strokeColor=none` is how draw.io says "no border" (mxShape.js:1398 accepts it), and
+    // it is the only way to draw a plain colour field with no outline at all.
+    if (t.borderless) parts.push("strokeColor=none;")
+    if (t.radius != null) {
+        if (t.radius > 0)
+            parts.push(`rounded=1;absoluteArcSize=1;arcSize=${t.radius * 2};`)
+        else parts.push("rounded=0;")
+    }
+    if (t.shadow != null)
+        parts.push(t.shadow > 0 ? (SHADOW_KEYS[t.shadow] ?? "") : "shadow=0;")
+    return parts.length ? parts.join("") : undefined
 }
 
 /** Resolve a catalog name to a style. Injected so the engine does not own the catalog. */
@@ -191,13 +265,22 @@ function styleFor(
                 n.fill ? `fillColor=${n.fill};` : undefined,
                 n.stroke ? `strokeColor=${n.stroke};` : undefined,
                 n.bold ? "fontStyle=1;" : undefined,
+                // Last, so an explicit override beats both the role's type and the
+                // paragraph heuristic above — asking for centred text has to win over
+                // "this looks like a paragraph, so set it flush left".
+                textStyleKeys(n.text),
             )
         }
         let stamped = stampLeaf(base, "box")
         if (n.shape && n.shape !== "box") stamped = stampShape(stamped, n.shape)
         if (n.role && n.role !== "body") stamped = stampRole(stamped, n.role)
         if (n.group) stamped = stampGroup(stamped, n.group)
-        stamped = stampFlex(stamped, { grow: n.grow, align: n.align })
+        stamped = stampFlex(stamped, {
+            grow: n.grow,
+            align: n.align,
+            maxW: n.maxW,
+            minW0: n.minW0,
+        })
         // Engine-measured (no explicit w/h): mark it, so the parser re-measures next
         // time instead of freezing this layout's numbers as a fixed size.
         if (n.w == null && n.h == null) stamped = stampAuto(stamped)
@@ -240,10 +323,22 @@ function styleFor(
         if (n.fill) base += `fillColor=${n.fill};`
         if (n.stroke) base += `strokeColor=${n.stroke};`
     }
+    if (n.kind === "group") {
+        const overrides = textStyleKeys(n.text)
+        if (overrides) base = mergeStyle(base, overrides)
+    }
     if (groupRole && groupRole !== "body") base = stampRole(base, groupRole)
     if (zone) base = stampGroup(base, zone)
     if (n.kind === "group")
-        base = stampFlex(base, { grow: n.grow, align: n.align, pad: n.pad })
+        base = stampFlex(base, {
+            grow: n.grow,
+            align: n.align,
+            justify: n.justify,
+            alignItems: n.alignItems,
+            maxW: n.maxW,
+            minW0: n.minW0,
+            pad: n.pad,
+        })
     return stampContainer(base, {
         kind: n.kind,
         dir: n.kind === "grid" ? "grid" : n.dir,
@@ -253,8 +348,12 @@ function styleFor(
     })
 }
 
+// `connectable=0` because an invisible wrapper is scaffolding, not a thing to draw arrows
+// from. Without it draw.io treats the empty frame as a normal shape: hovering anywhere over
+// the group pops up its connection crosses and direction arrows, which land on top of the
+// content inside it and read as stray marks in the middle of the diagram.
 const INVISIBLE_FRAME_STYLE =
-    "rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;"
+    "rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;connectable=0;"
 
 /**
  * One `<mxCell>` for a vertex, with geometry relative to its parent.
@@ -624,10 +723,18 @@ function edgeXml(
             style += `startArrow=${l.tail};startFill=${l.tailFill ? 1 : 0};`
         if (label) style += "labelBackgroundColor=light-dark(#FFFFFF,#0B0F14);"
     }
+    // SET rather than append. Unlike the branch above, this runs for a recovered style too —
+    // the router recomputes the ports on every layout, so they cannot be left at whatever the
+    // canvas held. But that recovered style ALREADY carries the previous pass's eight port
+    // keys, and appending grew the style by 76 characters per round-trip without bound.
+    // draw.io resolves duplicates last-wins so the arrow always looked right, which is why
+    // this survived until a byte-identity check caught it.
     if (route)
-        style +=
+        style = appendOnce(
+            style,
             `exitX=${route.exit.x};exitY=${route.exit.y};exitDx=0;exitDy=0;` +
-            `entryX=${route.entry.x};entryY=${route.entry.y};entryDx=0;entryDy=0;`
+                `entryX=${route.entry.x};entryY=${route.entry.y};entryDx=0;entryDy=0;`,
+        )
     const id = l.id ?? `ed${index + 1}`
     const points =
         route?.freeze && route.waypoints.length
@@ -730,6 +837,7 @@ export function renderDiagram(
         iconSize: opts.iconSize,
         gap: opts.rootGap,
         links: tree.links,
+        aspect: tree.aspect,
     })
 
     const flat = flatten(roots)
@@ -904,7 +1012,7 @@ export function renderDiagram(
     //
     // An INVISIBLE container is excluded, because both of those judgements are about what a
     // reader sees, and there is no border on screen to run alongside or to trespass across.
-    // A layer band in a flowchart is exactly that: `draw_graph` wraps each row of the graph
+    // A layer band in a flowchart is exactly that: `add_graph` wraps each row of the graph
     // in an unlabelled, unstroked container purely to stack them. Counting those as frames
     // measurably ruined the arrows — a back edge such as "return for correction" → "submit"
     // leaves its own band, so every clean route was rejected for trespassing on a frame that
@@ -971,11 +1079,16 @@ export function renderDiagram(
     for (const m of messages)
         cells.push(messageXml(m.link, m.index, m.y, cellById))
 
+    // The declared page ratio rides on the default layer's cell — the one cell every
+    // diagram has, and page-level state has no node to live on.
+    const layer = tree.aspect
+        ? `<mxCell id="1" parent="0" style="${MARKER.aspect}=${tree.aspect};"/>`
+        : `<mxCell id="1" parent="0"/>`
     const model =
         `<mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1"` +
         ` connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="${page.w}"` +
         ` pageHeight="${page.h}" math="0" shadow="0"><root><mxCell id="0"/>` +
-        `<mxCell id="1" parent="0"/>${cells.join("")}</root></mxGraphModel>`
+        `${layer}${cells.join("")}</root></mxGraphModel>`
 
     return {
         xml: `<mxfile host="app.diagrams.net"><diagram name="Page-1" id="page-1">${model}</diagram></mxfile>`,

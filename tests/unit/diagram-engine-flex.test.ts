@@ -90,11 +90,62 @@ describe("grow", () => {
 
         const flat = make(false)
         const grown = make(true)
-        const extraMain = rectOf(grown, "main").w - rectOf(flat, "main").w
-        const extraSide = rectOf(grown, "side").w - rectOf(flat, "side").w
-        // The slack lands on the columns instead of the gaps, split 2:1.
-        expect(extraMain).toBeGreaterThan(0)
-        expect(extraMain / extraSide).toBeCloseTo(2, 0)
+
+        // The weights make main wider than it would be on its own content...
+        expect(rectOf(grown, "main").w).toBeGreaterThan(rectOf(flat, "main").w)
+
+        // ...but NOT the full 2:1, and that is correct rather than a shortfall. `side`
+        // will not shrink below the width of its own text, so the ratio settles wherever
+        // that floor allows. A browser does exactly the same: `min-width` defaults to
+        // `auto`, so a `flex: 2` column stops shrinking at its content too.
+        const ratio = rectOf(grown, "main").w / rectOf(grown, "side").w
+        expect(ratio).toBeGreaterThan(1.3)
+        expect(ratio).toBeLessThan(2.1)
+    })
+
+    it("min-w-0 lets the weights win over the content width", () => {
+        // The CSS escape hatch, same spelling: with min-w-0 the narrow column may be
+        // squeezed under its own text, so a declared 2:1 really comes out 2:1.
+        const r = restructureDiagram("", [
+            { op: "add_container", id: "page", label: "", dir: "col", gap: 16 },
+            {
+                op: "add_box",
+                id: "mast",
+                parent: "page",
+                label: "A very wide masthead banner that stretches the page out",
+                role: "banner",
+            },
+            {
+                op: "add_container",
+                id: "cols",
+                parent: "page",
+                label: "",
+                dir: "row",
+                gap: 16,
+            },
+            {
+                op: "add_container",
+                id: "main",
+                parent: "cols",
+                label: "",
+                dir: "col",
+                class: "grow-2 min-w-0",
+            },
+            {
+                op: "add_container",
+                id: "side",
+                parent: "cols",
+                label: "",
+                dir: "col",
+                class: "grow-1 min-w-0",
+            },
+            { op: "add_box", id: "a", parent: "main", label: "main content" },
+            { op: "add_box", id: "b", parent: "side", label: "aside" },
+        ])
+        expect(r.errors).toEqual([])
+        const xml = r.xml as string
+        const ratio = rectOf(xml, "main").w / rectOf(xml, "side").w
+        expect(ratio).toBeCloseTo(2, 0)
     })
 })
 
