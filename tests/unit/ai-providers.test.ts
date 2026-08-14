@@ -320,6 +320,54 @@ describe("Atlas Cloud provider", () => {
     })
 })
 
+describe("OrcaRouter provider", () => {
+    let createOpenAIMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.ORCAROUTER_API_KEY = process.env.ORCAROUTER_API_KEY
+        savedEnv.ORCAROUTER_BASE_URL = process.env.ORCAROUTER_BASE_URL
+        delete process.env.ORCAROUTER_BASE_URL
+
+        const mod = await import("@ai-sdk/openai")
+        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
+        createOpenAIMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.ORCAROUTER_API_KEY = savedEnv.ORCAROUTER_API_KEY
+        process.env.ORCAROUTER_BASE_URL = savedEnv.ORCAROUTER_BASE_URL
+    })
+
+    it("uses OrcaRouter default endpoint with ORCAROUTER_API_KEY", () => {
+        process.env.ORCAROUTER_API_KEY = "server-orca-key"
+
+        getAIModel({
+            provider: "orcarouter",
+            modelId: "anthropic/claude-sonnet-4.6",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "server-orca-key",
+            baseURL: "https://api.orcarouter.ai/v1",
+        })
+    })
+
+    it("uses custom OrcaRouter base URL when provided", () => {
+        getAIModel({
+            provider: "orcarouter",
+            apiKey: "client-orca-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "openai/gpt-5.4-mini",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "client-orca-key",
+            baseURL: "https://proxy.example.com/v1",
+        })
+    })
+})
+
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
     let createDeepSeekMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}

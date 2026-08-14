@@ -182,6 +182,21 @@ Optional custom endpoint:
 OPENROUTER_BASE_URL=https://your-custom-endpoint
 ```
 
+### OrcaRouter
+
+```bash
+ORCAROUTER_API_KEY=sk-orca-...
+AI_MODEL=anthropic/claude-sonnet-4.6
+```
+
+Optional custom endpoint:
+
+```bash
+ORCAROUTER_BASE_URL=https://api.orcarouter.ai/v1
+```
+
+Get your API key from [orcarouter.ai](https://www.orcarouter.ai).
+
 ### Ollama (Local)
 
 ```bash
@@ -343,7 +358,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, orcarouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## Server-Side Multi-Model Configuration

@@ -167,6 +167,21 @@ AI_MODEL=anthropic/claude-sonnet-4
 OPENROUTER_BASE_URL=https://your-custom-endpoint
 ```
 
+### OrcaRouter
+
+```bash
+ORCAROUTER_API_KEY=sk-orca-...
+AI_MODEL=anthropic/claude-sonnet-4.6
+```
+
+任意のカスタムエンドポイント:
+
+```bash
+ORCAROUTER_BASE_URL=https://api.orcarouter.ai/v1
+```
+
+API キーは [orcarouter.ai](https://www.orcarouter.ai) から取得できます。
+
 ### Ollama (ローカル)
 
 ```bash
@@ -328,7 +343,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, orcarouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## サーバーサイドマルチモデル設定

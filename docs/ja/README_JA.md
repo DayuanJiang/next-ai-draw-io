@@ -203,6 +203,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   [OrcaRouter](https://www.orcarouter.ai)
 -   AIHubMix
 -   DeepSeek
 -   SiliconFlow

@@ -167,6 +167,21 @@ AI_MODEL=anthropic/claude-sonnet-4
 OPENROUTER_BASE_URL=https://your-custom-endpoint
 ```
 
+### OrcaRouter
+
+```bash
+ORCAROUTER_API_KEY=sk-orca-...
+AI_MODEL=anthropic/claude-sonnet-4.6
+```
+
+可选的自定义端点：
+
+```bash
+ORCAROUTER_BASE_URL=https://api.orcarouter.ai/v1
+```
+
+请从 [orcarouter.ai](https://www.orcarouter.ai) 获取 API 密钥。
+
 ### Ollama (本地)
 
 ```bash
@@ -328,7 +343,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, orcarouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## 服务端多模型配置

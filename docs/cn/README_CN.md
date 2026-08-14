@@ -204,6 +204,7 @@ npm run dev
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   [OrcaRouter](https://www.orcarouter.ai)
 -   AIHubMix
 -   DeepSeek
 -   SiliconFlow

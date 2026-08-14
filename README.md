@@ -211,6 +211,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   [OrcaRouter](https://www.orcarouter.ai)
 -   AIHubMix
 -   DeepSeek
 -   SiliconFlow
