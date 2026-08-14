@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import fs from "fs/promises"
 import path from "path"
 import { z } from "zod"
@@ -54,6 +55,36 @@ function slugify(name: string): string {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
+}
+
+function getProviderSlugs(providers: ServerProviderConfig[]): string[] {
+    const baseSlugs = providers.map((provider) => slugify(provider.name))
+    const slugCounts = new Map<string, number>()
+
+    for (const slug of baseSlugs) {
+        slugCounts.set(slug, (slugCounts.get(slug) ?? 0) + 1)
+    }
+
+    return providers.map((provider, index) => {
+        const baseSlug = baseSlugs[index]
+        if (baseSlug && slugCounts.get(baseSlug) === 1) return baseSlug
+
+        // Preserve existing IDs unless a slug is empty or ambiguous. The
+        // suffix keeps colliding providers stable across config reloads and
+        // includes credential routing fields so identical display names can
+        // still resolve to the intended server configuration.
+        const identity = JSON.stringify([
+            provider.name,
+            provider.provider,
+            provider.apiKeyEnv ?? null,
+            provider.baseUrlEnv ?? null,
+        ])
+        const suffix = createHash("sha256")
+            .update(identity)
+            .digest("hex")
+            .slice(0, 12)
+        return `${baseSlug || provider.provider}-${suffix}`
+    })
 }
 
 function getConfigPath(): string {
@@ -189,13 +220,14 @@ export async function loadFlattenedServerModels(): Promise<
     const defaultModelId = process.env.AI_MODEL
 
     const flattened: FlattenedServerModel[] = []
+    const providerSlugs = getProviderSlugs(cfg.providers)
 
-    for (const p of cfg.providers) {
+    for (const [providerIndex, p] of cfg.providers.entries()) {
         const providerLabel =
             p.name || PROVIDER_INFO[p.provider]?.label || p.provider
 
         // Use slugified name for unique ID (supports multiple API keys per provider)
-        const nameSlug = slugify(p.name)
+        const nameSlug = providerSlugs[providerIndex]
 
         for (const modelId of p.models) {
             const id = `server:${nameSlug}:${modelId}`
