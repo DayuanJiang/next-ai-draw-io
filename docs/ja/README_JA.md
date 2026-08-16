@@ -256,6 +256,6 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 ## スター履歴
 
-[![Star History Chart](https://api.star-history.com/svg?repos=DayuanJiang/next-ai-draw-io&type=date&legend=top-left)](https://www.star-history.com/#DayuanJiang/next-ai-draw-io&type=date&legend=top-left)
+[![Star History Chart](https://star-history.dera.page/svg?repos=DayuanJiang/next-ai-draw-io&type=date&legend=top-left)](https://star-history.dera.page/#DayuanJiang/next-ai-draw-io&type=date&legend=top-left)
 
 ---
