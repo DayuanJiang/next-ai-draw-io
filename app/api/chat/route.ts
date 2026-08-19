@@ -6,6 +6,7 @@ import {
     generateText,
     InvalidToolInputError,
     LoadAPIKeyError,
+    Output,
     stepCountIs,
     streamText,
 } from "ai"
@@ -36,6 +37,14 @@ import {
     wrapWithObserve,
 } from "@/lib/langfuse"
 import { findServerModelById } from "@/lib/server-model-config"
+import {
+    extractUserPrompt,
+    MAX_FILTERED_SHAPES,
+    parseShapeDoc,
+    rebuildShapeDoc,
+    SHAPE_FILTER_THRESHOLD,
+    selectShapes,
+} from "@/lib/shape-library-filter"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
 
@@ -113,8 +122,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
         .find((m: any) => m.role === "user")
     const userInputText =
         lastUserMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
-
-    ;(globalThis as any).lastUserInputText = userInputText
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -722,7 +729,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                             "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
                         ),
                 }),
-                execute: async ({ library }) => {
+                execute: async ({ library }, { messages, abortSignal }) => {
                     // Sanitize input - prevent path traversal attacks
                     const sanitizedLibrary = library
                         .toLowerCase()
@@ -748,51 +755,70 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                     }
 
                     try {
-                        const userPrompt =
-                            (globalThis as any).lastUserInputText || ""
-
                         const content = await fs.readFile(filePath, "utf-8")
 
-                        const [headerPart, shapesPart] =
-                            content.split("## Shapes")
-
-                        const shapes =
-                            shapesPart
-                                ?.split("\n")
-                                .filter((l) => l.startsWith("- "))
-                                .map((l) => l.replace("- ", "").trim()) || []
-
-                        if (shapes.length < 100) return content
-
-                        const { text } = await generateText({
-                            model,
-                            temperature: 0,
-                            prompt: `
-                    User request: "${userPrompt}"
-
-                    Pick only the 15 most relevant shapes.
-                    Return ONLY JSON array.
-
-                    ${shapes.join("\n")}
-                     `,
-                        })
-
-                        let selected: string[] = []
-
-                        try {
-                            selected = JSON.parse(text)
-                        } catch {
-                            const match = text.match(/\[[\s\S]*\]/)
-                            if (match) {
-                                selected = JSON.parse(match[0])
-                            }
+                        // Large libraries are filtered down to the shapes
+                        // relevant to the user's request; everything else
+                        // (small libraries, unrecognized formats) is returned
+                        // in full.
+                        const parsed = parseShapeDoc(content)
+                        if (
+                            !parsed ||
+                            parsed.totalShapes < SHAPE_FILTER_THRESHOLD
+                        ) {
+                            return content
                         }
 
-                        return `
-                    ${headerPart}
+                        const userPrompt = extractUserPrompt(messages)
+                        if (!userPrompt) {
+                            return content
+                        }
 
-                    ## Shapes
-                    ${(selected as string[]).map((s: string) => `- ${s}`).join("\n")}   `
+                        // Secondary LLM call to pick the most relevant shapes.
+                        // On any failure (provider error, schema validation,
+                        // empty selection) we fall back to the full document -
+                        // never return zero shapes.
+                        let selected: string[] = []
+                        try {
+                            const { output } = await generateText({
+                                model,
+                                temperature: 0,
+                                maxOutputTokens: 2000,
+                                abortSignal,
+                                output: Output.object({
+                                    schema: z.object({
+                                        shapes: z
+                                            .array(z.string())
+                                            .describe(
+                                                "Most relevant shape names, copied exactly from the list",
+                                            ),
+                                    }),
+                                }),
+                                prompt: `You are helping build a draw.io diagram. From the shape list below, pick the ${MAX_FILTERED_SHAPES} most relevant shapes for the user's request.
+
+User request: "${userPrompt}"
+
+Shape list:
+${parsed.groups.flatMap((group) => group.shapes).join("\n")}
+
+Return only shape names that appear exactly in the list.`,
+                            })
+                            selected = selectShapes(
+                                parsed,
+                                output?.shapes ?? [],
+                            )
+                        } catch (error) {
+                            console.error(
+                                `[get_shape_library] Shape filtering failed for "${library}", returning full library:`,
+                                error,
+                            )
+                        }
+
+                        if (selected.length === 0) {
+                            return content
+                        }
+
+                        return rebuildShapeDoc(parsed, selected)
                     } catch (error) {
                         if (
                             (error as NodeJS.ErrnoException).code === "ENOENT"
