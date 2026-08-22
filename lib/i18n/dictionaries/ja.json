@@ -132,6 +132,8 @@
         "customSystemMessage": "カスタムシステムメッセージ",
         "customSystemMessageDescription": "AIのシステムプロンプトに追加されるカスタム指示を入力します。",
         "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用...",
+        "maxOutputTokens": "最大出力トークン数",
+        "maxOutputTokensDescription": "1回の応答の予算で、思考過程とダイアグラムの XML が共有します。AI が考え続けてダイアグラムが生成されない場合は大きくしてください。空欄ならデフォルト値を使います。",
         "panelVisibility": "ロビーパネル",
         "panelVisibilityDescription": "チャットロビーに表示するパネルを選択します。",
         "showRecentChats": "最近のチャット",

@@ -75,6 +75,8 @@ interface SettingsDialogProps {
     onOpenModelConfig?: () => void
     customSystemMessage?: string
     onCustomSystemMessageChange?: (value: string) => void
+    maxOutputTokens?: string
+    onMaxOutputTokensChange?: (value: string) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -101,6 +103,8 @@ function SettingsContent({
     onOpenModelConfig,
     customSystemMessage = "",
     onCustomSystemMessageChange = () => {},
+    maxOutputTokens = "",
+    onMaxOutputTokensChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -590,6 +594,24 @@ function SettingsContent({
                             maxLength={5000}
                         />
                     </div>
+
+                    {/* Max Output Tokens */}
+                    <SettingItem
+                        label={dict.settings.maxOutputTokens}
+                        description={dict.settings.maxOutputTokensDescription}
+                    >
+                        <Input
+                            id="max-output-tokens"
+                            type="text"
+                            inputMode="numeric"
+                            value={maxOutputTokens}
+                            onChange={(e) =>
+                                onMaxOutputTokensChange(e.target.value)
+                            }
+                            placeholder="64000"
+                            className="h-9 w-28 text-sm"
+                        />
+                    </SettingItem>
 
                     {/* Send Shortcut */}
                     <SettingItem

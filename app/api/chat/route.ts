@@ -34,11 +34,17 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import {
+    resolveMaxOutputTokens,
+    withOutputTokenLimitFallback,
+} from "@/lib/output-token-limit"
 import { findServerModelById } from "@/lib/server-model-config"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
 
-export const maxDuration = 120
+// No explicit cap: a reasoning model can spend minutes planning before it emits
+// the tool call, so take whatever the host allows. Vercel's own default is 300s,
+// which is also where Node's response-body timeout on the upstream stream lands.
 
 // Helper function to create cached stream response
 function createCachedStreamResponse(xml: string): Response {
@@ -241,12 +247,21 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // Get AI model with optional client overrides
     const {
-        model,
+        model: baseModel,
         providerOptions,
         headers,
         modelId,
         provider: resolvedProvider,
     } = getAIModel(clientOverrides)
+
+    // Retry with a smaller budget if the provider rejects the requested one
+    const model = withOutputTokenLimitFallback(baseModel)
+
+    // User setting wins over server env, so desktop users can raise it themselves
+    const maxOutputTokens = resolveMaxOutputTokens(
+        req.headers.get("x-max-output-tokens"),
+    )
+    console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
@@ -493,9 +508,9 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
     const result = streamText({
         model,
         abortSignal: req.signal,
-        // Must be sent: unset means the provider's own default, and Bedrock's is 4096 —
-        // enough for a small diagram, so larger ones were cut off mid-attribute.
-        maxOutputTokens: Number(process.env.MAX_OUTPUT_TOKENS) || 16000,
+        // Must be sent: unset means the provider's own default, and Bedrock's is
+        // 4096, enough for a small diagram, so larger ones were cut off mid-attribute.
+        maxOutputTokens,
         stopWhen: stepCountIs(5),
         // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
         experimental_repairToolCall: async ({ toolCall, error }) => {
