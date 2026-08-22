@@ -132,6 +132,8 @@
         "customSystemMessage": "Custom System Message",
         "customSystemMessageDescription": "Add custom instructions appended to the AI's system prompt.",
         "customSystemMessagePlaceholder": "e.g., Always use blue color scheme for diagrams...",
+        "maxOutputTokens": "Max Output Tokens",
+        "maxOutputTokensDescription": "Budget for one reply, shared by thinking and the diagram XML. Raise it if the AI keeps thinking and no diagram appears. Leave empty for the default.",
         "panelVisibility": "Lobby Panels",
         "panelVisibilityDescription": "Choose which panels to show on the chat lobby.",
         "showRecentChats": "Recent Chats",

@@ -132,6 +132,8 @@
         "customSystemMessage": "自訂系統訊息",
         "customSystemMessageDescription": "新增自訂指示，將附加到 AI 的系統提示末尾。",
         "customSystemMessagePlaceholder": "例如：圖表始終使用藍色配色方案...",
+        "maxOutputTokens": "最大輸出 token 數",
+        "maxOutputTokensDescription": "單次回覆的額度，思考過程與圖表 XML 共用。若 AI 一直在思考卻沒有產生圖表，請將它調大。留空則使用預設值。",
         "panelVisibility": "大廳面板",
         "panelVisibilityDescription": "選擇在聊天大廳顯示哪些面板。",
         "showRecentChats": "最近聊天",

@@ -178,6 +178,7 @@ export default function ChatPanel({
     const [minimalStyle, setMinimalStyle] = useState(false)
     const [vlmValidationEnabled, setVlmValidationEnabled] = useState(false)
     const [customSystemMessage, setCustomSystemMessage] = useState("")
+    const [maxOutputTokens, setMaxOutputTokens] = useState("")
     const [shouldFocusInput, setShouldFocusInput] = useState(false)
 
     // Restore input from sessionStorage on mount (when ChatPanel remounts due to key change)
@@ -201,6 +202,14 @@ export default function ChatPanel({
         const stored = localStorage.getItem(STORAGE_KEYS.customSystemMessage)
         if (stored !== null) {
             setCustomSystemMessage(stored)
+        }
+    }, [])
+
+    // Load output token budget from localStorage on mount
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEYS.maxOutputTokens)
+        if (stored !== null) {
+            setMaxOutputTokens(stored)
         }
     }, [])
 
@@ -318,6 +327,13 @@ export default function ChatPanel({
     const handleCustomSystemMessageChange = useCallback((value: string) => {
         setCustomSystemMessage(value)
         localStorage.setItem(STORAGE_KEYS.customSystemMessage, value)
+    }, [])
+
+    // Handler for output token budget change (empty string = use server default)
+    const handleMaxOutputTokensChange = useCallback((value: string) => {
+        const digitsOnly = value.replace(/\D/g, "")
+        setMaxOutputTokens(digitsOnly)
+        localStorage.setItem(STORAGE_KEYS.maxOutputTokens, digitsOnly)
     }, [])
 
     // Ref to store the sendMessage function for use in callbacks
@@ -1104,6 +1120,9 @@ export default function ChatPanel({
                     ...(minimalStyle && {
                         "x-minimal-style": "true",
                     }),
+                    ...(maxOutputTokens && {
+                        "x-max-output-tokens": maxOutputTokens,
+                    }),
                 },
             },
         )
@@ -1448,6 +1467,8 @@ export default function ChatPanel({
                 onVlmValidationChange={handleVlmValidationChange}
                 customSystemMessage={customSystemMessage}
                 onCustomSystemMessageChange={handleCustomSystemMessageChange}
+                maxOutputTokens={maxOutputTokens}
+                onMaxOutputTokensChange={handleMaxOutputTokensChange}
                 onOpenModelConfig={() => setShowModelConfigDialog(true)}
             />
 
