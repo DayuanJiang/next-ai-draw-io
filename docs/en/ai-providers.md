@@ -76,6 +76,23 @@ Optional custom endpoint:
 AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 ```
 
+### SSYCloud (ShengSuanYun)
+
+SSYCloud provides OpenAI-compatible access to models from multiple vendors. Model IDs include the vendor prefix shown by the SSYCloud model list.
+
+```bash
+SSYCLOUD_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-flash
+```
+
+The default endpoint is:
+
+```bash
+SSYCLOUD_BASE_URL=https://router.shengsuanyun.com/api/v1
+```
+
+Get an API key and review the API examples in the [SSYCloud developer guide](https://lean.shengsuanyun.com/apidocs/guides/quick-start).
+
 ### Anthropic
 
 ```bash
@@ -343,7 +360,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # or: openai, anthropic, aihubmix, ssycloud, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## Server-Side Multi-Model Configuration

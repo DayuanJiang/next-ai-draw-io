@@ -212,6 +212,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   Ollama
 -   OpenRouter
 -   AIHubMix
+-   SSYCloud (胜算云)
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope

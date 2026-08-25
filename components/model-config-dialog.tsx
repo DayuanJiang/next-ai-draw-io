@@ -167,58 +167,78 @@ export function ModelConfigDialog({
     }, [])
 
     useEffect(() => {
-        if (
-            !open ||
-            selectedProvider?.provider !== "aihubmix" ||
-            loadedSuggestedProviders.aihubmix
-        ) {
+        const provider = selectedProvider?.provider
+        const supportsDynamicModels =
+            provider === "aihubmix" || provider === "ssycloud"
+        if (!open || !selectedProvider || !provider || !supportsDynamicModels) {
             return
         }
+        if (loadedSuggestedProviders[provider]) return
+        if (provider === "ssycloud" && !selectedProvider.apiKey) return
 
         let cancelled = false
-        setLoadingSuggestedProvider("aihubmix")
+        const timeout = setTimeout(() => {
+            setLoadingSuggestedProvider(provider)
 
-        fetch(getApiEndpoint("/api/aihubmix-models"))
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Failed to load models: ${response.status}`)
-                }
-                return response.json()
-            })
-            .then((data: { models?: unknown }) => {
-                if (cancelled || !Array.isArray(data.models)) {
-                    return
-                }
+            const request =
+                provider === "aihubmix"
+                    ? fetch(getApiEndpoint("/api/aihubmix-models"))
+                    : fetch(getApiEndpoint("/api/ssycloud-models"), {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                              apiKey: selectedProvider.apiKey,
+                              baseUrl: selectedProvider.baseUrl,
+                          }),
+                      })
 
-                const models = data.models.filter(
-                    (model): model is string => typeof model === "string",
-                )
-                if (models.length > 0) {
-                    setDynamicSuggestedModels((current) => ({
+            request
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error(
+                            `Failed to load models: ${response.status}`,
+                        )
+                    }
+                    return response.json()
+                })
+                .then((data: { models?: unknown }) => {
+                    if (cancelled || !Array.isArray(data.models)) return
+
+                    const models = data.models.filter(
+                        (model): model is string => typeof model === "string",
+                    )
+                    if (models.length > 0) {
+                        setDynamicSuggestedModels((current) => ({
+                            ...current,
+                            [provider]: models,
+                        }))
+                    }
+                })
+                .catch((error) => {
+                    console.warn(`Failed to load ${provider} models:`, error)
+                })
+                .finally(() => {
+                    if (cancelled) return
+
+                    setLoadedSuggestedProviders((current) => ({
                         ...current,
-                        aihubmix: models,
+                        [provider]: true,
                     }))
-                }
-            })
-            .catch((error) => {
-                console.warn("Failed to load AIHubMix models:", error)
-            })
-            .finally(() => {
-                if (cancelled) {
-                    return
-                }
-
-                setLoadedSuggestedProviders((current) => ({
-                    ...current,
-                    aihubmix: true,
-                }))
-                setLoadingSuggestedProvider(null)
-            })
+                    setLoadingSuggestedProvider(null)
+                })
+        }, 400)
 
         return () => {
             cancelled = true
+            clearTimeout(timeout)
         }
-    }, [open, selectedProvider?.provider, loadedSuggestedProviders.aihubmix])
+    }, [
+        open,
+        selectedProvider?.provider,
+        selectedProvider?.apiKey,
+        selectedProvider?.baseUrl,
+        loadedSuggestedProviders,
+    ])
 
     // Get suggested models for current provider
     const suggestedModels = selectedProvider
@@ -267,6 +287,19 @@ export function ModelConfigDialog({
         if (credentialFields.includes(field)) {
             setValidationStatus("idle")
             updateProvider(selectedProviderId, { validated: false })
+            if (
+                selectedProvider?.provider === "ssycloud" &&
+                (field === "apiKey" || field === "baseUrl")
+            ) {
+                setLoadedSuggestedProviders((current) => ({
+                    ...current,
+                    ssycloud: false,
+                }))
+                setDynamicSuggestedModels((current) => {
+                    const { ssycloud: _ssycloud, ...rest } = current
+                    return rest
+                })
+            }
         }
     }
 

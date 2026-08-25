@@ -55,6 +55,22 @@ describe("ServerModelsConfigSchema", () => {
         expect(() => ServerModelsConfigSchema.parse(config)).not.toThrow()
     })
 
+    it("accepts SSYCloud provider names", () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "SSYCloud Server",
+                    provider: "ssycloud",
+                    models: ["deepseek/deepseek-v4-flash"],
+                    apiKeyEnv: "SSYCLOUD_API_KEY",
+                    baseUrlEnv: "SSYCLOUD_BASE_URL",
+                },
+            ],
+        }
+
+        expect(() => ServerModelsConfigSchema.parse(config)).not.toThrow()
+    })
+
     it("rejects invalid provider names", () => {
         const invalidConfig = {
             providers: [
