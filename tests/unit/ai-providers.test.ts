@@ -6,6 +6,7 @@ import {
     supportsPromptCaching,
 } from "@/lib/ai-providers"
 import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
+import { extractSSYCloudModelIds } from "@/lib/ssycloud-models"
 
 describe("extractAihubmixModelIds", () => {
     it("extracts unique chat model IDs from the AIHubMix model list payload", () => {
@@ -28,6 +29,44 @@ describe("extractAihubmixModelIds", () => {
         expect(extractAihubmixModelIds({ data: null })).toEqual([])
         expect(extractAihubmixModelIds({})).toEqual([])
         expect(extractAihubmixModelIds(null)).toEqual([])
+    })
+})
+
+describe("extractSSYCloudModelIds", () => {
+    it("extracts unique Chat Completions model IDs", () => {
+        const models = extractSSYCloudModelIds({
+            data: [
+                {
+                    id: "openai/gpt-5.4",
+                    support_apis: ["/v1/chat/completions", "/v1/responses"],
+                },
+                {
+                    id: "anthropic/claude-sonnet-4.6",
+                    support_apis: "/v1/chat/completions,/v1/messages",
+                },
+                { id: "legacy/model-without-capabilities" },
+                {
+                    id: "responses-only",
+                    support_apis: ["/v1/responses"],
+                },
+                {
+                    id: "openai/gpt-5.4",
+                    support_apis: ["/v1/chat/completions"],
+                },
+            ],
+        })
+
+        expect(models).toEqual([
+            "openai/gpt-5.4",
+            "anthropic/claude-sonnet-4.6",
+            "legacy/model-without-capabilities",
+        ])
+    })
+
+    it("returns an empty list for malformed payloads", () => {
+        expect(extractSSYCloudModelIds({ data: null })).toEqual([])
+        expect(extractSSYCloudModelIds({})).toEqual([])
+        expect(extractSSYCloudModelIds(null)).toEqual([])
     })
 })
 
@@ -316,6 +355,58 @@ describe("Atlas Cloud provider", () => {
         expect(createOpenAIMock).toHaveBeenCalledWith({
             apiKey: "client-atlas-key",
             baseURL: "https://proxy.example.com/v1",
+        })
+    })
+})
+
+describe("SSYCloud provider", () => {
+    let createOpenAIMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.SSYCLOUD_API_KEY = process.env.SSYCLOUD_API_KEY
+        savedEnv.SSYCLOUD_BASE_URL = process.env.SSYCLOUD_BASE_URL
+        delete process.env.SSYCLOUD_BASE_URL
+
+        const mod = await import("@ai-sdk/openai")
+        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
+        createOpenAIMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.SSYCLOUD_API_KEY = savedEnv.SSYCLOUD_API_KEY
+        process.env.SSYCLOUD_BASE_URL = savedEnv.SSYCLOUD_BASE_URL
+    })
+
+    it("uses the default Chat Completions endpoint for server credentials", () => {
+        process.env.SSYCLOUD_API_KEY = "server-ssycloud-key"
+
+        const result = getAIModel({
+            provider: "ssycloud",
+            modelId: "deepseek/deepseek-v4-flash",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "server-ssycloud-key",
+            baseURL: "https://router.shengsuanyun.com/api/v1",
+        })
+        expect(result.model).toEqual({ modelId: "test-model" })
+    })
+
+    it("uses client credentials without falling back to server settings", () => {
+        process.env.SSYCLOUD_API_KEY = "server-ssycloud-key"
+        process.env.SSYCLOUD_BASE_URL = "https://server-proxy.example.com/v1"
+
+        getAIModel({
+            provider: "ssycloud",
+            apiKey: "client-ssycloud-key",
+            baseUrl: "https://client-proxy.example.com/v1",
+            modelId: "openai/gpt-5.4",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "client-ssycloud-key",
+            baseURL: "https://client-proxy.example.com/v1",
         })
     })
 })

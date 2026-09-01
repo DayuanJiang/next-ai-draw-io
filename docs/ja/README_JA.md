@@ -204,6 +204,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   Ollama
 -   OpenRouter
 -   AIHubMix
+-   SSYCloud（勝算雲）
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope

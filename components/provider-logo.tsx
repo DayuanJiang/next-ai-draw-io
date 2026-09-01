@@ -11,7 +11,7 @@ export function ProviderLogo({
     provider: ProviderName
     className?: string
 }) {
-    if (provider === "bedrock") {
+    if (provider === "bedrock" || provider === "ssycloud") {
         return <Cloud className={cn("size-4", className)} />
     }
     if (provider === "sglang") {

@@ -69,6 +69,26 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY_2).toBe("sk-second")
     })
 
+    it("uses isolated admin environment variables for SSYCloud", () => {
+        const updates = deriveEnvUpdates(
+            [
+                provider({
+                    provider: "ssycloud",
+                    apiKey: "ssy-test",
+                    baseUrl: "https://router.shengsuanyun.com/api/v1",
+                    models: ["openai/gpt-5.4"],
+                }),
+            ],
+            [],
+        )
+
+        expect(updates.ADMIN_SSYCLOUD_API_KEY).toBe("ssy-test")
+        expect(updates.ADMIN_SSYCLOUD_BASE_URL).toBe(
+            "https://router.shengsuanyun.com/api/v1",
+        )
+        expect(updates.SSYCLOUD_API_KEY).toBeUndefined()
+    })
+
     it("maps bedrock credentials to AWS env vars", () => {
         const updates = deriveEnvUpdates(
             [
