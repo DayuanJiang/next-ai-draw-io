@@ -7,6 +7,49 @@ import {
 } from "@/lib/ai-providers"
 import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
 
+describe("per-model thinking overrides", () => {
+    it("overrides the legacy DeepSeek default only when explicitly set", () => {
+        expect(
+            getAIModel({
+                provider: "deepseek",
+                apiKey: "client-key",
+                modelId: "deepseek-v4-pro",
+                thinkingEnabled: true,
+            }).providerOptions,
+        ).toEqual({ deepseek: { thinking: { type: "enabled" } } })
+
+        expect(
+            getAIModel({
+                provider: "deepseek",
+                apiKey: "client-key",
+                modelId: "deepseek-v4-pro",
+                thinkingEnabled: false,
+            }).providerOptions,
+        ).toEqual({ deepseek: { thinking: { type: "disabled" } } })
+    })
+
+    it("omits Anthropic manual thinking when explicitly disabled", () => {
+        expect(
+            getAIModel({
+                provider: "anthropic",
+                apiKey: "client-key",
+                modelId: "claude-sonnet-4-5-20250929",
+                thinkingEnabled: false,
+            }).providerOptions,
+        ).toBeUndefined()
+    })
+
+    it("uses Nova 2 Lite's explicit disabled reasoningConfig", () => {
+        expect(
+            getAIModel({
+                provider: "bedrock",
+                modelId: "amazon.nova-2-lite-v1:0",
+                thinkingEnabled: false,
+            }).providerOptions,
+        ).toEqual({ bedrock: { reasoningConfig: { type: "disabled" } } })
+    })
+})
+
 describe("extractAihubmixModelIds", () => {
     it("extracts unique chat model IDs from the AIHubMix model list payload", () => {
         const models = extractAihubmixModelIds({
