@@ -110,7 +110,12 @@ let writableCache: boolean | null = null
 export function isSettingsWritable(): boolean {
     if (writableCache !== null) return writableCache
     try {
-        const dir = path.dirname(getSettingsPath())
+        const filePath = getSettingsPath()
+        if (fs.existsSync(filePath) && !fs.statSync(filePath).isFile()) {
+            writableCache = false
+            return writableCache
+        }
+        const dir = path.dirname(filePath)
         fs.mkdirSync(dir, { recursive: true })
         fs.accessSync(dir, fs.constants.W_OK)
         writableCache = true
