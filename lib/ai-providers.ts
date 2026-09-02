@@ -1445,6 +1445,15 @@ export function supportsPromptCaching(modelId: string): boolean {
 }
 
 /**
+ * Check if a model supports the temperature sampling parameter.
+ * Claude Opus 4.7 and 4.8 reject sampling parameters entirely.
+ */
+export function supportsTemperature(modelId: string): boolean {
+    // Match plain, Bedrock inference-profile, and version-suffixed model IDs.
+    return !/claude-opus-4[.-](?:7|8)(?=$|[-.:])/i.test(modelId)
+}
+
+/**
  * Get the AI model for diagram validation.
  * Uses VALIDATION_MODEL env var if set, otherwise falls back to AI_MODEL.
  *

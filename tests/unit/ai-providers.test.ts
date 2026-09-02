@@ -4,6 +4,7 @@ import {
     isAihubmixStandardBaseURL,
     resolveBaseURL,
     supportsPromptCaching,
+    supportsTemperature,
 } from "@/lib/ai-providers"
 import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
 
@@ -179,6 +180,30 @@ describe("supportsPromptCaching", () => {
         expect(supportsPromptCaching("gpt-4o")).toBe(false)
         expect(supportsPromptCaching("gemini-pro")).toBe(false)
         expect(supportsPromptCaching("deepseek-chat")).toBe(false)
+    })
+})
+
+describe("supportsTemperature", () => {
+    it.each([
+        "claude-opus-4-7-20260416",
+        "anthropic.claude-opus-4-7-v1:0",
+        "us.anthropic.claude-opus-4-8-20260528-v1:0",
+        "global.anthropic.claude-opus-4-8",
+        "anthropic/claude-opus-4.7",
+        "anthropic/claude-opus-4.8",
+    ])("returns false for Claude Opus models without temperature (%s)", (modelId) => {
+        expect(supportsTemperature(modelId)).toBe(false)
+    })
+
+    it.each([
+        "claude-sonnet-4-5",
+        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "gpt-4o",
+        "gemini-2.0-flash",
+        "",
+        "unknown-model",
+    ])("returns true for models that may support temperature (%s)", (modelId) => {
+        expect(supportsTemperature(modelId)).toBe(true)
     })
 })
 
