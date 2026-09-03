@@ -109,7 +109,7 @@
     },
     "devDependencies": {
         "@anthropic-ai/tokenizer": "^0.0.4",
-        "@biomejs/biome": "2.5.7",
+        "@biomejs/biome": "2.5.12",
         "@playwright/test": "^1.57.0",
         "@tailwindcss/postcss": "^4",
         "@tailwindcss/typography": "^0.5.19",
