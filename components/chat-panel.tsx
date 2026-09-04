@@ -353,7 +353,7 @@ export default function ChatPanel({
     // VLM validation hook using AI SDK's useObject
     const { validateWithFallback } = useValidateDiagram()
 
-    // Diagram tool handlers (display_diagram, edit_diagram, append_diagram)
+    // Diagram tool handlers (edit_diagram, restructure_diagram, cached replay)
     const { handleToolCall } = useDiagramToolHandlers({
         partialXmlRef,
         editDiagramOriginalXmlRef,

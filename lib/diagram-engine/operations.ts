@@ -1,0 +1,1149 @@
+/**
+ * Structural operations — what the model sends instead of XML.
+ *
+ * The tree is re-derived from the canvas on every call, so an operation names existing
+ * nodes by id and says what to change. Adding one node costs a few dozen tokens; the
+ * equivalent as raw mxCell XML is hundreds, and re-emitting the whole diagram to add one
+ * icon costs thousands.
+ *
+ * Operations are applied in order, each against the result of the last, so a sequence
+ * like "add a frame, then move two nodes into it" works in a single call.
+ */
+
+import { z } from "zod"
+// A runtime import while graph.ts imports only TYPES from here — no cycle at runtime.
+import { graphToOperations } from "./graph"
+import { parseTw, type TwLayout } from "./tw"
+import {
+    type ContainerNode,
+    type DiagramNode,
+    type DiagramTree,
+    findNode,
+    findParent,
+    isContainer,
+    type LinkSpec,
+    type TextStyle,
+    walkTree,
+} from "./types"
+
+export const OperationSchema = z.discriminatedUnion("op", [
+    z.object({
+        op: z.literal("add_icon"),
+        id: z.string().describe("New unique id for this node"),
+        parent: z
+            .string()
+            .optional()
+            .describe("Container id to add into; omit for top level"),
+        name: z.string().describe("Catalog stencil name, e.g. 's3' or 'ec2'"),
+        label: z.string().optional(),
+        lane: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which lane (0-based row) this belongs to",
+            ),
+        col: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which column (0-based step) this sits in",
+            ),
+        after: z
+            .string()
+            .optional()
+            .describe("Insert after this sibling id; omit to append"),
+    }),
+    z.object({
+        op: z.literal("add_box"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string(),
+        role: z
+            .enum([
+                "banner",
+                "heading",
+                "body",
+                "callout",
+                "good",
+                "bad",
+                "metric",
+                "muted",
+            ])
+            .optional()
+            .describe(
+                "What this IS: banner=masthead, heading=section title, callout=must-not-miss, good/bad=verdict, metric=key number, muted=fine print. The theme decides how each looks",
+            ),
+        group: z
+            .string()
+            .optional()
+            .describe(
+                "Semantic zone name; nodes and panels sharing a group get the same hue from the engine's palette. Never pick colours",
+            ),
+        fill: z
+            .string()
+            .optional()
+            .describe(
+                "Fill colour, e.g. #DAE8FC. Prefer the group field over picking colours",
+            ),
+        stroke: z
+            .string()
+            .optional()
+            .describe("Border colour; pair it with fill"),
+        shape: z
+            .string()
+            .optional()
+            .describe(
+                "What the node IS, drawn as its conventional outline. Catalog: decision/diamond, terminator (start/end), round, data (input/output), document, cylinder (database), queue, person (actor/user), cloud (external system), hexagon (service), ellipse (concept), callout (note), step (pipeline stage), note, card, process, tape, cube. Any other draw.io shape token also works verbatim. Omit for a plain rectangle",
+            ),
+        grow: z
+            .number()
+            .optional()
+            .describe(
+                "Flex-grow weight: this box takes that share of the parent's leftover space along its stacking axis. Omit for natural size",
+            ),
+        align: z
+            .enum(["start", "center", "end", "stretch"])
+            .optional()
+            .describe(
+                "Cross-axis position in the parent: start/end pin to an edge, stretch fills the axis (a divider or highlight bar spanning its card). Default center",
+            ),
+        maxW: z
+            .number()
+            .optional()
+            .describe(
+                "Hard width cap in px. Long text rewraps to fit instead of stretching the box, so this is what keeps a paragraph from making the whole page a letterbox. Beats grow",
+            ),
+        class: z
+            .string()
+            .optional()
+            .describe(
+                'Tailwind layout classes, e.g. "grow-2 self-stretch max-w-md". Supported: grow / grow-N / flex-N, w-1/3 (a share of the row), w-full, min-w-0, self-start|center|end|stretch, max-w-N or max-w-xs..4xl. NO colour classes — colour comes from role and group. Unknown classes are ignored and reported back',
+            ),
+        lane: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which lane (0-based row) this belongs to",
+            ),
+        col: z
+            .number()
+            .optional()
+            .describe(
+                "Inside a pool: which column (0-based step) this sits in",
+            ),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_container"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z
+            .string()
+            .describe("Frame title; empty string means invisible wrapper"),
+        role: z
+            .enum([
+                "banner",
+                "heading",
+                "body",
+                "callout",
+                "good",
+                "bad",
+                "metric",
+                "muted",
+            ])
+            .optional()
+            .describe(
+                "Section role: heading=titled tinted panel, banner=masthead strip, good/bad=verdict panel",
+            ),
+        group: z
+            .string()
+            .optional()
+            .describe(
+                "Semantic zone name; the panel and everything sharing this group take one hue",
+            ),
+        dir: z.enum(["row", "col"]).describe("How children stack"),
+        gname: z
+            .string()
+            .optional()
+            .describe(
+                "Group stencil name, e.g. 'group_vpc'; omit for a plain frame",
+            ),
+        gap: z.number().optional(),
+        pad: z
+            .number()
+            .optional()
+            .describe(
+                "Interior padding px (default 24). Small values make tight cards; nest containers for internal structure",
+            ),
+        grow: z
+            .number()
+            .optional()
+            .describe(
+                "Flex-grow weight: this container takes that share of the parent's leftover space. E.g. two columns with grow 2 and 1 split the width 2:1",
+            ),
+        align: z
+            .enum(["start", "center", "end", "stretch"])
+            .optional()
+            .describe(
+                "Cross-axis position in the parent: start/end pin to an edge, stretch fills. Default center",
+            ),
+        justify: z
+            .enum(["start", "center", "end", "between", "around", "evenly"])
+            .optional()
+            .describe(
+                "How children spread along dir when there is spare room. Default start packs them and leaves the gap at the far end — set between or evenly to spread a short column down its full height instead of leaving a hole at the bottom",
+            ),
+        alignItems: z
+            .enum(["start", "center", "end", "stretch"])
+            .optional()
+            .describe(
+                "Cross-axis default for every child, so cards in a column all span the same width without setting align on each. stretch is what makes a column of cards line up",
+            ),
+        maxW: z
+            .number()
+            .optional()
+            .describe(
+                "Hard width cap in px. Children wrap or shrink to fit rather than run past it. Beats grow",
+            ),
+        class: z
+            .string()
+            .optional()
+            .describe(
+                'Tailwind classes, e.g. "flex-col gap-4 p-4 grow-3 items-stretch justify-between max-w-2xl". LAYOUT: flex-row|flex-col, grow / grow-N / flex-N, w-1/3, w-full, min-w-0 (let a weight shrink this below its own text width — needed on every column when you want an exact ratio), items-* and self-* (start|center|end|stretch), justify-start|center|end|between|around|evenly, gap-N, p-N, max-w-N or max-w-xs..4xl. Spacing is Tailwind\'s 4px scale, so gap-4 is 16px. TEXT (applies to the frame title): font-bold / font-normal, italic, underline, text-xs..text-4xl, text-left|center|right, align-top|middle|bottom, whitespace-nowrap. BORDER: border / border-N, border-dashed / border-dotted / border-solid — a dashed frame reads as planned or logical rather than deployed. NOT accepted: any colour class — colour comes from role and group; the other seven font weights; opacity-*, truncate, rounded-*, shadow-*, outline-*, transforms. Unknown classes are dropped and reported back',
+            ),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_graph"),
+        id: z.string(),
+        parent: z
+            .string()
+            .optional()
+            .describe("Container to embed the graph in; omit for top level"),
+        label: z.string().optional().describe("Frame title; omit for none"),
+        dir: z
+            .enum(["col", "row"])
+            .optional()
+            .describe(
+                "Flow direction: col (default) downwards, row rightwards",
+            ),
+        nodes: z
+            .array(
+                z.object({
+                    id: z.string(),
+                    label: z.string(),
+                    shape: z.string().optional(),
+                    icon: z.string().optional(),
+                    group: z.string().optional(),
+                    role: z
+                        .enum([
+                            "banner",
+                            "heading",
+                            "body",
+                            "callout",
+                            "good",
+                            "bad",
+                            "metric",
+                            "muted",
+                        ])
+                        .optional(),
+                }),
+            )
+            .describe("The graph's nodes"),
+        edges: z
+            .array(
+                z.object({
+                    source: z.string(),
+                    target: z.string(),
+                    label: z.string().optional(),
+                    dashed: z.boolean().optional(),
+                    bold: z.boolean().optional(),
+                    head: z.string().optional(),
+                    tail: z.string().optional(),
+                    headFill: z.boolean().optional(),
+                    tailFill: z.boolean().optional(),
+                }),
+            )
+            .describe(
+                "The arrows. THEY decide the node positions — layering and ordering are computed from them",
+            ),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_grid"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string(),
+        cols: z.number().describe("Number of columns"),
+        gap: z.number().optional(),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_pool"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string().describe("Pool title, e.g. the process name"),
+        lanes: z
+            .array(z.string())
+            .describe(
+                "Role names, one per lane, top to bottom. Steps go in these lanes via add_box lane/col",
+            ),
+        phases: z
+            .array(z.string())
+            .optional()
+            .describe("Milestone labels spanning the columns; omit for none"),
+        orientation: z
+            .enum(["horizontal", "vertical"])
+            .optional()
+            .describe(
+                "horizontal (default): lanes stack down, flow goes right",
+            ),
+        gap: z.number().optional(),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_sequence"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string().describe("Diagram title; empty string for none"),
+        gap: z
+            .number()
+            .optional()
+            .describe("Horizontal spacing between participants"),
+        step: z
+            .number()
+            .optional()
+            .describe("Vertical spacing between messages"),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("add_radial"),
+        id: z.string(),
+        parent: z.string().optional(),
+        label: z.string().describe("Frame title; empty string for none"),
+        spread: z
+            .enum(["radial", "down"])
+            .optional()
+            .describe(
+                "radial (default): branches on both sides, for a mind map. down: everything below the centre, for an org chart",
+            ),
+        gap: z.number().optional(),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("remove"),
+        id: z
+            .string()
+            .describe("Node to delete; its descendants and edges go too"),
+    }),
+    z.object({
+        op: z.literal("move"),
+        id: z.string(),
+        parent: z
+            .string()
+            .optional()
+            .describe("New container id; omit to move to top level"),
+        after: z.string().optional(),
+    }),
+    z.object({
+        op: z.literal("set_label"),
+        id: z.string(),
+        label: z.string(),
+    }),
+    z.object({
+        op: z.literal("set_shape"),
+        id: z.string(),
+        shape: z
+            .string()
+            .describe("New shape token; 'box' resets to a plain rectangle"),
+    }),
+    z.object({
+        op: z.literal("set_role"),
+        id: z.string(),
+        role: z
+            .enum([
+                "banner",
+                "heading",
+                "body",
+                "callout",
+                "good",
+                "bad",
+                "metric",
+                "muted",
+            ])
+            .describe("New information role; 'body' resets to the default"),
+    }),
+    z.object({
+        op: z.literal("set_group"),
+        id: z.string(),
+        group: z
+            .string()
+            .describe("New semantic zone; empty string removes the zone"),
+    }),
+    z.object({
+        op: z.literal("set_dir"),
+        id: z.string().describe("Container to re-orient"),
+        dir: z.enum(["row", "col"]),
+    }),
+    z.object({
+        op: z.literal("set_gap"),
+        id: z.string(),
+        gap: z.number(),
+    }),
+    z.object({
+        op: z.literal("link"),
+        id: z
+            .string()
+            .optional()
+            .describe(
+                "Edge id. Required for a second edge between the same two nodes (parallel relationships), so each can be addressed later",
+            ),
+        source: z.string(),
+        target: z.string(),
+        label: z.string().optional(),
+        dashed: z
+            .boolean()
+            .optional()
+            .describe("Dashed line — replication, sync, policy"),
+        bold: z
+            .boolean()
+            .optional()
+            .describe(
+                "A thick coloured arrow for THE key relationship — a transformation, the main flow. Use sparingly: one or two per diagram",
+            ),
+        head: z
+            .string()
+            .optional()
+            .describe(
+                "Arrowhead at the target. block/open/diamond/diamondThin/oval/cross/none, ER: ERone/ERmany/ERoneToMany/ERzeroToMany/ERzeroToOne. UML inheritance: head=block headFill=false. Omit for a plain arrow",
+            ),
+        tail: z
+            .string()
+            .optional()
+            .describe(
+                "Arrowhead at the source, same values as head. UML composition: tail=diamondThin tailFill=true. ER 1:N: tail=ERone head=ERoneToMany",
+            ),
+        headFill: z
+            .boolean()
+            .optional()
+            .describe(
+                "Fill the head. Meaning-bearing in UML: filled diamond=composition, hollow=aggregation",
+            ),
+        tailFill: z.boolean().optional(),
+        step: z
+            .number()
+            .optional()
+            .describe("Step number, shown as an 'N. ' prefix"),
+    }),
+    z.object({
+        op: z.literal("unlink"),
+        source: z.string(),
+        target: z.string(),
+        step: z
+            .number()
+            .optional()
+            .describe(
+                "Remove only the edge with this step number; omit to remove every edge between the two",
+            ),
+    }),
+    z.object({
+        op: z.literal("set_title"),
+        title: z.string(),
+    }),
+    z.object({
+        op: z.literal("clear"),
+        keepTitle: z
+            .boolean()
+            .optional()
+            .describe("Keep the page title; default drops it too"),
+    }),
+    z.object({
+        op: z.literal("set_page"),
+        aspect: z
+            .number()
+            .describe(
+                "Target width:height for the whole page. 1 = square, 1.4 = landscape slide, 0.75 = portrait poster, 1.6 = wide architecture diagram. Declare this FIRST on any multi-column diagram: it is what gives the columns a total width to divide, so grow weights and column proportions only take effect once it is set",
+            ),
+    }),
+])
+
+export type Operation = z.infer<typeof OperationSchema>
+
+export interface ApplyResult {
+    tree: DiagramTree
+    /** One entry per operation that could not be applied, in order. */
+    errors: string[]
+    /**
+     * Things that were drawn, but not the way they were asked for — an arrow naming a node
+     * that is not in the list, a loop that could not order the layers. Not errors: the
+     * diagram is fine and re-sending it would produce the same result, so failing would
+     * cost a turn and fix nothing.
+     */
+    warnings: string[]
+}
+
+/**
+ * The pool cell an add operation declared, if any.
+ *
+ * `lane` alone is enough — a step in a lane with no column given goes to column 0 — so the
+ * cell is recorded whenever either is present rather than requiring both.
+ */
+function cellOf(op: { lane?: number; col?: number }): {
+    cell?: { lane: number; col: number }
+} {
+    if (op.lane == null && op.col == null) return {}
+    return {
+        cell: {
+            lane: Math.max(0, Math.round(op.lane ?? 0)),
+            col: Math.max(0, Math.round(op.col ?? 0)),
+        },
+    }
+}
+
+/** Are these two nodes participants of the same sequence diagram? */
+function sameSequence(tree: DiagramTree, a: string, b: string): boolean {
+    for (const n of walkTree(tree)) {
+        if (n.kind !== "sequence") continue
+        const ids = new Set(n.children.map((c) => c.id))
+        if (ids.has(a) && ids.has(b)) return true
+    }
+    return false
+}
+
+/** Insert into a child list, after a named sibling or at the end. */
+function insert(
+    list: DiagramNode[],
+    node: DiagramNode,
+    after: string | undefined,
+): void {
+    if (after) {
+        const i = list.findIndex((c) => c.id === after)
+        if (i >= 0) {
+            list.splice(i + 1, 0, node)
+            return
+        }
+    }
+    list.push(node)
+}
+
+/** Detach a node from wherever it currently sits. Returns it, or null if not found. */
+function detach(tree: DiagramTree, id: string): DiagramNode | null {
+    const rootIdx = tree.roots.findIndex((r) => r.id === id)
+    if (rootIdx >= 0) return tree.roots.splice(rootIdx, 1)[0]
+    const parent = findParent(tree, id)
+    if (!parent) return null
+    const i = parent.children.findIndex((c) => c.id === id)
+    return i >= 0 ? parent.children.splice(i, 1)[0] : null
+}
+
+/** Would making `id` a descendant of `parentId` create a cycle? */
+function wouldCycle(tree: DiagramTree, id: string, parentId: string): boolean {
+    if (id === parentId) return true
+    const node = findNode(tree, id)
+    if (!node || !isContainer(node)) return false
+    for (const d of walkTree({ ...tree, roots: [node] }))
+        if (d.id === parentId) return true
+    return false
+}
+
+/**
+ * Resolve where a new or moved node goes. Returns the child list to insert into, or an
+ * error string.
+ */
+function targetList(
+    tree: DiagramTree,
+    parentId: string | undefined,
+): DiagramNode[] | string {
+    if (!parentId) return tree.roots
+    const p = findNode(tree, parentId)
+    if (!p) return `No node with id "${parentId}"`
+    if (!isContainer(p))
+        return `"${parentId}" is a ${p.kind}, not a container — it cannot hold children`
+    return p.children
+}
+
+/**
+ * Apply operations to a tree, in order.
+ *
+ * The input tree is deep-copied first: a partially-applied batch must not leave the
+ * caller's tree half-mutated when a later operation fails.
+ */
+export function applyOperations(
+    input: DiagramTree,
+    ops: Operation[],
+): ApplyResult {
+    const tree: DiagramTree = structuredClone(input)
+    const errors: string[] = []
+    const warnings: string[] = []
+
+    /**
+     * Resolve an operation's Tailwind class string into layout fields.
+     *
+     * Explicit fields win over classes. Both are accepted because they are the same
+     * vocabulary said two ways, and a caller mixing them — `class: "flex-col gap-4"` plus
+     * `grow: 3` — means the explicit number, not a conflict to reject.
+     *
+     * Unknown classes are collected once per call rather than per operation: a poster
+     * repeating `shadow-lg` on twelve cards should say so once.
+     */
+    const ignoredClasses = new Set<string>()
+    const twOf = (cls: string | undefined): TwLayout | null => {
+        if (!cls?.trim()) return null
+        const parsed = parseTw(cls)
+        for (const c of parsed.ignored) ignoredClasses.add(c)
+        return parsed
+    }
+
+    /**
+     * The presentation overrides a class string asked for, or undefined when it asked for
+     * none. Sparse on purpose: an absent field means "let the role decide", so a class
+     * string that only sets alignment cannot silently reset the type size.
+     */
+    const textOf = (tw: TwLayout | null): TextStyle | undefined => {
+        if (!tw) return undefined
+        const t: TextStyle = {
+            ...(tw.bold != null ? { bold: tw.bold } : {}),
+            ...(tw.italic != null ? { italic: tw.italic } : {}),
+            ...(tw.underline != null ? { underline: tw.underline } : {}),
+            ...(tw.strike != null ? { strike: tw.strike } : {}),
+            ...(tw.fontSize != null ? { size: tw.fontSize } : {}),
+            ...(tw.textAlign ? { align: tw.textAlign } : {}),
+            ...(tw.verticalAlign ? { valign: tw.verticalAlign } : {}),
+            ...(tw.nowrap != null ? { nowrap: tw.nowrap } : {}),
+            ...(tw.borderWidth != null ? { borderWidth: tw.borderWidth } : {}),
+            ...(tw.borderStyle ? { borderStyle: tw.borderStyle } : {}),
+            ...(tw.borderless != null ? { borderless: tw.borderless } : {}),
+            ...(tw.radius != null ? { radius: tw.radius } : {}),
+            ...(tw.shadow != null ? { shadow: tw.shadow } : {}),
+        }
+        return Object.keys(t).length > 0 ? t : undefined
+    }
+
+    const exists = (id: string) => findNode(tree, id) !== null
+
+    // add_graph is a macro: the layered-graph pass (graph.ts) decides which layer each
+    // node belongs to and who stands beside whom, and emits ordinary container/box/link
+    // operations. Expanding it HERE — rather than treating graphs as a special page-level
+    // tool — is what lets a graph sit inside a poster column or an architecture zone and
+    // still participate in the outer flexbox like any other node.
+    const expanded: Operation[] = []
+    for (const op of ops) {
+        if (op.op !== "add_graph") {
+            expanded.push(op)
+            continue
+        }
+        // Reject a graph that cannot be drawn, rather than emitting a broken one. Both
+        // checks have to happen here: an empty node list would otherwise produce an empty
+        // frame, and a duplicate id would surface as "add_box: id already taken", naming a
+        // synthetic operation the model never wrote.
+        if (op.nodes.length === 0) {
+            errors.push(`add_graph "${op.id}": no nodes — nothing to draw.`)
+            continue
+        }
+        const dupes = op.nodes
+            .map((nd) => nd.id)
+            .filter((id, i, all) => all.indexOf(id) !== i)
+        if (dupes.length > 0) {
+            errors.push(
+                `add_graph "${op.id}": duplicate node id(s): ${[...new Set(dupes)].join(", ")}.`,
+            )
+            continue
+        }
+        const g = graphToOperations(op.nodes, op.edges, {
+            flow: op.dir ?? "col",
+            parent: op.parent,
+            // The graph's own id namespaces the synthetic layer containers, so two
+            // graphs on one page cannot collide on `__layer0`.
+            prefix: op.id,
+            rootId: op.id,
+        })
+        // A stray endpoint is a warning, not an error: the rest of the graph is drawn
+        // correctly, so rejecting it would cost a turn and produce the same diagram.
+        if (g.unknownEndpoints.length)
+            warnings.push(
+                `Dropped edge(s) naming nodes that were not in the node list: ${g.unknownEndpoints.join(", ")}.`,
+            )
+        if (g.backEdges.length)
+            warnings.push(
+                `Loop(s) drawn but not used for ordering: ${g.backEdges
+                    .map((b) => `${b.source}→${b.target}`)
+                    .join(", ")}.`,
+            )
+        if (op.label || op.after) {
+            const root = g.operations[0]
+            if (root?.op === "add_container") {
+                if (op.label) root.label = op.label
+                if (op.after) root.after = op.after
+            }
+        }
+        expanded.push(...g.operations)
+    }
+
+    for (const op of expanded) {
+        switch (op.op) {
+            case "add_icon":
+            case "add_box":
+            case "add_container":
+            case "add_grid":
+            case "add_pool":
+            case "add_sequence":
+            case "add_radial": {
+                if (exists(op.id)) {
+                    errors.push(`${op.op}: id "${op.id}" is already taken`)
+                    break
+                }
+                const list = targetList(tree, op.parent)
+                if (typeof list === "string") {
+                    errors.push(`${op.op}: ${list}`)
+                    break
+                }
+                let node: DiagramNode
+                if (op.op === "add_icon")
+                    node = {
+                        kind: "icon",
+                        id: op.id,
+                        name: op.name,
+                        label: op.label ?? "",
+                        ...cellOf(op),
+                    }
+                else if (op.op === "add_box") {
+                    // Classes first, then the explicit fields on top: an explicit number is
+                    // the more specific statement of the two.
+                    const tw = twOf(op.class)
+                    const grow = op.grow ?? tw?.grow
+                    const align = op.align ?? tw?.align
+                    const maxW = op.maxW ?? tw?.maxW
+                    node = {
+                        kind: "box",
+                        id: op.id,
+                        label: op.label,
+                        ...(op.shape && op.shape !== "box"
+                            ? { shape: op.shape }
+                            : {}),
+                        ...(op.fill ? { fill: op.fill } : {}),
+                        ...(op.stroke ? { stroke: op.stroke } : {}),
+                        ...(op.role ? { role: op.role } : {}),
+                        ...(op.group ? { group: op.group } : {}),
+                        ...(grow && grow > 0 ? { grow } : {}),
+                        ...(align && align !== "center" ? { align } : {}),
+                        ...(maxW && maxW > 0 ? { maxW } : {}),
+                        ...(tw?.minW0 ? { minW0: true } : {}),
+                        ...(textOf(tw) ? { text: textOf(tw) } : {}),
+                        ...cellOf(op),
+                    }
+                } else if (op.op === "add_container") {
+                    const tw = twOf(op.class)
+                    const grow = op.grow ?? tw?.grow
+                    const align = op.align ?? tw?.align
+                    const justify = op.justify ?? tw?.justify
+                    const alignItems = op.alignItems ?? tw?.alignItems
+                    const maxW = op.maxW ?? tw?.maxW
+                    const pad = op.pad ?? tw?.pad
+                    node = {
+                        kind: "group",
+                        id: op.id,
+                        gname: op.gname ?? null,
+                        label: op.label,
+                        // `dir` is required on the operation, so a class can only confirm
+                        // it. Reading the class first would let `flex-col` silently override
+                        // a declared `dir: "row"`.
+                        dir: op.dir,
+                        gap: op.gap ?? tw?.gap ?? 20,
+                        children: [],
+                        ...(op.role ? { role: op.role } : {}),
+                        ...(op.group ? { group: op.group } : {}),
+                        ...(grow && grow > 0 ? { grow } : {}),
+                        ...(align && align !== "center" ? { align } : {}),
+                        ...(justify && justify !== "start" ? { justify } : {}),
+                        ...(alignItems ? { alignItems } : {}),
+                        ...(maxW && maxW > 0 ? { maxW } : {}),
+                        ...(tw?.minW0 ? { minW0: true } : {}),
+                        ...(textOf(tw) ? { text: textOf(tw) } : {}),
+                        ...(pad != null ? { pad: Math.max(0, pad) } : {}),
+                    }
+                } else if (op.op === "add_grid")
+                    node = {
+                        kind: "grid",
+                        id: op.id,
+                        gname: null,
+                        label: op.label,
+                        cols: Math.max(1, op.cols),
+                        gap: op.gap ?? 14,
+                        children: [],
+                    }
+                else if (op.op === "add_pool") {
+                    if (op.lanes.length === 0) {
+                        errors.push(
+                            `add_pool: "${op.id}" needs at least one lane — a swimlane diagram with no roles has nothing to divide`,
+                        )
+                        break
+                    }
+                    node = {
+                        kind: "pool",
+                        id: op.id,
+                        label: op.label,
+                        lanes: op.lanes,
+                        phases: op.phases ?? [],
+                        orientation: op.orientation ?? "horizontal",
+                        gap: op.gap ?? 40,
+                        children: [],
+                    }
+                } else if (op.op === "add_sequence")
+                    node = {
+                        kind: "sequence",
+                        id: op.id,
+                        label: op.label,
+                        gap: op.gap ?? 60,
+                        step: Math.max(24, op.step ?? 44),
+                        children: [],
+                    }
+                else
+                    node = {
+                        kind: "radial",
+                        id: op.id,
+                        label: op.label,
+                        spread: op.spread ?? "radial",
+                        gap: op.gap ?? 40,
+                        children: [],
+                    }
+                insert(list, node, op.after)
+                break
+            }
+
+            case "remove": {
+                const node = findNode(tree, op.id)
+                if (!node) {
+                    errors.push(`remove: no node with id "${op.id}"`)
+                    break
+                }
+                // Collect the subtree's ids first — edges touching any of them go too,
+                // otherwise draw.io renders an arrow pointing at nothing.
+                const doomed = new Set<string>()
+                for (const d of walkTree({ ...tree, roots: [node] }))
+                    doomed.add(d.id)
+                detach(tree, op.id)
+                tree.links = tree.links.filter(
+                    (l) => !doomed.has(l.source) && !doomed.has(l.target),
+                )
+                break
+            }
+
+            case "move": {
+                if (!exists(op.id)) {
+                    errors.push(`move: no node with id "${op.id}"`)
+                    break
+                }
+                if (op.parent && !exists(op.parent)) {
+                    errors.push(`move: no node with id "${op.parent}"`)
+                    break
+                }
+                if (op.parent && wouldCycle(tree, op.id, op.parent)) {
+                    errors.push(
+                        `move: cannot move "${op.id}" into "${op.parent}" — that is inside itself`,
+                    )
+                    break
+                }
+                const list = targetList(tree, op.parent)
+                if (typeof list === "string") {
+                    errors.push(`move: ${list}`)
+                    break
+                }
+                const node = detach(tree, op.id)
+                if (!node) {
+                    errors.push(`move: could not detach "${op.id}"`)
+                    break
+                }
+                insert(list, node, op.after)
+                break
+            }
+
+            case "set_label": {
+                const node = findNode(tree, op.id)
+                if (!node) {
+                    errors.push(`set_label: no node with id "${op.id}"`)
+                    break
+                }
+                if (node.kind === "title") {
+                    errors.push(
+                        `set_label: use set_title to change the page title`,
+                    )
+                    break
+                }
+                node.label = op.label
+                break
+            }
+
+            case "set_shape": {
+                const node = findNode(tree, op.id)
+                if (!node || node.kind !== "box") {
+                    errors.push(`set_shape: "${op.id}" is not a box`)
+                    break
+                }
+                // The verbatim style is last render's composition with the OLD shape
+                // baked in; keeping it would override the new declaration entirely.
+                if (op.shape === "box") delete node.shape
+                else node.shape = op.shape
+                delete node.style
+                delete node.w
+                delete node.h
+                break
+            }
+
+            case "set_role": {
+                const node = findNode(tree, op.id)
+                if (!node || (node.kind !== "box" && node.kind !== "group")) {
+                    errors.push(
+                        `set_role: "${op.id}" is not a box or container`,
+                    )
+                    break
+                }
+                if (op.role === "body") delete node.role
+                else node.role = op.role
+                delete node.style
+                break
+            }
+
+            case "set_group": {
+                const node = findNode(tree, op.id)
+                if (!node || (node.kind !== "box" && node.kind !== "group")) {
+                    errors.push(
+                        `set_group: "${op.id}" is not a box or container`,
+                    )
+                    break
+                }
+                if (op.group === "") delete node.group
+                else node.group = op.group
+                delete node.style
+                break
+            }
+
+            case "set_dir": {
+                const node = findNode(tree, op.id)
+                if (!node || !isContainer(node)) {
+                    errors.push(`set_dir: "${op.id}" is not a container`)
+                    break
+                }
+                if (node.kind !== "group") {
+                    // A grid, pool, sequence or radial container arranges its children by its
+                    // own rule; "row or column" is not a property they have.
+                    errors.push(
+                        node.kind === "grid"
+                            ? `set_dir: "${op.id}" is a grid — change its column count instead`
+                            : `set_dir: "${op.id}" is a ${node.kind}, which arranges its children by its own rule and has no row/column direction`,
+                    )
+                    break
+                }
+                node.dir = op.dir
+                break
+            }
+
+            case "set_gap": {
+                const node = findNode(tree, op.id)
+                if (!node || !isContainer(node)) {
+                    errors.push(`set_gap: "${op.id}" is not a container`)
+                    break
+                }
+                ;(node as ContainerNode).gap = Math.max(0, op.gap)
+                break
+            }
+
+            case "link": {
+                if (!exists(op.source)) {
+                    errors.push(`link: no node with id "${op.source}"`)
+                    break
+                }
+                if (!exists(op.target)) {
+                    errors.push(`link: no node with id "${op.target}"`)
+                    break
+                }
+                // A second arrow between the same pair WITHOUT an id is a mistake — two
+                // identical lines on top of each other. With an id it is a parallel
+                // relationship (an ER diagram's "places" and "cancels" between the same
+                // two entities), addressable separately. Sequence messages are exempt
+                // as before: their identity is the step, not the endpoints.
+                const conversation = sameSequence(tree, op.source, op.target)
+                const dup =
+                    !conversation &&
+                    !op.id &&
+                    tree.links.some(
+                        (l) => l.source === op.source && l.target === op.target,
+                    )
+                if (dup) {
+                    errors.push(
+                        `link: "${op.source}" → "${op.target}" already exists — give this one an id to draw a second, parallel relationship`,
+                    )
+                    break
+                }
+                if (op.id && tree.links.some((l) => l.id === op.id)) {
+                    errors.push(`link: edge id "${op.id}" is already taken`)
+                    break
+                }
+                // Arrowhead tokens reach the style string; the same charset gate as
+                // shapes keeps `block;dashed=1` from smuggling style keys in.
+                const badHead = [op.head, op.tail].find(
+                    (v) => v !== undefined && !/^[a-zA-Z0-9]+$/.test(v),
+                )
+                if (badHead !== undefined) {
+                    errors.push(
+                        `link: arrowhead "${badHead}" contains characters that are not allowed`,
+                    )
+                    break
+                }
+                const link: LinkSpec = { source: op.source, target: op.target }
+                if (op.id) link.id = op.id
+                if (op.label) link.label = op.label
+                if (op.dashed) link.dashed = true
+                if (op.bold) link.bold = true
+                if (op.head !== undefined) {
+                    link.head = op.head
+                    link.headFill = op.headFill ?? false
+                }
+                if (op.tail !== undefined) {
+                    link.tail = op.tail
+                    link.tailFill = op.tailFill ?? false
+                }
+                if (op.step != null) link.step = op.step
+                tree.links.push(link)
+                break
+            }
+
+            case "unlink": {
+                const before = tree.links.length
+                // With a step given, remove only that message: two participants of a sequence
+                // diagram can exchange several, and dropping all of them would delete messages
+                // the caller did not ask about.
+                tree.links = tree.links.filter(
+                    (l) =>
+                        !(
+                            l.source === op.source &&
+                            l.target === op.target &&
+                            (op.step == null || l.step === op.step)
+                        ),
+                )
+                if (tree.links.length === before)
+                    errors.push(
+                        op.step == null
+                            ? `unlink: no edge from "${op.source}" to "${op.target}"`
+                            : `unlink: no edge from "${op.source}" to "${op.target}" with step ${op.step}`,
+                    )
+                break
+            }
+
+            case "clear": {
+                // Start over. Needed because some diagrams are rebuilt rather than
+                // patched: in a flowchart one new arrow can change which row several
+                // nodes belong in, so there is no meaningful way to merge a new graph
+                // into the old layout.
+                //
+                // `foreign` goes too. Those are cells the parser could not place in the
+                // tree, and keeping them would leave a user's stray annotations floating
+                // over a diagram they no longer refer to.
+                tree.roots = []
+                tree.links = []
+                tree.foreign = []
+                if (!op.keepTitle) tree.title = undefined
+                break
+            }
+
+            case "set_title":
+                tree.title = op.title
+                break
+
+            case "set_page":
+                // Clamped rather than rejected: an out-of-range ratio is a slip, and a
+                // diagram 40 times wider than it is tall is never what was meant.
+                tree.aspect = Math.min(4, Math.max(0.25, op.aspect))
+                break
+        }
+    }
+
+    // Names the whole supported vocabulary, not just the group the dropped class looked like
+    // it belonged to: a model that reached for `pt-8` needs to see that padding is `p-N` only,
+    // and one that reached for `shadow-2xl` needs the four rungs that do exist.
+    if (ignoredClasses.size > 0)
+        warnings.push(
+            `Ignored class(es) with no equivalent here: ${[...ignoredClasses].join(", ")}. Supported — layout: flex-row/flex-col, grow/grow-N/flex-N, w-1/N, w-full, min-w-0, items-*, self-*, justify-*, gap-N, p-N, max-w-N/max-w-xs..4xl. Text: font-bold/font-normal, italic, underline, line-through, text-xs..4xl, text-left/center/right, align-top/middle/bottom, whitespace-nowrap. Border: border/border-N, border-solid/dashed/dotted, border-none, rounded/rounded-sm..4xl/rounded-full, shadow-sm/md/lg/xl/shadow-none. Colour comes from role and group; per-side borders and padding (border-l, pt-4) are not available.`,
+        )
+
+    return { tree, errors, warnings }
+}
+
+/** Every icon/group name in a tree, for validating against the catalog. */
+export function collectNames(
+    tree: DiagramTree,
+): { id: string; name: string; kind: "icon" | "group" }[] {
+    const out: { id: string; name: string; kind: "icon" | "group" }[] = []
+    for (const n of walkTree(tree)) {
+        if (n.kind === "icon" && n.name)
+            out.push({ id: n.id, name: n.name, kind: "icon" })
+        else if ((n.kind === "group" || n.kind === "grid") && n.gname)
+            out.push({ id: n.id, name: n.gname, kind: "group" })
+    }
+    return out
+}
+
+/** How a container arranges its children, in one short phrase for the outline. */
+function containerMeta(n: ContainerNode): string {
+    switch (n.kind) {
+        case "grid":
+            return `grid cols=${n.cols}`
+        case "pool":
+            return `pool lanes=[${n.lanes.join(" | ")}]${
+                n.phases.length ? ` phases=[${n.phases.join(" | ")}]` : ""
+            }${n.orientation === "vertical" ? " vertical" : ""}`
+        case "sequence":
+            return "sequence"
+        case "radial":
+            return `radial ${n.spread}`
+        default:
+            return n.dir
+    }
+}
+
+/**
+ * A compact text outline of the tree, for showing the model what is on the canvas.
+ *
+ * Sending the tree as JSON would cost several times more for the same information, and
+ * the model does not need coordinates — it needs to know what exists and how it nests so
+ * it can name ids in the next operation.
+ */
+export function outline(tree: DiagramTree): string {
+    const lines: string[] = []
+    if (tree.title) lines.push(`title: ${tree.title}`)
+    const walk = (n: DiagramNode, depth: number) => {
+        const pad = "  ".repeat(depth)
+        // A node inside a pool reports its cell: that is how the model knows which lane a
+        // step ended up in, which is exactly what it needs to move one.
+        const at = (x: DiagramNode) =>
+            (x.kind === "icon" || x.kind === "box") && x.cell
+                ? ` @lane${x.cell.lane},col${x.cell.col}`
+                : ""
+        if (n.kind === "icon")
+            lines.push(
+                `${pad}${n.id}: icon ${n.name}${n.label ? ` "${n.label}"` : ""}${at(n)}`,
+            )
+        else if (n.kind === "box")
+            lines.push(
+                `${pad}${n.id}: box${n.shape ? ` ${n.shape}` : ""} "${n.label}"${at(n)}`,
+            )
+        else if (n.kind === "title") lines.push(`${pad}${n.id}: title`)
+        else {
+            lines.push(
+                `${pad}${n.id}: ${containerMeta(n)}${n.label ? ` "${n.label}"` : " (wrapper)"}`,
+            )
+            for (const c of n.children) walk(c, depth + 1)
+        }
+    }
+    for (const r of tree.roots) walk(r, 0)
+    for (const l of tree.links) {
+        const bits = [l.label, l.dashed ? "dashed" : null]
+            .filter(Boolean)
+            .join(", ")
+        lines.push(`link ${l.source} -> ${l.target}${bits ? ` (${bits})` : ""}`)
+    }
+    if (tree.foreign.length)
+        lines.push(
+            `${tree.foreign.length} cell(s) kept as-is: ${tree.foreign.map((f) => f.id).join(", ")}`,
+        )
+    return lines.join("\n")
+}
