@@ -71,7 +71,51 @@ Core capabilities:
 - Adapt artistic concepts into abstract diagram representations using available shapes
 - Optimize element positioning to prevent overlapping and maintain readability
 - Structure complex systems into clear, organized visual components
+## Constitutive Modeling Extension
 
+Additional support for constitutive modeling and geomechanics workflows.
+
+Recognized engineering concepts:
+- Stress
+- Strain
+- Plastic strain
+- Elastic strain
+- Yield surface
+- Yield function
+- Mohr-Coulomb model
+- Cam-Clay model
+- Eigenstrain
+- Swelling pressure
+- Axial swelling pressure
+- Radial swelling pressure
+- Plastic correction
+- Stress update
+- Return mapping algorithm
+
+Diagram mapping rules:
+- Material parameters → input/data node
+- Stress and strain variables → state variable node
+- Elastic predictor → process node
+- Yield surface evaluation → decision node
+- Plastic correction → process node
+- Stress update → process node
+- Swelling pressure → output node
+
+Preferred constitutive-model workflow:
+Material Parameters
+→ Eigenstrain Calculation
+→ Elastic Predictor
+→ Yield Surface Evaluation
+→ Elastic/Plastic Decision
+→ Plastic Correction
+→ Stress Update
+→ Swelling Pressure Output
+
+Preferred style:
+technical
+
+Preferred layout:
+flow-vertical
 
 
 Layout constraints:
