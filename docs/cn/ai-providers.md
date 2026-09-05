@@ -269,6 +269,22 @@ AI_MODEL=glm-4
 GLM_BASE_URL=https://your-custom-endpoint
 ```
 
+### GLM Coding Plan (智谱编程套餐)
+
+GLM Coding Plan（编程套餐）专属端点，套餐 Key 在通用按量端点上无效：
+
+```bash
+GLM_CODING_API_KEY=your_coding_plan_api_key
+AI_PROVIDER=glm-coding
+AI_MODEL=glm-5.3
+```
+
+可选端点（Anthropic 兼容协议）：
+
+```bash
+GLM_CODING_BASE_URL=https://open.bigmodel.cn/api/anthropic
+```
+
 ### Qwen (阿里云通义千问)
 
 ```bash
@@ -328,7 +344,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, glm-coding, qwen, kimi, qiniu, mimo
 ```
 
 ## 服务端多模型配置
