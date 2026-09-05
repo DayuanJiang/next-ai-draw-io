@@ -13,6 +13,7 @@ import { createOllama } from "ollama-ai-provider-v2"
 import {
     AIHUBMIX_APP_CODE,
     isAihubmixStandardBaseURL,
+    normalizeGLMBaseURL,
     normalizeMiniMaxBaseURL,
 } from "@/lib/ai-providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
@@ -372,8 +373,33 @@ export async function POST(req: Request) {
                 break
             }
 
-            // GLM, Qwen, Kimi, Qiniu, Novita, MiMo, Atlas Cloud - OpenAI compatible
             case "glm":
+            case "glm-coding": {
+                const rawUrl =
+                    baseUrl ||
+                    PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||
+                    "https://open.bigmodel.cn/api/paas/v4"
+                const { baseURL: glmBaseUrl, isAnthropicCompatible } =
+                    normalizeGLMBaseURL(rawUrl)
+
+                if (isAnthropicCompatible) {
+                    // GLM Coding Plan Anthropic-compatible endpoint
+                    const glm = createAnthropic({
+                        apiKey,
+                        baseURL: glmBaseUrl,
+                    })
+                    model = glm.chat(modelId)
+                } else {
+                    const glm = createOpenAI({
+                        apiKey,
+                        baseURL: glmBaseUrl,
+                    })
+                    model = glm.chat(modelId)
+                }
+                break
+            }
+
+            // Qwen, Kimi, Qiniu, Novita, Atlas Cloud, MiMo - OpenAI compatible
             case "qwen":
             case "kimi":
             case "qiniu":
