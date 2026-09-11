@@ -182,6 +182,22 @@ Optional custom endpoint:
 OPENROUTER_BASE_URL=https://your-custom-endpoint
 ```
 
+### Requesty
+
+```bash
+AI_PROVIDER=requesty
+REQUESTY_API_KEY=your_api_key
+AI_MODEL=openai/gpt-4o-mini
+```
+
+Optional custom endpoint:
+
+```bash
+REQUESTY_BASE_URL=https://router.requesty.ai/v1
+```
+
+Requesty is an OpenAI-compatible router and uses `provider/model` model IDs (e.g. `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4-5`). See https://docs.requesty.ai and https://app.requesty.ai/router/list for the full model list.
+
 ### Ollama (Local)
 
 ```bash
@@ -343,7 +359,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, requesty, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## Server-Side Multi-Model Configuration
