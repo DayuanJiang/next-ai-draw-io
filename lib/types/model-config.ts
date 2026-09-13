@@ -25,6 +25,7 @@ export type ProviderName =
     | "novita"
     | "mimo"
     | "atlascloud"
+    | "api_route"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -118,6 +119,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     novita: "novita",
     mimo: "xiaomi",
     atlascloud: "openai",
+    api_route: "api_route",
 }
 
 // Provider metadata
@@ -211,6 +213,10 @@ export const PROVIDER_INFO: Record<
     atlascloud: {
         label: "Atlas Cloud",
         defaultBaseUrl: "https://api.atlascloud.ai/v1",
+    },
+    api_route: {
+        label: "API Route",
+        defaultBaseUrl: "https://www.api-route.com/v1",
     },
 }
 
@@ -451,6 +457,14 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     ],
     mimo: ["mimo-v2.5-pro", "mimo-v2.5"],
     atlascloud: ["qwen/qwen3.5-flash", "deepseek-ai/deepseek-v4-pro"],
+    api_route: [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "claude-3-7-sonnet-20250219",
+        "deepseek-chat",
+        "deepseek-reasoner",
+        "gemini-2.5-flash",
+    ],
 }
 
 // Helper to generate UUID

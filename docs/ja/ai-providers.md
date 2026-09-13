@@ -321,6 +321,23 @@ AI_MODEL=mimo-v2.5-pro
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### API Route
+
+API Route は、OpenAI、Claude、Gemini、DeepSeek などの主要モデルを OpenAI 互換のエンドポイントを通じて統合し、インテリジェントなルーティングと高可用性を提供します。
+
+[API Route](https://www.api-route.com) から API キーを取得してください：
+
+```bash
+API_ROUTE_API_KEY=your_api_key
+AI_MODEL=gpt-4o
+```
+
+任意のカスタムエンドポイント（デフォルト: `https://www.api-route.com/v1`）：
+
+```bash
+API_ROUTE_BASE_URL=https://www.api-route.com/v1
+```
+
 ## 自動検出
 
 **1つ**のプロバイダーの API キーのみを設定した場合、システムはそのプロバイダーを自動的に検出して使用します。`AI_PROVIDER` を設定する必要はありません。

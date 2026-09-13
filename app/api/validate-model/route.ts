@@ -372,14 +372,15 @@ export async function POST(req: Request) {
                 break
             }
 
-            // GLM, Qwen, Kimi, Qiniu, Novita, MiMo, Atlas Cloud - OpenAI compatible
+            // GLM, Qwen, Kimi, Qiniu, Novita, MiMo, Atlas Cloud, API Route - OpenAI compatible
             case "glm":
             case "qwen":
             case "kimi":
             case "qiniu":
             case "novita":
             case "atlascloud":
-            case "mimo": {
+            case "mimo":
+            case "api_route": {
                 const baseURL =
                     baseUrl ||
                     PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||

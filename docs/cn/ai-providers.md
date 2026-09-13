@@ -321,6 +321,23 @@ AI_MODEL=mimo-v2.5-pro
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### API Route
+
+API Route 通过统一的 OpenAI 兼容端点聚合 OpenAI、Claude、Gemini、DeepSeek 等主流大模型，支持高速智能路由与高可用调度。
+
+从 [API Route 官网](https://www.api-route.com) 获取 API Key：
+
+```bash
+API_ROUTE_API_KEY=your_api_key
+AI_MODEL=gpt-4o
+```
+
+可选的自定义端点（默认 `https://www.api-route.com/v1`）：
+
+```bash
+API_ROUTE_BASE_URL=https://www.api-route.com/v1
+```
+
 ## 自动检测
 
 如果您只配置了**一个**提供商的 API 密钥，系统将自动检测并使用该提供商。无需设置 `AI_PROVIDER`。

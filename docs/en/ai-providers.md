@@ -336,6 +336,23 @@ Optional custom endpoint (Token Plan subscribers should set their dedicated Base
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### API Route
+
+API Route provides unified access to OpenAI, Claude, Gemini, DeepSeek, and other leading models via an OpenAI-compatible endpoint with intelligent routing and high availability.
+
+Get your API key from [API Route](https://www.api-route.com):
+
+```bash
+API_ROUTE_API_KEY=your_api_key
+AI_MODEL=gpt-4o
+```
+
+Optional custom endpoint (defaults to `https://www.api-route.com/v1`):
+
+```bash
+API_ROUTE_BASE_URL=https://www.api-route.com/v1
+```
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
