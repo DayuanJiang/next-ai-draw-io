@@ -31,15 +31,15 @@
         "test:e2e": "playwright test"
     },
     "dependencies": {
-        "@ai-sdk/amazon-bedrock": "^4.0.1",
-        "@ai-sdk/anthropic": "^3.0.0",
-        "@ai-sdk/azure": "^3.0.0",
-        "@ai-sdk/deepseek": "^2.0.0",
-        "@ai-sdk/gateway": "^3.0.0",
-        "@ai-sdk/google": "^3.0.0",
-        "@ai-sdk/google-vertex": "^4.0.16",
-        "@ai-sdk/openai": "^3.0.0",
-        "@ai-sdk/react": "^3.0.1",
+        "@ai-sdk/amazon-bedrock": "^5.0.0",
+        "@ai-sdk/anthropic": "^4.0.0",
+        "@ai-sdk/azure": "^4.0.0",
+        "@ai-sdk/deepseek": "^3.0.0",
+        "@ai-sdk/gateway": "^4.0.0",
+        "@ai-sdk/google": "^4.0.0",
+        "@ai-sdk/google-vertex": "^5.0.0",
+        "@ai-sdk/openai": "^4.0.0",
+        "@ai-sdk/react": "^4.0.0",
         "@aihubmix/ai-sdk-provider": "^2.1.0",
         "@aws-sdk/client-dynamodb": "^3.957.0",
         "@aws-sdk/credential-providers": "^3.943.0",
@@ -50,7 +50,7 @@
         "@langfuse/tracing": "^4.4.9",
         "@next/third-parties": "^16.0.6",
         "@opennextjs/cloudflare": "^1.17.1",
-        "@openrouter/ai-sdk-provider": "^2.0.0",
+        "@openrouter/ai-sdk-provider": "^3.0.0",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
@@ -66,7 +66,7 @@
         "@radix-ui/react-tooltip": "^1.1.8",
         "@radix-ui/react-use-controllable-state": "^1.2.2",
         "@xmldom/xmldom": "^0.9.8",
-        "ai": "^6.0.1",
+        "ai": "^7.0.0",
         "base-64": "^1.0.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -78,7 +78,7 @@
         "nanoid": "^5.0.0",
         "negotiator": "^1.0.0",
         "next": "^16.0.7",
-        "ollama-ai-provider-v2": "^3.0.0",
+        "ollama-ai-provider-v2": "^4.0.0",
         "pako": "^2.1.0",
         "prism-react-renderer": "^2.4.1",
         "react": "^19.1.2",
@@ -144,7 +144,7 @@
     },
     "overrides": {
         "@openrouter/ai-sdk-provider": {
-            "ai": "^6.0.1"
+            "ai": "^7.0.0"
         }
     }
 }
