@@ -48,12 +48,14 @@ import {
 import { checkEditGate } from "./edit-gate.js"
 import { addHistory } from "./history.js"
 import {
+    enqueueExport,
     getState,
-    requestExport,
+    isBrowserConnected,
     requestSync,
     setState,
     shutdown,
     startHttpServer,
+    waitForExportJob,
     waitForSync,
 } from "./http-server.js"
 import { parseDrawioFileContent } from "./load-diagram.js"
@@ -919,7 +921,8 @@ server.registerTool(
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
             "- .drawio with a page selector: writes a single-page <mxfile> containing only that page.\n" +
             "- .png / .svg with NO page selector: exports the currently active page in the browser.\n" +
-            "- .png / .svg with a page selector: temporarily loads a single-page projection of that page into the browser, captures the rendered image, then restores the full document. The user will see a brief tab-flicker (~1-2s) but the exported image is guaranteed to be the requested page.",
+            "- .png / .svg with a page selector: temporarily loads a single-page projection of that page into the browser, captures the rendered image, then restores the full document. The user will see a brief tab-flicker (~1-2s) but the exported image is guaranteed to be the requested page.\n" +
+            "Concurrent export calls are safe: they are queued and rendered one at a time in order; each call returns as soon as its own image is ready.",
         inputSchema: {
             ...pageSelectorSchema,
             path: z
@@ -1079,33 +1082,55 @@ server.registerTool(
                 projectionXml = projection.xml
             }
 
-            // Ask the browser to export (optionally via a page projection) and
-            // poll for the resulting image data.
-            requestExport(
+            // Queue-based export. Concurrent export calls each enqueue a job
+            // with a unique id; the browser bridge renders jobs strictly one
+            // at a time (head of queue) and reports each result BY JOB ID,
+            // which resolves exactly this call's promise. This replaces the
+            // old single-slot requestExport + poll loop that raced under
+            // concurrency (requests overwrote each other; the single response
+            // was consumed by whichever caller polled first; late responses
+            // poisoned the next export).
+            if (!isBrowserConnected(currentSession.id)) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: The browser preview page is not connected (no recent poll). Open or refresh the session URL (e.g. call start_session), then retry the export.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            const job = enqueueExport(
                 currentSession.id,
                 detectedFormat as "png" | "svg",
                 projectionXml,
             )
+            if (!job) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Session state not found. Is the browser open?",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
 
-            // A projection export does an extra load + render round-trip in the
-            // browser, so give it a longer window. Re-read the live store entry
-            // each tick: setState() (from a concurrent autosave or tool call)
-            // replaces the Map entry with a new object, so a captured reference
-            // would go stale and never observe the browser's exportData.
-            const timeoutMs = projectionXml ? 15000 : 10000
-            const start = Date.now()
-            let exportData: string | undefined
-            while (Date.now() - start < timeoutMs) {
-                exportData = getState(currentSession.id)?.exportData
-                if (exportData) break
-                await new Promise((r) => setTimeout(r, 200))
-            }
-            const live = getState(currentSession.id)
-            if (live) {
-                live.exportData = undefined
-                live.exportFormat = undefined
-                live.exportXml = undefined
-            }
+            // Generous per-job budget: a queued job also waits for its
+            // predecessors to render, so this must cover the whole
+            // queue-drain, not just one render. The browser bridge reports
+            // per-job failures much sooner (30s render timeout) and a dead
+            // browser page is detected via heartbeat, so this wall-clock cap
+            // is only a backstop.
+            const timeoutMs =
+                Number(process.env.DRAWIO_EXPORT_TIMEOUT_MS) || 120_000
+            const exportData = await waitForExportJob(
+                currentSession.id,
+                job.id,
+                timeoutMs,
+            )
 
             if (!exportData) {
                 return {
@@ -1113,8 +1138,8 @@ server.registerTool(
                         {
                             type: "text",
                             text: projectionXml
-                                ? "Error: Export timed out after loading the single-page projection. The browser may be closed or unresponsive."
-                                : "Error: Export timed out. Make sure the browser tab is open and the diagram is loaded.",
+                                ? `Error: Export job #${job.id} timed out or failed after loading the single-page projection. The browser may be closed or unresponsive.`
+                                : `Error: Export job #${job.id} timed out or failed. Make sure the browser tab is open and the diagram is loaded.`,
                         },
                     ],
                     isError: true,
