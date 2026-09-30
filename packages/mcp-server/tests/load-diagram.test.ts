@@ -61,7 +61,11 @@ describe("decompressPageContent", () => {
 describe("parseDrawioFileContent", () => {
     it("passes a plain-XML mxfile through unchanged", () => {
         const r = parseDrawioFileContent(PLAIN_MXFILE)
-        expect(r).toEqual({ ok: true, xml: PLAIN_MXFILE })
+        expect(r).toEqual({
+            ok: true,
+            xml: PLAIN_MXFILE,
+            hadCompressedPages: false,
+        })
     })
 
     it("wraps a bare mxGraphModel into a one-page mxfile", () => {
@@ -103,7 +107,11 @@ describe("parseDrawioFileContent", () => {
     it("keeps empty pages as-is", () => {
         const withEmpty = `<mxfile><diagram id="a" name="Page-1">${MODEL_XML}</diagram><diagram id="b" name="Empty"></diagram></mxfile>`
         const r = parseDrawioFileContent(withEmpty)
-        expect(r).toEqual({ ok: true, xml: withEmpty })
+        expect(r).toEqual({
+            ok: true,
+            xml: withEmpty,
+            hadCompressedPages: false,
+        })
     })
 
     it("rejects empty files", () => {
@@ -122,5 +130,32 @@ describe("parseDrawioFileContent", () => {
         const r = parseDrawioFileContent(bad)
         expect(r.ok).toBe(false)
         if (!r.ok) expect(r.error).toContain('"Broken"')
+    })
+})
+
+describe("hadCompressedPages", () => {
+    it("is false for a plain-XML mxfile", () => {
+        const r = parseDrawioFileContent(PLAIN_MXFILE)
+        expect(r.ok).toBe(true)
+        if (r.ok) expect(r.hadCompressedPages).toBe(false)
+    })
+
+    it("is false for a bare mxGraphModel", () => {
+        const r = parseDrawioFileContent(MODEL_XML)
+        expect(r.ok).toBe(true)
+        if (r.ok) expect(r.hadCompressedPages).toBe(false)
+    })
+
+    it("is true for a fully compressed mxfile", () => {
+        const r = parseDrawioFileContent(COMPRESSED_MXFILE)
+        expect(r.ok).toBe(true)
+        if (r.ok) expect(r.hadCompressedPages).toBe(true)
+    })
+
+    it("is true for a mixed plain/compressed file", () => {
+        const mixed = `<mxfile><diagram id="a" name="Plain">${MODEL_XML}</diagram><diagram id="b" name="Squeezed">${drawioCompress(MODEL_XML)}</diagram></mxfile>`
+        const r = parseDrawioFileContent(mixed)
+        expect(r.ok).toBe(true)
+        if (r.ok) expect(r.hadCompressedPages).toBe(true)
     })
 })
