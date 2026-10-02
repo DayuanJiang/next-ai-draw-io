@@ -175,7 +175,8 @@ server.prompt(
 
 ## Opening an Existing .drawio File
 - Use load_diagram with the file path — the server reads and decompresses the file itself; don't read it and pass the XML through create_new_diagram
-- After loading, call get_diagram once before editing (you haven't seen the file's cell IDs yet)
+- If you already have the file's content (from another tool, a repo read, or an API), pass it as load_diagram's 'xml' argument instead — no temporary file needed
+- After loading from a path (or from compressed 'xml' content), call get_diagram once before editing (you haven't seen the file's cell IDs yet); plain-XML 'xml' you supplied yourself can be edited immediately
 
 ## Working with Multiple Pages
 - Use list_pages to discover existing pages (id, name, index)
@@ -439,20 +440,53 @@ server.registerTool(
     "load_diagram",
     {
         description:
-            "Load a .drawio file from disk into the current session, REPLACING the entire diagram (all pages). " +
-            "The server reads the file directly — you do NOT need to read the file yourself or pass its XML through create_new_diagram. " +
-            "Handles both plain-XML and draw.io's compressed save format.\n\n" +
-            "After loading, call get_diagram before edit_diagram — you haven't seen the file's cell IDs or structure yet.",
+            "Load a .drawio diagram into the current session, REPLACING the entire diagram (all pages). " +
+            "Provide ONE of two mutually exclusive sources: 'path' (the server reads the file from disk — you do NOT need to read the file yourself or pass its XML through create_new_diagram) " +
+            "or 'xml' (the raw file content you already have — from another tool, a repository read, or an API response — so no temporary file needs to be written first). " +
+            "Both accept plain XML and draw.io's compressed save format.\n\n" +
+            "After loading from 'path' (or from compressed 'xml'), call get_diagram before edit_diagram — you haven't seen the file's cell IDs yet. " +
+            "Plain-XML 'xml' content you supplied yourself is already known and can be edited immediately.",
         inputSchema: {
             path: z
                 .string()
+                .optional()
                 .describe(
-                    "Path to the .drawio file to load (e.g., ./diagram.drawio)",
+                    "Path to the .drawio file to load (e.g., ./diagram.drawio). Mutually exclusive with 'xml'.",
+                ),
+            xml: z
+                .string()
+                .optional()
+                .describe(
+                    "Raw .drawio file content: a plain <mxfile>/<mxGraphModel>, or draw.io's compressed save format. Use when the content is already in hand (another tool's output, a repository read, an API response). Mutually exclusive with 'path'.",
                 ),
         },
     },
-    async ({ path }) => {
+    async ({ path, xml: inlineXml }) => {
         try {
+            // Argument validation comes before the session check: a bad
+            // argument is a caller error and should be reported as such.
+            if (path !== undefined && inlineXml !== undefined) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Provide either 'path' or 'xml', not both.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            if (path === undefined && inlineXml === undefined) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Provide either 'path' (a .drawio file to read) or 'xml' (the file's content).",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
             if (!currentSession) {
                 return {
                     content: [
@@ -465,24 +499,32 @@ server.registerTool(
                 }
             }
 
-            const fs = await import("node:fs/promises")
-            const nodePath = await import("node:path")
-            const absolutePath = nodePath.resolve(path)
+            // Exactly one of path/xml is present (validated above).
+            let content = ""
+            let sourceLabel = ""
+            if (inlineXml !== undefined) {
+                content = inlineXml
+                sourceLabel = "inline XML"
+            } else if (path !== undefined) {
+                const fs = await import("node:fs/promises")
+                const nodePath = await import("node:path")
+                const absolutePath = nodePath.resolve(path)
 
-            let content: string
-            try {
-                content = await fs.readFile(absolutePath, "utf-8")
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e)
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error: Cannot read file ${absolutePath}: ${msg}`,
-                        },
-                    ],
-                    isError: true,
+                try {
+                    content = await fs.readFile(absolutePath, "utf-8")
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Error: Cannot read file ${absolutePath}: ${msg}`,
+                            },
+                        ],
+                        isError: true,
+                    }
                 }
+                sourceLabel = absolutePath
             }
 
             const loaded = parseDrawioFileContent(content)
@@ -495,7 +537,7 @@ server.registerTool(
             const xml = loaded.xml
 
             log.info(
-                `Loading diagram from ${absolutePath} (${xml.length} chars)`,
+                `Loading diagram from ${sourceLabel} (${xml.length} chars)`,
             )
 
             // Save the user's current state before replacing (same flow as
@@ -515,10 +557,17 @@ server.registerTool(
             currentSession.xml = xml
             currentSession.version++
             setState(currentSession.id, xml)
-            // Deliberately NOT marking the loaded XML as seen: the model only
-            // supplied a path, so it doesn't know the file's cell IDs. The
-            // edit gate will require one get_diagram before edits.
-            currentSession.lastSeenXml = ""
+            // Edit-gate semantics by source:
+            // - 'path': the model only supplied a path, so it doesn't know
+            //   the file's cell IDs — keep the gate (one get_diagram first).
+            // - plain 'xml': the model supplied the exact content, same
+            //   rationale as create_new_diagram — record it as seen.
+            // - compressed 'xml': the session now holds the decompressed
+            //   form, which the model cannot derive from the compressed
+            //   input — keep the gate.
+            const markSeen =
+                inlineXml !== undefined && !loaded.hadCompressedPages
+            currentSession.lastSeenXml = markSeen ? xml : ""
 
             addHistory(currentSession.id, xml, "")
 
@@ -529,13 +578,17 @@ server.registerTool(
                     ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
                     : "no pages parsed"
 
-            log.info(`Diagram loaded from file (${pageSummary})`)
+            log.info(`Diagram loaded (${pageSummary})`)
+
+            const gateHint = markSeen
+                ? ""
+                : "\n\nCall get_diagram before edit_diagram — you haven't seen this file's cell IDs yet."
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Diagram loaded from ${absolutePath}!\n\nThe diagram is now visible in your browser.\n\n${pageSummary}\n\nCall get_diagram before edit_diagram — you haven't seen this file's cell IDs yet.`,
+                        text: `Diagram loaded from ${sourceLabel}!\n\nThe diagram is now visible in your browser.\n\n${pageSummary}${gateHint}`,
                     },
                 ],
             }
@@ -550,7 +603,6 @@ server.registerTool(
         }
     },
 )
-
 // Tool: edit_diagram
 server.registerTool(
     "edit_diagram",

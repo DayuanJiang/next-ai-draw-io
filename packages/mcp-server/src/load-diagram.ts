@@ -18,7 +18,7 @@ import {
 } from "./pages.js"
 
 export type LoadResult =
-    | { ok: true; xml: string }
+    | { ok: true; xml: string; hadCompressedPages: boolean }
     | { ok: false; error: string }
 
 /**
@@ -54,7 +54,7 @@ export function parseDrawioFileContent(content: string): LoadResult {
     if (isMxGraphModel(trimmed)) {
         const normalized = normalizeToMxfile(trimmed)
         return normalized
-            ? { ok: true, xml: normalized }
+            ? { ok: true, xml: normalized, hadCompressedPages: false }
             : { ok: false, error: "Failed to parse <mxGraphModel> XML." }
     }
     if (!isMxFile(trimmed)) {
@@ -97,5 +97,9 @@ export function parseDrawioFileContent(content: string): LoadResult {
         decompressedAny = true
     }
     // Nothing changed — keep the file's own serialisation.
-    return { ok: true, xml: decompressedAny ? serializeMxfile(doc) : trimmed }
+    return {
+        ok: true,
+        xml: decompressedAny ? serializeMxfile(doc) : trimmed,
+        hadCompressedPages: decompressedAny,
+    }
 }

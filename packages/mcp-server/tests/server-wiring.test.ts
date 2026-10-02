@@ -140,3 +140,51 @@ describe("MCP server wiring", () => {
         expect(props.xml).toBeTruthy()
     })
 })
+
+describe("load_diagram dual-source arguments", () => {
+    it("advertises both optional 'path' and 'xml' sources", async () => {
+        const resp = await send("tools/list", {})
+        const load = resp.result.tools.find(
+            (t: { name: string }) => t.name === "load_diagram",
+        )
+        const props = load?.inputSchema?.properties ?? {}
+        expect(props.path).toBeTruthy()
+        expect(props.xml).toBeTruthy()
+        const required: string[] = load?.inputSchema?.required ?? []
+        expect(required).not.toContain("path")
+        expect(required).not.toContain("xml")
+    })
+
+    it("rejects passing both 'path' and 'xml'", async () => {
+        // Argument validation fires before the session check: no session
+        // exists in this harness, so a both-args call must report the
+        // mutual-exclusion error, not "No active session".
+        const resp = await send("tools/call", {
+            name: "load_diagram",
+            arguments: { path: "/tmp/x.drawio", xml: "<mxfile/>" },
+        })
+        expect(resp.error, JSON.stringify(resp.error)).toBeUndefined()
+        expect(resp.result?.isError).toBe(true)
+        expect(resp.result?.content?.[0]?.text).toContain("not both")
+    })
+
+    it("rejects passing neither 'path' nor 'xml'", async () => {
+        const resp = await send("tools/call", {
+            name: "load_diagram",
+            arguments: {},
+        })
+        expect(resp.result?.isError).toBe(true)
+        expect(resp.result?.content?.[0]?.text).toContain("either 'path'")
+    })
+
+    it("accepts 'xml' alone as a source (fails only on the missing session)", async () => {
+        const resp = await send("tools/call", {
+            name: "load_diagram",
+            arguments: {
+                xml: '<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>',
+            },
+        })
+        expect(resp.result?.isError).toBe(true)
+        expect(resp.result?.content?.[0]?.text).toContain("No active session")
+    })
+})
