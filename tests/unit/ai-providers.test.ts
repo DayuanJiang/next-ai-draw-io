@@ -320,6 +320,54 @@ describe("Atlas Cloud provider", () => {
     })
 })
 
+describe("API Route provider", () => {
+    let createOpenAIMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.API_ROUTE_API_KEY = process.env.API_ROUTE_API_KEY
+        savedEnv.API_ROUTE_BASE_URL = process.env.API_ROUTE_BASE_URL
+        delete process.env.API_ROUTE_BASE_URL
+
+        const mod = await import("@ai-sdk/openai")
+        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
+        createOpenAIMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.API_ROUTE_API_KEY = savedEnv.API_ROUTE_API_KEY
+        process.env.API_ROUTE_BASE_URL = savedEnv.API_ROUTE_BASE_URL
+    })
+
+    it("uses API Route default endpoint with API_ROUTE_API_KEY", () => {
+        process.env.API_ROUTE_API_KEY = "server-api-route-key"
+
+        getAIModel({
+            provider: "api_route",
+            modelId: "gpt-4o",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "server-api-route-key",
+            baseURL: "https://www.api-route.com/v1",
+        })
+    })
+
+    it("uses custom API Route base URL when provided", () => {
+        getAIModel({
+            provider: "api_route",
+            apiKey: "client-api-route-key",
+            baseUrl: "https://custom.api-route.com/v1",
+            modelId: "claude-3-7-sonnet-20250219",
+        })
+
+        expect(createOpenAIMock).toHaveBeenCalledWith({
+            apiKey: "client-api-route-key",
+            baseURL: "https://custom.api-route.com/v1",
+        })
+    })
+})
+
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
     let createDeepSeekMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
