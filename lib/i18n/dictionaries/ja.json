@@ -32,6 +32,7 @@
         "modelscope": "ModelScope",
         "minimax": "MiniMax",
         "glm": "GLM",
+        "glm-coding": "GLM Coding Plan（Zhipu）",
         "qwen": "Qwen",
         "kimi": "Kimi",
         "qiniu": "Qiniu",

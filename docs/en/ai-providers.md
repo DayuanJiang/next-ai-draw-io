@@ -284,6 +284,22 @@ Optional custom endpoint:
 GLM_BASE_URL=https://your-custom-endpoint
 ```
 
+### GLM Coding Plan (Zhipu)
+
+Dedicated endpoint for GLM Coding Plan subscribers - plan keys do NOT work on the general pay-as-you-go endpoint:
+
+```bash
+GLM_CODING_API_KEY=your_coding_plan_api_key
+AI_PROVIDER=glm-coding
+AI_MODEL=glm-5.3
+```
+
+Optional endpoint (Anthropic-compatible protocol):
+
+```bash
+GLM_CODING_BASE_URL=https://open.bigmodel.cn/api/anthropic
+```
+
 ### Qwen (Alibaba Cloud)
 
 ```bash
@@ -343,7 +359,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, glm-coding, qwen, kimi, qiniu, mimo
 ```
 
 ## Server-Side Multi-Model Configuration

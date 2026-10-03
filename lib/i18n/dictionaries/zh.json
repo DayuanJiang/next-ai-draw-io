@@ -32,6 +32,7 @@
         "modelscope": "ModelScope",
         "minimax": "MiniMax",
         "glm": "GLM",
+        "glm-coding": "GLM Coding Plan（智谱编程套餐）",
         "qwen": "Qwen",
         "kimi": "Kimi",
         "qiniu": "Qiniu",

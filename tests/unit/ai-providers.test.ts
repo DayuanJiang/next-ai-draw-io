@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     getAIModel,
     isAihubmixStandardBaseURL,
+    normalizeGLMBaseURL,
     resolveBaseURL,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
@@ -368,6 +369,113 @@ describe("Kimi provider uses createDeepSeek for reasoning_content support", () =
         expect(createDeepSeekMock).toHaveBeenCalledWith(
             expect.objectContaining({
                 baseURL: "https://custom-kimi-endpoint.com/v1",
+            }),
+        )
+    })
+})
+
+describe("normalizeGLMBaseURL", () => {
+    it("normalizes the Anthropic-compatible endpoint by appending /v1", () => {
+        expect(
+            normalizeGLMBaseURL("https://open.bigmodel.cn/api/anthropic"),
+        ).toEqual({
+            baseURL: "https://open.bigmodel.cn/api/anthropic/v1",
+            isAnthropicCompatible: true,
+        })
+    })
+
+    it("keeps an already-normalized Anthropic endpoint unchanged", () => {
+        expect(
+            normalizeGLMBaseURL("https://open.bigmodel.cn/api/anthropic/v1/"),
+        ).toEqual({
+            baseURL: "https://open.bigmodel.cn/api/anthropic/v1",
+            isAnthropicCompatible: true,
+        })
+    })
+
+    it("uses OpenAI-compatible endpoints as-is", () => {
+        expect(
+            normalizeGLMBaseURL("https://open.bigmodel.cn/api/coding/paas/v4"),
+        ).toEqual({
+            baseURL: "https://open.bigmodel.cn/api/coding/paas/v4",
+            isAnthropicCompatible: false,
+        })
+        expect(
+            normalizeGLMBaseURL("https://open.bigmodel.cn/api/paas/v4"),
+        ).toEqual({
+            baseURL: "https://open.bigmodel.cn/api/paas/v4",
+            isAnthropicCompatible: false,
+        })
+    })
+})
+
+describe("GLM providers use createDeepSeek for reasoning_content support", () => {
+    let createDeepSeekMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.GLM_API_KEY = process.env.GLM_API_KEY
+        savedEnv.GLM_BASE_URL = process.env.GLM_BASE_URL
+        savedEnv.GLM_CODING_API_KEY = process.env.GLM_CODING_API_KEY
+        savedEnv.GLM_CODING_BASE_URL = process.env.GLM_CODING_BASE_URL
+        delete process.env.GLM_BASE_URL
+        delete process.env.GLM_CODING_BASE_URL
+
+        const mod = await import("@ai-sdk/deepseek")
+        createDeepSeekMock = mod.createDeepSeek as ReturnType<typeof vi.fn>
+        createDeepSeekMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.GLM_API_KEY = savedEnv.GLM_API_KEY
+        process.env.GLM_BASE_URL = savedEnv.GLM_BASE_URL
+        process.env.GLM_CODING_API_KEY = savedEnv.GLM_CODING_API_KEY
+        process.env.GLM_CODING_BASE_URL = savedEnv.GLM_CODING_BASE_URL
+    })
+
+    it("routes glm-coding to the Coding Plan endpoint with GLM_CODING_API_KEY", () => {
+        process.env.GLM_CODING_API_KEY = "server-coding-key"
+
+        getAIModel({
+            provider: "glm-coding",
+            modelId: "glm-5.3",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "server-coding-key",
+                baseURL: "https://open.bigmodel.cn/api/coding/paas/v4",
+            }),
+        )
+    })
+
+    it("routes plain glm to the pay-as-you-go endpoint with GLM_API_KEY", () => {
+        process.env.GLM_API_KEY = "server-glm-key"
+
+        getAIModel({
+            provider: "glm",
+            modelId: "glm-5.3",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "server-glm-key",
+                baseURL: "https://open.bigmodel.cn/api/paas/v4",
+            }),
+        )
+    })
+
+    it("supports client BYOK override for glm-coding", () => {
+        getAIModel({
+            provider: "glm-coding",
+            apiKey: "client-coding-key",
+            modelId: "glm-5.3",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: "client-coding-key",
+                baseURL: "https://open.bigmodel.cn/api/coding/paas/v4",
             }),
         )
     })

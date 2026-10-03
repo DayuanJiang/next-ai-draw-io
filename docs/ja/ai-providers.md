@@ -269,6 +269,22 @@ AI_MODEL=glm-4
 GLM_BASE_URL=https://your-custom-endpoint
 ```
 
+### GLM Coding Plan (Zhipu)
+
+GLM Coding Plan（プログラミングプラン）専用エンドポイント。プランのキーは汎用の従量課金エンドポイントでは利用できません：
+
+```bash
+GLM_CODING_API_KEY=your_coding_plan_api_key
+AI_PROVIDER=glm-coding
+AI_MODEL=glm-5.3
+```
+
+オプションのエンドポイント（Anthropic 互換プロトコル）：
+
+```bash
+GLM_CODING_BASE_URL=https://open.bigmodel.cn/api/anthropic
+```
+
 ### Qwen (Alibaba Cloud)
 
 ```bash
@@ -328,7 +344,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, glm-coding, qwen, kimi, qiniu, mimo
 ```
 
 ## サーバーサイドマルチモデル設定

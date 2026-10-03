@@ -28,6 +28,7 @@ interface ModelConfig {
 export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
     "minimax",
     "glm",
+    "glm-coding",
     "qwen",
     "kimi",
     "qiniu",
@@ -57,6 +58,25 @@ export function normalizeMiniMaxBaseURL(rawUrl: string): {
         if (!baseURL.endsWith("/v1")) {
             baseURL = `${baseURL}/v1`
         }
+    }
+    return { baseURL, isAnthropicCompatible }
+}
+
+/**
+ * Normalize GLM (Zhipu) base URL for AI SDK compatibility.
+ * GLM Coding Plan supports Anthropic-compatible and OpenAI-compatible endpoints.
+ * OpenAI endpoints (https://open.bigmodel.cn/api/paas/v4 and
+ * https://open.bigmodel.cn/api/coding/paas/v4) are used as-is, while the
+ * Anthropic endpoint gets a /v1 suffix since the SDK appends /messages.
+ */
+export function normalizeGLMBaseURL(rawUrl: string): {
+    baseURL: string
+    isAnthropicCompatible: boolean
+} {
+    const isAnthropicCompatible = rawUrl.includes("/anthropic")
+    let baseURL = rawUrl.replace(/\/$/, "")
+    if (isAnthropicCompatible && !baseURL.endsWith("/v1")) {
+        baseURL = `${baseURL}/v1`
     }
     return { baseURL, isAnthropicCompatible }
 }
@@ -112,6 +132,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "doubao",
     "modelscope",
     "glm",
+    "glm-coding",
     "qwen",
     "qiniu",
     "kimi",
@@ -540,6 +561,7 @@ function buildProviderOptions(
         case "doubao":
         case "minimax":
         case "glm":
+        case "glm-coding":
         case "qwen":
         case "kimi":
         case "qiniu":
@@ -577,6 +599,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     doubao: "DOUBAO_API_KEY",
     modelscope: "MODELSCOPE_API_KEY",
     glm: "GLM_API_KEY",
+    "glm-coding": "GLM_CODING_API_KEY",
     qwen: "QWEN_API_KEY",
     qiniu: "QINIU_API_KEY",
     kimi: "KIMI_API_KEY",
@@ -1353,6 +1376,51 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
+        case "glm":
+        case "glm-coding": {
+            // glm-coding targets the GLM Coding Plan subscription endpoint
+            // (https://open.bigmodel.cn/api/coding/paas/v4); plain glm targets
+            // the pay-as-you-go endpoint (https://open.bigmodel.cn/api/paas/v4).
+            const apiKey = resolveApiKey(
+                overrides,
+                PROVIDER_ENV_VARS[provider] as string,
+            )
+            const baseUrlEnvVar =
+                provider === "glm-coding"
+                    ? "GLM_CODING_BASE_URL"
+                    : "GLM_BASE_URL"
+            const rawBaseURL = resolveBaseURL(
+                overrides?.apiKey,
+                overrides?.baseUrl,
+                resolveBaseUrlEnv(overrides, baseUrlEnvVar),
+                PROVIDER_INFO[provider]?.defaultBaseUrl,
+            )
+
+            if (!rawBaseURL) {
+                throw new Error(
+                    `GLM base URL could not be resolved. Set ${baseUrlEnvVar} or configure a base URL in settings.`,
+                )
+            }
+
+            const { baseURL, isAnthropicCompatible } =
+                normalizeGLMBaseURL(rawBaseURL)
+
+            if (isAnthropicCompatible) {
+                // GLM Coding Plan Anthropic-compatible endpoint
+                const glm = createAnthropic({ apiKey, baseURL })
+                model = glm.chat(modelId)
+            } else {
+                // Use createDeepSeek to properly handle reasoning_content for
+                // GLM thinking models (e.g., glm-5.3). GLM's API uses the same
+                // reasoning_content field as DeepSeek and Kimi, so this
+                // provider correctly captures and replays reasoning in
+                // multi-turn conversations.
+                const glm = createDeepSeek({ apiKey, baseURL })
+                model = glm(modelId)
+            }
+            break
+        }
+
         case "mimo": {
             const apiKey = resolveApiKey(overrides, "MIMO_API_KEY")
             const baseURL = resolveBaseURL(
@@ -1370,7 +1438,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             break
         }
 
-        case "glm":
         case "qwen":
         case "qiniu":
         case "novita":
@@ -1418,7 +1485,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, glm-coding, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud`,
             )
     }
 

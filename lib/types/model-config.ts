@@ -18,6 +18,7 @@ export type ProviderName =
     | "doubao"
     | "modelscope"
     | "glm"
+    | "glm-coding"
     | "qwen"
     | "qiniu"
     | "kimi"
@@ -183,6 +184,10 @@ export const PROVIDER_INFO: Record<
     glm: {
         label: "GLM (Zhipu)",
         defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    },
+    "glm-coding": {
+        label: "GLM Coding Plan (Zhipu)",
+        defaultBaseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
     },
     qwen: {
         label: "Qwen (Alibaba)",
@@ -433,6 +438,13 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "Qwen/Qwen3-Coder-30B-A3B-Instruct",
         "Qwen/Qwen3-32B",
         "Qwen/Qwen2.5-72B-Instruct",
+    ],
+    "glm-coding": [
+        // GLM Coding Plan models (https://docs.bigmodel.cn/cn/coding-plan/quick-start)
+        "glm-5.3",
+        "glm-5.2",
+        "glm-4.7",
+        "glm-4.5-air",
     ],
     minimax: [
         // MiniMax models (Anthropic-compatible API)
