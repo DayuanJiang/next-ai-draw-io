@@ -30,7 +30,7 @@ export function defaultDataDir(): string | null {
 }
 
 /** Any cell besides the root cells "0" and "1" */
-const hasCells = (xml: string) =>
+export const hasCells = (xml: string) =>
     /<(mxCell\b[^>]*\bid="(?![01]")|UserObject\b|object\b)/.test(xml)
 
 export class Autosaver {
@@ -89,8 +89,10 @@ export class Autosaver {
     private removeOldest(): void {
         if (!this.dir) return
         const dir = this.dir
+        // Only our own session files: DRAWIO_DATA_DIR may be a folder
+        // that also holds the user's diagrams
         const files = readdirSync(dir)
-            .filter((f) => f.endsWith(".drawio"))
+            .filter((f) => f.startsWith("mcp-") && f.endsWith(".drawio"))
             .map((f) => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
             .sort((a, b) => b.mtime - a.mtime)
         for (const { f } of files.slice(this.maxFiles)) {

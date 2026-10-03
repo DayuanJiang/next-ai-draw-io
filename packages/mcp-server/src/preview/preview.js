@@ -51,15 +51,22 @@ window.addEventListener('message', (e) => {
                 const isPng = pendingMcpExport === 'png' && d.startsWith('data:image/png');
                 const isSvg = (pendingMcpExport === 'svg' || pendingMcpExport === 'xmlsvg') && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
                 if (isPng || isSvg) {
-                    pendingMcpExport = null;
+                    // Keep pendingMcpExport set until the server has the
+                    // result: a poll answered before that still sees the
+                    // request and would start the same export again.
+                    const seq = msg.message.mcpExport;
                     fetch('/api/state', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ sessionId, exportData: d })
-                    }).catch(() => {});
-                    // Page-targeted export: restore the user's real
-                    // multi-page document now that we have the image.
-                    restoreFromProjection();
+                    }).catch(() => {}).finally(() => {
+                        // The timeout already ended this export
+                        if (seq !== mcpExportSeq) return;
+                        pendingMcpExport = null;
+                        // Page-targeted export: restore the user's real
+                        // multi-page document now that we have the image.
+                        restoreFromProjection();
+                    });
                 }
                 return;
             }

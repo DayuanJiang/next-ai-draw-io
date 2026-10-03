@@ -153,6 +153,16 @@ describe("request origin checks", () => {
 })
 
 describe("POST /api/state", () => {
+    it("refuses a push without xml and keeps the diagram", async () => {
+        setState("mcp-no-xml", "<mxfile>kept</mxfile>")
+        const res = await postJson("/api/state", {
+            sessionId: "mcp-no-xml",
+            baseVersion: 99,
+        })
+        expect(res.status).toBe(400)
+        expect(getState("mcp-no-xml")?.xml).toBe("<mxfile>kept</mxfile>")
+    })
+
     it("decodes UTF-8 characters split across body chunks", async () => {
         const xml = `<mxfile>${"数据".repeat(30000)}</mxfile>`
         const body = Buffer.from(JSON.stringify({ sessionId: "mcp-utf8", xml }))

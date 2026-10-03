@@ -477,6 +477,11 @@ function handleStateApi(
                     return
                 }
 
+                if (typeof data.xml !== "string") {
+                    res.writeHead(400, { "Content-Type": "application/json" })
+                    res.end(JSON.stringify({ error: "xml must be a string" }))
+                    return
+                }
                 const version = setState(sessionId, data.xml, data.svg, true)
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ success: true, version }))

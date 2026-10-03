@@ -245,4 +245,22 @@ describe("validateAndFixXml strict checks", () => {
         expect(r.fixed).toContain('as="sourcePoint"')
         expect(r.fixed).toContain('<mxPoint x="1" y="2"/>')
     })
+
+    it("finds an orphan mxPoint after an empty <Array/>", () => {
+        const edge = (id: string, points: string) =>
+            `<mxCell id="${id}" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${points}</mxGeometry></mxCell>`
+        const r = validateAndFixXml(
+            model(
+                edge("e1", `<Array as="points"/>`) +
+                    `<mxCell id="v" vertex="1" parent="1"><mxGeometry x="1" y="1" width="9" height="9" as="geometry"><mxPoint x="5" y="5"/></mxGeometry></mxCell>` +
+                    edge(
+                        "e2",
+                        `<Array as="points"><mxPoint x="1" y="2"/></Array>`,
+                    ),
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).not.toContain('<mxPoint x="5" y="5"/>')
+        expect(r.fixed).toContain('<mxPoint x="1" y="2"/>')
+    })
 })

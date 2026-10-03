@@ -49,10 +49,10 @@ describe("Autosaver", () => {
         )
     })
 
-    it("keeps only the newest files", () => {
+    it("keeps only the newest session files and never touches other files", () => {
         const dir = tempDir()
         const saver = new Autosaver(dir, 10, 2)
-        for (const [i, id] of ["mcp-old", "mcp-mid"].entries()) {
+        for (const [i, id] of ["mine", "mcp-old", "mcp-mid"].entries()) {
             writeFileSync(join(dir, `${id}.drawio`), DIAGRAM)
             utimesSync(join(dir, `${id}.drawio`), 1000 + i, 1000 + i)
         }
@@ -61,6 +61,7 @@ describe("Autosaver", () => {
         expect(readdirSync(dir).sort()).toEqual([
             "mcp-mid.drawio",
             "mcp-new.drawio",
+            "mine.drawio",
         ])
     })
 

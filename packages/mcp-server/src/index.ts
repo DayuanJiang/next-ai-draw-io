@@ -59,7 +59,7 @@ import {
     serializeMxfile,
     wrapCellsInModel,
 } from "./pages.js"
-import { Autosaver, defaultDataDir } from "./persistence.js"
+import { Autosaver, defaultDataDir, hasCells } from "./persistence.js"
 import { getShapeLibrary, SHAPE_LIBRARY_GROUPS } from "./shape-library.js"
 import { validateAndFixXml } from "./xml-validation.js"
 
@@ -670,8 +670,8 @@ server.registerTool(
             if (!gate.ok) {
                 log.warn(
                     gate.reason === "stale"
-                        ? "edit_diagram called with unseen browser changes - rejecting to prevent data loss"
-                        : "edit_diagram called without seeing the diagram - rejecting to prevent data loss",
+                        ? "edit_diagram rejected: the browser has changes the model has not seen"
+                        : "edit_diagram rejected: the model has not seen the diagram yet",
                 )
                 // The error carries the current page, so the model has now
                 // seen it and can retry without a get_diagram round-trip.
@@ -926,6 +926,7 @@ function exportViaBrowser(
             live.exportData = undefined
             live.exportFormat = undefined
             live.exportXml = undefined
+            live.exportOptions = undefined
         }
         return exportData
     })
@@ -1009,12 +1010,7 @@ server.registerTool(
                 return previewStalledError(currentSession.id)
             }
             const xml = getState(currentSession.id)?.xml || currentSession.xml
-            // Any cell besides the root cells "0" and "1"
-            if (
-                !/<(mxCell\b[^>]*\bid="(?![01]")|UserObject\b|object\b)/.test(
-                    xml,
-                )
-            ) {
+            if (!hasCells(xml)) {
                 return {
                     content: [{ type: "text", text: "The diagram is empty." }],
                 }
@@ -1026,18 +1022,26 @@ server.registerTool(
                 page_index,
             })
             let pageId: string | undefined
+            let projectionXml: string | undefined
             if (hasPageSelector(pageSelector)) {
-                pageId = pageIdFor(normalizeToMxfile(xml) ?? xml, pageSelector)
+                const doc = normalizeToMxfile(xml) ?? xml
+                pageId = pageIdFor(doc, pageSelector)
+                // A page without an id: load just that page and capture
+                // it, as export_diagram does
                 if (!pageId) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Error: Page ${describeSelector(pageSelector)} not found.`,
-                            },
-                        ],
-                        isError: true,
+                    const projection = projectPage(doc, pageSelector)
+                    if (!projection.ok) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Error: Page ${describeSelector(pageSelector)} not found.`,
+                                },
+                            ],
+                            isError: true,
+                        }
                     }
+                    projectionXml = projection.xml
                 }
             }
 
@@ -1046,7 +1050,7 @@ server.registerTool(
                 data = await exportViaBrowser(
                     currentSession.id,
                     "png",
-                    undefined,
+                    projectionXml,
                     { width, pageId },
                 )
                 if (!data || data.length <= MAX_SCREENSHOT_CHARS) break

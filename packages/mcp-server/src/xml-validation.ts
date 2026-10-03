@@ -369,7 +369,8 @@ function findOrphanMxPoints(
     xml: string,
 ): Array<{ start: number; end: number }> {
     const arrays: Array<[number, number]> = []
-    for (const m of xml.matchAll(/<Array\b[^>]*>[\s\S]*?<\/Array>/g)) {
+    // (?<!\/) skips an empty <Array/>, which has no points inside
+    for (const m of xml.matchAll(/<Array\b[^>]*(?<!\/)>[\s\S]*?<\/Array>/g)) {
         arrays.push([m.index, m.index + m[0].length])
     }
     const orphans: Array<{ start: number; end: number }> = []
