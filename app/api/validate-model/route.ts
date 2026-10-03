@@ -47,7 +47,6 @@ export async function POST(req: Request) {
             // Note: Express Mode only needs vertexApiKey
             vertexApiKey,
         } = body
-
         if (!provider || !modelId) {
             return NextResponse.json(
                 { valid: false, error: "Provider and model ID are required" },
@@ -299,7 +298,7 @@ export async function POST(req: Request) {
                                 messages: [
                                     { role: "user", content: "Say 'OK'" },
                                 ],
-                                max_tokens: 20,
+                                max_tokens: 1000,
                                 stream: true,
                                 enable_thinking: false,
                             }),
@@ -415,7 +414,7 @@ export async function POST(req: Request) {
         await generateText({
             model,
             prompt: "Say 'OK'",
-            maxOutputTokens: 20,
+            maxOutputTokens: 1000,
         })
         const responseTime = Date.now() - startTime
 
