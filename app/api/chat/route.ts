@@ -3,8 +3,10 @@ import {
     convertToModelMessages,
     createUIMessageStream,
     createUIMessageStreamResponse,
+    generateText,
     InvalidToolInputError,
     LoadAPIKeyError,
+    Output,
     stepCountIs,
     streamText,
 } from "ai"
@@ -39,6 +41,14 @@ import {
     withOutputTokenLimitFallback,
 } from "@/lib/output-token-limit"
 import { findServerModelById } from "@/lib/server-model-config"
+import {
+    extractUserPrompt,
+    MAX_FILTERED_SHAPES,
+    parseShapeDoc,
+    rebuildShapeDoc,
+    SHAPE_FILTER_THRESHOLD,
+    selectShapes,
+} from "@/lib/shape-library-filter"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
 
@@ -734,7 +744,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                             "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
                         ),
                 }),
-                execute: async ({ library }) => {
+                execute: async ({ library }, { messages, abortSignal }) => {
                     // Sanitize input - prevent path traversal attacks
                     const sanitizedLibrary = library
                         .toLowerCase()
@@ -761,7 +771,69 @@ Call this tool to get shape names and usage syntax for a specific library.`,
 
                     try {
                         const content = await fs.readFile(filePath, "utf-8")
-                        return content
+
+                        // Large libraries are filtered down to the shapes
+                        // relevant to the user's request; everything else
+                        // (small libraries, unrecognized formats) is returned
+                        // in full.
+                        const parsed = parseShapeDoc(content)
+                        if (
+                            !parsed ||
+                            parsed.totalShapes < SHAPE_FILTER_THRESHOLD
+                        ) {
+                            return content
+                        }
+
+                        const userPrompt = extractUserPrompt(messages)
+                        if (!userPrompt) {
+                            return content
+                        }
+
+                        // Secondary LLM call to pick the most relevant shapes.
+                        // On any failure (provider error, schema validation,
+                        // empty selection) we fall back to the full document -
+                        // never return zero shapes.
+                        let selected: string[] = []
+                        try {
+                            const { output } = await generateText({
+                                model,
+                                temperature: 0,
+                                maxOutputTokens: 2000,
+                                abortSignal,
+                                output: Output.object({
+                                    schema: z.object({
+                                        shapes: z
+                                            .array(z.string())
+                                            .describe(
+                                                "Most relevant shape names, copied exactly from the list",
+                                            ),
+                                    }),
+                                }),
+                                prompt: `You are helping build a draw.io diagram. From the shape list below, pick the ${MAX_FILTERED_SHAPES} most relevant shapes for the user's request.
+
+User request: "${userPrompt}"
+
+Shape list:
+${parsed.groups.flatMap((group) => group.shapes).join("\n")}
+
+Return only shape names that appear exactly in the list.`,
+                            })
+                            selected = selectShapes(
+                                parsed,
+                                output?.shapes ?? [],
+                            )
+                        } catch (error) {
+                            console.error(
+                                `[get_shape_library] Shape filtering failed for "${library}", returning full library:`,
+                                error,
+                            )
+                        }
+
+                        if (selected.length === 0) {
+                            return content
+                        }
+
+                        return rebuildShapeDoc(parsed, selected)
                     } catch (error) {
                         if (
                             (error as NodeJS.ErrnoException).code === "ENOENT"
