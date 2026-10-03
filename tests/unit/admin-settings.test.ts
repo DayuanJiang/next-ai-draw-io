@@ -136,9 +136,9 @@ describe("isSettingsWritable", () => {
         expect(isSettingsWritable()).toBe(true)
     })
 
-    it("returns false for an unwritable path", () => {
+    it("returns false when the settings path is a directory", () => {
         _resetForTests()
-        process.env.SETTINGS_FILE = "/nonexistent-root-dir/settings.json"
+        process.env.SETTINGS_FILE = tmpDir
         expect(isSettingsWritable()).toBe(false)
     })
 })
@@ -152,7 +152,9 @@ describe("settings file on disk", () => {
             version: 1,
             values: { TEST_ADMIN_VAR: "secret" },
         })
-        const mode = fs.statSync(filePath).mode & 0o777
-        expect(mode).toBe(0o600)
+        if (process.platform !== "win32") {
+            const mode = fs.statSync(filePath).mode & 0o777
+            expect(mode).toBe(0o600)
+        }
     })
 })
