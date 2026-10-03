@@ -13,4 +13,5 @@ export interface ToolPartLike {
         operations?: DiagramOperation[]
     } & Record<string, unknown>
     output?: string
+    errorText?: string
 }
