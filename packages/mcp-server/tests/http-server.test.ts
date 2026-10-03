@@ -254,11 +254,15 @@ describe("export requests", () => {
 })
 
 describe("preview page", () => {
-    it("serves a script that parses", async () => {
+    it("serves scripts that parse, with every placeholder filled", async () => {
         const res = await request("/?mcp=mcp-test-script")
-        const script = res.body.match(/<script>([\s\S]*)<\/script>/)?.[1]
-        expect(script).toBeTruthy()
-        expect(() => new Function(script as string)).not.toThrow()
+        expect(res.body).not.toContain("{{")
+        // Both scripts share one global scope in the page
+        const scripts = [...res.body.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+            .map((m) => m[1])
+            .join("\n")
+        expect(scripts).toContain('const sessionId = "mcp-test-script";')
+        expect(() => new Function(scripts)).not.toThrow()
     })
 })
 

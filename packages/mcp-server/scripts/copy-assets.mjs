@@ -15,3 +15,8 @@ for (const file of readdirSync(libSrc)) {
         cpSync(join(libSrc, file), join(libDest, file))
     }
 }
+
+// Browser preview page (HTML, CSS and script)
+cpSync(join(pkg, "src/preview"), join(pkg, "dist/preview"), {
+    recursive: true,
+})

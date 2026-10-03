@@ -3,7 +3,13 @@
 // Run after `npm run build`.
 import { execSync } from "node:child_process"
 
-const REQUIRED = ["dist/index.js", "dist/shape-libraries/aws4.md"]
+const REQUIRED = [
+    "dist/index.js",
+    "dist/shape-libraries/aws4.md",
+    "dist/preview/index.html",
+    "dist/preview/preview.css",
+    "dist/preview/preview.js",
+]
 
 const [pack] = JSON.parse(
     execSync("npm pack --dry-run --json", { encoding: "utf8" }),

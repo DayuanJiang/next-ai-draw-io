@@ -7,7 +7,7 @@
     },
     "files": {
         "ignoreUnknown": false,
-        "includes": ["**", "!public"]
+        "includes": ["**", "!public", "!packages/mcp-server/src/preview"]
     },
     "formatter": {
         "enabled": true,
