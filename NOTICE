@@ -1,0 +1,52 @@
+next-ai-draw-io
+Copyright the next-ai-draw-io contributors
+
+This product includes software developed by third parties, as set out below.
+
+--------------------------------------------------------------------------------
+lib/diagram-engine/ — layout and rendering
+--------------------------------------------------------------------------------
+
+The declarative layout algorithm (bottom-up measure, top-down place, sibling
+size equalisation), the swimlane-pool geometry, and the mxCell/style emission in
+`lib/diagram-engine/layout.ts` and `lib/diagram-engine/render.ts` are derived
+from drawio-ai-kit:
+
+    https://github.com/sparklabx/drawio-ai-kit
+    Copyright (c) sparklabx
+    Licensed under the MIT License
+
+Original to this repository:
+
+  - the XML→tree reverse parser (`parse.ts`), which that project does not have
+  - the style-marker scheme (`markers.ts`) that lets structure survive a
+    round-trip through the draw.io editor
+  - the structural-operations layer (`operations.ts`)
+  - the invisible-container approach that replaces that project's "phantom" nodes
+  - the edge router (`route.ts`)
+  - the graph→layers pass (`graph.ts`): layer assignment, cycle breaking and
+    barycentre crossing reduction, which turn a flat node/arrow list into a
+    flowchart
+  - the sequence-diagram and radial (mind map / org chart) layouts
+
+--------------------------------------------------------------------------------
+lib/diagram-engine/data/aws-stencils.json — stencil catalog
+--------------------------------------------------------------------------------
+
+A name→style map for the mxgraph.aws4 stencil family, generated from
+drawio-ai-kit's `catalog/aws.json`, which in turn was generated from the draw.io
+shape index published by jgraph:
+
+    https://github.com/jgraph/drawio-mcp
+    Copyright (c) JGraph Ltd
+    Licensed under the Apache License, Version 2.0
+
+The style strings are reproduced verbatim from that index. They reference the
+official AWS Architecture Icons, which are trademarks of Amazon Web Services and
+are NOT covered by this repository's licence. Their use is governed by the AWS
+Architecture Icons terms:
+
+    https://aws.amazon.com/architecture/icons/
+
+The catalog contains stencil *names and style strings* only — it does not embed
+any AWS icon artwork. draw.io supplies the artwork at render time.

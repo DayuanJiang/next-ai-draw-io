@@ -110,6 +110,7 @@ Here are some example prompts and their generated diagrams:
 -   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
 -   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
+-   **Computed Layout**: For architecture diagrams, flowcharts, swimlane/BPMN diagrams, sequence diagrams, mind maps and org charts, the AI declares only the structure — what contains what, or what points at what — and the app computes every coordinate, size and arrow route. Containers always fit their contents, siblings never overlap, and arrows are routed around the shapes they would otherwise cross. Anything you then move or recolour by hand is read back as part of the diagram, so a later edit does not undo it.
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
 ## MCP Server

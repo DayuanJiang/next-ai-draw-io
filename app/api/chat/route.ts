@@ -8,9 +8,7 @@ import {
     stepCountIs,
     streamText,
 } from "ai"
-import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
-import path from "path"
 import { z } from "zod"
 import {
     getAIModel,
@@ -23,6 +21,7 @@ import {
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
+import { OperationSchema, searchStencils } from "@/lib/diagram-engine"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
@@ -46,7 +45,11 @@ import { getUserIdFromRequest } from "@/lib/user-id"
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
 // which is also where Node's response-body timeout on the upstream stream lands.
 
-// Helper function to create cached stream response
+// Helper function to create cached stream response.
+//
+// This replays a stored XML answer straight to the canvas, so it still speaks the
+// `display_diagram` wire format even though the model can no longer call that tool: the client
+// handler for it is what puts XML on the canvas. Nothing here goes through the model.
 function createCachedStreamResponse(xml: string): Response {
     const toolCallId = `cached-${Date.now()}`
 
@@ -565,15 +568,6 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
                             },
                         }
                     }
-                    if (toolCall.toolName === "display_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                xml: "",
-                                _error: "JSON repair failed - empty diagram",
-                            },
-                        }
-                    }
                     return null
                 }
             }
@@ -613,44 +607,6 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         },
         tools: {
             // Client-side tool that will be executed on the client
-            display_diagram: {
-                description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
-
-VALIDATION RULES (XML will be rejected if violated):
-1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
-2. Do NOT include root cells (id="0" or id="1") - they are added automatically
-3. All mxCell elements must be siblings - never nested
-4. Every mxCell needs a unique id (start from "2")
-5. Every mxCell needs a valid parent attribute (use "1" for top-level)
-6. Escape special chars in values: &lt; &gt; &amp; &quot;
-
-Example (generate ONLY this - no wrapper tags):
-<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
-
-Notes:
-- For AWS diagrams, use **AWS 2025 icons**.
-- For animated connectors, add "flowAnimation=1" to edge style.
-`,
-                inputSchema: z.object({
-                    xml: z
-                        .string()
-                        .describe("XML string to be displayed on draw.io"),
-                }),
-            },
             edit_diagram: {
                 description: `Edit the current diagram by ID-based operations (update/add/delete cells).
 
@@ -693,87 +649,169 @@ Example - Delete container (children & edges auto-deleted):
                         .describe("Array of operations to apply"),
                 }),
             },
-            append_diagram: {
-                description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.
+            restructure_diagram: {
+                description: `Build or edit a diagram by declaring STRUCTURE. The engine computes every coordinate.
 
-WHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).
+PREFER THIS over edit_diagram whenever the diagram's meaning is in nesting or in a fixed frame: cloud architecture, swimlane/BPMN, sequence diagrams, mind maps, org charts — AND poster-style layouts: paper summaries, cheat sheets, infographics, comparison sheets. You declare what contains what; layout, sizing, alignment and arrow routing are computed. Containers always fit their contents and siblings never overlap, so the usual layout problems cannot occur.
 
-CRITICAL INSTRUCTIONS:
-1. Do NOT include any wrapper tags - just continue the mxCell elements
-2. Continue from EXACTLY where your previous output stopped
-3. Complete the remaining mxCell elements
-4. If still truncated, call append_diagram again with the next fragment
+The layout model is FLEXBOX. row/col containers nest freely; a box with internal structure is an invisible col container (pad 10-14) holding smaller boxes. Three knobs: grow (columns split leftover WIDTH by weight — grow 3 / grow 2 gives a 3:2 page; for containers in a row, not for leaf boxes), align "stretch" (child fills its column's width; content keeps natural height and packs to the top — the engine leaves leftover vertical space at the bottom, never inflates boxes to fill it, so balance columns by moving content between them), pad (8-14 tight card, default 24 roomy section). Labels take inline HTML — <b>, <i>, <font color="#...">, <br> — so one box carries a bold keyword, a second paragraph, a coloured verdict line. Paragraphs set themselves flush-left automatically; short labels centre. Emoji in headings (💡 Core Idea) read instantly.
 
-Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
+DECLARE THE PAGE SHAPE FIRST, with set_page. aspect is width:height — 1 square, 1.4 a landscape slide, 0.75 a portrait poster, 1.6 a wide architecture diagram. This is the one thing that has to come before everything else: it gives the top level a definite width, and until there is one there is no spare room to share out, so grow weights and column fractions have no effect at all. A row that then cannot fit wraps onto a second line rather than running off to the right.
+
+LAYOUT, TYPE AND SURFACE — Tailwind classes. Every add_container and add_box takes class, and it is the preferred way to say these things. Colour is the one thing a class never carries: that comes from role and group.
+  proportion    grow-3 / flex-3 / w-2/3 — a column's share of the row. Add min-w-0 to BOTH columns when you want the ratio exactly: without it a column will not shrink below the width of its own text, so a declared 3:1 lands wherever the text allows (this is how flexbox behaves in a browser too).
+  direction     flex-row, flex-col (or the dir field, which a class cannot override)
+  cross axis    items-stretch on the container (cards all span the same width — this is what makes a column line up), or self-start / self-center / self-end / self-stretch on one child
+  main axis     justify-start (default: packed, spare room at the far end) / justify-center / justify-end / justify-between / justify-around / justify-evenly. Reach for justify-between when a short column would otherwise leave a hole at the bottom.
+  spacing       gap-4 between children, p-6 inside. Tailwind's 4px scale, so gap-4 is 16px and p-6 is 24px. Use the scale; there is no gap-7.5.
+  width cap     max-w-md (448) or max-w-96, up to max-w-4xl. A capped box rewraps its text instead of stretching, which is what stops one long sentence flattening the page. A cap beats grow.
+  type          font-bold / font-normal, italic, underline, line-through, text-xs..text-4xl (12/14/16/18/20/24/30/36px), text-left|center|right, align-top|middle|bottom, whitespace-nowrap. An explicit alignment beats the engine's own "this looks like a paragraph" rule, so use text-center when you want a long label centred. line-through is for a superseded or cancelled step.
+  border        border or border-N for thickness, border-dashed / border-dotted / border-solid. A dashed frame is the conventional way to draw something planned, optional or purely logical. border-none removes the outline entirely, which is how you draw a plain colour field.
+  corners       rounded, rounded-sm, rounded-md, rounded-lg, rounded-xl, rounded-2xl, rounded-3xl, rounded-4xl (4/4/6/8/12/16/24/32px), rounded-full for a capsule, rounded-none for square. Real pixels, so the same class is the same corner on every box. Overrides the corner of a shape that has one, which is what you want on round and terminator.
+  elevation     shadow-sm / shadow-md / shadow-lg / shadow-xl, shadow-none. Use it to lift a card off a panel; one level on one group of cards, not on everything.
+NOT supported, and dropped with a note telling you which: EVERY colour class (bg-*, text-red-*, border-blue-*) and gradients — colour comes from role and group; the seven font weights between font-thin and font-black, because draw.io has one bold bit rather than a weight ladder; opacity-* (Tailwind's is any number, not a scale); truncate (draw.io cannot draw the ellipsis, so text would just be cut); PER-SIDE borders (border-l, border-t-4) — draw.io draws these with a shape called partialRectangle, which would take the place of the node's own shape, and what a node IS matters more than which of its edges show; PER-SIDE padding (pt-4, px-2) — the engine has one padding value, and draw.io's per-side keys pad the LABEL rather than making room for children; per-corner radius (rounded-tl-lg); text-shadow-*; tracking-* and uppercase/lowercase/capitalize and leading-* (draw.io has no letter-spacing, no text-transform and no per-node line height); outline-*, hover:*, responsive prefixes, and all transforms.
+
+PLAN THE COLUMNS BEFORE THE FIRST OPERATION. The engine places exactly what you declare; a column that runs out of content early leaves a hole at the bottom of the page and nothing later can fill it. So: list each section with a rough character count (heading ~20, paragraph ~its length, comparison card ~the sum of its parts, add_graph ~400); a column twice as wide runs about half as tall, so a column's SHARE OF THE TOTAL CONTENT must match its grow weight — grow 3 beside grow 1 holds about three times the characters, never fewer; add the columns up and check the ratio before emitting anything (1200 vs 1100 chars is grow 1 / grow 1, and wanting grow 3 / grow 1 for 900 vs 1100 means the plan is wrong — move sections across or equalise the weights); a full-width element (masthead, footnote, wide diagram) is its own row above or below the row of columns, never inside one, because a 900-wide diagram in one column forces that column wide and strands the others. State the numbers in your preamble ("left ~N chars / right ~M, so grow X / Y") — writing them down is what catches the mismatch.
+
+For a POSTER (paper summary, cheat sheet): set_page with aspect 0.75 (portrait) or 1.4 (landscape); one col container as the page with class "gap-4"; a banner box as the masthead with class "self-stretch" (do NOT also use set_title — the banner IS the title); a muted box for the byline; a row container class "gap-4" holding 2-4 col containers as columns, each class "grow-N min-w-0 items-stretch"; each section a heading-role box + content boxes. Give each section a distinct group name — sections sharing a group share a hue, so groups are how the poster gets its colour. Use roles on boxes: callout for the core idea, good/bad for verdict pairs, metric for the headline number, muted for fine print. A comparison card: add_container dir=col class="gap-2 p-3 grow-1 items-stretch" role=bad, then a bold title box, the body text, a role=bad answer bar, and a coloured "<font color=\\"#B85450\\"><b>✗ Often Wrong</b></font>" verdict with class "self-start".
+{"operations":[
+  {"op":"set_page","aspect":0.8},
+  {"op":"add_container","id":"page","label":"","dir":"col","class":"gap-4"},
+  {"op":"add_box","id":"mast","parent":"page","label":"Chain-of-Thought Prompting","role":"banner","class":"self-stretch"},
+  {"op":"add_container","id":"cols","parent":"page","label":"","dir":"row","class":"gap-4"},
+  {"op":"add_container","id":"left","parent":"cols","label":"","dir":"col","class":"grow-2 min-w-0 gap-3 items-stretch"},
+  {"op":"add_container","id":"right","parent":"cols","label":"","dir":"col","class":"grow-1 min-w-0 gap-3 items-stretch"},
+  {"op":"add_box","id":"h1","parent":"left","label":"What it is","role":"heading","group":"idea"},
+  {"op":"add_box","id":"p1","parent":"left","label":"Ask the model to show its steps...","group":"idea"}
+]}
+(Two thirds of the characters go in the grow-2 column, one third in the grow-1 column.)
+
+Never write coordinates, mxCell XML, or style strings. Look AWS icon names up with search_stencils first — an invented name is rejected with suggestions.
+
+Operations are applied in order, so you can add a container and fill it in the same call:
+{"operations":[
+  {"op":"add_container","id":"vpc","label":"VPC 10.0.0.0/16","dir":"col","gname":"group_vpc"},
+  {"op":"add_icon","id":"alb","parent":"vpc","name":"application_load_balancer","label":"ALB"},
+  {"op":"add_icon","id":"ec2","parent":"vpc","name":"ec2","label":"EC2"},
+  {"op":"link","source":"alb","target":"ec2","label":"route","step":1}
+]}
+
+Editing an existing diagram: the structure is re-read from the canvas each time, INCLUDING anything the user moved or recoloured by hand. To add one service, send one operation — do not re-send the diagram.
+
+CLOUD ARCHITECTURE (AWS/Azure/GCP/Kubernetes) — every zone is a container, and each one's dir is what makes the diagram readable: dir follows the traffic. Nesting is Region -> VPC -> Availability Zone -> Subnet, and managed/global services (CloudFront, Route 53, S3, DynamoDB, SQS, SNS, WAF, CloudWatch) sit OUTSIDE the VPC — a regional service inside a subnet states something false about the network. Use dir "row" wherever things are PEERS (availability zones side by side, replicas, a set of regional services) and dir "col" wherever traffic FLOWS THROUGH (the tiers inside one zone: public -> app -> data, top to bottom). Label every zone with its scope ("Availability Zone A", "Private Subnet (App)", "VPC 10.0.0.0/16") — an unlabelled frame makes the reader guess what the boundary means. Put the actor (Users / Internet) OUTSIDE the region as a plain box with shape "person" or "cloud" and link it inwards; it is not infrastructure. Two availability zones is the right default for "a sample architecture" — one reads as a single point of failure, three repeats the same information a third time. Number the request path on the links ("1. HTTPS", "2. forward", "3. route", "4. query") so the reader has an entry point, and make cross-cutting links (replication, telemetry) dashed and unnumbered. Keep each zone to 1-4 icons: one is fine when the boundary itself is the point (a subnet holding one NAT gateway), ten is a wall of icons — split it or use add_grid.
+{"operations":[
+  {"op":"add_box","id":"users","label":"Users / Internet","shape":"person"},
+  {"op":"add_container","id":"region","label":"Region (ap-southeast-1)","dir":"row","gname":"group_region"},
+  {"op":"add_container","id":"vpc","parent":"region","label":"VPC 10.0.0.0/16","dir":"col","gname":"group_vpc"},
+  {"op":"add_icon","id":"igw","parent":"vpc","name":"internet_gateway","label":"Internet Gateway"},
+  {"op":"add_icon","id":"alb","parent":"vpc","name":"application_load_balancer","label":"ALB"},
+  {"op":"add_container","id":"azs","parent":"vpc","dir":"row"},
+  {"op":"add_container","id":"az_a","parent":"azs","label":"Availability Zone A","dir":"col","gname":"group_availability_zone"},
+  {"op":"add_container","id":"pub_a","parent":"az_a","label":"Public Subnet","dir":"col","gname":"group_subnet"},
+  {"op":"add_icon","id":"nat_a","parent":"pub_a","name":"nat_gateway","label":"NAT Gateway"},
+  {"op":"add_container","id":"app_a","parent":"az_a","label":"Private Subnet (App)","dir":"col","gname":"group_subnet"},
+  {"op":"add_icon","id":"ec2_a","parent":"app_a","name":"ec2","label":"EC2 / ECS"},
+  {"op":"add_container","id":"db_a","parent":"az_a","label":"Private Subnet (Data)","dir":"col","gname":"group_subnet"},
+  {"op":"add_icon","id":"rds_a","parent":"db_a","name":"rds","label":"RDS (Primary)"},
+  {"op":"add_container","id":"reg_svc","parent":"region","label":"Regional / Edge services","dir":"col"},
+  {"op":"add_icon","id":"waf","parent":"reg_svc","name":"waf","label":"AWS WAF"},
+  {"op":"link","source":"users","target":"igw","label":"1. HTTPS"},
+  {"op":"link","source":"igw","target":"alb","label":"2. forward"},
+  {"op":"link","source":"alb","target":"ec2_a","label":"3. route"},
+  {"op":"link","source":"ec2_a","target":"rds_a","label":"4. query"},
+  {"op":"link","source":"rds_a","target":"rds_b","label":"Multi-AZ replication","dashed":true}
+]}
+(az_b mirrors az_a, with RDS labelled "(Standby)".)
+
+CONTAINERS — pick by what the diagram means:
+
+add_container: children stacked along one axis. dir "row" side by side, "col" one above the next. An empty label makes an invisible grouping wrapper (use it to group columns without drawing another frame). gname is an AWS group stencil (group_region, group_vpc, group_availability_zone, group_subnet, group_account) — omit it for a plain titled frame.
+
+add_grid: packs children into cols columns. Use it to pack 3-8 related icons into one labelled area rather than giving each its own frame.
+
+add_graph: an ARROW-ORDERED block. Give it nodes and edges, NO positions and NO nesting: the engine reads the arrows to work out how many rows the diagram has, which nodes share a row, and who goes left of whom — chosen to keep arrows from crossing each other or running through unrelated boxes. Loops and arrows that skip ahead are fine.
+  THIS IS THE ONLY WAY TO DRAW A FLOWCHART. Use it for flowcharts, decision trees, process and approval flows, CI/CD pipelines, state machines, git/branching workflows, dependency graphs, ER diagrams, site maps, data-flow diagrams, and any "illustrate how X works" where X is a sequence of steps or states. Never build one out of add_container/add_box by hand: declaring a flowchart as nesting puts every step in one column, so each branch has to jump over the step beside it.
+  Omit parent for a whole-page flowchart; set parent to put a flow inside one zone of a bigger diagram (a pipeline in an architecture diagram, a small flowchart in a poster column), where the block then joins the outer layout like any node. dir: "col" (default) flows down, "row" flows right.
+  Redrawing a whole-page flowchart: send clear first. One new arrow can change which row several nodes belong in, so a flowchart is rebuilt rather than patched.
+{"operations":[
+  {"op":"clear"},
+  {"op":"add_graph","id":"flow","nodes":[
+    {"id":"start","label":"Order received","shape":"terminator"},
+    {"id":"check","label":"Amount > $1000?","shape":"decision"},
+    {"id":"mgr","label":"Manager approval"},
+    {"id":"auto","label":"Auto-approve"},
+    {"id":"ship","label":"Ship order"}
+  ],"edges":[
+    {"source":"start","target":"check"},
+    {"source":"check","target":"mgr","label":"yes"},
+    {"source":"check","target":"auto","label":"no"},
+    {"source":"mgr","target":"ship"},
+    {"source":"auto","target":"ship"}
+  ]},
+  {"op":"set_title","title":"Order Approval"}
+]}
+  Grouping: when the nodes fall into natural zones (remote vs local, frontend vs backend, roles, phases), set the same group name on each zone's nodes and the engine colours each zone consistently. Set icon instead of shape to draw a node as a catalog icon.
+
+add_pool: a SWIMLANE diagram. lanes are the roles, top to bottom. Set orientation to "vertical" for vertical swimlanes, where the lanes become columns and the flow runs downwards. Each step is an add_box with lane (which role owns it) and col (which step of the process it is); columns advance left to right and an empty cell means that role does nothing at that point. Two steps with the same col happen at the same time. phases optionally labels groups of columns.
+{"operations":[
+  {"op":"add_pool","id":"p","label":"Expense claim","lanes":["Employee","Manager","Finance"],"phases":["Submit","Review","Pay"]},
+  {"op":"add_box","id":"fill","parent":"p","label":"Fill form","lane":0,"col":0,"shape":"terminator"},
+  {"op":"add_box","id":"rev","parent":"p","label":"Review","lane":1,"col":1},
+  {"op":"add_box","id":"ok","parent":"p","label":"Approved?","lane":1,"col":2,"shape":"decision"},
+  {"op":"add_box","id":"pay","parent":"p","label":"Pay out","lane":2,"col":3},
+  {"op":"link","source":"fill","target":"rev"},{"op":"link","source":"rev","target":"ok"},
+  {"op":"link","source":"ok","target":"pay","label":"yes"}
+]}
+
+add_sequence: a SEQUENCE diagram. One add_box per participant, left to right in the order they first act; the engine draws each one's lifeline. Every message is a link with a step number giving its order — number them 1, 2, 3… as they happen, and make a reply its own link back. A participant calling itself is a link from a node to itself.
+{"operations":[
+  {"op":"add_sequence","id":"s","label":"Login flow"},
+  {"op":"add_box","id":"u","parent":"s","label":"User"},
+  {"op":"add_box","id":"api","parent":"s","label":"API"},
+  {"op":"add_box","id":"db","parent":"s","label":"Database"},
+  {"op":"link","source":"u","target":"api","label":"POST /login","step":1},
+  {"op":"link","source":"api","target":"db","label":"find user","step":2},
+  {"op":"link","source":"db","target":"api","label":"user record","step":3},
+  {"op":"link","source":"api","target":"u","label":"JWT","step":4}
+]}
+
+add_radial: a MIND MAP or ORG CHART. Add every node with the radial container as its parent — a FLAT list, never nested inside another box — and let the links carry the hierarchy: link parent to child. The node nothing points at becomes the centre. spread "radial" fans branches out both sides (a mind map); "down" hangs everything below its parent (an org chart, where a reporting line only reads correctly downwards).
+{"operations":[
+  {"op":"add_radial","id":"o","label":"","spread":"down"},
+  {"op":"add_box","id":"ceo","parent":"o","label":"CEO"},
+  {"op":"add_box","id":"cto","parent":"o","label":"CTO"},
+  {"op":"add_box","id":"lead","parent":"o","label":"Platform Lead"},
+  {"op":"link","source":"ceo","target":"cto"},{"op":"link","source":"cto","target":"lead"}
+]}
+
+BOX SHAPES: add_box takes shape — "decision" for a branch (diamond), "terminator" for a start/end point, "data" for input or output, "document" for a report, "round" for a soft-edged step. Use them; a reader takes a diamond to mean a choice.`,
                 inputSchema: z.object({
-                    xml: z
-                        .string()
-                        .describe(
-                            "Continuation XML fragment to append (NO wrapper tags)",
-                        ),
+                    operations: z
+                        .array(OperationSchema)
+                        .describe("Structural operations, applied in order"),
                 }),
             },
-            get_shape_library: {
-                description: `Get draw.io shape/icon library documentation with style syntax and shape names.
-
-Available libraries:
-- Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
-- Networking: cisco19, network, kubernetes, vvd, rack
-- Business: bpmn, lean_mapping
-- General: flowchart, basic, arrows2, infographic, sitemap
-- UI/Mockups: android, material_design
-- Enterprise: citrix, sap, mscae, atlassian
-- Engineering: fluidpower, electrical, pid, cabinets, floorplan
-- Icons: webicons
-
-Call this tool to get shape names and usage syntax for a specific library.`,
+            search_stencils: {
+                description: `Find AWS stencil names for restructure_diagram. Returns names and official colours — call this before naming an icon, and batch the whole diagram's lookups into as few calls as possible.`,
                 inputSchema: z.object({
-                    library: z
+                    query: z
                         .string()
                         .describe(
-                            "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
+                            "Service name or keyword, e.g. 's3' or 'nat gateway'",
                         ),
+                    kind: z
+                        .enum(["icon", "group"])
+                        .optional()
+                        .describe(
+                            "Restrict to service icons or container frames",
+                        ),
+                    limit: z.number().optional(),
                 }),
-                execute: async ({ library }) => {
-                    // Sanitize input - prevent path traversal attacks
-                    const sanitizedLibrary = library
-                        .toLowerCase()
-                        .replace(/[^a-z0-9_-]/g, "")
-
-                    if (sanitizedLibrary !== library.toLowerCase()) {
-                        return `Invalid library name "${library}". Use only letters, numbers, underscores, and hyphens.`
-                    }
-
-                    const baseDir = path.join(
-                        process.cwd(),
-                        "docs/shape-libraries",
-                    )
-                    const filePath = path.join(
-                        baseDir,
-                        `${sanitizedLibrary}.md`,
-                    )
-
-                    // Verify path stays within expected directory
-                    const resolvedPath = path.resolve(filePath)
-                    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
-                        return `Invalid library path.`
-                    }
-
-                    try {
-                        const content = await fs.readFile(filePath, "utf-8")
-                        return content
-                    } catch (error) {
-                        if (
-                            (error as NodeJS.ErrnoException).code === "ENOENT"
-                        ) {
-                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, material_design, lean_mapping, openstack, rack`
-                        }
-                        console.error(
-                            `[get_shape_library] Error loading "${library}":`,
-                            error,
-                        )
-                        return `Error loading library "${library}". Please try again.`
-                    }
+                execute: async ({ query, kind, limit }) => {
+                    const hits = searchStencils(query, { kind, limit })
+                    if (hits.length === 0)
+                        return `No stencil matches "${query}". Try a shorter or more general term.`
+                    return JSON.stringify(hits)
                 },
             },
         },

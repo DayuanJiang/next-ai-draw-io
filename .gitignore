@@ -79,3 +79,5 @@ ai-models.json
 
 # admin panel settings (contains secrets)
 data/
+# ...but the diagram engine's stencil catalog is generated source, not settings
+!lib/diagram-engine/data/

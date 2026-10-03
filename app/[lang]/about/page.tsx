@@ -166,6 +166,15 @@ export default function About() {
                             diagrams
                         </li>
                         <li>
+                            <strong>Computed Layout</strong>: For architecture
+                            diagrams, flowcharts, swimlane diagrams, sequence
+                            diagrams, mind maps and org charts, the AI declares
+                            only the structure and the app computes every
+                            coordinate, size and arrow route — so containers fit
+                            their contents, shapes never overlap, and arrows are
+                            routed around what they would otherwise cross
+                        </li>
+                        <li>
                             <strong>Animated Connectors</strong>: Create dynamic
                             and animated connectors between diagram elements for
                             better visualization
