@@ -188,7 +188,8 @@
         "failedToExport": "取得圖表資料時出錯",
         "failedToLoadExample": "載入範例圖片時出錯",
         "failedToRecordFeedback": "記錄您的回饋失敗。請重試。",
-        "storageUpdateFailed": "聊天已清除，但無法更新瀏覽器儲存空間"
+        "storageUpdateFailed": "聊天已清除，但無法更新瀏覽器儲存空間",
+        "sessionSaveFailed": "無法儲存這個對話。瀏覽器儲存空間可能已滿，請在歷史紀錄裡刪除舊對話後重試。"
     },
     "quota": {
         "dailyLimit": "已達每日配額",

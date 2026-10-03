@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useContext, useRef, useState } from "react"
 import type { DrawIoEmbedRef, EventExport } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
@@ -42,6 +42,12 @@ interface DiagramContextType {
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
 
+// Exports for thumbnails, validation PNGs and file saves carry a tag in the
+// request's `message` field. draw.io echoes the request back in the export
+// event, so each result reaches its own caller; untagged exports (chat-panel's
+// onFetchChart) resolve resolverRef.
+type ExportTag = "thumbnail" | "validation"
+
 export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [chartXML, setChartXML] = useState<string>("")
     const [latestSvg, setLatestSvg] = useState<string>("")
@@ -53,8 +59,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
     const resolverRef = useRef<((value: string) => void) | null>(null)
-    // Resolver for PNG export (used for VLM validation)
-    const pngResolverRef = useRef<((value: string) => void) | null>(null)
+    // Pending thumbnail and validation PNG exports, keyed by their export tag
+    const taggedResolversRef = useRef<
+        Partial<Record<ExportTag, (value: string) => void>>
+    >({})
     // Track if we're expecting an export for history (user-initiated)
     const expectHistoryExportRef = useRef<boolean>(false)
     // Track latest chartXML for restoration after remount
@@ -76,10 +84,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setIsDrawioReady(false)
     }
 
-    // Keep chartXMLRef in sync with state for restoration after remount
-    useEffect(() => {
-        chartXMLRef.current = chartXML
-    }, [chartXML])
+    // Update chartXML and its ref together, so callbacks that read the ref
+    // (export handler, autosave) see the new value right away
+    const updateChartXML = (xml: string) => {
+        chartXMLRef.current = xml
+        setChartXML(xml)
+    }
 
     // Track if we're expecting an export for file save (stores raw export data)
     const saveResolverRef = useRef<{
@@ -106,64 +116,52 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    // Export with a tag in `message` (draw.io echoes it back in the export
+    // event) and wait for that result. Resolves to null on timeout, which is
+    // expected occasionally.
+    const requestTaggedExport = (
+        tag: ExportTag,
+        format: "xmlsvg" | "png",
+        timeoutMs: number,
+    ) =>
+        new Promise<string | null>((resolve) => {
+            const finish = (value: string | null) => {
+                clearTimeout(timer)
+                if (taggedResolversRef.current[tag] === finish) {
+                    delete taggedResolversRef.current[tag]
+                }
+                resolve(value)
+            }
+            const timer = setTimeout(() => finish(null), timeoutMs)
+            taggedResolversRef.current[tag] = finish
+            drawioRef.current?.exportDiagram({ format, message: tag })
+        })
+
     // Get current diagram as SVG for thumbnail (used by session storage)
     const getThumbnailSvg = async (): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
-        if (!isRealDiagram(chartXML)) return null
+        if (!isRealDiagram(chartXMLRef.current)) return null
 
-        try {
-            const svgData = await Promise.race([
-                new Promise<string>((resolve) => {
-                    resolverRef.current = resolve
-                    drawioRef.current?.exportDiagram({ format: "xmlsvg" })
-                }),
-                new Promise<string>((_, reject) =>
-                    setTimeout(() => reject(new Error("Export timeout")), 3000),
-                ),
-            ])
-
+        // xmlsvg exports return an SVG data URL
+        const svgData = await requestTaggedExport("thumbnail", "xmlsvg", 3000)
+        if (svgData?.startsWith("data:image/svg")) {
             // Update latestSvg so it's available for future saves
-            if (svgData?.includes("<svg")) {
-                setLatestSvg(svgData)
-                return svgData
-            }
-            return null
-        } catch {
-            // Timeout is expected occasionally - don't log as error
-            return null
+            setLatestSvg(svgData)
+            return svgData
         }
+        return null
     }
 
     // Capture current diagram as PNG for VLM validation
     const captureValidationPng = async (): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
-        if (!isRealDiagram(chartXML)) return null
+        if (!isRealDiagram(chartXMLRef.current)) return null
 
-        try {
-            const pngData = await Promise.race([
-                new Promise<string>((resolve) => {
-                    pngResolverRef.current = resolve
-                    drawioRef.current?.exportDiagram({ format: "png" })
-                }),
-                new Promise<string>((_, reject) =>
-                    setTimeout(
-                        () => reject(new Error("PNG export timeout")),
-                        5000,
-                    ),
-                ),
-            ])
-
-            // PNG data should be a base64 data URL
-            if (pngData?.startsWith("data:image/png")) {
-                return pngData
-            }
-            return null
-        } catch {
-            // Timeout is expected occasionally - don't log as error
-            return null
-        }
+        const pngData = await requestTaggedExport("validation", "png", 5000)
+        // PNG data should be a base64 data URL
+        return pngData?.startsWith("data:image/png") ? pngData : null
     }
 
     const loadDiagram = (
@@ -193,7 +191,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
-        setChartXML(xmlToLoad)
+        updateChartXML(xmlToLoad)
 
         if (drawioRef.current) {
             drawioRef.current.load({
@@ -205,24 +203,17 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleDiagramExport = (data: EventExport) => {
-        // Handle PNG export for VLM validation
-        if (pngResolverRef.current && data.data?.startsWith("data:image/png")) {
-            pngResolverRef.current(data.data)
-            pngResolverRef.current = null
+        // Tagged exports (thumbnail, validation PNG, file save) go only to
+        // their own caller, so they never take the result meant for resolverRef
+        const tag = data.message?.message
+        if (tag === "thumbnail" || tag === "validation") {
+            taggedResolversRef.current[tag]?.(data.data)
             return
         }
-
-        // Handle save to file if requested (process raw data before extraction)
-        if (saveResolverRef.current.resolver) {
-            const format = saveResolverRef.current.format
-            saveResolverRef.current.resolver(data.data, data.xml)
+        if (tag === "save") {
+            saveResolverRef.current.resolver?.(data.data, data.xml)
             saveResolverRef.current = { resolver: null, format: null }
-            // For non-xmlsvg formats, skip XML extraction as it will fail
-            // Only drawio (which uses xmlsvg internally) has the content attribute
-            // xmlsvg is saved directly as SVG file, no need for extraction
-            if (format === "png" || format === "svg" || format === "xmlsvg") {
-                return
-            }
+            return
         }
 
         // Don't write chartXML here: exports don't change the diagram, and
@@ -236,12 +227,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Limit to 20 entries to prevent memory leaks during long sessions
         const MAX_HISTORY_SIZE = 20
         if (expectHistoryExportRef.current) {
+            // Store the full multi-page document (extractedXML is only the
+            // first page), so restoring a version keeps every page
+            const historyXml = chartXMLRef.current || extractedXML
             setDiagramHistory((prev) => {
                 const newHistory = [
                     ...prev,
                     {
                         svg: data.data,
-                        xml: extractedXML,
+                        xml: historyXml,
                     },
                 ]
                 // Keep only the last MAX_HISTORY_SIZE entries (circular buffer)
@@ -256,14 +250,16 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    // react-drawio registers this callback once per iframe mount, so it must
+    // read refs: state captured in its closure would stay stale after a remount
     const handleDiagramAutoSave = (data: { xml?: string }) => {
         if (!data?.xml) return
-        // Don't overwrite a pending restore - if we have a real diagram in state
-        // but DrawIO isn't ready yet, it means we're waiting to restore
-        if (!isDrawioReady && isRealDiagram(chartXML)) {
+        // Don't overwrite a pending restore - if we have a real diagram but
+        // DrawIO hasn't loaded yet, it means we're waiting to restore
+        if (!hasCalledOnLoadRef.current && isRealDiagram(chartXMLRef.current)) {
             return
         }
-        setChartXML(data.xml)
+        updateChartXML(data.xml)
     }
 
     const clearDiagram = () => {
@@ -365,7 +361,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Export diagram - callback will be handled in handleDiagramExport
-        drawioRef.current.exportDiagram({ format: drawioFormat })
+        drawioRef.current.exportDiagram({
+            format: drawioFormat,
+            message: "save",
+        })
     }
 
     // Log save event to Langfuse (just flags the trace, doesn't send content)

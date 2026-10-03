@@ -76,6 +76,17 @@ export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
     // No valid ending found at all
     if (lastValidEnd === -1) return false
 
+    // If the last mxCell has no </mxCell> after it, it must be self-closing.
+    // Otherwise the trailing "/>" belongs to a child such as <mxGeometry .../>
+    // and the output was cut off before the cell was closed.
+    const lastCellStart = trimmed.lastIndexOf("<mxCell")
+    if (
+        lastCellStart > lastMxCellClose &&
+        !/^<mxCell\b[^<]*\/>/.test(trimmed.slice(lastCellStart))
+    ) {
+        return false
+    }
+
     // Check what comes after the last valid ending
     // For />: add 2 chars, for </mxCell>: add 9 chars
     const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
@@ -95,36 +106,12 @@ export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
 export function extractCompleteMxCells(xml: string | undefined | null): string {
     if (!xml) return ""
 
-    const completeCells: Array<{ index: number; text: string }> = []
+    // Match self-closing <mxCell ... /> or <mxCell ...>...</mxCell>, in document order.
+    // The lazy [^>]*? tries "/>" first, so a self-closing cell never swallows
+    // the following cells up to the next </mxCell>.
+    const cellPattern = /<mxCell\b[^>]*?(?:\/>|>[\s\S]*?<\/mxCell>)/g
 
-    // Match self-closing mxCell tags: <mxCell ... />
-    // Also match mxCell with nested mxGeometry: <mxCell ...>...<mxGeometry .../></mxCell>
-    const selfClosingPattern = /<mxCell\s+[^>]*\/>/g
-    const nestedPattern = /<mxCell\s+[^>]*>[\s\S]*?<\/mxCell>/g
-
-    // Find all self-closing mxCell elements
-    let match: RegExpExecArray | null
-    while ((match = selfClosingPattern.exec(xml)) !== null) {
-        completeCells.push({ index: match.index, text: match[0] })
-    }
-
-    // Find all mxCell elements with nested content (like mxGeometry)
-    while ((match = nestedPattern.exec(xml)) !== null) {
-        completeCells.push({ index: match.index, text: match[0] })
-    }
-
-    // Sort by position to maintain order
-    completeCells.sort((a, b) => a.index - b.index)
-
-    // Remove duplicates (a self-closing match might overlap with nested match)
-    const seen = new Set<number>()
-    const uniqueCells = completeCells.filter((cell) => {
-        if (seen.has(cell.index)) return false
-        seen.add(cell.index)
-        return true
-    })
-
-    return uniqueCells.map((c) => c.text).join("\n")
+    return (xml.match(cellPattern) || []).join("\n")
 }
 
 // ============================================================================
@@ -488,6 +475,31 @@ export interface ApplyOperationsResult {
 }
 
 /**
+ * draw.io wraps cells that have links, tooltips or custom data in
+ * <object>/<UserObject>, and the wrapper carries the id instead of the mxCell.
+ */
+function getCellWrapper(cell: Element): Element | null {
+    const parent = cell.parentElement
+    return parent?.tagName === "object" || parent?.tagName === "UserObject"
+        ? parent
+        : null
+}
+
+/** Id of a cell, read from its wrapper when the mxCell has none */
+function getCellId(cell: Element): string | null {
+    return (
+        cell.getAttribute("id") ||
+        getCellWrapper(cell)?.getAttribute("id") ||
+        null
+    )
+}
+
+/** Element to replace or remove for a cell (the wrapper if there is one) */
+function getCellNode(cell: Element): Element {
+    return getCellWrapper(cell) || cell
+}
+
+/**
  * Apply diagram operations (update/add/delete) using ID-based lookup.
  * This replaces the text-matching approach with direct DOM manipulation.
  *
@@ -535,12 +547,14 @@ export function applyDiagramOperations(
         }
     }
 
-    // Build a map of cell IDs to elements
+    // Build a map of cell IDs to elements (wrapper elements for wrapped cells)
     const cellMap = new Map<string, Element>()
     root.querySelectorAll("mxCell").forEach((cell) => {
-        const id = cell.getAttribute("id")
-        if (id) cellMap.set(id, cell)
+        const id = getCellId(cell)
+        if (id) cellMap.set(id, getCellNode(cell))
     })
+    // Cells removed by delete operations in this batch
+    const deletedIds = new Set<string>()
 
     // Process each operation
     for (const op of operations) {
@@ -580,7 +594,7 @@ export function applyDiagramOperations(
             }
 
             // Validate ID matches
-            const newCellId = newCell.getAttribute("id")
+            const newCellId = getCellId(newCell)
             if (newCellId !== op.cell_id) {
                 errors.push({
                     type: "update",
@@ -590,8 +604,8 @@ export function applyDiagramOperations(
                 continue
             }
 
-            // Import and replace the node
-            const importedNode = doc.importNode(newCell, true)
+            // Import and replace the node (with its wrapper, if any)
+            const importedNode = doc.importNode(getCellNode(newCell), true)
             existingCell.parentNode?.replaceChild(importedNode, existingCell)
 
             // Update the map with the new element
@@ -632,7 +646,7 @@ export function applyDiagramOperations(
             }
 
             // Validate ID matches
-            const newCellId = newCell.getAttribute("id")
+            const newCellId = getCellId(newCell)
             if (newCellId !== op.cell_id) {
                 errors.push({
                     type: "add",
@@ -642,8 +656,8 @@ export function applyDiagramOperations(
                 continue
             }
 
-            // Import and append the node
-            const importedNode = doc.importNode(newCell, true)
+            // Import and append the node (with its wrapper, if any)
+            const importedNode = doc.importNode(getCellNode(newCell), true)
             root.appendChild(importedNode)
 
             // Add to map
@@ -661,8 +675,15 @@ export function applyDiagramOperations(
 
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
-                // Cell not found - might have been cascade-deleted by a previous operation
-                // Skip silently instead of erroring (AI may redundantly list children/edges)
+                // Cells cascade-deleted earlier in this batch are skipped silently
+                // (AI may redundantly list children/edges)
+                if (!deletedIds.has(op.cell_id)) {
+                    errors.push({
+                        type: "delete",
+                        cellId: op.cell_id,
+                        message: `Cell with id="${op.cell_id}" not found`,
+                    })
+                }
                 continue
             }
 
@@ -679,7 +700,7 @@ export function applyDiagramOperations(
                     `mxCell[parent="${cellId}"]`,
                 )
                 children.forEach((child) => {
-                    const childId = child.getAttribute("id")
+                    const childId = getCellId(child)
                     if (childId && childId !== "0" && childId !== "1") {
                         collectDescendants(childId)
                     }
@@ -696,7 +717,7 @@ export function applyDiagramOperations(
                     `mxCell[source="${cellId}"], mxCell[target="${cellId}"]`,
                 )
                 referencingEdges.forEach((edge) => {
-                    const edgeId = edge.getAttribute("id")
+                    const edgeId = getCellId(edge)
                     // Protect root cells from being added via edge references
                     if (edgeId && edgeId !== "0" && edgeId !== "1") {
                         // Recurse to collect edge's children (like labels)
@@ -718,6 +739,7 @@ export function applyDiagramOperations(
                 if (cell) {
                     cell.parentNode?.removeChild(cell)
                     cellMap.delete(cellId)
+                    deletedIds.add(cellId)
                 }
             }
         }
@@ -758,22 +780,87 @@ function checkDuplicateAttributes(xml: string): string | null {
     return null
 }
 
-/** Check for duplicate IDs in XML */
-function checkDuplicateIds(xml: string): string | null {
-    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
+/** Matches one <diagram> page of a document (the last one may be unclosed) */
+const PAGE_PATTERN = /<diagram\b[\s\S]*?(?:<\/diagram>|$)/g
+
+const ID_ATTR_PATTERN = /\bid\s*=\s*["']([^"']+)["']/gi
+
+/**
+ * Split XML into pages. Ids only need to be unique within a page: every
+ * page of a multi-page document has its own root cells "0" and "1".
+ */
+function splitPages(xml: string): string[] {
+    return xml.match(PAGE_PATTERN) || [xml]
+}
+
+/** Ids that appear more than once, with their counts */
+function findDuplicateIds(xml: string): Map<string, number> {
     const ids = new Map<string, number>()
-    let idMatch
-    while ((idMatch = idPattern.exec(xml)) !== null) {
-        const id = idMatch[1]
-        ids.set(id, (ids.get(id) || 0) + 1)
+    for (const match of xml.matchAll(ID_ATTR_PATTERN)) {
+        ids.set(match[1], (ids.get(match[1]) || 0) + 1)
     }
-    const duplicateIds = Array.from(ids.entries())
-        .filter(([, count]) => count > 1)
-        .map(([id, count]) => `'${id}' (${count}x)`)
-    if (duplicateIds.length > 0) {
-        return `Invalid XML: Found duplicate ID(s): ${duplicateIds.slice(0, 3).join(", ")}. All id attributes must be unique.`
+    return new Map(Array.from(ids).filter(([, count]) => count > 1))
+}
+
+/** Check for duplicate IDs in XML (per page) */
+function checkDuplicateIds(xml: string): string | null {
+    for (const page of splitPages(xml)) {
+        const duplicateIds = Array.from(findDuplicateIds(page)).map(
+            ([id, count]) => `'${id}' (${count}x)`,
+        )
+        if (duplicateIds.length > 0) {
+            return `Invalid XML: Found duplicate ID(s): ${duplicateIds.slice(0, 3).join(", ")}. All id attributes must be unique.`
+        }
     }
     return null
+}
+
+/** Rename repeated ids in one page (keeps the first occurrence) */
+function renameDuplicateIds(xml: string): { xml: string; renamed: number } {
+    const duplicateIds = findDuplicateIds(xml)
+    if (duplicateIds.size === 0) return { xml, renamed: 0 }
+
+    const idCounters = new Map<string, number>()
+    const renamedXml = xml.replace(ID_ATTR_PATTERN, (match, id) => {
+        if (!duplicateIds.has(id)) return match
+
+        const count = idCounters.get(id) || 0
+        idCounters.set(id, count + 1)
+
+        if (count === 0) return match // Keep first occurrence
+
+        // Rename subsequent occurrences (the id sits just before the closing quote)
+        return `${match.slice(0, -id.length - 1)}${id}_dup${count}${match.slice(-1)}`
+    })
+    return { xml: renamedXml, renamed: duplicateIds.size }
+}
+
+/**
+ * Returns a function telling whether a position is inside a quoted attribute
+ * value. Positions must be queried in increasing order: the scan resumes where
+ * it stopped instead of starting over, which keeps large documents fast.
+ */
+function createQuoteTracker(str: string): (pos: number) => boolean {
+    let i = 0
+    let inQuote = false
+    let quoteChar = ""
+    return (pos: number) => {
+        for (; i < pos && i < str.length; i++) {
+            const c = str[i]
+            if (inQuote) {
+                if (c === quoteChar) inQuote = false
+            } else if (c === '"' || c === "'") {
+                // Only quotes that follow "=" open an attribute value
+                let j = i - 1
+                while (j >= 0 && /\s/.test(str[j])) j--
+                if (j >= 0 && str[j] === "=") {
+                    inQuote = true
+                    quoteChar = c
+                }
+            }
+        }
+        return inQuote
+    }
 }
 
 /** Check for tag mismatches using parsed tags */
@@ -1088,13 +1175,19 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     // 3b. Fix malformed attribute values where &quot; is used as delimiter instead of actual quotes
     // Pattern: attr=&quot;value&quot; should become attr="value" (the &quot; was meant to be the quote delimiter)
     // This commonly happens with dashPattern=&quot;1 1;&quot;
-    const malformedQuotePattern = /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;/
-    if (malformedQuotePattern.test(fixed)) {
-        // Replace =&quot; with =" and trailing &quot; before next attribute or tag end with "
-        fixed = fixed.replace(
-            /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*?)&quot;/g,
-            '$1="$2"',
-        )
+    // Matches inside another attribute value are kept: rich text labels like
+    // value="&lt;font color=&quot;#ff0000&quot;&gt;..." are valid.
+    const isInsideQuotesFor3b = createQuoteTracker(fixed)
+    let malformedQuotesFixed = false
+    fixed = fixed.replace(
+        /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*?)&quot;/g,
+        (match: string, attr: string, value: string, offset: number) => {
+            if (isInsideQuotesFor3b(offset)) return match
+            malformedQuotesFixed = true
+            return `${attr}="${value}"`
+        },
+    )
+    if (malformedQuotesFixed) {
         fixes.push(
             'Fixed malformed attribute quotes (=&quot;...&quot; to ="...")',
         )
@@ -1108,9 +1201,11 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     }
 
     // 3d. Fix missing space between attributes like vertex="1"parent="1"
-    const missingSpacePattern = /("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g
+    // Requires name=" right after the quote, so the opening quote of a value
+    // such as style="rounded=1;..." is not mistaken for a closing one.
+    const missingSpacePattern = /"([a-zA-Z_:][\w:.-]*=")/g
     if (missingSpacePattern.test(fixed)) {
-        fixed = fixed.replace(/("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g, "$1 $2")
+        fixed = fixed.replace(missingSpacePattern, '" $1')
         fixes.push("Added missing space between attributes")
     }
 
@@ -1240,32 +1335,13 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         "mxPoint",
         "Array",
         "Object",
+        // Wrappers of cells with links, tooltips or custom data
+        "object",
+        "UserObject",
         "mxRectangle",
     ])
 
-    // Helper: Check if a position is inside a quoted attribute value
-    // by counting unescaped quotes before that position
-    const isInsideQuotes = (str: string, pos: number): boolean => {
-        let inQuote = false
-        let quoteChar = ""
-        for (let i = 0; i < pos && i < str.length; i++) {
-            const c = str[i]
-            if (inQuote) {
-                if (c === quoteChar) inQuote = false
-            } else if (c === '"' || c === "'") {
-                // Check if this quote is part of an attribute (preceded by =)
-                // Look back for = sign
-                let j = i - 1
-                while (j >= 0 && /\s/.test(str[j])) j--
-                if (j >= 0 && str[j] === "=") {
-                    inQuote = true
-                    quoteChar = c
-                }
-            }
-        }
-        return inQuote
-    }
-
+    const isInsideQuotesFor8c = createQuoteTracker(fixed)
     const foreignTagPattern = /<\/?([a-zA-Z][a-zA-Z0-9_]*)[^>]*>/g
     let foreignMatch
     const foreignTags = new Set<string>()
@@ -1280,7 +1356,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         // Skip if this is a valid draw.io tag
         if (validDrawioTags.has(tagName)) continue
         // Skip if this tag is inside a quoted attribute value
-        if (isInsideQuotes(fixed, foreignMatch.index)) continue
+        if (isInsideQuotesFor8c(foreignMatch.index)) continue
 
         foreignTags.add(tagName)
         foreignTagPositions.push({
@@ -1352,10 +1428,11 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     >()
     // Match full tags to detect self-closing by checking if ends with />
     const fullTagPattern = /<(\/?[a-zA-Z][a-zA-Z0-9]*)[^>]*>/g
+    const isInsideQuotesFor10b = createQuoteTracker(fixed)
     let tagCountMatch
     while ((tagCountMatch = fullTagPattern.exec(fixed)) !== null) {
         // Skip tags inside quoted attribute values (e.g., value="<b>Title</b>")
-        if (isInsideQuotes(fixed, tagCountMatch.index)) continue
+        if (isInsideQuotesFor10b(tagCountMatch.index)) continue
 
         const fullMatch = tagCountMatch[0] // e.g., "<mxCell .../>" or "</mxCell>"
         const tagPart = tagCountMatch[1] // e.g., "mxCell" or "/mxCell"
@@ -1445,125 +1522,112 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     // 11. Fix nested mxCell by flattening
     // Pattern A: <mxCell id="X">...<mxCell id="X">...</mxCell></mxCell> (duplicate ID)
     // Pattern B: <mxCell id="X">...<mxCell id="Y">...</mxCell></mxCell> (different ID - true nesting)
-    const lines = fixed.split("\n")
-    let newLines: string[] = []
-    let nestedFixed = 0
-    let extraClosingToRemove = 0
+    // These passes work line by line and would break valid cells written on a
+    // single line, so each one runs only when cells are really nested.
+    if (checkNestedMxCells(fixed)) {
+        const lines = fixed.split("\n")
+        const newLines: string[] = []
+        let nestedFixed = 0
+        let extraClosingToRemove = 0
 
-    // First pass: fix duplicate ID nesting (same as before)
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        const nextLine = lines[i + 1]
+        // First pass: fix duplicate ID nesting (same as before)
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]
+            const nextLine = lines[i + 1]
 
-        // Check if current line and next line are both mxCell opening tags with same ID
-        if (
-            nextLine &&
-            /<mxCell\s/.test(line) &&
-            /<mxCell\s/.test(nextLine) &&
-            !line.includes("/>") &&
-            !nextLine.includes("/>")
-        ) {
-            const id1 = line.match(/\bid\s*=\s*["']([^"']+)["']/)?.[1]
-            const id2 = nextLine.match(/\bid\s*=\s*["']([^"']+)["']/)?.[1]
+            // Check if current line and next line are both mxCell opening tags with same ID
+            if (
+                nextLine &&
+                /<mxCell\s/.test(line) &&
+                /<mxCell\s/.test(nextLine) &&
+                !line.includes("/>") &&
+                !nextLine.includes("/>")
+            ) {
+                const id1 = line.match(/\bid\s*=\s*["']([^"']+)["']/)?.[1]
+                const id2 = nextLine.match(/\bid\s*=\s*["']([^"']+)["']/)?.[1]
 
-            if (id1 && id1 === id2) {
-                nestedFixed++
-                extraClosingToRemove++ // Need to remove one </mxCell> later
-                continue // Skip this duplicate opening line
+                if (id1 && id1 === id2) {
+                    nestedFixed++
+                    extraClosingToRemove++ // Need to remove one </mxCell> later
+                    continue // Skip this duplicate opening line
+                }
             }
-        }
 
-        // Remove extra </mxCell> if we have pending removals
-        if (extraClosingToRemove > 0 && /^\s*<\/mxCell>\s*$/.test(line)) {
-            extraClosingToRemove--
-            continue // Skip this closing tag
-        }
-
-        newLines.push(line)
-    }
-
-    if (nestedFixed > 0) {
-        fixed = newLines.join("\n")
-        fixes.push(`Flattened ${nestedFixed} duplicate-ID nested mxCell(s)`)
-    }
-
-    // Second pass: fix true nesting (different IDs)
-    // Insert </mxCell> before nested child to close parent
-    const lines2 = fixed.split("\n")
-    newLines = []
-    let trueNestedFixed = 0
-    let cellDepth = 0
-    let pendingCloseRemoval = 0
-
-    for (let i = 0; i < lines2.length; i++) {
-        const line = lines2[i]
-        const trimmed = line.trim()
-
-        // Track mxCell depth
-        const isOpenCell = /<mxCell\s/.test(trimmed) && !trimmed.endsWith("/>")
-        const isCloseCell = trimmed === "</mxCell>"
-
-        if (isOpenCell) {
-            if (cellDepth > 0) {
-                // Found nested cell - insert closing tag for parent before this line
-                const indent = line.match(/^(\s*)/)?.[1] || ""
-                newLines.push(indent + "</mxCell>")
-                trueNestedFixed++
-                pendingCloseRemoval++ // Need to remove one </mxCell> later
+            // Remove extra </mxCell> if we have pending removals
+            if (extraClosingToRemove > 0 && /^\s*<\/mxCell>\s*$/.test(line)) {
+                extraClosingToRemove--
+                continue // Skip this closing tag
             }
-            cellDepth = 1 // Reset to 1 since we just opened a new cell
+
             newLines.push(line)
-        } else if (isCloseCell) {
-            if (pendingCloseRemoval > 0) {
-                pendingCloseRemoval--
-                // Skip this extra closing tag
+        }
+
+        if (nestedFixed > 0) {
+            fixed = newLines.join("\n")
+            fixes.push(`Flattened ${nestedFixed} duplicate-ID nested mxCell(s)`)
+        }
+    }
+
+    if (checkNestedMxCells(fixed)) {
+        // Second pass: fix true nesting (different IDs)
+        // Insert </mxCell> before nested child to close parent
+        const lines2 = fixed.split("\n")
+        const newLines: string[] = []
+        let trueNestedFixed = 0
+        let cellDepth = 0
+        let pendingCloseRemoval = 0
+
+        for (let i = 0; i < lines2.length; i++) {
+            const line = lines2[i]
+            const trimmed = line.trim()
+
+            // Track mxCell depth
+            const isOpenCell =
+                /<mxCell\s/.test(trimmed) && !trimmed.endsWith("/>")
+            const isCloseCell = trimmed === "</mxCell>"
+
+            if (isOpenCell) {
+                if (cellDepth > 0) {
+                    // Found nested cell - insert closing tag for parent before this line
+                    const indent = line.match(/^(\s*)/)?.[1] || ""
+                    newLines.push(indent + "</mxCell>")
+                    trueNestedFixed++
+                    pendingCloseRemoval++ // Need to remove one </mxCell> later
+                }
+                cellDepth = 1 // Reset to 1 since we just opened a new cell
+                newLines.push(line)
+            } else if (isCloseCell) {
+                if (pendingCloseRemoval > 0) {
+                    pendingCloseRemoval--
+                    // Skip this extra closing tag
+                } else {
+                    cellDepth = Math.max(0, cellDepth - 1)
+                    newLines.push(line)
+                }
             } else {
-                cellDepth = Math.max(0, cellDepth - 1)
                 newLines.push(line)
             }
-        } else {
-            newLines.push(line)
+        }
+
+        if (trueNestedFixed > 0) {
+            fixed = newLines.join("\n")
+            fixes.push(`Fixed ${trueNestedFixed} true nested mxCell(s)`)
         }
     }
 
-    if (trueNestedFixed > 0) {
-        fixed = newLines.join("\n")
-        fixes.push(`Fixed ${trueNestedFixed} true nested mxCell(s)`)
+    // 12. Fix duplicate IDs by appending suffix, page by page (ids such as the
+    // root cells "0" and "1" legitimately repeat across pages)
+    let renamedIds = 0
+    const renamePage = (page: string) => {
+        const { xml: renamed, renamed: count } = renameDuplicateIds(page)
+        renamedIds += count
+        return renamed
     }
-
-    // 12. Fix duplicate IDs by appending suffix
-    const seenIds = new Map<string, number>()
-    const duplicateIds: string[] = []
-
-    // First pass: find duplicates
-    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
-    let idMatch
-    while ((idMatch = idPattern.exec(fixed)) !== null) {
-        const id = idMatch[1]
-        seenIds.set(id, (seenIds.get(id) || 0) + 1)
-    }
-
-    // Find which IDs are duplicated
-    for (const [id, count] of seenIds) {
-        if (count > 1) duplicateIds.push(id)
-    }
-
-    // Second pass: rename duplicates (keep first occurrence, rename others)
-    if (duplicateIds.length > 0) {
-        const idCounters = new Map<string, number>()
-        fixed = fixed.replace(/\bid\s*=\s*["']([^"']+)["']/gi, (match, id) => {
-            if (!duplicateIds.includes(id)) return match
-
-            const count = idCounters.get(id) || 0
-            idCounters.set(id, count + 1)
-
-            if (count === 0) return match // Keep first occurrence
-
-            // Rename subsequent occurrences
-            const newId = `${id}_dup${count}`
-            return match.replace(id, newId)
-        })
-        fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s)`)
+    fixed = /<diagram\b/.test(fixed)
+        ? fixed.replace(PAGE_PATTERN, renamePage)
+        : renamePage(fixed)
+    if (renamedIds > 0) {
+        fixes.push(`Renamed ${renamedIds} duplicate ID(s)`)
     }
 
     // 9. Fix empty id attributes by generating unique IDs
@@ -1673,6 +1737,11 @@ export function validateAndFixXml(xml: string): {
     }
 }
 
+/**
+ * Decode an xmlsvg export (SVG data URL) into uncompressed diagram XML.
+ * Only the first page is returned; for the full multi-page document use the
+ * autosaved chartXML instead.
+ */
 export function extractDiagramXML(xml_svg_string: string): string {
     try {
         // 1. Parse the SVG string (using built-in DOMParser in a browser-like environment)

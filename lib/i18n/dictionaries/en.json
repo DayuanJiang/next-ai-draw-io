@@ -188,7 +188,8 @@
         "failedToExport": "Error fetching chart data",
         "failedToLoadExample": "Error loading example image",
         "failedToRecordFeedback": "Failed to record your feedback. Please try again.",
-        "storageUpdateFailed": "Chat cleared but browser storage could not be updated"
+        "storageUpdateFailed": "Chat cleared but browser storage could not be updated",
+        "sessionSaveFailed": "Could not save this chat. Browser storage may be full: delete old chats from history and try again."
     },
     "quota": {
         "dailyLimit": "Daily Quota Reached",

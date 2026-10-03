@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { useDictionary } from "@/hooks/use-dictionary"
 import {
     type ChatSession,
     createEmptySession,
@@ -44,6 +46,15 @@ export interface UseSessionManagerReturn {
     clearCurrentSession: () => void
 }
 
+// Reading the session list loads every stored session in full, and window
+// focus also fires each time the user clicks back from the draw.io iframe
+const FOCUS_REFRESH_INTERVAL_MS = 30_000
+
+function notifySaveFailed(message: string) {
+    // Same id, so repeated failures update one toast instead of stacking
+    toast.error(message, { id: "session-save-failed", duration: 8000 })
+}
+
 interface UseSessionManagerOptions {
     /** Session ID from URL param - if provided, load this session; if null, start blank */
     initialSessionId?: string | null
@@ -53,6 +64,7 @@ export function useSessionManager(
     options: UseSessionManagerOptions = {},
 ): UseSessionManagerReturn {
     const { initialSessionId } = options
+    const dict = useDictionary()
     const [sessions, setSessions] = useState<SessionMetadata[]>([])
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(
         null,
@@ -163,9 +175,15 @@ export function useSessionManager(
         handleSessionIdChange()
     }, [initialSessionId, isAvailable])
 
-    // Refresh sessions on window focus (multi-tab sync)
+    // Refresh sessions on window focus (multi-tab sync), at most once per interval
+    const lastFocusRefreshRef = useRef(0)
     useEffect(() => {
         const handleFocus = () => {
+            const now = Date.now()
+            if (now - lastFocusRefreshRef.current < FOCUS_REFRESH_INTERVAL_MS) {
+                return
+            }
+            lastFocusRefreshRef.current = now
             refreshSessions()
         }
         window.addEventListener("focus", handleFocus)
@@ -238,6 +256,8 @@ export function useSessionManager(
             ) {
                 return
             }
+            // Nothing can be stored without IndexedDB
+            if (!isIndexedDBAvailable()) return
 
             if (!currentSession) {
                 // Create a new session if none exists
@@ -250,7 +270,12 @@ export function useSessionManager(
                     diagramHistory: data.diagramHistory,
                     title: extractTitle(data.messages),
                 }
-                await saveSession(newSession)
+                // Without a stored session, keep no session id (it would end
+                // up in the URL and point to nothing after a reload)
+                if (!(await saveSession(newSession))) {
+                    notifySaveFailed(dict.errors.sessionSaveFailed)
+                    return
+                }
                 await enforceSessionLimit()
                 setCurrentSession(newSession)
                 setCurrentSessionId(newSession.id)
@@ -277,7 +302,10 @@ export function useSessionManager(
                         : currentSession.title,
             }
 
-            await saveSession(updatedSession)
+            if (!(await saveSession(updatedSession))) {
+                notifySaveFailed(dict.errors.sessionSaveFailed)
+                return
+            }
             setCurrentSession(updatedSession)
 
             // Update sessions list metadata
@@ -298,7 +326,7 @@ export function useSessionManager(
                 ),
             )
         },
-        [currentSession, currentSessionId, refreshSessions],
+        [currentSession, currentSessionId, refreshSessions, dict],
     )
 
     // Clear current session state (for starting fresh without loading another session)

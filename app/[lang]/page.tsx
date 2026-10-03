@@ -37,7 +37,6 @@ export default function Home() {
     )
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
-    const isMobileRef = useRef(false)
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -48,7 +47,9 @@ export default function Home() {
             const currentLocale = pathParts[0]
             if (currentLocale !== savedLocale) {
                 pathParts[0] = savedLocale
-                router.replace(`/${pathParts.join("/")}`)
+                // Keep the query (e.g. ?session=) and hash
+                const { search, hash } = window.location
+                router.replace(`/${pathParts.join("/")}${search}${hash}`)
                 return // Wait for redirect
             }
         }
@@ -106,27 +107,17 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile - reset draw.io before crossing breakpoint
-    const isInitialRenderRef = useRef(true)
+    // Check mobile. The draw.io iframe is not remounted when crossing the
+    // breakpoint (only the chat panel is), so its ready state stays as is.
     useEffect(() => {
         const checkMobile = () => {
-            const newIsMobile = window.innerWidth < 768
-            if (
-                !isInitialRenderRef.current &&
-                newIsMobile !== isMobileRef.current
-            ) {
-                setIsDrawioReady(false)
-                resetDrawioReady()
-            }
-            isMobileRef.current = newIsMobile
-            isInitialRenderRef.current = false
-            setIsMobile(newIsMobile)
+            setIsMobile(window.innerWidth < 768)
         }
 
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [resetDrawioReady])
+    }, [])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -193,7 +184,11 @@ export default function Home() {
                                             noExitBtn: true,
                                             dark:
                                                 darkMode || drawioUi === "dark",
-                                            lang: currentLang,
+                                            // draw.io names Traditional Chinese "zh-tw"
+                                            lang:
+                                                currentLang === "zh-Hant"
+                                                    ? "zh-tw"
+                                                    : currentLang,
                                             // Enable offline mode in Electron to disable external service calls
                                             ...(isElectron && {
                                                 offline: true,
