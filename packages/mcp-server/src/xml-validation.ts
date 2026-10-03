@@ -25,6 +25,23 @@ const STRUCTURAL_ATTRS = [
 /** Valid XML entity names */
 const VALID_ENTITIES = new Set(["lt", "gt", "amp", "quot", "apos"])
 
+/** Element names draw.io understands (case-sensitive) */
+const VALID_DRAWIO_TAGS = new Set([
+    "mxfile",
+    "diagram",
+    "mxGraphModel",
+    "root",
+    "mxCell",
+    "mxGeometry",
+    "mxPoint",
+    "Array",
+    "Object",
+    "mxRectangle",
+    // Wrappers draw.io writes for cells with links, tooltips or data
+    "UserObject",
+    "object",
+])
+
 // ============================================================================
 // XML Parsing Helpers
 // ============================================================================
@@ -88,6 +105,33 @@ function parseXmlTags(xml: string): ParsedTag[] {
     }
 
     return tags
+}
+
+/**
+ * Returns a function telling whether a position lies inside a quoted
+ * attribute value. Positions must be queried in increasing order.
+ */
+function createQuoteTracker(str: string): (pos: number) => boolean {
+    let i = 0
+    let inQuote = false
+    let quoteChar = ""
+    return (pos: number) => {
+        for (; i < pos && i < str.length; i++) {
+            const c = str[i]
+            if (inQuote) {
+                if (c === quoteChar) inQuote = false
+            } else if (c === '"' || c === "'") {
+                // Only quotes that follow "=" open an attribute value
+                let j = i - 1
+                while (j >= 0 && /\s/.test(str[j])) j--
+                if (j >= 0 && str[j] === "=") {
+                    inQuote = true
+                    quoteChar = c
+                }
+            }
+        }
+        return inQuote
+    }
 }
 
 /** Rewrite every opening tag with fn, leaving text and closing tags as is. */
@@ -306,6 +350,37 @@ function checkNestedMxCells(xml: string): string | null {
     return null
 }
 
+/** Check for element names draw.io does not know (e.g. a lowercase <mxcell>) */
+function checkUnknownElements(xml: string): string | null {
+    const tags = parseXmlTags(xml.replace(/<!--[\s\S]*?-->/g, ""))
+    for (const { tagName } of tags) {
+        if (!VALID_DRAWIO_TAGS.has(tagName)) {
+            return `Invalid XML: Unknown element <${tagName}>. draw.io only understands ${Array.from(VALID_DRAWIO_TAGS).join(", ")} (names are case-sensitive).`
+        }
+    }
+    return null
+}
+
+/**
+ * Find <mxPoint> elements without an "as" attribute outside <Array
+ * as="points">. draw.io rejects them with "Could not add object mxPoint".
+ */
+function findOrphanMxPoints(
+    xml: string,
+): Array<{ start: number; end: number }> {
+    const arrays: Array<[number, number]> = []
+    for (const m of xml.matchAll(/<Array\b[^>]*>[\s\S]*?<\/Array>/g)) {
+        arrays.push([m.index, m.index + m[0].length])
+    }
+    const orphans: Array<{ start: number; end: number }> = []
+    for (const m of xml.matchAll(/<mxPoint\b[^>]*?(?:\/>|>\s*<\/mxPoint>)/g)) {
+        if (/\sas\s*=/.test(m[0])) continue
+        if (arrays.some(([s, e]) => m.index > s && m.index < e)) continue
+        orphans.push({ start: m.index, end: m.index + m[0].length })
+    }
+    return orphans
+}
+
 // ============================================================================
 // Main Validation Function
 // ============================================================================
@@ -314,9 +389,14 @@ function checkNestedMxCells(xml: string): string | null {
  * Validates draw.io XML structure for common issues
  * Uses DOM parsing + additional regex checks for high accuracy
  * @param xml - The XML string to validate
+ * @param opts.strict - Also reject unknown element names and orphan
+ *   <mxPoint>s. Used for XML the model wrote, not for files or browser state.
  * @returns null if valid, error message string if invalid
  */
-export function validateMxCellStructure(xml: string): string | null {
+export function validateMxCellStructure(
+    xml: string,
+    opts: { strict?: boolean } = {},
+): string | null {
     // Size check for performance
     if (xml.length > MAX_XML_SIZE) {
         console.warn(
@@ -408,6 +488,16 @@ export function validateMxCellStructure(xml: string): string | null {
     const nestedCellError = checkNestedMxCells(xml)
     if (nestedCellError) {
         return nestedCellError
+    }
+
+    if (opts.strict) {
+        const unknownError = checkUnknownElements(xml)
+        if (unknownError) {
+            return unknownError
+        }
+        if (findOrphanMxPoints(xml).length > 0) {
+            return 'Invalid XML: Found <mxPoint> without an "as" attribute outside <Array as="points">. Put waypoints inside <Array as="points"> or remove the point.'
+        }
     }
 
     // 11. Strict XML syntax check, run last so the checks above can give
@@ -629,63 +719,65 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Fixed <Cell> tags to <mxCell>")
     }
 
-    // 15. Fix common closing tag typos (MUST run before foreign tag removal)
-    const tagTypos = [
-        { wrong: /<\/mxElement>/gi, right: "</mxCell>", name: "</mxElement>" },
-        { wrong: /<\/mxcell>/g, right: "</mxCell>", name: "</mxcell>" },
-        {
-            wrong: /<\/mxgeometry>/g,
-            right: "</mxGeometry>",
-            name: "</mxgeometry>",
-        },
-        { wrong: /<\/mxpoint>/g, right: "</mxPoint>", name: "</mxpoint>" },
-        {
-            wrong: /<\/mxgraphmodel>/gi,
-            right: "</mxGraphModel>",
-            name: "</mxgraphmodel>",
-        },
-    ]
-    for (const { wrong, right, name } of tagTypos) {
-        const before = fixed
-        fixed = fixed.replace(wrong, right)
-        if (fixed !== before) {
-            fixes.push(`Fixed typo ${name} to ${right}`)
+    // 15. Fix closing tag typos and wrong tag case, e.g. <mxcell> (MUST run
+    // before foreign tag removal, which would otherwise delete them)
+    const before15 = fixed
+    fixed = fixed.replace(/<\/mxElement>/gi, "</mxCell>")
+    if (fixed !== before15) {
+        fixes.push("Fixed typo </mxElement> to </mxCell>")
+    }
+    for (const name of ["mxCell", "mxGeometry", "mxPoint", "mxGraphModel"]) {
+        let changed = false
+        fixed = fixed.replace(
+            new RegExp(`<(/?)${name}(?=[\\s/>])`, "gi"),
+            (match, slash) => {
+                const right = `<${slash}${name}`
+                if (match !== right) changed = true
+                return right
+            },
+        )
+        if (changed) {
+            fixes.push(`Fixed tag case of <${name}>`)
         }
     }
 
-    // 16. Remove non-draw.io tags (after typo fixes so lowercase variants are fixed first)
-    const validDrawioTags = new Set([
-        "mxfile",
-        "diagram",
-        "mxGraphModel",
-        "root",
-        "mxCell",
-        "mxGeometry",
-        "mxPoint",
-        "Array",
-        "Object",
-        "mxRectangle",
-        // Wrappers draw.io writes for cells with links, tooltips or data
-        "UserObject",
-        "object",
-    ])
+    // 16. Remove non-draw.io tags (after the case fixes above). Removes only
+    // the exact tag occurrences and skips quoted attribute values, so a stray
+    // <mxGraph/> never takes <mxGraphModel> with it and <b> inside
+    // value="..." stays.
+    const isInsideQuotesFor16 = createQuoteTracker(fixed)
     const foreignTagPattern = /<\/?([a-zA-Z][a-zA-Z0-9_]*)[^>]*>/g
     let foreignMatch
     const foreignTags = new Set<string>()
+    const foreignTagPositions: Array<{ start: number; end: number }> = []
     while ((foreignMatch = foreignTagPattern.exec(fixed)) !== null) {
         const tagName = foreignMatch[1]
-        if (!validDrawioTags.has(tagName)) {
-            foreignTags.add(tagName)
-        }
+        if (VALID_DRAWIO_TAGS.has(tagName)) continue
+        if (isInsideQuotesFor16(foreignMatch.index)) continue
+        foreignTags.add(tagName)
+        foreignTagPositions.push({
+            start: foreignMatch.index,
+            end: foreignMatch.index + foreignMatch[0].length,
+        })
     }
-    if (foreignTags.size > 0) {
-        for (const tag of foreignTags) {
-            fixed = fixed.replace(new RegExp(`<${tag}[^>]*>`, "gi"), "")
-            fixed = fixed.replace(new RegExp(`</${tag}>`, "gi"), "")
+    if (foreignTagPositions.length > 0) {
+        // Remove from the end so earlier positions stay valid
+        for (const { start, end } of foreignTagPositions.reverse()) {
+            fixed = fixed.slice(0, start) + fixed.slice(end)
         }
         fixes.push(
             `Removed foreign tags: ${Array.from(foreignTags).join(", ")}`,
         )
+    }
+
+    // 16b. Remove orphan <mxPoint>s (no "as" attribute, not inside
+    // <Array as="points">), which draw.io refuses to load
+    const orphanPoints = findOrphanMxPoints(fixed)
+    if (orphanPoints.length > 0) {
+        for (const { start, end } of orphanPoints.reverse()) {
+            fixed = fixed.slice(0, start) + fixed.slice(end)
+        }
+        fixes.push(`Removed ${orphanPoints.length} orphan <mxPoint>(s)`)
     }
 
     // 17. Fix unclosed tags
@@ -725,19 +817,23 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         }
     }
 
-    // 18. Remove extra closing tags
+    // 18. Remove extra closing tags. Counts only draw.io tags outside quoted
+    // attribute values (value="<b>Title</b>" holds HTML, not elements).
     const tagCounts = new Map<
         string,
         { opens: number; closes: number; selfClosing: number }
     >()
     const fullTagPattern = /<(\/?[a-zA-Z][a-zA-Z0-9]*)[^>]*>/g
+    const isInsideQuotesFor18 = createQuoteTracker(fixed)
     let tagCountMatch
     while ((tagCountMatch = fullTagPattern.exec(fixed)) !== null) {
+        if (isInsideQuotesFor18(tagCountMatch.index)) continue
         const fullMatch = tagCountMatch[0]
         const tagPart = tagCountMatch[1]
         const isClosing = tagPart.startsWith("/")
         const isSelfClosing = fullMatch.endsWith("/>")
         const tagName = isClosing ? tagPart.slice(1) : tagPart
+        if (!VALID_DRAWIO_TAGS.has(tagName)) continue
 
         let counts = tagCounts.get(tagName)
         if (!counts) {
@@ -943,7 +1039,8 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 // ============================================================================
 
 /**
- * Validates XML and attempts to fix if invalid
+ * Validates XML and attempts to fix if invalid. Runs the strict checks
+ * (unknown elements, orphan mxPoints): every caller passes XML the model wrote.
  * @param xml - The XML string to validate and potentially fix
  * @returns Object with validation result, fixed XML if applicable, and fixes applied
  */
@@ -954,7 +1051,7 @@ export function validateAndFixXml(xml: string): {
     fixes: string[]
 } {
     // First validation attempt
-    let error = validateMxCellStructure(xml)
+    let error = validateMxCellStructure(xml, { strict: true })
 
     if (!error) {
         return { valid: true, error: null, fixed: null, fixes: [] }
@@ -964,7 +1061,7 @@ export function validateAndFixXml(xml: string): {
     const { fixed, fixes } = autoFixXml(xml)
 
     // Validate the fixed version
-    error = validateMxCellStructure(fixed)
+    error = validateMxCellStructure(fixed, { strict: true })
 
     if (!error) {
         return { valid: true, error: null, fixed, fixes }
@@ -977,34 +1074,4 @@ export function validateAndFixXml(xml: string): {
         fixed: fixes.length > 0 ? fixed : null,
         fixes,
     }
-}
-
-/**
- * Check if mxCell XML output is complete (not truncated).
- * Uses a robust approach that handles any LLM provider's wrapper tags
- * by finding the last valid mxCell ending and checking if suffix is just closing tags.
- * @param xml - The XML string to check (can be undefined/null)
- * @returns true if XML appears complete, false if truncated or empty
- */
-export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
-    const trimmed = xml?.trim() || ""
-    if (!trimmed) return false
-
-    // Find position of last complete mxCell ending (either /> or </mxCell>)
-    const lastSelfClose = trimmed.lastIndexOf("/>")
-    const lastMxCellClose = trimmed.lastIndexOf("</mxCell>")
-
-    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
-
-    // No valid ending found at all
-    if (lastValidEnd === -1) return false
-
-    // Check what comes after the last valid ending
-    // For />: add 2 chars, for </mxCell>: add 9 chars
-    const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
-    const suffix = trimmed.slice(lastValidEnd + endOffset)
-
-    // If suffix is empty or only contains closing tags (any provider's wrapper) or whitespace, it's complete
-    // This regex matches any sequence of closing XML tags like </foo>, </bar>, </｜DSML｜xyz>
-    return /^(\s*<\/[^>]+>)*\s*$/.test(suffix)
 }

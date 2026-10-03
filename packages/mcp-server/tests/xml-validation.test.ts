@@ -184,3 +184,65 @@ describe("XML serializer and strict parsing in page helpers", () => {
         ).toThrow()
     })
 })
+
+describe("autoFixXml keeps valid tags", () => {
+    it("removes a stray <mxGraph/> without touching <mxGraphModel>", () => {
+        const r = validateAndFixXml(
+            model(`<mxGraph/><mxCell id="2" vertex="1" parent="1"/>`),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain("<mxGraphModel>")
+        expect(r.fixed).toContain("</mxGraphModel>")
+        expect(r.fixed).not.toContain("<mxGraph/>")
+        expect(r.fixed).toContain('id="2"')
+    })
+
+    it("removes a stray <a> without touching <Array> waypoints", () => {
+        const edge = `<mxCell id="e" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1" y="2"/></Array></mxGeometry></mxCell>`
+        const r = validateAndFixXml(model(`<a>x</a>${edge}`))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('<Array as="points">')
+        expect(r.fixed).toContain('<mxPoint x="1" y="2"/>')
+        expect(r.fixed).not.toContain("<a>")
+    })
+
+    it("fixes a lowercase <mxcell> instead of deleting every cell", () => {
+        const r = validateAndFixXml(
+            model(
+                `<mxcell id="3" vertex="1" parent="1"></mxcell>${BROKEN_CELL}`,
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('<mxCell id="3"')
+        expect(r.fixed).toContain('<mxCell id="0"/>')
+        expect(r.fixed).toContain('value="R&amp;D"')
+    })
+
+    it("keeps label text when removing a foreign tag", () => {
+        const cell = `<mxCell id="4" value="&lt;b&gt;Bold&lt;/b&gt;" vertex="1" parent="1"/>`
+        const r = validateAndFixXml(model(`<foo/>${cell}`))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('value="&lt;b&gt;Bold&lt;/b&gt;"')
+        expect(r.fixed).not.toContain("<foo/>")
+    })
+})
+
+describe("validateAndFixXml strict checks", () => {
+    it("fixes the case of an unknown element name", () => {
+        const r = validateAndFixXml(
+            model(`<mxcell id="3" vertex="1" parent="1"/>`),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixes).toContain("Fixed tag case of <mxCell>")
+        expect(r.fixed).toContain('<mxCell id="3"')
+    })
+
+    it("removes an orphan mxPoint but keeps waypoints and named points", () => {
+        const cell = `<mxCell id="e" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="5" y="5"/><mxPoint x="0" y="0" as="sourcePoint"/><Array as="points"><mxPoint x="1" y="2"/></Array></mxGeometry></mxCell>`
+        const r = validateAndFixXml(model(cell))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).not.toContain('<mxPoint x="5" y="5"/>')
+        expect(r.fixed).toContain('as="sourcePoint"')
+        expect(r.fixed).toContain('<mxPoint x="1" y="2"/>')
+    })
+})

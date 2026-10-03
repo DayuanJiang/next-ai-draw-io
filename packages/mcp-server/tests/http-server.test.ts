@@ -8,12 +8,14 @@
 
 import http from "node:http"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { addHistory } from "../src/history.js"
+import { addHistory, getHistory } from "../src/history.js"
 import {
     getState,
+    requestSync,
     setState,
     shutdown,
     startHttpServer,
+    waitForSync,
 } from "../src/http-server.js"
 
 let port = 0
@@ -188,6 +190,55 @@ describe("POST /api/state", () => {
             expect(ok.status).toBe(200)
             expect(getState(id)?.xml).toBe(xml)
         }
+    })
+
+    it("keeps a rejected user edit in history", async () => {
+        const id = "mcp-conflict-history"
+        setState(id, "<mxfile>user v1</mxfile>", undefined, true)
+        const aiVersion = setState(id, "<mxfile>AI edit</mxfile>")
+        const before = getHistory(id).length
+
+        const stale = await postJson("/api/state", {
+            sessionId: id,
+            xml: "<mxfile>lost user edit</mxfile>",
+            baseVersion: aiVersion - 1,
+        })
+        expect(stale.status).toBe(409)
+        expect(JSON.parse(stale.body).savedToHistory).toBe(true)
+        const history = getHistory(id)
+        expect(history).toHaveLength(before + 1)
+        expect(history.at(-1)?.xml).toBe("<mxfile>lost user edit</mxfile>")
+    })
+
+    it("ends a pending sync when the sync reply is older than an AI write", async () => {
+        const id = "mcp-stale-sync"
+        setState(id, "<mxfile>before</mxfile>", undefined, true)
+        const aiVersion = setState(id, "<mxfile>AI edit</mxfile>")
+        requestSync(id)
+        const before = getHistory(id).length
+
+        // The browser exported its old diagram, then loaded the AI write
+        const stale = await postJson("/api/state", {
+            sessionId: id,
+            xml: "<mxfile>before</mxfile>",
+            baseVersion: aiVersion - 1,
+            source: "sync",
+        })
+        expect(stale.status).toBe(409)
+        expect(JSON.parse(stale.body).savedToHistory).toBe(false)
+        expect(getState(id)?.xml).toBe("<mxfile>AI edit</mxfile>")
+        expect(getState(id)?.syncRequested).toBeUndefined()
+        expect(getHistory(id)).toHaveLength(before)
+        expect(await waitForSync(id, 200)).toBe(true)
+    })
+})
+
+describe("preview page", () => {
+    it("serves a script that parses", async () => {
+        const res = await request("/?mcp=mcp-test-script")
+        const script = res.body.match(/<script>([\s\S]*)<\/script>/)?.[1]
+        expect(script).toBeTruthy()
+        expect(() => new Function(script as string)).not.toThrow()
     })
 })
 

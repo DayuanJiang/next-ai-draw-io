@@ -8,6 +8,7 @@
  */
 
 import { getXmlSyntaxError } from "./dom.js"
+import { decompressPageContent } from "./load-diagram.js"
 import { log } from "./logger.js"
 import { findPageElement, hasPageSelector, type PageSelector } from "./pages.js"
 
@@ -32,6 +33,44 @@ export interface ApplyOperationsResult {
 // <UserObject id="..."><mxCell .../></UserObject> (or <object>): the id sits
 // on the wrapper, so the wrapper is treated as the cell.
 const CELL_SELECTOR = "mxCell, UserObject, object"
+
+/**
+ * Return the <root> of a <diagram> page, creating it when missing. An empty
+ * page gets a blank model with the "0" and "1" root cells; a page whose text
+ * is draw.io's compressed format is decompressed in place. Returns null if
+ * the text is neither empty nor decompressible.
+ */
+function ensurePageRoot(doc: Document, page: Element): Element | null {
+    const existing = page.querySelector("root")
+    if (existing) return existing
+
+    let model = page.querySelector("mxGraphModel")
+    if (!model) {
+        const text = page.textContent?.trim() ?? ""
+        if (text) {
+            const xml = decompressPageContent(text)
+            if (!xml || getXmlSyntaxError(xml)) return null
+            const parsed = new DOMParser().parseFromString(xml, "text/xml")
+            if (parsed.documentElement?.tagName !== "mxGraphModel") return null
+            page.textContent = ""
+            model = page.appendChild(
+                doc.importNode(parsed.documentElement, true),
+            ) as Element
+            const decompressedRoot = model.querySelector("root")
+            if (decompressedRoot) return decompressedRoot
+        } else {
+            model = page.appendChild(doc.createElement("mxGraphModel"))
+        }
+    }
+
+    const blank = new DOMParser().parseFromString(
+        `<root><mxCell id="0"/><mxCell id="1" parent="0"/></root>`,
+        "text/xml",
+    )
+    return model.appendChild(
+        doc.importNode(blank.documentElement, true),
+    ) as Element
+}
 
 /** Read parent/source/target, which a wrapped cell keeps on its inner mxCell. */
 function cellAttr(cell: Element, name: string): string | null {
@@ -98,7 +137,7 @@ export function applyDiagramOperations(
                 ],
             }
         }
-        root = found.element.querySelector("root")
+        root = ensurePageRoot(doc as unknown as Document, found.element)
         if (!root) {
             const pageId =
                 found.element.getAttribute("id") || `(index ${found.index})`
@@ -108,7 +147,7 @@ export function applyDiagramOperations(
                     {
                         type: "update",
                         cellId: "",
-                        message: `Page "${pageId}" has no <root> element`,
+                        message: `Page "${pageId}" has no <root> element and its content could not be decompressed`,
                     },
                 ],
             }

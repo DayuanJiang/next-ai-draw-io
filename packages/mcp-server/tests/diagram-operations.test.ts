@@ -4,6 +4,7 @@
  * The id sits on the wrapper; the inner mxCell has none.
  */
 
+import { deflateRawSync } from "node:zlib"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 import { installDomPolyfill } from "../src/dom.js"
 
@@ -81,5 +82,45 @@ describe("cascade delete logging", () => {
         expect(result).not.toContain('id="e"')
         expect(spy).not.toHaveBeenCalled()
         spy.mockRestore()
+    })
+})
+
+describe("pages without a <root>", () => {
+    const ADD_A = {
+        operation: "add" as const,
+        cell_id: "a",
+        new_xml: `<mxCell id="a" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`,
+    }
+
+    it("treats an empty page as a blank page", () => {
+        const doc = `<mxfile><diagram id="p" name="Page-1"></diagram></mxfile>`
+        const { result, errors } = applyDiagramOperations(doc, [ADD_A])
+        expect(errors).toEqual([])
+        expect(result).toContain('<mxCell id="0"/>')
+        expect(result).toContain('<mxCell id="1" parent="0"/>')
+        expect(result).toContain('<mxCell id="a"')
+    })
+
+    it("decompresses a compressed page before editing it", () => {
+        const model = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="b" vertex="1" parent="1"/></root></mxGraphModel>`
+        const compressed = deflateRawSync(
+            Buffer.from(encodeURIComponent(model)),
+        ).toString("base64")
+        const doc = `<mxfile><diagram id="p" name="Page-1">${compressed}</diagram></mxfile>`
+        const { result, errors } = applyDiagramOperations(doc, [ADD_A])
+        expect(errors).toEqual([])
+        expect(result).not.toContain(compressed)
+        expect(result).toContain('<mxCell id="b"')
+        expect(result).toContain('<mxCell id="a"')
+        // Only one model and one set of root cells
+        expect(result.match(/<mxGraphModel/g)).toHaveLength(1)
+        expect(result.match(/<mxCell id="0"/g)).toHaveLength(1)
+    })
+
+    it("reports a page whose text is not compressed XML", () => {
+        const doc = `<mxfile><diagram id="p" name="Page-1">not base64 !!</diagram></mxfile>`
+        const { errors } = applyDiagramOperations(doc, [ADD_A])
+        expect(errors[0]?.cellId).toBe("")
+        expect(errors[0]?.message).toContain("could not be decompressed")
     })
 })

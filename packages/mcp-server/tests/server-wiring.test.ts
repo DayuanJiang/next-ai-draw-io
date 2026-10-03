@@ -107,7 +107,7 @@ afterAll(() => {
 })
 
 describe("MCP server wiring", () => {
-    it("registers all nine multi-page tools", async () => {
+    it("registers all ten tools", async () => {
         const resp = await send("tools/list", {})
         expect(resp.error, JSON.stringify(resp.error)).toBeUndefined()
         const names: string[] = (resp.result?.tools ?? []).map(

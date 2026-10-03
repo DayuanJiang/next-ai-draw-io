@@ -302,13 +302,14 @@ export function deletePageFromDoc(
     doc: Document,
     selector: PageSelector,
 ): { ok: boolean; reason?: string; deletedId?: string; deletedIndex?: number } {
-    const pages = listPagesFromDoc(doc)
-    if (pages.length <= 1) {
-        return { ok: false, reason: "Cannot delete the only remaining page" }
-    }
+    // Match first, so a wrong selector reports "not found" even on a
+    // one-page document
     const found = findPageElement(doc, selector)
     if (!found) {
         return { ok: false, reason: "Page not found" }
+    }
+    if (listPagesFromDoc(doc).length <= 1) {
+        return { ok: false, reason: "Cannot delete the only remaining page" }
     }
     const id = found.element.getAttribute("id") || ""
     const index = found.index

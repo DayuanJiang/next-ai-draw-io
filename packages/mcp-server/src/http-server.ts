@@ -256,10 +256,6 @@ export function shutdown(): void {
     stopHttpServer()
 }
 
-export function getServerPort(): number {
-    return serverPort
-}
-
 function handleRequest(
     req: http.IncomingMessage,
     res: http.ServerResponse,
@@ -422,11 +418,23 @@ function handleStateApi(
                     typeof data.baseVersion === "number" &&
                     data.baseVersion < (current?.serverVersion ?? 0)
                 ) {
+                    let savedToHistory = false
+                    if (data.source === "sync") {
+                        // A stale sync reply: the store already holds the
+                        // newer AI write, so the sync is done.
+                        if (current) current.syncRequested = undefined
+                    } else if (typeof data.xml === "string" && data.xml) {
+                        // A user edit lost the race with an AI write. Keep
+                        // it in history so the user can restore it.
+                        addHistory(sessionId, data.xml, data.svg || "")
+                        savedToHistory = true
+                    }
                     res.writeHead(409, { "Content-Type": "application/json" })
                     res.end(
                         JSON.stringify({
                             error: "Diagram changed on the server",
                             version: current?.version,
+                            savedToHistory,
                         }),
                     )
                     return
@@ -708,6 +716,15 @@ function getHtmlPage(sessionId: string): string {
         }
         .filename-group { display: flex; }
         .filename-group input { border-radius: 8px 0 0 8px; border-right: none; }
+        #notice {
+            display: none; position: fixed; left: 50%; bottom: 24px;
+            transform: translateX(-50%); z-index: 3000; max-width: 480px;
+            padding: 10px 16px; border-radius: 8px; font-size: 13px;
+            background: #18181b; color: white;
+            font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        #notice.open { display: block; }
         .filename-group .ext {
             padding: 10px 14px; background: #f4f4f5; border: 1px solid #e4e4e7;
             border-radius: 0 8px 8px 0; font-size: 13px; color: #71717a;
@@ -749,6 +766,7 @@ function getHtmlPage(sessionId: string): string {
         </div>
         <iframe id="drawio" src="${normalizeUrl(DRAWIO_BASE_URL)}/?embed=1&proto=json&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0"></iframe>
     </div>
+    <div id="notice" role="status"></div>
     <div id="history-modal">
         <div class="modal-content">
             <div class="modal-header"><h2>History</h2></div>
@@ -797,7 +815,8 @@ function getHtmlPage(sessionId: string): string {
         let pendingAiSvg = false;
         let pendingMcpExport = null; // 'png' or 'svg' when MCP requested export
         let projectionExportActive = false; // page-targeted export: showing a transient single-page projection
-        let projectionRestoreXml = null; // the real document to reload once a projection export finishes
+        let forceReload = false; // reload the server state on the next poll even if the version is unchanged
+        let noticeTimer = null;
 
         window.addEventListener('message', (e) => {
             if (e.origin !== '${DRAWIO_ORIGIN}') return;
@@ -824,7 +843,10 @@ function getHtmlPage(sessionId: string): string {
                     // draw.io returns the XML in msg.xml, with no msg.data.
                     if (pendingSyncExport && msg.xml) {
                         pendingSyncExport = false;
-                        pushState(msg.xml, '');
+                        // Push with the version the export was taken at: a
+                        // newer AI write may have loaded meanwhile, and this
+                        // older XML must not overwrite it.
+                        pushState(msg.xml, '', pendingSyncBase, 'sync');
                     }
                 } else if (msg.event === 'export' && msg.data) {
                     // Handle MCP server export request (png/svg). fireExport tags
@@ -848,8 +870,11 @@ function getHtmlPage(sessionId: string): string {
                         }
                         return;
                     }
-                    // Handle file download export (PNG/SVG only, drawio uses lastXml directly)
-                    if (pendingDownload && (pendingDownload.format === 'png' || pendingDownload.format === 'svg')) {
+                    // Handle file download export (PNG/SVG only, drawio uses
+                    // lastXml directly). Tagged with dlExport like mcpExport,
+                    // so an autosave SVG export can never be saved instead.
+                    if (msg.message && msg.message.dlExport) {
+                        if (!pendingDownload) return;
                         const dl = pendingDownload;
                         pendingDownload = null;
                         let dataUrl = msg.data;
@@ -897,36 +922,46 @@ function getHtmlPage(sessionId: string): string {
         }
 
         // Restore the user's real document after a page-targeted projection
-        // export. If we never captured one (lastXml was null at projection
-        // start), fall back to forcing a reload from the server on the next
-        // poll by rewinding currentVersion — never leave the iframe stuck on
-        // the transient projection.
+        // export by reloading the server state. The server also has any
+        // autosave that was still in flight when the projection started,
+        // which a copy taken at that moment would miss. A flag is used
+        // because a push finishing meanwhile may update currentVersion.
         function restoreFromProjection() {
             if (!projectionExportActive) return;
             projectionExportActive = false;
-            if (projectionRestoreXml) {
-                iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: projectionRestoreXml, autosave: 1 }), '*');
-                projectionRestoreXml = null;
-            } else {
-                currentVersion = -1; // force the next poll to reload from server
-            }
+            forceReload = true;
+            poll();
         }
 
-        async function pushState(xml, svg = '', baseVersion = currentVersion) {
+        function showNotice(text) {
+            const el = document.getElementById('notice');
+            el.textContent = text;
+            el.classList.add('open');
+            clearTimeout(noticeTimer);
+            noticeTimer = setTimeout(() => el.classList.remove('open'), 8000);
+        }
+
+        // source is 'sync' for replies to a server sync request, else 'edit'
+        async function pushState(xml, svg = '', baseVersion = currentVersion, source = 'edit') {
             if (!sessionId) return;
             try {
                 const r = await fetch('/api/state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, xml, svg, baseVersion })
+                    body: JSON.stringify({ sessionId, xml, svg, baseVersion, source })
                 });
                 if (r.ok) { const d = await r.json(); currentVersion = d.version; lastXml = xml; }
                 // 409: the AI wrote a newer version; load it now
-                else if (r.status === 409) poll();
+                else if (r.status === 409) {
+                    const d = await r.json().catch(() => ({}));
+                    if (d.savedToHistory) showNotice('The AI changed the diagram while you were editing. Your last change was saved in History.');
+                    poll();
+                }
             } catch (e) { console.error('Push failed:', e); }
         }
 
         let pendingSyncExport = false;
+        let pendingSyncBase = 0; // version the pending sync export was taken at
 
         async function poll() {
             if (!sessionId) return;
@@ -939,6 +974,7 @@ function getHtmlPage(sessionId: string): string {
                 // while in case draw.io never answers, so later syncs still run.
                 if (s.syncRequested && !pendingSyncExport && isReady) {
                     pendingSyncExport = true;
+                    pendingSyncBase = currentVersion;
                     iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
                     setTimeout(() => { pendingSyncExport = false; }, 5000);
                 }
@@ -952,7 +988,8 @@ function getHtmlPage(sessionId: string): string {
                 // so it doesn't fight the projection — and leave currentVersion
                 // unadvanced so this bump is re-detected and applied once the
                 // real document is restored.
-                if (s.version > currentVersion && s.xml && !projectionExportActive) {
+                if ((forceReload || s.version > currentVersion) && s.xml && !projectionExportActive) {
+                    forceReload = false;
                     currentVersion = s.version;
                     loadDiagram(s.xml, true);
                 }
@@ -972,13 +1009,11 @@ function getHtmlPage(sessionId: string): string {
                     const fireExport = () => {
                         // mcpExport is echoed back in msg.message (see the handler)
                         const exportOpts = pendingMcpExport === 'png'
-                            ? { action: 'export', format: 'png', scale: 2, mcpExport: true }
+                            ? { action: 'export', format: 'png', scale: 2, currentPage: true, mcpExport: true }
                             : { action: 'export', format: 'svg', mcpExport: true };
                         iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
                     };
                     if (s.exportXml) {
-                        // Stash the real document so we can restore after export.
-                        projectionRestoreXml = lastXml;
                         projectionExportActive = true;
                         // Load the projection without touching lastXml/server state.
                         iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: s.exportXml, autosave: 0 }), '*');
@@ -1055,11 +1090,11 @@ function getHtmlPage(sessionId: string): string {
                 saveConfirmBtn.textContent = 'Save';
             } else if (format === 'png') {
                 pendingDownload = { format: 'png', filename };
-                iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'png', scale: 2 }), '*');
+                iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'png', scale: 2, currentPage: true, dlExport: true }), '*');
                 setTimeout(() => { saveConfirmBtn.disabled = false; saveConfirmBtn.textContent = 'Save'; pendingDownload = null; }, 5000);
             } else if (format === 'svg') {
                 pendingDownload = { format: 'svg', filename };
-                iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
+                iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg', dlExport: true }), '*');
                 setTimeout(() => { saveConfirmBtn.disabled = false; saveConfirmBtn.textContent = 'Save'; pendingDownload = null; }, 5000);
             }
         };
