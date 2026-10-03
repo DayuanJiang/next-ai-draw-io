@@ -56,6 +56,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
+import { STORAGE_KEYS } from "@/lib/storage"
 import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
@@ -133,6 +134,14 @@ export function ModelConfigDialog({
         modelId: string
         message: string
     } | null>(null)
+    // Model ID being typed; written to the config only when valid on blur
+    const [modelIdDraft, setModelIdDraft] = useState<{
+        id: string
+        value: string
+    } | null>(null)
+    // Bumped on every credential edit so a running test can tell that its
+    // results belong to the old credentials
+    const credentialsVersionRef = useRef(0)
     const [dynamicSuggestedModels, setDynamicSuggestedModels] = useState<
         Partial<Record<ProviderName, string[]>>
     >({})
@@ -156,6 +165,11 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
+
+    // Discard an unfinished model ID edit when the dialog closes
+    useEffect(() => {
+        if (!open) setModelIdDraft(null)
+    }, [open])
 
     // Cleanup validation reset timeout on unmount
     useEffect(() => {
@@ -253,9 +267,9 @@ export function ModelConfigDialog({
         field: keyof ProviderConfig,
         value: string | boolean,
     ) => {
-        if (!selectedProviderId) return
-        updateProvider(selectedProviderId, { [field]: value })
-        // Reset validation when credentials change
+        if (!selectedProviderId || !selectedProvider) return
+        const updates: Partial<ProviderConfig> = { [field]: value }
+        // Reset validation of the provider and its models when credentials change
         const credentialFields = [
             "apiKey",
             "baseUrl",
@@ -265,9 +279,17 @@ export function ModelConfigDialog({
             "vertexApiKey",
         ]
         if (credentialFields.includes(field)) {
+            credentialsVersionRef.current++
             setValidationStatus("idle")
-            updateProvider(selectedProviderId, { validated: false })
+            setValidatingModelIndex(null)
+            updates.validated = false
+            updates.models = selectedProvider.models.map((m) => ({
+                ...m,
+                validated: undefined,
+                validationError: undefined,
+            }))
         }
+        updateProvider(selectedProviderId, updates)
     }
 
     // Handle adding a model to current provider
@@ -337,6 +359,7 @@ export function ModelConfigDialog({
 
         let allValid = true
         let errorCount = 0
+        const credentialsVersion = credentialsVersionRef.current
 
         // Validate each model
         for (let i = 0; i < selectedProvider.models.length; i++) {
@@ -346,26 +369,37 @@ export function ModelConfigDialog({
             try {
                 // For EdgeOne, construct baseUrl from current origin
                 const baseUrl = isEdgeOne
-                    ? `${window.location.origin}/api/edgeai`
+                    ? `${window.location.origin}${getApiEndpoint("/api/edgeai")}`
                     : selectedProvider.baseUrl
 
-                const response = await fetch("/api/validate-model", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        provider: selectedProvider.provider,
-                        apiKey: selectedProvider.apiKey,
-                        baseUrl,
-                        modelId: model.modelId,
-                        // AWS Bedrock credentials
-                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
-                        awsRegion: selectedProvider.awsRegion,
-                        // Vertex AI credentials (Express Mode)
-                        vertexApiKey: selectedProvider.vertexApiKey,
-                    }),
-                })
-                const data = await response.json()
+                const response = await fetch(
+                    getApiEndpoint("/api/validate-model"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-access-code":
+                                localStorage.getItem(STORAGE_KEYS.accessCode) ||
+                                "",
+                        },
+                        body: JSON.stringify({
+                            provider: selectedProvider.provider,
+                            apiKey: selectedProvider.apiKey,
+                            baseUrl,
+                            modelId: model.modelId,
+                            // AWS Bedrock credentials
+                            awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                            awsSecretAccessKey:
+                                selectedProvider.awsSecretAccessKey,
+                            awsRegion: selectedProvider.awsRegion,
+                            // Vertex AI credentials (Express Mode)
+                            vertexApiKey: selectedProvider.vertexApiKey,
+                        }),
+                    },
+                )
+                const data = await response.json().catch(() => ({}))
+                // Credentials changed during the test: drop the results
+                if (credentialsVersionRef.current !== credentialsVersion) return
 
                 if (data.valid) {
                     updateModel(selectedProviderId, model.id, {
@@ -377,10 +411,15 @@ export function ModelConfigDialog({
                     errorCount++
                     updateModel(selectedProviderId, model.id, {
                         validated: false,
-                        validationError: data.error || "Validation failed",
+                        validationError:
+                            data.error ||
+                            (response.ok
+                                ? "Validation failed"
+                                : `Request failed (${response.status})`),
                     })
                 }
             } catch {
+                if (credentialsVersionRef.current !== credentialsVersion) return
                 allValid = false
                 errorCount++
                 updateModel(selectedProviderId, model.id, {
@@ -615,7 +654,9 @@ export function ModelConfigDialog({
 
                         {/* Add Provider */}
                         <div className="p-3 border-t border-border-subtle">
+                            {/* Always empty so picking the same type again still fires */}
                             <Select
+                                value=""
                                 onValueChange={(v) =>
                                     handleAddProvider(v as ProviderName)
                                 }
@@ -837,6 +878,7 @@ export function ModelConfigDialog({
                                                     <Plus className="h-3.5 w-3.5" />
                                                 </Button>
                                                 <Select
+                                                    value=""
                                                     onValueChange={(value) => {
                                                         if (value) {
                                                             handleAddModel(
@@ -989,7 +1031,10 @@ export function ModelConfigDialog({
                                                                     </div>
                                                                     <Input
                                                                         value={
-                                                                            model.modelId
+                                                                            modelIdDraft?.id ===
+                                                                            model.id
+                                                                                ? modelIdDraft.value
+                                                                                : model.modelId
                                                                         }
                                                                         title={
                                                                             model.modelId
@@ -1007,24 +1052,14 @@ export function ModelConfigDialog({
                                                                                     null,
                                                                                 )
                                                                             }
-                                                                            if (
-                                                                                selectedProviderId
-                                                                            ) {
-                                                                                updateModel(
-                                                                                    selectedProviderId,
-                                                                                    model.id,
-                                                                                    {
-                                                                                        modelId:
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
-                                                                                        validated:
-                                                                                            undefined,
-                                                                                        validationError:
-                                                                                            undefined,
-                                                                                    },
-                                                                                )
-                                                                            }
+                                                                            setModelIdDraft(
+                                                                                {
+                                                                                    id: model.id,
+                                                                                    value: e
+                                                                                        .target
+                                                                                        .value,
+                                                                                },
+                                                                            )
                                                                         }}
                                                                         onKeyDown={(
                                                                             e,
@@ -1041,6 +1076,10 @@ export function ModelConfigDialog({
                                                                         ) => {
                                                                             const newModelId =
                                                                                 e.target.value.trim()
+                                                                            // Drop the draft; an invalid ID falls back to the saved one
+                                                                            setModelIdDraft(
+                                                                                null,
+                                                                            )
 
                                                                             // Helper to show error with shake
                                                                             const showError =
@@ -1135,6 +1174,24 @@ export function ModelConfigDialog({
                                                                             setEditError(
                                                                                 null,
                                                                             )
+                                                                            if (
+                                                                                selectedProviderId &&
+                                                                                newModelId !==
+                                                                                    model.modelId
+                                                                            ) {
+                                                                                updateModel(
+                                                                                    selectedProviderId,
+                                                                                    model.id,
+                                                                                    {
+                                                                                        modelId:
+                                                                                            newModelId,
+                                                                                        validated:
+                                                                                            undefined,
+                                                                                        validationError:
+                                                                                            undefined,
+                                                                                    },
+                                                                                )
+                                                                            }
                                                                         }}
                                                                         className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                     />

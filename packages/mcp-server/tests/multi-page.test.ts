@@ -15,21 +15,13 @@
  * (diagram-operations.ts) — i.e. the layers underneath the MCP tool surface.
  */
 
-import { DOMParser } from "linkedom"
 import { beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.js"
 
 // Install the DOM polyfill exactly as index.ts does at runtime — the
 // helpers under test rely on it.
 beforeAll(() => {
-    ;(globalThis as any).DOMParser = DOMParser
-    class XMLSerializerPolyfill {
-        serializeToString(node: any): string {
-            if (node.outerHTML !== undefined) return node.outerHTML
-            if (node.documentElement) return node.documentElement.outerHTML
-            return ""
-        }
-    }
-    ;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
+    installDomPolyfill()
 })
 
 import { applyDiagramOperations } from "../src/diagram-operations.js"

@@ -10,6 +10,10 @@ import { aihubmix, createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
+import {
+    adminProvidersToConfig,
+    loadAdminProviders,
+} from "@/lib/admin/providers"
 import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
@@ -824,8 +828,16 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             // Use client-provided credentials if available, otherwise fall back to IAM/env vars
             const hasClientCredentials =
                 overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey
+            // Keys from the admin panel. The ADMIN_ names keep them out of the
+            // default AWS credential chain, which other clients such as the
+            // DynamoDB quota manager use with their own credentials.
+            const adminAccessKeyId = process.env.ADMIN_AWS_ACCESS_KEY_ID
+            const adminSecretAccessKey = process.env.ADMIN_AWS_SECRET_ACCESS_KEY
             const bedrockRegion =
-                overrides?.awsRegion || process.env.AWS_REGION || "us-west-2"
+                overrides?.awsRegion ||
+                process.env.ADMIN_AWS_REGION ||
+                process.env.AWS_REGION ||
+                "us-west-2"
 
             const bedrockProvider = hasClientCredentials
                 ? createAmazonBedrock({
@@ -836,10 +848,16 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                           sessionToken: overrides.awsSessionToken,
                       }),
                   })
-                : createAmazonBedrock({
-                      region: bedrockRegion,
-                      credentialProvider: fromNodeProviderChain(),
-                  })
+                : adminAccessKeyId && adminSecretAccessKey
+                  ? createAmazonBedrock({
+                        region: bedrockRegion,
+                        accessKeyId: adminAccessKeyId,
+                        secretAccessKey: adminSecretAccessKey,
+                    })
+                  : createAmazonBedrock({
+                        region: bedrockRegion,
+                        credentialProvider: fromNodeProviderChain(),
+                    })
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
@@ -872,8 +890,9 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 // for compatibility (most proxies don't support /responses endpoint)
                 const customOpenAI = createOpenAI({ apiKey, baseURL })
                 model = customOpenAI.chat(modelId)
-            } else if (overrides?.apiKey) {
-                // Custom API key but official OpenAI endpoint, use Responses API
+            } else if (overrides?.apiKey || overrides?.apiKeyEnv) {
+                // Custom API key (the client's, or a server model's own env var)
+                // but official OpenAI endpoint, use Responses API
                 // to support reasoning for gpt-5, o1, o3, o4 models
                 const customOpenAI = createOpenAI({ apiKey })
                 model = customOpenAI(modelId)
@@ -928,7 +947,9 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.baseUrl,
                 serverBaseUrl,
             )
-            if (baseURL || overrides?.apiKey) {
+            // The default instance only reads GOOGLE_GENERATIVE_AI_API_KEY, so a
+            // server model's own env var (apiKeyEnv) needs a custom instance too
+            if (baseURL || overrides?.apiKey || overrides?.apiKeyEnv) {
                 const customGoogle = createGoogleGenerativeAI({
                     apiKey,
                     ...(baseURL && { baseURL }),
@@ -941,8 +962,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         }
         case "vertexai": {
             // Express Mode: Use API key for authentication
-            const vertexApiKey =
-                overrides?.vertexApiKey || process.env.GOOGLE_VERTEX_API_KEY
+            // SECURITY: a client base URL only ever gets the client's key, so the
+            // server's GOOGLE_VERTEX_API_KEY is never sent to a client-chosen host
+            const vertexApiKey = overrides?.baseUrl
+                ? overrides.vertexApiKey
+                : overrides?.vertexApiKey || process.env.GOOGLE_VERTEX_API_KEY
 
             if (!vertexApiKey) {
                 throw new Error(
@@ -951,9 +975,13 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 )
             }
 
-            // Support custom base URL from env or client override
-            const baseURL =
-                overrides?.baseUrl || process.env.GOOGLE_VERTEX_BASE_URL
+            // Support custom base URL from env or client override.
+            // A client key only goes to the client's URL or the official one.
+            const baseURL = resolveBaseURL(
+                overrides?.vertexApiKey,
+                overrides?.baseUrl,
+                process.env.GOOGLE_VERTEX_BASE_URL,
+            )
 
             const vertexProvider = createVertex({
                 apiKey: vertexApiKey,
@@ -1079,7 +1107,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 overrides?.baseUrl,
                 serverBaseUrl,
             )
-            if (baseURL || overrides?.apiKey) {
+            if (baseURL || overrides?.apiKey || overrides?.apiKeyEnv) {
                 const customDeepSeek = createDeepSeek({
                     apiKey,
                     ...(baseURL && { baseURL }),
@@ -1241,7 +1269,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             )
             // Only use custom configuration if explicitly set (local dev or custom Gateway)
             // Otherwise undefined → AI SDK uses Vercel default (https://ai-gateway.vercel.sh/v1/ai) + OIDC
-            if (baseURL || overrides?.apiKey) {
+            if (baseURL || overrides?.apiKey || overrides?.apiKeyEnv) {
                 const customGateway = createGateway({
                     apiKey,
                     ...(baseURL && { baseURL }),
@@ -1431,6 +1459,36 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 }
 
 /**
+ * Whether the call is paid for by the server's own credentials (env keys or
+ * IAM role) rather than credentials sent with the request. Mirrors which key
+ * each branch of getAIModel ends up using.
+ */
+export function usesServerCredentials(
+    provider: ProviderName,
+    overrides?: ClientOverrides,
+): boolean {
+    switch (provider) {
+        case "bedrock":
+            return !(overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey)
+        case "vertexai":
+            return !overrides?.vertexApiKey
+        case "edgeone":
+            // The platform's own endpoint, no key involved
+            return false
+        case "ollama":
+            // Only a server key costs money; a keyless local server or the
+            // client's own server does not
+            return (
+                !overrides?.baseUrl &&
+                !overrides?.apiKey &&
+                !!(overrides?.apiKeyEnv || process.env.OLLAMA_API_KEY)
+            )
+        default:
+            return !overrides?.apiKey
+    }
+}
+
+/**
  * Check if a model supports prompt caching.
  * Currently only Claude models on Bedrock support prompt caching.
  */
@@ -1464,6 +1522,17 @@ export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
         )
     }
 
-    const { model } = getAIModel({ modelId })
+    // A default set in the admin panel becomes AI_PROVIDER/AI_MODEL, but its key
+    // lives in an ADMIN_-prefixed env var. Point at it the way the chat route
+    // does for server models, or the standard env var is required instead.
+    const panelDefault = adminProvidersToConfig(
+        loadAdminProviders(),
+    ).providers.find((p) => p.default && p.provider === process.env.AI_PROVIDER)
+
+    const { model } = getAIModel({
+        modelId,
+        apiKeyEnv: panelDefault?.apiKeyEnv,
+        baseUrlEnv: panelDefault?.baseUrlEnv,
+    })
     return model
 }

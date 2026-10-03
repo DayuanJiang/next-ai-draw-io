@@ -101,6 +101,15 @@ function saveConfig(config: MultiModelConfig): void {
     localStorage.setItem(STORAGE_KEYS.modelConfigs, JSON.stringify(config))
 }
 
+/**
+ * Server model to fall back to: the one marked default, else the first one
+ */
+function defaultServerModelId(
+    serverModels: FlattenedServerModel[],
+): string | undefined {
+    return (serverModels.find((m) => m.isDefault) ?? serverModels[0])?.id
+}
+
 export interface UseModelConfigReturn {
     // State
     config: MultiModelConfig
@@ -144,6 +153,16 @@ export function useModelConfig(): UseModelConfigReturn {
         setIsLoaded(true)
     }, [])
 
+    // Pick up config changes saved by other tabs, so this tab neither shows a
+    // stale model nor overwrites their changes on its next save
+    useEffect(() => {
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === STORAGE_KEYS.modelConfigs) setConfig(loadConfig())
+        }
+        window.addEventListener("storage", handleStorage)
+        return () => window.removeEventListener("storage", handleStorage)
+    }, [])
+
     // Load server models on mount (if any)
     useEffect(() => {
         if (typeof window === "undefined") return
@@ -165,17 +184,18 @@ export function useModelConfig(): UseModelConfigReturn {
                 setServerModels(raw)
                 setServerLoaded(true)
 
-                // Auto-select default server model if no model is currently selected
+                // Auto-select the default server model if no model is selected,
+                // or if the saved server model is gone (renamed or removed)
                 setConfig((prev) => {
-                    if (!prev.selectedModelId && raw.length > 0) {
-                        const defaultModel = raw.find((m) => m.isDefault)
-                        if (defaultModel) {
-                            return { ...prev, selectedModelId: defaultModel.id }
-                        }
-                        // If no default marked, use first server model
-                        return { ...prev, selectedModelId: raw[0].id }
-                    }
-                    return prev
+                    const id = prev.selectedModelId
+                    const isStale =
+                        id?.startsWith("server:") &&
+                        !raw.some((m) => m.id === id)
+                    if (id && !isStale) return prev
+                    const fallback = defaultServerModelId(raw)
+                    return fallback === id
+                        ? prev
+                        : { ...prev, selectedModelId: fallback }
                 })
             })
             .catch((error) => {
@@ -260,24 +280,31 @@ export function useModelConfig(): UseModelConfigReturn {
         [],
     )
 
-    const deleteProvider = useCallback((providerId: string) => {
-        setConfig((prev) => {
-            const provider = prev.providers.find((p) => p.id === providerId)
-            const modelIds = provider?.models.map((m) => m.id) || []
+    const deleteProvider = useCallback(
+        (providerId: string) => {
+            setConfig((prev) => {
+                const provider = prev.providers.find((p) => p.id === providerId)
+                const modelIds = provider?.models.map((m) => m.id) || []
 
-            // Clear selected model if it belongs to deleted provider
-            const newSelectedId =
-                prev.selectedModelId && modelIds.includes(prev.selectedModelId)
-                    ? undefined
-                    : prev.selectedModelId
+                // Fall back to the default server model if the selected model
+                // belongs to the deleted provider
+                const newSelectedId =
+                    prev.selectedModelId &&
+                    modelIds.includes(prev.selectedModelId)
+                        ? defaultServerModelId(serverModels)
+                        : prev.selectedModelId
 
-            return {
-                ...prev,
-                providers: prev.providers.filter((p) => p.id !== providerId),
-                selectedModelId: newSelectedId,
-            }
-        })
-    }, [])
+                return {
+                    ...prev,
+                    providers: prev.providers.filter(
+                        (p) => p.id !== providerId,
+                    ),
+                    selectedModelId: newSelectedId,
+                }
+            })
+        },
+        [serverModels],
+    )
 
     const addModel = useCallback(
         (providerId: string, modelId: string): ModelConfig => {
@@ -334,14 +361,15 @@ export function useModelConfig(): UseModelConfigReturn {
                           }
                         : p,
                 ),
-                // Clear selected model if it was deleted
+                // Fall back to the default server model if the selected model
+                // was deleted
                 selectedModelId:
                     prev.selectedModelId === modelConfigId
-                        ? undefined
+                        ? defaultServerModelId(serverModels)
                         : prev.selectedModelId,
             }))
         },
-        [],
+        [serverModels],
     )
 
     const resetConfig = useCallback(() => {

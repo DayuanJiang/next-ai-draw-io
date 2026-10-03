@@ -6,7 +6,15 @@
 import { log } from "./logger.js"
 
 const MAX_HISTORY = 20
-const historyStore = new Map<string, Array<{ xml: string; svg: string }>>()
+
+interface HistoryEntry {
+    id: number // Stable across shifts of the circular buffer
+    xml: string
+    svg: string
+}
+
+let nextEntryId = 0
+const historyStore = new Map<string, HistoryEntry[]>()
 
 export function addHistory(sessionId: string, xml: string, svg = ""): number {
     let history = historyStore.get(sessionId)
@@ -21,7 +29,7 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
         return history.length - 1
     }
 
-    history.push({ xml, svg })
+    history.push({ id: nextEntryId++, xml, svg })
 
     // Circular buffer
     if (history.length > MAX_HISTORY) {
@@ -32,18 +40,16 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
     return history.length - 1
 }
 
-export function getHistory(
-    sessionId: string,
-): Array<{ xml: string; svg: string }> {
+export function getHistory(sessionId: string): HistoryEntry[] {
     return historyStore.get(sessionId) || []
 }
 
+/** Look up an entry by its id; the array index shifts as old entries drop. */
 export function getHistoryEntry(
     sessionId: string,
-    index: number,
-): { xml: string; svg: string } | undefined {
-    const history = historyStore.get(sessionId)
-    return history?.[index]
+    id: number,
+): HistoryEntry | undefined {
+    return historyStore.get(sessionId)?.find((entry) => entry.id === id)
 }
 
 export function clearHistory(sessionId: string): void {

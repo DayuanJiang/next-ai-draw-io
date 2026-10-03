@@ -264,9 +264,13 @@ export function ModelSelector({
                                                         (model) => (
                                                             <ModelSelectorItem
                                                                 key={model.id}
-                                                                value={
-                                                                    model.modelId
-                                                                }
+                                                                // Unique value so same-named models highlight
+                                                                // separately; keywords keep search by name
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
                                                                 onSelect={() =>
                                                                     handleSelect(
                                                                         model.id,
@@ -351,9 +355,11 @@ export function ModelSelector({
                                                         (model) => (
                                                             <ModelSelectorItem
                                                                 key={model.id}
-                                                                value={
-                                                                    model.modelId
-                                                                }
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
                                                                 onSelect={() =>
                                                                     handleSelect(
                                                                         model.id,

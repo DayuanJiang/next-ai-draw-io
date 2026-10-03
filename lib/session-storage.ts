@@ -1,5 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import { toast } from "sonner"
 import type { Template } from "./template-storage"
 
 // Constants
@@ -61,6 +62,7 @@ let dbPromise: Promise<IDBPDatabase<ChatSessionDB>> | null = null
 
 async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
     if (!dbPromise) {
+        // A failed or lost connection is not cached: the next call reopens it
         dbPromise = openDB<ChatSessionDB>(DB_NAME, DB_VERSION, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
@@ -88,6 +90,28 @@ async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
                     }
                 }
             },
+            blocked() {
+                // An older tab keeps the DB open, so the upgrade has to wait
+                toast.warning(
+                    "Please close other tabs of this app to finish updating chat storage.",
+                    { id: "idb-upgrade-blocked", duration: 10000 },
+                )
+            },
+            blocking(_currentVersion, _blockedVersion, event) {
+                // Another tab needs to upgrade the DB: close our connection so
+                // it is not stuck, and reopen on the next call
+                const db = event.target as IDBDatabase
+                db.close()
+                dbPromise = null
+            },
+            terminated() {
+                // The browser closed the connection (e.g. Safari after a long
+                // time in the background)
+                dbPromise = null
+            },
+        }).catch((error) => {
+            dbPromise = null
+            throw error
         })
     }
     return dbPromise
@@ -145,6 +169,8 @@ export async function getSession(id: string): Promise<ChatSession | null> {
     }
 }
 
+// Returns false on failure (e.g. storage quota exceeded). Other sessions are
+// never deleted automatically; the caller tells the user instead.
 export async function saveSession(session: ChatSession): Promise<boolean> {
     if (!isIndexedDBAvailable()) return false
     try {
@@ -152,29 +178,11 @@ export async function saveSession(session: ChatSession): Promise<boolean> {
         await db.put(STORE_NAME, session)
         return true
     } catch (error) {
-        // Handle quota exceeded
-        if (
-            error instanceof DOMException &&
-            error.name === "QuotaExceededError"
-        ) {
-            console.warn("Storage quota exceeded, deleting oldest session...")
-            await deleteOldestSession()
-            // Retry once
-            try {
-                const db = await getDB()
-                await db.put(STORE_NAME, session)
-                return true
-            } catch (retryError) {
-                console.error(
-                    "Failed to save session after cleanup:",
-                    retryError,
-                )
-                return false
-            }
-        } else {
-            console.error("Failed to save session:", error)
-            return false
-        }
+        console.error("Failed to save session:", error)
+        // Reopen the connection next time in case it was lost (Safari reports
+        // "Connection to Indexed Database server lost" without closing it)
+        dbPromise = null
+        return false
     }
 }
 

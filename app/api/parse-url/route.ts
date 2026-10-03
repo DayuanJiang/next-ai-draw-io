@@ -1,9 +1,11 @@
 import { extractFromHtml } from "@extractus/article-extractor"
 import { NextResponse } from "next/server"
 import TurndownService from "turndown"
+import { checkAccessCode } from "@/lib/access-code"
 import { isPrivateUrl } from "@/lib/ssrf-protection"
 
 const MAX_CONTENT_LENGTH = 150000 // Match PDF limit
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 const EXTRACT_TIMEOUT_MS = 15000
 const USER_AGENT = "Mozilla/5.0 (compatible; NextAIDrawio/1.0)"
 
@@ -32,7 +34,36 @@ function detectCharset(
     }
 }
 
+// Read the response body, giving up once it passes MAX_RESPONSE_BYTES so a
+// huge download can't exhaust server memory. Returns null when too large.
+async function readLimitedBody(
+    response: Response,
+): Promise<ArrayBuffer | null> {
+    if (Number(response.headers.get("content-length")) > MAX_RESPONSE_BYTES) {
+        return null
+    }
+    if (!response.body) return new ArrayBuffer(0)
+
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+        if (total > MAX_RESPONSE_BYTES) {
+            await reader.cancel()
+            return null
+        }
+        chunks.push(value)
+    }
+    return new Blob(chunks as BlobPart[]).arrayBuffer()
+}
+
 export async function POST(req: Request) {
+    const accessError = checkAccessCode(req)
+    if (accessError) return accessError
+
     try {
         const { url } = await req.json()
 
@@ -97,7 +128,15 @@ export async function POST(req: Request) {
                 )
             }
 
-            const buffer = await response.arrayBuffer()
+            const buffer = await readLimitedBody(response)
+            if (!buffer) {
+                return NextResponse.json(
+                    {
+                        error: `Page exceeds the ${MAX_RESPONSE_BYTES / 1024 / 1024} MB download limit`,
+                    },
+                    { status: 413 },
+                )
+            }
             const charset = detectCharset(contentType, buffer)
             html = new TextDecoder(charset).decode(buffer)
         } catch (err: any) {

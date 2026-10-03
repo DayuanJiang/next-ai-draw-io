@@ -41,7 +41,7 @@ parameters: {
 tool name: edit_diagram
 description: Edit specific parts of the EXISTING diagram. Use this when making small targeted changes like adding/removing elements, changing labels, or adjusting properties. This is more efficient than regenerating the entire diagram.
 parameters: {
-  edits: Array<{search: string, replace: string}>
+  operations: Array<{operation: "update" | "add" | "delete", cell_id: string, new_xml?: string}>
 }
 ---Tool3---
 tool name: append_diagram

@@ -3,15 +3,14 @@
  * Copied from lib/utils.ts to avoid cross-package imports
  */
 
+import { getXmlSyntaxError } from "./dom.js"
+
 // ============================================================================
 // Constants
 // ============================================================================
 
 /** Maximum XML size to process (1MB) - larger XMLs may cause performance issues */
 const MAX_XML_SIZE = 1_000_000
-
-/** Maximum iterations for aggressive cell dropping to prevent infinite loops */
-const MAX_DROP_ITERATIONS = 10
 
 /** Structural attributes that should not be duplicated in draw.io */
 const STRUCTURAL_ATTRS = [
@@ -91,6 +90,21 @@ function parseXmlTags(xml: string): ParsedTag[] {
     return tags
 }
 
+/** Rewrite every opening tag with fn, leaving text and closing tags as is. */
+function replaceInOpeningTags(
+    xml: string,
+    fn: (tag: string) => string,
+): string {
+    let out = ""
+    let last = 0
+    for (const { tag, isClosing, startIndex, endIndex } of parseXmlTags(xml)) {
+        if (isClosing) continue
+        out += xml.slice(last, startIndex) + fn(tag)
+        last = endIndex + 1
+    }
+    return out + xml.slice(last)
+}
+
 // ============================================================================
 // Validation Helper Functions
 // ============================================================================
@@ -128,8 +142,7 @@ function checkDuplicateAttributes(xml: string): string | null {
  * scope the cell-ID uniqueness check per <diagram>, and additionally check
  * that the <diagram> ids themselves are unique.
  *
- * The legacy regex-based check is kept as a fallback for non-mxfile inputs
- * and for XML that won't DOM-parse.
+ * The legacy regex-based check is kept as a fallback for non-mxfile inputs.
  */
 function checkDuplicateIds(xml: string): string | null {
     // The DOM-aware path only matters for <mxfile> wrappers; for legacy
@@ -142,51 +155,47 @@ function checkDuplicateIds(xml: string): string | null {
     if (mightBeMxFile)
         try {
             const doc = new DOMParser().parseFromString(xml, "text/xml")
-            if (!doc.querySelector("parsererror")) {
-                const rootEl = doc.documentElement
-                if (rootEl && rootEl.tagName === "mxfile") {
-                    const diagrams = doc.querySelectorAll("diagram")
+            const rootEl = doc.documentElement
+            if (rootEl && rootEl.tagName === "mxfile") {
+                const diagrams = doc.querySelectorAll("diagram")
 
-                    // 1) <diagram> ids must be unique across the file.
-                    const diagramIds = new Map<string, number>()
-                    diagrams.forEach((d) => {
-                        const id = d.getAttribute("id")
-                        if (id)
-                            diagramIds.set(id, (diagramIds.get(id) || 0) + 1)
-                    })
-                    const dupDiagrams = Array.from(diagramIds.entries())
-                        .filter(([, c]) => c > 1)
-                        .map(([id]) => `'${id}'`)
-                    if (dupDiagrams.length > 0) {
-                        return `Invalid XML: Found duplicate <diagram> id(s): ${dupDiagrams.slice(0, 3).join(", ")}. Each page must have a unique id.`
-                    }
-
-                    // 2) Within each page, mxCell ids must be unique.
-                    for (let i = 0; i < diagrams.length; i++) {
-                        const diagram = diagrams[i]
-                        const pageId =
-                            diagram.getAttribute("id") || `(index ${i})`
-                        const cells = diagram.querySelectorAll("mxCell")
-                        const cellIds = new Map<string, number>()
-                        cells.forEach((c) => {
-                            const id = c.getAttribute("id")
-                            if (id) cellIds.set(id, (cellIds.get(id) || 0) + 1)
-                        })
-                        const dups = Array.from(cellIds.entries())
-                            .filter(([, c]) => c > 1)
-                            .map(([id, count]) => `'${id}' (${count}x)`)
-                        if (dups.length > 0) {
-                            return `Invalid XML: Found duplicate cell ID(s) in page "${pageId}": ${dups.slice(0, 3).join(", ")}. All mxCell ids must be unique within a page.`
-                        }
-                    }
-                    return null
+                // 1) <diagram> ids must be unique across the file.
+                const diagramIds = new Map<string, number>()
+                diagrams.forEach((d) => {
+                    const id = d.getAttribute("id")
+                    if (id) diagramIds.set(id, (diagramIds.get(id) || 0) + 1)
+                })
+                const dupDiagrams = Array.from(diagramIds.entries())
+                    .filter(([, c]) => c > 1)
+                    .map(([id]) => `'${id}'`)
+                if (dupDiagrams.length > 0) {
+                    return `Invalid XML: Found duplicate <diagram> id(s): ${dupDiagrams.slice(0, 3).join(", ")}. Each page must have a unique id.`
                 }
+
+                // 2) Within each page, mxCell ids must be unique.
+                for (let i = 0; i < diagrams.length; i++) {
+                    const diagram = diagrams[i]
+                    const pageId = diagram.getAttribute("id") || `(index ${i})`
+                    const cells = diagram.querySelectorAll("mxCell")
+                    const cellIds = new Map<string, number>()
+                    cells.forEach((c) => {
+                        const id = c.getAttribute("id")
+                        if (id) cellIds.set(id, (cellIds.get(id) || 0) + 1)
+                    })
+                    const dups = Array.from(cellIds.entries())
+                        .filter(([, c]) => c > 1)
+                        .map(([id, count]) => `'${id}' (${count}x)`)
+                    if (dups.length > 0) {
+                        return `Invalid XML: Found duplicate cell ID(s) in page "${pageId}": ${dups.slice(0, 3).join(", ")}. All mxCell ids must be unique within a page.`
+                    }
+                }
+                return null
             }
         } catch {
             // fall through to regex
         }
 
-    // Legacy regex-based check for bare <mxGraphModel> and parse-error cases.
+    // Legacy regex-based check for bare <mxGraphModel> inputs.
     const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
     const ids = new Map<string, number>()
     let idMatch
@@ -315,14 +324,11 @@ export function validateMxCellStructure(xml: string): string | null {
         )
     }
 
-    // 0. First use DOM parser to catch syntax errors (most accurate)
+    // 0. DOM-based checks. Syntax errors are caught by the strict check at
+    // the end: linkedom's DOMParser never reports them.
     try {
         const parser = new DOMParser()
         const doc = parser.parseFromString(xml, "text/xml")
-        const parseError = doc.querySelector("parsererror")
-        if (parseError) {
-            return `Invalid XML: The XML contains syntax errors (likely unescaped special characters like <, >, & in attribute values). Please escape special characters: use &lt; for <, &gt; for >, &amp; for &, &quot; for ". Regenerate the diagram with properly escaped values.`
-        }
 
         // DOM-based checks for nested mxCell
         const allCells = doc.querySelectorAll("mxCell")
@@ -402,6 +408,14 @@ export function validateMxCellStructure(xml: string): string | null {
     const nestedCellError = checkNestedMxCells(xml)
     if (nestedCellError) {
         return nestedCellError
+    }
+
+    // 11. Strict XML syntax check, run last so the checks above can give
+    // more specific messages. Catches what they miss, e.g. duplicate or
+    // unquoted attributes, which make draw.io refuse to load the diagram.
+    const syntaxError = getXmlSyntaxError(xml)
+    if (syntaxError) {
+        return `Invalid XML: syntax error at ${syntaxError} Escape special characters in attribute values (&lt; for <, &amp; for &, &quot; for "), quote every attribute value, and do not repeat an attribute.`
     }
 
     return null
@@ -494,13 +508,21 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         }
     }
 
-    // 6. Fix malformed attribute quotes
-    const malformedQuotePattern = /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;/
-    if (malformedQuotePattern.test(fixed)) {
-        fixed = fixed.replace(
-            /(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*?)&quot;/g,
-            '$1="$2"',
-        )
+    // 6. Fix malformed attribute quotes (name=&quot;value&quot;). Quoted
+    // values are matched first and kept, so &quot; inside a rich-text
+    // label like value="&lt;font style=&quot;...&quot;&gt;" is left alone.
+    let quotesFixed = false
+    fixed = replaceInOpeningTags(fixed, (tag) =>
+        tag.replace(
+            /("[^"]*"|'[^']*')|(\s[a-zA-Z][a-zA-Z0-9_:-]*)=&quot;([^&]*?)&quot;/g,
+            (match, quoted, name, value) => {
+                if (quoted) return match
+                quotesFixed = true
+                return `${name}="${value}"`
+            },
+        ),
+    )
+    if (quotesFixed) {
         fixes.push("Fixed malformed attribute quotes")
     }
 
@@ -511,10 +533,21 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Fixed malformed closing tags")
     }
 
-    // 8. Fix missing space between attributes
-    const missingSpacePattern = /("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g
-    if (missingSpacePattern.test(fixed)) {
-        fixed = fixed.replace(/("[^"]*")([a-zA-Z][a-zA-Z0-9_:-]*=)/g, "$1 $2")
+    // 8. Fix missing space between attributes (id="2"vertex="1"). Every
+    // quoted value is consumed whole, so quotes always pair up within one
+    // attribute.
+    let spaceAdded = false
+    fixed = replaceInOpeningTags(fixed, (tag) =>
+        tag.replace(
+            /("[^"]*"|'[^']*')([a-zA-Z_:])?/g,
+            (match, quoted, next) => {
+                if (!next) return match
+                spaceAdded = true
+                return `${quoted} ${next}`
+            },
+        ),
+    )
+    if (spaceAdded) {
         fixes.push("Added missing space between attributes")
     }
 
@@ -632,6 +665,9 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         "Array",
         "Object",
         "mxRectangle",
+        // Wrappers draw.io writes for cells with links, tooltips or data
+        "UserObject",
+        "object",
     ])
     const foreignTagPattern = /<\/?([a-zA-Z][a-zA-Z0-9_]*)[^>]*>/g
     let foreignMatch
@@ -796,8 +832,10 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push(`Flattened ${nestedFixed} duplicate-ID nested mxCell(s)`)
     }
 
-    // 21. Fix true nested mxCell (different IDs)
-    const lines2 = fixed.split("\n")
+    // 21. Fix true nested mxCell (different IDs). Runs only when the nesting
+    // check finds real nesting, because this line-based rewrite can break
+    // valid cells written over several lines.
+    const lines2 = checkNestedMxCells(fixed) ? fixed.split("\n") : []
     newLines = []
     let trueNestedFixed = 0
     let cellDepth = 0
@@ -807,7 +845,11 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         const line = lines2[i]
         const trimmed = line.trim()
 
-        const isOpenCell = /<mxCell\s/.test(trimmed) && !trimmed.endsWith("/>")
+        // A line holding a whole cell (<mxCell ...>...</mxCell>) opens nothing
+        const isOpenCell =
+            /<mxCell\s/.test(trimmed) &&
+            !trimmed.endsWith("/>") &&
+            !trimmed.endsWith("</mxCell>")
         const isCloseCell = trimmed === "</mxCell>"
 
         if (isOpenCell) {
@@ -860,9 +902,11 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 
         if (duplicateIds.length > 0) {
             const idCounters = new Map<string, number>()
+            // Rebuild from the captured parts so only the value changes (an id
+            // like "d" or "i" also occurs in the attribute name itself)
             fixed = fixed.replace(
-                /\bid\s*=\s*["']([^"']+)["']/gi,
-                (match, id) => {
+                /(\bid\s*=\s*["'])([^"']+)(["'])/gi,
+                (match, before, id, after) => {
                     if (!duplicateIds.includes(id)) return match
 
                     const count = idCounters.get(id) || 0
@@ -870,8 +914,7 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 
                     if (count === 0) return match
 
-                    const newId = `${id}_dup${count}`
-                    return match.replace(id, newId)
+                    return `${before}${id}_dup${count}${after}`
                 },
             )
             fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s)`)
@@ -890,49 +933,6 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     )
     if (emptyIdCount > 0) {
         fixes.push(`Generated ${emptyIdCount} missing ID(s)`)
-    }
-
-    // 24. Aggressive: drop broken mxCell elements
-    if (typeof DOMParser !== "undefined") {
-        let droppedCells = 0
-        let maxIterations = MAX_DROP_ITERATIONS
-        while (maxIterations-- > 0) {
-            const parser = new DOMParser()
-            const doc = parser.parseFromString(fixed, "text/xml")
-            const parseError = doc.querySelector("parsererror")
-            if (!parseError) break
-
-            const errText = parseError.textContent || ""
-            const match = errText.match(/(\d+):\d+:/)
-            if (!match) break
-
-            const errLine = parseInt(match[1], 10) - 1
-            const lines = fixed.split("\n")
-
-            let cellStart = errLine
-            let cellEnd = errLine
-
-            while (cellStart > 0 && !lines[cellStart].includes("<mxCell")) {
-                cellStart--
-            }
-
-            while (cellEnd < lines.length - 1) {
-                if (
-                    lines[cellEnd].includes("</mxCell>") ||
-                    lines[cellEnd].trim().endsWith("/>")
-                ) {
-                    break
-                }
-                cellEnd++
-            }
-
-            lines.splice(cellStart, cellEnd - cellStart + 1)
-            fixed = lines.join("\n")
-            droppedCells++
-        }
-        if (droppedCells > 0) {
-            fixes.push(`Dropped ${droppedCells} unfixable mxCell element(s)`)
-        }
     }
 
     return { fixed, fixes }

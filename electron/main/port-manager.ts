@@ -1,4 +1,6 @@
+import { readFileSync, writeFileSync } from "node:fs"
 import net from "node:net"
+import path from "node:path"
 import { app } from "electron"
 
 /**
@@ -24,6 +26,38 @@ const PORT_CONFIG = {
 let allocatedPort: number | null = null
 
 /**
+ * File that remembers the production port from the last launch, so the app
+ * keeps the same origin (and its localStorage) instead of switching between
+ * the legacy and new port depending on which one is free at startup
+ */
+function getSavedPortPath(): string {
+    return path.join(app.getPath("userData"), "server-port.json")
+}
+
+function loadSavedPort(): number | null {
+    try {
+        const { port } = JSON.parse(readFileSync(getSavedPortPath(), "utf-8"))
+        return Number.isInteger(port) ? port : null
+    } catch {
+        return null
+    }
+}
+
+/**
+ * Remember the port the production server started on
+ */
+export function saveServerPort(port: number): void {
+    if (!app.isPackaged || port === loadSavedPort()) {
+        return
+    }
+    try {
+        writeFileSync(getSavedPortPath(), JSON.stringify({ port }), "utf-8")
+    } catch (error) {
+        console.error("Failed to save server port:", error)
+    }
+}
+
+/**
  * Check if a specific port is available
  */
 export function isPortAvailable(port: number): Promise<boolean> {
@@ -44,7 +78,8 @@ export function isPortAvailable(port: number): Promise<boolean> {
 /**
  * Find an available port
  * - In development: uses fixed port (6002)
- * - In production: uses fixed port (13370) to preserve localStorage
+ * - In production: uses the port from the last launch, then the legacy
+ *   port (61337), then 13370, to preserve localStorage
  * - Falls back to sequential ports if preferred port is unavailable
  * - Last resort: lets the OS assign a port (port 0)
  *
@@ -67,6 +102,20 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
             `Previously allocated port ${allocatedPort} is no longer available`,
         )
         allocatedPort = null
+    }
+
+    // In production, use the port from the last launch first
+    if (!isDev) {
+        const savedPort = loadSavedPort()
+        if (savedPort !== null) {
+            if (await isPortAvailable(savedPort)) {
+                allocatedPort = savedPort
+                return savedPort
+            }
+            console.warn(
+                `Port ${savedPort} from the last launch is unavailable. Data saved under it will not show on the new port.`,
+            )
+        }
     }
 
     // In production, try legacy port first to preserve existing users' localStorage

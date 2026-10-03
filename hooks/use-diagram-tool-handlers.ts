@@ -1,5 +1,4 @@
 import type { MutableRefObject } from "react"
-import { useRef } from "react"
 import type { DiagramOperation } from "@/components/chat/types"
 import type {
     ValidationState,
@@ -48,6 +47,8 @@ type ValidateDiagramFn = (
 interface UseDiagramToolHandlersParams {
     partialXmlRef: MutableRefObject<string>
     editDiagramOriginalXmlRef: MutableRefObject<Map<string, string>>
+    // Failed VLM validations in the current user turn (reset on each user message)
+    validationRetryCountRef: MutableRefObject<number>
     chartXMLRef: MutableRefObject<string>
     onDisplayChart: (xml: string, skipValidation?: boolean) => string | null
     onFetchChart: (saveToHistory?: boolean) => Promise<string>
@@ -72,6 +73,7 @@ interface UseDiagramToolHandlersParams {
 export function useDiagramToolHandlers({
     partialXmlRef,
     editDiagramOriginalXmlRef,
+    validationRetryCountRef,
     chartXMLRef,
     onDisplayChart,
     onFetchChart,
@@ -82,9 +84,6 @@ export function useDiagramToolHandlers({
     sessionId,
     onValidationStateChange,
 }: UseDiagramToolHandlersParams) {
-    // Track validation retry count per tool call
-    const validationRetryCountRef = useRef<Map<string, number>>(new Map())
-
     // Helper to update validation state
     const updateValidationState = (
         toolCallId: string,
@@ -232,17 +231,15 @@ ${finalXml}
                             )
                         }
 
-                        const retryCount =
-                            validationRetryCountRef.current.get(
-                                toolCall.toolCallId,
-                            ) || 0
+                        // Each retry is a new tool call, so count attempts per user turn
+                        const attempt = validationRetryCountRef.current + 1
 
                         // Notify UI that we're validating (include the image)
                         updateValidationState(
                             toolCall.toolCallId,
                             "validating",
                             {
-                                attempt: retryCount + 1,
+                                attempt,
                                 maxAttempts: MAX_VALIDATION_RETRIES,
                                 imageData: capturedPngData,
                             },
@@ -254,17 +251,14 @@ ${finalXml}
                         )
 
                         if (!result.valid) {
-                            if (retryCount < MAX_VALIDATION_RETRIES) {
-                                validationRetryCountRef.current.set(
-                                    toolCall.toolCallId,
-                                    retryCount + 1,
-                                )
+                            if (attempt < MAX_VALIDATION_RETRIES) {
+                                validationRetryCountRef.current = attempt
 
                                 const feedback =
                                     formatValidationFeedback(result)
                                 if (DEBUG) {
                                     console.log(
-                                        `[display_diagram] Validation failed (attempt ${retryCount + 1}/${MAX_VALIDATION_RETRIES}):`,
+                                        `[display_diagram] Validation failed (attempt ${attempt}/${MAX_VALIDATION_RETRIES}):`,
                                         result.issues,
                                     )
                                 }
@@ -274,7 +268,7 @@ ${finalXml}
                                     toolCall.toolCallId,
                                     "failed",
                                     {
-                                        attempt: retryCount + 1,
+                                        attempt,
                                         maxAttempts: MAX_VALIDATION_RETRIES,
                                         result,
                                         imageData: capturedPngData,
@@ -285,19 +279,17 @@ ${finalXml}
                                     tool: "display_diagram",
                                     toolCallId: toolCall.toolCallId,
                                     state: "output-error",
-                                    errorText: `[Validation attempt ${retryCount + 1}/${MAX_VALIDATION_RETRIES}]\n${feedback}`,
+                                    errorText: `[Validation attempt ${attempt}/${MAX_VALIDATION_RETRIES}]\n${feedback}`,
                                 })
                                 return
                             } else {
-                                // Max retries reached - accept the diagram with warning
+                                // Last attempt - accept the diagram with warning
                                 if (DEBUG) {
                                     console.log(
                                         "[display_diagram] Max validation retries reached, accepting diagram",
                                     )
                                 }
-                                validationRetryCountRef.current.delete(
-                                    toolCall.toolCallId,
-                                )
+                                validationRetryCountRef.current = 0
 
                                 // Notify UI that we're accepting with issues (include the image)
                                 updateValidationState(
@@ -314,10 +306,8 @@ ${finalXml}
                                 return
                             }
                         } else {
-                            // Validation passed - clean up retry count
-                            validationRetryCountRef.current.delete(
-                                toolCall.toolCallId,
-                            )
+                            // Validation passed - reset retry count
+                            validationRetryCountRef.current = 0
                             if (DEBUG) {
                                 console.log(
                                     "[display_diagram] Validation passed!",
@@ -382,12 +372,17 @@ ${finalXml}
         }
 
         let currentXml = ""
+        // Use the original XML captured during streaming (shared with chat-message-display)
+        // This ensures we apply operations to the same base XML that streaming used
+        const originalXml = editDiagramOriginalXmlRef.current.get(
+            toolCall.toolCallId,
+        )
+        // On failure, undo the streaming preview so the canvas matches the XML
+        // reported back to the model
+        const restoreOriginal = () => {
+            if (originalXml) onDisplayChart(originalXml, true)
+        }
         try {
-            // Use the original XML captured during streaming (shared with chat-message-display)
-            // This ensures we apply operations to the same base XML that streaming used
-            const originalXml = editDiagramOriginalXmlRef.current.get(
-                toolCall.toolCallId,
-            )
             if (originalXml) {
                 currentXml = originalXml
             } else {
@@ -416,6 +411,7 @@ ${finalXml}
                     )
                     .join("\n")
 
+                restoreOriginal()
                 addToolOutput({
                     tool: "edit_diagram",
                     toolCallId: toolCall.toolCallId,
@@ -441,6 +437,7 @@ Please check the cell IDs and retry.`,
                     "[edit_diagram] Validation error:",
                     validationError,
                 )
+                restoreOriginal()
                 addToolOutput({
                     tool: "edit_diagram",
                     toolCallId: toolCall.toolCallId,
@@ -472,6 +469,7 @@ Please fix the operations to avoid structural issues.`,
             const errorMessage =
                 error instanceof Error ? error.message : String(error)
 
+            restoreOriginal()
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
@@ -495,6 +493,19 @@ Please check cell IDs and retry, or use display_diagram to regenerate.`,
         addToolOutput: AddToolOutputFn,
     ) => {
         const { xml } = toolCall.input as { xml: string }
+
+        // Nothing to continue: loading the fragment alone would replace the whole diagram
+        if (!partialXmlRef.current) {
+            addToolOutput({
+                tool: "append_diagram",
+                toolCallId: toolCall.toolCallId,
+                state: "output-error",
+                errorText: `ERROR: There is no truncated diagram to continue, so append_diagram cannot be used now.
+
+Use display_diagram to create the complete diagram, or edit_diagram to change the current one.`,
+            })
+            return
+        }
 
         // Detect if LLM incorrectly started fresh instead of continuing
         // LLM should only output bare mxCells now, so wrapper tags indicate error
