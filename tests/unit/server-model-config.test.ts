@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { _resetForTests } from "@/lib/admin/settings"
 import {
+    findServerModelById,
     loadFlattenedServerModels,
     type ServerModelsConfig,
     ServerModelsConfigSchema,
@@ -231,5 +232,75 @@ describe("loadFlattenedServerModels", () => {
 
         expect(models.length).toBe(1)
         expect(models[0].apiKeyEnv).toEqual(["OPENAI_KEY_1", "OPENAI_KEY_2"])
+    })
+
+    it("keeps colliding provider name slugs routed to the right credentials", async () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "Open AI",
+                    provider: "openai",
+                    models: ["shared-model"],
+                    apiKeyEnv: "OPENAI_KEY_PRIMARY",
+                },
+                {
+                    name: "Open-AI",
+                    provider: "openai",
+                    models: ["shared-model"],
+                    apiKeyEnv: "OPENAI_KEY_BACKUP",
+                },
+            ],
+        }
+        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
+
+        const models = await loadFlattenedServerModels()
+
+        expect(new Set(models.map((model) => model.id)).size).toBe(2)
+        const backup = await findServerModelById(models[1].id)
+        expect(backup?.apiKeyEnv).toBe("OPENAI_KEY_BACKUP")
+    })
+
+    it("creates distinct IDs for non-Latin provider names", async () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "生产环境",
+                    provider: "openai",
+                    models: ["shared-model"],
+                    apiKeyEnv: "OPENAI_KEY_PRIMARY",
+                },
+                {
+                    name: "备用环境",
+                    provider: "openai",
+                    models: ["shared-model"],
+                    apiKeyEnv: "OPENAI_KEY_BACKUP",
+                },
+            ],
+        }
+        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
+
+        const models = await loadFlattenedServerModels()
+
+        expect(new Set(models.map((model) => model.id)).size).toBe(2)
+        expect(models.every((model) => !model.id.startsWith("server::"))).toBe(
+            true,
+        )
+    })
+
+    it("preserves existing IDs when provider slugs do not collide", async () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "OpenAI Production",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                },
+            ],
+        }
+        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
+
+        const models = await loadFlattenedServerModels()
+
+        expect(models[0].id).toBe("server:openai-production:gpt-4o")
     })
 })
