@@ -27,6 +27,7 @@
         "google": "Google",
         "azure": "Azure OpenAI",
         "openrouter": "OpenRouter",
+        "requesty": "Requesty",
         "deepseek": "DeepSeek",
         "siliconflow": "SiliconFlow",
         "modelscope": "ModelScope",

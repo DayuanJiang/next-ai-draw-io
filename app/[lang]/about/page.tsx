@@ -340,6 +340,7 @@ export default function About() {
                         <li>Azure OpenAI</li>
                         <li>Ollama</li>
                         <li>OpenRouter</li>
+                        <li>Requesty</li>
                         <li>DeepSeek</li>
                         <li>SiliconFlow</li>
                         <li>ModelScope</li>
