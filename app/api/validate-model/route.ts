@@ -10,6 +10,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { generateText } from "ai"
 import { NextResponse } from "next/server"
 import { createOllama } from "ollama-ai-provider-v2"
+import { checkAccessCode } from "@/lib/access-code"
 import {
     AIHUBMIX_APP_CODE,
     isAihubmixStandardBaseURL,
@@ -33,7 +34,24 @@ interface ValidateRequest {
     vertexApiKey?: string // Express Mode API key
 }
 
+// With private URLs blocked, a public baseUrl could still redirect the
+// request to an internal host, so redirects are refused in that case.
+function redirectGuardedFetch(): typeof fetch | undefined {
+    if (allowPrivateUrls()) return undefined
+    return async (input, init) => {
+        const response = await fetch(input, { ...init, redirect: "manual" })
+        if (response.status >= 300 && response.status < 400) {
+            throw new Error("Redirects are not allowed for custom base URLs")
+        }
+        return response
+    }
+}
+
 export async function POST(req: Request) {
+    // Lets the server send requests to arbitrary URLs, so require the access code
+    const accessError = checkAccessCode(req)
+    if (accessError) return accessError
+
     try {
         const body: ValidateRequest = await req.json()
         const {
@@ -91,6 +109,7 @@ export async function POST(req: Request) {
             )
         }
 
+        const guardedFetch = redirectGuardedFetch()
         let model: any
 
         switch (provider) {
@@ -98,6 +117,7 @@ export async function POST(req: Request) {
                 const openai = createOpenAI({
                     apiKey,
                     ...(baseUrl && { baseURL: baseUrl }),
+                    fetch: guardedFetch,
                 })
                 model = openai.chat(modelId)
                 break
@@ -107,6 +127,7 @@ export async function POST(req: Request) {
                 const anthropic = createAnthropic({
                     apiKey,
                     baseURL: baseUrl || "https://api.anthropic.com/v1",
+                    fetch: guardedFetch,
                 })
                 model = anthropic(modelId)
                 break
@@ -116,6 +137,7 @@ export async function POST(req: Request) {
                 const google = createGoogleGenerativeAI({
                     apiKey,
                     ...(baseUrl && { baseURL: baseUrl }),
+                    fetch: guardedFetch,
                 })
                 model = google(modelId)
                 break
@@ -125,6 +147,7 @@ export async function POST(req: Request) {
                 const vertex = createVertex({
                     apiKey: vertexApiKey,
                     ...(baseUrl && { baseURL: baseUrl }),
+                    fetch: guardedFetch,
                 })
                 model = vertex(modelId)
                 break
@@ -134,6 +157,7 @@ export async function POST(req: Request) {
                 const azure = createOpenAI({
                     apiKey,
                     baseURL: baseUrl,
+                    fetch: guardedFetch,
                 })
                 model = azure.chat(modelId)
                 break
@@ -153,6 +177,7 @@ export async function POST(req: Request) {
                 const openrouter = createOpenRouter({
                     apiKey,
                     ...(baseUrl && { baseURL: baseUrl }),
+                    fetch: guardedFetch,
                 })
                 model = openrouter(modelId)
                 break
@@ -174,6 +199,7 @@ export async function POST(req: Request) {
                     const aihubmixCompatible = createOpenAI({
                         apiKey,
                         baseURL: baseUrl,
+                        fetch: guardedFetch,
                     })
                     model = aihubmixCompatible.chat(modelId)
                 }
@@ -185,6 +211,7 @@ export async function POST(req: Request) {
                     const ds = createDeepSeek({
                         apiKey,
                         ...(baseUrl && { baseURL: baseUrl }),
+                        fetch: guardedFetch,
                     })
                     model = ds(modelId)
                 } else {
@@ -197,6 +224,7 @@ export async function POST(req: Request) {
                 const sf = createOpenAI({
                     apiKey,
                     baseURL: baseUrl || "https://api.siliconflow.cn/v1",
+                    fetch: guardedFetch,
                 })
                 model = sf.chat(modelId)
                 break
@@ -213,6 +241,7 @@ export async function POST(req: Request) {
                         baseUrl ||
                         process.env.OLLAMA_BASE_URL ||
                         "https://ollama.com/api",
+                    fetch: guardedFetch,
                     ...(ollamaApiKey && {
                         headers: { Authorization: `Bearer ${ollamaApiKey}` },
                     }),
@@ -225,6 +254,7 @@ export async function POST(req: Request) {
                 const gw = createGateway({
                     apiKey,
                     ...(baseUrl && { baseURL: baseUrl }),
+                    fetch: guardedFetch,
                 })
                 model = gw(modelId)
                 break
@@ -232,13 +262,16 @@ export async function POST(req: Request) {
 
             case "edgeone": {
                 // EdgeOne uses OpenAI-compatible API via Edge Functions
-                // Need to pass cookies for EdgeOne Pages authentication
+                // Need to pass cookies for EdgeOne Pages authentication,
+                // and the access code, which the edge function also checks
                 const cookieHeader = req.headers.get("cookie") || ""
                 const edgeone = createOpenAI({
                     apiKey: "edgeone", // EdgeOne doesn't require API key
                     baseURL: baseUrl || "/api/edgeai",
+                    fetch: guardedFetch,
                     headers: {
                         cookie: cookieHeader,
+                        "x-access-code": req.headers.get("x-access-code") || "",
                     },
                 })
                 model = edgeone.chat(modelId)
@@ -250,6 +283,7 @@ export async function POST(req: Request) {
                 const sglang = createOpenAI({
                     apiKey: apiKey || "not-needed",
                     baseURL: baseUrl || "http://127.0.0.1:8000/v1",
+                    fetch: guardedFetch,
                 })
                 model = sglang.chat(modelId)
                 break
@@ -267,12 +301,14 @@ export async function POST(req: Request) {
                     const doubao = createDeepSeek({
                         apiKey,
                         baseURL: doubaoBaseUrl,
+                        fetch: guardedFetch,
                     })
                     model = doubao(modelId)
                 } else {
                     const doubao = createOpenAI({
                         apiKey,
                         baseURL: doubaoBaseUrl,
+                        fetch: guardedFetch,
                     })
                     model = doubao.chat(modelId)
                 }
@@ -286,7 +322,7 @@ export async function POST(req: Request) {
 
                 try {
                     // Initiate a streaming request (required for QwQ-32B and certain Qwen3 models)
-                    const response = await fetch(
+                    const response = await (guardedFetch ?? fetch)(
                         `${baseURL}/chat/completions`,
                         {
                             method: "POST",
@@ -307,9 +343,15 @@ export async function POST(req: Request) {
                     )
 
                     if (!response.ok) {
-                        const errorText = await response.text()
+                        // Log the body but return only the status: the
+                        // caller chooses baseUrl, so the body may come from
+                        // any host the server can reach
+                        console.error(
+                            "[validate-model] ModelScope error body:",
+                            await response.text(),
+                        )
                         throw new Error(
-                            `ModelScope API error (${response.status}): ${errorText}`,
+                            `ModelScope API error (${response.status})`,
                         )
                     }
 
@@ -360,12 +402,14 @@ export async function POST(req: Request) {
                     const minimax = createAnthropic({
                         apiKey,
                         baseURL: minimaxBaseUrl,
+                        fetch: guardedFetch,
                     })
                     model = minimax.chat(modelId)
                 } else {
                     const minimax = createOpenAI({
                         apiKey,
                         baseURL: minimaxBaseUrl,
+                        fetch: guardedFetch,
                     })
                     model = minimax.chat(modelId)
                 }
@@ -398,6 +442,7 @@ export async function POST(req: Request) {
                 const openai = createOpenAI({
                     apiKey,
                     baseURL,
+                    fetch: guardedFetch,
                 })
                 model = openai.chat(modelId)
                 break

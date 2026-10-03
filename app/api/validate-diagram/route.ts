@@ -4,6 +4,7 @@
  */
 
 import { streamObject } from "ai"
+import { checkAccessCode } from "@/lib/access-code"
 import { getValidationModel } from "@/lib/ai-providers"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
 import {
@@ -12,6 +13,9 @@ import {
 } from "@/lib/validation-schema"
 
 export const maxDuration = 30
+
+// Data URL length cap (~3.75 MB of PNG), well above a normal diagram capture
+const MAX_IMAGE_DATA_LENGTH = 5 * 1024 * 1024
 
 interface ValidateDiagramRequest {
     imageData: string // Base64 PNG data URL
@@ -44,6 +48,10 @@ function createStreamingResponse(result: ValidationResult): Response {
 }
 
 export async function POST(req: Request): Promise<Response> {
+    // Uses the server's model credentials, so require the access code
+    const accessError = checkAccessCode(req)
+    if (accessError) return accessError
+
     try {
         // Check if VLM validation is enabled (default: true)
         const enableValidation = process.env.ENABLE_VLM_VALIDATION !== "false"
@@ -69,6 +77,13 @@ export async function POST(req: Request): Promise<Response> {
             return Response.json(
                 { error: "Invalid image data format" },
                 { status: 400 },
+            )
+        }
+
+        if (imageData.length > MAX_IMAGE_DATA_LENGTH) {
+            return Response.json(
+                { error: "Image data too large" },
+                { status: 413 },
             )
         }
 
