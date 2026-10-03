@@ -41,6 +41,7 @@ const EXPECTED_TOOLS = [
     "delete_page",
     "get_drawing_guide",
     "get_shape_library",
+    "screenshot_diagram",
 ]
 
 // Claude Code truncates tool descriptions and server instructions here

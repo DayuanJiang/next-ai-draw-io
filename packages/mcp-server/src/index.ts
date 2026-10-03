@@ -31,6 +31,8 @@ import { editDiagram, targetPageXml } from "./edit-diagram.js"
 import { checkEditGate } from "./edit-gate.js"
 import { addHistory } from "./history.js"
 import {
+    type ExportOptions,
+    getServerPort,
     getState,
     requestExport,
     requestSync,
@@ -44,6 +46,7 @@ import { log } from "./logger.js"
 import {
     addPageToDoc,
     deletePageFromDoc,
+    findPageElement,
     hasPageSelector,
     listPagesFromDoc,
     normalizeToMxfile,
@@ -95,10 +98,13 @@ Start with start_session: it opens the preview and its result contains the drawi
 
 Before using cloud or icon shapes (AWS, Azure, GCP, Kubernetes, Cisco, BPMN...), call get_shape_library and use the exact style names it returns. Never guess icon style names.
 
+After drawing a complex diagram, call screenshot_diagram once to see it, and fix overlapping shapes or edges that cross shapes.
+
 Tools:
 - create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
 - edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry.
 - get_diagram: read the current XML, including the user's manual edits.
+- screenshot_diagram: see the rendered diagram as an image.
 - load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
 - list_pages, add_page, rename_page, delete_page: manage pages (tabs).`
 
@@ -885,9 +891,10 @@ function exportViaBrowser(
     sessionId: string,
     format: "png" | "svg",
     projectionXml?: string,
+    options?: ExportOptions,
 ): Promise<string | undefined> {
     const run = exportQueue.then(async () => {
-        requestExport(sessionId, format, projectionXml)
+        requestExport(sessionId, format, projectionXml, options)
 
         // A projection export does an extra load + render round-trip in the
         // browser, so give it a longer window. Re-read the live store entry
@@ -914,6 +921,160 @@ function exportViaBrowser(
     return run
 }
 
+/**
+ * True when the preview tab polled before but has gone quiet. Browsers
+ * slow down timers in background tabs (Chrome: about once a minute after
+ * 5 minutes hidden), so an export would just time out.
+ */
+function previewStalled(sessionId: string): boolean {
+    const lastPolled = getState(sessionId)?.lastPolled
+    return lastPolled !== undefined && Date.now() - lastPolled > 10_000
+}
+
+function previewStalledError(sessionId: string) {
+    return {
+        content: [
+            {
+                type: "text" as const,
+                text: `Error: The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), then retry.`,
+            },
+        ],
+        isError: true,
+    }
+}
+
+/** The <diagram id> of the page a selector targets, for draw.io's pageId. */
+function pageIdFor(xml: string, selector: PageSelector): string | undefined {
+    const doc = parseMxfile(xml)
+    return (
+        (doc && findPageElement(doc, selector)?.element.getAttribute("id")) ||
+        undefined
+    )
+}
+
+// Screenshot size: Claude Desktop caps a tool result at about 150,000
+// characters, so retry smaller above 140,000 base64 characters. (Claude
+// Code 2.1 accepted a 240,000 character image in testing.)
+const SCREENSHOT_WIDTHS = [1000, 700]
+const MAX_SCREENSHOT_CHARS = 140_000
+
+// Adapted from the web app's vision check (lib/validation-prompts.ts)
+const SCREENSHOT_CHECKLIST = `Check this rendering of the diagram for:
+1. Overlapping shapes that cover each other or their labels (critical)
+2. Edges crossing shapes that are not their source or target (critical)
+3. Text that is cut off, overlapping or too small to read (warning)
+4. Layout problems: cramped shapes, poor spacing or misalignment (warning)
+5. Rendering errors: missing, incomplete or broken elements, such as an icon that did not load (critical)
+If there are critical issues, fix them with edit_diagram and take one more screenshot. Do at most two rounds of fixes. Minor cosmetic issues are fine, and diagrams with only 1 or 2 shapes pass unless something is clearly broken.`
+
+// Tool: screenshot_diagram
+server.registerTool(
+    "screenshot_diagram",
+    {
+        title: "Screenshot diagram",
+        description:
+            "Render the diagram in the preview and return it as a PNG image, so you can see your own result. " +
+            "Call this once after drawing or heavily editing a complex diagram, then fix overlaps and edges that cross shapes. " +
+            "Without a page selector it shows the page on screen. Needs the preview tab to be open.",
+        inputSchema: { ...pageSelectorSchema },
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (input) => {
+        const { page_id, page_name, page_index } = input ?? {}
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            if (previewStalled(currentSession.id)) {
+                return previewStalledError(currentSession.id)
+            }
+            const xml = getState(currentSession.id)?.xml || currentSession.xml
+            // Any cell besides the root cells "0" and "1"
+            if (
+                !/<(mxCell\b[^>]*\bid="(?![01]")|UserObject\b|object\b)/.test(
+                    xml,
+                )
+            ) {
+                return {
+                    content: [{ type: "text", text: "The diagram is empty." }],
+                }
+            }
+
+            const pageSelector = pickPageSelector({
+                page_id,
+                page_name,
+                page_index,
+            })
+            let pageId: string | undefined
+            if (hasPageSelector(pageSelector)) {
+                pageId = pageIdFor(normalizeToMxfile(xml) ?? xml, pageSelector)
+                if (!pageId) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Error: Page ${describeSelector(pageSelector)} not found.`,
+                            },
+                        ],
+                        isError: true,
+                    }
+                }
+            }
+
+            let data: string | undefined
+            for (const width of SCREENSHOT_WIDTHS) {
+                data = await exportViaBrowser(
+                    currentSession.id,
+                    "png",
+                    undefined,
+                    { width, pageId },
+                )
+                if (!data || data.length <= MAX_SCREENSHOT_CHARS) break
+            }
+            if (!data) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Screenshot timed out. Make sure the preview tab is open and in front.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            return {
+                content: [
+                    {
+                        type: "image",
+                        data: data.replace(/^data:image\/png;base64,/, ""),
+                        mimeType: "image/png",
+                    },
+                    {
+                        type: "text",
+                        text: `Screenshot of ${hasPageSelector(pageSelector) ? `page ${describeSelector(pageSelector)}` : "the page on screen"}.\n\n${SCREENSHOT_CHECKLIST}`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("screenshot_diagram failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
 // Tool: export_diagram
 server.registerTool(
     "export_diagram",
@@ -926,7 +1087,8 @@ server.registerTool(
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
             "- .drawio with a page selector: writes a single-page <mxfile> containing only that page.\n" +
             "- .png / .svg with NO page selector: exports the currently active page in the browser.\n" +
-            "- .png / .svg with a page selector: temporarily loads a single-page projection of that page into the browser, captures the rendered image, then restores the full document. The user will see a brief tab-flicker (~1-2s) but the exported image is guaranteed to be the requested page.",
+            "- .png with a page selector: renders that page without changing what the user sees.\n" +
+            "- .svg with a page selector: temporarily loads that page into the browser, captures it, then restores the full document (the user sees a brief flicker).",
         inputSchema: {
             ...pageSelectorSchema,
             path: z
@@ -1058,6 +1220,9 @@ server.registerTool(
                     isError: true,
                 }
             }
+            if (previewStalled(currentSession.id)) {
+                return previewStalledError(currentSession.id)
+            }
 
             // -----------------------------------------------------------------
             // Page-targeted PNG/SVG export.
@@ -1070,8 +1235,15 @@ server.registerTool(
             // browser-side. The canonical session state is never mutated here,
             // so there is no restore race and no concurrent-edit clobbering.
             // -----------------------------------------------------------------
+            // PNG: draw.io renders any page by id, without touching the
+            // page on screen. SVG export has no page option, so it still
+            // needs the projection below.
             let projectionXml: string | undefined
-            if (hasPageSelector(pageSelector)) {
+            let pngPageId: string | undefined
+            if (hasPageSelector(pageSelector) && detectedFormat === "png") {
+                pngPageId = pageIdFor(currentSession.xml, pageSelector)
+            }
+            if (hasPageSelector(pageSelector) && !pngPageId) {
                 const projection = projectPage(currentSession.xml, pageSelector)
                 if (!projection.ok) {
                     return {
@@ -1094,6 +1266,7 @@ server.registerTool(
                 currentSession.id,
                 detectedFormat as "png" | "svg",
                 projectionXml,
+                pngPageId ? { pageId: pngPageId } : undefined,
             )
 
             if (!exportData) {

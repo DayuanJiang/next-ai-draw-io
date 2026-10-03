@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { addHistory, getHistory } from "../src/history.js"
 import {
     getState,
+    requestExport,
     requestSync,
     setState,
     shutdown,
@@ -230,6 +231,25 @@ describe("POST /api/state", () => {
         expect(getState(id)?.syncRequested).toBeUndefined()
         expect(getHistory(id)).toHaveLength(before)
         expect(await waitForSync(id, 200)).toBe(true)
+    })
+})
+
+describe("export requests", () => {
+    it("hands draw.io export options to the page and clears them after", async () => {
+        const id = "mcp-export-options"
+        setState(id, "<mxfile>x</mxfile>")
+        requestExport(id, "png", undefined, { width: 1000, pageId: "p2" })
+        const poll = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(poll.exportFormat).toBe("png")
+        expect(poll.exportOptions).toEqual({ width: 1000, pageId: "p2" })
+
+        await postJson("/api/state", {
+            sessionId: id,
+            exportData: "data:image/png;base64,AAAA",
+        })
+        expect(getState(id)?.exportOptions).toBeUndefined()
     })
 })
 

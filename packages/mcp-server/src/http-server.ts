@@ -102,7 +102,17 @@ interface SessionState {
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
     exportFormat?: "png" | "svg" // Set by MCP tool to request browser export
     exportXml?: string // Single-page projection to load before a page-targeted export
+    exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
     exportData?: string // Base64/SVG data returned by browser after export
+}
+
+/**
+ * draw.io's PNG export takes these directly: width caps the image size
+ * (never upscales), pageId renders a page other than the one on screen.
+ */
+export interface ExportOptions {
+    width?: number
+    pageId?: string
 }
 
 export const stateStore = new Map<string, SessionState>()
@@ -134,6 +144,7 @@ export function setState(
         syncRequested: undefined, // Clear sync request when browser pushes state
         exportFormat: existing?.exportFormat, // Preserve pending export request
         exportXml: existing?.exportXml, // Preserve pending projection
+        exportOptions: existing?.exportOptions,
         exportData: existing?.exportData, // Preserve export result
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
@@ -155,11 +166,13 @@ export function requestExport(
     sessionId: string,
     format: "png" | "svg",
     projectionXml?: string,
+    options?: ExportOptions,
 ): boolean {
     const state = stateStore.get(sessionId)
     if (!state) return false
     state.exportData = undefined
     state.exportXml = projectionXml
+    state.exportOptions = options
     state.exportFormat = format
     return true
 }
@@ -254,6 +267,10 @@ const cleanupIntervalId = setInterval(cleanupExpiredSessions, 5 * 60 * 1000)
 export function shutdown(): void {
     clearInterval(cleanupIntervalId)
     stopHttpServer()
+}
+
+export function getServerPort(): number {
+    return serverPort
 }
 
 function handleRequest(
@@ -379,6 +396,7 @@ function handleStateApi(
                 syncRequested: !!state?.syncRequested,
                 exportFormat: state?.exportFormat || null,
                 exportXml: state?.exportXml || null,
+                exportOptions: state?.exportOptions || null,
             }),
         )
     } else if (req.method === "POST") {
@@ -401,6 +419,7 @@ function handleStateApi(
                         state.exportData = data.exportData
                         state.exportFormat = undefined
                         state.exportXml = undefined
+                        state.exportOptions = undefined
                         log.debug(
                             `Export data received for session=${sessionId}`,
                         )
@@ -1006,10 +1025,13 @@ function getHtmlPage(sessionId: string): string {
                 // projection is showing (see projectionExportActive guard).
                 if (s.exportFormat && !pendingMcpExport && isReady) {
                     pendingMcpExport = s.exportFormat;
+                    const extra = s.exportOptions || {};
                     const fireExport = () => {
-                        // mcpExport is echoed back in msg.message (see the handler)
+                        // mcpExport is echoed back in msg.message (see the
+                        // handler). PNG: width caps the size, pageId picks a
+                        // page; without one draw.io would use the first page.
                         const exportOpts = pendingMcpExport === 'png'
-                            ? { action: 'export', format: 'png', scale: 2, currentPage: true, mcpExport: true }
+                            ? { action: 'export', format: 'png', scale: 2, currentPage: !extra.pageId, ...extra, mcpExport: true }
                             : { action: 'export', format: 'svg', mcpExport: true };
                         iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
                     };
