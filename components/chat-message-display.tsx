@@ -129,12 +129,14 @@ const getMessageTextContent = (message: UIMessage): string => {
         .join("\n")
 }
 
+// Matches the [PDF: ...], [File: ...] and [URL: ...] sections appended to the user's text
+export const APPENDED_FILE_SECTIONS_PATTERN =
+    /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
+
 // Get only the user's original text, excluding appended file content
 const getUserOriginalText = (message: UIMessage): string => {
     const fullText = getMessageTextContent(message)
-    // Strip out [PDF: ...], [File: ...], and [URL: ...] sections that were appended
-    const filePattern = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
-    return fullText.replace(filePattern, "").trim()
+    return fullText.replace(APPENDED_FILE_SECTIONS_PATTERN, "").trim()
 }
 
 interface SessionMetadata {
@@ -458,6 +460,11 @@ export function ChatMessageDisplay({
             messages.length > 0 ? [messages[messages.length - 1]] : []
 
         messagesToProcess.forEach((message) => {
+            // Messages restored from a saved session were applied before it was
+            // saved; the saved diagram is authoritative, so don't replay them
+            const isRestoredMessage =
+                loadedMessageIdsRef?.current.has(message.id) ?? false
+
             if (message.parts) {
                 message.parts.forEach((part) => {
                     if (part.type?.startsWith("tool-")) {
@@ -474,6 +481,8 @@ export function ChatMessageDisplay({
                                 return prev
                             })
                         }
+
+                        if (isRestoredMessage) return
 
                         if (
                             part.type === "tool-display_diagram" &&
@@ -541,6 +550,32 @@ export function ChatMessageDisplay({
                             part.type === "tool-edit_diagram" &&
                             input?.operations
                         ) {
+                            // Failed or stopped: drop the queued preview. If the original
+                            // XML is still stored, the tool handler never ran (user pressed
+                            // stop), so undo the streamed preview here.
+                            if (state === "output-error") {
+                                if (
+                                    pendingEditRef.current?.toolCallId ===
+                                        toolCallId &&
+                                    editDebounceTimeoutRef.current
+                                ) {
+                                    clearTimeout(editDebounceTimeoutRef.current)
+                                    editDebounceTimeoutRef.current = null
+                                    pendingEditRef.current = null
+                                }
+                                const originalXml =
+                                    editDiagramOriginalXmlRef.current.get(
+                                        toolCallId,
+                                    )
+                                if (originalXml) {
+                                    editDiagramOriginalXmlRef.current.delete(
+                                        toolCallId,
+                                    )
+                                    onDisplayChart(originalXml, true)
+                                }
+                                return
+                            }
+
                             const completeOps = getCompleteOperations(
                                 input.operations as DiagramOperation[],
                             )
@@ -610,9 +645,10 @@ export function ChatMessageDisplay({
                                                         origXml,
                                                         pending.operations,
                                                     )
-                                                    handleDisplayChart(
+                                                    // Load the full document so other pages stay intact
+                                                    onDisplayChart(
                                                         editedXml,
-                                                        false,
+                                                        true,
                                                     )
                                                     lastProcessedXmlRef.current.set(
                                                         pending.toolCallId +

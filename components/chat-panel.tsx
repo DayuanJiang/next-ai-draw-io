@@ -32,6 +32,7 @@ import { useSessionManager } from "@/hooks/use-session-manager"
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
+import { isMinimalDiagram } from "@/lib/chat-helpers"
 import type { DrawioTheme } from "@/lib/drawio-themes"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -40,9 +41,12 @@ import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { cn, formatXML, isRealDiagram } from "@/lib/utils"
+import { cn, formatXML, isRealDiagram, wrapWithMxFile } from "@/lib/utils"
 import type { ValidationState } from "./chat/ValidationCard"
-import { ChatMessageDisplay } from "./chat-message-display"
+import {
+    APPENDED_FILE_SECTIONS_PATTERN,
+    ChatMessageDisplay,
+} from "./chat-message-display"
 import { DevXmlSimulator } from "./dev-xml-simulator"
 
 // localStorage keys for persistence
@@ -105,6 +109,18 @@ function hasToolErrors(messages: ChatMessage[]): boolean {
 
     const lastToolPart = toolParts[toolParts.length - 1]
     return lastToolPart?.state === TOOL_ERROR_STATE
+}
+
+/**
+ * Snapshots keep the full multi-page document, but the model only sees and
+ * edits the first page, so give it the first page's mxGraphModel.
+ * Older snapshots already hold a single mxGraphModel and are returned as is.
+ */
+function getFirstPageXml(xml: string): string {
+    if (!xml.includes("<mxfile")) return xml
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    const model = doc.querySelector("diagram")?.querySelector("mxGraphModel")
+    return model ? formatXML(new XMLSerializer().serializeToString(model)) : xml
 }
 
 export default function ChatPanel({
@@ -336,19 +352,8 @@ export default function ChatPanel({
         localStorage.setItem(STORAGE_KEYS.maxOutputTokens, digitsOnly)
     }, [])
 
-    // Ref to store the sendMessage function for use in callbacks
-    const sendMessageRef = useRef<typeof sendMessage | null>(null)
-
-    // Callback to improve diagram with validation suggestions
-    const handleImproveWithSuggestions = useCallback((feedback: string) => {
-        if (sendMessageRef.current) {
-            // Send the feedback as a new user message to trigger regeneration
-            sendMessageRef.current({
-                role: "user",
-                parts: [{ type: "text", text: feedback }],
-            })
-        }
-    }, [])
+    // Failed VLM validations in the current user turn (reset on user action)
+    const validationRetryCountRef = useRef(0)
 
     // VLM validation hook using AI SDK's useObject
     const { validateWithFallback } = useValidateDiagram()
@@ -357,6 +362,7 @@ export default function ChatPanel({
     const { handleToolCall } = useDiagramToolHandlers({
         partialXmlRef,
         editDiagramOriginalXmlRef,
+        validationRetryCountRef,
         chartXMLRef,
         onDisplayChart,
         onFetchChart,
@@ -518,11 +524,6 @@ export default function ChatPanel({
         },
     })
 
-    // Store sendMessage in ref for use in callbacks (like handleImproveWithSuggestions)
-    useEffect(() => {
-        sendMessageRef.current = sendMessage
-    }, [sendMessage])
-
     // Ref to track latest messages for unload persistence
     const messagesRef = useRef(messages)
     useEffect(() => {
@@ -531,6 +532,9 @@ export default function ChatPanel({
 
     // Track last synced session ID to detect external changes (e.g., URL back/forward)
     const lastSyncedSessionIdRef = useRef<string | null>(null)
+    // Messages array from our latest save. A session holding this exact array was
+    // created by our own save, so it must not be treated as an external switch.
+    const lastSavedMessagesRef = useRef<unknown[] | null>(null)
 
     // Helper: Sync UI state with session data (eliminates duplication)
     // Track message IDs that are being loaded from session (to skip animations/scroll)
@@ -597,8 +601,10 @@ export default function ChatPanel({
                     thumbnailDataUrl = latestSvgRef.current
                 }
             }
+            const messages = sanitizeMessages(messagesRef.current)
+            lastSavedMessagesRef.current = messages
             return {
-                messages: sanitizeMessages(messagesRef.current),
+                messages,
                 xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
                 diagramXml: currentDiagramXml,
                 thumbnailDataUrl,
@@ -651,8 +657,13 @@ export default function ChatPanel({
         // Skip if session ID hasn't changed (our own saves don't change the ID)
         if (newSessionId === lastSyncedSessionIdRef.current) return
 
+        // Our own save created this session; the UI already shows its content
+        const isOwnNewSession =
+            newSession?.messages === lastSavedMessagesRef.current
+
         // Update last synced ID
         lastSyncedSessionIdRef.current = newSessionId
+        if (isOwnNewSession) return
 
         // Sync UI with new session
         if (newSession) {
@@ -793,12 +804,23 @@ export default function ChatPanel({
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         const isProcessing = status === "streaming" || status === "submitted"
-        if (input.trim() && !isProcessing) {
-            // Check if input matches a cached example (only when no messages yet)
-            if (messages.length === 0) {
+        // Attachments still extracting have no text yet. Template sends call
+        // requestSubmit() and skip the disabled send button, so check here too.
+        const isExtracting =
+            files.some((f) => pdfData.get(f)?.isExtracting) ||
+            Array.from(urlData.values()).some((d) => d.isExtracting)
+        if (input.trim() && !isProcessing && !isExtracting) {
+            // Check if input matches a cached example (only when no messages
+            // yet and the canvas is empty, same rule as the server)
+            if (
+                messages.length === 0 &&
+                isMinimalDiagram(chartXMLRef.current || "")
+            ) {
+                // Pass the file name so a user's own file never matches an example
                 const cached = findCachedResponse(
                     input.trim(),
                     files.length > 0,
+                    files.length === 1 ? files[0].name : undefined,
                 )
                 if (cached) {
                     // Add user message and fake assistant response to messages
@@ -834,6 +856,11 @@ export default function ChatPanel({
                             ],
                         },
                     ] as any)
+                    // Snapshot the canvas before the example so editing this message works
+                    xmlSnapshotsRef.current.set(
+                        0,
+                        chartXMLRef.current || wrapWithMxFile(""),
+                    )
                     setInput("")
                     sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                     setFiles([])
@@ -843,9 +870,6 @@ export default function ChatPanel({
             }
 
             try {
-                let chartXml = await onFetchChart()
-                chartXml = formatXML(chartXml)
-
                 // Build user text by concatenating input with pre-extracted text
                 // (Backend only reads first text part, so we must combine them)
                 const parts: any[] = []
@@ -860,20 +884,7 @@ export default function ChatPanel({
                 // Add the combined text as the first part
                 parts.unshift({ type: "text", text: userText })
 
-                // Get previous XML from the last snapshot (before this message)
-                const snapshotKeys = Array.from(
-                    xmlSnapshotsRef.current.keys(),
-                ).sort((a, b) => b - a)
-                const previousXml =
-                    snapshotKeys.length > 0
-                        ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
-                        : ""
-
-                // Save XML snapshot for this message (will be at index = current messages.length)
-                const messageIndex = messages.length
-                xmlSnapshotsRef.current.set(messageIndex, chartXml)
-
-                sendChatMessage(parts, chartXml, previousXml, sessionId)
+                await sendWithCurrentDiagram(parts)
 
                 // Token count is tracked in onFinish with actual server usage
                 setInput("")
@@ -882,7 +893,34 @@ export default function ChatPanel({
                 setUrlData(new Map())
             } catch (error) {
                 console.error("Error fetching chart data:", error)
+                toast.error(dict.errors.failedToExport)
             }
+        }
+    }
+
+    // Export the current diagram, snapshot it for this message, and send
+    const sendWithCurrentDiagram = async (parts: any[]) => {
+        const chartXml = formatXML(await onFetchChart())
+        const previousXml = getPreviousXml(messages.length)
+
+        // Snapshot the full multi-page document (kept fresh by autosave) so
+        // regenerate/edit can restore every page; the model gets page 1 only
+        xmlSnapshotsRef.current.set(
+            messages.length,
+            chartXMLRef.current || chartXml,
+        )
+
+        sendChatMessage(parts, chartXml, previousXml, sessionId)
+    }
+
+    // Send VLM validation feedback as a new user message through the normal send path
+    const handleImproveWithSuggestions = async (feedback: string) => {
+        if (status === "streaming" || status === "submitted") return
+        try {
+            await sendWithCurrentDiagram([{ type: "text", text: feedback }])
+        } catch (error) {
+            console.error("Error fetching chart data:", error)
+            toast.error(dict.errors.failedToExport)
         }
     }
 
@@ -989,10 +1027,9 @@ export default function ChatPanel({
     // Handle sending a template directly (called from TemplatePanel)
     const handleSendTemplate = useCallback(
         async (template: { prompt: string }) => {
+            // Keep attachments: they are sent along with the template prompt
             flushSync(() => {
                 setInput(template.prompt)
-                setFiles([])
-                setUrlData(new Map())
             })
 
             const formElement = document.getElementById(
@@ -1002,7 +1039,7 @@ export default function ChatPanel({
                 formElement.requestSubmit()
             }
         },
-        [setInput, setFiles, setUrlData],
+        [setInput],
     )
 
     const handleInputChange = (
@@ -1017,13 +1054,15 @@ export default function ChatPanel({
     }
 
     // Helper functions for message actions (regenerate/edit)
-    // Extract previous XML snapshot before a given message index
+    // Extract previous XML snapshot (first page, as sent to the model) before a given message index
     const getPreviousXml = (beforeIndex: number): string => {
         const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
             .filter((k) => k < beforeIndex)
             .sort((a, b) => b - a)
         return snapshotKeys.length > 0
-            ? xmlSnapshotsRef.current.get(snapshotKeys[0]) || ""
+            ? getFirstPageXml(
+                  xmlSnapshotsRef.current.get(snapshotKeys[0]) || "",
+              )
             : ""
     }
 
@@ -1075,6 +1114,7 @@ export default function ChatPanel({
         // Reset all retry/continuation state on user-initiated message
         autoRetryCountRef.current = 0
         continuationRetryCountRef.current = 0
+        validationRetryCountRef.current = 0
         partialXmlRef.current = ""
 
         const config = getSelectedAIConfig()
@@ -1223,7 +1263,12 @@ export default function ChatPanel({
         })
 
         // Now send the message after state is guaranteed to be updated
-        sendChatMessage(userParts, savedXml, previousXml, sessionId)
+        sendChatMessage(
+            userParts,
+            getFirstPageXml(savedXml),
+            previousXml,
+            sessionId,
+        )
     }
 
     const handleEditMessage = async (messageIndex: number, newText: string) => {
@@ -1250,10 +1295,13 @@ export default function ChatPanel({
         // Clean up snapshots for messages after the user message (they will be removed)
         cleanupSnapshotsAfter(messageIndex)
 
-        // Create new parts with updated text
+        // Create new parts with updated text. The edit box only shows the typed
+        // text, so keep the appended PDF/file/URL content
         const newParts = message.parts?.map((part: any) => {
             if (part.type === "text") {
-                return { ...part, text: newText }
+                const appended =
+                    part.text.match(APPENDED_FILE_SECTIONS_PATTERN)?.[0] ?? ""
+                return { ...part, text: newText + appended }
             }
             return part
         }) || [{ type: "text", text: newText }]
@@ -1266,7 +1314,12 @@ export default function ChatPanel({
         })
 
         // Now send the edited message after state is guaranteed to be updated
-        sendChatMessage(newParts, savedXml, previousXml, sessionId)
+        sendChatMessage(
+            newParts,
+            getFirstPageXml(savedXml),
+            previousXml,
+            sessionId,
+        )
     }
 
     // Collapsed view (desktop only)

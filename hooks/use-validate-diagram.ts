@@ -6,6 +6,7 @@
 
 import { experimental_useObject as useObject } from "@ai-sdk/react"
 import { useCallback, useRef } from "react"
+import { getSelectedAIConfig } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
     type ValidationResult,
@@ -39,6 +40,8 @@ export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
     const { object, submit, isLoading, error, stop } = useObject({
         api: getApiEndpoint("/api/validate-diagram"),
         schema: ValidationResultSchema,
+        // Resolved per request so a changed access code is picked up
+        headers: () => ({ "x-access-code": getSelectedAIConfig().accessCode }),
         onFinish: ({
             object,
             error: finishError,
