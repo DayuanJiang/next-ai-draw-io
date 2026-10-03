@@ -1,6 +1,7 @@
 "use client"
 import { usePathname, useRouter } from "next/navigation"
 import { Suspense, useCallback, useEffect, useRef, useState } from "react"
+import type { ActionLoad } from "react-drawio"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
 import ChatPanel from "@/components/chat-panel"
@@ -10,6 +11,12 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import {
+    getParentTargetOrigin,
+    isDrawioEmbedMode,
+    parseDrawioLoadAction,
+    parseDrawioMessage,
+} from "@/lib/drawio-embed"
 import { type DrawioTheme, isDrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
@@ -32,18 +39,28 @@ export default function Home() {
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
     const [isElectron, setIsElectron] = useState(false)
+    const [isEmbedMode, setIsEmbedMode] = useState(false)
     const [drawioBaseUrl, setDrawioBaseUrl] = useState(
         process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net",
     )
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isMobileRef = useRef(false)
+    const parentOriginRef = useRef<string | null>(null)
+    const hasSentEmbedInitRef = useRef(false)
 
     // Load preferences from localStorage after mount
     useEffect(() => {
+        const embedMode = isDrawioEmbedMode(window.location.search)
+        setIsEmbedMode(embedMode)
+
         // Restore saved locale and redirect if needed
         const savedLocale = localStorage.getItem("next-ai-draw-io-locale")
-        if (savedLocale && i18n.locales.includes(savedLocale as Locale)) {
+        if (
+            !embedMode &&
+            savedLocale &&
+            i18n.locales.includes(savedLocale as Locale)
+        ) {
             const pathParts = pathname.split("/").filter(Boolean)
             const currentLocale = pathParts[0]
             if (currentLocale !== savedLocale) {
@@ -85,10 +102,67 @@ export default function Home() {
         setIsLoaded(true)
     }, [pathname, router])
 
+    // Bridge the outer host to the nested diagrams.net iframe. The parent is
+    // allowed to initialize the editor; draw.io events are relayed back using
+    // the standard JSON embed protocol.
+    useEffect(() => {
+        if (!isEmbedMode || window.parent === window) return
+
+        const handleEmbedMessage = (event: MessageEvent) => {
+            if (event.source === window.parent) {
+                if (
+                    parentOriginRef.current &&
+                    event.origin !== parentOriginRef.current
+                ) {
+                    return
+                }
+
+                const message = parseDrawioLoadAction(event.data)
+                if (!message || !drawioRef.current) return
+
+                parentOriginRef.current = event.origin
+                const { action: _action, ...loadAction } = message
+                drawioRef.current.load(loadAction as Omit<ActionLoad, "action">)
+                return
+            }
+
+            const drawioFrame = document.querySelector<HTMLIFrameElement>(
+                "iframe.diagrams-iframe",
+            )
+            if (event.source !== drawioFrame?.contentWindow) return
+
+            const message = parseDrawioMessage(event.data)
+            if (
+                !message ||
+                typeof message.event !== "string" ||
+                message.event === "init" ||
+                !parentOriginRef.current
+            ) {
+                return
+            }
+
+            window.parent.postMessage(
+                JSON.stringify(message),
+                getParentTargetOrigin(parentOriginRef.current),
+            )
+        }
+
+        window.addEventListener("message", handleEmbedMessage)
+        return () => window.removeEventListener("message", handleEmbedMessage)
+    }, [drawioRef, isEmbedMode])
+
     const handleDrawioLoad = useCallback(() => {
         setIsDrawioReady(true)
         onDrawioLoad()
-    }, [onDrawioLoad])
+        if (
+            isEmbedMode &&
+            window.parent !== window &&
+            !hasSentEmbedInitRef.current
+        ) {
+            hasSentEmbedInitRef.current = true
+            window.parent.postMessage(JSON.stringify({ event: "init" }), "*")
+        }
+    }, [isEmbedMode, onDrawioLoad])
 
     const handleDarkModeChange = () => {
         const newValue = !darkMode
@@ -154,6 +228,60 @@ export default function Home() {
         return () => window.removeEventListener("keydown", handleKeyDown)
     }, [])
 
+    const drawioContent = (
+        <>
+            {isLoaded && (
+                <div
+                    className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
+                >
+                    <DrawIoEmbed
+                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}-${isEmbedMode}`}
+                        ref={drawioRef}
+                        autosave={!isEmbedMode}
+                        onAutoSave={
+                            isEmbedMode ? undefined : handleDiagramAutoSave
+                        }
+                        onExport={isEmbedMode ? undefined : handleDiagramExport}
+                        onLoad={handleDrawioLoad}
+                        baseUrl={drawioBaseUrl}
+                        urlParameters={{
+                            ui: drawioUi,
+                            spin: false,
+                            libraries: false,
+                            saveAndExit: isEmbedMode,
+                            noSaveBtn: !isEmbedMode,
+                            noExitBtn: !isEmbedMode,
+                            dark: darkMode || drawioUi === "dark",
+                            lang: currentLang,
+                            // Enable offline mode in Electron to disable external service calls
+                            ...(isElectron && {
+                                offline: true,
+                            }),
+                        }}
+                    />
+                </div>
+            )}
+            {(!isLoaded || !isDrawioReady) && (
+                <div className="h-full w-full bg-background flex items-center justify-center">
+                    <span className="text-muted-foreground">
+                        Draw.io panel is loading...
+                    </span>
+                </div>
+            )}
+        </>
+    )
+
+    if (isEmbedMode) {
+        return (
+            <main
+                className="h-screen w-screen overflow-hidden bg-background"
+                data-testid="drawio-embed-container"
+            >
+                {drawioContent}
+            </main>
+        )
+    }
+
     return (
         <div className="h-screen bg-background relative overflow-hidden">
             <ResizablePanelGroup
@@ -172,43 +300,7 @@ export default function Home() {
                         }`}
                     >
                         <div className="h-full rounded-xl overflow-hidden shadow-soft-lg border border-border/30 relative">
-                            {isLoaded && (
-                                <div
-                                    className={`h-full w-full ${isDrawioReady ? "" : "invisible absolute inset-0"}`}
-                                >
-                                    <DrawIoEmbed
-                                        key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
-                                        ref={drawioRef}
-                                        autosave
-                                        onAutoSave={handleDiagramAutoSave}
-                                        onExport={handleDiagramExport}
-                                        onLoad={handleDrawioLoad}
-                                        baseUrl={drawioBaseUrl}
-                                        urlParameters={{
-                                            ui: drawioUi,
-                                            spin: false,
-                                            libraries: false,
-                                            saveAndExit: false,
-                                            noSaveBtn: true,
-                                            noExitBtn: true,
-                                            dark:
-                                                darkMode || drawioUi === "dark",
-                                            lang: currentLang,
-                                            // Enable offline mode in Electron to disable external service calls
-                                            ...(isElectron && {
-                                                offline: true,
-                                            }),
-                                        }}
-                                    />
-                                </div>
-                            )}
-                            {(!isLoaded || !isDrawioReady) && (
-                                <div className="h-full w-full bg-background flex items-center justify-center">
-                                    <span className="text-muted-foreground">
-                                        Draw.io panel is loading...
-                                    </span>
-                                </div>
-                            )}
+                            {drawioContent}
                         </div>
                     </div>
                 </ResizablePanel>

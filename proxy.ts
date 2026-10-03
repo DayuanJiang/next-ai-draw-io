@@ -47,14 +47,11 @@ export function proxy(request: NextRequest) {
     // Redirect if there is no locale
     if (pathnameIsMissingLocale) {
         const locale = getLocale(request)
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`
 
-        // Redirect to localized path
-        return NextResponse.redirect(
-            new URL(
-                `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`,
-                request.url,
-            ),
-        )
+        // Keep query parameters such as ?embed=1 across locale detection.
+        return NextResponse.redirect(redirectUrl)
     }
 }
 
