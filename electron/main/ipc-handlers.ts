@@ -1,7 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron"
-import { rebuildAppMenu } from "./app-menu"
 import {
-    applyPresetToEnv,
+    app,
+    BrowserWindow,
+    dialog,
+    type IpcMainInvokeEvent,
+    ipcMain,
+} from "electron"
+import { rebuildAppMenu, switchPreset } from "./app-menu"
+import {
     type ConfigPreset,
     createPreset,
     deletePreset,
@@ -20,6 +25,7 @@ import {
     type ProxyConfig,
     saveProxyConfig,
 } from "./proxy-manager"
+import { isAppUrl } from "./window-manager"
 
 /**
  * Allowed configuration keys for presets
@@ -49,12 +55,31 @@ function sanitizePresetConfig(
 }
 
 /**
+ * Register an IPC handler that only answers the app's own pages
+ * (the main window on the app server, or the local settings page).
+ * A main window that somehow ends up on an external site still gets the
+ * preload API, so its calls must be rejected here.
+ */
+function handle<Args extends unknown[]>(
+    channel: string,
+    listener: (event: IpcMainInvokeEvent, ...args: Args) => unknown,
+): void {
+    ipcMain.handle(channel, (event, ...args) => {
+        const url = event.senderFrame?.url
+        if (!isAppUrl(url) && !url?.startsWith("file://")) {
+            throw new Error(`Blocked "${channel}" from untrusted page: ${url}`)
+        }
+        return listener(event, ...(args as Args))
+    })
+}
+
+/**
  * Register all IPC handlers
  */
 export function registerIpcHandlers(): void {
     // ==================== App Info ====================
 
-    ipcMain.handle("get-version", () => {
+    handle("get-version", () => {
         return app.getVersion()
     })
 
@@ -81,7 +106,7 @@ export function registerIpcHandlers(): void {
 
     // ==================== File Dialogs ====================
 
-    ipcMain.handle("dialog-open-file", async (event) => {
+    handle("dialog-open-file", async (event) => {
         const win = BrowserWindow.fromWebContents(event.sender)
         if (!win) return null
 
@@ -108,9 +133,9 @@ export function registerIpcHandlers(): void {
         }
     })
 
-    ipcMain.handle("dialog-save-file", async (event, data: string) => {
+    handle("dialog-save-file", async (event, data: string) => {
         const win = BrowserWindow.fromWebContents(event.sender)
-        if (!win) return false
+        if (!win || typeof data !== "string") return false
 
         const result = await dialog.showSaveDialog(win, {
             filters: [
@@ -135,28 +160,28 @@ export function registerIpcHandlers(): void {
 
     // ==================== Config Presets ====================
 
-    ipcMain.handle("config-presets:get-all", () => {
+    handle("config-presets:get-all", () => {
         return getAllPresets()
     })
 
-    ipcMain.handle("config-presets:get-current", () => {
+    handle("config-presets:get-current", () => {
         return getCurrentPreset()
     })
 
-    ipcMain.handle("config-presets:get-current-id", () => {
+    handle("config-presets:get-current-id", () => {
         return getCurrentPresetId()
     })
 
-    ipcMain.handle(
+    handle(
         "config-presets:save",
-        (
+        async (
             _event,
             preset: Omit<ConfigPreset, "id" | "createdAt" | "updatedAt"> & {
                 id?: string
             },
         ) => {
             // Validate preset name
-            if (typeof preset.name !== "string" || !preset.name.trim()) {
+            if (typeof preset?.name !== "string" || !preset.name.trim()) {
                 throw new Error("Invalid preset name")
             }
 
@@ -165,42 +190,48 @@ export function registerIpcHandlers(): void {
 
             if (preset.id) {
                 // Update existing preset
-                return updatePreset(preset.id, {
+                const updated = updatePreset(preset.id, {
                     name: preset.name.trim(),
                     config: sanitizedConfig,
                 })
+                // Re-apply the active preset so the edit takes effect
+                if (updated && updated.id === getCurrentPresetId()) {
+                    await switchPreset(updated.id)
+                } else {
+                    rebuildAppMenu()
+                }
+                return updated
             }
             // Create new preset
-            return createPreset({
+            const created = createPreset({
                 name: preset.name.trim(),
                 config: sanitizedConfig,
             })
+            rebuildAppMenu()
+            return created
         },
     )
 
-    ipcMain.handle("config-presets:delete", (_event, id: string) => {
-        return deletePreset(id)
+    handle("config-presets:delete", async (_event, id: string) => {
+        const wasCurrent = id === getCurrentPresetId()
+        // Deleting the active preset also clears its env vars
+        const deleted = deletePreset(id)
+        rebuildAppMenu()
+
+        // Restart so the server stops using the deleted preset
+        if (deleted && wasCurrent && app.isPackaged) {
+            await restartNextServer()
+        }
+        return deleted
     })
 
-    ipcMain.handle("config-presets:apply", async (_event, id: string) => {
-        const env = applyPresetToEnv(id)
-        if (!env) {
-            return { success: false, error: "Preset not found" }
-        }
-
-        const isDev = process.env.NODE_ENV === "development"
-
-        if (isDev) {
-            // In development mode, the config file change will trigger
-            // the file watcher in electron-dev.mjs to restart Next.js
-            // We just need to save the preset (already done in applyPresetToEnv)
-            return { success: true, env, devMode: true }
-        }
-
-        // Production mode: restart the Next.js server to apply new environment variables
+    handle("config-presets:apply", async (_event, id: string) => {
         try {
-            await restartNextServer()
-            return { success: true, env }
+            const env = await switchPreset(id)
+            // In development mode, electron-dev.mjs restarts Next.js
+            return app.isPackaged
+                ? { success: true, env }
+                : { success: true, env, devMode: true }
         } catch (error) {
             return {
                 success: false,
@@ -212,30 +243,39 @@ export function registerIpcHandlers(): void {
         }
     })
 
-    ipcMain.handle(
-        "config-presets:set-current",
-        (_event, id: string | null) => {
-            return setCurrentPreset(id)
-        },
-    )
+    handle("config-presets:set-current", (_event, id: string | null) => {
+        return setCurrentPreset(id)
+    })
 
     // ==================== Proxy Settings ====================
 
-    ipcMain.handle("get-proxy", () => {
+    handle("get-proxy", () => {
         return getProxyConfig()
     })
 
-    ipcMain.handle("set-proxy", async (_event, config: ProxyConfig) => {
+    handle("set-proxy", async (_event, config: ProxyConfig) => {
+        const isOptionalString = (value: unknown) =>
+            value === undefined || typeof value === "string"
+        if (
+            typeof config !== "object" ||
+            config === null ||
+            !isOptionalString(config.httpProxy) ||
+            !isOptionalString(config.httpsProxy)
+        ) {
+            return { success: false, error: "Invalid proxy settings" }
+        }
+
         try {
             // Save config to file
-            saveProxyConfig(config)
+            saveProxyConfig({
+                httpProxy: config.httpProxy,
+                httpsProxy: config.httpsProxy,
+            })
 
             // Apply to current process environment
             applyProxyToEnv()
 
-            const isDev = process.env.NODE_ENV === "development"
-
-            if (isDev) {
+            if (!app.isPackaged) {
                 // In development, env vars are already applied
                 // Next.js dev server may need manual restart
                 return { success: true, devMode: true }
@@ -257,11 +297,11 @@ export function registerIpcHandlers(): void {
 
     // ==================== User Locale ====================
 
-    ipcMain.handle("get-user-locale", () => {
+    handle("get-user-locale", () => {
         return getUserLocale()
     })
 
-    ipcMain.handle("set-user-locale", (_event, locale: string) => {
+    handle("set-user-locale", (_event, locale: string) => {
         // Validate locale is one of the supported values
         if (!["en", "zh", "ja", "zh-Hant"].includes(locale)) {
             return { success: false, error: "Invalid locale" }

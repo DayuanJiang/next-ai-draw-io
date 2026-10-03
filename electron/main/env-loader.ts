@@ -48,12 +48,16 @@ function loadEnvFromFile(filePath: string): void {
             const key = trimmed.slice(0, equalIndex).trim()
             let value = trimmed.slice(equalIndex + 1).trim()
 
-            // Remove surrounding quotes
-            if (
-                (value.startsWith('"') && value.endsWith('"')) ||
-                (value.startsWith("'") && value.endsWith("'"))
-            ) {
-                value = value.slice(1, -1)
+            const quote = value[0]
+            const closingQuote =
+                quote === '"' || quote === "'" ? value.indexOf(quote, 1) : -1
+            if (closingQuote > 0) {
+                // Quoted value: keep what's inside the quotes and drop
+                // anything after them (e.g. a comment)
+                value = value.slice(1, closingQuote)
+            } else {
+                // Unquoted value: drop an inline comment ("value  # comment")
+                value = value.replace(/\s+#.*$/, "")
             }
 
             // Don't override existing environment variables
