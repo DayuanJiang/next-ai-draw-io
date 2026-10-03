@@ -10,6 +10,7 @@ import { aihubmix, createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
+import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
 import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderName }
@@ -91,6 +92,7 @@ export interface ClientOverrides {
     // Can be a single string or array of strings for load balancing
     apiKeyEnv?: string | string[]
     baseUrlEnv?: string
+    thinkingEnabled?: boolean
 }
 
 // Providers that can be selected from client settings
@@ -259,6 +261,7 @@ function parseIntSafe(
 function buildProviderOptions(
     provider: ProviderName,
     modelId?: string,
+    thinkingEnabled?: boolean,
 ): Record<string, any> | undefined {
     const options: Record<string, any> = {}
 
@@ -306,6 +309,18 @@ function buildProviderOptions(
                         | "detailed"
                 }
             }
+            if (
+                modelId &&
+                thinkingEnabled !== undefined &&
+                supportsThinkingToggle(provider, modelId)
+            ) {
+                options.openai = {
+                    ...options.openai,
+                    reasoningEffort: thinkingEnabled
+                        ? process.env.OPENAI_REASONING_EFFORT || "medium"
+                        : "none",
+                }
+            }
             break
         }
 
@@ -325,6 +340,24 @@ function buildProviderOptions(
                         type: thinkingType,
                         budgetTokens: thinkingBudget,
                     },
+                }
+            }
+            if (
+                modelId &&
+                thinkingEnabled !== undefined &&
+                supportsThinkingToggle(provider, modelId)
+            ) {
+                // Anthropic turns manual extended thinking off by omitting
+                // `thinking`; `type: "disabled"` is not a Messages API mode.
+                if (thinkingEnabled) {
+                    options.anthropic = {
+                        thinking: {
+                            type: "enabled",
+                            budgetTokens: thinkingBudget || 1024,
+                        },
+                    }
+                } else {
+                    delete options.anthropic
                 }
             }
             break
@@ -412,6 +445,19 @@ function buildProviderOptions(
             if (Object.keys(options_obj).length > 0) {
                 options.google = { ...options.google, ...options_obj }
             }
+            if (
+                modelId &&
+                thinkingEnabled !== undefined &&
+                supportsThinkingToggle(provider, modelId)
+            ) {
+                options.google = {
+                    ...options.google,
+                    thinkingConfig: {
+                        ...(options.google?.thinkingConfig || {}),
+                        thinkingBudget: thinkingEnabled ? -1 : 0,
+                    },
+                }
+            }
             break
         }
         case "vertexai": {
@@ -452,6 +498,19 @@ function buildProviderOptions(
                 }
                 options.google = { thinkingConfig }
             }
+            if (
+                modelId &&
+                thinkingEnabled !== undefined &&
+                supportsThinkingToggle(provider, modelId)
+            ) {
+                options.google = {
+                    ...options.google,
+                    thinkingConfig: {
+                        ...(options.google?.thinkingConfig || {}),
+                        thinkingBudget: thinkingEnabled ? -1 : 0,
+                    },
+                }
+            }
             break
         }
         case "azure": {
@@ -471,6 +530,18 @@ function buildProviderOptions(
                         | "none"
                         | "brief"
                         | "detailed"
+                }
+            }
+            if (
+                modelId &&
+                thinkingEnabled !== undefined &&
+                supportsThinkingToggle(provider, modelId)
+            ) {
+                options.azure = {
+                    ...options.azure,
+                    reasoningEffort: thinkingEnabled
+                        ? process.env.AZURE_REASONING_EFFORT || "medium"
+                        : "none",
                 }
             }
             break
@@ -518,6 +589,41 @@ function buildProviderOptions(
 
                 options.bedrock = { reasoningConfig }
             }
+            if (
+                modelId &&
+                thinkingEnabled !== undefined &&
+                supportsThinkingToggle(provider, modelId)
+            ) {
+                const isClaude =
+                    modelId.includes("claude") || modelId.includes("anthropic")
+                if (!thinkingEnabled && isClaude) {
+                    // Claude extended thinking is disabled by omitting the
+                    // `thinking` object; it has no `type: "disabled"` mode.
+                    delete options.bedrock
+                } else if (!thinkingEnabled) {
+                    // Nova 2 Lite exposes an explicit binary switch.
+                    options.bedrock = {
+                        ...options.bedrock,
+                        reasoningConfig: { type: "disabled" },
+                    }
+                } else {
+                    options.bedrock = {
+                        ...options.bedrock,
+                        reasoningConfig: {
+                            ...(options.bedrock?.reasoningConfig || {}),
+                            type: "enabled",
+                            ...(isClaude
+                                ? { budgetTokens: budgetTokens || 1024 }
+                                : {
+                                      maxReasoningEffort:
+                                          process.env
+                                              .BEDROCK_REASONING_EFFORT ||
+                                          "medium",
+                                  }),
+                        },
+                    }
+                }
+            }
             break
         }
 
@@ -530,7 +636,25 @@ function buildProviderOptions(
             break
         }
 
-        case "deepseek":
+        case "deepseek": {
+            // DeepSeek V4 models enable thinking by default. This application
+            // needs predictable, compact tool-call output because diagrams
+            // are returned as draw.io XML. Keep thinking disabled for all
+            // DeepSeek requests unless this is explicitly changed later.
+            options.deepseek = {
+                thinking: {
+                    type:
+                        thinkingEnabled !== undefined &&
+                        supportsThinkingToggle(provider, modelId || "")
+                            ? thinkingEnabled
+                                ? "enabled"
+                                : "disabled"
+                            : "disabled",
+                },
+            }
+            break
+        }
+
         case "openrouter":
         case "aihubmix":
         case "siliconflow":
@@ -817,7 +941,11 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     let headers: Record<string, string> | undefined
 
     // Build provider-specific options from environment variables
-    const customProviderOptions = buildProviderOptions(provider, modelId)
+    const customProviderOptions = buildProviderOptions(
+        provider,
+        modelId,
+        overrides?.thinkingEnabled,
+    )
 
     switch (provider) {
         case "bedrock": {

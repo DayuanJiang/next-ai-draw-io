@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { getApiEndpoint } from "@/lib/base-path"
 import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
+import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
 import {
     createEmptyConfig,
     createModelConfig,
@@ -121,7 +122,7 @@ export interface UseModelConfigReturn {
         updates: Partial<ProviderConfig>,
     ) => void
     deleteProvider: (providerId: string) => void
-    addModel: (providerId: string, modelId: string) => ModelConfig
+    addModel: (providerId: string, modelId: string) => void
     updateModel: (
         providerId: string,
         modelConfigId: string,
@@ -279,21 +280,29 @@ export function useModelConfig(): UseModelConfigReturn {
         })
     }, [])
 
-    const addModel = useCallback(
-        (providerId: string, modelId: string): ModelConfig => {
+    const addModel = useCallback((providerId: string, modelId: string) => {
+        setConfig((prev) => {
+            const provider = prev.providers.find((p) => p.id === providerId)
             const newModel = createModelConfig(modelId)
-            setConfig((prev) => ({
+            // Only new, known-capable models get an explicit default.
+            // Existing localStorage records stay undefined for compatibility.
+            if (
+                provider &&
+                supportsThinkingToggle(provider.provider, modelId)
+            ) {
+                newModel.thinkingEnabled = true
+            }
+
+            return {
                 ...prev,
                 providers: prev.providers.map((p) =>
                     p.id === providerId
                         ? { ...p, models: [...p.models, newModel] }
                         : p,
                 ),
-            }))
-            return newModel
-        },
-        [],
-    )
+            }
+        })
+    }, [])
 
     const updateModel = useCallback(
         (
@@ -386,6 +395,7 @@ export function getSelectedAIConfig(): {
     selectedModelId: string
     // Vertex AI credentials (Express Mode)
     vertexApiKey: string
+    thinkingEnabled?: boolean
 } {
     const empty = {
         accessCode: "",
@@ -399,6 +409,7 @@ export function getSelectedAIConfig(): {
         awsSessionToken: "",
         selectedModelId: "",
         vertexApiKey: "",
+        thinkingEnabled: undefined,
     }
 
     if (typeof window === "undefined") return empty
@@ -423,6 +434,7 @@ export function getSelectedAIConfig(): {
             awsSessionToken: "",
             selectedModelId: "",
             vertexApiKey: "",
+            thinkingEnabled: undefined,
         }
     }
 
@@ -478,5 +490,6 @@ export function getSelectedAIConfig(): {
         selectedModelId: config.selectedModelId || "",
         // Vertex AI credentials (Express Mode)
         vertexApiKey: model.vertexApiKey || "",
+        thinkingEnabled: model.thinkingEnabled,
     }
 }
