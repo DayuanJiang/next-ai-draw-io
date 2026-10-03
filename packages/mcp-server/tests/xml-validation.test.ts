@@ -1,0 +1,186 @@
+/**
+ * Tests for XML syntax checking, autoFixXml and the XML serializer.
+ *
+ * linkedom (the DOM used in Node) parses leniently and never reports syntax
+ * errors, so validation relies on the strict check in dom.ts. autoFixXml
+ * runs on the whole document whenever any check fails, so its steps must
+ * leave valid parts of the document untouched.
+ */
+
+import { beforeAll, describe, expect, it } from "vitest"
+import { getXmlSyntaxError, installDomPolyfill } from "../src/dom.js"
+
+beforeAll(() => {
+    installDomPolyfill()
+})
+
+import { addPageToDoc, parseMxfile, serializeMxfile } from "../src/pages.js"
+import { validateAndFixXml } from "../src/xml-validation.js"
+
+/** Bare model with the root cells plus the given cells. */
+const model = (cells: string) =>
+    `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`
+
+// A bare & makes the first validation fail, which triggers autoFixXml on
+// the whole document.
+const BROKEN_CELL = `<mxCell id="9" value="R&D" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+
+describe("getXmlSyntaxError", () => {
+    it("accepts well-formed XML", () => {
+        expect(getXmlSyntaxError(model(""))).toBeNull()
+    })
+
+    it.each([
+        ["duplicate attribute", `<a style="x" style="y"/>`],
+        ["unquoted attribute", `<a id=2/>`],
+        ["missing space between attributes", `<a id="2"vertex="1"/>`],
+        ["bare ampersand", `<a v="R&D"/>`],
+        ["unclosed tag", `<a><b></a>`],
+        ["plain text", `hello`],
+    ])("reports %s", (_name, xml) => {
+        expect(getXmlSyntaxError(xml)).toMatch(/^\d+:\d+: /)
+    })
+})
+
+describe("validateAndFixXml", () => {
+    it("rejects a duplicate style attribute", () => {
+        const r = validateAndFixXml(
+            model(
+                `<mxCell id="2" style="a=1;" style="b=1;" vertex="1" parent="1"/>`,
+            ),
+        )
+        expect(r.valid).toBe(false)
+        expect(r.error).toContain("duplicate attribute: style")
+    })
+
+    it("rejects an unquoted attribute value", () => {
+        const r = validateAndFixXml(
+            model(`<mxCell id=2 vertex="1" parent="1"/>`),
+        )
+        expect(r.valid).toBe(false)
+    })
+
+    it("keeps style values intact while fixing another cell", () => {
+        const cells = `<mxCell id="2" style="shape=cylinder3;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="2" target="2"><mxGeometry relative="1" as="geometry"/></mxCell>`
+        const r = validateAndFixXml(model(cells + BROKEN_CELL))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('style="shape=cylinder3;whiteSpace=wrap;"')
+        expect(r.fixed).toContain('style="edgeStyle=orthogonalEdgeStyle;"')
+        expect(r.fixed).toContain('value="R&amp;D"')
+    })
+
+    it("keeps &quot; inside rich-text labels", () => {
+        const rich = `<mxCell id="4" value="&lt;font style=&quot;color: red;&quot;&gt;Hi&lt;/font&gt;" style="html=1;" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+        const r = validateAndFixXml(model(rich + BROKEN_CELL))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain(
+            'value="&lt;font style=&quot;color: red;&quot;&gt;Hi&lt;/font&gt;"',
+        )
+        expect(getXmlSyntaxError(r.fixed ?? "")).toBeNull()
+    })
+
+    it("keeps UserObject and object wrappers", () => {
+        const wrapped = `<UserObject id="u" label="L" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject><object id="o" label="O"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></object>`
+        const r = validateAndFixXml(model(wrapped + BROKEN_CELL))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('<UserObject id="u"')
+        expect(r.fixed).toContain('<object id="o"')
+    })
+
+    it("leaves one-cell-per-line XML alone while fixing another cell", () => {
+        const xml = [
+            "<mxGraphModel>",
+            "<root>",
+            '<mxCell id="0"/>',
+            '<mxCell id="1" parent="0"/>',
+            BROKEN_CELL,
+            '<mxCell id="3" value="B" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>',
+            "</root>",
+            "</mxGraphModel>",
+        ].join("\n")
+        const r = validateAndFixXml(xml)
+        expect(r.valid).toBe(true)
+        expect(r.fixes).toEqual(["Escaped unescaped & characters"])
+    })
+
+    it("leaves cells split over two lines alone while fixing another cell", () => {
+        const xml = [
+            "<mxGraphModel><root>",
+            '<mxCell id="0"/><mxCell id="1" parent="0"/>',
+            '<mxCell id="2" value="A" vertex="1" parent="1">',
+            '  <mxGeometry as="geometry"/></mxCell>',
+            '<mxCell id="3" value="B" vertex="1" parent="1">',
+            '  <mxGeometry as="geometry"/></mxCell>',
+            BROKEN_CELL,
+            "</root></mxGraphModel>",
+        ].join("\n")
+        const r = validateAndFixXml(xml)
+        expect(r.valid).toBe(true)
+        expect(r.fixes).toEqual(["Escaped unescaped & characters"])
+    })
+
+    it("renames duplicate short ids without touching the attribute name", () => {
+        const r = validateAndFixXml(
+            model(
+                `<mxCell id="d" vertex="1" parent="1"/><mxCell id="d" vertex="1" parent="1"/><mxCell id="i" vertex="1" parent="1"/><mxCell id="i" vertex="1" parent="1"/>`,
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('id="d_dup1"')
+        expect(r.fixed).toContain('id="i_dup1"')
+    })
+
+    it("adds a missing space between attributes", () => {
+        const r = validateAndFixXml(
+            model(
+                `<mxCell id="2"value="a" style="x=1;" vertex="1" parent="1"/>`,
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('<mxCell id="2" value="a" style="x=1;"')
+    })
+
+    it("fixes attribute values quoted with &quot;", () => {
+        const r = validateAndFixXml(
+            model(
+                `<mxCell id="2" value=&quot;Hello&quot; vertex="1" parent="1"/>`,
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain('value="Hello"')
+    })
+})
+
+describe("XML serializer and strict parsing in page helpers", () => {
+    it("keeps line breaks and tabs in attribute values", () => {
+        const xml = `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="2" value="Multi-Head&#xa;Attention&#9;x" vertex="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+        const out = serializeMxfile(parseMxfile(xml) as Document)
+        expect(out).toContain('value="Multi-Head&#xa;Attention&#9;x"')
+        expect(out).not.toMatch(/value="[^"]*\n/)
+    })
+
+    it("escapes special characters in attributes and text", () => {
+        const xml = `<mxfile><diagram id="p" name="R&amp;D">a &lt; b<mxGraphModel><root><mxCell id="0" value="&lt;b&gt; &amp; &quot;"/></root></mxGraphModel></diagram></mxfile>`
+        const out = serializeMxfile(parseMxfile(xml) as Document)
+        expect(out).toBe(xml)
+    })
+
+    it("parseMxfile returns null for malformed XML", () => {
+        expect(
+            parseMxfile(
+                `<mxfile><diagram id="p" name="a" name="b"></diagram></mxfile>`,
+            ),
+        ).toBeNull()
+    })
+
+    it("addPageToDoc rejects malformed page XML", () => {
+        const doc = parseMxfile(
+            `<mxfile><diagram id="p" name="Page-1">${model("")}</diagram></mxfile>`,
+        ) as Document
+        expect(() =>
+            addPageToDoc(doc, {
+                xml: model(`<mxCell id=2 vertex="1" parent="1"/>`),
+            }),
+        ).toThrow()
+    })
+})

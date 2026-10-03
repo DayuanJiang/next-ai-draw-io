@@ -18,6 +18,7 @@
  */
 
 import { DOMParser } from "linkedom"
+import { getXmlSyntaxError } from "./dom.js"
 
 export interface PageInfo {
     id: string
@@ -110,8 +111,8 @@ export function normalizeToMxfile(
  */
 export function parseMxfile(xml: string): Document | null {
     try {
+        if (getXmlSyntaxError(xml)) return null
         const doc = new DOMParser().parseFromString(xml, "text/xml")
-        if (doc.querySelector("parsererror")) return null
         if (doc.documentElement?.tagName !== "mxfile") return null
         return doc as unknown as Document
     } catch {
@@ -258,12 +259,12 @@ export function addPageToDoc(
     }
 
     const snippet = `<wrapper><diagram id="${escapeAttr(id)}" name="${escapeAttr(name)}">${inner}</diagram></wrapper>`
-    const tempDoc = new DOMParser().parseFromString(snippet, "text/xml")
-    if (tempDoc.querySelector("parsererror")) {
+    if (getXmlSyntaxError(snippet)) {
         throw new Error(
             "Failed to parse new page xml — make sure it is a valid <mxGraphModel>",
         )
     }
+    const tempDoc = new DOMParser().parseFromString(snippet, "text/xml")
     const newDiagram = tempDoc.querySelector("diagram")
     if (!newDiagram) {
         throw new Error("Failed to construct <diagram> element for new page")

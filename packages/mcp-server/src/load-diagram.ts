@@ -9,6 +9,7 @@
  */
 import { inflateRawSync } from "node:zlib"
 import { DOMParser } from "linkedom"
+import { getXmlSyntaxError } from "./dom.js"
 import {
     isMxFile,
     isMxGraphModel,
@@ -82,7 +83,7 @@ export function parseDrawioFileContent(content: string): LoadResult {
         }
         const inner = new DOMParser().parseFromString(xml, "text/xml")
         if (
-            inner.querySelector("parsererror") ||
+            getXmlSyntaxError(xml) ||
             inner.documentElement?.tagName !== "mxGraphModel"
         ) {
             return {

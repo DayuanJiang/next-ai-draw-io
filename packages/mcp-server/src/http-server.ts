@@ -12,7 +12,9 @@ function readBody(
     res: http.ServerResponse,
     cb: (body: string) => void,
 ): void {
-    let body = ""
+    // Decode once at the end: a multi-byte UTF-8 character can be split
+    // across two chunks.
+    const chunks: Buffer[] = []
     let size = 0
     req.on("data", (chunk: Buffer) => {
         size += chunk.length
@@ -22,9 +24,9 @@ function readBody(
             req.destroy()
             return
         }
-        body += chunk
+        chunks.push(chunk)
     })
-    req.on("end", () => cb(body))
+    req.on("end", () => cb(Buffer.concat(chunks).toString("utf8")))
 }
 
 import {
@@ -62,9 +64,11 @@ function normalizeUrl(url: string): string {
     return url.replace(/\/$/, "")
 }
 
-function isLikelyMcpSessionId(sessionId: string): boolean {
-    // Keep this cheap and conservative to avoid creating state for arbitrary IDs.
-    return sessionId.startsWith("mcp-") && sessionId.length <= 128
+// Session ids look like "mcp-<base36 time>-<base36 random>" (start_session).
+// Only this charset is accepted, because ids are written into the page's
+// HTML and script and into the redirect Location header.
+function isValidSessionId(sessionId: string): boolean {
+    return /^mcp-[a-z0-9-]{1,64}$/.test(sessionId)
 }
 
 // Find the most recent active session (for auto-redirect when no sessionId provided)
@@ -80,7 +84,7 @@ function getMostRecentSessionId(): string | null {
 
 function ensureSessionStateInitialized(sessionId: string): void {
     if (!sessionId) return
-    if (!isLikelyMcpSessionId(sessionId)) return
+    if (!isValidSessionId(sessionId)) return
     if (stateStore.has(sessionId)) return
 
     setState(sessionId, DEFAULT_DIAGRAM_XML)
@@ -89,7 +93,11 @@ function ensureSessionStateInitialized(sessionId: string): void {
 interface SessionState {
     xml: string
     version: number
+    // Version of the last write the browser did not make itself (AI edit,
+    // restore). A browser push based on an older version is rejected.
+    serverVersion?: number
     lastUpdated: Date
+    lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
     exportFormat?: "png" | "svg" // Set by MCP tool to request browser export
@@ -108,13 +116,20 @@ export function getState(sessionId: string): SessionState | undefined {
     return stateStore.get(sessionId)
 }
 
-export function setState(sessionId: string, xml: string, svg?: string): number {
+export function setState(
+    sessionId: string,
+    xml: string,
+    svg?: string,
+    fromBrowser = false,
+): number {
     const existing = stateStore.get(sessionId)
     const newVersion = (existing?.version || 0) + 1
     stateStore.set(sessionId, {
         xml,
         version: newVersion,
+        serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
         lastUpdated: new Date(),
+        lastPolled: existing?.lastPolled,
         svg: svg || existing?.svg, // Preserve cached SVG if not provided
         syncRequested: undefined, // Clear sync request when browser pushes state
         exportFormat: existing?.exportFormat, // Preserve pending export request
@@ -222,7 +237,11 @@ export function stopHttpServer(): void {
 function cleanupExpiredSessions(): void {
     const now = Date.now()
     for (const [sessionId, state] of stateStore) {
-        if (now - state.lastUpdated.getTime() > SESSION_TTL) {
+        const lastActive = Math.max(
+            state.lastUpdated.getTime(),
+            state.lastPolled ?? 0,
+        )
+        if (now - lastActive > SESSION_TTL) {
             stateStore.delete(sessionId)
             clearHistory(sessionId)
             log.info(`Cleaned up expired session: ${sessionId}`)
@@ -245,7 +264,48 @@ function handleRequest(
     req: http.IncomingMessage,
     res: http.ServerResponse,
 ): void {
-    const url = new URL(req.url || "/", `http://localhost:${serverPort}`)
+    // A bad request must never take down the MCP process
+    try {
+        routeRequest(req, res)
+    } catch (err) {
+        log.error("HTTP request failed:", err)
+        if (!res.headersSent) res.writeHead(500)
+        res.end()
+    }
+}
+
+// Serve only requests addressed to localhost, sent by a localhost page or by
+// a non-browser client (no Origin header). This blocks DNS rebinding and
+// scripts on other websites.
+function isLocalRequest(req: http.IncomingMessage): boolean {
+    const isLocalHost = (host: string) =>
+        /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)
+    const origin = req.headers.origin
+    return (
+        isLocalHost(req.headers.host ?? "") &&
+        (origin === undefined || isLocalHost(origin.replace(/^http:\/\//, "")))
+    )
+}
+
+function routeRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+): void {
+    let url: URL
+    try {
+        url = new URL(req.url || "/", `http://localhost:${serverPort}`)
+    } catch {
+        // e.g. "//" is not a valid URL path
+        res.writeHead(400)
+        res.end("Bad Request")
+        return
+    }
+
+    if (!isLocalRequest(req)) {
+        res.writeHead(403)
+        res.end("Forbidden")
+        return
+    }
 
     const requestOrigin = req.headers.origin
     if (requestOrigin === `http://localhost:${serverPort}`) {
@@ -262,12 +322,19 @@ function handleRequest(
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
         const sessionId = url.searchParams.get("mcp") || ""
+        if (sessionId && !isValidSessionId(sessionId)) {
+            res.writeHead(400)
+            res.end("Invalid session id")
+            return
+        }
 
         // Auto-redirect to most recent session if no sessionId provided
         if (!sessionId) {
             const recentSessionId = getMostRecentSessionId()
             if (recentSessionId) {
-                res.writeHead(302, { Location: `/?mcp=${recentSessionId}` })
+                res.writeHead(302, {
+                    Location: `/?mcp=${encodeURIComponent(recentSessionId)}`,
+                })
                 res.end()
                 return
             }
@@ -305,6 +372,9 @@ function handleStateApi(
         }
         ensureSessionStateInitialized(sessionId)
         const state = stateStore.get(sessionId)
+        // Polling counts as activity, so a session stays alive while its
+        // tab is open
+        if (state) state.lastPolled = Date.now()
         res.writeHead(200, { "Content-Type": "application/json" })
         res.end(
             JSON.stringify({
@@ -320,9 +390,11 @@ function handleStateApi(
             try {
                 const data = JSON.parse(body)
                 const { sessionId } = data
-                if (!sessionId) {
+                if (!sessionId || !isValidSessionId(sessionId)) {
                     res.writeHead(400, { "Content-Type": "application/json" })
-                    res.end(JSON.stringify({ error: "sessionId required" }))
+                    res.end(
+                        JSON.stringify({ error: "valid sessionId required" }),
+                    )
                     return
                 }
 
@@ -342,7 +414,25 @@ function handleStateApi(
                     return
                 }
 
-                const version = setState(sessionId, data.xml, data.svg)
+                // The browser edited a version older than the latest AI write
+                // (it has not loaded that write yet). Keep the AI write; the
+                // browser loads it on its next poll.
+                const current = stateStore.get(sessionId)
+                if (
+                    typeof data.baseVersion === "number" &&
+                    data.baseVersion < (current?.serverVersion ?? 0)
+                ) {
+                    res.writeHead(409, { "Content-Type": "application/json" })
+                    res.end(
+                        JSON.stringify({
+                            error: "Diagram changed on the server",
+                            version: current?.version,
+                        }),
+                    )
+                    return
+                }
+
+                const version = setState(sessionId, data.xml, data.svg, true)
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ success: true, version }))
             } catch {
@@ -378,7 +468,11 @@ function handleHistoryApi(
     res.writeHead(200, { "Content-Type": "application/json" })
     res.end(
         JSON.stringify({
-            entries: history.map((entry, i) => ({ index: i, svg: entry.svg })),
+            entries: history.map((entry, i) => ({
+                index: i,
+                id: entry.id,
+                svg: entry.svg,
+            })),
             count: history.length,
         }),
     )
@@ -396,16 +490,14 @@ function handleRestoreApi(
 
     readBody(req, res, (body) => {
         try {
-            const { sessionId, index } = JSON.parse(body)
-            if (!sessionId || index === undefined) {
+            const { sessionId, id } = JSON.parse(body)
+            if (!sessionId || typeof id !== "number") {
                 res.writeHead(400, { "Content-Type": "application/json" })
-                res.end(
-                    JSON.stringify({ error: "sessionId and index required" }),
-                )
+                res.end(JSON.stringify({ error: "sessionId and id required" }))
                 return
             }
 
-            const entry = getHistoryEntry(sessionId, index)
+            const entry = getHistoryEntry(sessionId, id)
             if (!entry) {
                 res.writeHead(404, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Entry not found" }))
@@ -415,7 +507,7 @@ function handleRestoreApi(
             const newVersion = setState(sessionId, entry.xml)
             addHistory(sessionId, entry.xml, entry.svg)
 
-            log.info(`Restored session ${sessionId} to index ${index}`)
+            log.info(`Restored session ${sessionId} to history entry ${id}`)
 
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true, newVersion }))
@@ -697,10 +789,11 @@ function getHtmlPage(sessionId: string): string {
         </div>
     </div>
     <script>
-        const sessionId = "${sessionId}";
+        const sessionId = ${JSON.stringify(sessionId).replace(/</g, "\\u003c")};
         const iframe = document.getElementById('drawio');
         let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
         let pendingSvgExport = null;
+        let pendingSvgBase = 0; // version the pending autosave was based on
         let pendingAiSvg = false;
         let pendingMcpExport = null; // 'png' or 'svg' when MCP requested export
         let projectionExportActive = false; // page-targeted export: showing a transient single-page projection
@@ -718,18 +811,29 @@ function getHtmlPage(sessionId: string): string {
                     // for a page-targeted export — otherwise we'd push the
                     // transient projection back as the canonical session state.
                     if (projectionExportActive) return;
-                    // Request SVG export, then push state with SVG
+                    // Request SVG export, then push state with SVG. Remember the
+                    // version this edit is based on, so the server can reject it
+                    // if the AI wrote a newer version that is not loaded yet.
                     pendingSvgExport = msg.xml;
+                    pendingSvgBase = currentVersion;
                     iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
                     // Fallback if export doesn't respond
-                    setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
+                    setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, '', pendingSvgBase); pendingSvgExport = null; } }, 2000);
+                } else if (msg.event === 'export' && msg.format === 'xml') {
+                    // Sync export requested by the server (get_diagram).
+                    // draw.io returns the XML in msg.xml, with no msg.data.
+                    if (pendingSyncExport && msg.xml) {
+                        pendingSyncExport = false;
+                        pushState(msg.xml, '');
+                    }
                 } else if (msg.event === 'export' && msg.data) {
-                    // Handle MCP server export request (png/svg)
-                    // Verify the response matches the requested format to avoid capturing
-                    // unrelated exports (autosave SVG, sync XML)
-                    if (pendingMcpExport) {
+                    // Handle MCP server export request (png/svg). fireExport tags
+                    // the request with mcpExport and draw.io echoes the request
+                    // back in msg.message, which tells it apart from autosave and
+                    // preview SVG exports.
+                    if (msg.message && msg.message.mcpExport) {
                         const d = msg.data;
-                        const isPng = pendingMcpExport === 'png' && (d.startsWith('data:image/png') || (typeof d === 'string' && d.length > 100 && !d.startsWith('<')));
+                        const isPng = pendingMcpExport === 'png' && d.startsWith('data:image/png');
                         const isSvg = pendingMcpExport === 'svg' && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
                         if (isPng || isSvg) {
                             pendingMcpExport = null;
@@ -741,8 +845,8 @@ function getHtmlPage(sessionId: string): string {
                             // Page-targeted export: restore the user's real
                             // multi-page document now that we have the image.
                             restoreFromProjection();
-                            return;
                         }
+                        return;
                     }
                     // Handle file download export (PNG/SVG only, drawio uses lastXml directly)
                     if (pendingDownload && (pendingDownload.format === 'png' || pendingDownload.format === 'svg')) {
@@ -761,19 +865,13 @@ function getHtmlPage(sessionId: string): string {
                         saveConfirmBtn.textContent = 'Save';
                         return;
                     }
-                    // Handle sync export (XML format) - server requested fresh state
-                    if (pendingSyncExport && !msg.data.startsWith('data:') && !msg.data.startsWith('<svg')) {
-                        pendingSyncExport = false;
-                        pushState(msg.data, '');
-                        return;
-                    }
                     // Handle SVG export
                     let svg = msg.data;
                     if (!svg.startsWith('data:')) svg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
                     if (pendingSvgExport) {
                         const xml = pendingSvgExport;
                         pendingSvgExport = null;
-                        pushState(xml, svg);
+                        pushState(xml, svg, pendingSvgBase);
                     } else if (pendingAiSvg) {
                         pendingAiSvg = false;
                         fetch('/api/history-svg', {
@@ -814,15 +912,17 @@ function getHtmlPage(sessionId: string): string {
             }
         }
 
-        async function pushState(xml, svg = '') {
+        async function pushState(xml, svg = '', baseVersion = currentVersion) {
             if (!sessionId) return;
             try {
                 const r = await fetch('/api/state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, xml, svg })
+                    body: JSON.stringify({ sessionId, xml, svg, baseVersion })
                 });
                 if (r.ok) { const d = await r.json(); currentVersion = d.version; lastXml = xml; }
+                // 409: the AI wrote a newer version; load it now
+                else if (r.status === 409) poll();
             } catch (e) { console.error('Push failed:', e); }
         }
 
@@ -830,14 +930,22 @@ function getHtmlPage(sessionId: string): string {
 
         async function poll() {
             if (!sessionId) return;
+            const knownVersion = currentVersion;
             try {
                 const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
                 if (!r.ok) return;
                 const s = await r.json();
-                // Handle sync request - server needs fresh state
-                if (s.syncRequested && !pendingSyncExport) {
+                // Handle sync request - server needs fresh state. Reset after a
+                // while in case draw.io never answers, so later syncs still run.
+                if (s.syncRequested && !pendingSyncExport && isReady) {
                     pendingSyncExport = true;
                     iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
+                    setTimeout(() => { pendingSyncExport = false; }, 5000);
+                }
+                // The server lost this session (e.g. it expired) and rebuilt it
+                // with a blank diagram: push back what the browser shows.
+                if (s.version < knownVersion && lastXml) {
+                    pushState(lastXml);
                 }
                 // Load new diagram from server (before export, so we export latest).
                 // While a page-targeted projection is on screen, skip the reload
@@ -862,9 +970,10 @@ function getHtmlPage(sessionId: string): string {
                 if (s.exportFormat && !pendingMcpExport && isReady) {
                     pendingMcpExport = s.exportFormat;
                     const fireExport = () => {
+                        // mcpExport is echoed back in msg.message (see the handler)
                         const exportOpts = pendingMcpExport === 'png'
-                            ? { action: 'export', format: 'png', scale: 2 }
-                            : { action: 'export', format: 'svg' };
+                            ? { action: 'export', format: 'png', scale: 2, mcpExport: true }
+                            : { action: 'export', format: 'svg', mcpExport: true };
                         iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
                     };
                     if (s.exportXml) {
@@ -962,7 +1071,7 @@ function getHtmlPage(sessionId: string): string {
         const historyEmpty = document.getElementById('history-empty');
         const restoreBtn = document.getElementById('restore-btn');
         const cancelBtn = document.getElementById('cancel-btn');
-        let historyData = [], selectedIdx = null;
+        let historyData = [], selectedId = null;
 
         historyBtn.onclick = async () => {
             if (!sessionId) return;
@@ -977,7 +1086,7 @@ function getHtmlPage(sessionId: string): string {
             historyModal.classList.add('open');
         };
 
-        cancelBtn.onclick = () => { historyModal.classList.remove('open'); selectedIdx = null; restoreBtn.disabled = true; };
+        cancelBtn.onclick = () => { historyModal.classList.remove('open'); selectedId = null; restoreBtn.disabled = true; };
         historyModal.onclick = (e) => { if (e.target === historyModal) cancelBtn.onclick(); };
 
         function renderHistory() {
@@ -989,30 +1098,30 @@ function getHtmlPage(sessionId: string): string {
             historyGrid.style.display = 'grid';
             historyEmpty.style.display = 'none';
             historyGrid.innerHTML = historyData.map((e, i) => \`
-                <div class="history-item" data-idx="\${e.index}">
+                <div class="history-item" data-id="\${e.id}">
                     <div class="thumb">\${e.svg ? \`<img src="\${e.svg}">\` : '#' + e.index}</div>
                     <div class="label">#\${e.index}</div>
                 </div>
             \`).join('');
             historyGrid.querySelectorAll('.history-item').forEach(item => {
                 item.onclick = () => {
-                    const idx = parseInt(item.dataset.idx);
-                    if (selectedIdx === idx) { selectedIdx = null; restoreBtn.disabled = true; }
-                    else { selectedIdx = idx; restoreBtn.disabled = false; }
-                    historyGrid.querySelectorAll('.history-item').forEach(el => el.classList.toggle('selected', parseInt(el.dataset.idx) === selectedIdx));
+                    const id = parseInt(item.dataset.id);
+                    if (selectedId === id) { selectedId = null; restoreBtn.disabled = true; }
+                    else { selectedId = id; restoreBtn.disabled = false; }
+                    historyGrid.querySelectorAll('.history-item').forEach(el => el.classList.toggle('selected', parseInt(el.dataset.id) === selectedId));
                 };
             });
         }
 
         restoreBtn.onclick = async () => {
-            if (selectedIdx === null) return;
+            if (selectedId === null) return;
             restoreBtn.disabled = true;
             restoreBtn.textContent = 'Restoring...';
             try {
                 const r = await fetch('/api/restore', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, index: selectedIdx })
+                    body: JSON.stringify({ sessionId, id: selectedId })
                 });
                 if (r.ok) { cancelBtn.onclick(); await poll(); }
                 else { alert('Restore failed'); }

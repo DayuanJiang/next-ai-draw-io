@@ -9,11 +9,11 @@
  * reads as a user edit.
  */
 
-import { DOMParser } from "linkedom"
 import { beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.js"
 
 beforeAll(() => {
-    ;(globalThis as any).DOMParser = DOMParser
+    installDomPolyfill()
 })
 
 import { checkEditGate, contentFingerprint } from "../src/edit-gate.js"

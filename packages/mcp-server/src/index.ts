@@ -18,24 +18,6 @@
  * surface.
  */
 
-// Setup DOM polyfill for Node.js (required for XML operations)
-import { DOMParser } from "linkedom"
-;(globalThis as any).DOMParser = DOMParser
-
-// Create XMLSerializer polyfill using outerHTML
-class XMLSerializerPolyfill {
-    serializeToString(node: any): string {
-        if (node.outerHTML !== undefined) {
-            return node.outerHTML
-        }
-        if (node.documentElement) {
-            return node.documentElement.outerHTML
-        }
-        return ""
-    }
-}
-;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
-
 import { createRequire } from "node:module"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
@@ -45,6 +27,7 @@ import {
     applyDiagramOperations,
     type DiagramOperation,
 } from "./diagram-operations.js"
+import { installDomPolyfill } from "./dom.js"
 import { checkEditGate } from "./edit-gate.js"
 import { addHistory } from "./history.js"
 import {
@@ -71,6 +54,9 @@ import {
     serializeMxfile,
 } from "./pages.js"
 import { validateAndFixXml } from "./xml-validation.js"
+
+// DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
+installDomPolyfill()
 
 // Server configuration
 const config = {
@@ -908,6 +894,47 @@ server.registerTool(
     },
 )
 
+// The browser bridge has one export slot per session, so export requests
+// run one at a time: a concurrent call waits for the previous one.
+let exportQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * Ask the browser to export (optionally via a page projection) and poll for
+ * the resulting image data. Resolves to undefined on timeout.
+ */
+function exportViaBrowser(
+    sessionId: string,
+    format: "png" | "svg",
+    projectionXml?: string,
+): Promise<string | undefined> {
+    const run = exportQueue.then(async () => {
+        requestExport(sessionId, format, projectionXml)
+
+        // A projection export does an extra load + render round-trip in the
+        // browser, so give it a longer window. Re-read the live store entry
+        // each tick: setState() (from a concurrent autosave or tool call)
+        // replaces the Map entry with a new object, so a captured reference
+        // would go stale and never observe the browser's exportData.
+        const timeoutMs = projectionXml ? 15000 : 10000
+        const start = Date.now()
+        let exportData: string | undefined
+        while (Date.now() - start < timeoutMs) {
+            exportData = getState(sessionId)?.exportData
+            if (exportData) break
+            await new Promise((r) => setTimeout(r, 200))
+        }
+        const live = getState(sessionId)
+        if (live) {
+            live.exportData = undefined
+            live.exportFormat = undefined
+            live.exportXml = undefined
+        }
+        return exportData
+    })
+    exportQueue = run.catch(() => {})
+    return run
+}
+
 // Tool: export_diagram
 server.registerTool(
     "export_diagram",
@@ -1079,33 +1106,11 @@ server.registerTool(
                 projectionXml = projection.xml
             }
 
-            // Ask the browser to export (optionally via a page projection) and
-            // poll for the resulting image data.
-            requestExport(
+            const exportData = await exportViaBrowser(
                 currentSession.id,
                 detectedFormat as "png" | "svg",
                 projectionXml,
             )
-
-            // A projection export does an extra load + render round-trip in the
-            // browser, so give it a longer window. Re-read the live store entry
-            // each tick: setState() (from a concurrent autosave or tool call)
-            // replaces the Map entry with a new object, so a captured reference
-            // would go stale and never observe the browser's exportData.
-            const timeoutMs = projectionXml ? 15000 : 10000
-            const start = Date.now()
-            let exportData: string | undefined
-            while (Date.now() - start < timeoutMs) {
-                exportData = getState(currentSession.id)?.exportData
-                if (exportData) break
-                await new Promise((r) => setTimeout(r, 200))
-            }
-            const live = getState(currentSession.id)
-            if (live) {
-                live.exportData = undefined
-                live.exportFormat = undefined
-                live.exportXml = undefined
-            }
 
             if (!exportData) {
                 return {
@@ -1215,15 +1220,20 @@ async function loadMxfileForMutation(): Promise<
         doc,
         writeBack: (newDoc: Document) => {
             const newXml = serializeMxfile(newDoc)
+            // The store may hold user edits the model has not seen yet.
+            const sawLatest = checkEditGate(
+                sessionRef.lastSeenXml,
+                browserState?.xml ?? "",
+            ).ok
             // Save history before overwriting so the user can undo.
             addHistory(sessionRef.id, sessionRef.xml, browserState?.svg || "")
             sessionRef.xml = newXml
             sessionRef.version++
             setState(sessionRef.id, newXml)
-            // The model just wrote this exact state, so mark it as seen —
-            // subsequent edit_diagram calls don't need a redundant
-            // get_diagram round-trip.
-            sessionRef.lastSeenXml = newXml
+            // The model just wrote this exact state. If it had seen the state
+            // it built on, mark the result as seen so edit_diagram needs no
+            // extra get_diagram; otherwise edit_diagram must ask for one.
+            sessionRef.lastSeenXml = sawLatest ? newXml : ""
             addHistory(sessionRef.id, newXml, "")
         },
     }
