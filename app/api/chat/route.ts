@@ -12,13 +12,17 @@ import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
 import path from "path"
 import { z } from "zod"
+import { checkAccessCode } from "@/lib/access-code"
 import {
     getAIModel,
     SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
+    usesServerCredentials,
 } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
+    dropInvalidToolCalls,
+    fixToolInputJson,
     isMinimalDiagram,
     replaceHistoricalToolInputs,
     validateFileParts,
@@ -29,6 +33,7 @@ import {
     recordTokenUsage,
 } from "@/lib/dynamo-quota-manager"
 import {
+    endTrace,
     getTelemetryConfig,
     setTraceInput,
     setTraceOutput,
@@ -38,7 +43,11 @@ import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
 } from "@/lib/output-token-limit"
-import { findServerModelById } from "@/lib/server-model-config"
+import {
+    type FlattenedServerModel,
+    findServerModelById,
+} from "@/lib/server-model-config"
+import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
 
@@ -76,24 +85,14 @@ function createCachedStreamResponse(xml: string): Response {
     return createUIMessageStreamResponse({ stream })
 }
 
+// Responses streamed from the model, whose trace streamText's callbacks end
+const modelStreamResponses = new WeakSet<Response>()
+
 // Inner handler function
 async function handleChatRequest(req: Request): Promise<Response> {
     // Check for access code
-    const accessCodes =
-        process.env.ACCESS_CODE_LIST?.split(",")
-            .map((code) => code.trim())
-            .filter(Boolean) || []
-    if (accessCodes.length > 0) {
-        const accessCodeHeader = req.headers.get("x-access-code")
-        if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
-            return Response.json(
-                {
-                    error: "Invalid or missing access code. Please configure it in Settings.",
-                },
-                { status: 401 },
-            )
-        }
-    }
+    const accessDenied = checkAccessCode(req)
+    if (accessDenied) return accessDenied
 
     const body = await req.json()
     const { messages, xml, previousXml, sessionId } = body
@@ -192,6 +191,15 @@ async function handleChatRequest(req: Request): Promise<Response> {
         baseUrl = `${origin}/api/edgeai`
     }
 
+    // Same rule as validate-model: with ALLOW_PRIVATE_URLS=false a request may
+    // not point the server at a private or internal address
+    if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
+        return Response.json(
+            { error: "Private or internal base URLs are not allowed." },
+            { status: 400 },
+        )
+    }
+
     // Get cookie header for EdgeOne authentication (eo_token, eo_time)
     const cookieHeader = req.headers.get("cookie")
 
@@ -201,8 +209,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
         baseUrlEnv?: string
         provider?: string
     } = {}
+    let serverModel: FlattenedServerModel | null = null
     if (selectedModelId?.startsWith("server:")) {
-        const serverModel = await findServerModelById(selectedModelId)
+        serverModel = await findServerModelById(selectedModelId)
         console.log(
             `[Server Model Lookup] ID: ${selectedModelId}, Found: ${!!serverModel}, Provider: ${serverModel?.provider}`,
         )
@@ -221,7 +230,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
         provider: serverModelConfig.provider || provider,
         baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
-        modelId: req.headers.get("x-ai-model"),
+        // A server model runs the model it was configured with, whatever the header says
+        modelId: serverModel?.modelId || req.headers.get("x-ai-model"),
         // AWS Bedrock credentials
         awsAccessKeyId: req.headers.get("x-aws-access-key-id"),
         awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
@@ -231,11 +241,14 @@ async function handleChatRequest(req: Request): Promise<Response> {
         ...serverModelConfig,
         // Vertex AI credentials (Express Mode)
         vertexApiKey: req.headers.get("x-vertex-api-key"),
-        // Pass cookies for EdgeOne Pages authentication
-        ...(provider === "edgeone" &&
-            cookieHeader && {
-                headers: { cookie: cookieHeader },
-            }),
+        // Pass cookies for EdgeOne Pages authentication, and the access code,
+        // which the EdgeOne function checks too
+        ...(provider === "edgeone" && {
+            headers: {
+                ...(cookieHeader && { cookie: cookieHeader }),
+                "x-access-code": req.headers.get("x-access-code") || "",
+            },
+        }),
     }
 
     // Read minimal style preference from header
@@ -254,12 +267,32 @@ async function handleChatRequest(req: Request): Promise<Response> {
         provider: resolvedProvider,
     } = getAIModel(clientOverrides)
 
+    // On the server's own keys, only run models the server offers: a server
+    // model picked by id (its model name is fixed above) or one in AI_MODEL.
+    // With their own key, users can run any model.
+    const onServerCredentials = usesServerCredentials(
+        resolvedProvider,
+        clientOverrides,
+    )
+    const envModels =
+        process.env.AI_MODEL?.split(",").map((m) => m.trim()) || []
+    if (onServerCredentials && !serverModel && !envModels.includes(modelId)) {
+        return Response.json(
+            {
+                error: `Model "${modelId}" is not available on this server. Add your own API key in Settings to use it.`,
+            },
+            { status: 400 },
+        )
+    }
+
     // Retry with a smaller budget if the provider rejects the requested one
     const model = withOutputTokenLimitFallback(baseModel)
 
-    // User setting wins over server env, so desktop users can raise it themselves
+    // The user setting can raise the budget only on their own key (desktop users
+    // can still raise it themselves); on the server's keys it can only lower it
     const maxOutputTokens = resolveMaxOutputTokens(
         req.headers.get("x-max-output-tokens"),
+        onServerCredentials,
     )
     console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
@@ -340,32 +373,9 @@ ${userInputText}
     )
 
     // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
-    // Bedrock API rejects messages where toolUse.input is not a valid JSON object
-    enhancedMessages = enhancedMessages
-        .map((msg: any) => {
-            if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
-                return msg
-            }
-            const filteredContent = msg.content.filter((part: any) => {
-                if (part.type === "tool-call") {
-                    // Check if input is a valid object (not null, undefined, or empty)
-                    if (
-                        !part.input ||
-                        typeof part.input !== "object" ||
-                        Object.keys(part.input).length === 0
-                    ) {
-                        console.warn(
-                            `[route.ts] Filtering out tool-call with invalid input:`,
-                            { toolName: part.toolName, input: part.input },
-                        )
-                        return false
-                    }
-                }
-                return true
-            })
-            return { ...msg, content: filteredContent }
-        })
-        .filter((msg: any) => msg.content && msg.content.length > 0)
+    // and their results. Bedrock API rejects messages where toolUse.input is not a valid
+    // JSON object, and every provider rejects a tool result whose call is gone.
+    enhancedMessages = dropInvalidToolCalls(enhancedMessages)
 
     // DEBUG: Log modelMessages structure (what's being sent to AI)
     console.log("[route.ts] Model messages count:", enhancedMessages.length)
@@ -410,7 +420,7 @@ ${userInputText}
                 contentParts.push({
                     type: "image",
                     image: filePart.url,
-                    mimeType: filePart.mediaType,
+                    mediaType: filePart.mediaType,
                 })
             }
 
@@ -471,7 +481,7 @@ ${previousXml}
 ${xml || ""}
 """
 
-IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.`
 
     const systemMessages = isSingleSystemProvider
         ? [
@@ -528,23 +538,11 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
                 error.name === "AI_InvalidToolInputError"
             ) {
                 try {
-                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
-                    let inputToRepair = toolCall.input
-                    if (typeof inputToRepair === "string") {
-                        // Fix `:=` instead of `: ` (LLM sometimes generates this)
-                        inputToRepair = inputToRepair.replace(/:=/g, ": ")
-                        // Fix `= "` instead of `: "`
-                        inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
-                        // Fix inconsistent quote escaping in XML attributes within JSON strings
-                        // Pattern: attribute="value\" where opening quote is unescaped but closing is escaped
-                        // Example: y="-20\" should be y=\"-20\"
-                        inputToRepair = inputToRepair.replace(
-                            /(\w+)="([^"]*?)\\"/g,
-                            '$1=\\"$2\\"',
-                        )
-                    }
-                    // Use jsonrepair to fix truncated JSON
-                    const repairedInput = jsonrepair(inputToRepair)
+                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle,
+                    // then use jsonrepair to fix truncated JSON
+                    const repairedInput = jsonrepair(
+                        fixToolInputJson(toolCall.input),
+                    )
                     console.log(
                         `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
                     )
@@ -554,26 +552,8 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
                         `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
                         repairError,
                     )
-                    // Return a placeholder input to avoid API errors in multi-step
-                    // The tool will fail gracefully on client side
-                    if (toolCall.toolName === "edit_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                operations: [],
-                                _error: "JSON repair failed - no operations to apply",
-                            },
-                        }
-                    }
-                    if (toolCall.toolName === "display_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                xml: "",
-                                _error: "JSON repair failed - empty diagram",
-                            },
-                        }
-                    }
+                    // Keep the original error, so the model and the client see why
+                    // the input was rejected and the model can retry the call
                     return null
                 }
             }
@@ -596,7 +576,7 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
 
             // Record token usage for server-side quota tracking (if enabled)
             // Use totalUsage (cumulative across all steps) instead of usage (final step only)
-            // Include all 4 token types: input, output, cache read, cache write
+            // inputTokens already includes cache reads and writes in AI SDK 6
             if (
                 isQuotaEnabled() &&
                 !hasOwnApiKey &&
@@ -605,12 +585,16 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
             ) {
                 const totalTokens =
                     (totalUsage.inputTokens || 0) +
-                    (totalUsage.outputTokens || 0) +
-                    (totalUsage.cachedInputTokens || 0) +
-                    (totalUsage.inputTokenDetails?.cacheWriteTokens || 0)
+                    (totalUsage.outputTokens || 0)
                 recordTokenUsage(userId, totalTokens)
             }
         },
+        // onFinish is skipped when the stream fails or is aborted, so end the trace here
+        onError: ({ error }) => {
+            console.error(error) // what AI SDK does without an onError
+            endTrace()
+        },
+        onAbort: () => endTrace(),
         tools: {
             // Client-side tool that will be executed on the client
             display_diagram: {
@@ -782,7 +766,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         }),
     })
 
-    return result.toUIMessageStreamResponse({
+    const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
@@ -796,6 +780,8 @@ Call this tool to get shape names and usage syntax for a specific library.`,
             return undefined
         },
     })
+    modelStreamResponses.add(response)
+    return response
 }
 
 // Helper to categorize errors and return appropriate response
@@ -862,11 +848,16 @@ function handleError(error: unknown): Response {
 
 // Wrap handler with error handling
 async function safeHandler(req: Request): Promise<Response> {
+    let response: Response
     try {
-        return await handleChatRequest(req)
+        response = await handleChatRequest(req)
     } catch (error) {
-        return handleError(error)
+        response = handleError(error)
     }
+    // Early returns, cache hits and errors never reach streamText's callbacks,
+    // so their Langfuse trace has to be ended here
+    if (!modelStreamResponses.has(response)) endTrace()
+    return response
 }
 
 // Wrap with Langfuse observe (if configured)
