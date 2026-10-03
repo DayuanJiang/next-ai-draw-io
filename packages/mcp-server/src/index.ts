@@ -34,6 +34,7 @@ import {
     type ExportOptions,
     getServerPort,
     getState,
+    onStateChange,
     requestExport,
     requestSync,
     setState,
@@ -57,6 +58,7 @@ import {
     serializeMxfile,
     wrapCellsInModel,
 } from "./pages.js"
+import { Autosaver, defaultDataDir } from "./persistence.js"
 import { getShapeLibrary, SHAPE_LIBRARY_GROUPS } from "./shape-library.js"
 import { validateAndFixXml } from "./xml-validation.js"
 
@@ -67,6 +69,10 @@ installDomPolyfill()
 const config = {
     port: parseInt(process.env.PORT || "6002", 10),
 }
+
+// Keep each session's latest diagram on disk, so it survives this process
+const autosaver = new Autosaver(defaultDataDir())
+onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
 
 // Session state (single session for simplicity)
 let currentSession: {
@@ -267,13 +273,18 @@ server.registerTool(
             const browserUrl = `http://localhost:${port}?mcp=${sessionId}`
             await open(browserUrl)
 
+            const savePath = autosaver.pathFor(sessionId)
+            const saveNote = savePath
+                ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
+                : ""
+
             log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.\n\n${DRAWING_GUIDE}`,
+                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}\n\n${DRAWING_GUIDE}`,
                     },
                 ],
             }
@@ -1731,6 +1742,7 @@ function gracefulShutdown(reason: string) {
     if (isShuttingDown) return
     isShuttingDown = true
     log.info(`Shutting down: ${reason}`)
+    autosaver.flush()
     shutdown()
     process.exit(0)
 }

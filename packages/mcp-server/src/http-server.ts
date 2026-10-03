@@ -87,7 +87,8 @@ function ensureSessionStateInitialized(sessionId: string): void {
     if (!isValidSessionId(sessionId)) return
     if (stateStore.has(sessionId)) return
 
-    setState(sessionId, DEFAULT_DIAGRAM_XML)
+    // Not a change worth saving: the browser fills it on its next push
+    setState(sessionId, DEFAULT_DIAGRAM_XML, undefined, false, false)
 }
 
 interface SessionState {
@@ -126,11 +127,21 @@ export function getState(sessionId: string): SessionState | undefined {
     return stateStore.get(sessionId)
 }
 
+// Called after every state change (AI write, browser push, restore)
+let stateListener: ((sessionId: string, xml: string) => void) | null = null
+
+export function onStateChange(
+    listener: (sessionId: string, xml: string) => void,
+): void {
+    stateListener = listener
+}
+
 export function setState(
     sessionId: string,
     xml: string,
     svg?: string,
     fromBrowser = false,
+    notify = true,
 ): number {
     const existing = stateStore.get(sessionId)
     const newVersion = (existing?.version || 0) + 1
@@ -148,6 +159,7 @@ export function setState(
         exportData: existing?.exportData, // Preserve export result
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
+    if (notify) stateListener?.(sessionId, xml)
     return newVersion
 }
 
@@ -833,6 +845,7 @@ function getHtmlPage(sessionId: string): string {
         let pendingSvgBase = 0; // version the pending autosave was based on
         let pendingAiSvg = false;
         let pendingMcpExport = null; // 'png' or 'svg' when MCP requested export
+        let mcpExportSeq = 0; // number of the latest MCP export
         let projectionExportActive = false; // page-targeted export: showing a transient single-page projection
         let forceReload = false; // reload the server state on the next poll even if the version is unchanged
         let noticeTimer = null;
@@ -873,6 +886,8 @@ function getHtmlPage(sessionId: string): string {
                     // back in msg.message, which tells it apart from autosave and
                     // preview SVG exports.
                     if (msg.message && msg.message.mcpExport) {
+                        // A late reply to an export that already timed out
+                        if (msg.message.mcpExport !== mcpExportSeq) return;
                         const d = msg.data;
                         const isPng = pendingMcpExport === 'png' && d.startsWith('data:image/png');
                         const isSvg = pendingMcpExport === 'svg' && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
@@ -1025,14 +1040,16 @@ function getHtmlPage(sessionId: string): string {
                 // projection is showing (see projectionExportActive guard).
                 if (s.exportFormat && !pendingMcpExport && isReady) {
                     pendingMcpExport = s.exportFormat;
+                    const seq = ++mcpExportSeq;
                     const extra = s.exportOptions || {};
                     const fireExport = () => {
-                        // mcpExport is echoed back in msg.message (see the
-                        // handler). PNG: width caps the size, pageId picks a
-                        // page; without one draw.io would use the first page.
+                        // mcpExport carries this export's number and is echoed
+                        // back in msg.message (see the handler). PNG: width
+                        // caps the size, pageId picks a page; without one
+                        // draw.io would use the first page.
                         const exportOpts = pendingMcpExport === 'png'
-                            ? { action: 'export', format: 'png', scale: 2, currentPage: !extra.pageId, ...extra, mcpExport: true }
-                            : { action: 'export', format: 'svg', mcpExport: true };
+                            ? { action: 'export', format: 'png', scale: 2, currentPage: !extra.pageId, ...extra, mcpExport: seq }
+                            : { action: 'export', format: 'svg', mcpExport: seq };
                         iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
                     };
                     if (s.exportXml) {
@@ -1046,9 +1063,10 @@ function getHtmlPage(sessionId: string): string {
                         fireExport();
                     }
                     // Timeout: reset if draw.io never responds, and restore the
-                    // real document if a projection was left showing.
+                    // real document if a projection was left showing. Only for
+                    // this export: a later one may be running by then.
                     setTimeout(() => {
-                        if (pendingMcpExport) {
+                        if (pendingMcpExport && seq === mcpExportSeq) {
                             pendingMcpExport = null;
                             restoreFromProjection();
                         }
