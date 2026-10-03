@@ -25,6 +25,7 @@ export type ProviderName =
     | "novita"
     | "mimo"
     | "atlascloud"
+    | "ssycloud"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -118,6 +119,7 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     novita: "novita",
     mimo: "xiaomi",
     atlascloud: "openai",
+    ssycloud: "openai", // ProviderLogo uses a local fallback; keep a safe remote fallback
 }
 
 // Provider metadata
@@ -211,6 +213,10 @@ export const PROVIDER_INFO: Record<
     atlascloud: {
         label: "Atlas Cloud",
         defaultBaseUrl: "https://api.atlascloud.ai/v1",
+    },
+    ssycloud: {
+        label: "SSYCloud (胜算云)",
+        defaultBaseUrl: "https://router.shengsuanyun.com/api/v1",
     },
 }
 
@@ -451,6 +457,16 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     ],
     mimo: ["mimo-v2.5-pro", "mimo-v2.5"],
     atlascloud: ["qwen/qwen3.5-flash", "deepseek-ai/deepseek-v4-pro"],
+    ssycloud: [
+        "openai/gpt-5.4",
+        "openai/gpt-5.4-mini",
+        "anthropic/claude-sonnet-4.6",
+        "google/gemini-2.5-pro",
+        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-v3.2",
+        "ali/qwen3-max",
+        "bigmodel/glm-4.7",
+    ],
 }
 
 // Helper to generate UUID

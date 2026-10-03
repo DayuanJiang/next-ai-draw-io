@@ -205,6 +205,7 @@ npm run dev
 -   Ollama
 -   OpenRouter
 -   AIHubMix
+-   SSYCloud（胜算云）
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope

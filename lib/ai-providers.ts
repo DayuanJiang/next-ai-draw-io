@@ -33,6 +33,7 @@ export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
     "qiniu",
     "novita",
     "mimo",
+    "ssycloud",
 ])
 
 /**
@@ -119,6 +120,7 @@ const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
     "novita",
     "mimo",
     "atlascloud",
+    "ssycloud",
 ]
 
 // Bedrock provider options for Anthropic beta features
@@ -545,6 +547,7 @@ function buildProviderOptions(
         case "qiniu":
         case "novita":
         case "atlascloud":
+        case "ssycloud":
         case "mimo": {
             // These providers don't have reasoning configs in AI SDK yet
             // Gateway passes through to underlying providers which handle their own configs
@@ -584,6 +587,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     novita: "NOVITA_API_KEY",
     mimo: "MIMO_API_KEY",
     atlascloud: "ATLASCLOUD_API_KEY",
+    ssycloud: "SSYCLOUD_API_KEY",
 }
 
 /**
@@ -687,7 +691,7 @@ function validateProviderCredentials(
  * Get the AI model based on environment variables
  *
  * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, modelscope)
+ * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, ssycloud, deepseek, siliconflow, sglang, gateway, modelscope)
  * - AI_MODEL: The model ID/name for the selected provider
  *
  * Provider-specific env vars:
@@ -700,6 +704,8 @@ function validateProviderCredentials(
  * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to https://ollama.com/api)
  * - OPENROUTER_API_KEY: OpenRouter API key
  * - AIHUBMIX_API_KEY: AIHubMix API key
+ * - SSYCLOUD_API_KEY: SSYCloud API key
+ * - SSYCLOUD_BASE_URL: SSYCloud endpoint (optional, defaults to https://router.shengsuanyun.com/api/v1)
  * - DEEPSEEK_API_KEY: DeepSeek API key
  * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
  * - SILICONFLOW_API_KEY: SiliconFlow API key
@@ -790,6 +796,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                         `- AWS_ACCESS_KEY_ID for Bedrock\n` +
                         `- OPENROUTER_API_KEY for OpenRouter\n` +
                         `- AIHUBMIX_API_KEY for AIHubMix\n` +
+                        `- SSYCLOUD_API_KEY for SSYCloud\n` +
                         `- AZURE_API_KEY for Azure\n` +
                         `- SILICONFLOW_API_KEY for SiliconFlow\n` +
                         `- SGLANG_API_KEY for SGLang\n` +
@@ -1374,7 +1381,8 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         case "qwen":
         case "qiniu":
         case "novita":
-        case "atlascloud": {
+        case "atlascloud":
+        case "ssycloud": {
             const envVar = PROVIDER_ENV_VARS[provider]
             if (!envVar) {
                 throw new Error(
@@ -1418,7 +1426,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
         default:
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud`,
+                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, ssycloud`,
             )
     }
 

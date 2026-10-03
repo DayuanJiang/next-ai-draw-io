@@ -61,6 +61,23 @@ AI_MODEL=claude-sonnet-4-5-20250929
 AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 ```
 
+### SSYCloud（胜算云）
+
+胜算云通过 OpenAI 兼容接口统一提供多个厂商的模型。模型 ID 需要保留模型列表中显示的厂商前缀。
+
+```bash
+SSYCLOUD_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-flash
+```
+
+默认端点为：
+
+```bash
+SSYCLOUD_BASE_URL=https://router.shengsuanyun.com/api/v1
+```
+
+API Key 获取方式和调用示例请参考[胜算云开发者快速入门](https://lean.shengsuanyun.com/apidocs/guides/quick-start)。
+
 ### Anthropic
 
 ```bash
@@ -328,7 +345,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, ssycloud, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## 服务端多模型配置

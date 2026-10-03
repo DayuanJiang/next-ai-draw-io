@@ -358,6 +358,10 @@ const PROVIDER_ENV_MAP: Record<string, { apiKey: string; baseUrl: string }> = {
         apiKey: "MODELSCOPE_API_KEY",
         baseUrl: "MODELSCOPE_BASE_URL",
     },
+    ssycloud: {
+        apiKey: "SSYCLOUD_API_KEY",
+        baseUrl: "SSYCLOUD_BASE_URL",
+    },
     gateway: { apiKey: "AI_GATEWAY_API_KEY", baseUrl: "AI_GATEWAY_BASE_URL" },
     // bedrock doesn't use API keys in the same way
     bedrock: { apiKey: "", baseUrl: "" },

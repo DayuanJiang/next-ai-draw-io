@@ -61,6 +61,23 @@ AI_MODEL=claude-sonnet-4-5-20250929
 AIHUBMIX_BASE_URL=https://aihubmix.com/v1
 ```
 
+### SSYCloud（勝算雲）
+
+SSYCloud は、複数ベンダーのモデルを OpenAI 互換 API で提供します。モデル ID には、SSYCloud のモデル一覧に表示されるベンダープレフィックスが必要です。
+
+```bash
+SSYCLOUD_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-flash
+```
+
+デフォルトのエンドポイント：
+
+```bash
+SSYCLOUD_BASE_URL=https://router.shengsuanyun.com/api/v1
+```
+
+API キーの取得方法と呼び出し例は、[SSYCloud 開発者向けクイックスタート](https://lean.shengsuanyun.com/apidocs/guides/quick-start)を参照してください。
+
 ### Anthropic
 
 ```bash
@@ -328,7 +345,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # または: openai, anthropic, aihubmix, ssycloud, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
 
 ## サーバーサイドマルチモデル設定
