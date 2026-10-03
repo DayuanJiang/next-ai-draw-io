@@ -26,6 +26,7 @@ import open from "open"
 import { z } from "zod"
 import type { DiagramOperation } from "./diagram-operations.js"
 import { installDomPolyfill } from "./dom.js"
+import { DRAWING_GUIDE } from "./drawing-guide.js"
 import { editDiagram, targetPageXml } from "./edit-diagram.js"
 import { checkEditGate } from "./edit-gate.js"
 import { addHistory } from "./history.js"
@@ -51,7 +52,9 @@ import {
     projectPage,
     renamePageInDoc,
     serializeMxfile,
+    wrapCellsInModel,
 } from "./pages.js"
+import { getShapeLibrary, SHAPE_LIBRARY_GROUPS } from "./shape-library.js"
 import { validateAndFixXml } from "./xml-validation.js"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -83,10 +86,29 @@ let currentSession: {
 const require = createRequire(import.meta.url)
 const packageVersion: string = require("../package.json").version
 
-const server = new McpServer({
-    name: "next-ai-drawio",
-    version: packageVersion,
-})
+// Hosts truncate instructions (Claude Code at 2,048 characters) and may show
+// only the first 512, so the essentials come first. The full rules are in
+// DRAWING_GUIDE, returned by start_session.
+const INSTRUCTIONS = `next-ai-drawio creates and edits draw.io diagrams and shows them live in a browser preview, where the user can also edit them by hand.
+
+Start with start_session: it opens the preview and its result contains the drawing guide (layout, edge routing and style rules). Follow the guide when drawing; call get_drawing_guide if it is no longer in your context.
+
+Before using cloud or icon shapes (AWS, Azure, GCP, Kubernetes, Cisco, BPMN...), call get_shape_library and use the exact style names it returns. Never guess icon style names.
+
+Tools:
+- create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
+- edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry.
+- get_diagram: read the current XML, including the user's manual edits.
+- load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
+- list_pages, add_page, rename_page, delete_page: manage pages (tabs).`
+
+const server = new McpServer(
+    {
+        name: "next-ai-drawio",
+        version: packageVersion,
+    },
+    { instructions: INSTRUCTIONS },
+)
 
 // Shared Zod schema fragment for page-targeting parameters.
 // Every multi-page-aware tool reuses these three optional fields so the LLM
@@ -149,7 +171,7 @@ function describeSelector(s: PageSelector): string {
     return "first page"
 }
 
-// Register prompt with workflow guidance
+// The same guide as start_session, for hosts that show prompts to the user
 server.registerPrompt(
     "diagram-workflow",
     {
@@ -159,49 +181,67 @@ server.registerPrompt(
         messages: [
             {
                 role: "user",
-                content: {
-                    type: "text",
-                    text: `# Draw.io Diagram Workflow Guidelines
-
-## Creating a New Diagram
-1. Call start_session to open the browser preview
-2. Use create_new_diagram with either a bare <mxGraphModel> (single page) or a full <mxfile> with one or more <diagram> children (multi-page)
-
-## Opening an Existing .drawio File
-- Use load_diagram with the file path — the server reads and decompresses the file itself; don't read it and pass the XML through create_new_diagram
-- After loading, call get_diagram once before editing (you haven't seen the file's cell IDs yet)
-
-## Working with Multiple Pages
-- Use list_pages to discover existing pages (id, name, index)
-- Use add_page to append a new page (without losing existing ones — unlike create_new_diagram which REPLACES everything)
-- Use rename_page / delete_page for management
-- edit_diagram, get_diagram, and export_diagram all accept optional page_id / page_name / page_index — when omitted they target the first page
-
-## Editing a Page (add / update / delete cells)
-1. Call edit_diagram with your operations, optionally with a page selector
-2. If you don't know the current cell IDs or structure, call get_diagram first
-3. For add/update, provide the cell_id and complete mxCell XML
-4. No need to call get_diagram before every edit: the server rejects the edit (with no side effects) if the user changed the diagram in the browser since you last saw it, and tells you to call get_diagram once and retry
-
-## Important Notes
-- create_new_diagram REPLACES the entire document, including ALL pages - only use for new diagrams. Use add_page to add a tab without losing existing content.
-- edit_diagram PRESERVES the user's manual changes: it is rejected with the current XML when the user edited the diagram since you last saw it
-- Always use unique cell_ids within a page (cell ids "0" and "1" are reserved root sentinels and can repeat across pages)`,
-                },
+                content: { type: "text", text: DRAWING_GUIDE },
             },
         ],
     }),
+)
+
+// Tool: get_drawing_guide
+server.registerTool(
+    "get_drawing_guide",
+    {
+        title: "Get drawing guide",
+        description:
+            "Return the drawing guide: XML format, layout, edge routing, style and editing rules. " +
+            "start_session already returns it; call this only if the guide is no longer in your context.",
+        inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => ({ content: [{ type: "text", text: DRAWING_GUIDE }] }),
+)
+
+// Tool: get_shape_library
+server.registerTool(
+    "get_shape_library",
+    {
+        title: "Get shape library",
+        description:
+            "Get the style syntax and shape names of a draw.io icon library. Call this BEFORE drawing with " +
+            "cloud, network or other icon shapes, and use the exact names it returns; never guess them.\n\n" +
+            `Libraries:\n${Object.entries(SHAPE_LIBRARY_GROUPS)
+                .map(([group, names]) => `- ${group}: ${names.join(", ")}`)
+                .join("\n")}`,
+        inputSchema: {
+            library: z
+                .string()
+                .describe("Library name, e.g. aws4, kubernetes, flowchart"),
+        },
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ library }) => {
+        const found = await getShapeLibrary(library)
+        return found.ok
+            ? { content: [{ type: "text", text: found.text }] }
+            : {
+                  content: [{ type: "text", text: `Error: ${found.error}` }],
+                  isError: true,
+              }
+    },
 )
 
 // Tool: start_session
 server.registerTool(
     "start_session",
     {
+        title: "Start session",
         description:
             "Start a new diagram session and open the browser for real-time preview. " +
             "Starts an embedded server and opens a browser window with draw.io. " +
-            "The browser will show diagram updates as they happen.",
+            "The browser will show diagram updates as they happen. " +
+            "The result includes the drawing guide; follow it when drawing.",
         inputSchema: {},
+        annotations: { destructiveHint: false, openWorldHint: false },
     },
     async () => {
         try {
@@ -227,7 +267,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.`,
+                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.\n\n${DRAWING_GUIDE}`,
                     },
                 ],
             }
@@ -247,72 +287,26 @@ server.registerTool(
 server.registerTool(
     "create_new_diagram",
     {
-        description: `Create a NEW diagram from XML. ONLY use this when creating a diagram from scratch.
+        title: "Create new diagram",
+        description: `Create a NEW diagram, REPLACING the whole document: every page and any unsaved user changes (the previous state stays in History). To add a tab use add_page; to change cells use edit_diagram.
 
-⚠️ DESTRUCTIVE: This tool REPLACES the entire document, INCLUDING every existing page/tab and any unsaved user changes. To add a tab without losing existing content, use add_page instead. To modify cells on an existing page, use edit_diagram.
+Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape_library first. Follow the drawing guide returned by start_session (call get_drawing_guide if it is no longer in your context).
 
-CRITICAL: You MUST provide the 'xml' argument in EVERY call. Do NOT call this tool without xml.
+Accepted xml:
+1) Only the mxCell elements of one page (recommended). The server adds <mxfile>, <mxGraphModel>, <root> and the root cells "0" and "1":
+<mxCell id="2" value="Shape" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>
+2) A bare <mxGraphModel> with <root> (one page).
+3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-When to use this tool:
-- Creating a new diagram from scratch (no existing diagram, or wanting to wipe and start over)
-- The user explicitly asks to "start over" or "create a new diagram"
-
-When to use add_page instead:
-- The user wants ANOTHER tab/page alongside what's already there (e.g. "add a CNN diagram on a new page")
-
-When to use edit_diagram instead:
-- ANY modifications to an existing page's cells (add/remove/move shapes, change labels, etc.)
-
-ACCEPTED XML SHAPES:
-
-1) Bare mxGraphModel (single-page, legacy):
-<mxGraphModel>
-  <root>
-    <mxCell id="0"/>
-    <mxCell id="1" parent="0"/>
-    <mxCell id="2" value="Shape" style="rounded=1;" vertex="1" parent="1">
-      <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-    </mxCell>
-  </root>
-</mxGraphModel>
-The server auto-wraps this in <mxfile><diagram id="..." name="Page-1">...</diagram></mxfile>.
-
-2) Full mxfile (one or more pages):
-<mxfile host="app.diagrams.net">
-  <diagram id="page-1" name="Architecture">
-    <mxGraphModel><root>...</root></mxGraphModel>
-  </diagram>
-  <diagram id="page-2" name="Sequence">
-    <mxGraphModel><root>...</root></mxGraphModel>
-  </diagram>
-</mxfile>
-Each <diagram> becomes a tab in the embedded editor. Cell ids "0" and "1" are reserved root sentinels and MUST repeat in every page's <root>.
-
-LAYOUT CONSTRAINTS (per page):
-- Keep all elements within x=0-800, y=0-600 (single page viewport)
-- Start from margins (x=40, y=40), keep elements grouped closely
-- Use unique IDs starting from "2" within each page (0 and 1 are reserved)
-- Set parent="1" for top-level shapes
-- Space shapes 150-200px apart for clear edge routing
-
-EDGE ROUTING RULES:
-- Never let multiple edges share the same path - use different exitY/entryY values
-- For bidirectional connections (A↔B), use OPPOSITE sides
-- Always specify exitX, exitY, entryX, entryY explicitly in edge style
-- Route edges AROUND obstacles using waypoints (add 20-30px clearance)
-- Use natural connection points based on flow (not corners)
-
-COMMON STYLES:
-- Shapes: rounded=1; fillColor=#hex; strokeColor=#hex
-- Edges: endArrow=classic; edgeStyle=orthogonalEdgeStyle; curved=1
-- Text: fontSize=14; fontStyle=1 (bold); align=center`,
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent="1" for top-level shapes, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600.`,
         inputSchema: {
             xml: z
                 .string()
                 .describe(
-                    "REQUIRED: Either a complete <mxGraphModel> (legacy single-page) or a full <mxfile> with one or more <diagram> children (multi-page).",
+                    "REQUIRED: the mxCell elements of one page, a bare <mxGraphModel>, or a full <mxfile> with one or more <diagram> pages.",
                 ),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ xml: inputXml }) => {
         try {
@@ -328,8 +322,10 @@ COMMON STYLES:
                 }
             }
 
-            // Validate and auto-fix XML (works for both mxfile and mxGraphModel inputs).
-            let xml = inputXml
+            // Bare cells get the wrapper and root cells first: the strict
+            // parser rejects several top-level elements. Then validate and
+            // auto-fix (works for both mxfile and mxGraphModel inputs).
+            let xml = wrapCellsInModel(inputXml)
             const { valid, error, fixed, fixes } = validateAndFixXml(xml)
             if (fixed) {
                 xml = fixed
@@ -357,7 +353,7 @@ COMMON STYLES:
                     content: [
                         {
                             type: "text",
-                            text: "Error: XML must be either a <mxGraphModel> or an <mxfile> with one or more <diagram> children.",
+                            text: "Error: XML must be the mxCell elements of one page, a <mxGraphModel>, or an <mxfile> with one or more <diagram> children.",
                         },
                     ],
                     isError: true,
@@ -432,6 +428,7 @@ COMMON STYLES:
 server.registerTool(
     "load_diagram",
     {
+        title: "Load .drawio file",
         description:
             "Load a .drawio file from disk into the current session, REPLACING the entire diagram (all pages). " +
             "The server reads the file directly — you do NOT need to read the file yourself or pass its XML through create_new_diagram. " +
@@ -444,6 +441,7 @@ server.registerTool(
                     "Absolute path to the .drawio file to load (e.g. /Users/me/diagram.drawio or ~/diagram.drawio). Relative paths resolve against the MCP server's working directory, which is often not your project.",
                 ),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ path }) => {
         try {
@@ -549,6 +547,7 @@ server.registerTool(
 server.registerTool(
     "edit_diagram",
     {
+        title: "Edit diagram",
         description:
             "Edit a specific page in the current diagram by ID-based operations (update/add/delete cells).\n\n" +
             "All-or-nothing: if any operation fails, nothing is applied and every failure is listed.\n\n" +
@@ -563,16 +562,13 @@ server.registerTool(
             "- page_id / page_name / page_index are optional; when all omitted, the FIRST page is targeted\n" +
             "- Use list_pages to discover what pages exist\n\n" +
             "Operations:\n" +
-            "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml.\n" +
+            "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml. One cell per operation.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
-            "- delete: Remove a cell by its id. Only cell_id is needed.\n\n" +
-            "For add/update, new_xml must be a complete mxCell element including mxGeometry.\n\n" +
+            "- delete: Remove a cell by its id. Only cell_id is needed. Its children and connected edges are deleted too, so give only a container's id.\n\n" +
+            "For add/update, new_xml must be a complete mxCell element including mxGeometry. No XML comments. " +
+            'Every " inside new_xml must be escaped as \\" in the JSON.\n\n' +
             "Example - Add a rectangle on the default (first) page:\n" +
             '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
-            "Example - Add a cell on a specific page by name:\n" +
-            '{"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" ... />"}]}\n\n' +
-            "Example - Update a cell on page index 1:\n" +
-            '{"page_index": 1, "operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" .../>"}]}\n\n' +
             "Example - Delete a cell on the default page:\n" +
             '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
@@ -585,7 +581,11 @@ server.registerTool(
                             .describe(
                                 "Operation to perform: add, update, or delete",
                             ),
-                        cell_id: z.string().describe("The id of the mxCell"),
+                        cell_id: z
+                            .string()
+                            .describe(
+                                "The id of the mxCell. Must match the id attribute in new_xml.",
+                            ),
                         new_xml: z
                             .string()
                             .optional()
@@ -596,6 +596,7 @@ server.registerTool(
                 )
                 .describe("Array of operations to apply"),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ operations, page_id, page_name, page_index }) => {
         try {
@@ -744,6 +745,7 @@ server.registerTool(
 server.registerTool(
     "get_diagram",
     {
+        title: "Get diagram",
         description:
             "Get the current diagram XML (fetches latest from browser, including user's manual edits). " +
             "Call this when you don't know the current diagram content (cell IDs, pages, structure) — " +
@@ -753,6 +755,7 @@ server.registerTool(
         inputSchema: {
             ...pageSelectorSchema,
         },
+        annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (input) => {
         // Defensive: when every field is optional an MCP client could in
@@ -915,6 +918,7 @@ function exportViaBrowser(
 server.registerTool(
     "export_diagram",
     {
+        title: "Export diagram",
         description:
             "Export the current diagram to a file. Supports .drawio (XML), .png, and .svg formats. " +
             "The format is auto-detected from the file extension, or can be specified explicitly.\n\n" +
@@ -937,6 +941,7 @@ server.registerTool(
                     "Export format. If omitted, detected from file extension. Defaults to drawio.",
                 ),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ path: rawPath, format, page_id, page_name, page_index }) => {
         const path = expandHome(rawPath)
@@ -1222,9 +1227,11 @@ async function loadMxfileForMutation(): Promise<
 server.registerTool(
     "list_pages",
     {
+        title: "List pages",
         description:
             "List every page (tab) in the current diagram. Returns each page's id, name, 0-based index, and cell count. Use this to discover what pages exist before targeting one with edit_diagram, get_diagram, export_diagram, rename_page, or delete_page.",
         inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () => {
         try {
@@ -1276,12 +1283,13 @@ server.registerTool(
 server.registerTool(
     "add_page",
     {
+        title: "Add page",
         description:
             'Append a new page (tab) to the current diagram WITHOUT touching existing pages or unsaved user changes. Use this when the user wants "another diagram alongside" — e.g. "add a CNN page" — instead of create_new_diagram which wipes everything.\n\n' +
             "Inputs:\n" +
             "- name: optional display name for the tab (defaults to Page-N where N = existing-page-count + 1)\n" +
             "- id: optional explicit page id; if omitted the server generates a short alphanumeric id\n" +
-            '- xml: optional starting <mxGraphModel> for the new page. If omitted, the page starts blank with the standard root sentinel cells ("0" and "1").\n\n' +
+            '- xml: optional starting content: the mxCell elements of the page (root cells "0" and "1" are added), or a bare <mxGraphModel>. If omitted, the page starts blank.\n\n' +
             "Returns the new page's id, name, and index so the caller can immediately target it with edit_diagram.",
         inputSchema: {
             name: z
@@ -1301,9 +1309,10 @@ server.registerTool(
                 .string()
                 .optional()
                 .describe(
-                    'Optional starting <mxGraphModel> XML for the new page. Must include <root> with id="0" and id="1" cells. If omitted the page starts blank.',
+                    "Optional starting content: the mxCell elements of the page, or a bare <mxGraphModel>. If omitted the page starts blank.",
                 ),
         },
+        annotations: { destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
         // All three fields optional — coalesce so a no-args call doesn't
@@ -1322,7 +1331,7 @@ server.registerTool(
 
             // If caller provided XML, validate it before splicing it in so we
             // never get a half-broken mxfile written to the session.
-            let cleanXml: string | undefined = xml
+            let cleanXml: string | undefined = xml && wrapCellsInModel(xml)
             if (cleanXml) {
                 const { valid, error, fixed, fixes } =
                     validateAndFixXml(cleanXml)
@@ -1384,6 +1393,7 @@ server.registerTool(
 server.registerTool(
     "rename_page",
     {
+        title: "Rename page",
         description:
             "Rename an existing page (tab). At least one of page_id / page_name / page_index is required to identify which page to rename. The new_name becomes the visible tab label in the editor.",
         inputSchema: {
@@ -1393,6 +1403,7 @@ server.registerTool(
                 .min(1)
                 .describe("The new display name for the page tab."),
         },
+        annotations: { destructiveHint: false, openWorldHint: false },
     },
     async ({ new_name, page_id, page_name, page_index }) => {
         try {
@@ -1464,11 +1475,13 @@ server.registerTool(
 server.registerTool(
     "delete_page",
     {
+        title: "Delete page",
         description:
             "Delete a page (tab) from the current diagram. At least one of page_id / page_name / page_index is required. Refuses to delete the last remaining page — the editor needs at least one tab.",
         inputSchema: {
             ...pageSelectorSchema,
         },
+        annotations: { openWorldHint: false },
     },
     async (input) => {
         // All three fields are optional — coalesce so a no-args call returns

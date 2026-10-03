@@ -62,6 +62,10 @@ jobs:
         if: steps.version.outputs.publish == 'true'
         run: npm test
 
+      - name: Build and check package contents
+        if: steps.version.outputs.publish == 'true'
+        run: npm run build && npm run check-package
+
       - name: Publish to npm
         if: steps.version.outputs.publish == 'true'
         run: npm publish

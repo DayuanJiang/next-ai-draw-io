@@ -81,6 +81,37 @@ function stripXmlDeclaration(xml: string): string {
     return xml.replace(/^\s*<\?xml[^>]*\?>\s*/i, "")
 }
 
+const ROOT_CELLS = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+
+/**
+ * Turn a list of bare cells (optionally inside <root>) into a one-page
+ * <mxGraphModel>, adding the "0" and "1" root cells. The model then only
+ * writes its own cells, as in the web app (wrapWithMxFile in lib/utils.ts).
+ * Root cells the model wrote anyway are replaced, and trailing closing tags
+ * some providers append are dropped. <mxfile>, <mxGraphModel> and anything
+ * else are returned unchanged.
+ */
+export function wrapCellsInModel(xml: string): string {
+    let content = stripXmlDeclaration(xml.trim())
+    if (!/^<(mxCell|UserObject|object|root)[\s/>]/.test(content)) return xml
+
+    content = content.replace(/<\/?root>/g, "").trim()
+    // End of the last cell, counting wrapped cells (</UserObject>, </object>)
+    let end = -1
+    for (const close of ["/>", "</mxCell>", "</UserObject>", "</object>"]) {
+        const at = content.lastIndexOf(close)
+        if (at !== -1) end = Math.max(end, at + close.length)
+    }
+    if (end !== -1 && /^(\s*<\/[^>]+>)*\s*$/.test(content.slice(end))) {
+        content = content.slice(0, end)
+    }
+    content = content
+        .replace(/<mxCell[^>]*\bid=["']0["'][^>]*(?:\/>|><\/mxCell>)/g, "")
+        .replace(/<mxCell[^>]*\bid=["']1["'][^>]*(?:\/>|><\/mxCell>)/g, "")
+        .trim()
+    return `<mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel>`
+}
+
 /**
  * Wrap a bare <mxGraphModel> XML string in <mxfile><diagram>...</diagram></mxfile>.
  * If the input is already an mxfile, returns it unchanged.
@@ -255,7 +286,7 @@ export function addPageToDoc(
         }
         inner = trimmed
     } else {
-        inner = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>`
+        inner = `<mxGraphModel><root>${ROOT_CELLS}</root></mxGraphModel>`
     }
 
     const snippet = `<wrapper><diagram id="${escapeAttr(id)}" name="${escapeAttr(name)}">${inner}</diagram></wrapper>`
