@@ -3,7 +3,7 @@ let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
 let pendingSvgExport = null;
 let pendingSvgBase = 0; // version the pending autosave was based on
 let pendingAiSvg = false;
-let pendingMcpExport = null; // 'png' or 'svg' when MCP requested export
+let pendingMcpExport = null; // 'png', 'svg' or 'xmlsvg' when MCP requested export
 let mcpExportSeq = 0; // number of the latest MCP export
 let projectionExportActive = false; // page-targeted export: showing a transient single-page projection
 let forceReload = false; // reload the server state on the next poll even if the version is unchanged
@@ -49,7 +49,7 @@ window.addEventListener('message', (e) => {
                 if (msg.message.mcpExport !== mcpExportSeq) return;
                 const d = msg.data;
                 const isPng = pendingMcpExport === 'png' && d.startsWith('data:image/png');
-                const isSvg = pendingMcpExport === 'svg' && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
+                const isSvg = (pendingMcpExport === 'svg' || pendingMcpExport === 'xmlsvg') && (d.startsWith('data:image/svg') || d.startsWith('<svg'));
                 if (isPng || isSvg) {
                     pendingMcpExport = null;
                     fetch('/api/state', {
@@ -208,7 +208,7 @@ async function poll() {
                 // draw.io would use the first page.
                 const exportOpts = pendingMcpExport === 'png'
                     ? { action: 'export', format: 'png', scale: 2, currentPage: !extra.pageId, ...extra, mcpExport: seq }
-                    : { action: 'export', format: 'svg', mcpExport: seq };
+                    : { action: 'export', format: pendingMcpExport, mcpExport: seq };
                 iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
             };
             if (s.exportXml) {
@@ -246,14 +246,26 @@ const saveCancelBtn = document.getElementById('save-cancel-btn');
 const saveConfirmBtn = document.getElementById('save-confirm-btn');
 let pendingDownload = null;
 
-const extMap = { drawio: '.drawio', png: '.png', svg: '.svg' };
+const extMap = { drawio: '.drawio', png: '.png', svg: '.svg', xmlsvg: '.drawio.svg' };
 
 saveBtn.onclick = () => {
     if (!sessionId || !isReady) return;
+    // Local date as YYYY-MM-DD, like the web app's default name
+    saveFilename.value = 'diagram-' + new Date().toLocaleDateString('sv-SE');
     saveModal.classList.add('open');
     saveFilename.focus();
     saveFilename.select();
 };
+
+saveFilename.onkeydown = (e) => {
+    if (e.key === 'Enter' && !e.isComposing && !saveConfirmBtn.disabled) saveConfirmBtn.onclick();
+};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (saveModal.classList.contains('open')) saveCancelBtn.onclick();
+    if (historyModal.classList.contains('open')) cancelBtn.onclick();
+});
 
 saveFormat.onchange = () => {
     saveExt.textContent = extMap[saveFormat.value] || '.drawio';
@@ -291,9 +303,10 @@ saveConfirmBtn.onclick = () => {
         pendingDownload = { format: 'png', filename };
         iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'png', scale: 2, currentPage: true, dlExport: true }), '*');
         setTimeout(() => { saveConfirmBtn.disabled = false; saveConfirmBtn.textContent = 'Save'; pendingDownload = null; }, 5000);
-    } else if (format === 'svg') {
-        pendingDownload = { format: 'svg', filename };
-        iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg', dlExport: true }), '*');
+    } else {
+        // svg, or xmlsvg: an SVG with the diagram embedded, which draw.io can open again
+        pendingDownload = { format, filename };
+        iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format, dlExport: true }), '*');
         setTimeout(() => { saveConfirmBtn.disabled = false; saveConfirmBtn.textContent = 'Save'; pendingDownload = null; }, 5000);
     }
 };
@@ -358,7 +371,7 @@ restoreBtn.onclick = async () => {
             body: JSON.stringify({ sessionId, id: selectedId })
         });
         if (r.ok) { cancelBtn.onclick(); await poll(); }
-        else { alert('Restore failed'); }
-    } catch { alert('Restore failed'); }
+        else { showNotice('Restore failed. Please try again.'); }
+    } catch { showNotice('Restore failed. Please try again.'); }
     restoreBtn.textContent = 'Restore';
 };

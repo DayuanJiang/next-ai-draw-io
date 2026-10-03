@@ -104,11 +104,14 @@ interface SessionState {
     lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
-    exportFormat?: "png" | "svg" // Set by MCP tool to request browser export
+    exportFormat?: ExportFormat // Set by MCP tool to request browser export
     exportXml?: string // Single-page projection to load before a page-targeted export
     exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
     exportData?: string // Base64/SVG data returned by browser after export
 }
+
+/** draw.io export formats; xmlsvg is an SVG with the diagram embedded */
+export type ExportFormat = "png" | "svg" | "xmlsvg"
 
 /**
  * draw.io's PNG export takes these directly: width caps the image size
@@ -179,7 +182,7 @@ export function setState(
  */
 export function requestExport(
     sessionId: string,
-    format: "png" | "svg",
+    format: ExportFormat,
     projectionXml?: string,
     options?: ExportOptions,
 ): boolean {

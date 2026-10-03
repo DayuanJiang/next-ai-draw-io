@@ -31,6 +31,7 @@ import { editDiagram, targetPageXml } from "./edit-diagram.js"
 import { checkEditGate } from "./edit-gate.js"
 import { addHistory } from "./history.js"
 import {
+    type ExportFormat,
     type ExportOptions,
     getServerPort,
     getState,
@@ -900,7 +901,7 @@ let exportQueue: Promise<unknown> = Promise.resolve()
  */
 function exportViaBrowser(
     sessionId: string,
-    format: "png" | "svg",
+    format: ExportFormat,
     projectionXml?: string,
     options?: ExportOptions,
 ): Promise<string | undefined> {
@@ -1092,14 +1093,14 @@ server.registerTool(
     {
         title: "Export diagram",
         description:
-            "Export the current diagram to a file. Supports .drawio (XML), .png, and .svg formats. " +
+            "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io can open and edit again). " +
             "The format is auto-detected from the file extension, or can be specified explicitly.\n\n" +
             "Multi-page behaviour:\n" +
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
             "- .drawio with a page selector: writes a single-page <mxfile> containing only that page.\n" +
             "- .png / .svg with NO page selector: exports the currently active page in the browser.\n" +
             "- .png with a page selector: renders that page without changing what the user sees.\n" +
-            "- .svg with a page selector: temporarily loads that page into the browser, captures it, then restores the full document (the user sees a brief flicker).",
+            "- .svg / .drawio.svg with a page selector: temporarily loads that page into the browser, captures it, then restores the full document (the user sees a brief flicker).",
         inputSchema: {
             ...pageSelectorSchema,
             path: z
@@ -1108,7 +1109,7 @@ server.registerTool(
                     "Absolute file path to save to (e.g. /Users/me/diagram.drawio, ~/diagram.png). Relative paths resolve against the MCP server's working directory, which is often not your project.",
                 ),
             format: z
-                .enum(["drawio", "png", "svg"])
+                .enum(["drawio", "png", "svg", "drawio.svg"])
                 .optional()
                 .describe(
                     "Export format. If omitted, detected from file extension. Defaults to drawio.",
@@ -1161,10 +1162,16 @@ server.registerTool(
             const nodePath = await import("node:path")
 
             // Detect format from extension if not specified
-            const ext = nodePath.extname(path).toLowerCase()
+            const lowerPath = path.toLowerCase()
             const detectedFormat =
                 format ||
-                (ext === ".png" ? "png" : ext === ".svg" ? "svg" : "drawio")
+                (lowerPath.endsWith(".drawio.svg")
+                    ? "drawio.svg"
+                    : lowerPath.endsWith(".png")
+                      ? "png"
+                      : lowerPath.endsWith(".svg")
+                        ? "svg"
+                        : "drawio")
 
             // .drawio path - write XML directly (no browser round-trip).
             if (detectedFormat === "drawio") {
@@ -1209,15 +1216,21 @@ server.registerTool(
                 }
             }
 
-            // PNG or SVG: request browser to export via iframe
+            // PNG or SVG: request browser to export via iframe. Replace a
+            // known extension that does not match the format.
             let filePath = path
-            if (ext !== `.${detectedFormat}`) {
-                if (ext === ".drawio" || ext === ".png" || ext === ".svg") {
-                    filePath = filePath.slice(0, -ext.length)
-                }
-                filePath = `${filePath}.${detectedFormat}`
+            const suffix = `.${detectedFormat}`
+            if (!lowerPath.endsWith(suffix)) {
+                const known = [".drawio.svg", ".drawio", ".png", ".svg"].find(
+                    (e) => lowerPath.endsWith(e),
+                )
+                if (known) filePath = filePath.slice(0, -known.length)
+                filePath = `${filePath}${suffix}`
             }
             const absolutePath = nodePath.resolve(filePath)
+            // draw.io's name for an SVG with the diagram embedded
+            const browserFormat =
+                detectedFormat === "drawio.svg" ? "xmlsvg" : detectedFormat
 
             const state = getState(currentSession.id)
             if (!state) {
@@ -1275,7 +1288,7 @@ server.registerTool(
 
             const exportData = await exportViaBrowser(
                 currentSession.id,
-                detectedFormat as "png" | "svg",
+                browserFormat,
                 projectionXml,
                 pngPageId ? { pageId: pngPageId } : undefined,
             )

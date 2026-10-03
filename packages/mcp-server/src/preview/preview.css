@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; }
 #container { width: 100%; height: 100%; display: flex; flex-direction: column; }
@@ -6,7 +5,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
     padding: 0 20px; height: 52px;
     background: linear-gradient(to bottom, #ffffff, #fafbfc);
     border-bottom: 1px solid #e8ecf0;
-    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     display: flex; justify-content: space-between; align-items: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     position: relative; z-index: 10;
@@ -74,7 +73,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
     width: 90%; max-width: 480px; max-height: 70vh;
     display: flex; flex-direction: column;
     box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     animation: modalIn 0.2s ease-out;
 }
 @keyframes modalIn {
@@ -156,7 +155,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
     transform: translateX(-50%); z-index: 3000; max-width: 480px;
     padding: 10px 16px; border-radius: 8px; font-size: 13px;
     background: #18181b; color: white;
-    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 #notice.open { display: block; }
@@ -164,4 +163,28 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
     padding: 10px 14px; background: #f4f4f5; border: 1px solid #e4e4e7;
     border-radius: 0 8px 8px 0; font-size: 13px; color: #71717a;
     font-family: 'SF Mono', Monaco, monospace;
+}
+
+/* Dark mode follows the system, like draw.io with dark=auto */
+@media (prefers-color-scheme: dark) {
+    #header { background: #1c1c20; border-bottom-color: #2e2e34; box-shadow: none; }
+    #header .title { color: #f4f4f5; }
+    #header .session { background: #2a2a30; color: #a1a1aa; }
+    #history-btn, .btn-secondary { background: #2a2a30; color: #e4e4e7; border-color: #3f3f46; }
+    #history-btn:hover, .btn-secondary:hover { background: #3f3f46; border-color: #52525b; }
+    #save-btn, .btn-primary { background: #f4f4f5; color: #18181b; }
+    #save-btn:hover, .btn-primary:hover { background: #e4e4e7; }
+    #save-btn:disabled, #history-btn:disabled, .btn-primary:disabled { background: #2a2a30; color: #71717a; }
+    .modal-content { background: #1c1c20; color: #e4e4e7; }
+    .modal-header, .modal-footer { border-color: #2e2e34; }
+    .modal-header h2 { color: #f4f4f5; }
+    .history-item { background: #27272a; border-color: #3f3f46; }
+    .history-item:hover { background: #2e2e34; border-color: #71717a; }
+    .history-item.selected { background: #2e2e34; border-color: #f4f4f5; box-shadow: 0 0 0 3px rgba(244,244,245,0.15); }
+    .history-item .label, .empty { color: #a1a1aa; }
+    .form-group label { color: #d4d4d8; }
+    .form-group select, .form-group input { background: #27272a; color: #f4f4f5; border-color: #3f3f46; }
+    .form-group select:focus, .form-group input:focus { border-color: #a1a1aa; box-shadow: 0 0 0 3px rgba(244,244,245,0.1); }
+    .filename-group .ext { background: #2a2a30; border-color: #3f3f46; color: #a1a1aa; }
+    #notice { background: #f4f4f5; color: #18181b; }
 }

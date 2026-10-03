@@ -40,7 +40,7 @@
                 </button>
             </div>
         </div>
-        <iframe id="drawio" src="{{DRAWIO_URL}}/?embed=1&proto=json&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0"></iframe>
+        <iframe id="drawio" src="{{DRAWIO_URL}}/?embed=1&proto=json&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0&themes=1&dark=auto" title="draw.io editor"></iframe>
     </div>
     <div id="notice" role="status"></div>
     <div id="history-modal">
@@ -66,12 +66,13 @@
                         <option value="drawio">Draw.io (.drawio)</option>
                         <option value="png">PNG Image (.png)</option>
                         <option value="svg">SVG Vector (.svg)</option>
+                        <option value="xmlsvg">Editable SVG (.drawio.svg)</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Filename</label>
                     <div class="filename-group">
-                        <input type="text" id="save-filename" value="diagram" placeholder="Enter filename">
+                        <input type="text" id="save-filename" value="diagram" placeholder="Enter filename" autocomplete="off">
                         <span class="ext" id="save-ext">.drawio</span>
                     </div>
                 </div>
