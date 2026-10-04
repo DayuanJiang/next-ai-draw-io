@@ -186,7 +186,22 @@
         "failedToLoadExample": "Error loading example image",
         "failedToRecordFeedback": "Failed to record your feedback. Please try again.",
         "storageUpdateFailed": "Chat cleared but browser storage could not be updated",
-        "sessionSaveFailed": "Could not save this chat. Browser storage may be full: delete old chats from history and try again."
+        "sessionSaveFailed": "Could not save this chat. Browser storage may be full: delete old chats from history and try again.",
+        "llm": {
+            "invalid_api_key": "The provider rejected the API key. Check it in model settings.",
+            "forbidden": "The provider refused the request. The key may not have access to this model or region.",
+            "model_not_found": "The provider does not know this model. Check the model ID in model settings.",
+            "insufficient_quota": "The provider account has no credit or quota left.",
+            "rate_limited": "The provider is limiting requests. Wait a moment and try again.",
+            "context_too_long": "The conversation is too long for this model. Start a new chat or pick a model with a larger context.",
+            "images_unsupported": "This model doesn't support image input.",
+            "tools_unsupported": "This model doesn't support tool calls, which drawing needs. Pick another model.",
+            "output_truncated": "The output was cut off before the diagram was complete. Try a simpler request or raise the output limit in settings.",
+            "provider_unavailable": "The provider is having problems. Try again later.",
+            "cannot_connect": "Could not reach the provider. Check the base URL and your network.",
+            "timeout": "The provider did not answer in time.",
+            "openModelSettings": "Open model settings"
+        }
     },
     "quota": {
         "dailyLimit": "Daily Quota Reached",

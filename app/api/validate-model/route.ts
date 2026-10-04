@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { checkAccessCode } from "@/lib/access-code"
 import { getAIModel } from "@/lib/ai-providers"
+import { classifyLLMError } from "@/lib/llm-errors"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 
 export const runtime = "nodejs"
@@ -146,35 +147,9 @@ export async function POST(req: Request) {
     } catch (error) {
         console.error("[validate-model] Error:", error)
 
-        let errorMessage = "Validation failed"
-        if (error instanceof Error) {
-            // Extract meaningful error message
-            if (error.name === "TimeoutError") {
-                errorMessage = `No answer within ${TEST_TIMEOUT_MS / 1000} seconds`
-            } else if (
-                error.message.includes("401") ||
-                error.message.includes("Unauthorized")
-            ) {
-                errorMessage = "Invalid API key"
-            } else if (
-                error.message.includes("404") ||
-                error.message.includes("not found")
-            ) {
-                errorMessage = "Model not found"
-            } else if (
-                error.message.includes("429") ||
-                error.message.includes("rate limit")
-            ) {
-                errorMessage = "Rate limited - try again later"
-            } else if (error.message.includes("ECONNREFUSED")) {
-                errorMessage = "Cannot connect to server"
-            } else {
-                errorMessage = error.message.slice(0, 100)
-            }
-        }
-
+        const { code, message } = classifyLLMError(error)
         return NextResponse.json(
-            { valid: false, error: errorMessage },
+            { valid: false, code, error: message },
             { status: 200 }, // Return 200 so client can read error message
         )
     }

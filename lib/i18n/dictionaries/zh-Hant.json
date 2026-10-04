@@ -186,7 +186,22 @@
         "failedToLoadExample": "載入範例圖片時出錯",
         "failedToRecordFeedback": "記錄您的回饋失敗。請重試。",
         "storageUpdateFailed": "聊天已清除，但無法更新瀏覽器儲存空間",
-        "sessionSaveFailed": "無法儲存這個對話。瀏覽器儲存空間可能已滿，請在歷史紀錄裡刪除舊對話後重試。"
+        "sessionSaveFailed": "無法儲存這個對話。瀏覽器儲存空間可能已滿，請在歷史紀錄裡刪除舊對話後重試。",
+        "llm": {
+            "invalid_api_key": "服務商拒絕了這個 API Key，請在模型設定中檢查。",
+            "forbidden": "服務商拒絕了這次請求。這個 Key 可能沒有使用該模型或該地區的權限。",
+            "model_not_found": "服務商找不到這個模型，請在模型設定中檢查模型 ID。",
+            "insufficient_quota": "服務商帳戶的餘額或額度已經用完。",
+            "rate_limited": "服務商正在限制請求頻率，請稍候再試。",
+            "context_too_long": "對話內容超過了這個模型能處理的長度。請開啟新的對話，或換一個上下文更長的模型。",
+            "images_unsupported": "這個模型不支援圖片輸入。",
+            "tools_unsupported": "這個模型不支援工具呼叫，而繪圖需要工具呼叫。請換一個模型。",
+            "output_truncated": "輸出在圖表完成之前就被截斷了。請簡化請求，或在設定中調高輸出上限。",
+            "provider_unavailable": "服務商發生問題，請稍後再試。",
+            "cannot_connect": "無法連線到服務商，請檢查 Base URL 和網路。",
+            "timeout": "服務商沒有及時回應。",
+            "openModelSettings": "開啟模型設定"
+        }
     },
     "quota": {
         "dailyLimit": "已達每日配額",

@@ -414,8 +414,20 @@ export function ModelConfigDialog({
                           }
                         : {
                               validated: false,
+                              // The hint for the error's kind, then the
+                              // provider's own message
                               validationError:
-                                  data.error ||
+                                  [
+                                      (
+                                          dict.errors.llm as Record<
+                                              string,
+                                              string
+                                          >
+                                      )[data.code],
+                                      data.error,
+                                  ]
+                                      .filter(Boolean)
+                                      .join(" ") ||
                                   (response.ok
                                       ? "Validation failed"
                                       : `Request failed (${response.status})`),
@@ -459,7 +471,13 @@ export function ModelConfigDialog({
             setValidationStatus("error")
             setValidationError(`${errorCount} model(s) failed validation`)
         }
-    }, [selectedProvider, selectedProviderId, updateProvider, updateModel])
+    }, [
+        selectedProvider,
+        selectedProviderId,
+        updateProvider,
+        updateModel,
+        dict,
+    ])
 
     // Get all available provider types
     const availableProviders = Object.keys(PROVIDER_INFO) as ProviderName[]

@@ -148,6 +148,8 @@ interface SessionMetadata {
 
 interface ChatMessageDisplayProps {
     messages: UIMessage[]
+    // Shown on an error that a model setting can fix (bad key, unknown model)
+    onOpenModelConfig?: () => void
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
     processedToolCallsRef: MutableRefObject<Set<string>>
@@ -171,6 +173,7 @@ interface ChatMessageDisplayProps {
 
 export function ChatMessageDisplay({
     messages,
+    onOpenModelConfig,
     setInput,
     setFiles,
     processedToolCallsRef,
@@ -1193,6 +1196,32 @@ export function ChatMessageDisplay({
                                                                     return null
                                                                 },
                                                             )}
+                                                            {message.role ===
+                                                                "system" &&
+                                                                (
+                                                                    message.metadata as
+                                                                        | {
+                                                                              openModelConfig?: boolean
+                                                                          }
+                                                                        | undefined
+                                                                )
+                                                                    ?.openModelConfig &&
+                                                                onOpenModelConfig && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={
+                                                                            onOpenModelConfig
+                                                                        }
+                                                                        className="mt-2 text-xs font-medium underline underline-offset-2 hover:opacity-80"
+                                                                    >
+                                                                        {
+                                                                            dict
+                                                                                .errors
+                                                                                .llm
+                                                                                .openModelSettings
+                                                                        }
+                                                                    </button>
+                                                                )}
                                                         </div>
                                                     )
                                                 },

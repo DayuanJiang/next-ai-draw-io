@@ -363,84 +363,69 @@ export default function ChatPanel({
             await handleToolCall({ toolCall }, addToolOutput)
         },
         onError: (error) => {
-            // Handle server-side quota limit (429 response)
-            // AI SDK puts the full response body in error.message for non-OK responses
+            // Server errors are JSON: a quota limit ({type: request, token or
+            // tpm}), a provider error ({type: "provider", code, message}) or
+            // {error}. The SDK puts the response body in error.message.
+            let data: any = null
             try {
-                const data = JSON.parse(error.message)
-                if (data.type === "request") {
-                    quotaManager.showQuotaLimitToast(data.used, data.limit)
-                    return
-                }
-                if (data.type === "token") {
-                    quotaManager.showTokenLimitToast(data.used, data.limit)
-                    return
-                }
-                if (data.type === "tpm") {
-                    quotaManager.showTPMLimitToast(data.limit)
-                    return
-                }
+                data = JSON.parse(error.message)
             } catch {
-                // Not JSON, fall through to string matching for backwards compatibility
+                // Plain text, e.g. a network failure in the browser
             }
-
-            // Fallback to string matching
-            if (error.message.includes("Daily request limit")) {
-                quotaManager.showQuotaLimitToast()
+            if (data?.type === "request") {
+                quotaManager.showQuotaLimitToast(data.used, data.limit)
                 return
             }
-            if (error.message.includes("Daily token limit")) {
-                quotaManager.showTokenLimitToast()
+            if (data?.type === "token") {
+                quotaManager.showTokenLimitToast(data.used, data.limit)
                 return
             }
-            if (
-                error.message.includes("Rate limit exceeded") ||
-                error.message.includes("tokens per minute")
-            ) {
-                quotaManager.showTPMLimitToast()
+            if (data?.type === "tpm") {
+                quotaManager.showTPMLimitToast(data.limit)
                 return
             }
 
+            const isAccessCodeError = String(
+                data?.error ?? error.message,
+            ).includes("Invalid or missing access code")
             // Silence access code error in console since it's handled by UI
-            if (!error.message.includes("Invalid or missing access code")) {
-                console.error("Chat error:", error)
-            }
+            if (!isAccessCodeError) console.error("Chat error:", error)
 
-            // Translate technical errors into user-friendly messages
-            // The server now handles detailed error messages, so we can display them directly.
-            // But we still handle connection/network errors that happen before reaching the server.
-            let friendlyMessage = error.message
-
-            // Simple check for network errors if message is generic
-            if (friendlyMessage === "Failed to fetch") {
-                friendlyMessage = "Network error. Please check your connection."
-            }
-
-            // Truncated tool input error (model output limit too low)
-            if (friendlyMessage.includes("toolUse.input is invalid")) {
-                friendlyMessage =
-                    "Output was truncated before the diagram could be generated. Try a simpler request or increase the maxOutputLength."
-            }
-
-            // Translate image not supported error
-            if (
-                friendlyMessage.includes("image content block") ||
-                friendlyMessage.toLowerCase().includes("image_url")
-            ) {
-                friendlyMessage = "This model doesn't support image input."
+            // A hint the user can act on, then the provider's own words
+            let text: string = error.message
+            let openModelConfig = false
+            if (data?.type === "provider") {
+                const hints = dict.errors.llm as Record<string, string>
+                text = hints[data.code]
+                    ? `${hints[data.code]}\n\n${data.message}`
+                    : data.message
+                openModelConfig = [
+                    "invalid_api_key",
+                    "forbidden",
+                    "model_not_found",
+                ].includes(data.code)
+            } else if (typeof data?.error === "string") {
+                text = data.error
+            } else if (error.message === "Failed to fetch") {
+                text = dict.errors.networkError
             }
 
             // Add system message for error so it can be cleared
-            setMessages((currentMessages) => {
-                const errorMessage = {
+            setMessages((currentMessages) => [
+                ...currentMessages,
+                {
                     id: `error-${Date.now()}`,
                     role: "system" as const,
-                    content: friendlyMessage,
-                    parts: [{ type: "text" as const, text: friendlyMessage }],
-                }
-                return [...currentMessages, errorMessage]
-            })
+                    content: text,
+                    parts: [{ type: "text" as const, text }],
+                    // The message shows a button that opens model settings
+                    ...(openModelConfig && {
+                        metadata: { openModelConfig: true },
+                    }),
+                },
+            ])
 
-            if (error.message.includes("Invalid or missing access code")) {
+            if (isAccessCodeError) {
                 // Show settings dialog to help user fix it
                 setShowSettingsDialog(true)
             }
@@ -1417,6 +1402,7 @@ export default function ChatPanel({
             {/* Messages */}
             <main className="flex-1 w-full overflow-hidden">
                 <ChatMessageDisplay
+                    onOpenModelConfig={() => setShowModelConfigDialog(true)}
                     messages={messages}
                     setInput={setInput}
                     setFiles={handleFileChange}

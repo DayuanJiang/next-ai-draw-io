@@ -4,7 +4,6 @@ import {
     createUIMessageStream,
     createUIMessageStreamResponse,
     InvalidToolInputError,
-    LoadAPIKeyError,
     stepCountIs,
     streamText,
 } from "ai"
@@ -39,6 +38,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import { classifyLLMError, isToolCallError } from "@/lib/llm-errors"
 import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
@@ -720,6 +720,12 @@ Call this tool to get shape names and usage syntax for a specific library.`,
 
     const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
+        // The same text goes back to the model when its tool call was
+        // invalid, so it can fix it: keep that one as it is
+        onError: (error) =>
+            isToolCallError(error)
+                ? (error as Error).message
+                : JSON.stringify(classifyLLMError(error)),
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage
@@ -736,61 +742,24 @@ Call this tool to get shape names and usage syntax for a specific library.`,
     return response
 }
 
-// Helper to categorize errors and return appropriate response
+// Errors before the stream starts, as JSON the chat panel reads
 function handleError(error: unknown): Response {
     console.error("Error in chat route:", error)
 
     const isDev = process.env.NODE_ENV === "development"
-
-    // Check for specific AI SDK error types
-    if (APICallError.isInstance(error)) {
-        return Response.json(
-            {
-                error: error.message,
-                ...(isDev && {
-                    details: error.responseBody,
-                    stack: error.stack,
-                }),
-            },
-            { status: error.statusCode || 500 },
-        )
-    }
-
-    if (LoadAPIKeyError.isInstance(error)) {
-        return Response.json(
-            {
-                error: "Authentication failed. Please check your API key.",
-                ...(isDev && {
-                    stack: error.stack,
-                }),
-            },
-            { status: 401 },
-        )
-    }
-
-    // Fallback for other errors with safety filter
-    const message =
-        error instanceof Error ? error.message : "An unexpected error occurred"
-    const status = (error as any)?.statusCode || (error as any)?.status || 500
-
-    // Prevent leaking API keys, tokens, or other sensitive data
-    const lowerMessage = message.toLowerCase()
-    const safeMessage =
-        lowerMessage.includes("key") ||
-        lowerMessage.includes("token") ||
-        lowerMessage.includes("sig") ||
-        lowerMessage.includes("signature") ||
-        lowerMessage.includes("secret") ||
-        lowerMessage.includes("password") ||
-        lowerMessage.includes("credential")
-            ? "Authentication failed. Please check your credentials."
-            : message
+    const classified = classifyLLMError(error)
+    const status =
+        (error as { statusCode?: number })?.statusCode ||
+        (error as { status?: number })?.status ||
+        (classified.code === "invalid_api_key" ? 401 : 500)
 
     return Response.json(
         {
-            error: safeMessage,
+            ...classified,
             ...(isDev && {
-                details: message,
+                details: APICallError.isInstance(error)
+                    ? error.responseBody
+                    : undefined,
                 stack: error instanceof Error ? error.stack : undefined,
             }),
         },
