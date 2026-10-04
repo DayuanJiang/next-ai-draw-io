@@ -308,3 +308,13 @@ describe("text between tags", () => {
         ).toBe(true)
     })
 })
+
+describe("text directly under a page", () => {
+    it("fixes a literal \\n before the model of a page", () => {
+        const r = validateAndFixXml(
+            `<mxfile><diagram id="p" name="P">\\n${model(`<mxCell id="2" vertex="1" parent="1"/>`)}</diagram></mxfile>`,
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).not.toContain("\\n")
+    })
+})

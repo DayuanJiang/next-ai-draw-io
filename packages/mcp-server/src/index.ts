@@ -19,7 +19,6 @@
  */
 
 import { createRequire } from "node:module"
-import { homedir } from "node:os"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
@@ -61,7 +60,7 @@ import {
     serializeMxfile,
     wrapCellsInModel,
 } from "./pages.ts"
-import { Autosaver, defaultDataDir } from "./persistence.ts"
+import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
@@ -169,13 +168,6 @@ function pickPageSelector(input: {
     if (input.page_name) selector.page_name = input.page_name
     if (input.page_index !== undefined) selector.page_index = input.page_index
     return selector
-}
-
-/** Expand a leading ~ to the home directory (shells do this, MCP hosts don't). */
-function expandHome(p: string): string {
-    if (p === "~") return homedir()
-    if (p.startsWith("~/") || p.startsWith("~\\")) return homedir() + p.slice(1)
-    return p
 }
 
 /** Format a selector for human-readable error messages. */
@@ -904,6 +896,7 @@ function exportViaBrowser(
             live.exportFormat = undefined
             live.exportXml = undefined
             live.exportOptions = undefined
+            live.exportId = undefined
         }
         return exportData
     })

@@ -19,6 +19,19 @@ export function prepareNewDiagram(
     input: string,
     page: { pageId?: string; pageName?: string } = {},
 ): NewDiagram {
+    // Bare cells get the root cells "0" and "1". A shape or edge with one of
+    // these ids would be renamed as a duplicate, breaking its edges.
+    if (
+        !/<(mxGraphModel|mxfile)\b/.test(input) &&
+        /<mxCell\b(?=[^>]*\bid=["'][01]["'])(?=[^>]*\b(?:vertex|edge)=["']1["'])/.test(
+            input,
+        )
+    ) {
+        return {
+            ok: false,
+            error: 'Cell ids "0" and "1" are the root cells, which are added automatically. Give shapes and edges ids starting at "2".',
+        }
+    }
     let xml = wrapCellsInModel(input)
     const { valid, error, fixed, fixes } = validateAndFixXml(xml)
     if (fixed) xml = fixed

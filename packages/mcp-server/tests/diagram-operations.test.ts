@@ -124,3 +124,28 @@ describe("pages without a <root>", () => {
         expect(errors[0]?.message).toContain("could not be decompressed")
     })
 })
+
+describe("a wrapped mxCell with its wrapper's id", () => {
+    const doc = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="u" label="A" link="https://example.com"><mxCell id="u" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject></root></mxGraphModel></diagram></mxfile>`
+
+    it("deletes the whole wrapper", () => {
+        const { result, errors } = applyDiagramOperations(doc, [
+            { operation: "delete", cell_id: "u" },
+        ])
+        expect(errors).toEqual([])
+        expect(result).not.toContain("UserObject")
+    })
+
+    it("replaces the wrapper on update", () => {
+        const { result, errors } = applyDiagramOperations(doc, [
+            {
+                operation: "update",
+                cell_id: "u",
+                new_xml: `<UserObject id="u" label="B" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>`,
+            },
+        ])
+        expect(errors).toEqual([])
+        expect(result.match(/<UserObject/g)).toHaveLength(1)
+        expect(result).toContain('label="B"')
+    })
+})

@@ -10,7 +10,7 @@ import {
     utimesSync,
     writeFileSync,
 } from "node:fs"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { Autosaver, defaultDataDir } from "../src/persistence.ts"
@@ -87,5 +87,10 @@ describe("defaultDataDir", () => {
         expect(defaultDataDir()).toBe("/tmp/x")
         delete process.env.DRAWIO_DATA_DIR
         expect(defaultDataDir()).toMatch(/\.next-ai-drawio$/)
+    })
+
+    it("expands ~, which JSON configs pass on as it is", () => {
+        process.env.DRAWIO_DATA_DIR = "~/drawio-saves"
+        expect(defaultDataDir()).toBe(join(homedir(), "drawio-saves"))
     })
 })

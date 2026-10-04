@@ -407,11 +407,13 @@ function findOrphanMxPoints(
 /** The first non-blank text under el, skipping a page's compressed data */
 function findTextBetweenTags(el: Element | null): string | null {
     if (!el) return null
+    // A <diagram> with only text holds the page compressed
+    const compressed = el.tagName === "diagram" && el.children.length === 0
     for (const node of Array.from(el.childNodes)) {
         if (node.nodeType === 1) {
             const text = findTextBetweenTags(node as Element)
             if (text) return text
-        } else if (node.nodeType === 3 && el.tagName !== "diagram") {
+        } else if (node.nodeType === 3 && !compressed) {
             const text = node.textContent?.trim()
             if (text) return text.slice(0, 40)
         }

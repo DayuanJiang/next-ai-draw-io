@@ -135,6 +135,36 @@ test("display_diagram replaces the document with the fixed diagram", async ({
     await expect(canvas.getByText("Second", { exact: true })).toHaveCount(0)
 })
 
+test("an edit with a fixable cell is fixed, not rejected", async ({
+    page: p,
+}) => {
+    // Chrome's DOMParser puts a <parsererror> next to the cell, which used
+    // to count as a second cell
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", { xml: cell("a", "Alpha", 40) }),
+        streamedToolCall("edit_diagram", {
+            operations: [
+                {
+                    operation: "add",
+                    cell_id: "c",
+                    new_xml: cell("c", "Gamma", 400).replace(
+                        "</mxCell>",
+                        "</mxcell>",
+                    ),
+                },
+            ],
+        }),
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Add another box")
+    await waitForCompleteCount(p, 2)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(p.getByText(/exactly one cell/)).toHaveCount(0)
+})
+
 test("edit_diagram applies all operations or none", async ({ page: p }) => {
     const canvas = await mockReplies(p, [
         streamedToolCall("display_diagram", {

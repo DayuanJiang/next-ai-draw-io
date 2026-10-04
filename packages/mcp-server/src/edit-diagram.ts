@@ -24,7 +24,13 @@ function countTopLevelElements(fragment: string): number {
         `<wrapper>${fragment}</wrapper>`,
         "text/xml",
     )
-    return doc.documentElement?.children.length ?? 0
+    // On a syntax error the browser adds a <parsererror> element (Chrome
+    // next to the cells, Firefox as the root); the syntax is checked later
+    const root = doc.documentElement
+    if (!root || root.tagName === "parsererror") return 1
+    return Array.from(root.children).filter(
+        (el) => el.tagName !== "parsererror",
+    ).length
 }
 
 /** The target page as a one-page <mxfile>, or the whole document. */

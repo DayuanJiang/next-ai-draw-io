@@ -23,11 +23,18 @@ import { hasCells } from "./pages.ts"
 const DELAY_MS = 1000
 const MAX_FILES = 50
 
+/** Expand a leading ~ to the home directory (shells do this, MCP hosts don't). */
+export function expandHome(p: string): string {
+    if (p === "~") return homedir()
+    if (p.startsWith("~/") || p.startsWith("~\\")) return homedir() + p.slice(1)
+    return p
+}
+
 /** DRAWIO_DATA_DIR, default ~/.next-ai-drawio; "off" disables saving. */
 export function defaultDataDir(): string | null {
     const dir = process.env.DRAWIO_DATA_DIR
     if (dir === "off") return null
-    return dir || join(homedir(), ".next-ai-drawio")
+    return dir ? expandHome(dir) : join(homedir(), ".next-ai-drawio")
 }
 
 export class Autosaver {

@@ -54,7 +54,7 @@ export function generatePageId(): string {
 
 /** Any cell besides the root cells "0" and "1" */
 export const hasCells = (xml: string) =>
-    /<(mxCell\b[^>]*\bid="(?![01]")|UserObject\b|object\b)/.test(xml)
+    /<(mxCell\b[^>]*\bid=["'](?![01]["'])|UserObject\b|object\b)/.test(xml)
 
 /** Cheap regex check — does the XML start with an <mxfile> root? */
 export function isMxFile(xml: string): boolean {

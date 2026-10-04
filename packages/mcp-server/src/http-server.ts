@@ -106,6 +106,7 @@ interface SessionState {
     exportFormat?: ExportFormat // Set by MCP tool to request browser export
     exportXml?: string // Single-page projection to load before a page-targeted export
     exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
+    exportId?: number // Number of the pending export, echoed with its result
     exportData?: string // Base64/SVG data returned by browser after export
 }
 
@@ -161,6 +162,7 @@ export function setState(
         exportFormat: existing?.exportFormat, // Preserve pending export request
         exportXml: existing?.exportXml, // Preserve pending projection
         exportOptions: existing?.exportOptions,
+        exportId: existing?.exportId,
         exportData: existing?.exportData, // Preserve export result
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
@@ -191,8 +193,13 @@ export function requestExport(
     state.exportXml = projectionXml
     state.exportOptions = options
     state.exportFormat = format
+    // The browser sends this back with the result, so a late result of an
+    // export that timed out is not taken for this one
+    state.exportId = ++lastExportId
     return true
 }
+
+let lastExportId = 0
 
 export function requestSync(sessionId: string): boolean {
     const state = stateStore.get(sessionId)
@@ -414,6 +421,7 @@ function handleStateApi(
                 exportFormat: state?.exportFormat || null,
                 exportXml: state?.exportXml || null,
                 exportOptions: state?.exportOptions || null,
+                exportId: state?.exportId ?? null,
             }),
         )
     } else if (req.method === "POST") {
@@ -432,13 +440,18 @@ function handleStateApi(
                 // Browser is returning export data (png/svg)
                 if (data.exportData !== undefined) {
                     const state = stateStore.get(sessionId)
-                    if (state) {
+                    if (state && data.exportId === state.exportId) {
                         state.exportData = data.exportData
                         state.exportFormat = undefined
                         state.exportXml = undefined
                         state.exportOptions = undefined
+                        state.exportId = undefined
                         log.debug(
                             `Export data received for session=${sessionId}`,
+                        )
+                    } else if (state) {
+                        log.debug(
+                            `Ignored a late export result for session=${sessionId}`,
                         )
                     }
                     res.writeHead(200, { "Content-Type": "application/json" })

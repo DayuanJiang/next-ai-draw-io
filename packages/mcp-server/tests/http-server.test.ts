@@ -258,8 +258,27 @@ describe("export requests", () => {
         await postJson("/api/state", {
             sessionId: id,
             exportData: "data:image/png;base64,AAAA",
+            exportId: poll.exportId,
         })
         expect(getState(id)?.exportOptions).toBeUndefined()
+    })
+
+    it("ignores a late result of an export that already timed out", async () => {
+        const id = "mcp-export-late"
+        setState(id, "<mxfile>x</mxfile>")
+        requestExport(id, "png")
+        const first = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        // The server gave up on the first export and asked for the next
+        requestExport(id, "svg")
+        await postJson("/api/state", {
+            sessionId: id,
+            exportData: "data:image/png;base64,LATE",
+            exportId: first.exportId,
+        })
+        expect(getState(id)?.exportData).toBeUndefined()
+        expect(getState(id)?.exportFormat).toBe("svg")
     })
 })
 

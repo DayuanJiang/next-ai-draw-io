@@ -5,6 +5,7 @@ let pendingSvgBase = 0; // version the pending autosave was based on
 let pendingAiSvg = false;
 let pendingMcpExport = null; // 'png', 'svg' or 'xmlsvg' when MCP requested export
 let mcpExportSeq = 0; // number of the latest MCP export
+let mcpExportId = null; // the server's id for it, sent back with the result
 let projectionExportActive = false; // page-targeted export: showing a transient single-page projection
 let forceReload = false; // reload the server state on the next poll even if the version is unchanged
 let noticeTimer = null;
@@ -58,7 +59,7 @@ window.addEventListener('message', (e) => {
                     fetch('/api/state', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId, exportData: d })
+                        body: JSON.stringify({ sessionId, exportData: d, exportId: mcpExportId })
                     }).catch(() => {}).finally(() => {
                         // The timeout already ended this export
                         if (seq !== mcpExportSeq) return;
@@ -170,14 +171,6 @@ async function poll() {
         const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
         if (!r.ok) return;
         const s = await r.json();
-        // Handle sync request - server needs fresh state. Reset after a
-        // while in case draw.io never answers, so later syncs still run.
-        if (s.syncRequested && !pendingSyncExport && isReady) {
-            pendingSyncExport = true;
-            pendingSyncBase = currentVersion;
-            iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
-            setTimeout(() => { pendingSyncExport = false; }, 5000);
-        }
         // The server lost this session (e.g. it expired) and rebuilt it
         // with a blank diagram: push back what the browser shows.
         if (s.version < knownVersion && lastXml) {
@@ -193,6 +186,17 @@ async function poll() {
             currentVersion = s.version;
             loadDiagram(s.xml, true);
         }
+        // Handle sync request - server needs fresh state. After the load
+        // above, so draw.io exports what it just loaded; never while a
+        // one-page projection is on screen, which would be sent as the
+        // whole document. Reset after a while in case draw.io never
+        // answers, so later syncs still run.
+        if (s.syncRequested && !pendingSyncExport && isReady && !projectionExportActive) {
+            pendingSyncExport = true;
+            pendingSyncBase = currentVersion;
+            iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
+            setTimeout(() => { pendingSyncExport = false; }, 5000);
+        }
         // Handle export request from MCP server (png/svg).
         //
         // Plain export: capture whatever tab is currently displayed.
@@ -207,6 +211,7 @@ async function poll() {
         if (s.exportFormat && !pendingMcpExport && isReady) {
             pendingMcpExport = s.exportFormat;
             const seq = ++mcpExportSeq;
+            mcpExportId = s.exportId;
             const extra = s.exportOptions || {};
             const fireExport = () => {
                 // mcpExport carries this export's number and is echoed

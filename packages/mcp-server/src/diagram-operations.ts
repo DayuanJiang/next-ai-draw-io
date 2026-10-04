@@ -185,7 +185,11 @@ export function applyDiagramOperations(
     const cellMap = new Map<string, Element>()
     root.querySelectorAll(CELL_SELECTOR).forEach((cell) => {
         const id = cell.getAttribute("id")
-        if (id) cellMap.set(id, cell)
+        // A wrapped mxCell may repeat its wrapper's id; the wrapper is the cell
+        const wrapped =
+            cell.tagName === "mxCell" &&
+            /^(UserObject|object)$/.test(cell.parentElement?.tagName ?? "")
+        if (id && !wrapped) cellMap.set(id, cell)
     })
     // Ids deleted so far in this batch; deleting one again is a no-op
     const deletedIds = new Set<string>()

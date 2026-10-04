@@ -10,7 +10,8 @@ beforeAll(() => {
     installDomPolyfill()
 })
 
-import { wrapCellsInModel } from "../src/pages.ts"
+import { prepareNewDiagram } from "../src/new-diagram.ts"
+import { hasCells, wrapCellsInModel } from "../src/pages.ts"
 import { validateAndFixXml } from "../src/xml-validation.ts"
 
 const A = `<mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`
@@ -64,5 +65,35 @@ describe("wrapCellsInModel", () => {
         expect(wrapCellsInModel(`${wrapped}</invoke>`)).toBe(
             `<mxGraphModel><root>${ROOTS}${wrapped}</root></mxGraphModel>`,
         )
+    })
+})
+
+describe("hasCells", () => {
+    it("counts cells written with single quotes", () => {
+        expect(hasCells(`<mxCell id='2' vertex='1' parent='1'/>`)).toBe(true)
+        expect(hasCells(`<mxCell id='0'/><mxCell id='1' parent='0'/>`)).toBe(
+            false,
+        )
+    })
+})
+
+describe("prepareNewDiagram", () => {
+    it("rejects a shape that uses a root cell id", () => {
+        // It would clash with the added root cell "1" and be renamed,
+        // which breaks the edges that point to it
+        const cells =
+            `<mxCell id="1" value="Start" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>` +
+            `<mxCell id="3" edge="1" parent="1" source="1" target="2"><mxGeometry relative="1" as="geometry"/></mxCell>`
+        const out = prepareNewDiagram(cells)
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.error).toMatch(/"0" and "1"/)
+    })
+
+    it("still accepts the root cells sent along with the shapes", () => {
+        const out = prepareNewDiagram(
+            `<mxCell id="0"/><mxCell id="1" parent="0"/>${A}`,
+        )
+        expect(out.ok).toBe(true)
     })
 })
