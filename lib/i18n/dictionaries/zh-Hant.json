@@ -369,6 +369,8 @@
         "enterSecretKey": "輸入您的 Secret Key",
         "baseUrl": "基礎 URL",
         "optional": "（可選）",
+        "getApiKey": "取得 API Key",
+        "requestUrl": "請求將傳送至 {url}",
         "baseUrlWithExample": "基礎 URL（可選，例如 {example}）",
         "customEndpoint": "自訂端點 URL",
         "minimaxBaseUrlHint": "使用 /anthropic 端點為 Anthropic 相容 API（推薦），或使用 /v1 端點為 OpenAI 相容 API",

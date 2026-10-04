@@ -332,6 +332,21 @@ describe("Atlas Cloud provider", () => {
             includeUsage: true,
         })
     })
+
+    it("drops an endpoint path pasted along with the base URL", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1/chat/completions/",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://proxy.example.com/v1",
+            }),
+        )
+    })
 })
 
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {

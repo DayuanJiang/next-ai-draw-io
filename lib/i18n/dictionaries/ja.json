@@ -323,6 +323,8 @@
         "enterSecretKey": "シークレットアクセスキーを入力",
         "baseUrl": "ベース URL",
         "optional": "（オプション）",
+        "getApiKey": "API キーを取得",
+        "requestUrl": "リクエスト先: {url}",
         "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
         "minimaxBaseUrlHint": "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",

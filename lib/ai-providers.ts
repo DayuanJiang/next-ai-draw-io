@@ -22,7 +22,11 @@ import {
     loadAdminProviders,
 } from "@/lib/admin/providers"
 import { redirectGuardedFetch } from "@/lib/ssrf-protection"
-import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
+import {
+    normalizeBaseUrl,
+    PROVIDER_INFO,
+    type ProviderName,
+} from "@/lib/types/model-config"
 
 export type { ProviderName }
 
@@ -766,7 +770,14 @@ function createModel(
  * <NAME>_API_KEY / <NAME>_BASE_URL, see env.example). The settings test
  * button uses the same function, so a passing test means the chat works.
  */
-export function getAIModel(overrides?: ClientOverrides): ModelConfig {
+export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
+    // Drop an endpoint path pasted along with the client's base URL
+    const overrides = clientOverrides?.baseUrl
+        ? {
+              ...clientOverrides,
+              baseUrl: normalizeBaseUrl(clientOverrides.baseUrl),
+          }
+        : clientOverrides
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.

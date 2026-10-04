@@ -65,3 +65,34 @@ test("the Test button checks all models at once and shows each result", async ({
         "model-ok",
     ])
 })
+
+test("the key link and the base URL cleanup", async ({ page }) => {
+    await page.addInitScript((config) => {
+        localStorage.setItem(
+            "next-ai-draw-io-model-configs",
+            JSON.stringify(config),
+        )
+    }, CONFIG)
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await page.locator("button:has(svg.lucide-bot)").first().click()
+    await page.getByText("Configure Models...").click()
+    const dialog = page.locator('[role="dialog"]')
+    await dialog.getByText("GLM (Zhipu)").first().click()
+
+    await expect(
+        dialog.getByRole("link", { name: "Get API key" }),
+    ).toHaveAttribute(
+        "href",
+        "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    )
+    const baseUrl = dialog.locator("#base-url")
+    await baseUrl.fill("https://proxy.example.com/v4/chat/completions/")
+    await baseUrl.blur()
+    await expect(baseUrl).toHaveValue("https://proxy.example.com/v4")
+    await expect(
+        dialog.getByText(
+            "Requests go to https://proxy.example.com/v4/chat/completions",
+        ),
+    ).toBeVisible()
+})

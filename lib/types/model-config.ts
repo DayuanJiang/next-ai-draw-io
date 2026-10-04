@@ -122,22 +122,25 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     atlascloud: "openai",
 }
 
-// Provider metadata
+// Provider metadata. apiKeyUrl is the page where users create a key.
 export const PROVIDER_INFO: Record<
     ProviderName,
-    { label: string; defaultBaseUrl?: string }
+    { label: string; defaultBaseUrl?: string; apiKeyUrl?: string }
 > = {
     openai: {
         label: "OpenAI",
         defaultBaseUrl: "https://api.openai.com/v1",
+        apiKeyUrl: "https://platform.openai.com/api-keys",
     },
     anthropic: {
         label: "Anthropic",
         defaultBaseUrl: "https://api.anthropic.com/v1",
+        apiKeyUrl: "https://platform.claude.com/settings/keys",
     },
     google: {
         label: "Google",
         defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        apiKeyUrl: "https://aistudio.google.com/apikey",
     },
     vertexai: { label: "Google Vertex AI" },
     azure: {
@@ -148,22 +151,27 @@ export const PROVIDER_INFO: Record<
     ollama: {
         label: "Ollama",
         defaultBaseUrl: "https://ollama.com/api",
+        apiKeyUrl: "https://ollama.com/settings/keys",
     },
     openrouter: {
         label: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
+        apiKeyUrl: "https://openrouter.ai/keys",
     },
     aihubmix: {
         label: "AIHubMix",
         defaultBaseUrl: "https://aihubmix.com/v1",
+        apiKeyUrl: "https://aihubmix.com/token",
     },
     deepseek: {
         label: "DeepSeek",
         defaultBaseUrl: "https://api.deepseek.com/v1",
+        apiKeyUrl: "https://platform.deepseek.com/api_keys",
     },
     siliconflow: {
         label: "SiliconFlow",
         defaultBaseUrl: "https://api.siliconflow.cn/v1",
+        apiKeyUrl: "https://cloud.siliconflow.cn/account/ak",
     },
     sglang: {
         label: "SGLang",
@@ -172,47 +180,60 @@ export const PROVIDER_INFO: Record<
     gateway: {
         label: "AI Gateway",
         defaultBaseUrl: "https://ai-gateway.vercel.sh/v1/ai",
+        apiKeyUrl: "https://vercel.com/ai-gateway",
     },
     edgeone: { label: "EdgeOne Pages" },
     doubao: {
         label: "Doubao (ByteDance)",
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        apiKeyUrl:
+            "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
     },
     modelscope: {
         label: "ModelScope",
         defaultBaseUrl: "https://api-inference.modelscope.cn/v1",
+        apiKeyUrl: "https://modelscope.cn/my/myaccesstoken",
     },
     glm: {
         label: "GLM (Zhipu)",
         defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+        apiKeyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
     },
     qwen: {
         label: "Qwen (Alibaba)",
         defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        apiKeyUrl: "https://bailian.console.aliyun.com/?tab=model#/api-key",
     },
     qiniu: {
         label: "Qiniu",
         defaultBaseUrl: "https://api.qnaigc.com/v1",
+        apiKeyUrl: "https://www.qiniu.com/ai/models",
     },
     kimi: {
         label: "Kimi (Moonshot)",
         defaultBaseUrl: "https://api.moonshot.cn/v1",
+        apiKeyUrl: "https://platform.moonshot.cn/console/api-keys",
     },
     minimax: {
         label: "MiniMax",
         defaultBaseUrl: "https://api.minimaxi.com/anthropic",
+        apiKeyUrl:
+            "https://platform.minimaxi.com/user-center/basic-information/interface-key",
     },
     novita: {
         label: "Novita AI",
         defaultBaseUrl: "https://api.novita.ai/openai",
+        apiKeyUrl: "https://novita.ai/dashboard/key",
     },
     mimo: {
         label: "MiMo (Xiaomi)",
         defaultBaseUrl: "https://api.xiaomimimo.com/v1",
+        apiKeyUrl: "https://platform.xiaomimimo.com/#/console/api-keys",
     },
     atlascloud: {
         label: "Atlas Cloud",
         defaultBaseUrl: "https://api.atlascloud.ai/v1",
+        apiKeyUrl: "https://www.atlascloud.ai/console/api-keys",
     },
 }
 
@@ -530,4 +551,39 @@ export function findModelById(
     modelId: string,
 ): FlattenedModel | undefined {
     return flattenModels(config).find((m) => m.id === modelId)
+}
+
+/**
+ * A base URL the way the SDKs expect it: no spaces, no trailing slash, and
+ * no endpoint path users often paste along (".../v1/chat/completions"),
+ * which the SDK would append a second time.
+ */
+export function normalizeBaseUrl(url: string): string {
+    return url
+        .trim()
+        .replace(/\/+$/, "")
+        .replace(/\/(?:chat\/completions|completions|messages|responses)$/, "")
+}
+
+/** Where a chat request goes for a base URL, or null when the SDK decides */
+export function chatRequestUrl(
+    provider: ProviderName,
+    baseUrl: string,
+): string | null {
+    const url = normalizeBaseUrl(baseUrl)
+    if (!url) return null
+    if (provider === "anthropic") return `${url}/messages`
+    // These SDKs build their own paths (or, for MiniMax, pick the protocol
+    // from the URL)
+    const ownPaths: ProviderName[] = [
+        "google",
+        "vertexai",
+        "azure",
+        "bedrock",
+        "ollama",
+        "gateway",
+        "minimax",
+        "edgeone",
+    ]
+    return ownPaths.includes(provider) ? null : `${url}/chat/completions`
 }
