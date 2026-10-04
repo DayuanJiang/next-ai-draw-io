@@ -7,6 +7,13 @@
  * update this file too.
  */
 
+import {
+    indent,
+    SWIMLANE_EXAMPLE,
+    TWO_EDGES_EXAMPLE,
+    WAYPOINT_EXAMPLE,
+} from "./xml-examples.ts"
+
 export const DRAWING_GUIDE = `# Draw.io drawing guide
 
 ## Workflow
@@ -41,21 +48,7 @@ Rules (XML that breaks them is rejected):
 
 Containers and swimlanes: children use the container id as parent and coordinates relative to the container.
 
-    <mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-      <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-    </mxCell>
-    <mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-      <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-    </mxCell>
-    <mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-      <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-    </mxCell>
-    <mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-      <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-    </mxCell>
-    <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-      <mxGeometry relative="1" as="geometry"/>
-    </mxCell>
+${indent(SWIMLANE_EXAMPLE)}
 
 ## Layout
 - Keep every element of a page within x 0 to 800 and y 0 to 600, so the whole diagram fits one view without a page break.
@@ -80,23 +73,11 @@ Before sending XML, check:
 
 Two edges between the same nodes:
 
-    <mxCell id="e1" value="A to B" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;endArrow=classic;" edge="1" parent="1" source="a" target="b">
-      <mxGeometry relative="1" as="geometry"/>
-    </mxCell>
-    <mxCell id="e2" value="B to A" style="edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.7;entryX=1;entryY=0.7;endArrow=classic;" edge="1" parent="1" source="b" target="a">
-      <mxGeometry relative="1" as="geometry"/>
-    </mxCell>
+${indent(TWO_EDGES_EXAMPLE)}
 
 Waypoints go inside <Array as="points"> in the edge geometry. Example: Hotfix (right, bottom) connects to Main (center, top) while Develop (center, middle) is in between, so the edge goes right to x=750 first, then up, and enters Main from the right:
 
-    <mxCell id="hotfix_to_main" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=0;entryX=1;entryY=0.5;endArrow=classic;" edge="1" parent="1" source="hotfix" target="main">
-      <mxGeometry relative="1" as="geometry">
-        <Array as="points">
-          <mxPoint x="750" y="80"/>
-          <mxPoint x="750" y="150"/>
-        </Array>
-      </mxGeometry>
-    </mxCell>
+${indent(WAYPOINT_EXAMPLE)}
 
 ## Styles
 - Shapes: rounded=1, fillColor=#hex, strokeColor=#hex, whiteSpace=wrap;html=1;

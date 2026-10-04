@@ -8,7 +8,6 @@ import {
     stepCountIs,
     streamText,
 } from "ai"
-import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
 import path from "path"
 import { z } from "zod"
@@ -50,6 +49,11 @@ import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+import {
+    getShapeLibrary,
+    SHAPE_LIBRARY_LIST,
+} from "@/packages/mcp-server/src/shape-library.ts"
+import { SWIMLANE_EXAMPLE } from "@/packages/mcp-server/src/xml-examples.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -609,21 +613,7 @@ VALIDATION RULES (XML will be rejected if violated):
 6. Escape special chars in values: &lt; &gt; &amp; &quot;
 
 Example (generate ONLY this - no wrapper tags):
-<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
+${SWIMLANE_EXAMPLE}
 
 Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
@@ -701,14 +691,7 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
                 description: `Get draw.io shape/icon library documentation with style syntax and shape names.
 
 Available libraries:
-- Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
-- Networking: cisco19, network, kubernetes, vvd, rack
-- Business: bpmn, lean_mapping
-- General: flowchart, basic, arrows2, infographic, sitemap
-- UI/Mockups: android, material_design
-- Enterprise: citrix, sap, mscae, atlassian
-- Engineering: fluidpower, electrical, pid, cabinets, floorplan
-- Icons: webicons
+${SHAPE_LIBRARY_LIST}
 
 Call this tool to get shape names and usage syntax for a specific library.`,
                 inputSchema: z.object({
@@ -719,45 +702,12 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                         ),
                 }),
                 execute: async ({ library }) => {
-                    // Sanitize input - prevent path traversal attacks
-                    const sanitizedLibrary = library
-                        .toLowerCase()
-                        .replace(/[^a-z0-9_-]/g, "")
-
-                    if (sanitizedLibrary !== library.toLowerCase()) {
-                        return `Invalid library name "${library}". Use only letters, numbers, underscores, and hyphens.`
-                    }
-
-                    const baseDir = path.join(
-                        process.cwd(),
-                        "docs/shape-libraries",
+                    // Only known library names reach the file system
+                    const result = await getShapeLibrary(
+                        library,
+                        path.join(process.cwd(), "docs/shape-libraries"),
                     )
-                    const filePath = path.join(
-                        baseDir,
-                        `${sanitizedLibrary}.md`,
-                    )
-
-                    // Verify path stays within expected directory
-                    const resolvedPath = path.resolve(filePath)
-                    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
-                        return `Invalid library path.`
-                    }
-
-                    try {
-                        const content = await fs.readFile(filePath, "utf-8")
-                        return content
-                    } catch (error) {
-                        if (
-                            (error as NodeJS.ErrnoException).code === "ENOENT"
-                        ) {
-                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, material_design, lean_mapping, openstack, rack`
-                        }
-                        console.error(
-                            `[get_shape_library] Error loading "${library}":`,
-                            error,
-                        )
-                        return `Error loading library "${library}". Please try again.`
-                    }
+                    return result.ok ? result.text : result.error
                 },
             },
         },

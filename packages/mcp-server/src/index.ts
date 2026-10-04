@@ -62,7 +62,7 @@ import {
     wrapCellsInModel,
 } from "./pages.ts"
 import { Autosaver, defaultDataDir } from "./persistence.ts"
-import { getShapeLibrary, SHAPE_LIBRARY_GROUPS } from "./shape-library.ts"
+import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -224,9 +224,7 @@ server.registerTool(
         description:
             "Get the style syntax and shape names of a draw.io icon library. Call this BEFORE drawing with " +
             "cloud, network or other icon shapes, and use the exact names it returns; never guess them.\n\n" +
-            `Libraries:\n${Object.entries(SHAPE_LIBRARY_GROUPS)
-                .map(([group, names]) => `- ${group}: ${names.join(", ")}`)
-                .join("\n")}`,
+            `Libraries:\n${SHAPE_LIBRARY_LIST}`,
         inputSchema: {
             library: z
                 .string()
