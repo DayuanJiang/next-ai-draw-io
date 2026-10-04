@@ -472,7 +472,9 @@ export default function ChatPanel({
                 setShowSettingsDialog(true)
             }
         },
-        onFinish: () => {},
+        // Re-render streamed messages at most every 150 ms. The streaming
+        // diagram preview draws on each update, so this also limits redraws
+        experimental_throttle: 150,
         sendAutomaticallyWhen: ({ messages }) => {
             const isInContinuationMode = partialXmlRef.current.length > 0
 
@@ -883,7 +885,6 @@ export default function ChatPanel({
 
                 await sendWithCurrentDiagram(parts)
 
-                // Token count is tracked in onFinish with actual server usage
                 setInput("")
                 sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                 setFiles([])

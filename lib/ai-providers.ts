@@ -2,14 +2,18 @@ import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { azure, createAzure } from "@ai-sdk/azure"
 import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
-import { createGateway, gateway } from "@ai-sdk/gateway"
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
 import { createVertex } from "@ai-sdk/google-vertex"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { aihubmix, createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { defaultSettingsMiddleware, wrapLanguageModel } from "ai"
+import {
+    createGateway,
+    defaultSettingsMiddleware,
+    gateway,
+    wrapLanguageModel,
+} from "ai"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
 import {
     adminProvidersToConfig,

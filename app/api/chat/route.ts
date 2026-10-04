@@ -95,6 +95,8 @@ function createCachedStreamResponse(xml: string): Response {
 const modelStreamResponses = new WeakSet<Response>()
 
 // Inner handler function
+const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
+
 async function handleChatRequest(req: Request): Promise<Response> {
     // Check for access code
     const accessDenied = checkAccessCode(req)
@@ -335,35 +337,37 @@ ${userInputText}
     // Convert UIMessages to ModelMessages and add system message
     const modelMessages = await convertToModelMessages(messages)
 
-    // DEBUG: Log incoming messages structure
-    console.log("[route.ts] Incoming messages count:", messages.length)
-    messages.forEach((msg: any, idx: number) => {
-        console.log(
-            `[route.ts] Message ${idx} role:`,
-            msg.role,
-            "parts count:",
-            msg.parts?.length,
-        )
-        if (msg.parts) {
-            msg.parts.forEach((part: any, partIdx: number) => {
-                if (
-                    part.type === "tool-invocation" ||
-                    part.type === "tool-result"
-                ) {
-                    console.log(`[route.ts]   Part ${partIdx}:`, {
-                        type: part.type,
-                        toolName: part.toolName,
-                        hasInput: !!part.input,
-                        inputType: typeof part.input,
-                        inputKeys:
-                            part.input && typeof part.input === "object"
-                                ? Object.keys(part.input)
-                                : null,
-                    })
-                }
-            })
-        }
-    })
+    // DEBUG_LLM_PAYLOAD=true logs the incoming message structure
+    if (DEBUG_LLM_PAYLOAD) {
+        console.log("[route.ts] Incoming messages count:", messages.length)
+        messages.forEach((msg: any, idx: number) => {
+            console.log(
+                `[route.ts] Message ${idx} role:`,
+                msg.role,
+                "parts count:",
+                msg.parts?.length,
+            )
+            if (msg.parts) {
+                msg.parts.forEach((part: any, partIdx: number) => {
+                    if (
+                        part.type === "tool-invocation" ||
+                        part.type === "tool-result"
+                    ) {
+                        console.log(`[route.ts]   Part ${partIdx}:`, {
+                            type: part.type,
+                            toolName: part.toolName,
+                            hasInput: !!part.input,
+                            inputType: typeof part.input,
+                            inputKeys:
+                                part.input && typeof part.input === "object"
+                                    ? Object.keys(part.input)
+                                    : null,
+                        })
+                    }
+                })
+            }
+        })
+    }
 
     // Replace historical tool call XML with placeholders to reduce tokens
     // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
@@ -385,34 +389,39 @@ ${userInputText}
     // JSON object, and every provider rejects a tool result whose call is gone.
     enhancedMessages = dropInvalidToolCalls(enhancedMessages)
 
-    // DEBUG: Log modelMessages structure (what's being sent to AI)
-    console.log("[route.ts] Model messages count:", enhancedMessages.length)
-    enhancedMessages.forEach((msg: any, idx: number) => {
-        console.log(
-            `[route.ts] ModelMsg ${idx} role:`,
-            msg.role,
-            "content count:",
-            msg.content?.length,
-        )
-        if (msg.content) {
-            msg.content.forEach((part: any, partIdx: number) => {
-                if (part.type === "tool-call" || part.type === "tool-result") {
-                    console.log(`[route.ts]   Content ${partIdx}:`, {
-                        type: part.type,
-                        toolName: part.toolName,
-                        hasInput: !!part.input,
-                        inputType: typeof part.input,
-                        inputValue:
-                            part.input === undefined
-                                ? "undefined"
-                                : part.input === null
-                                  ? "null"
-                                  : "object",
-                    })
-                }
-            })
-        }
-    })
+    // DEBUG_LLM_PAYLOAD=true logs what is sent to the model
+    if (DEBUG_LLM_PAYLOAD) {
+        console.log("[route.ts] Model messages count:", enhancedMessages.length)
+        enhancedMessages.forEach((msg: any, idx: number) => {
+            console.log(
+                `[route.ts] ModelMsg ${idx} role:`,
+                msg.role,
+                "content count:",
+                msg.content?.length,
+            )
+            if (msg.content) {
+                msg.content.forEach((part: any, partIdx: number) => {
+                    if (
+                        part.type === "tool-call" ||
+                        part.type === "tool-result"
+                    ) {
+                        console.log(`[route.ts]   Content ${partIdx}:`, {
+                            type: part.type,
+                            toolName: part.toolName,
+                            hasInput: !!part.input,
+                            inputType: typeof part.input,
+                            inputValue:
+                                part.input === undefined
+                                    ? "undefined"
+                                    : part.input === null
+                                      ? "null"
+                                      : "object",
+                        })
+                    }
+                })
+            }
+        })
+    }
 
     // Update the last message with user input only (XML moved to separate cached system message)
     if (enhancedMessages.length >= 1) {

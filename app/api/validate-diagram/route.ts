@@ -3,7 +3,7 @@
  * Accepts a PNG image and streams validation results using useObject-compatible format.
  */
 
-import { streamObject } from "ai"
+import { Output, streamText } from "ai"
 import { checkAccessCode } from "@/lib/access-code"
 import { getValidationModel } from "@/lib/ai-providers"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
@@ -29,20 +29,9 @@ const DEFAULT_VALID_RESULT: ValidationResult = {
     suggestions: [],
 }
 
-/**
- * Create a streaming response for useObject compatibility.
- * useObject expects text stream format, not plain JSON.
- */
+/** A fixed result in the text format useObject reads */
 function createStreamingResponse(result: ValidationResult): Response {
-    const encoder = new TextEncoder()
-    const stream = new ReadableStream({
-        start(controller) {
-            // Stream the JSON as text (useObject parses this)
-            controller.enqueue(encoder.encode(JSON.stringify(result)))
-            controller.close()
-        },
-    })
-    return new Response(stream, {
+    return new Response(JSON.stringify(result), {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
     })
 }
@@ -108,9 +97,9 @@ export async function POST(req: Request): Promise<Response> {
             ) || 10000
 
         // Stream the VLM response for useObject consumption
-        const result = streamObject({
+        const result = streamText({
             model,
-            schema: ValidationResultSchema,
+            output: Output.object({ schema: ValidationResultSchema }),
             system: VALIDATION_SYSTEM_PROMPT,
             messages: [
                 {
@@ -129,10 +118,10 @@ export async function POST(req: Request): Promise<Response> {
             ],
             maxOutputTokens: 1024,
             abortSignal: AbortSignal.timeout(timeout),
-            onFinish: ({ object }) => {
-                if (sessionId && object) {
+            onFinish: ({ output }) => {
+                if (sessionId && output) {
                     console.log(
-                        `[validate-diagram] Session ${sessionId}: valid=${object.valid}, issues=${object.issues?.length ?? 0}`,
+                        `[validate-diagram] Session ${sessionId}: valid=${output.valid}, issues=${output.issues?.length ?? 0}`,
                     )
                 }
             },
