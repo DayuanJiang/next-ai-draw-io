@@ -1013,7 +1013,7 @@ export function ModelConfigDialog({
                                             ) : (
                                                 <div className="divide-y divide-border-subtle">
                                                     {selectedProvider.models.map(
-                                                        (model, index) => (
+                                                        (model) => (
                                                             <div
                                                                 key={model.id}
                                                                 className={cn(
