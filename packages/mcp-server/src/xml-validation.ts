@@ -404,6 +404,21 @@ function findOrphanMxPoints(
  *   <mxPoint>s. Used for XML the model wrote, not for files or browser state.
  * @returns null if valid, error message string if invalid
  */
+/** The first non-blank text under el, skipping a page's compressed data */
+function findTextBetweenTags(el: Element | null): string | null {
+    if (!el) return null
+    for (const node of Array.from(el.childNodes)) {
+        if (node.nodeType === 1) {
+            const text = findTextBetweenTags(node as Element)
+            if (text) return text
+        } else if (node.nodeType === 3 && el.tagName !== "diagram") {
+            const text = node.textContent?.trim()
+            if (text) return text.slice(0, 40)
+        }
+    }
+    return null
+}
+
 export function validateMxCellStructure(
     xml: string,
     opts: { strict?: boolean } = {},
@@ -427,6 +442,15 @@ export function validateMxCellStructure(
             if (cell.parentElement?.tagName === "mxCell") {
                 const id = cell.getAttribute("id") || "unknown"
                 return `Invalid XML: Found nested mxCell (id="${id}"). Cells should be siblings, not nested inside other mxCell elements.`
+            }
+        }
+
+        // draw.io reads any text inside a page as compressed page data and
+        // then fails to open the page
+        if (!doc.querySelector("parsererror")) {
+            const text = findTextBetweenTags(doc.documentElement)
+            if (text) {
+                return `Invalid XML: Found text "${text}" between tags. Labels belong in the value attribute; remove any other text between tags.`
             }
         }
     } catch (error) {
@@ -540,6 +564,15 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixed = fixed.replace(/\\"/g, '"')
         fixed = fixed.replace(/\\n/g, "\n")
         fixes.push("Fixed JSON-escaped XML")
+    }
+
+    // 0b. Literal \n, \t or \r between tags, from escaping the XML twice
+    const unescaped = fixed.replace(/>(?:\s|\\[nrt])+</g, (gap) =>
+        gap.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\r/g, ""),
+    )
+    if (unescaped !== fixed) {
+        fixed = unescaped
+        fixes.push("Replaced literal \\n between tags with line breaks")
     }
 
     // 1. Remove CDATA wrapper

@@ -212,7 +212,7 @@ describe("autoFixXml keeps valid tags", () => {
 
     it("removes a stray <a> without touching <Array> waypoints", () => {
         const edge = `<mxCell id="e" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1" y="2"/></Array></mxGeometry></mxCell>`
-        const r = validateAndFixXml(model(`<a>x</a>${edge}`))
+        const r = validateAndFixXml(model(`<a></a>${edge}`))
         expect(r.valid).toBe(true)
         expect(r.fixed).toContain('<Array as="points">')
         expect(r.fixed).toContain('<mxPoint x="1" y="2"/>')
@@ -275,5 +275,36 @@ describe("validateAndFixXml strict checks", () => {
         expect(r.valid).toBe(true)
         expect(r.fixed).not.toContain('<mxPoint x="5" y="5"/>')
         expect(r.fixed).toContain('<mxPoint x="1" y="2"/>')
+    })
+})
+
+describe("text between tags", () => {
+    // draw.io reads any text inside a page as compressed data, so the whole
+    // page fails to open with an atob error
+    it("turns a literal \\n between tags into a line break", () => {
+        const cell = `<mxCell id="3" value="Reset password" vertex="1" parent="1">\\n  <mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>\\n</mxCell>`
+        const r = validateAndFixXml(cell)
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toBe(
+            `<mxCell id="3" value="Reset password" vertex="1" parent="1">\n  <mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>\n</mxCell>`,
+        )
+    })
+
+    it("rejects other text between tags", () => {
+        const r = validateAndFixXml(
+            model(
+                `<mxCell id="3" vertex="1" parent="1">Reset password<mxGeometry as="geometry"/></mxCell>`,
+            ),
+        )
+        expect(r.valid).toBe(false)
+        expect(r.error).toMatch(/Reset password/)
+    })
+
+    it("accepts a compressed page", () => {
+        expect(
+            validateAndFixXml(
+                `<mxfile><diagram id="p" name="P">dZHBDoIwDIafhjtsGPWM6MkTB8/LVmBxrGQMQZ/eLRuIUS/bv/VfmybF</diagram></mxfile>`,
+            ).valid,
+        ).toBe(true)
     })
 })

@@ -110,6 +110,19 @@ describe("editDiagram", () => {
         expect(out.ok).toBe(true)
     })
 
+    it("fixes a literal \\n between tags, as gpt-5-mini sends it", () => {
+        const newXml = `<mxCell id="c" value="Reset password" vertex="1" parent="1">\\n  <mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>\\n</mxCell>`
+        const out = editDiagram(
+            DOC,
+            [{ operation: "add", cell_id: "c", new_xml: newXml }],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('value="Reset password"')
+        expect(out.xml).not.toContain("\\n")
+    })
+
     it("reports a missing page as a page-level error", () => {
         const out = editDiagram(DOC, [{ operation: "delete", cell_id: "a" }], {
             page_id: "nope",
