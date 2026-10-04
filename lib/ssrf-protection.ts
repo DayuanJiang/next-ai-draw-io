@@ -115,3 +115,19 @@ export async function isPrivateUrl(urlString: string): Promise<boolean> {
 export function allowPrivateUrls(): boolean {
     return process.env.ALLOW_PRIVATE_URLS !== "false"
 }
+
+/**
+ * A fetch for requests to a base URL the client chose. With private URLs
+ * blocked, a public URL could still redirect the request to an internal
+ * host, so redirects are refused. Undefined when private URLs are allowed.
+ */
+export function redirectGuardedFetch(): typeof fetch | undefined {
+    if (allowPrivateUrls()) return undefined
+    return async (input, init) => {
+        const response = await fetch(input, { ...init, redirect: "manual" })
+        if (response.status >= 300 && response.status < 400) {
+            throw new Error("Redirects are not allowed for custom base URLs")
+        }
+        return response
+    }
+}

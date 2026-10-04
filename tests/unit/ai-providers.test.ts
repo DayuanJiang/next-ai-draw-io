@@ -272,8 +272,15 @@ describe("AIHubMix provider", () => {
     })
 })
 
+vi.mock("@ai-sdk/openai-compatible", () => {
+    const mockModel = { specificationVersion: "v3", modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreate = vi.fn(() => mockProviderFn)
+    return { createOpenAICompatible: mockCreate }
+})
+
 describe("Atlas Cloud provider", () => {
-    let createOpenAIMock: ReturnType<typeof vi.fn>
+    let createCompatibleMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
 
     beforeEach(async () => {
@@ -281,9 +288,11 @@ describe("Atlas Cloud provider", () => {
         savedEnv.ATLASCLOUD_BASE_URL = process.env.ATLASCLOUD_BASE_URL
         delete process.env.ATLASCLOUD_BASE_URL
 
-        const mod = await import("@ai-sdk/openai")
-        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
-        createOpenAIMock.mockClear()
+        const mod = await import("@ai-sdk/openai-compatible")
+        createCompatibleMock = mod.createOpenAICompatible as ReturnType<
+            typeof vi.fn
+        >
+        createCompatibleMock.mockClear()
     })
 
     afterEach(() => {
@@ -299,9 +308,12 @@ describe("Atlas Cloud provider", () => {
             modelId: "qwen/qwen3.5-flash",
         })
 
-        expect(createOpenAIMock).toHaveBeenCalledWith({
+        // An OpenAI-compatible API; includeUsage keeps quota tracking working
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
             apiKey: "server-atlas-key",
             baseURL: "https://api.atlascloud.ai/v1",
+            includeUsage: true,
         })
     })
 
@@ -313,9 +325,11 @@ describe("Atlas Cloud provider", () => {
             modelId: "deepseek-ai/deepseek-v4-pro",
         })
 
-        expect(createOpenAIMock).toHaveBeenCalledWith({
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
             apiKey: "client-atlas-key",
             baseURL: "https://proxy.example.com/v1",
+            includeUsage: true,
         })
     })
 })

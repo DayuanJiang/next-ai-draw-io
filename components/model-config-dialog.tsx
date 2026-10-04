@@ -4,7 +4,6 @@ import {
     AlertCircle,
     Check,
     ChevronRight,
-    Clock,
     Eye,
     EyeOff,
     Key,
@@ -57,7 +56,11 @@ import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import { STORAGE_KEYS } from "@/lib/storage"
-import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
+import type {
+    ModelConfig,
+    ProviderConfig,
+    ProviderName,
+} from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -126,9 +129,10 @@ export function ModelConfigDialog({
     > | null>(null)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [deleteConfirmText, setDeleteConfirmText] = useState("")
-    const [validatingModelIndex, setValidatingModelIndex] = useState<
-        number | null
-    >(null)
+    // Models whose test is running (they are all tested at once)
+    const [validatingModelIds, setValidatingModelIds] = useState<Set<string>>(
+        () => new Set(),
+    )
     const [duplicateError, setDuplicateError] = useState<string>("")
     const [editError, setEditError] = useState<{
         modelId: string
@@ -281,12 +285,14 @@ export function ModelConfigDialog({
         if (credentialFields.includes(field)) {
             credentialsVersionRef.current++
             setValidationStatus("idle")
-            setValidatingModelIndex(null)
+            setValidatingModelIds(new Set())
             updates.validated = false
             updates.models = selectedProvider.models.map((m) => ({
                 ...m,
                 validated: undefined,
                 validationError: undefined,
+                validationWarning: undefined,
+                responseTime: undefined,
             }))
         }
         updateProvider(selectedProviderId, updates)
@@ -361,75 +367,82 @@ export function ModelConfigDialog({
         let errorCount = 0
         const credentialsVersion = credentialsVersionRef.current
 
-        // Validate each model
-        for (let i = 0; i < selectedProvider.models.length; i++) {
-            const model = selectedProvider.models[i]
-            setValidatingModelIndex(i)
+        // For EdgeOne, construct baseUrl from current origin
+        const baseUrl = isEdgeOne
+            ? `${window.location.origin}${getApiEndpoint("/api/edgeai")}`
+            : selectedProvider.baseUrl
 
-            try {
-                // For EdgeOne, construct baseUrl from current origin
-                const baseUrl = isEdgeOne
-                    ? `${window.location.origin}${getApiEndpoint("/api/edgeai")}`
-                    : selectedProvider.baseUrl
-
-                const response = await fetch(
-                    getApiEndpoint("/api/validate-model"),
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "x-access-code":
-                                localStorage.getItem(STORAGE_KEYS.accessCode) ||
-                                "",
+        // Test every model at once; each row updates when its answer arrives
+        setValidatingModelIds(new Set(selectedProvider.models.map((m) => m.id)))
+        await Promise.all(
+            selectedProvider.models.map(async (model) => {
+                let update: Partial<ModelConfig>
+                try {
+                    const response = await fetch(
+                        getApiEndpoint("/api/validate-model"),
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "x-access-code":
+                                    localStorage.getItem(
+                                        STORAGE_KEYS.accessCode,
+                                    ) || "",
+                            },
+                            body: JSON.stringify({
+                                provider: selectedProvider.provider,
+                                apiKey: selectedProvider.apiKey,
+                                baseUrl,
+                                modelId: model.modelId,
+                                // AWS Bedrock credentials
+                                awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                                awsSecretAccessKey:
+                                    selectedProvider.awsSecretAccessKey,
+                                awsRegion: selectedProvider.awsRegion,
+                                // Vertex AI credentials (Express Mode)
+                                vertexApiKey: selectedProvider.vertexApiKey,
+                            }),
                         },
-                        body: JSON.stringify({
-                            provider: selectedProvider.provider,
-                            apiKey: selectedProvider.apiKey,
-                            baseUrl,
-                            modelId: model.modelId,
-                            // AWS Bedrock credentials
-                            awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                            awsSecretAccessKey:
-                                selectedProvider.awsSecretAccessKey,
-                            awsRegion: selectedProvider.awsRegion,
-                            // Vertex AI credentials (Express Mode)
-                            vertexApiKey: selectedProvider.vertexApiKey,
-                        }),
-                    },
-                )
-                const data = await response.json().catch(() => ({}))
-                // Credentials changed during the test: drop the results
+                    )
+                    const data = await response.json().catch(() => ({}))
+                    update = data.valid
+                        ? {
+                              validated: true,
+                              validationError: undefined,
+                              validationWarning: data.warning,
+                              responseTime: data.responseTime,
+                          }
+                        : {
+                              validated: false,
+                              validationError:
+                                  data.error ||
+                                  (response.ok
+                                      ? "Validation failed"
+                                      : `Request failed (${response.status})`),
+                              validationWarning: undefined,
+                          }
+                } catch {
+                    update = {
+                        validated: false,
+                        validationError: "Network error",
+                        validationWarning: undefined,
+                    }
+                }
+                // Credentials changed during the test: drop the result
                 if (credentialsVersionRef.current !== credentialsVersion) return
-
-                if (data.valid) {
-                    updateModel(selectedProviderId, model.id, {
-                        validated: true,
-                        validationError: undefined,
-                    })
-                } else {
+                if (update.validated === false) {
                     allValid = false
                     errorCount++
-                    updateModel(selectedProviderId, model.id, {
-                        validated: false,
-                        validationError:
-                            data.error ||
-                            (response.ok
-                                ? "Validation failed"
-                                : `Request failed (${response.status})`),
-                    })
                 }
-            } catch {
-                if (credentialsVersionRef.current !== credentialsVersion) return
-                allValid = false
-                errorCount++
-                updateModel(selectedProviderId, model.id, {
-                    validated: false,
-                    validationError: "Network error",
+                updateModel(selectedProviderId, model.id, update)
+                setValidatingModelIds((prev) => {
+                    const next = new Set(prev)
+                    next.delete(model.id)
+                    return next
                 })
-            }
-        }
-
-        setValidatingModelIndex(null)
+            }),
+        )
+        if (credentialsVersionRef.current !== credentialsVersion) return
 
         if (allValid) {
             setValidationStatus("success")
@@ -992,28 +1005,24 @@ export function ModelConfigDialog({
                                                                 <div className="flex items-center gap-3 p-3 min-w-0">
                                                                     {/* Status icon */}
                                                                     <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
-                                                                        {validatingModelIndex !==
-                                                                            null &&
-                                                                        index ===
-                                                                            validatingModelIndex ? (
+                                                                        {validatingModelIds.has(
+                                                                            model.id,
+                                                                        ) ? (
                                                                             // Currently validating
                                                                             <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
                                                                                 <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
                                                                             </div>
-                                                                        ) : validatingModelIndex !==
-                                                                              null &&
-                                                                          index >
-                                                                              validatingModelIndex &&
-                                                                          model.validated ===
-                                                                              undefined ? (
-                                                                            // Queued
-                                                                            <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
-                                                                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                            </div>
                                                                         ) : model.validated ===
                                                                           true ? (
-                                                                            // Valid
-                                                                            <div className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center">
+                                                                            // Valid, with the time the test took
+                                                                            <div
+                                                                                className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center"
+                                                                                title={
+                                                                                    model.responseTime
+                                                                                        ? `${(model.responseTime / 1000).toFixed(1)} s`
+                                                                                        : undefined
+                                                                                }
+                                                                            >
                                                                                 <Check className="h-4 w-4 text-success" />
                                                                             </div>
                                                                         ) : model.validated ===
@@ -1216,6 +1225,14 @@ export function ModelConfigDialog({
                                                                         <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
                                                                             {
                                                                                 model.validationError
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                {model.validated &&
+                                                                    model.validationWarning && (
+                                                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 px-3 pb-2 pl-14">
+                                                                            {
+                                                                                model.validationWarning
                                                                             }
                                                                         </p>
                                                                     )}

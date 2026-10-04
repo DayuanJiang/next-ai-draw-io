@@ -32,6 +32,8 @@ export interface ModelConfig {
     modelId: string // e.g., "gpt-4o", "claude-sonnet-4-5"
     validated?: boolean // Has this model been validated
     validationError?: string // Error message if validation failed
+    validationWarning?: string // Passed, but e.g. did not call a tool
+    responseTime?: number // Milliseconds the last test took
 }
 
 // Provider configuration

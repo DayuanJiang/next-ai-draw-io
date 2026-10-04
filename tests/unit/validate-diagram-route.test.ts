@@ -27,7 +27,11 @@ vi.mock("@/lib/ai-providers", () => ({
                         chunks: [
                             { type: "text-start", id: "t" },
                             ...[json.slice(0, 20), json.slice(20)].map(
-                                (delta) => ({ type: "text-delta", id: "t", delta }),
+                                (delta) => ({
+                                    type: "text-delta",
+                                    id: "t",
+                                    delta,
+                                }),
                             ),
                             { type: "text-end", id: "t" },
                             {
