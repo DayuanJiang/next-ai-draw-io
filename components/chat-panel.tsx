@@ -1,7 +1,7 @@
 "use client"
 
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
+import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai"
 import {
     MessageSquarePlus,
     PanelRightClose,
@@ -55,21 +55,6 @@ const STORAGE_SESSION_ID_KEY = "next-ai-draw-io-session-id"
 // sessionStorage keys
 const SESSION_STORAGE_INPUT_KEY = "next-ai-draw-io-input"
 
-// Type for message parts (tool calls and their states)
-interface MessagePart {
-    type: string
-    state?: string
-    toolName?: string
-    input?: { xml?: string; [key: string]: unknown }
-    [key: string]: unknown
-}
-
-interface ChatMessage {
-    role: string
-    parts?: MessagePart[]
-    [key: string]: unknown
-}
-
 interface ChatPanelProps {
     isVisible: boolean
     onToggleVisibility: () => void
@@ -92,22 +77,10 @@ const MAX_CONTINUATION_RETRY_COUNT = 2 // Limit for truncation continuation retr
  * Check if auto-resubmit should happen based on tool errors.
  * Only checks the LAST tool part (most recent tool call), not all tool parts.
  */
-function hasToolErrors(messages: ChatMessage[]): boolean {
+function hasToolErrors(messages: UIMessage[]): boolean {
     const lastMessage = messages[messages.length - 1]
-    if (!lastMessage || lastMessage.role !== "assistant") {
-        return false
-    }
-
-    const toolParts =
-        (lastMessage.parts as MessagePart[] | undefined)?.filter((part) =>
-            part.type?.startsWith("tool-"),
-        ) || []
-
-    if (toolParts.length === 0) {
-        return false
-    }
-
-    const lastToolPart = toolParts[toolParts.length - 1]
+    if (lastMessage?.role !== "assistant") return false
+    const lastToolPart = lastMessage.parts.filter(isToolUIPart).at(-1)
     return lastToolPart?.state === TOOL_ERROR_STATE
 }
 
@@ -478,9 +451,7 @@ export default function ChatPanel({
         sendAutomaticallyWhen: ({ messages }) => {
             const isInContinuationMode = partialXmlRef.current.length > 0
 
-            const shouldRetry = hasToolErrors(
-                messages as unknown as ChatMessage[],
-            )
+            const shouldRetry = hasToolErrors(messages)
 
             if (!shouldRetry) {
                 // No error, reset retry count and clear state
