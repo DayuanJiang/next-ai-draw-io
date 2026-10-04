@@ -22,16 +22,18 @@ function post(body: unknown): Request {
 }
 
 describe("POST /api/log-save", () => {
-    it.each(["drawio", "png", "svg", "xmlsvg"])(
-        "logs a save in %s format",
-        async (format) => {
-            const res = await logSave(
-                post({ filename: "diagram", format, sessionId: "s1" }),
-            )
-            expect(res.status).toBe(200)
-            expect(await res.json()).toEqual({ success: true, logged: true })
-        },
-    )
+    it.each([
+        "drawio",
+        "png",
+        "svg",
+        "xmlsvg",
+    ])("logs a save in %s format", async (format) => {
+        const res = await logSave(
+            post({ filename: "diagram", format, sessionId: "s1" }),
+        )
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ success: true, logged: true })
+    })
 
     it("rejects an unknown format", async () => {
         const res = await logSave(
