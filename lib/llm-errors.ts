@@ -36,7 +36,8 @@ export interface LLMError {
 // error can come as 403 or 429, a context or image error as a plain 400
 const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
     [
-        /context length|context window|maximum context|prompt is too long|input is too long|too many (?:input )?tokens/i,
+        // Not "too many tokens": that is Bedrock's throttling message
+        /context length|context window|maximum context|prompt is too long|input is too long|too many input tokens/i,
         "context_too_long",
     ],
     [
@@ -110,12 +111,19 @@ function problemDetail(body: string): string | undefined {
 /**
  * The error text for the chat stream: what went wrong with the provider as
  * JSON for the hint, or the text the model must read to fix a tool call.
+ * On the server's keys the provider's own text stays in the server log:
+ * it can name the server's account, role or internal hosts.
  */
-export function streamErrorText(error: unknown): string {
+export function streamErrorText(error: unknown, hideDetails = false): string {
     // The SDK passes an invalid tool call's error as a plain string
     if (typeof error === "string") return error
     if (isToolCallError(error)) return (error as Error).message
-    return JSON.stringify(classifyLLMError(error))
+    const classified = classifyLLMError(error)
+    if (hideDetails) {
+        console.error("[chat] Provider error:", error)
+        classified.message = "The provider returned an error."
+    }
+    return JSON.stringify(classified)
 }
 
 /**

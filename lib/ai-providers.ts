@@ -682,7 +682,8 @@ function createModel(
             // A custom base URL is usually a proxy that only has Chat
             // Completions; the official endpoint uses the Responses API,
             // which returns reasoning for the o-series and gpt-5 or later
-            return e.baseURL
+            return e.baseURL &&
+                e.baseURL !== PROVIDER_INFO.openai.defaultBaseUrl
                 ? openaiProvider.chat(modelId)
                 : openaiProvider(modelId)
         }
@@ -994,14 +995,28 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 provider === "gateway"
                     ? "AI_GATEWAY_BASE_URL"
                     : `${provider.toUpperCase()}_BASE_URL`
+            // A local default (SGLang's 127.0.0.1) only fills the settings
+            // form; the server must not call its own machine for it. With a
+            // user's key the OpenAI SDK would read the server's
+            // OPENAI_BASE_URL, so name the official endpoint.
+            const defaultUrl = PROVIDER_INFO[provider].defaultBaseUrl
+            const publicDefault = defaultUrl?.startsWith("https://")
+                ? defaultUrl
+                : undefined
             const baseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
                 resolveBaseUrlEnv(overrides, baseUrlEnv),
-                SDK_KNOWS_ENDPOINT.has(provider)
+                SDK_KNOWS_ENDPOINT.has(provider) &&
+                    !(provider === "openai" && overrides?.apiKey)
                     ? undefined
-                    : PROVIDER_INFO[provider].defaultBaseUrl,
+                    : publicDefault,
             )
+            if (!baseURL && !SDK_KNOWS_ENDPOINT.has(provider)) {
+                throw new Error(
+                    `${PROVIDER_INFO[provider].label} needs a base URL. Add it in the model settings.`,
+                )
+            }
             model = createModel(provider, modelId, {
                 apiKey,
                 baseURL,
@@ -1032,6 +1047,10 @@ export function usesServerCredentials(
     provider: ProviderName,
     overrides?: ClientOverrides,
 ): boolean {
+    // The desktop app's local server holds the user's own preset keys
+    if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
+    // Cleaned like getAIModel does: "/" means no base URL
+    const baseUrl = normalizeBaseUrl(overrides?.baseUrl ?? "")
     switch (provider) {
         case "bedrock":
             return !(overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey)
@@ -1044,7 +1063,7 @@ export function usesServerCredentials(
             // Only a server key costs money; a keyless local server or the
             // client's own server does not
             return (
-                !overrides?.baseUrl &&
+                !baseUrl &&
                 !overrides?.apiKey &&
                 !!(overrides?.apiKeyEnv || process.env.OLLAMA_API_KEY)
             )

@@ -76,6 +76,19 @@ async function getJson(
 }
 
 /**
+ * Where to list from without the user's base URL: where chat goes then. For
+ * Ollama that is the server's Ollama, else the SDK's local default; a local
+ * default in PROVIDER_INFO (SGLang's) only fills the settings form.
+ */
+function listFallbackUrl(provider: ProviderName): string {
+    if (provider === "ollama") {
+        return process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434/api"
+    }
+    const url = PROVIDER_INFO[provider].defaultBaseUrl
+    return url?.startsWith("https://") ? url : ""
+}
+
+/**
  * The provider's chat models, with tool support from the provider's own
  * data or else models.dev. Only the client's key is used, so the server's
  * keys never go to a URL the client chose.
@@ -85,9 +98,7 @@ export async function listProviderModels(
     { apiKey, baseUrl }: { apiKey?: string; baseUrl?: string },
     fetchFn: typeof fetch = fetch,
 ): Promise<ListedModel[]> {
-    const base = normalizeBaseUrl(
-        baseUrl || PROVIDER_INFO[provider].defaultBaseUrl || "",
-    )
+    const base = normalizeBaseUrl(baseUrl || listFallbackUrl(provider))
     const bearer: Record<string, string> = apiKey
         ? { Authorization: `Bearer ${apiKey}` }
         : {}
@@ -170,6 +181,11 @@ export async function listProviderModels(
             break
         }
         default: {
+            if (!base) {
+                throw new Error(
+                    `${PROVIDER_INFO[provider].label} needs a base URL to list its models.`,
+                )
+            }
             const data = await getJson(`${base}/models`, bearer, fetchFn)
             models = (data.data ?? [])
                 .map((m: { id: string }) => ({ id: m.id }))

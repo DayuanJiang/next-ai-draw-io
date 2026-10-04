@@ -74,6 +74,50 @@ describe("POST /api/validate-model", () => {
         expect(typeof data.responseTime).toBe("number")
     })
 
+    it("reports a model that did not answer in time", async () => {
+        // The 15 s timeout has fired: the SDK ends the stream with an
+        // abort part instead of throwing
+        const timedOut = AbortSignal.abort(
+            new DOMException("The operation timed out.", "TimeoutError"),
+        )
+        const timeout = vi
+            .spyOn(AbortSignal, "timeout")
+            .mockReturnValue(timedOut)
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => {
+                throw timedOut.reason
+            }),
+        )
+        try {
+            const data = await testGlm()
+            expect(data.valid).toBe(false)
+            expect(data.code).toBe("timeout")
+        } finally {
+            timeout.mockRestore()
+        }
+    })
+
+    it("does not run on the server's keys", async () => {
+        process.env.OLLAMA_API_KEY = "server-ollama-key"
+        try {
+            const res = await validateModel(
+                new Request("http://localhost/api/validate-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: "ollama",
+                        modelId: "any-cloud-model",
+                    }),
+                }),
+            )
+            expect(res.status).toBe(400)
+            expect((await res.json()).error).toMatch(/API key/)
+        } finally {
+            delete process.env.OLLAMA_API_KEY
+        }
+    })
+
     it("warns when the model answers without a tool call", async () => {
         streamReply({ role: "assistant", content: "OK" })
         const data = await testGlm()

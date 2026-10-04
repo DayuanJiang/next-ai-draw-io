@@ -2,14 +2,15 @@ import { streamText, tool } from "ai"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { checkAccessCode } from "@/lib/access-code"
-import { getAIModel } from "@/lib/ai-providers"
+import { getAIModel, usesServerCredentials } from "@/lib/ai-providers"
 import { classifyLLMError } from "@/lib/llm-errors"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
+import type { ProviderName } from "@/lib/types/model-config"
 
 export const runtime = "nodejs"
 
 interface ValidateRequest {
-    provider: string
+    provider: ProviderName
     apiKey: string
     baseUrl?: string
     modelId: string
@@ -93,6 +94,22 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
+        // The Test button checks the user's own provider. On the server's
+        // keys (Ollama Cloud without a key or URL) anyone could run any model.
+        if (
+            usesServerCredentials(provider, {
+                apiKey,
+                baseUrl,
+                awsAccessKeyId,
+                awsSecretAccessKey,
+                vertexApiKey,
+            })
+        ) {
+            return NextResponse.json(
+                { valid: false, error: "API key is required" },
+                { status: 400 },
+            )
+        }
 
         // The same model the chat would use. A client base URL makes it
         // refuse redirects to internal hosts.
@@ -130,6 +147,14 @@ export async function POST(req: Request) {
         let finishReason: string | undefined
         for await (const part of result.fullStream) {
             if (part.type === "error") throw part.error
+            // The timeout ends the stream with an abort part, not an error
+            if (part.type === "abort") {
+                const timeout = new Error(
+                    `The model did not answer within ${TEST_TIMEOUT_MS / 1000} s.`,
+                )
+                timeout.name = "TimeoutError"
+                throw timeout
+            }
             if (part.type === "tool-call") {
                 calledTool = true
                 break

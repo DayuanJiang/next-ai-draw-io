@@ -44,10 +44,12 @@ function loadSavedPort(): number | null {
 }
 
 /**
- * Remember the port the production server started on
+ * Remember the port of the first production launch. A later launch that
+ * found it taken keeps it remembered: the user's data lives under that
+ * origin, and the next launch goes back to it once it is free.
  */
 export function saveServerPort(port: number): void {
-    if (!app.isPackaged || port === loadSavedPort()) {
+    if (!app.isPackaged || loadSavedPort() !== null) {
         return
     }
     try {

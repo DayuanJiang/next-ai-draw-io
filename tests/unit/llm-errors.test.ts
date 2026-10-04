@@ -110,6 +110,14 @@ describe("classifyLLMError", () => {
         expect(classifyLLMError(error).code).toBe("model_not_found")
     })
 
+    it("reads Bedrock's token throttling as a rate limit", () => {
+        const error = apiError(
+            429,
+            "Too many tokens, please wait before trying again.",
+        )
+        expect(classifyLLMError(error).code).toBe("rate_limited")
+    })
+
     it("names a network error the SDK wrapped", () => {
         const error = new APICallError({
             message:
@@ -199,6 +207,19 @@ describe("streamErrorText", () => {
         for (const text of errors) {
             expect(text).toMatch(/^Invalid input for tool edit_diagram/)
         }
+    })
+
+    it("hides the provider's text on the server's keys", () => {
+        const error = apiError(
+            403,
+            "User: arn:aws:sts::123456789012:assumed-role/app/s is not authorized to perform: bedrock:InvokeModel",
+        )
+        const hidden = JSON.parse(streamErrorText(error, true))
+        expect(hidden.code).toBe("forbidden")
+        expect(hidden.message).not.toMatch(/arn:aws|123456789012/)
+        expect(JSON.parse(streamErrorText(error)).message).toMatch(
+            /not authorized/,
+        )
     })
 
     it("classifies a provider error", () => {

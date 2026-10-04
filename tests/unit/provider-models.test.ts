@@ -103,6 +103,29 @@ describe("listProviderModels", () => {
         ])
     })
 
+    it("lists Ollama from where chat goes without a base URL", async () => {
+        const { fn, calls } = answer({ models: [{ name: "llama3.2" }] })
+        process.env.OLLAMA_BASE_URL = "http://ollama.internal:11434"
+        try {
+            await listProviderModels("ollama", {}, fn)
+        } finally {
+            delete process.env.OLLAMA_BASE_URL
+        }
+        await listProviderModels("ollama", {}, fn)
+        expect(calls.map((c) => c.url)).toEqual([
+            "http://ollama.internal:11434/api/tags",
+            "http://127.0.0.1:11434/api/tags",
+        ])
+    })
+
+    it("does not use SGLang's local address as a default", async () => {
+        const { fn, calls } = answer({ data: [] })
+        await expect(
+            listProviderModels("sglang", { apiKey: "k" }, fn),
+        ).rejects.toThrow(/base URL/)
+        expect(calls).toHaveLength(0)
+    })
+
     it("turns a failed request into an error with its status", async () => {
         const { fn } = answer({ error: "bad key" }, 401)
         await expect(

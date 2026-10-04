@@ -87,6 +87,8 @@ async function startServer(): Promise<string> {
         HOSTNAME: "127.0.0.1",
         // Enable Node.js built-in proxy support for fetch (Node.js 24+)
         NODE_USE_ENV_PROXY: "1",
+        // The preset keys are the user's own, not a server's
+        NEXT_AI_DRAWIO_DESKTOP: "1",
     }
 
     // Keep requests to local model servers (e.g. Ollama) off the proxy

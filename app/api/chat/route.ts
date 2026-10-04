@@ -133,36 +133,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
         userId: userId,
     })
 
-    // === SERVER-SIDE QUOTA CHECK START ===
-    // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
-    const hasOwnApiKey = !!(
-        req.headers.get("x-ai-provider") &&
-        (req.headers.get("x-ai-api-key") ||
-            req.headers.get("x-aws-access-key-id") ||
-            req.headers.get("x-vertex-api-key"))
-    )
-
-    // Skip quota check if: quota disabled, user has own API key, or is anonymous
-    if (isQuotaEnabled() && !hasOwnApiKey && userId !== "anonymous") {
-        const quotaCheck = await checkAndIncrementRequest(userId, {
-            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
-            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
-            tpm: Number(process.env.TPM_LIMIT) || 20000,
-        })
-        if (!quotaCheck.allowed) {
-            return Response.json(
-                {
-                    error: quotaCheck.error,
-                    type: quotaCheck.type,
-                    used: quotaCheck.used,
-                    limit: quotaCheck.limit,
-                },
-                { status: 429 },
-            )
-        }
-    }
-    // === SERVER-SIDE QUOTA CHECK END ===
-
     // === FILE VALIDATION START ===
     const fileValidation = validateFileParts(messages)
     if (!fileValidation.valid) {
@@ -292,14 +262,41 @@ async function handleChatRequest(req: Request): Promise<Response> {
         )
     }
 
+    // === SERVER-SIDE QUOTA CHECK START ===
+    // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
+    // server's keys. Decided by the key actually used: a key header the
+    // provider never reads must not skip it.
+    const countsQuota =
+        isQuotaEnabled() && onServerCredentials && userId !== "anonymous"
+    if (countsQuota) {
+        const quotaCheck = await checkAndIncrementRequest(userId, {
+            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+            tpm: Number(process.env.TPM_LIMIT) || 20000,
+        })
+        if (!quotaCheck.allowed) {
+            return Response.json(
+                {
+                    error: quotaCheck.error,
+                    type: quotaCheck.type,
+                    used: quotaCheck.used,
+                    limit: quotaCheck.limit,
+                },
+                { status: 429 },
+            )
+        }
+    }
+    // === SERVER-SIDE QUOTA CHECK END ===
+
     // Retry once if the provider rejects the requested budget, or (newer
     // Claude models) the sampling or thinking settings
     const model = withOutputTokenLimitFallback(
         withDeprecatedParamsFallback(baseModel),
     )
 
-    // The user setting can raise the budget only on their own key (desktop users
-    // can still raise it themselves); on the server's keys it can only lower it
+    // The user setting can raise the budget only on their own key (in the
+    // desktop app every key is the user's); on the server's keys it can only
+    // lower it
     const maxOutputTokens = resolveMaxOutputTokens(
         req.headers.get("x-max-output-tokens"),
         onServerCredentials,
@@ -587,12 +584,7 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
             // Record token usage for server-side quota tracking (if enabled)
             // Use totalUsage (cumulative across all steps) instead of usage (final step only)
             // inputTokens already includes cache reads and writes in AI SDK 6
-            if (
-                isQuotaEnabled() &&
-                !hasOwnApiKey &&
-                userId !== "anonymous" &&
-                totalUsage
-            ) {
+            if (countsQuota && totalUsage) {
                 const totalTokens =
                     (totalUsage.inputTokens || 0) +
                     (totalUsage.outputTokens || 0)
@@ -724,7 +716,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
 
     const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
-        onError: streamErrorText,
+        onError: (error) => streamErrorText(error, onServerCredentials),
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage

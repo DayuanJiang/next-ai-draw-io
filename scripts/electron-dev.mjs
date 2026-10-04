@@ -146,7 +146,8 @@ function killProcess(proc) {
  * Start Next.js dev server with preset environment
  */
 function startNextServer(presetEnv) {
-    const env = { ...process.env }
+    // The preset keys are the user's own, not a server's
+    const env = { ...process.env, NEXT_AI_DRAWIO_DESKTOP: "1" }
 
     // Apply preset environment variables
     if (presetEnv) {

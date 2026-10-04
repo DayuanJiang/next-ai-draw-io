@@ -1,3 +1,4 @@
+import { createOpenAI } from "@ai-sdk/openai"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     getAIModel,
@@ -56,6 +57,9 @@ const ENV_KEYS = [
     "AI_PROVIDER",
     "AI_MODEL",
     "VALIDATION_MODEL",
+    "NEXT_AI_DRAWIO_DESKTOP",
+    "SGLANG_API_KEY",
+    "SGLANG_BASE_URL",
 ]
 const savedEnv: Record<string, string | undefined> = {}
 
@@ -270,5 +274,47 @@ describe("getValidationModel", () => {
         getValidationModel()
 
         expect(createOpenRouter).toHaveBeenCalledWith({ apiKey: "env-key" })
+    })
+})
+
+describe("whose keys a request uses", () => {
+    it("cleans the base URL like the request does", () => {
+        // "/" and a pasted path clean up to no base URL: the server's Ollama
+        process.env.OLLAMA_API_KEY = "server-ollama-key"
+        expect(usesServerCredentials("ollama", { baseUrl: "/" })).toBe(true)
+        expect(
+            usesServerCredentials("ollama", { baseUrl: "/chat/completions" }),
+        ).toBe(true)
+    })
+
+    it("counts the desktop app's keys as the user's own", () => {
+        // Electron passes the user's preset keys as server env vars
+        process.env.NEXT_AI_DRAWIO_DESKTOP = "1"
+        expect(usesServerCredentials("openai", {})).toBe(false)
+    })
+
+    it("sends a user's OpenAI key to the official endpoint", () => {
+        // The SDK would otherwise read the server's OPENAI_BASE_URL
+        process.env.OPENAI_BASE_URL = "https://operator-proxy.example.com/v1"
+        getAIModel({
+            provider: "openai",
+            apiKey: "user-key",
+            modelId: "gpt-5.5",
+        })
+        expect(createOpenAI).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                apiKey: "user-key",
+                baseURL: "https://api.openai.com/v1",
+            }),
+        )
+        // Still the Responses API, like without a base URL
+        const provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
+        expect(provider.chat).not.toHaveBeenCalled()
+    })
+
+    it("needs a base URL for SGLang instead of using 127.0.0.1", () => {
+        expect(() =>
+            getAIModel({ provider: "sglang", apiKey: "k", modelId: "m" }),
+        ).toThrow(/base URL/)
     })
 })
