@@ -122,25 +122,45 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     atlascloud: "openai",
 }
 
+/** How a provider lists its models (see lib/provider-models.ts) */
+export type ModelListStyle =
+    | "openai"
+    | "anthropic"
+    | "google"
+    | "ollama"
+    | "openrouter"
+    | "aihubmix"
+    | "gateway"
+
 // Provider metadata. apiKeyUrl is the page where users create a key.
+// modelList is missing where a key alone cannot list the models (Bedrock,
+// Vertex, Azure) or the list is not reliable (Doubao, MiniMax).
 export const PROVIDER_INFO: Record<
     ProviderName,
-    { label: string; defaultBaseUrl?: string; apiKeyUrl?: string }
+    {
+        label: string
+        defaultBaseUrl?: string
+        apiKeyUrl?: string
+        modelList?: ModelListStyle
+    }
 > = {
     openai: {
         label: "OpenAI",
         defaultBaseUrl: "https://api.openai.com/v1",
         apiKeyUrl: "https://platform.openai.com/api-keys",
+        modelList: "openai",
     },
     anthropic: {
         label: "Anthropic",
         defaultBaseUrl: "https://api.anthropic.com/v1",
         apiKeyUrl: "https://platform.claude.com/settings/keys",
+        modelList: "anthropic",
     },
     google: {
         label: "Google",
         defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
         apiKeyUrl: "https://aistudio.google.com/apikey",
+        modelList: "google",
     },
     vertexai: { label: "Google Vertex AI" },
     azure: {
@@ -152,35 +172,42 @@ export const PROVIDER_INFO: Record<
         label: "Ollama",
         defaultBaseUrl: "https://ollama.com/api",
         apiKeyUrl: "https://ollama.com/settings/keys",
+        modelList: "ollama",
     },
     openrouter: {
         label: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
         apiKeyUrl: "https://openrouter.ai/keys",
+        modelList: "openrouter",
     },
     aihubmix: {
         label: "AIHubMix",
         defaultBaseUrl: "https://aihubmix.com/v1",
         apiKeyUrl: "https://aihubmix.com/token",
+        modelList: "aihubmix",
     },
     deepseek: {
         label: "DeepSeek",
         defaultBaseUrl: "https://api.deepseek.com/v1",
         apiKeyUrl: "https://platform.deepseek.com/api_keys",
+        modelList: "openai",
     },
     siliconflow: {
         label: "SiliconFlow",
         defaultBaseUrl: "https://api.siliconflow.cn/v1",
         apiKeyUrl: "https://cloud.siliconflow.cn/account/ak",
+        modelList: "openai",
     },
     sglang: {
         label: "SGLang",
         defaultBaseUrl: "http://127.0.0.1:8000/v1",
+        modelList: "openai",
     },
     gateway: {
         label: "AI Gateway",
         defaultBaseUrl: "https://ai-gateway.vercel.sh/v1/ai",
         apiKeyUrl: "https://vercel.com/ai-gateway",
+        modelList: "gateway",
     },
     edgeone: { label: "EdgeOne Pages" },
     doubao: {
@@ -193,26 +220,31 @@ export const PROVIDER_INFO: Record<
         label: "ModelScope",
         defaultBaseUrl: "https://api-inference.modelscope.cn/v1",
         apiKeyUrl: "https://modelscope.cn/my/myaccesstoken",
+        modelList: "openai",
     },
     glm: {
         label: "GLM (Zhipu)",
         defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
         apiKeyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
+        modelList: "openai",
     },
     qwen: {
         label: "Qwen (Alibaba)",
         defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
         apiKeyUrl: "https://bailian.console.aliyun.com/?tab=model#/api-key",
+        modelList: "openai",
     },
     qiniu: {
         label: "Qiniu",
         defaultBaseUrl: "https://api.qnaigc.com/v1",
         apiKeyUrl: "https://www.qiniu.com/ai/models",
+        modelList: "openai",
     },
     kimi: {
         label: "Kimi (Moonshot)",
         defaultBaseUrl: "https://api.moonshot.cn/v1",
         apiKeyUrl: "https://platform.moonshot.cn/console/api-keys",
+        modelList: "openai",
     },
     minimax: {
         label: "MiniMax",
@@ -224,16 +256,19 @@ export const PROVIDER_INFO: Record<
         label: "Novita AI",
         defaultBaseUrl: "https://api.novita.ai/openai",
         apiKeyUrl: "https://novita.ai/dashboard/key",
+        modelList: "openai",
     },
     mimo: {
         label: "MiMo (Xiaomi)",
         defaultBaseUrl: "https://api.xiaomimimo.com/v1",
         apiKeyUrl: "https://platform.xiaomimimo.com/#/console/api-keys",
+        modelList: "openai",
     },
     atlascloud: {
         label: "Atlas Cloud",
         defaultBaseUrl: "https://api.atlascloud.ai/v1",
         apiKeyUrl: "https://www.atlascloud.ai/console/api-keys",
+        modelList: "openai",
     },
 }
 

@@ -1,0 +1,184 @@
+import { createGateway } from "ai"
+import { getModelInfo } from "@/lib/model-catalog"
+import {
+    normalizeBaseUrl,
+    PROVIDER_INFO,
+    type ProviderName,
+} from "@/lib/types/model-config"
+
+/** A model a provider offers. tools is false when it cannot call tools. */
+export interface ListedModel {
+    id: string
+    tools?: boolean
+}
+
+export const AIHUBMIX_MODELS_ENDPOINT = "https://aihubmix.com/api/v1/models"
+
+export function canListModels(provider: ProviderName): boolean {
+    return (
+        Object.hasOwn(PROVIDER_INFO, provider) &&
+        !!PROVIDER_INFO[provider].modelList
+    )
+}
+
+// Models in OpenAI-style lists that are not for chat
+const NON_CHAT =
+    /(?:^|[-/_])(?:embed(?:ding)?s?|whisper|tts|transcribe|dall-e|moderation|rerank|realtime|sora)(?:$|[-/_])|gpt-image/i
+
+const NON_CHAT_AIHUBMIX_TYPES = new Set([
+    "embedding",
+    "image_generation",
+    "rerank",
+    "transcription",
+    "tts",
+    "video",
+])
+
+/** Chat model ids from AIHubMix's public model list */
+export function extractAihubmixModelIds(payload: unknown): string[] {
+    const data = (payload as { data?: unknown })?.data
+    if (!Array.isArray(data)) return []
+    const ids = new Set<string>()
+    for (const item of data) {
+        const record = item as { model_id?: unknown; types?: unknown }
+        if (typeof record?.model_id !== "string" || !record.model_id.trim()) {
+            continue
+        }
+        const types = new Set(
+            typeof record.types === "string"
+                ? record.types.split(",").map((t) => t.trim())
+                : [],
+        )
+        if (!types.has("llm")) continue
+        if ([...NON_CHAT_AIHUBMIX_TYPES].some((t) => types.has(t))) continue
+        ids.add(record.model_id.trim())
+    }
+    return [...ids]
+}
+
+/** GET a JSON list; a failed request carries its status for the error hint */
+async function getJson(
+    url: string,
+    headers: Record<string, string>,
+    fetchFn: typeof fetch,
+): Promise<any> {
+    const response = await fetchFn(url, {
+        headers,
+        signal: AbortSignal.timeout(15_000),
+    })
+    if (!response.ok) {
+        throw Object.assign(
+            new Error(`The model list request failed (${response.status})`),
+            { statusCode: response.status },
+        )
+    }
+    return response.json()
+}
+
+/**
+ * The provider's chat models, with tool support from the provider's own
+ * data or else models.dev. Only the client's key is used, so the server's
+ * keys never go to a URL the client chose.
+ */
+export async function listProviderModels(
+    provider: ProviderName,
+    { apiKey, baseUrl }: { apiKey?: string; baseUrl?: string },
+    fetchFn: typeof fetch = fetch,
+): Promise<ListedModel[]> {
+    const base = normalizeBaseUrl(
+        baseUrl || PROVIDER_INFO[provider].defaultBaseUrl || "",
+    )
+    const bearer: Record<string, string> = apiKey
+        ? { Authorization: `Bearer ${apiKey}` }
+        : {}
+    let models: ListedModel[]
+
+    // AIHubMix has a public list, unless the user points to another
+    // endpoint, which is OpenAI-compatible
+    const style =
+        provider === "aihubmix" &&
+        baseUrl &&
+        !/^https:\/\/aihubmix\.com(\/v1)?$/.test(base)
+            ? "openai"
+            : PROVIDER_INFO[provider].modelList
+
+    switch (style) {
+        case "anthropic": {
+            const data = await getJson(
+                `${base}/models?limit=1000`,
+                {
+                    "x-api-key": apiKey ?? "",
+                    "anthropic-version": "2023-06-01",
+                },
+                fetchFn,
+            )
+            models = (data.data ?? []).map((m: { id: string }) => ({
+                id: m.id,
+            }))
+            break
+        }
+        case "google": {
+            // The key goes in a header: in the URL it would end up in logs
+            const data = await getJson(
+                `${base}/models?pageSize=1000`,
+                { "x-goog-api-key": apiKey ?? "" },
+                fetchFn,
+            )
+            models = (data.models ?? [])
+                .filter((m: { supportedGenerationMethods?: string[] }) =>
+                    m.supportedGenerationMethods?.includes("generateContent"),
+                )
+                .map((m: { name: string }) => ({
+                    id: m.name.replace(/^models\//, ""),
+                }))
+            break
+        }
+        case "ollama": {
+            const api = base.endsWith("/api") ? base : `${base}/api`
+            const data = await getJson(`${api}/tags`, bearer, fetchFn)
+            models = (data.models ?? []).map((m: { name: string }) => ({
+                id: m.name,
+            }))
+            break
+        }
+        case "openrouter": {
+            const data = await getJson(`${base}/models`, bearer, fetchFn)
+            models = (data.data ?? []).map(
+                (m: { id: string; supported_parameters?: string[] }) => ({
+                    id: m.id,
+                    ...(m.supported_parameters && {
+                        tools: m.supported_parameters.includes("tools"),
+                    }),
+                }),
+            )
+            break
+        }
+        case "gateway": {
+            const { models: entries } = await createGateway({
+                ...(apiKey && { apiKey }),
+                ...(baseUrl && { baseURL: base }),
+                fetch: fetchFn,
+            }).getAvailableModels()
+            models = entries
+                .filter((m) => !m.modelType || m.modelType === "language")
+                .map((m) => ({ id: m.id }))
+            break
+        }
+        case "aihubmix": {
+            const data = await getJson(AIHUBMIX_MODELS_ENDPOINT, {}, fetchFn)
+            models = extractAihubmixModelIds(data).map((id) => ({ id }))
+            break
+        }
+        default: {
+            const data = await getJson(`${base}/models`, bearer, fetchFn)
+            models = (data.data ?? [])
+                .map((m: { id: string }) => ({ id: m.id }))
+                .filter((m: ListedModel) => !NON_CHAT.test(m.id))
+        }
+    }
+
+    return models.map((m) => ({
+        ...m,
+        tools: m.tools ?? getModelInfo(provider, m.id)?.tools,
+    }))
+}

@@ -9,6 +9,7 @@ import {
     Key,
     Loader2,
     Plus,
+    RefreshCw,
     Server,
     Settings2,
     Sparkles,
@@ -34,6 +35,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
+    Command,
+    CommandEmpty,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command"
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -42,6 +50,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Select,
@@ -55,6 +68,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
+import type { ListedModel } from "@/lib/provider-models"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type {
     ModelConfig,
@@ -146,14 +160,17 @@ export function ModelConfigDialog({
     // Bumped on every credential edit so a running test can tell that its
     // results belong to the old credentials
     const credentialsVersionRef = useRef(0)
-    const [dynamicSuggestedModels, setDynamicSuggestedModels] = useState<
-        Partial<Record<ProviderName, string[]>>
+    // Models fetched from the provider, per provider config
+    const [fetchedModels, setFetchedModels] = useState<
+        Record<string, ListedModel[]>
     >({})
-    const [loadedSuggestedProviders, setLoadedSuggestedProviders] = useState<
-        Partial<Record<ProviderName, boolean>>
-    >({})
-    const [loadingSuggestedProvider, setLoadingSuggestedProvider] =
-        useState<ProviderName | null>(null)
+    const [fetchingModels, setFetchingModels] = useState(false)
+    const [fetchModelsError, setFetchModelsError] = useState("")
+    const [modelPickerOpen, setModelPickerOpen] = useState(false)
+    // models.dev data for hints, loaded with the dialog (it is ~180 KB)
+    const [getModelInfo, setGetModelInfo] = useState<
+        typeof import("@/lib/model-catalog").getModelInfo | null
+    >(null)
 
     const {
         config,
@@ -185,73 +202,74 @@ export function ModelConfigDialog({
     }, [])
 
     useEffect(() => {
-        if (
-            !open ||
-            selectedProvider?.provider !== "aihubmix" ||
-            loadedSuggestedProviders.aihubmix
-        ) {
-            return
-        }
+        if (!open || getModelInfo) return
+        import("@/lib/model-catalog").then((catalog) =>
+            setGetModelInfo(() => catalog.getModelInfo),
+        )
+    }, [open, getModelInfo])
 
-        let cancelled = false
-        setLoadingSuggestedProvider("aihubmix")
-
-        fetch(getApiEndpoint("/api/aihubmix-models"))
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Failed to load models: ${response.status}`)
-                }
-                return response.json()
-            })
-            .then((data: { models?: unknown }) => {
-                if (cancelled || !Array.isArray(data.models)) {
-                    return
-                }
-
-                const models = data.models.filter(
-                    (model): model is string => typeof model === "string",
-                )
-                if (models.length > 0) {
-                    setDynamicSuggestedModels((current) => ({
-                        ...current,
-                        aihubmix: models,
-                    }))
-                }
-            })
-            .catch((error) => {
-                console.warn("Failed to load AIHubMix models:", error)
-            })
-            .finally(() => {
-                if (cancelled) {
-                    return
-                }
-
-                setLoadedSuggestedProviders((current) => ({
+    const handleFetchModels = async () => {
+        if (!selectedProvider) return
+        const providerId = selectedProvider.id
+        setFetchingModels(true)
+        setFetchModelsError("")
+        try {
+            const response = await fetch(
+                getApiEndpoint("/api/provider-models"),
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-code":
+                            localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+                    },
+                    body: JSON.stringify({
+                        provider: selectedProvider.provider,
+                        apiKey: selectedProvider.apiKey,
+                        baseUrl: selectedProvider.baseUrl,
+                    }),
+                },
+            )
+            const data = await response.json().catch(() => ({}))
+            if (Array.isArray(data.models)) {
+                setFetchedModels((current) => ({
                     ...current,
-                    aihubmix: true,
+                    [providerId]: data.models,
                 }))
-                setLoadingSuggestedProvider(null)
-            })
-
-        return () => {
-            cancelled = true
+                setModelPickerOpen(true)
+            } else {
+                const hints = dict.errors.llm as Record<string, string>
+                setFetchModelsError(
+                    [hints[data.code], data.error].filter(Boolean).join(" ") ||
+                        `Request failed (${response.status})`,
+                )
+            }
+        } catch {
+            setFetchModelsError(dict.errors.networkError)
+        } finally {
+            setFetchingModels(false)
         }
-    }, [open, selectedProvider?.provider, loadedSuggestedProviders.aihubmix])
+    }
 
-    // Get suggested models for current provider
-    const suggestedModels = selectedProvider
-        ? dynamicSuggestedModels[selectedProvider.provider] ||
-          SUGGESTED_MODELS[selectedProvider.provider] ||
-          []
+    // The provider's own list once fetched, else the suggested models
+    const suggestedModels: ListedModel[] = selectedProvider
+        ? fetchedModels[selectedProvider.id] ||
+          (SUGGESTED_MODELS[selectedProvider.provider] || []).map((id) => ({
+              id,
+          }))
         : []
-    const isLoadingSuggestedModels =
-        selectedProvider?.provider === loadingSuggestedProvider
+    // Tool calls are what drawing needs: false when known to be missing
+    const supportsTools = (model: ListedModel) =>
+        selectedProvider
+            ? (model.tools ??
+              getModelInfo?.(selectedProvider.provider, model.id)?.tools)
+            : undefined
 
     // Filter out already-added models from suggestions
     const existingModelIds =
         selectedProvider?.models.map((m) => m.modelId) || []
     const availableSuggestions = suggestedModels.filter(
-        (modelId) => !existingModelIds.includes(modelId),
+        (model) => !existingModelIds.includes(model.id),
     )
     const emptyStateSuggestions = selectedProvider
         ? (SUGGESTED_MODELS[selectedProvider.provider] || [])
@@ -286,6 +304,8 @@ export function ModelConfigDialog({
             credentialsVersionRef.current++
             setValidationStatus("idle")
             setValidatingModelIds(new Set())
+            setFetchedModels(({ [selectedProviderId]: _, ...rest }) => rest)
+            setFetchModelsError("")
             updates.validated = false
             updates.models = selectedProvider.models.map((m) => ({
                 ...m,
@@ -908,58 +928,132 @@ export function ModelConfigDialog({
                                                 >
                                                     <Plus className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Select
-                                                    value=""
-                                                    onValueChange={(value) => {
-                                                        if (value) {
-                                                            handleAddModel(
-                                                                value,
-                                                            )
+                                                {PROVIDER_INFO[
+                                                    selectedProvider.provider
+                                                ].modelList && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 rounded-lg"
+                                                        onClick={
+                                                            handleFetchModels
                                                         }
-                                                    }}
-                                                    disabled={
-                                                        isLoadingSuggestedModels ||
-                                                        availableSuggestions.length ===
-                                                            0
-                                                    }
-                                                >
-                                                    <SelectTrigger className="w-28 h-8 rounded-lg hover:bg-interactive-hover">
-                                                        {isLoadingSuggestedModels ? (
+                                                        disabled={
+                                                            fetchingModels
+                                                        }
+                                                        title={
+                                                            dict.modelConfig
+                                                                .fetchModels
+                                                        }
+                                                        aria-label={
+                                                            dict.modelConfig
+                                                                .fetchModels
+                                                        }
+                                                    >
+                                                        {fetchingModels ? (
                                                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                         ) : (
-                                                            <span className="text-xs">
-                                                                {availableSuggestions.length ===
+                                                            <RefreshCw className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
+                                                )}
+                                                <Popover
+                                                    open={modelPickerOpen}
+                                                    onOpenChange={
+                                                        setModelPickerOpen
+                                                    }
+                                                >
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-28 h-8 rounded-lg text-xs"
+                                                            disabled={
+                                                                availableSuggestions.length ===
                                                                 0
-                                                                    ? dict
-                                                                          .modelConfig
-                                                                          .allAdded
-                                                                    : dict
-                                                                          .modelConfig
-                                                                          .suggested}
-                                                            </span>
-                                                        )}
-                                                    </SelectTrigger>
-                                                    <SelectContent className="max-h-72">
-                                                        {availableSuggestions.map(
-                                                            (modelId) => (
-                                                                <SelectItem
-                                                                    key={
-                                                                        modelId
+                                                            }
+                                                        >
+                                                            {availableSuggestions.length ===
+                                                            0
+                                                                ? dict
+                                                                      .modelConfig
+                                                                      .allAdded
+                                                                : dict
+                                                                      .modelConfig
+                                                                      .suggested}
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent
+                                                        className="w-80 p-0"
+                                                        align="end"
+                                                    >
+                                                        <Command>
+                                                            <CommandInput
+                                                                placeholder={
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .searchModels
+                                                                }
+                                                            />
+                                                            <CommandList className="max-h-72">
+                                                                <CommandEmpty>
+                                                                    {
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .noModelsFound
                                                                     }
-                                                                    value={
-                                                                        modelId
-                                                                    }
-                                                                    className="font-mono text-xs"
-                                                                >
-                                                                    {modelId}
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                                </CommandEmpty>
+                                                                {availableSuggestions.map(
+                                                                    (model) => (
+                                                                        <CommandItem
+                                                                            key={
+                                                                                model.id
+                                                                            }
+                                                                            value={
+                                                                                model.id
+                                                                            }
+                                                                            onSelect={() => {
+                                                                                handleAddModel(
+                                                                                    model.id,
+                                                                                )
+                                                                                setModelPickerOpen(
+                                                                                    false,
+                                                                                )
+                                                                            }}
+                                                                            className="font-mono text-xs"
+                                                                        >
+                                                                            <span className="truncate">
+                                                                                {
+                                                                                    model.id
+                                                                                }
+                                                                            </span>
+                                                                            {supportsTools(
+                                                                                model,
+                                                                            ) ===
+                                                                                false && (
+                                                                                <span className="ml-auto shrink-0 font-sans text-[10px] text-amber-600 dark:text-amber-400">
+                                                                                    {
+                                                                                        dict
+                                                                                            .modelConfig
+                                                                                            .noTools
+                                                                                    }
+                                                                                </span>
+                                                                            )}
+                                                                        </CommandItem>
+                                                                    ),
+                                                                )}
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
                                         }
                                     >
+                                        {fetchModelsError && (
+                                            <p className="mb-2 text-xs text-destructive">
+                                                {fetchModelsError}
+                                            </p>
+                                        )}
                                         {/* Model List */}
                                         <div className="rounded-2xl border border-border-subtle bg-surface-2/30 overflow-hidden min-h-[120px]">
                                             {selectedProvider.models.length ===
@@ -1243,6 +1337,20 @@ export function ModelConfigDialog({
                                                                         <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
                                                                             {
                                                                                 model.validationError
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                {!model.validationWarning &&
+                                                                    getModelInfo?.(
+                                                                        selectedProvider.provider,
+                                                                        model.modelId,
+                                                                    )?.tools ===
+                                                                        false && (
+                                                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 px-3 pb-2 pl-14">
+                                                                            {
+                                                                                dict
+                                                                                    .modelConfig
+                                                                                    .mayNotDraw
                                                                             }
                                                                         </p>
                                                                     )}
