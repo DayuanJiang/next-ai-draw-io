@@ -275,6 +275,10 @@ export const PROVIDER_INFO: Record<
 // Suggested models per provider for quick add
 export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     openai: [
+        "gpt-6.1-sol",
+        "gpt-6-sol",
+        "gpt-6-luna",
+        "gpt-6-astra",
         "gpt-5.5-pro",
         "gpt-5.5",
         "gpt-5.4-pro",
@@ -288,7 +292,13 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "gpt-4o-mini",
     ],
     anthropic: [
-        // Claude 4.8 / 4.7 / 4.6 series (latest, dateless pinned IDs)
+        // Claude 5 series (latest)
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-fable-5-1",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        // Claude 4.8 / 4.7 / 4.6 series (dateless pinned IDs)
         "claude-opus-4-8",
         "claude-sonnet-4-6",
         "claude-haiku-4-5",
@@ -366,10 +376,15 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     ],
     openrouter: [
         // Anthropic
+        "anthropic/claude-opus-5.5",
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-fable-5.1",
         "anthropic/claude-opus-4.8",
         "anthropic/claude-sonnet-4.6",
         "anthropic/claude-haiku-4.5",
         // OpenAI
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-luna",
         "openai/gpt-5.5",
         "openai/gpt-5.4",
         "openai/gpt-5.4-mini",
@@ -458,6 +473,10 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "default",
     ],
     gateway: [
+        "anthropic/claude-opus-5.5",
+        "anthropic/claude-sonnet-5.5",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-luna",
         "openai/gpt-5.5",
         "anthropic/claude-opus-4.7",
         "google/gemini-3.1-pro-preview",

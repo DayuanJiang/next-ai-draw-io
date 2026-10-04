@@ -244,8 +244,8 @@ function googleSamplingSettings(): { topK?: number; topP?: number } {
  * Supports various AI SDK providers with their unique configuration options
  *
  * Environment variables:
- * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (minimal/low/medium/high) - for o1/o3/o4/gpt-5
- * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (auto/detailed) - auto-enabled for o1/o3/o4/gpt-5
+ * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (minimal/low/medium/high) - for the o-series and gpt-5 or later
+ * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (auto/detailed) - auto-enabled for the o-series and gpt-5 or later
  * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens (1024-64000)
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
  * - GOOGLE_THINKING_BUDGET: Google Gemini 2.5 thinking budget in tokens (1024-100000)
@@ -269,14 +269,9 @@ function buildProviderOptions(
             const reasoningEffort = process.env.OPENAI_REASONING_EFFORT
             const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY
 
-            // OpenAI reasoning models (o1, o3, o4, gpt-5) need reasoningSummary to return thoughts
-            if (
-                modelId &&
-                (modelId.includes("o1") ||
-                    modelId.includes("o3") ||
-                    modelId.includes("o4") ||
-                    modelId.includes("gpt-5"))
-            ) {
+            // Reasoning models (the o-series, gpt-5 and later) need
+            // reasoningSummary to return thoughts
+            if (modelId && /^(o\d|gpt-([5-9]|[1-9]\d))/.test(modelId)) {
                 options.openai = {
                     // Auto-enable reasoning summary for reasoning models
                     // Use 'auto' as default since not all models support 'detailed'
@@ -686,7 +681,7 @@ function createModel(
             const openaiProvider = createOpenAI(opts)
             // A custom base URL is usually a proxy that only has Chat
             // Completions; the official endpoint uses the Responses API,
-            // which returns reasoning for gpt-5 and the o-series
+            // which returns reasoning for the o-series and gpt-5 or later
             return e.baseURL
                 ? openaiProvider.chat(modelId)
                 : openaiProvider(modelId)
