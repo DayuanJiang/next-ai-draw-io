@@ -282,6 +282,8 @@ export function ModelConfigDialog({
         const newProvider = addProvider(providerType)
         setSelectedProviderId(newProvider.id)
         setValidationStatus("idle")
+        setFetchModelsError("")
+        setModelPickerOpen(false)
     }
 
     // Handle provider field updates
@@ -653,6 +655,10 @@ export function ModelConfigDialog({
                                                 )
                                                 setValidationStatus("idle")
                                                 setShowApiKey(false)
+                                                // These belong to the
+                                                // provider shown before
+                                                setFetchModelsError("")
+                                                setModelPickerOpen(false)
                                             }}
                                             className={cn(
                                                 "group flex items-center gap-3 px-3 py-2.5 rounded-xl w-full",
@@ -957,7 +963,11 @@ export function ModelConfigDialog({
                                                         )}
                                                     </Button>
                                                 )}
+                                                {/* modal: the dialog blocks the
+                                                wheel outside itself, and the
+                                                list is rendered outside it */}
                                                 <Popover
+                                                    modal
                                                     open={modelPickerOpen}
                                                     onOpenChange={
                                                         setModelPickerOpen
@@ -1309,6 +1319,10 @@ export function ModelConfigDialog({
                                                                                         validated:
                                                                                             undefined,
                                                                                         validationError:
+                                                                                            undefined,
+                                                                                        validationWarning:
+                                                                                            undefined,
+                                                                                        responseTime:
                                                                                             undefined,
                                                                                     },
                                                                                 )

@@ -41,6 +41,7 @@ import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { cn, formatXML, isRealDiagram } from "@/lib/utils"
+import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { BLANK_MXFILE, hasCells } from "@/packages/mcp-server/src/pages.ts"
 import type { ValidationState } from "./chat/ValidationCard"
 import {
@@ -363,6 +364,13 @@ export default function ChatPanel({
             await handleToolCall({ toolCall }, addToolOutput)
         },
         onError: (error) => {
+            // An edit still streaming when the request failed never reaches
+            // the tool handler: undo its preview. The first stored original
+            // is the diagram before any of them.
+            const [originalXml] = editDiagramOriginalXmlRef.current.values()
+            if (originalXml) onDisplayChart(originalXml, true)
+            editDiagramOriginalXmlRef.current.clear()
+
             // Server errors are JSON: a quota limit ({type: request, token or
             // tpm}), a provider error ({type: "provider", code, message}) or
             // {error}. The SDK puts the response body in error.message.
@@ -778,8 +786,9 @@ export default function ChatPanel({
                     files.length === 1 ? files[0].name : undefined,
                 )
                 if (cached) {
-                    // Add user message and fake assistant response to messages
-                    // The chat-message-display useEffect will handle displaying the diagram
+                    // Add the user message and a finished display_diagram
+                    // answer, and load its diagram here: these messages never
+                    // reach the tool handler
                     const toolCallId = `cached-${Date.now()}`
 
                     // Build user message text including any file content
@@ -816,6 +825,11 @@ export default function ChatPanel({
                         0,
                         chartXMLRef.current || BLANK_MXFILE,
                     )
+                    const prepared = prepareNewDiagram(cached.xml, {
+                        pageId: "page-1",
+                        pageName: "Page-1",
+                    })
+                    if (prepared.ok) onDisplayChart(prepared.xml, true)
                     setInput("")
                     sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
                     setFiles([])

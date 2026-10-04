@@ -45,6 +45,60 @@ const cell = (id: string, label: string, x: number) =>
 const page = (id: string, cells: string) =>
     `<diagram id="${id}" name="${id}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
 
+const sse = (events: object[]) =>
+    events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")
+const EDIT_GAMMA = {
+    operations: [
+        { operation: "add", cell_id: "c", new_xml: cell("c", "Gamma", 400) },
+    ],
+}
+const editStart = (id: string) => ({
+    type: "tool-input-start",
+    toolCallId: id,
+    toolName: "edit_diagram",
+})
+const editDeltas = (id: string) =>
+    (JSON.stringify(EDIT_GAMMA).match(/[\s\S]{1,40}/g) ?? []).map((d) => ({
+        type: "tool-input-delta",
+        toolCallId: id,
+        inputTextDelta: d,
+    }))
+
+/**
+ * Answer each chat request with the next reply. Each string in a reply is
+ * one network chunk, sent 300 ms apart, so the throttled UI renders between
+ * chunks like with a real model.
+ */
+async function chunkedReplies(p: Page, replies: string[][]) {
+    await p.addInitScript((replies) => {
+        const realFetch = window.fetch
+        let n = 0
+        window.fetch = async (input, init) => {
+            const url =
+                typeof input === "string" ? input : (input as Request).url
+            if (!url.endsWith("/api/chat")) return realFetch(input, init)
+            const chunks = replies[n++] ?? [
+                'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
+            ]
+            const body = new ReadableStream({
+                async start(controller) {
+                    for (const chunk of chunks) {
+                        controller.enqueue(new TextEncoder().encode(chunk))
+                        await new Promise((r) => setTimeout(r, 300))
+                    }
+                    controller.close()
+                },
+            })
+            return new Response(body, {
+                headers: { "content-type": "text/event-stream" },
+            })
+        }
+    }, replies)
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    return p.frameLocator("iframe")
+}
+
 const TWO_PAGES = `<mxfile>${page("First", cell("a", "Old A", 40))}${page("Second", cell("b", "Old B", 40))}</mxfile>`
 // Bare cells with a duplicate id and an unescaped &, which get fixed, and
 // a linked cell whose label lives on its UserObject wrapper
@@ -137,6 +191,26 @@ test("edit_diagram applies all operations or none", async ({ page: p }) => {
     await expect(canvas.getByText("Broken", { exact: true })).toHaveCount(0)
 })
 
+test("a built-in example draws its diagram", async ({ page: p }) => {
+    // Answered in the browser from lib/cached-responses.ts, no request
+    let requests = 0
+    await p.route("**/api/chat", (route) => {
+        requests++
+        return route.fulfill({ status: 500, body: "{}" })
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(
+        p,
+        "Give me a **animated connector** diagram of transformer's architecture",
+    )
+    await waitForCompleteCount(p, 1)
+    await expect(
+        p.frameLocator("iframe").getByText("Transformer Architecture"),
+    ).toBeVisible({ timeout: 15000 })
+    expect(requests).toBe(0)
+})
+
 test("the thinking header is in the page language", async ({ page: p }) => {
     const events = [
         { type: "start" },
@@ -198,38 +272,14 @@ test("an edit right after a broken edit call starts from the real diagram", asyn
     // Seen with Claude Opus 5.5: the first edit call had invalid JSON, the
     // server rejected it, and the model sent the same edit again at once.
     // The second edit must not see the first one's streamed preview.
-    const sse = (events: object[]) =>
-        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")
-    const edit = {
-        operations: [
-            {
-                operation: "add",
-                cell_id: "c",
-                new_xml: cell("c", "Gamma", 400),
-            },
-        ],
-    }
-    const deltas = (id: string) =>
-        (JSON.stringify(edit).match(/[\s\S]{1,40}/g) ?? []).map((d) => ({
-            type: "tool-input-delta",
-            toolCallId: id,
-            inputTextDelta: d,
-        }))
-    const start = (id: string) => ({
-        type: "tool-input-start",
-        toolCallId: id,
-        toolName: "edit_diagram",
-    })
-    // Each inner array is sent as one network chunk, 300 ms apart, so the
-    // throttled UI renders between chunks like with a real model
     const replies = [
         [streamedToolCall("display_diagram", { xml: cell("a", "Alpha", 40) })],
         [
             sse([
                 { type: "start" },
                 { type: "start-step" },
-                start("e1"),
-                ...deltas("e1"),
+                editStart("e1"),
+                ...editDeltas("e1"),
             ]),
             sse([
                 {
@@ -246,48 +296,22 @@ test("an edit right after a broken edit call starts from the real diagram", asyn
                 },
                 { type: "finish-step" },
                 { type: "start-step" },
-                start("e2"),
-                ...deltas("e2"),
+                editStart("e2"),
+                ...editDeltas("e2"),
             ]),
             `${sse([
                 {
                     type: "tool-input-available",
                     toolCallId: "e2",
                     toolName: "edit_diagram",
-                    input: edit,
+                    input: EDIT_GAMMA,
                 },
                 { type: "finish-step" },
                 { type: "finish" },
             ])}data: [DONE]\n\n`,
         ],
     ]
-    await p.addInitScript((replies) => {
-        const realFetch = window.fetch
-        let n = 0
-        window.fetch = async (input, init) => {
-            const url =
-                typeof input === "string" ? input : (input as Request).url
-            if (!url.endsWith("/api/chat")) return realFetch(input, init)
-            const chunks = replies[n++] ?? [
-                'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
-            ]
-            const body = new ReadableStream({
-                async start(controller) {
-                    for (const chunk of chunks) {
-                        controller.enqueue(new TextEncoder().encode(chunk))
-                        await new Promise((r) => setTimeout(r, 300))
-                    }
-                    controller.close()
-                },
-            })
-            return new Response(body, {
-                headers: { "content-type": "text/event-stream" },
-            })
-        }
-    }, replies)
-    await p.goto("/", { waitUntil: "networkidle" })
-    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
-    const canvas = p.frameLocator("iframe")
+    const canvas = await chunkedReplies(p, replies)
 
     await sendMessage(p, "Draw a box")
     await waitForCompleteCount(p, 1)
@@ -297,4 +321,33 @@ test("an edit right after a broken edit call starts from the real diagram", asyn
         timeout: 15000,
     })
     await expect(p.getByText(/No changes were made/)).toHaveCount(0)
+})
+
+test("a request that fails during an edit undoes its preview", async ({
+    page: p,
+}) => {
+    const canvas = await chunkedReplies(p, [
+        [streamedToolCall("display_diagram", { xml: cell("a", "Alpha", 40) })],
+        [
+            sse([
+                { type: "start" },
+                { type: "start-step" },
+                editStart("e1"),
+                ...editDeltas("e1"),
+            ]),
+            `${sse([{ type: "error", errorText: "Upstream connection lost" }])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Add another box")
+    // The preview shows the new cell while the edit streams
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(p.getByText("Upstream connection lost").first()).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Gamma", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
 })

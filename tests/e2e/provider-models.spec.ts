@@ -14,13 +14,13 @@ const CONFIG = {
     ],
 }
 
-async function openQwenSettings(page: Page) {
+async function openQwenSettings(page: Page, config: object = CONFIG) {
     await page.addInitScript((config) => {
         localStorage.setItem(
             "next-ai-draw-io-model-configs",
             JSON.stringify(config),
         )
-    }, CONFIG)
+    }, config)
     await page.goto("/", { waitUntil: "networkidle" })
     await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
     await page.locator("button:has(svg.lucide-bot)").first().click()
@@ -66,6 +66,31 @@ test("fetches the provider's models and adds one from the picker", async ({
     await expect(dialog.locator('input[title="qwen-new-max"]')).toBeVisible()
 })
 
+test("the model picker scrolls with the mouse wheel", async ({ page }) => {
+    // The picker sits in a popover above the settings dialog, which blocks
+    // wheel events outside itself
+    await page.route("**/api/provider-models", (route) =>
+        route.fulfill({
+            json: {
+                models: Array.from({ length: 60 }, (_, i) => ({
+                    id: `qwen-model-${i}`,
+                })),
+            },
+        }),
+    )
+    const dialog = await openQwenSettings(page)
+    await dialog
+        .getByRole("button", { name: "Fetch models from the provider" })
+        .click()
+    const list = page.locator("[cmdk-list]")
+    await expect(list.getByText("qwen-model-0")).toBeVisible()
+    await list.hover()
+    await page.mouse.wheel(0, 400)
+    await expect
+        .poll(() => list.evaluate((el) => el.scrollTop), { timeout: 3000 })
+        .toBeGreaterThan(0)
+})
+
 test("shows a hint when the provider rejects the key", async ({ page }) => {
     await page.route("**/api/provider-models", (route) =>
         route.fulfill({
@@ -82,4 +107,53 @@ test("shows a hint when the provider rejects the key", async ({ page }) => {
             "The provider rejected the API key. Check it in model settings. Incorrect API key",
         ),
     ).toBeVisible()
+})
+
+test("a fetch error stays with its provider", async ({ page }) => {
+    await page.route("**/api/provider-models", (route) =>
+        route.fulfill({
+            status: 401,
+            json: { code: "invalid_api_key", error: "Incorrect API key" },
+        }),
+    )
+    const dialog = await openQwenSettings(page, {
+        version: 1,
+        providers: [
+            ...CONFIG.providers,
+            { id: "p2", provider: "glm", apiKey: "k", models: [] },
+        ],
+    })
+    await dialog
+        .getByRole("button", { name: "Fetch models from the provider" })
+        .click()
+    const error = dialog.getByText("Incorrect API key")
+    await expect(error).toBeVisible()
+    await dialog.getByText("GLM (Zhipu)").first().click()
+    await expect(error).toHaveCount(0)
+})
+
+test("editing a model id clears the old test warning", async ({ page }) => {
+    const warning = "Connected, but the model answered without calling a tool."
+    const dialog = await openQwenSettings(page, {
+        version: 1,
+        providers: [
+            {
+                ...CONFIG.providers[0],
+                models: [
+                    {
+                        id: "m1",
+                        modelId: "qwen-max",
+                        validated: true,
+                        validationWarning: warning,
+                    },
+                ],
+            },
+        ],
+    })
+    await expect(dialog.getByText(warning)).toBeVisible()
+    const input = dialog.locator('input[title="qwen-max"]')
+    await input.fill("qwen-mt-plus")
+    await input.blur()
+    await expect(dialog.getByText(warning)).toHaveCount(0)
+    await expect(dialog.getByText("may not be able to draw")).toBeVisible()
 })
