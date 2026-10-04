@@ -524,6 +524,10 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
 
     const result = streamText({
         model,
+        // The system messages carry cache points, so they go in messages.
+        // A client's own system messages have string content and were
+        // dropped by the empty-content filter above.
+        allowSystemInMessages: true,
         abortSignal: req.signal,
         // Must be sent: unset means the provider's own default, and Bedrock's is
         // 4096, enough for a small diagram, so larger ones were cut off mid-attribute.

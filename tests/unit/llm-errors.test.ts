@@ -88,6 +88,47 @@ describe("classifyLLMError", () => {
         timeout.name = "TimeoutError"
         expect(classifyLLMError(timeout).code).toBe("timeout")
     })
+
+    it("names a network error the SDK wrapped", () => {
+        const error = new APICallError({
+            message:
+                "Cannot connect to API: Connect Timeout Error (attempted address: api.example.com:443, timeout: 10000ms)",
+            url: "https://api.example.com/v1/chat/completions",
+            requestBodyValues: {},
+        })
+        expect(classifyLLMError(error).code).toBe("cannot_connect")
+    })
+
+    it("reads an error object sent in the stream", () => {
+        // OpenRouter, when the upstream provider is overloaded
+        const error = {
+            code: 503,
+            message:
+                "Upstream error from Nvidia: Service temporarily overloaded",
+            metadata: { error_type: "provider_overloaded" },
+        }
+        expect(classifyLLMError(error)).toEqual({
+            type: "provider",
+            code: "provider_unavailable",
+            message:
+                "Upstream error from Nvidia: Service temporarily overloaded",
+        })
+    })
+
+    it("adds the reason from a problem+json body", () => {
+        // NVIDIA, for a retired model; the SDK's message is only "Gone"
+        const body = JSON.stringify({
+            title: "Gone",
+            status: 410,
+            detail: "The model 'deepseek-v4-flash' has reached its end of life",
+        })
+        expect(classifyLLMError(apiError(410, "Gone", body))).toEqual({
+            type: "provider",
+            code: "model_not_found",
+            message:
+                "Gone: The model 'deepseek-v4-flash' has reached its end of life",
+        })
+    })
 })
 
 describe("isToolCallError", () => {

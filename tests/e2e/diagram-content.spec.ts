@@ -136,3 +136,30 @@ test("edit_diagram applies all operations or none", async ({ page: p }) => {
     await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible()
     await expect(canvas.getByText("Broken", { exact: true })).toHaveCount(0)
 })
+
+test("blank text before a tool call shows no empty bubble", async ({
+    page: p,
+}) => {
+    // Kimi K2.6 sends a lone space before calling the tool
+    const blankText = [
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: " " },
+        { type: "text-end", id: "t1" },
+    ]
+        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+        .join("")
+    const reply = streamedToolCall("display_diagram", {
+        xml: cell("2", "Alpha", 40),
+    }).replace(
+        'data: {"type":"tool-input-start"',
+        `${blankText}data: {"type":"tool-input-start"`,
+    )
+    const canvas = await mockReplies(p, [reply])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    // Assistant text bubbles have this background
+    await expect(p.locator("div.rounded-2xl.bg-muted\\/60")).toHaveCount(0)
+})

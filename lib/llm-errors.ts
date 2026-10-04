@@ -62,6 +62,8 @@ const STATUS_CODES: Record<number, LLMErrorCode> = {
     403: "forbidden",
     404: "model_not_found",
     408: "timeout",
+    // A retired model
+    410: "model_not_found",
     413: "context_too_long",
     429: "rate_limited",
 }
@@ -76,7 +78,10 @@ const GENERAL_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         "invalid_api_key",
     ],
     [/rate limit|too many requests/i, "rate_limited"],
-    [/ECONNREFUSED|ENOTFOUND|ECONNRESET|fetch failed/i, "cannot_connect"],
+    [
+        /Cannot connect to API|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|fetch failed/i,
+        "cannot_connect",
+    ],
 ]
 
 /** Secrets a provider may echo back: API keys, Bearer tokens, key=value */
@@ -89,6 +94,15 @@ function redact(text: string): string {
             /\b(api[_-]?key|access[_-]?key|secret|token|password|signature)(["']?\s*[:=]\s*["']?)[^\s"',&}]+/gi,
             "$1$2[redacted]",
         )
+}
+
+function problemDetail(body: string): string | undefined {
+    try {
+        const detail = JSON.parse(body)?.detail
+        return typeof detail === "string" ? detail : undefined
+    } catch {
+        return undefined
+    }
 }
 
 /**
@@ -106,13 +120,28 @@ export function isToolCallError(error: unknown): boolean {
 export function classifyLLMError(error: unknown): LLMError {
     // After the SDK's retries, the last attempt says what happened
     const e = RetryError.isInstance(error) ? error.lastError : error
-    const raw = e instanceof Error ? e.message : String(e)
-    const message = redact(raw).slice(0, 500)
+    // Errors sent inside the stream can be plain objects like OpenRouter's
+    // { code: 503, message }
+    const plain = e as {
+        message?: unknown
+        code?: unknown
+        statusCode?: number
+    }
+    const raw =
+        e instanceof Error
+            ? e.message
+            : typeof plain?.message === "string"
+              ? plain.message
+              : String(e)
     const body = APICallError.isInstance(e) ? (e.responseBody ?? "") : ""
+    // A problem+json body names the reason the SDK left out (NVIDIA: "Gone")
+    const detail = problemDetail(body)
+    const message = redact(detail ? `${raw}: ${detail}` : raw).slice(0, 500)
     const text = `${raw} ${body}`
     const status = APICallError.isInstance(e)
         ? e.statusCode
-        : (e as { statusCode?: number })?.statusCode
+        : (plain?.statusCode ??
+          (typeof plain?.code === "number" ? plain.code : undefined))
 
     const find = (rules: Array<[RegExp, LLMErrorCode]>) =>
         rules.find(([pattern]) => pattern.test(text))?.[1]

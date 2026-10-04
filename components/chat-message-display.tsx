@@ -845,8 +845,12 @@ export function ChatMessageDisplay({
                                                     part.type?.startsWith(
                                                         "tool-",
                                                     )
+                                                // Blank text (some models send
+                                                // a lone space) gets no bubble
                                                 const isContentPart =
-                                                    part.type === "text" ||
+                                                    (part.type === "text" &&
+                                                        part.text.trim() !==
+                                                            "") ||
                                                     part.type === "file"
 
                                                 if (isToolPart) {
