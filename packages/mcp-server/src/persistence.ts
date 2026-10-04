@@ -17,7 +17,8 @@ import {
 } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { log } from "./logger.js"
+import { log } from "./logger.ts"
+import { hasCells } from "./pages.ts"
 
 const DELAY_MS = 1000
 const MAX_FILES = 50
@@ -28,10 +29,6 @@ export function defaultDataDir(): string | null {
     if (dir === "off") return null
     return dir || join(homedir(), ".next-ai-drawio")
 }
-
-/** Any cell besides the root cells "0" and "1" */
-export const hasCells = (xml: string) =>
-    /<(mxCell\b[^>]*\bid="(?![01]")|UserObject\b|object\b)/.test(xml)
 
 export class Autosaver {
     private pending = new Map<

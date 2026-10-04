@@ -10,7 +10,7 @@
 import { deflateRawSync } from "node:zlib"
 import { DOMParser } from "linkedom"
 import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.js"
+import { installDomPolyfill } from "../src/dom.ts"
 
 // Install the DOM polyfills exactly as index.ts does at runtime.
 beforeAll(() => {
@@ -20,7 +20,7 @@ beforeAll(() => {
 import {
     decompressPageContent,
     parseDrawioFileContent,
-} from "../src/load-diagram.js"
+} from "../src/load-diagram.ts"
 
 const MODEL_XML = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="box1" value="Hello" style="rounded=0;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`
 

@@ -1,29 +1,13 @@
 /**
- * DOM setup for Node.
+ * DOM setup for Node. The XML helpers use the global DOMParser and
+ * XMLSerializer, which the browser has and Node gets from here.
  *
  * linkedom gives us a DOM with querySelector, but it is lenient: it never
- * reports syntax errors (no <parsererror>), and its serializer writes raw
- * newlines inside attribute values, which the browser reads back as spaces.
- * saxes, a strict XML parser, checks well-formedness the way draw.io's
- * DOMParser will, and serializeXml writes attribute values safely.
+ * reports syntax errors (no <parsererror>; xml-syntax.ts checks them), and
+ * its serializer writes raw newlines inside attribute values, which the
+ * browser reads back as spaces. serializeXml writes attribute values safely.
  */
 import { DOMParser } from "linkedom"
-import { SaxesParser } from "saxes"
-
-/**
- * Returns the first XML syntax error as "line:column: message", or null if
- * the XML is well-formed. Surrounding whitespace is ignored because every
- * caller trims before the XML reaches the browser.
- */
-export function getXmlSyntaxError(xml: string): string | null {
-    let error: string | null = null
-    const parser = new SaxesParser()
-    parser.on("error", (err) => {
-        error ??= err.message
-    })
-    parser.write(xml.trim()).close()
-    return error
-}
 
 const ESCAPES: Record<string, string> = {
     "&": "&amp;",

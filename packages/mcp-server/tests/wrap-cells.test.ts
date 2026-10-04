@@ -4,14 +4,14 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.js"
+import { installDomPolyfill } from "../src/dom.ts"
 
 beforeAll(() => {
     installDomPolyfill()
 })
 
-import { wrapCellsInModel } from "../src/pages.js"
-import { validateAndFixXml } from "../src/xml-validation.js"
+import { wrapCellsInModel } from "../src/pages.ts"
+import { validateAndFixXml } from "../src/xml-validation.ts"
 
 const A = `<mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`
 const B = `<mxCell id="3" value="B" vertex="1" parent="1"><mxGeometry x="200" y="0" width="80" height="40" as="geometry"/></mxCell>`
@@ -43,6 +43,12 @@ describe("wrapCellsInModel", () => {
         expect(wrapped).toBe(
             `<mxGraphModel><root>${ROOTS}${A}</root></mxGraphModel>`,
         )
+    })
+
+    it("drops comments and text before the first cell", () => {
+        const expected = `<mxGraphModel><root>${ROOTS}${A}</root></mxGraphModel>`
+        expect(wrapCellsInModel(`Here is the diagram: ${A}`)).toBe(expected)
+        expect(wrapCellsInModel(`<!-- boxes -->\n${A}`)).toBe(expected)
     })
 
     it("leaves <mxGraphModel> and <mxfile> input unchanged", () => {

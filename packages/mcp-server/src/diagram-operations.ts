@@ -7,10 +7,10 @@
  * first page is targeted (the "active page by convention" — see pages.ts).
  */
 
-import { getXmlSyntaxError } from "./dom.js"
-import { decompressPageContent } from "./load-diagram.js"
-import { log } from "./logger.js"
-import { findPageElement, hasPageSelector, type PageSelector } from "./pages.js"
+import { decompressPageContent } from "./load-diagram.ts"
+import { log } from "./logger.ts"
+import { findPageElement, hasPageSelector, type PageSelector } from "./pages.ts"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export interface DiagramOperation {
     operation: "update" | "add" | "delete"

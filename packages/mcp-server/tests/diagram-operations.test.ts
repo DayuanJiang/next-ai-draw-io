@@ -6,13 +6,13 @@
 
 import { deflateRawSync } from "node:zlib"
 import { beforeAll, describe, expect, it, vi } from "vitest"
-import { installDomPolyfill } from "../src/dom.js"
+import { installDomPolyfill } from "../src/dom.ts"
 
 beforeAll(() => {
     installDomPolyfill()
 })
 
-import { applyDiagramOperations } from "../src/diagram-operations.js"
+import { applyDiagramOperations } from "../src/diagram-operations.ts"
 
 const DOC = `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="a" label="A" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject><mxCell id="b" value="B" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><object id="e1" label="" tooltip="t"><mxCell edge="1" source="b" target="a" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell></object><mxCell id="child" value="C" vertex="1" parent="a"><mxGeometry as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
 

@@ -3,7 +3,7 @@
  * Stores {xml, svg} entries in a circular buffer
  */
 
-import { log } from "./logger.js"
+import { log } from "./logger.ts"
 
 const MAX_HISTORY = 20
 

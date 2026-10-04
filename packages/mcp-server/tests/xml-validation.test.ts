@@ -8,14 +8,15 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest"
-import { getXmlSyntaxError, installDomPolyfill } from "../src/dom.js"
+import { installDomPolyfill } from "../src/dom.ts"
+import { getXmlSyntaxError } from "../src/xml-syntax.ts"
 
 beforeAll(() => {
     installDomPolyfill()
 })
 
-import { addPageToDoc, parseMxfile, serializeMxfile } from "../src/pages.js"
-import { validateAndFixXml } from "../src/xml-validation.js"
+import { addPageToDoc, parseMxfile, serializeMxfile } from "../src/pages.ts"
+import { validateAndFixXml } from "../src/xml-validation.ts"
 
 /** Bare model with the root cells plus the given cells. */
 const model = (cells: string) =>
@@ -26,6 +27,18 @@ const model = (cells: string) =>
 const BROKEN_CELL = `<mxCell id="9" value="R&D" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
 
 describe("getXmlSyntaxError", () => {
+    it("rejects an attribute prefix that was never declared", () => {
+        // The browser's DOMParser, and so draw.io, rejects it too
+        expect(getXmlSyntaxError(`<mxCell id="2" xlink:href="x"/>`)).toMatch(
+            /prefix/,
+        )
+        expect(
+            getXmlSyntaxError(
+                `<mxCell xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="x"/>`,
+            ),
+        ).toBeNull()
+    })
+
     it("accepts well-formed XML", () => {
         expect(getXmlSyntaxError(model(""))).toBeNull()
     })

@@ -3,7 +3,7 @@
  * Copied from lib/utils.ts to avoid cross-package imports
  */
 
-import { getXmlSyntaxError } from "./dom.js"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 // ============================================================================
 // Constants
@@ -216,15 +216,25 @@ function checkDuplicateIds(xml: string): string | null {
                     return `Invalid XML: Found duplicate <diagram> id(s): ${dupDiagrams.slice(0, 3).join(", ")}. Each page must have a unique id.`
                 }
 
-                // 2) Within each page, mxCell ids must be unique.
+                // 2) Within each page, cell ids must be unique. A cell with
+                // a link or custom data is a UserObject/object holding the
+                // id, around an mxCell whose own id does not count.
                 for (let i = 0; i < diagrams.length; i++) {
                     const diagram = diagrams[i]
                     const pageId = diagram.getAttribute("id") || `(index ${i})`
-                    const cells = diagram.querySelectorAll("mxCell")
+                    const cells = diagram.querySelectorAll(
+                        "mxCell, UserObject, object",
+                    )
                     const cellIds = new Map<string, number>()
                     cells.forEach((c) => {
+                        const wrapped =
+                            c.tagName === "mxCell" &&
+                            /^(UserObject|object)$/.test(
+                                c.parentElement?.tagName ?? "",
+                            )
                         const id = c.getAttribute("id")
-                        if (id) cellIds.set(id, (cellIds.get(id) || 0) + 1)
+                        if (id && !wrapped)
+                            cellIds.set(id, (cellIds.get(id) || 0) + 1)
                     })
                     const dups = Array.from(cellIds.entries())
                         .filter(([, c]) => c > 1)
@@ -1040,19 +1050,23 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 // ============================================================================
 
 /**
- * Validates XML and attempts to fix if invalid. Runs the strict checks
- * (unknown elements, orphan mxPoints): every caller passes XML the model wrote.
+ * Validates XML and attempts to fix if invalid. By default runs the strict
+ * checks (unknown elements, orphan mxPoints), meant for XML the model wrote.
+ * Pass strict: false for a diagram that also holds the user's own content.
  * @param xml - The XML string to validate and potentially fix
  * @returns Object with validation result, fixed XML if applicable, and fixes applied
  */
-export function validateAndFixXml(xml: string): {
+export function validateAndFixXml(
+    xml: string,
+    { strict = true }: { strict?: boolean } = {},
+): {
     valid: boolean
     error: string | null
     fixed: string | null
     fixes: string[]
 } {
     // First validation attempt
-    let error = validateMxCellStructure(xml, { strict: true })
+    let error = validateMxCellStructure(xml, { strict })
 
     if (!error) {
         return { valid: true, error: null, fixed: null, fixes: [] }
@@ -1062,7 +1076,7 @@ export function validateAndFixXml(xml: string): {
     const { fixed, fixes } = autoFixXml(xml)
 
     // Validate the fixed version
-    error = validateMxCellStructure(fixed, { strict: true })
+    error = validateMxCellStructure(fixed, { strict })
 
     if (!error) {
         return { valid: true, error: null, fixed, fixes }

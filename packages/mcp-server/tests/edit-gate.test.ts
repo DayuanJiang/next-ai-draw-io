@@ -10,13 +10,13 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.js"
+import { installDomPolyfill } from "../src/dom.ts"
 
 beforeAll(() => {
     installDomPolyfill()
 })
 
-import { checkEditGate, contentFingerprint } from "../src/edit-gate.js"
+import { checkEditGate, contentFingerprint } from "../src/edit-gate.ts"
 
 const XML_A = `<mxfile host="app.diagrams.net"><diagram id="p1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="box1" value="Hello" style="rounded=0;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
 

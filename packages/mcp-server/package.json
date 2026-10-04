@@ -42,11 +42,13 @@
         "@modelcontextprotocol/sdk": "^1.31.0",
         "linkedom": "^0.18.0",
         "open": "^11.0.0",
+        "pako": "^2.2.0",
         "saxes": "^6.0.0",
         "zod": "^4.0.0"
     },
     "devDependencies": {
         "@types/node": "^24.0.0",
+        "@types/pako": "^2.0.4",
         "tsx": "^4.19.0",
         "typescript": "^5",
         "vitest": "^4.1.8"

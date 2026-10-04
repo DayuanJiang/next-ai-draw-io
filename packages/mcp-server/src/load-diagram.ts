@@ -7,16 +7,15 @@
  * diagram's text content. The rest of the server assumes plain XML inside
  * every <diagram>, so loading decompresses all pages up front.
  */
-import { inflateRawSync } from "node:zlib"
-import { DOMParser } from "linkedom"
-import { getXmlSyntaxError } from "./dom.js"
+import { inflateRaw } from "pako"
 import {
     isMxFile,
     isMxGraphModel,
     normalizeToMxfile,
     parseMxfile,
     serializeMxfile,
-} from "./pages.js"
+} from "./pages.ts"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export type LoadResult =
     | { ok: true; xml: string }
@@ -28,9 +27,11 @@ export type LoadResult =
  */
 export function decompressPageContent(compressed: string): string | null {
     try {
-        const inflated = inflateRawSync(
-            Buffer.from(compressed.trim(), "base64"),
-        ).toString("utf-8")
+        // atob and pako work in Node and in the browser
+        const bytes = Uint8Array.from(atob(compressed.trim()), (c) =>
+            c.charCodeAt(0),
+        )
+        const inflated = inflateRaw(bytes, { to: "string" })
         try {
             return decodeURIComponent(inflated)
         } catch {

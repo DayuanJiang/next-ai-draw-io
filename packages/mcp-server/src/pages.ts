@@ -17,8 +17,7 @@
  *   - how to add/rename/delete pages without re-parsing ad-hoc.
  */
 
-import { DOMParser } from "linkedom"
-import { getXmlSyntaxError } from "./dom.js"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export interface PageInfo {
     id: string
@@ -52,6 +51,10 @@ export function generatePageId(): string {
     const b = Math.random().toString(36).substring(2, 6)
     return `${a}-${b}`
 }
+
+/** Any cell besides the root cells "0" and "1" */
+export const hasCells = (xml: string) =>
+    /<(mxCell\b[^>]*\bid="(?![01]")|UserObject\b|object\b)/.test(xml)
 
 /** Cheap regex check — does the XML start with an <mxfile> root? */
 export function isMxFile(xml: string): boolean {
@@ -87,15 +90,24 @@ const ROOT_CELLS = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
  * Turn a list of bare cells (optionally inside <root>) into a one-page
  * <mxGraphModel>, adding the "0" and "1" root cells. The model then only
  * writes its own cells, as in the web app (wrapWithMxFile in lib/utils.ts).
- * Root cells the model wrote anyway are replaced, and trailing closing tags
- * some providers append are dropped. <mxfile>, <mxGraphModel> and anything
- * else are returned unchanged.
+ * Root cells the model wrote anyway are replaced, and comments or text
+ * before the first cell and trailing closing tags some providers append
+ * are dropped. <mxfile>, <mxGraphModel> and anything else are returned
+ * unchanged.
  */
 export function wrapCellsInModel(xml: string): string {
     let content = stripXmlDeclaration(xml.trim())
-    if (!/^<(mxCell|UserObject|object|root)[\s/>]/.test(content)) return xml
+    const start = content.search(/<(mxCell|UserObject|object|root)[\s/>]/)
+    if (start === -1) return xml
+    // Only comments and plain text may come before the first cell
+    if (!/^(?:<!--[\s\S]*?-->|[^<])*$/.test(content.slice(0, start))) {
+        return xml
+    }
 
-    content = content.replace(/<\/?root>/g, "").trim()
+    content = content
+        .slice(start)
+        .replace(/<\/?root>/g, "")
+        .trim()
     // End of the last cell, counting wrapped cells (</UserObject>, </object>)
     let end = -1
     for (const close of ["/>", "</mxCell>", "</UserObject>", "</object>"]) {

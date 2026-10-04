@@ -8,7 +8,7 @@
 
 import http from "node:http"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { addHistory, getHistory } from "../src/history.js"
+import { addHistory, getHistory } from "../src/history.ts"
 import {
     getState,
     requestExport,
@@ -17,7 +17,7 @@ import {
     shutdown,
     startHttpServer,
     waitForSync,
-} from "../src/http-server.js"
+} from "../src/http-server.ts"
 
 let port = 0
 

@@ -3,14 +3,14 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.js"
+import { installDomPolyfill } from "../src/dom.ts"
 
 beforeAll(() => {
     installDomPolyfill()
 })
 
-import { editDiagram, targetPageXml } from "../src/edit-diagram.js"
-import { validateMxCellStructure } from "../src/xml-validation.js"
+import { editDiagram, targetPageXml } from "../src/edit-diagram.ts"
+import { validateMxCellStructure } from "../src/xml-validation.ts"
 
 const cell = (id: string, extra = "") =>
     `<mxCell id="${id}" value="${id}" vertex="1" parent="1"${extra}><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`

@@ -38,8 +38,8 @@ import {
     getHistory,
     getHistoryEntry,
     updateLastHistorySvg,
-} from "./history.js"
-import { log } from "./logger.js"
+} from "./history.ts"
+import { log } from "./logger.ts"
 
 // Configurable draw.io embed URL for private deployments
 const DRAWIO_BASE_URL =

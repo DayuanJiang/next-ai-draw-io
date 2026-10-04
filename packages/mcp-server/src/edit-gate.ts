@@ -17,7 +17,7 @@
  * change: the set of pages, each page's name, and each page's cell tree
  * (tags + sorted attributes + text). Byte equality is kept as a fast path.
  */
-import { isMxGraphModel, normalizeToMxfile, parseMxfile } from "./pages.js"
+import { isMxGraphModel, normalizeToMxfile, parseMxfile } from "./pages.ts"
 
 export type EditGateResult =
     | { ok: true }

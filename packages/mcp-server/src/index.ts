@@ -24,12 +24,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
 import { z } from "zod"
-import type { DiagramOperation } from "./diagram-operations.js"
-import { installDomPolyfill } from "./dom.js"
-import { DRAWING_GUIDE } from "./drawing-guide.js"
-import { editDiagram, targetPageXml } from "./edit-diagram.js"
-import { checkEditGate } from "./edit-gate.js"
-import { addHistory } from "./history.js"
+import type { DiagramOperation } from "./diagram-operations.ts"
+import { installDomPolyfill } from "./dom.ts"
+import { DRAWING_GUIDE } from "./drawing-guide.ts"
+import { editDiagram, targetPageXml } from "./edit-diagram.ts"
+import { checkEditGate } from "./edit-gate.ts"
+import { addHistory } from "./history.ts"
 import {
     type ExportFormat,
     type ExportOptions,
@@ -42,13 +42,14 @@ import {
     shutdown,
     startHttpServer,
     waitForSync,
-} from "./http-server.js"
-import { parseDrawioFileContent } from "./load-diagram.js"
-import { log } from "./logger.js"
+} from "./http-server.ts"
+import { parseDrawioFileContent } from "./load-diagram.ts"
+import { log } from "./logger.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
     findPageElement,
+    hasCells,
     hasPageSelector,
     listPagesFromDoc,
     normalizeToMxfile,
@@ -58,10 +59,10 @@ import {
     renamePageInDoc,
     serializeMxfile,
     wrapCellsInModel,
-} from "./pages.js"
-import { Autosaver, defaultDataDir, hasCells } from "./persistence.js"
-import { getShapeLibrary, SHAPE_LIBRARY_GROUPS } from "./shape-library.js"
-import { validateAndFixXml } from "./xml-validation.js"
+} from "./pages.ts"
+import { Autosaver, defaultDataDir } from "./persistence.ts"
+import { getShapeLibrary, SHAPE_LIBRARY_GROUPS } from "./shape-library.ts"
+import { validateAndFixXml } from "./xml-validation.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
 installDomPolyfill()

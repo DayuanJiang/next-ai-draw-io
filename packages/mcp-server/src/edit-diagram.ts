@@ -10,9 +10,9 @@
 import {
     applyDiagramOperations,
     type DiagramOperation,
-} from "./diagram-operations.js"
-import { type PageSelector, projectPage } from "./pages.js"
-import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.js"
+} from "./diagram-operations.ts"
+import { type PageSelector, projectPage } from "./pages.ts"
+import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.ts"
 
 export type EditOutcome =
     | { ok: true; xml: string; applied: number; fixes: string[] }
