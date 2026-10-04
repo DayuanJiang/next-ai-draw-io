@@ -31,18 +31,25 @@ describe("withoutDeprecatedParams", () => {
         },
     }
 
-    it("drops sampling settings and the thinking budget", () => {
+    // Measured on Bedrock: Opus 4.7, 4.8 and every Claude 5 model accept
+    // adaptive thinking, and return its text only with display "summarized"
+    const ADAPTIVE = { type: "adaptive", display: "summarized" }
+
+    it("drops sampling settings and switches to adaptive thinking", () => {
         for (const error of [TEMPERATURE, THINKING]) {
             expect(withoutDeprecatedParams(error, params)).toEqual({
                 maxOutputTokens: 1000,
                 providerOptions: {
-                    anthropic: { cacheControl: { type: "ephemeral" } },
+                    anthropic: {
+                        thinking: ADAPTIVE,
+                        cacheControl: { type: "ephemeral" },
+                    },
                 },
             })
         }
     })
 
-    it("drops a Bedrock thinking budget", () => {
+    it("switches a Bedrock thinking budget to adaptive thinking", () => {
         const bedrock = {
             providerOptions: {
                 bedrock: {
@@ -51,7 +58,7 @@ describe("withoutDeprecatedParams", () => {
             },
         }
         expect(withoutDeprecatedParams(THINKING, bedrock)).toEqual({
-            providerOptions: { bedrock: {} },
+            providerOptions: { bedrock: { reasoningConfig: ADAPTIVE } },
         })
     })
 

@@ -18,21 +18,25 @@ interface CallParams {
     providerOptions?: Record<string, Record<string, unknown> | undefined>
 }
 
-/** Drop a thinking config of type "enabled" stored under key, if any. */
-function withoutEnabledThinking(
+// What these models take instead of a budget. Without display "summarized"
+// they think but send no thinking text to show.
+const ADAPTIVE_THINKING = { type: "adaptive", display: "summarized" }
+
+/** Turn a thinking config of type "enabled" stored under key into adaptive */
+function adaptiveThinking(
     options: Record<string, unknown> | undefined,
     key: string,
 ): Record<string, unknown> | undefined {
     const config = options?.[key] as { type?: string } | undefined
     if (config?.type !== "enabled") return options
-    const { [key]: _, ...rest } = options as Record<string, unknown>
-    return rest
+    return { ...options, [key]: ADAPTIVE_THINKING }
 }
 
 /**
  * The params without the settings newer Claude models reject, or null when
- * the error is about something else or there is nothing to drop. The model
- * then runs with its own default sampling and thinking.
+ * the error is about something else or there is nothing to change. The
+ * model then runs with its default sampling, and a thinking budget becomes
+ * adaptive thinking.
  */
 export function withoutDeprecatedParams<T extends CallParams>(
     error: unknown,
@@ -43,8 +47,8 @@ export function withoutDeprecatedParams<T extends CallParams>(
 
     const { temperature, topP, topK, ...rest } = params
     const options = params.providerOptions
-    const anthropic = withoutEnabledThinking(options?.anthropic, "thinking")
-    const bedrock = withoutEnabledThinking(options?.bedrock, "reasoningConfig")
+    const anthropic = adaptiveThinking(options?.anthropic, "thinking")
+    const bedrock = adaptiveThinking(options?.bedrock, "reasoningConfig")
     const changed =
         temperature !== undefined ||
         topP !== undefined ||
@@ -80,7 +84,7 @@ export function withDeprecatedParamsFallback(
                     const retry = withoutDeprecatedParams(error, params)
                     if (!retry) throw error
                     console.warn(
-                        "[model params] Rejected sampling or thinking settings, retrying with the model defaults",
+                        "[model params] Rejected sampling or thinking settings, retrying with default sampling and adaptive thinking",
                     )
                     return await inner.doStream(retry)
                 }

@@ -347,32 +347,35 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "o3",
         "o4-mini",
     ],
+    // Newer models only answer through an inference profile id (the region
+    // prefix). Each id here was called once on 2026-10-04.
     bedrock: [
-        // Anthropic Claude
-        "anthropic.claude-opus-4-8",
-        "anthropic.claude-opus-4-7",
-        "anthropic.claude-sonnet-4-6",
-        "anthropic.claude-opus-4-6-v1",
-        "anthropic.claude-opus-4-5-20251101-v1:0",
-        "anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "anthropic.claude-haiku-4-5-20251001-v1:0",
-        "anthropic.claude-opus-4-1-20250805-v1:0",
-        "anthropic.claude-opus-4-20250514-v1:0",
-        "anthropic.claude-sonnet-4-20250514-v1:0",
-        "anthropic.claude-3-5-haiku-20241022-v1:0",
+        // Anthropic Claude ("global." works from any region)
+        "global.anthropic.claude-opus-5-5",
+        "global.anthropic.claude-sonnet-5-5",
+        "global.anthropic.claude-fable-5-1",
+        "global.anthropic.claude-opus-5",
+        "global.anthropic.claude-sonnet-5",
+        "global.anthropic.claude-opus-4-8",
+        "global.anthropic.claude-opus-4-7",
+        "global.anthropic.claude-sonnet-4-6",
+        "global.anthropic.claude-opus-4-6-v1",
+        "global.anthropic.claude-opus-4-5-20251101-v1:0",
+        "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "global.anthropic.claude-sonnet-4-20250514-v1:0",
         // Amazon Nova
-        "amazon.nova-2-lite-v1:0",
-        "amazon.nova-premier-v1:0",
+        "us.amazon.nova-2-lite-v1:0",
         "amazon.nova-pro-v1:0",
         "amazon.nova-lite-v1:0",
         "amazon.nova-micro-v1:0",
         // Meta Llama
-        "meta.llama4-maverick-17b-instruct-v1:0",
-        "meta.llama4-scout-17b-instruct-v1:0",
-        "meta.llama3-3-70b-instruct-v1:0",
+        "us.meta.llama4-maverick-17b-instruct-v1:0",
+        "us.meta.llama4-scout-17b-instruct-v1:0",
+        "us.meta.llama3-3-70b-instruct-v1:0",
         // Mistral
         "mistral.mistral-large-3-675b-instruct",
-        "mistral.pixtral-large-2502-v1:0",
+        "us.mistral.pixtral-large-2502-v1:0",
     ],
     openrouter: [
         // Anthropic
