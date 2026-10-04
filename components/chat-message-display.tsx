@@ -26,6 +26,7 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import { Shimmer } from "@/components/ai-elements/shimmer"
 import { ChatLobby } from "@/components/chat/ChatLobby"
 import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
 import { ToolCallCard } from "@/components/chat/ToolCallCard"
@@ -193,6 +194,23 @@ export function ChatMessageDisplay({
     currentInput = "",
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
+    // The thinking header in the page language
+    const thinkingMessage = (isStreaming: boolean, duration?: number) => {
+        if (isStreaming || duration === 0) {
+            return <Shimmer duration={1}>{dict.reasoning.thinking}</Shimmer>
+        }
+        if (duration === undefined) return <p>{dict.reasoning.thoughtBrief}</p>
+        return (
+            <p>
+                {duration === 1
+                    ? dict.reasoning.thoughtForOne
+                    : dict.reasoning.thoughtFor.replace(
+                          "{duration}",
+                          String(duration),
+                      )}
+            </p>
+        )
+    }
     const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const scrollTopRef = useRef<HTMLDivElement>(null)
@@ -404,6 +422,10 @@ export function ChatMessageDisplay({
         // Previous messages are already processed and won't change
         const messagesToProcess =
             messages.length > 0 ? [messages[messages.length - 1]] : []
+        // The diagram without streamed previews. Undoing a failed edit's
+        // preview below changes it before chartXML catches up, and an edit
+        // streaming right after must start from the undone diagram.
+        let baseXml = chartXML
 
         messagesToProcess.forEach((message) => {
             // Messages restored from a saved session were applied before it was
@@ -460,13 +482,12 @@ export function ChatMessageDisplay({
 
                         // Handle edit_diagram streaming - apply operations incrementally for preview
                         // Uses shared editDiagramOriginalXmlRef to coordinate with tool handler
-                        if (
-                            part.type === "tool-edit_diagram" &&
-                            input?.operations
-                        ) {
+                        if (part.type === "tool-edit_diagram") {
                             // Failed or stopped: if the original XML is still
-                            // stored, the tool handler never ran (user pressed
-                            // stop), so undo the streamed preview here.
+                            // stored, the tool handler never ran (invalid
+                            // JSON, or the user pressed stop), so undo the
+                            // streamed preview here. Invalid JSON leaves no
+                            // operations in the input, so check this first.
                             if (state === "output-error") {
                                 const originalXml =
                                     editDiagramOriginalXmlRef.current.get(
@@ -477,9 +498,11 @@ export function ChatMessageDisplay({
                                         toolCallId,
                                     )
                                     onDisplayChart(originalXml, true)
+                                    baseXml = originalXml
                                 }
                                 return
                             }
+                            if (!input?.operations) return
 
                             if (state !== "input-streaming") {
                                 // Input complete: the tool handler applies the
@@ -506,7 +529,7 @@ export function ChatMessageDisplay({
                                     toolCallId,
                                 )
                             ) {
-                                if (!chartXML) {
+                                if (!baseXml) {
                                     console.warn(
                                         "[edit_diagram streaming] No chart XML available",
                                     )
@@ -514,7 +537,7 @@ export function ChatMessageDisplay({
                                 }
                                 editDiagramOriginalXmlRef.current.set(
                                     toolCallId,
-                                    chartXML,
+                                    baseXml,
                                 )
                             }
                             const originalXml =
@@ -739,7 +762,11 @@ export function ChatMessageDisplay({
                                                                 !isRestoredMessage
                                                             }
                                                         >
-                                                            <ReasoningTrigger />
+                                                            <ReasoningTrigger
+                                                                getThinkingMessage={
+                                                                    thinkingMessage
+                                                                }
+                                                            />
                                                             <ReasoningContent>
                                                                 {
                                                                     reasoningPart.text

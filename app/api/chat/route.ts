@@ -38,7 +38,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
-import { classifyLLMError, isToolCallError } from "@/lib/llm-errors"
+import { classifyLLMError, streamErrorText } from "@/lib/llm-errors"
 import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
@@ -724,12 +724,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
 
     const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
-        // The same text goes back to the model when its tool call was
-        // invalid, so it can fix it: keep that one as it is
-        onError: (error) =>
-            isToolCallError(error)
-                ? (error as Error).message
-                : JSON.stringify(classifyLLMError(error)),
+        onError: streamErrorText,
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage

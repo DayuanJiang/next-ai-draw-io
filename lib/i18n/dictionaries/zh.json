@@ -248,6 +248,7 @@
     "reasoning": {
         "thinking": "思考中...",
         "thoughtFor": "思考了 {duration} 秒",
+        "thoughtForOne": "思考了 1 秒",
         "thoughtBrief": "思考了几秒钟"
     },
     "dev": {

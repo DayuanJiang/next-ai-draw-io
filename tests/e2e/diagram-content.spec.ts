@@ -137,6 +137,34 @@ test("edit_diagram applies all operations or none", async ({ page: p }) => {
     await expect(canvas.getByText("Broken", { exact: true })).toHaveCount(0)
 })
 
+test("the thinking header is in the page language", async ({ page: p }) => {
+    const events = [
+        { type: "start" },
+        { type: "reasoning-start", id: "r1" },
+        { type: "reasoning-delta", id: "r1", delta: "Plan the boxes" },
+        { type: "reasoning-end", id: "r1" },
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: "Done" },
+        { type: "text-end", id: "t1" },
+        { type: "finish" },
+    ]
+    await p.route("**/api/chat", (route) =>
+        route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: `${events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")}data: [DONE]\n\n`,
+        }),
+    )
+    await p.goto("/zh", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "画两个框")
+    await expect(p.getByText("Plan the boxes")).toBeAttached({
+        timeout: 15000,
+    })
+    await expect(p.getByText(/^思考/)).toBeVisible()
+    await expect(p.getByText(/^Thought for|^Thinking/)).toHaveCount(0)
+})
+
 test("blank text before a tool call shows no empty bubble", async ({
     page: p,
 }) => {
@@ -162,4 +190,111 @@ test("blank text before a tool call shows no empty bubble", async ({
     })
     // Assistant text bubbles have this background
     await expect(p.locator("div.rounded-2xl.bg-muted\\/60")).toHaveCount(0)
+})
+
+test("an edit right after a broken edit call starts from the real diagram", async ({
+    page: p,
+}) => {
+    // Seen with Claude Opus 5.5: the first edit call had invalid JSON, the
+    // server rejected it, and the model sent the same edit again at once.
+    // The second edit must not see the first one's streamed preview.
+    const sse = (events: object[]) =>
+        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")
+    const edit = {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "c",
+                new_xml: cell("c", "Gamma", 400),
+            },
+        ],
+    }
+    const deltas = (id: string) =>
+        (JSON.stringify(edit).match(/[\s\S]{1,40}/g) ?? []).map((d) => ({
+            type: "tool-input-delta",
+            toolCallId: id,
+            inputTextDelta: d,
+        }))
+    const start = (id: string) => ({
+        type: "tool-input-start",
+        toolCallId: id,
+        toolName: "edit_diagram",
+    })
+    // Each inner array is sent as one network chunk, 300 ms apart, so the
+    // throttled UI renders between chunks like with a real model
+    const replies = [
+        [streamedToolCall("display_diagram", { xml: cell("a", "Alpha", 40) })],
+        [
+            sse([
+                { type: "start" },
+                { type: "start-step" },
+                start("e1"),
+                ...deltas("e1"),
+            ]),
+            sse([
+                {
+                    type: "tool-input-error",
+                    toolCallId: "e1",
+                    toolName: "edit_diagram",
+                    input: "{broken",
+                    errorText: "JSON parsing failed",
+                },
+                {
+                    type: "tool-output-error",
+                    toolCallId: "e1",
+                    errorText: "JSON parsing failed",
+                },
+                { type: "finish-step" },
+                { type: "start-step" },
+                start("e2"),
+                ...deltas("e2"),
+            ]),
+            `${sse([
+                {
+                    type: "tool-input-available",
+                    toolCallId: "e2",
+                    toolName: "edit_diagram",
+                    input: edit,
+                },
+                { type: "finish-step" },
+                { type: "finish" },
+            ])}data: [DONE]\n\n`,
+        ],
+    ]
+    await p.addInitScript((replies) => {
+        const realFetch = window.fetch
+        let n = 0
+        window.fetch = async (input, init) => {
+            const url =
+                typeof input === "string" ? input : (input as Request).url
+            if (!url.endsWith("/api/chat")) return realFetch(input, init)
+            const chunks = replies[n++] ?? [
+                'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
+            ]
+            const body = new ReadableStream({
+                async start(controller) {
+                    for (const chunk of chunks) {
+                        controller.enqueue(new TextEncoder().encode(chunk))
+                        await new Promise((r) => setTimeout(r, 300))
+                    }
+                    controller.close()
+                },
+            })
+            return new Response(body, {
+                headers: { "content-type": "text/event-stream" },
+            })
+        }
+    }, replies)
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    const canvas = p.frameLocator("iframe")
+
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Add another box")
+    await waitForCompleteCount(p, 2)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(p.getByText(/No changes were made/)).toHaveCount(0)
 })

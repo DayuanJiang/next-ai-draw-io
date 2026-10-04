@@ -1,7 +1,20 @@
 // @vitest-environment node
-import { APICallError, InvalidToolInputError, RetryError } from "ai"
+import {
+    APICallError,
+    InvalidToolInputError,
+    RetryError,
+    simulateReadableStream,
+    streamText,
+    tool,
+} from "ai"
+import { MockLanguageModelV3 } from "ai/test"
 import { describe, expect, it } from "vitest"
-import { classifyLLMError, isToolCallError } from "@/lib/llm-errors"
+import { z } from "zod"
+import {
+    classifyLLMError,
+    isToolCallError,
+    streamErrorText,
+} from "@/lib/llm-errors"
 
 const apiError = (statusCode: number, message: string, responseBody = "") =>
     new APICallError({
@@ -89,6 +102,14 @@ describe("classifyLLMError", () => {
         expect(classifyLLMError(timeout).code).toBe("timeout")
     })
 
+    it("points to the model id when Bedrock wants an inference profile", () => {
+        const error = apiError(
+            400,
+            "Invocation of model ID anthropic.claude-sonnet-5-5 with on-demand throughput isn’t supported. Retry your request with the ID or ARN of an inference profile that contains this model.",
+        )
+        expect(classifyLLMError(error).code).toBe("model_not_found")
+    })
+
     it("names a network error the SDK wrapped", () => {
         const error = new APICallError({
             message:
@@ -127,6 +148,64 @@ describe("classifyLLMError", () => {
             code: "model_not_found",
             message:
                 "Gone: The model 'deepseek-v4-flash' has reached its end of life",
+        })
+    })
+})
+
+describe("streamErrorText", () => {
+    it("keeps the text of a tool call the model got wrong", async () => {
+        // Seen with Claude Opus 5.5: a quote left unescaped in the input
+        const model = new MockLanguageModelV3({
+            doStream: (async () => ({
+                stream: simulateReadableStream({
+                    chunks: [
+                        {
+                            type: "tool-call",
+                            toolCallId: "c1",
+                            toolName: "edit_diagram",
+                            input: '{"operations": [{"new_xml": "as="x""}]}',
+                        },
+                        {
+                            type: "finish",
+                            finishReason: {
+                                unified: "tool-calls",
+                                raw: "tool_use",
+                            },
+                            usage: {
+                                inputTokens: { total: 1 },
+                                outputTokens: { total: 1 },
+                            },
+                        },
+                    ],
+                }),
+            })) as any,
+        })
+        const result = streamText({
+            model: model as any,
+            prompt: "edit",
+            tools: {
+                edit_diagram: tool({
+                    inputSchema: z.object({ operations: z.array(z.any()) }),
+                }),
+            },
+        })
+        const errors: string[] = []
+        for await (const chunk of result.toUIMessageStream({
+            onError: streamErrorText,
+        })) {
+            if ("errorText" in chunk) errors.push(chunk.errorText)
+        }
+        expect(errors.length).toBeGreaterThan(0)
+        for (const text of errors) {
+            expect(text).toMatch(/^Invalid input for tool edit_diagram/)
+        }
+    })
+
+    it("classifies a provider error", () => {
+        expect(JSON.parse(streamErrorText(apiError(401, "bad key")))).toEqual({
+            type: "provider",
+            code: "invalid_api_key",
+            message: "bad key",
         })
     })
 })

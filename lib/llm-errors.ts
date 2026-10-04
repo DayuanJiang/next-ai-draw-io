@@ -49,6 +49,8 @@ const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
     ],
     // Bedrock, when the output limit cut the tool call's JSON short
     [/toolUse\.input is invalid/i, "output_truncated"],
+    // Bedrock, for a model id without the inference profile prefix
+    [/on-demand throughput isn.t supported/i, "model_not_found"],
     [
         /insufficient[_ ]quota|insufficient balance|exceeded your current quota|credit balance is too low|余额不足/i,
         "insufficient_quota",
@@ -103,6 +105,17 @@ function problemDetail(body: string): string | undefined {
     } catch {
         return undefined
     }
+}
+
+/**
+ * The error text for the chat stream: what went wrong with the provider as
+ * JSON for the hint, or the text the model must read to fix a tool call.
+ */
+export function streamErrorText(error: unknown): string {
+    // The SDK passes an invalid tool call's error as a plain string
+    if (typeof error === "string") return error
+    if (isToolCallError(error)) return (error as Error).message
+    return JSON.stringify(classifyLLMError(error))
 }
 
 /**

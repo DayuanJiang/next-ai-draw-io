@@ -248,6 +248,7 @@
     "reasoning": {
         "thinking": "Thinking...",
         "thoughtFor": "Thought for {duration} seconds",
+        "thoughtForOne": "Thought for 1 second",
         "thoughtBrief": "Thought for a few seconds"
     },
     "dev": {
