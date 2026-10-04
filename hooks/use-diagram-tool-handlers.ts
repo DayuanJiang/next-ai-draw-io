@@ -6,9 +6,13 @@ import type {
 } from "@/components/chat/ValidationCard"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
-import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
+import { isMxCellXmlComplete } from "@/lib/utils"
+import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 
 const DEBUG = process.env.NODE_ENV === "development"
+
+// display_diagram replaces the document with this one page
+const NEW_PAGE = { pageId: "page-1", pageName: "Page-1" }
 
 interface ToolCall {
     toolCallId: string
@@ -173,11 +177,12 @@ NEXT STEP: Call append_diagram with the continuation XML.
         const finalXml = xml
         partialXmlRef.current = "" // Reset any partial from previous truncation
 
-        // Wrap raw XML with full mxfile structure for draw.io
-        const fullXml = wrapWithMxFile(finalXml)
-
-        // loadDiagram validates and returns error if invalid
-        const validationError = onDisplayChart(fullXml)
+        // Wrap, validate and auto-fix the model's XML like the MCP server's
+        // create_new_diagram, then load it
+        const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+        const validationError = prepared.ok
+            ? onDisplayChart(prepared.xml, true)
+            : prepared.error
 
         if (validationError) {
             console.warn("[display_diagram] Validation error:", validationError)
@@ -545,8 +550,10 @@ Start your continuation with the NEXT character after where it stopped.`,
             const finalXml = partialXmlRef.current
             partialXmlRef.current = "" // Reset
 
-            const fullXml = wrapWithMxFile(finalXml)
-            const validationError = onDisplayChart(fullXml)
+            const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+            const validationError = prepared.ok
+                ? onDisplayChart(prepared.xml, true)
+                : prepared.error
 
             if (validationError) {
                 addToolOutput({

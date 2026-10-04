@@ -6,11 +6,8 @@ import type { DrawIoEmbedRef, EventExport } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
-import {
-    extractDiagramXML,
-    isRealDiagram,
-    validateAndFixXml,
-} from "../lib/utils"
+import { validateAndFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
+import { extractDiagramXML, isRealDiagram } from "../lib/utils"
 
 interface DiagramContextType {
     chartXML: string
@@ -170,9 +167,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     ): string | null => {
         let xmlToLoad = chart
 
-        // Validate XML structure before loading (unless skipped for internal use)
+        // Validate XML structure before loading (unless skipped for internal
+        // use). Not strict: the XML may hold the user's own diagram, and the
+        // tool handlers check model XML strictly before it gets here.
         if (!skipValidation) {
-            const validation = validateAndFixXml(chart)
+            const validation = validateAndFixXml(chart, { strict: false })
             if (!validation.valid) {
                 console.warn(
                     "[loadDiagram] Validation error:",

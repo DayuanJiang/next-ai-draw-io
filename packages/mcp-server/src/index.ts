@@ -45,6 +45,7 @@ import {
 } from "./http-server.ts"
 import { parseDrawioFileContent } from "./load-diagram.ts"
 import { log } from "./logger.ts"
+import { prepareNewDiagram } from "./new-diagram.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
@@ -341,44 +342,21 @@ Rules: cells are siblings (never nested), ids are unique per page and start from
                 }
             }
 
-            // Bare cells get the wrapper and root cells first: the strict
-            // parser rejects several top-level elements. Then validate and
-            // auto-fix (works for both mxfile and mxGraphModel inputs).
-            let xml = wrapCellsInModel(inputXml)
-            const { valid, error, fixed, fixes } = validateAndFixXml(xml)
-            if (fixed) {
-                xml = fixed
-                log.info(`XML auto-fixed: ${fixes.join(", ")}`)
-            }
-            if (!valid && error) {
-                log.error(`XML validation failed: ${error}`)
+            const prepared = prepareNewDiagram(inputXml)
+            if (!prepared.ok) {
+                log.error(prepared.error)
                 return {
                     content: [
-                        {
-                            type: "text",
-                            text: `Error: XML validation failed - ${error}`,
-                        },
+                        { type: "text", text: `Error: ${prepared.error}` },
                     ],
                     isError: true,
                 }
             }
-
-            // Normalise to the canonical mxfile shape so every later tool can
-            // assume "session.xml is always an mxfile". Bare <mxGraphModel>
-            // inputs are wrapped into a single-page mxfile here.
-            const normalized = normalizeToMxfile(xml)
-            if (!normalized) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Error: XML must be the mxCell elements of one page, a <mxGraphModel>, or an <mxfile> with one or more <diagram> children.",
-                        },
-                    ],
-                    isError: true,
-                }
+            if (prepared.fixes.length > 0) {
+                log.info(`XML auto-fixed: ${prepared.fixes.join(", ")}`)
             }
-            xml = normalized
+            // Every later tool can assume session.xml is an mxfile
+            const xml = prepared.xml
 
             log.info(`Setting diagram content, ${xml.length} chars`)
 

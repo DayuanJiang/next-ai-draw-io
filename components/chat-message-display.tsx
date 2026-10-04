@@ -41,7 +41,6 @@ import {
     convertToLegalXml,
     extractCompleteMxCells,
     replaceNodes,
-    validateAndFixXml,
 } from "@/lib/utils"
 
 // Helper to extract complete operations from streaming input
@@ -345,73 +344,32 @@ export function ChatMessageDisplay({
         }
     }
 
+    // Streaming preview of display_diagram: draw the complete cells written
+    // so far. The tool handler validates and loads the final diagram.
     const handleDisplayChart = useCallback(
-        (xml: string, showToast = false) => {
-            let currentXml = xml || ""
+        (xml: string) => {
+            const completeCells = extractCompleteMxCells(xml || "")
+            if (!completeCells) return
+            const convertedXml = convertToLegalXml(completeCells)
+            if (convertedXml === previousXML.current) return
 
-            // During streaming (showToast=false), extract only complete mxCell elements
-            // This allows progressive rendering even with partial/incomplete trailing XML
-            if (!showToast) {
-                const completeCells = extractCompleteMxCells(currentXml)
-                if (!completeCells) {
-                    return
-                }
-                currentXml = completeCells
-            }
+            // Skip this update while the cells written so far don't parse
+            const testDoc = new DOMParser().parseFromString(
+                `<root>${convertedXml}</root>`,
+                "text/xml",
+            )
+            if (testDoc.querySelector("parsererror")) return
 
-            const convertedXml = convertToLegalXml(currentXml)
-            if (convertedXml !== previousXML.current) {
-                // Parse and validate XML BEFORE calling replaceNodes
-                const parser = new DOMParser()
-                // Wrap in root element for parsing multiple mxCell elements
-                const testDoc = parser.parseFromString(
-                    `<root>${convertedXml}</root>`,
-                    "text/xml",
-                )
-                const parseError = testDoc.querySelector("parsererror")
-
-                if (parseError) {
-                    // Only show toast if this is the final XML (not during streaming)
-                    if (showToast) {
-                        toast.error(dict.errors.malformedXml)
-                    }
-                    return // Skip this update
-                }
-
-                try {
-                    // If chartXML is empty, create a default mxfile structure to use with replaceNodes
-                    // This ensures the XML is properly wrapped in mxfile/diagram/mxGraphModel format
-                    const baseXML =
-                        chartXML ||
-                        `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
-                    const replacedXML = replaceNodes(baseXML, convertedXml)
-
-                    // During streaming (showToast=false), skip heavy validation for lower latency
-                    // The quick DOM parse check above catches malformed XML
-                    // Full validation runs on final output (showToast=true)
-                    if (!showToast) {
-                        previousXML.current = convertedXml
-                        onDisplayChart(replacedXML, true)
-                        return
-                    }
-
-                    // Final output: run full validation and auto-fix
-                    const validation = validateAndFixXml(replacedXML)
-                    if (validation.valid) {
-                        previousXML.current = convertedXml
-                        // Use fixed XML if available, otherwise use original
-                        const xmlToLoad = validation.fixed || replacedXML
-                        onDisplayChart(xmlToLoad, true)
-                    } else {
-                        toast.error(dict.errors.validationFailed)
-                    }
-                } catch (error) {
-                    console.error("Error processing XML:", error)
-                    // Only show toast if this is the final XML (not during streaming)
-                    if (showToast) {
-                        toast.error(dict.errors.failedToProcess)
-                    }
-                }
+            try {
+                // An empty canvas gets a default mxfile to put the cells in
+                const baseXML =
+                    chartXML ||
+                    `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+                const replacedXML = replaceNodes(baseXML, convertedXml)
+                previousXML.current = convertedXml
+                onDisplayChart(replacedXML, true)
+            } catch (error) {
+                console.error("Error processing XML:", error)
             }
         },
         [chartXML, onDisplayChart],
@@ -497,10 +455,7 @@ export function ChatMessageDisplay({
                                 return // Skip redundant processing
                             }
 
-                            if (
-                                state === "input-streaming" ||
-                                state === "input-available"
-                            ) {
+                            if (state === "input-streaming") {
                                 // Debounce streaming updates - queue the XML and process after delay
                                 pendingXmlRef.current = xml
 
@@ -513,10 +468,7 @@ export function ChatMessageDisplay({
                                             debounceTimeoutRef.current = null
                                             pendingXmlRef.current = null
                                             if (pendingXml) {
-                                                handleDisplayChart(
-                                                    pendingXml,
-                                                    false,
-                                                )
+                                                handleDisplayChart(pendingXml)
                                                 lastProcessedXmlRef.current.set(
                                                     toolCallId,
                                                     pendingXml,
@@ -527,17 +479,16 @@ export function ChatMessageDisplay({
                                     )
                                 }
                             } else if (
-                                state === "output-available" &&
                                 !processedToolCalls.current.has(toolCallId)
                             ) {
-                                // Final output - process immediately (clear any pending debounce)
+                                // Input complete: the tool handler loads the
+                                // validated diagram, so drop a queued preview
+                                // that would draw the raw cells over it
                                 if (debounceTimeoutRef.current) {
                                     clearTimeout(debounceTimeoutRef.current)
                                     debounceTimeoutRef.current = null
                                     pendingXmlRef.current = null
                                 }
-                                // Show toast only if final XML is malformed
-                                handleDisplayChart(xml, true)
                                 processedToolCalls.current.add(toolCallId)
                                 // Clean up the ref entry - tool is complete, no longer needed
                                 lastProcessedXmlRef.current.delete(toolCallId)

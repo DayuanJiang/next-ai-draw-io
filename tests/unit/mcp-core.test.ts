@@ -14,7 +14,11 @@ import {
     wrapCellsInModel,
 } from "@/packages/mcp-server/src/pages.ts"
 import { getXmlSyntaxError } from "@/packages/mcp-server/src/xml-syntax.ts"
-import { validateAndFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
+import {
+    autoFixXml,
+    validateAndFixXml,
+    validateMxCellStructure,
+} from "@/packages/mcp-server/src/xml-validation.ts"
 
 const box = (id: string, parent = "1") =>
     `<mxCell id="${id}" value="${id}" vertex="1" parent="${parent}"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`
@@ -86,5 +90,93 @@ describe("MCP diagram modules with a browser DOM", () => {
         const base64 = btoa(String.fromCharCode(...deflated))
         expect(decompressPageContent(base64)).toBe(model)
         expect(decompressPageContent("not compressed")).toBeNull()
+    })
+})
+
+// Repair cases fixed in the web app's own copy before it moved here
+const page = (id: string, cells: string) =>
+    `<diagram name="${id}" id="${id}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+
+describe("duplicate ids in multi-page documents", () => {
+    const shape = (id: string, value = "Box") =>
+        `<mxCell id="${id}" value="${value}" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`
+
+    it("accepts the same ids on different pages", () => {
+        const xml = `<mxfile>${page("p1", shape("2"))}${page("p2", shape("2"))}</mxfile>`
+        expect(validateMxCellStructure(xml)).toBeNull()
+    })
+
+    it("still reports duplicate ids within one page", () => {
+        const xml = `<mxfile>${page("p1", shape("2") + shape("2"))}${page("p2", "")}</mxfile>`
+        expect(validateMxCellStructure(xml)).toMatch(/duplicate cell ID/i)
+    })
+
+    it("does not rename the root cells of other pages when fixing", () => {
+        const xml = `<mxfile>${page("p1", shape("2", "R&D"))}${page("p2", shape("3"))}</mxfile>`
+        const result = validateAndFixXml(xml)
+        expect(result.valid).toBe(true)
+        expect(result.fixed).not.toContain("_dup")
+        expect(result.fixed).toContain("R&amp;D")
+    })
+
+    it("renames a duplicate id in a bare model, as display_diagram has", () => {
+        // In an <mxfile> the duplicate is reported instead (above)
+        const xml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${shape("d") + shape("d")}</root></mxGraphModel>`
+        const { fixed } = autoFixXml(xml)
+        expect(fixed).toContain('<mxCell id="d" ')
+        expect(fixed).toContain('<mxCell id="d_dup1" ')
+    })
+})
+
+describe("autoFixXml", () => {
+    it("does not insert a space at the start of style values", () => {
+        const xml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="R&D" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></root></mxGraphModel>`
+        const { fixed } = autoFixXml(xml)
+        expect(fixed).toContain('style="rounded=1;whiteSpace=wrap;"')
+    })
+
+    it("adds a missing space between attributes", () => {
+        const xml = `<mxCell id="2" vertex="1"parent="1"/>`
+        expect(autoFixXml(xml).fixed).toContain('vertex="1" parent="1"')
+    })
+
+    it("keeps &quot; inside rich text labels", () => {
+        const label = "&lt;font color=&quot;#ff0000&quot;&gt;Hello&lt;/font&gt;"
+        const xml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="${label}" style="html=1;" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><mxCell id="3" value="Q&A" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></root></mxGraphModel>`
+        const result = validateAndFixXml(xml)
+        expect(result.valid).toBe(true)
+        expect(result.fixed).toContain(`value="${label}"`)
+    })
+
+    it("fixes an attribute delimited by &quot;", () => {
+        const xml = `<mxCell id="2" dashPattern=&quot;1 1;&quot; vertex="1" parent="1"/>`
+        expect(autoFixXml(xml).fixed).toContain('dashPattern="1 1;"')
+    })
+
+    it("keeps cells written on one line next to multi-line cells", () => {
+        const xml = `<mxGraphModel><root>
+<mxCell id="0"/>
+<mxCell id="1" parent="0"/>
+<mxCell id="2" value="Q&A" vertex="1" parent="1">
+  <mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>
+</mxCell>
+<mxCell id="e1" edge="1" parent="1" source="2" target="3"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="3" value="B" vertex="1" parent="1">
+  <mxGeometry x="200" y="0" width="80" height="40" as="geometry"/>
+</mxCell>
+</root></mxGraphModel>`
+        const result = validateAndFixXml(xml)
+        expect(result.valid).toBe(true)
+        for (const id of ["2", "e1", "3"]) {
+            expect(result.fixed).toContain(`<mxCell id="${id}"`)
+        }
+    })
+
+    it("keeps object and UserObject wrappers", () => {
+        const xml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="2" label="Docs" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject><object id="3" label="A&B" owner="me"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></object></root></mxGraphModel>`
+        const result = validateAndFixXml(xml)
+        expect(result.valid).toBe(true)
+        expect(result.fixed).toContain('<UserObject id="2"')
+        expect(result.fixed).toContain('<object id="3"')
     })
 })
