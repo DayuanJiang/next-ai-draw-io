@@ -37,11 +37,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
-    applyDiagramOperations,
     convertToLegalXml,
     extractCompleteMxCells,
     replaceNodes,
 } from "@/lib/utils"
+import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
+import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -362,9 +363,7 @@ export function ChatMessageDisplay({
 
             try {
                 // An empty canvas gets a default mxfile to put the cells in
-                const baseXML =
-                    chartXML ||
-                    `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+                const baseXML = chartXML || BLANK_MXFILE
                 const replacedXML = replaceNodes(baseXML, convertedXml)
                 previousXML.current = convertedXml
                 onDisplayChart(replacedXML, true)

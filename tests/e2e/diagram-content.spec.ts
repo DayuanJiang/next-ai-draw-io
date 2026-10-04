@@ -1,32 +1,43 @@
-import { expect, test } from "@playwright/test"
+import { expect, type Page, test } from "@playwright/test"
 import { getIframe, sendMessage, waitForCompleteCount } from "./lib/fixtures"
 
 /**
- * Checks what draw.io actually shows after display_diagram, not only the
+ * Checks what draw.io actually shows after the diagram tools, not only the
  * tool card. The tool input is streamed in chunks like a real model, and
  * the browser tool handler (not the server) completes the tool call.
  */
-function streamedToolCall(xml: string) {
+function streamedToolCall(toolName: string, input: unknown) {
     const toolCallId = `call_${Math.random().toString(36).slice(2)}`
-    const input = JSON.stringify({ xml })
-    const chunks = input.match(/[\s\S]{1,40}/g) ?? []
+    const chunks = JSON.stringify(input).match(/[\s\S]{1,40}/g) ?? []
     const events = [
         { type: "start", messageId: `msg_${toolCallId}` },
-        { type: "tool-input-start", toolCallId, toolName: "display_diagram" },
+        { type: "tool-input-start", toolCallId, toolName },
         ...chunks.map((inputTextDelta) => ({
             type: "tool-input-delta",
             toolCallId,
             inputTextDelta,
         })),
-        {
-            type: "tool-input-available",
-            toolCallId,
-            toolName: "display_diagram",
-            input: { xml },
-        },
+        { type: "tool-input-available", toolCallId, toolName, input },
         { type: "finish" },
     ]
     return `${events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")}data: [DONE]\n\n`
+}
+
+const END_TURN =
+    'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n'
+
+/** Answer each chat request with the next reply, then end the turn */
+async function mockReplies(p: Page, replies: string[]) {
+    await p.route("**/api/chat", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: replies.shift() ?? END_TURN,
+        })
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    return p.frameLocator("iframe")
 }
 
 const cell = (id: string, label: string, x: number) =>
@@ -46,20 +57,10 @@ const NEW_CELLS =
 test("display_diagram replaces the document with the fixed diagram", async ({
     page: p,
 }) => {
-    const replies = [TWO_PAGES, NEW_CELLS]
-    await p.route("**/api/chat", async (route) => {
-        const xml = replies.shift()
-        await route.fulfill({
-            status: 200,
-            contentType: "text/event-stream",
-            body: xml
-                ? streamedToolCall(xml)
-                : 'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
-        })
-    })
-    await p.goto("/", { waitUntil: "networkidle" })
-    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
-    const canvas = p.frameLocator("iframe")
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", { xml: TWO_PAGES }),
+        streamedToolCall("display_diagram", { xml: NEW_CELLS }),
+    ])
 
     await sendMessage(p, "Draw two pages")
     await waitForCompleteCount(p, 1)
@@ -78,4 +79,60 @@ test("display_diagram replaces the document with the fixed diagram", async ({
     // The old pages are gone
     await expect(canvas.getByText("Old A")).toHaveCount(0)
     await expect(canvas.getByText("Second", { exact: true })).toHaveCount(0)
+})
+
+test("edit_diagram applies all operations or none", async ({ page: p }) => {
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", {
+            xml: cell("a", "Alpha", 40) + cell("b", "Beta", 220),
+        }),
+        streamedToolCall("edit_diagram", {
+            operations: [
+                { operation: "delete", cell_id: "a" },
+                {
+                    operation: "update",
+                    cell_id: "b",
+                    new_xml: cell("b", "Beta two", 220),
+                },
+                {
+                    operation: "add",
+                    cell_id: "c",
+                    new_xml: cell("c", "Gamma", 400),
+                },
+            ],
+        }),
+        // The first operation is fine, the second fails: nothing is kept
+        streamedToolCall("edit_diagram", {
+            operations: [
+                {
+                    operation: "update",
+                    cell_id: "c",
+                    new_xml: cell("c", "Broken", 400),
+                },
+                { operation: "delete", cell_id: "missing" },
+            ],
+        }),
+    ])
+
+    await sendMessage(p, "Draw two boxes")
+    await waitForCompleteCount(p, 1)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+
+    await sendMessage(p, "Change them")
+    await waitForCompleteCount(p, 2)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta two", { exact: true })).toBeVisible()
+    await expect(canvas.getByText("Alpha", { exact: true })).toHaveCount(0)
+
+    await sendMessage(p, "Change again")
+    await expect(p.getByText(/No changes were made/).first()).toBeAttached({
+        timeout: 15000,
+    })
+    await p.waitForTimeout(1000)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible()
+    await expect(canvas.getByText("Broken", { exact: true })).toHaveCount(0)
 })

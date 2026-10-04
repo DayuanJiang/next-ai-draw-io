@@ -23,7 +23,6 @@ import { findCachedResponse } from "@/lib/cached-responses"
 import {
     dropInvalidToolCalls,
     fixToolInputJson,
-    isMinimalDiagram,
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
@@ -50,6 +49,7 @@ import {
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { getUserIdFromRequest } from "@/lib/user-id"
+import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -164,7 +164,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === CACHE CHECK START ===
     const isFirstMessage = messages.length === 1
-    const isEmptyDiagram = !xml || xml.trim() === "" || isMinimalDiagram(xml)
+    const isEmptyDiagram = !xml || !hasCells(xml)
 
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]

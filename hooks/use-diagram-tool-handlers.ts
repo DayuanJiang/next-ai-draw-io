@@ -7,6 +7,7 @@ import type {
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
+import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 
 const DEBUG = process.env.NODE_ENV === "development"
@@ -401,27 +402,19 @@ ${finalXml}
                 }
             }
 
-            const { applyDiagramOperations } = await import("@/lib/utils")
-            const { result: editedXml, errors } = applyDiagramOperations(
-                currentXml,
-                operations,
-            )
-
-            // Check for operation errors
-            if (errors.length > 0) {
-                const errorMessages = errors
-                    .map(
-                        (e) =>
-                            `- ${e.type} on cell_id="${e.cellId}": ${e.message}`,
-                    )
-                    .join("\n")
-
+            // All or nothing, checked like the MCP server's edit_diagram.
+            // The model sees the first page, so edits target it.
+            const outcome = editDiagram(currentXml, operations, {})
+            if (!outcome.ok) {
+                const reason = outcome.pageError
+                    ? outcome.errors[0]
+                    : `No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}`
                 restoreOriginal()
                 addToolOutput({
                     tool: "edit_diagram",
                     toolCallId: toolCall.toolCallId,
                     state: "output-error",
-                    errorText: `Some operations failed:\n${errorMessages}
+                    errorText: `${reason}
 
 Current diagram XML:
 \`\`\`xml
@@ -435,36 +428,12 @@ Please check the cell IDs and retry.`,
                 return
             }
 
-            // loadDiagram validates and returns error if invalid
-            const validationError = onDisplayChart(editedXml)
-            if (validationError) {
-                console.warn(
-                    "[edit_diagram] Validation error:",
-                    validationError,
-                )
-                restoreOriginal()
-                addToolOutput({
-                    tool: "edit_diagram",
-                    toolCallId: toolCall.toolCallId,
-                    state: "output-error",
-                    errorText: `Edit produced invalid XML: ${validationError}
-
-Current diagram XML:
-\`\`\`xml
-${currentXml}
-\`\`\`
-
-Please fix the operations to avoid structural issues.`,
-                })
-                // Clean up the shared original XML ref
-                editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
-                return
-            }
+            onDisplayChart(outcome.xml, true)
             onExport()
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
-                output: `Successfully applied ${operations.length} operation(s) to the diagram.`,
+                output: `Successfully applied ${outcome.applied} operation(s) to the diagram.`,
             })
             // Clean up the shared original XML ref
             editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)

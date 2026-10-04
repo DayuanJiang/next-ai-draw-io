@@ -32,7 +32,6 @@ import { useSessionManager } from "@/hooks/use-session-manager"
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
-import { isMinimalDiagram } from "@/lib/chat-helpers"
 import type { DrawioTheme } from "@/lib/drawio-themes"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -41,7 +40,8 @@ import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
-import { cn, formatXML, isRealDiagram, wrapWithMxFile } from "@/lib/utils"
+import { cn, formatXML, isRealDiagram } from "@/lib/utils"
+import { BLANK_MXFILE, hasCells } from "@/packages/mcp-server/src/pages.ts"
 import type { ValidationState } from "./chat/ValidationCard"
 import {
     APPENDED_FILE_SECTIONS_PATTERN,
@@ -812,10 +812,7 @@ export default function ChatPanel({
         if (input.trim() && !isProcessing && !isExtracting) {
             // Check if input matches a cached example (only when no messages
             // yet and the canvas is empty, same rule as the server)
-            if (
-                messages.length === 0 &&
-                isMinimalDiagram(chartXMLRef.current || "")
-            ) {
+            if (messages.length === 0 && !hasCells(chartXMLRef.current || "")) {
                 // Pass the file name so a user's own file never matches an example
                 const cached = findCachedResponse(
                     input.trim(),
@@ -859,7 +856,7 @@ export default function ChatPanel({
                     // Snapshot the canvas before the example so editing this message works
                     xmlSnapshotsRef.current.set(
                         0,
-                        chartXMLRef.current || wrapWithMxFile(""),
+                        chartXMLRef.current || BLANK_MXFILE,
                     )
                     setInput("")
                     sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)

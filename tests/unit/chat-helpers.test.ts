@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest"
 import {
     dropInvalidToolCalls,
     fixToolInputJson,
-    isMinimalDiagram,
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
@@ -92,36 +91,6 @@ describe("validateFileParts", () => {
             { role: "user", parts: [{ type: "text", text: "hello" }] },
         ]
         expect(validateFileParts(messages).valid).toBe(false)
-    })
-})
-
-describe("isMinimalDiagram", () => {
-    it("returns true for empty diagram", () => {
-        const xml = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
-        expect(isMinimalDiagram(xml)).toBe(true)
-    })
-
-    it("returns false for diagram with content", () => {
-        const xml =
-            '<mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Hello"/>'
-        expect(isMinimalDiagram(xml)).toBe(false)
-    })
-
-    it("handles whitespace correctly", () => {
-        const xml = '  <mxCell id="0"/>  <mxCell id="1" parent="0"/>  '
-        expect(isMinimalDiagram(xml)).toBe(true)
-    })
-
-    it("returns false for a shape drawn in draw.io with a random id", () => {
-        const xml =
-            '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="xY3kQ9-1" value="" style="rounded=0;" vertex="1" parent="1"><mxGeometry x="10" y="10" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>'
-        expect(isMinimalDiagram(xml)).toBe(false)
-    })
-
-    it("does not mistake ids that start with 0 or 1 for root cells", () => {
-        const xml =
-            '<mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="10"/>'
-        expect(isMinimalDiagram(xml)).toBe(false)
     })
 })
 

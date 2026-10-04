@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-    applyDiagramOperations,
-    cn,
-    extractCompleteMxCells,
-    isMxCellXmlComplete,
-    wrapWithMxFile,
-} from "@/lib/utils"
+import { cn, extractCompleteMxCells, isMxCellXmlComplete } from "@/lib/utils"
 
 describe("isMxCellXmlComplete", () => {
     it("returns false for empty/null input", () => {
@@ -71,36 +65,6 @@ describe("isMxCellXmlComplete", () => {
     })
 })
 
-describe("wrapWithMxFile", () => {
-    it("wraps empty string with default structure", () => {
-        const result = wrapWithMxFile("")
-        expect(result).toContain("<mxfile>")
-        expect(result).toContain("<mxGraphModel>")
-        expect(result).toContain('<mxCell id="0"/>')
-        expect(result).toContain('<mxCell id="1" parent="0"/>')
-    })
-
-    it("wraps raw mxCell content", () => {
-        const xml = '<mxCell id="2" value="Hello"/>'
-        const result = wrapWithMxFile(xml)
-        expect(result).toContain("<mxfile>")
-        expect(result).toContain(xml)
-        expect(result).toContain("</mxfile>")
-    })
-
-    it("returns full mxfile unchanged", () => {
-        const fullXml =
-            '<mxfile><diagram name="Page-1"><mxGraphModel></mxGraphModel></diagram></mxfile>'
-        const result = wrapWithMxFile(fullXml)
-        expect(result).toBe(fullXml)
-    })
-
-    it("handles whitespace in input", () => {
-        const result = wrapWithMxFile("   ")
-        expect(result).toContain("<mxfile>")
-    })
-})
-
 describe("cn (class name utility)", () => {
     it("merges class names", () => {
         expect(cn("foo", "bar")).toBe("foo bar")
@@ -130,52 +94,5 @@ describe("extractCompleteMxCells", () => {
         expect(extractCompleteMxCells(xml)).toBe(
             '<mxCell id="2" vertex="1" parent="1"/>',
         )
-    })
-})
-
-describe("applyDiagramOperations with wrapped cells", () => {
-    const xml = `<mxfile><diagram id="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="5" label="Docs" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject><mxCell id="6" value="B" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><mxCell id="e1" edge="1" parent="1" source="5" target="6"><mxGeometry relative="1" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
-
-    it("deletes a wrapped cell and its edges", () => {
-        const { result, errors } = applyDiagramOperations(xml, [
-            { operation: "delete", cell_id: "5" },
-            { operation: "delete", cell_id: "e1" },
-        ])
-        expect(errors).toEqual([])
-        expect(result).not.toContain("UserObject")
-        expect(result).not.toContain('id="e1"')
-        expect(result).toContain('id="6"')
-    })
-
-    it("rejects adding a cell with the id of a wrapped cell", () => {
-        const { errors } = applyDiagramOperations(xml, [
-            {
-                operation: "add",
-                cell_id: "5",
-                new_xml: '<mxCell id="5" vertex="1" parent="1"/>',
-            },
-        ])
-        expect(errors[0]?.message).toContain("already exists")
-    })
-
-    it("updates a wrapped cell", () => {
-        const { result, errors } = applyDiagramOperations(xml, [
-            {
-                operation: "update",
-                cell_id: "5",
-                new_xml:
-                    '<UserObject id="5" label="New" link="https://example.org"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>',
-            },
-        ])
-        expect(errors).toEqual([])
-        expect(result).toContain('label="New"')
-        expect(result).not.toContain('label="Docs"')
-    })
-
-    it("reports deleting a cell that does not exist", () => {
-        const { errors } = applyDiagramOperations(xml, [
-            { operation: "delete", cell_id: "missing" },
-        ])
-        expect(errors[0]?.message).toContain("not found")
     })
 })

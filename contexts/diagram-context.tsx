@@ -6,6 +6,10 @@ import type { DrawIoEmbedRef, EventExport } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
+import {
+    BLANK_MXFILE,
+    normalizeToMxfile,
+} from "@/packages/mcp-server/src/pages.ts"
 import { validateAndFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
 import { extractDiagramXML, isRealDiagram } from "../lib/utils"
 
@@ -262,7 +266,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const clearDiagram = () => {
-        const emptyDiagram = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+        const emptyDiagram = BLANK_MXFILE
         // Skip validation for trusted internal template (loadDiagram also sets chartXML)
         loadDiagram(emptyDiagram, true)
         setLatestSvg("")
@@ -296,11 +300,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                     const xml = fullDiagramXML?.trim()
                         ? fullDiagramXML
                         : extractDiagramXML(exportData)
-                    let xmlContent = xml
-                    if (!xml.includes("<mxfile")) {
-                        xmlContent = `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
-                    }
-                    fileContent = xmlContent
+                    fileContent =
+                        normalizeToMxfile(xml, {
+                            pageId: "page-1",
+                            pageName: "Page-1",
+                        }) ?? xml
                     mimeType = "application/xml"
                     extension = ".drawio"
                 } else if (format === "png") {

@@ -180,3 +180,86 @@ describe("autoFixXml", () => {
         expect(result.fixed).toContain('<object id="3"')
     })
 })
+
+describe("hasCells (was isMinimalDiagram in the web app)", () => {
+    it("returns true for empty diagram", () => {
+        const xml = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+        expect(hasCells(xml)).toBe(false)
+    })
+
+    it("returns false for diagram with content", () => {
+        const xml =
+            '<mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Hello"/>'
+        expect(hasCells(xml)).toBe(true)
+    })
+
+    it("handles whitespace correctly", () => {
+        const xml = '  <mxCell id="0"/>  <mxCell id="1" parent="0"/>  '
+        expect(hasCells(xml)).toBe(false)
+    })
+
+    it("returns false for a shape drawn in draw.io with a random id", () => {
+        const xml =
+            '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="xY3kQ9-1" value="" style="rounded=0;" vertex="1" parent="1"><mxGeometry x="10" y="10" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>'
+        expect(hasCells(xml)).toBe(true)
+    })
+
+    it("does not mistake ids that start with 0 or 1 for root cells", () => {
+        const xml =
+            '<mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="10"/>'
+        expect(hasCells(xml)).toBe(true)
+    })
+
+    it("counts a cell wrapped in a UserObject", () => {
+        const xml =
+            '<mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="u" link="x"><mxCell vertex="1" parent="1"/></UserObject>'
+        expect(hasCells(xml)).toBe(true)
+    })
+})
+
+describe("applyDiagramOperations with wrapped cells", () => {
+    const xml = `<mxfile><diagram id="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="5" label="Docs" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject><mxCell id="6" value="B" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><mxCell id="e1" edge="1" parent="1" source="5" target="6"><mxGeometry relative="1" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+
+    it("deletes a wrapped cell and its edges", () => {
+        const { result, errors } = applyDiagramOperations(xml, [
+            { operation: "delete", cell_id: "5" },
+            { operation: "delete", cell_id: "e1" },
+        ])
+        expect(errors).toEqual([])
+        expect(result).not.toContain("UserObject")
+        expect(result).not.toContain('id="e1"')
+        expect(result).toContain('id="6"')
+    })
+
+    it("rejects adding a cell with the id of a wrapped cell", () => {
+        const { errors } = applyDiagramOperations(xml, [
+            {
+                operation: "add",
+                cell_id: "5",
+                new_xml: '<mxCell id="5" vertex="1" parent="1"/>',
+            },
+        ])
+        expect(errors[0]?.message).toContain("already exists")
+    })
+
+    it("updates a wrapped cell", () => {
+        const { result, errors } = applyDiagramOperations(xml, [
+            {
+                operation: "update",
+                cell_id: "5",
+                new_xml:
+                    '<UserObject id="5" label="New" link="https://example.org"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>',
+            },
+        ])
+        expect(errors).toEqual([])
+        expect(result).toContain('label="New"')
+        expect(result).not.toContain('label="Docs"')
+    })
+
+    it("reports deleting a cell that does not exist", () => {
+        const { errors } = applyDiagramOperations(xml, [
+            { operation: "delete", cell_id: "missing" },
+        ])
+        expect(errors[0]?.message).toContain("not found")
+    })
+})

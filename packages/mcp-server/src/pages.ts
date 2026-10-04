@@ -86,6 +86,9 @@ function stripXmlDeclaration(xml: string): string {
 
 const ROOT_CELLS = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
 
+/** A one-page document with only the root cells */
+export const BLANK_MXFILE = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${ROOT_CELLS}</root></mxGraphModel></diagram></mxfile>`
+
 /**
  * Turn a list of bare cells (optionally inside <root>) into a one-page
  * <mxGraphModel>, adding the "0" and "1" root cells. The model then only

@@ -40,6 +40,7 @@ import {
     updateLastHistorySvg,
 } from "./history.ts"
 import { log } from "./logger.ts"
+import { BLANK_MXFILE } from "./pages.ts"
 
 // Configurable draw.io embed URL for private deployments
 const DRAWIO_BASE_URL =
@@ -56,10 +57,6 @@ function getOrigin(url: string): string {
 }
 
 const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
-
-// Minimal blank diagram used to bootstrap new sessions.
-// This avoids the draw.io embed spinner (spin=1) getting stuck when no `load(xml)` is ever sent.
-const DEFAULT_DIAGRAM_XML = `<mxfile host="app.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
 
 // Normalize URL for iframe src - ensure no double slashes
 function normalizeUrl(url: string): string {
@@ -91,7 +88,9 @@ function ensureSessionStateInitialized(sessionId: string): void {
     if (stateStore.has(sessionId)) return
 
     // Not a change worth saving: the browser fills it on its next push
-    setState(sessionId, DEFAULT_DIAGRAM_XML, undefined, false, false)
+    // A blank diagram keeps the draw.io spinner (spin=1) from waiting
+    // forever when no load(xml) is ever sent
+    setState(sessionId, BLANK_MXFILE, undefined, false, false)
 }
 
 interface SessionState {

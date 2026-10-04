@@ -53,13 +53,6 @@ export function validateFileParts(messages: any[]): {
     return { valid: true }
 }
 
-// Helper function to check if diagram is minimal/empty
-// Empty means no mxCell besides the root cells "0" and "1". Cells drawn in
-// draw.io get random ids, so checking for id="2" is not enough.
-export function isMinimalDiagram(xml: string): boolean {
-    return !/<mxCell\b[^>]*\bid="(?![01]")/.test(xml)
-}
-
 // A tool-call input providers accept: a non-empty JSON object
 function isValidToolInput(input: unknown): boolean {
     return !!input && typeof input === "object" && Object.keys(input).length > 0
