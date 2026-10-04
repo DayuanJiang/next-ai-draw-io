@@ -224,7 +224,8 @@ export function TemplatePanel({
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `templates-${new Date().toISOString().split("T")[0]}.json`
+            // Local date as YYYY-MM-DD (toISOString would give UTC)
+            a.download = `templates-${new Date().toLocaleDateString("sv-SE")}.json`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)

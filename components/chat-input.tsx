@@ -642,9 +642,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                             dict.save.savedSuccessfully,
                         )
                     }
-                    defaultFilename={`diagram-${new Date()
-                        .toISOString()
-                        .slice(0, 10)}`}
+                    // Local date as YYYY-MM-DD (toISOString would give UTC)
+                    defaultFilename={`diagram-${new Date().toLocaleDateString("sv-SE")}`}
                 />
                 {onUrlChange && (
                     <UrlInputDialog

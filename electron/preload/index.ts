@@ -18,10 +18,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     maximize: () => ipcRenderer.send("window-maximize"),
     close: () => ipcRenderer.send("window-close"),
 
-    // File operations
-    openFile: () => ipcRenderer.invoke("dialog-open-file"),
-    saveFile: (data: string) => ipcRenderer.invoke("dialog-save-file", data),
-
     // Proxy settings
     getProxy: () => ipcRenderer.invoke("get-proxy"),
     setProxy: (config: { httpProxy?: string; httpsProxy?: string }) =>

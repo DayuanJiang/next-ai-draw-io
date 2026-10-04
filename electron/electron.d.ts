@@ -60,10 +60,6 @@ declare global {
             maximize: () => void
             /** Close the window */
             close: () => void
-            /** Open file dialog and return file path */
-            openFile: () => Promise<string | null>
-            /** Save data to file via save dialog */
-            saveFile: (data: string) => Promise<boolean>
             /** Get proxy configuration */
             getProxy: () => Promise<ProxyConfig>
             /** Set proxy configuration (saves and restarts server) */
