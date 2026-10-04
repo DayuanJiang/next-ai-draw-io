@@ -13,6 +13,7 @@ import path from "path"
 import { z } from "zod"
 import { checkAccessCode } from "@/lib/access-code"
 import {
+    CACHE_POINT,
     getAIModel,
     SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
@@ -25,6 +26,7 @@ import {
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
+import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
@@ -266,7 +268,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const {
         model: baseModel,
         providerOptions,
-        headers,
         modelId,
         provider: resolvedProvider,
     } = getAIModel(clientOverrides)
@@ -289,8 +290,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
         )
     }
 
-    // Retry with a smaller budget if the provider rejects the requested one
-    const model = withOutputTokenLimitFallback(baseModel)
+    // Retry once if the provider rejects the requested budget, or (newer
+    // Claude models) the sampling or thinking settings
+    const model = withOutputTokenLimitFallback(
+        withDeprecatedParamsFallback(baseModel),
+    )
 
     // The user setting can raise the budget only on their own key (desktop users
     // can still raise it themselves); on the server's keys it can only lower it
@@ -444,9 +448,7 @@ ${userInputText}
             if (enhancedMessages[i].role === "assistant") {
                 enhancedMessages[i] = {
                     ...enhancedMessages[i],
-                    providerOptions: {
-                        bedrock: { cachePoint: { type: "default" } },
-                    },
+                    providerOptions: CACHE_POINT,
                 }
                 break // Only cache the last assistant message
             }
@@ -499,21 +501,13 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
               {
                   role: "system" as const,
                   content: finalSystemMessage,
-                  ...(shouldCache && {
-                      providerOptions: {
-                          bedrock: { cachePoint: { type: "default" } },
-                      },
-                  }),
+                  ...(shouldCache && { providerOptions: CACHE_POINT }),
               },
               // Cache breakpoint 2: Previous and Current diagram XML context
               {
                   role: "system" as const,
                   content: xmlContext,
-                  ...(shouldCache && {
-                      providerOptions: {
-                          bedrock: { cachePoint: { type: "default" } },
-                      },
-                  }),
+                  ...(shouldCache && { providerOptions: CACHE_POINT }),
               },
           ]
 
@@ -566,7 +560,6 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         },
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
-        ...(headers && { headers }),
         // Langfuse telemetry config (returns undefined if not configured)
         ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
             experimental_telemetry: getTelemetryConfig({

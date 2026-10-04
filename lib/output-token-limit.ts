@@ -36,7 +36,7 @@ function usableLimit(value: number): number | null {
 }
 
 /** Message and body of an error that may be about the budget, or null. */
-function rejectionText(error: unknown): string | null {
+export function rejectionText(error: unknown): string | null {
     const err = error as {
         message?: unknown
         responseBody?: unknown

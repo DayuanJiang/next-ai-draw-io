@@ -9,6 +9,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai"
 import { aihubmix, createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
+import { defaultSettingsMiddleware, wrapLanguageModel } from "ai"
 import { createOllama, ollama } from "ollama-ai-provider-v2"
 import {
     adminProvidersToConfig,
@@ -23,7 +24,6 @@ export const AIHUBMIX_APP_CODE = "MSBS9675"
 interface ModelConfig {
     model: any
     providerOptions?: any
-    headers?: Record<string, string>
     modelId: string
     provider: ProviderName
 }
@@ -132,11 +132,6 @@ const BEDROCK_ANTHROPIC_BETA = {
     },
 }
 
-// Direct Anthropic API headers for beta features
-const ANTHROPIC_BETA_HEADERS = {
-    "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
-}
-
 /**
  * Resolve baseURL based on whether user is providing their own API key.
  * When user provides their own API key, we should NOT fall back to server's
@@ -242,6 +237,26 @@ function parseIntSafe(
 }
 
 /**
+ * GOOGLE_TOP_K and GOOGLE_TOP_P. They are call settings, so they go on the
+ * model through a middleware: as Google provider options they were dropped.
+ */
+function googleSamplingSettings(): { topK?: number; topP?: number } {
+    const settings: { topK?: number; topP?: number } = {}
+    const topK = parseIntSafe(process.env.GOOGLE_TOP_K, "GOOGLE_TOP_K", 1, 100)
+    if (topK) settings.topK = topK
+    if (process.env.GOOGLE_TOP_P) {
+        const topP = Number.parseFloat(process.env.GOOGLE_TOP_P)
+        if (Number.isNaN(topP) || topP < 0 || topP > 1) {
+            throw new Error(
+                `GOOGLE_TOP_P must be a number between 0 and 1, got: ${process.env.GOOGLE_TOP_P}`,
+            )
+        }
+        settings.topP = topP
+    }
+    return settings
+}
+
+/**
  * Build provider-specific options from environment variables
  * Supports various AI SDK providers with their unique configuration options
  *
@@ -335,7 +350,6 @@ function buildProviderOptions(
         }
 
         case "google": {
-            const reasoningEffort = process.env.GOOGLE_REASONING_EFFORT
             const thinkingBudgetVal = parseIntSafe(
                 process.env.GOOGLE_THINKING_BUDGET,
                 "GOOGLE_THINKING_BUDGET",
@@ -374,47 +388,6 @@ function buildProviderOptions(
                 }
 
                 options.google = { thinkingConfig }
-            } else if (reasoningEffort) {
-                options.google = {
-                    reasoningEffort: reasoningEffort as
-                        | "low"
-                        | "medium"
-                        | "high",
-                }
-            }
-
-            // Keep existing Google options
-            const options_obj: Record<string, any> = {}
-            const candidateCount = parseIntSafe(
-                process.env.GOOGLE_CANDIDATE_COUNT,
-                "GOOGLE_CANDIDATE_COUNT",
-                1,
-                8,
-            )
-            if (candidateCount) {
-                options_obj.candidateCount = candidateCount
-            }
-            const topK = parseIntSafe(
-                process.env.GOOGLE_TOP_K,
-                "GOOGLE_TOP_K",
-                1,
-                100,
-            )
-            if (topK) {
-                options_obj.topK = topK
-            }
-            if (process.env.GOOGLE_TOP_P) {
-                const topP = Number.parseFloat(process.env.GOOGLE_TOP_P)
-                if (Number.isNaN(topP) || topP < 0 || topP > 1) {
-                    throw new Error(
-                        `GOOGLE_TOP_P must be a number between 0 and 1, got: ${process.env.GOOGLE_TOP_P}`,
-                    )
-                }
-                options_obj.topP = topP
-            }
-
-            if (Object.keys(options_obj).length > 0) {
-                options.google = { ...options.google, ...options_obj }
             }
             break
         }
@@ -818,7 +791,6 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
 
     let model: any
     let providerOptions: any
-    let headers: Record<string, string> | undefined
 
     // Build provider-specific options from environment variables
     const customProviderOptions = buildProviderOptions(provider, modelId)
@@ -922,14 +894,13 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             const authToken = !apiKey
                 ? process.env.ANTHROPIC_AUTH_TOKEN
                 : undefined
+            // The provider streams tool input per tool (eager_input_streaming),
+            // which replaced the fine-grained-tool-streaming beta header
             const customProvider = createAnthropic({
                 ...(authToken ? { authToken } : { apiKey }),
                 baseURL,
-                headers: ANTHROPIC_BETA_HEADERS,
             })
             model = customProvider(modelId)
-            // Add beta headers for fine-grained tool streaming
-            headers = ANTHROPIC_BETA_HEADERS
             break
         }
 
@@ -957,6 +928,15 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
                 model = customGoogle(modelId)
             } else {
                 model = google(modelId)
+            }
+            const sampling = googleSamplingSettings()
+            if (Object.keys(sampling).length > 0) {
+                model = wrapLanguageModel({
+                    model,
+                    middleware: defaultSettingsMiddleware({
+                        settings: sampling,
+                    }),
+                })
             }
             break
         }
@@ -1455,7 +1435,7 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
         providerOptions = customProviderOptions
     }
 
-    return { model, providerOptions, headers, modelId, provider }
+    return { model, providerOptions, modelId, provider }
 }
 
 /**
@@ -1489,11 +1469,20 @@ export function usesServerCredentials(
 }
 
 /**
- * Check if a model supports prompt caching.
- * Currently only Claude models on Bedrock support prompt caching.
+ * Prompt cache breakpoint for Claude, set on a message's providerOptions.
+ * Each provider reads only its own key; OpenRouter also reads the
+ * anthropic one.
+ */
+export const CACHE_POINT = {
+    bedrock: { cachePoint: { type: "default" } },
+    anthropic: { cacheControl: { type: "ephemeral" } },
+}
+
+/**
+ * Check if a model supports prompt caching: Claude models, on Bedrock,
+ * the Anthropic API or OpenRouter (see CACHE_POINT).
  */
 export function supportsPromptCaching(modelId: string): boolean {
-    // Bedrock prompt caching is supported for Claude models
     return (
         modelId.includes("claude") ||
         modelId.includes("anthropic") ||
