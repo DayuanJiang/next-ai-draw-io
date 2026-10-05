@@ -1,6 +1,8 @@
 export interface CachedResponse {
     promptText: string
     hasImage: boolean
+    // Name of the bundled example file the prompt is sent with
+    fileName?: string
     xml: string
 }
 
@@ -254,6 +256,7 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     {
         promptText: "Replicate this in aws style",
         hasImage: true,
+        fileName: "architecture.png",
         xml: `<mxCell id="2" value="AWS" style="sketch=0;outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;rounded=1;arcSize=5;" vertex="1" parent="1">
     <mxGeometry x="340" y="40" width="880" height="520" as="geometry"/>
   </mxCell>
@@ -318,6 +321,7 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     {
         promptText: "Replicate this flowchart.",
         hasImage: true,
+        fileName: "example.png",
         xml: `<mxCell id="2" value="Lamp doesn't work" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcccc;strokeColor=#000000;strokeWidth=2;fontSize=18;fontStyle=0;" vertex="1" parent="1">
     <mxGeometry x="140" y="40" width="180" height="60" as="geometry"/>
   </mxCell>
@@ -379,6 +383,7 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     {
         promptText: "Summarize this paper as a diagram",
         hasImage: true,
+        fileName: "chain-of-thought.txt",
         xml: `<mxCell id="title_bg" parent="1"
                     style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1a237e;strokeColor=none;arcSize=8;"
                     value="" vertex="1">
@@ -879,14 +884,19 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     },
 ]
 
+// Examples that come with a file only match when that exact example file is
+// attached, so a user's own file with the same prompt still goes to the model.
+// Callers that can't tell file names (the server) only get text-only examples.
 export function findCachedResponse(
     promptText: string,
     hasImage: boolean,
+    fileName?: string,
 ): CachedResponse | undefined {
     return CACHED_EXAMPLE_RESPONSES.find(
         (c) =>
             c.promptText === promptText &&
             c.hasImage === hasImage &&
+            (!c.fileName || c.fileName === fileName) &&
             c.xml !== "",
     )
 }

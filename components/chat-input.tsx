@@ -1,6 +1,7 @@
 "use client"
 
 import {
+    BookmarkPlus,
     Download,
     History,
     Image as ImageIcon,
@@ -10,7 +11,9 @@ import {
 } from "lucide-react"
 import type React from "react"
 import {
+    type Dispatch,
     forwardRef,
+    type SetStateAction,
     useCallback,
     useEffect,
     useImperativeHandle,
@@ -19,6 +22,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
+import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
 import { ErrorToast } from "@/components/error-toast"
 import { HistoryDialog } from "@/components/history-dialog"
 import { ModelSelector } from "@/components/model-selector"
@@ -39,9 +43,20 @@ import { FilePreviewList } from "./file-preview-list"
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
 const MAX_FILES = 5
+// Image formats every supported model provider accepts (SVG is read as text)
+const SUPPORTED_IMAGE_TYPES = [
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+]
 
 function isValidFileType(file: File): boolean {
-    return file.type.startsWith("image/") || isPdfFile(file) || isTextFile(file)
+    return (
+        SUPPORTED_IMAGE_TYPES.includes(file.type) ||
+        isPdfFile(file) ||
+        isTextFile(file)
+    )
 }
 
 function formatFileSize(bytes: number): string {
@@ -162,7 +177,7 @@ interface ChatInputProps {
         { text: string; charCount: number; isExtracting: boolean }
     >
     urlData?: Map<string, UrlData>
-    onUrlChange?: (data: Map<string, UrlData>) => void
+    onUrlChange?: Dispatch<SetStateAction<Map<string, UrlData>>>
 
     sessionId?: string
     error?: Error | null
@@ -236,11 +251,17 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
         const [showHistory, setShowHistory] = useState(false)
         const [showUrlDialog, setShowUrlDialog] = useState(false)
+        const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false)
         const [isExtractingUrl, setIsExtractingUrl] = useState(false)
         const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
         // Allow retry when there's an error (even if status is still "streaming" or "submitted")
         const isDisabled =
             (status === "streaming" || status === "submitted") && !error
+        // Block sending until attached files and URLs have their text, otherwise
+        // their content would be silently dropped
+        const isExtractingAttachments =
+            files.some((file) => pdfData.get(file)?.isExtracting) ||
+            Array.from(urlData?.values() ?? []).some((d) => d.isExtracting)
 
         const adjustTextareaHeight = useCallback(() => {
             const textarea = textareaRef.current
@@ -278,6 +299,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
         }
 
         const handleKeyDown = (e: React.KeyboardEvent) => {
+            // Enter that confirms an IME candidate must not send the message
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
+
             const shouldSend =
                 sendShortcut === "enter"
                     ? e.key === "Enter" &&
@@ -289,7 +313,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             if (shouldSend) {
                 e.preventDefault()
                 const form = e.currentTarget.closest("form")
-                if (form && input.trim() && !isDisabled) {
+                if (
+                    form &&
+                    input.trim() &&
+                    !isDisabled &&
+                    !isExtractingAttachments
+                ) {
                     form.requestSubmit()
                 }
             }
@@ -377,13 +406,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
             if (isDisabled) return
 
-            const droppedFiles = e.dataTransfer.files
-            const supportedFiles = Array.from(droppedFiles).filter((file) =>
-                isValidFileType(file),
-            )
-
+            // Let validateFiles show a toast for unsupported types
             const { validFiles, errors } = validateFiles(
-                supportedFiles,
+                Array.from(e.dataTransfer.files),
                 files.length,
                 dict,
             )
@@ -398,33 +423,34 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
             setIsExtractingUrl(true)
 
+            // Use functional updates so a removal or send made while extracting
+            // is not overwritten when the request finishes
             try {
-                const existing = urlData
-                    ? new Map(urlData)
-                    : new Map<string, UrlData>()
-                existing.set(url, {
-                    url,
-                    title: url,
-                    content: "",
-                    charCount: 0,
-                    isExtracting: true,
-                })
-                onUrlChange(existing)
+                onUrlChange((prev) =>
+                    new Map(prev).set(url, {
+                        url,
+                        title: url,
+                        content: "",
+                        charCount: 0,
+                        isExtracting: true,
+                    }),
+                )
 
                 const data = await extractUrlContent(url)
 
-                const newUrlData = new Map(existing)
-                newUrlData.set(url, data)
-                onUrlChange(newUrlData)
+                // Skip if the URL was removed while extracting
+                onUrlChange((prev) =>
+                    prev.has(url) ? new Map(prev).set(url, data) : prev,
+                )
 
                 setShowUrlDialog(false)
             } catch (error) {
                 // Remove the URL from the data map on error
-                const newUrlData = urlData
-                    ? new Map(urlData)
-                    : new Map<string, UrlData>()
-                newUrlData.delete(url)
-                onUrlChange(newUrlData)
+                onUrlChange((prev) => {
+                    const next = new Map(prev)
+                    next.delete(url)
+                    return next
+                })
                 showErrorToast(
                     <span className="text-muted-foreground">
                         {error instanceof Error
@@ -439,6 +465,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
 
         return (
             <form
+                id="chat-form"
                 onSubmit={onSubmit}
                 className={`w-full transition-all duration-200 ${
                     isDragging
@@ -459,11 +486,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                             urlData={urlData}
                             onRemoveUrl={
                                 onUrlChange
-                                    ? (url) => {
-                                          const next = new Map(urlData)
-                                          next.delete(url)
-                                          onUrlChange(next)
-                                      }
+                                    ? (url) =>
+                                          onUrlChange((prev) => {
+                                              const next = new Map(prev)
+                                              next.delete(url)
+                                              return next
+                                          })
                                     : undefined
                             }
                         />
@@ -538,12 +566,24 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                                 </ButtonWithTooltip>
                             )}
 
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowSaveAsTemplate(true)}
+                                disabled={isDisabled || !input.trim()}
+                                tooltipContent={dict.templates.saveAsTemplate}
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <BookmarkPlus className="h-4 w-4" />
+                            </ButtonWithTooltip>
+
                             <input
                                 type="file"
                                 ref={fileInputRef}
                                 className="hidden"
                                 onChange={handleFileChange}
-                                accept="image/*,.pdf,application/pdf,text/*,.md,.markdown,.json,.csv,.xml,.yaml,.yml,.toml"
+                                accept="image/png,image/jpeg,image/gif,image/webp,.svg,.pdf,application/pdf,text/*,.md,.markdown,.json,.csv,.xml,.yaml,.yml,.toml"
                                 multiple
                                 disabled={isDisabled}
                             />
@@ -572,7 +612,11 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                         ) : (
                             <Button
                                 type="submit"
-                                disabled={isDisabled || !input.trim()}
+                                disabled={
+                                    isDisabled ||
+                                    isExtractingAttachments ||
+                                    !input.trim()
+                                }
                                 size="sm"
                                 className="h-8 px-4 rounded-xl font-medium shadow-sm"
                                 aria-label={dict.chat.send}
@@ -598,9 +642,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                             dict.save.savedSuccessfully,
                         )
                     }
-                    defaultFilename={`diagram-${new Date()
-                        .toISOString()
-                        .slice(0, 10)}`}
+                    // Local date as YYYY-MM-DD (toISOString would give UTC)
+                    defaultFilename={`diagram-${new Date().toLocaleDateString("sv-SE")}`}
                 />
                 {onUrlChange && (
                     <UrlInputDialog
@@ -610,6 +653,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                         isExtracting={isExtractingUrl}
                     />
                 )}
+                <TemplateCreateDialog
+                    open={showSaveAsTemplate}
+                    onOpenChange={setShowSaveAsTemplate}
+                    onSuccess={() => {
+                        setShowSaveAsTemplate(false)
+                        // Let the template list in the lobby reload
+                        window.dispatchEvent(new Event("templatesChanged"))
+                    }}
+                    initialPrompt={input.trim()}
+                />
             </form>
         )
     },

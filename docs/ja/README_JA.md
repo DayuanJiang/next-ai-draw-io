@@ -19,7 +19,7 @@
 
 AI機能とdraw.ioダイアグラムを統合したNext.jsウェブアプリケーションです。自然言語コマンドとAI支援の可視化により、ダイアグラムを作成、修正、強化できます。
 
-> 注：<img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) のご支援により、デモサイトに強力な K2-thinking モデルを導入しました！
+> 注：<img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) のご支援により、デモサイトに強力な glm-4.7 モデルを導入しました！
 
 https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 
@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   - [目次](#目次)
   - [例](#例)
   - [機能](#機能)
-  - [MCPサーバー（プレビュー）](#mcpサーバープレビュー)
+  - [MCPサーバー](#mcpサーバー)
     - [Claude Code CLI](#claude-code-cli)
   - [はじめに](#はじめに)
     - [オンラインで試す](#オンラインで試す)
@@ -54,31 +54,31 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
   <tr>
     <td colspan="2" valign="top" align="center">
       <strong>アニメーションTransformerコネクタ</strong><br />
-      <p><strong>プロンプト：</strong> **アニメーションコネクタ**付きのTransformerアーキテクチャ図を作成してください。</p>
+      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
       <img src="../../public/animated_connectors.svg" alt="アニメーションコネクタ付きTransformerアーキテクチャ" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>GCPアーキテクチャ図</strong><br />
-      <p><strong>プロンプト：</strong> **GCPアイコン**を使用してGCPアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../../public/gcp_demo.svg" alt="GCPアーキテクチャ図" width="480" />
+      <strong>RAG技術ダイアグラム</strong><br />
+      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
+      <img src="../../public/rag_prod.svg" alt="RAGアーキテクチャ図" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>AWSアーキテクチャ図</strong><br />
-      <p><strong>プロンプト：</strong> **AWSアイコン**を使用してAWSアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../../public/aws_demo.svg" alt="AWSアーキテクチャ図" width="480" />
+      <strong>ReactとAWSによる認証</strong><br />
+      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
+      <img src="../../public/auth.svg" alt="認証アーキテクチャ図" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>Azureアーキテクチャ図</strong><br />
-      <p><strong>プロンプト：</strong> **Azureアイコン**を使用してAzureアーキテクチャ図を生成してください。この図では、ユーザーがインスタンス上でホストされているフロントエンドに接続します。</p>
-      <img src="../../public/azure_demo.svg" alt="Azureアーキテクチャ図" width="480" />
+      <strong>オープンイノベーション</strong><br />
+      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
+      <img src="../../public/inno.svg" alt="オープンイノベーション図" width="480" />
     </td>
     <td width="50%" valign="top">
       <strong>猫のスケッチ</strong><br />
-      <p><strong>プロンプト：</strong> かわいい猫を描いてください。</p>
+      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
       <img src="../../public/cat_demo.svg" alt="猫の絵" width="240" />
     </td>
   </tr>
@@ -96,9 +96,7 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 -   **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
 -   **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
 
-## MCPサーバー（プレビュー）
-
-> **プレビュー機能**：この機能は実験的であり、安定しない可能性があります。
+## MCPサーバー
 
 MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
 
@@ -123,6 +121,13 @@ Claudeにダイアグラムの作成を依頼：
 > 「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを作成してください」
 
 ダイアグラムがリアルタイムでブラウザに表示されます！
+
+MCPサーバーには、Webアプリの主な作図機能が含まれています：
+
+-   Webアプリと同じ作図ルールとシェイプライブラリ（AWS、Azure、GCP、Kubernetesなど）
+-   スクリーンショットツール：AIが描画結果を確認して修正できます
+-   バージョン履歴、複数ページのダイアグラム、`.drawio`・`.png`・`.svg`・`.drawio.svg`形式でのダウンロード
+-   `~/.next-ai-drawio/`への自動保存：再起動後も続きから編集できます
 
 詳細は[MCPサーバーREADME](../../packages/mcp-server/README.md)をご覧ください（VS Code、Cursorなどのクライアント設定も含む）。
 
@@ -196,7 +201,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 
 ## マルチプロバイダーサポート
 
--   [ByteDance Doubao](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)
+-   [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)
 -   AWS Bedrock（デフォルト）
 -   OpenAI
 -   Anthropic
@@ -205,6 +210,7 @@ Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   AIHubMix
 -   DeepSeek
 -   SiliconFlow
 -   ModelScope
@@ -217,11 +223,17 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 ### サーバーサイドマルチモデル設定
 
-管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。`AI_MODELS_CONFIG` 環境変数（JSON文字列）または `ai-models.json` ファイルで設定します。
+管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。`AI_MODELS_CONFIG` 環境変数（JSON文字列）または `ai-models.json` ファイルで設定します。同一プロバイダー内の複数モデルだけが必要な場合は、`AI_MODEL` にカンマ区切りでモデルIDを列挙する簡易設定も使えます。
 
 **モデル要件**：このタスクは厳密なフォーマット制約（draw.io XML）を持つ長文テキスト生成を伴うため、強力なモデル機能が必要です。Claude Sonnet 4.5、GPT-5.1、Gemini 3 Pro、DeepSeek V3.2/R1を推奨します。
 
 注：`claude`シリーズはAWS、Azure、GCPなどのクラウドアーキテクチャロゴ付きのdraw.ioダイアグラムで学習されているため、クラウドアーキテクチャダイアグラムを作成したい場合は最適な選択です。
+
+### 管理パネル
+
+`ADMIN_PASSWORD` 環境変数を設定して `/admin` にアクセスすると、`.env` を手動で編集する代わりに Web パネルでサーバー設定（モデル、アクセスコード、機能、可観測性、クォータ）を管理できます。
+
+📖 **[管理パネルガイド](./admin-panel.md)** — 有効化の方法、優先順位ルール、注意事項。
 
 
 ## 仕組み
@@ -237,7 +249,7 @@ AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタム�
 
 ## サポート＆お問い合わせ
 
-**デモサイトのAPIトークン使用を支援してくださった[ByteDance Doubao](https://www.volcengine.com/activity/newyear-referral?utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)に特別な感謝を申し上げます！** ARKプラットフォームに登録すると、50万トークンが無料でもらえます！
+**デモサイトのAPIトークン使用を支援してくださった[ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)に特別な感謝を申し上げます！** ARKプラットフォームに登録すると、50万トークンが無料でもらえます！
 
 このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために[スポンサー](https://github.com/sponsors/DayuanJiang)をご検討ください！
 

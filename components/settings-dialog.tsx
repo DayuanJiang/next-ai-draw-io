@@ -2,7 +2,7 @@
 
 import { ChevronRight, Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,8 +22,10 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import type { DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
 
@@ -62,8 +64,8 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    drawioUi: "min" | "sketch"
-    onToggleDrawioUi: () => void
+    drawioUi: DrawioTheme
+    onDrawioUiChange: (theme: DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     minimalStyle?: boolean
@@ -71,6 +73,10 @@ interface SettingsDialogProps {
     vlmValidationEnabled?: boolean
     onVlmValidationChange?: (value: boolean) => void
     onOpenModelConfig?: () => void
+    customSystemMessage?: string
+    onCustomSystemMessageChange?: (value: string) => void
+    maxOutputTokens?: string
+    onMaxOutputTokensChange?: (value: string) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -87,7 +93,7 @@ function SettingsContent({
     open,
     onOpenChange,
     drawioUi,
-    onToggleDrawioUi,
+    onDrawioUiChange,
     darkMode,
     onToggleDarkMode,
     minimalStyle = false,
@@ -95,6 +101,10 @@ function SettingsContent({
     vlmValidationEnabled = false,
     onVlmValidationChange = () => {},
     onOpenModelConfig,
+    customSystemMessage = "",
+    onCustomSystemMessageChange = () => {},
+    maxOutputTokens = "",
+    onMaxOutputTokensChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -109,14 +119,31 @@ function SettingsContent({
     const [currentLang, setCurrentLang] = useState("en")
     const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
 
+    // Panel visibility state
+    const [showRecentChats, setShowRecentChats] = useState(true)
+    const [showMyTemplates, setShowMyTemplates] = useState(true)
+    const [showQuickExamples, setShowQuickExamples] = useState(true)
+
+    const handlePanelToggle = useCallback(
+        (key: string, value: boolean, setter: (v: boolean) => void) => {
+            setter(value)
+            localStorage.setItem(key, String(value))
+            window.dispatchEvent(new CustomEvent("panelVisibilityChange"))
+        },
+        [],
+    )
+
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
     const [httpsProxy, setHttpsProxy] = useState("")
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
 
     useEffect(() => {
-        // Only fetch if not cached in localStorage
-        if (getStoredAccessCodeRequired() !== null) return
+        // Re-fetch config whenever the dialog opens to ensure we always show
+        // the access code input if the server requires it. This fixes the case
+        // where a stale localStorage cache (from before ACCESS_CODE_LIST was
+        // configured) would hide the access code input.
+        if (!open) return
 
         fetch(getApiEndpoint("/api/config"))
             .then((res) => {
@@ -132,10 +159,9 @@ function SettingsContent({
                 setAccessCodeRequired(required)
             })
             .catch(() => {
-                // Don't cache on error - allow retry on next mount
-                setAccessCodeRequired(false)
+                // Keep existing cached value on error
             })
-    }, [])
+    }, [open])
 
     // Detect current language from pathname
     useEffect(() => {
@@ -158,6 +184,17 @@ function SettingsContent({
                 STORAGE_KEYS.sendShortcut,
             )
             setSendShortcut(storedSendShortcut || "ctrl-enter")
+
+            setShowRecentChats(
+                localStorage.getItem(STORAGE_KEYS.showRecentChats) !== "false",
+            )
+            setShowMyTemplates(
+                localStorage.getItem(STORAGE_KEYS.showMyTemplates) !== "false",
+            )
+            setShowQuickExamples(
+                localStorage.getItem(STORAGE_KEYS.showQuickExamples) !==
+                    "false",
+            )
 
             setError("")
 
@@ -274,7 +311,7 @@ function SettingsContent({
     }
 
     return (
-        <DialogContent className="sm:max-w-lg p-0 gap-0">
+        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
             <DialogHeader className="px-6 pt-6 pb-4">
                 <DialogTitle>{dict.settings.title}</DialogTitle>
@@ -284,7 +321,7 @@ function SettingsContent({
             </DialogHeader>
 
             {/* Content */}
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-6 overflow-y-auto flex-1 scrollbar-thin">
                 <div className="divide-y divide-border-subtle">
                     {/* API Keys & Models */}
                     {onOpenModelConfig && (
@@ -400,23 +437,40 @@ function SettingsContent({
                     {/* Draw.io Style */}
                     <SettingItem
                         label={dict.settings.drawioStyle}
-                        description={`${dict.settings.drawioStyleDescription} ${
-                            drawioUi === "min"
-                                ? dict.settings.minimal
-                                : dict.settings.sketch
-                        }`}
+                        description={dict.settings.drawioStyleDescription}
                     >
-                        <Button
-                            id="drawio-ui"
-                            variant="outline"
-                            onClick={onToggleDrawioUi}
-                            className="h-9 w-[120px] rounded-xl border-border-subtle hover:bg-interactive-hover font-normal"
+                        <Select
+                            value={drawioUi}
+                            onValueChange={(v) =>
+                                onDrawioUiChange(v as DrawioTheme)
+                            }
                         >
-                            {dict.settings.switchTo}{" "}
-                            {drawioUi === "min"
-                                ? dict.settings.sketch
-                                : dict.settings.minimal}
-                        </Button>
+                            <SelectTrigger
+                                id="drawio-ui-select"
+                                aria-label={dict.settings.drawioStyle}
+                                className="w-[120px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="kennedy">
+                                    {dict.settings.themeDefault}
+                                </SelectItem>
+                                <SelectItem value="atlas">Atlas</SelectItem>
+                                <SelectItem value="dark">
+                                    {dict.settings.themeDark}
+                                </SelectItem>
+                                <SelectItem value="min">
+                                    {dict.settings.themeMinimal}
+                                </SelectItem>
+                                <SelectItem value="sketch">
+                                    {dict.settings.themeSketch}
+                                </SelectItem>
+                                <SelectItem value="simple">
+                                    {dict.settings.themeSimple}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </SettingItem>
 
                     {/* Diagram Style */}
@@ -438,6 +492,63 @@ function SettingsContent({
                         </div>
                     </SettingItem>
 
+                    {/* Panel Visibility */}
+                    <SettingItem
+                        label={dict.settings.panelVisibility}
+                        description={dict.settings.panelVisibilityDescription}
+                    >
+                        <div className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-recent-chats"
+                                    checked={showRecentChats}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showRecentChats,
+                                            v,
+                                            setShowRecentChats,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showRecentChats}
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-my-templates"
+                                    checked={showMyTemplates}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showMyTemplates,
+                                            v,
+                                            setShowMyTemplates,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showMyTemplates}
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-quick-examples"
+                                    checked={showQuickExamples}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showQuickExamples,
+                                            v,
+                                            setShowQuickExamples,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showQuickExamples}
+                                </span>
+                            </label>
+                        </div>
+                    </SettingItem>
+
                     {/* VLM Diagram Validation */}
                     <SettingItem
                         label={dict.settings.diagramValidation}
@@ -455,6 +566,51 @@ function SettingsContent({
                                     : dict.settings.disabled}
                             </span>
                         </div>
+                    </SettingItem>
+
+                    {/* Custom System Message */}
+                    <div className="py-4 space-y-3">
+                        <div className="space-y-0.5">
+                            <Label
+                                htmlFor="custom-system-message"
+                                className="text-sm font-medium"
+                            >
+                                {dict.settings.customSystemMessage}
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                {dict.settings.customSystemMessageDescription}
+                            </p>
+                        </div>
+                        <Textarea
+                            id="custom-system-message"
+                            value={customSystemMessage}
+                            onChange={(e) =>
+                                onCustomSystemMessageChange(e.target.value)
+                            }
+                            placeholder={
+                                dict.settings.customSystemMessagePlaceholder
+                            }
+                            className="min-h-[80px] max-h-[160px] text-sm"
+                            maxLength={5000}
+                        />
+                    </div>
+
+                    {/* Max Output Tokens */}
+                    <SettingItem
+                        label={dict.settings.maxOutputTokens}
+                        description={dict.settings.maxOutputTokensDescription}
+                    >
+                        <Input
+                            id="max-output-tokens"
+                            type="text"
+                            inputMode="numeric"
+                            value={maxOutputTokens}
+                            onChange={(e) =>
+                                onMaxOutputTokensChange(e.target.value)
+                            }
+                            placeholder="64000"
+                            className="h-9 w-28 text-sm"
+                        />
                     </SettingItem>
 
                     {/* Send Shortcut */}

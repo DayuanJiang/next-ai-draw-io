@@ -27,4 +27,15 @@ export const STORAGE_KEYS = {
 
     // Diagram validation
     vlmValidationEnabled: "next-ai-draw-io-vlm-validation-enabled",
+
+    // Custom system message
+    customSystemMessage: "next-ai-draw-io-custom-system-message",
+
+    // Output token budget per turn (empty = server default)
+    maxOutputTokens: "next-ai-draw-io-max-output-tokens",
+
+    // Panel visibility
+    showRecentChats: "next-ai-draw-io-show-recent-chats",
+    showMyTemplates: "next-ai-draw-io-show-my-templates",
+    showQuickExamples: "next-ai-draw-io-show-quick-examples",
 } as const

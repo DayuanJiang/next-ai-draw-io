@@ -4,23 +4,25 @@ import {
     AlertCircle,
     Check,
     ChevronRight,
-    Clock,
-    Cloud,
     Eye,
     EyeOff,
     Key,
-    Link2,
     Loader2,
     Plus,
+    RefreshCw,
     Server,
     Settings2,
     Sparkles,
-    Tag,
     Trash2,
     X,
     Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import {
+    ProviderCredentialsFields,
+    type SecretField,
+} from "@/components/provider-credentials-fields"
+import { ProviderLogo } from "@/components/provider-logo"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -33,6 +35,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
+    Command,
+    CommandEmpty,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command"
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -41,6 +50,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Select,
@@ -52,8 +66,15 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
+import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
-import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
+import type { ListedModel } from "@/lib/provider-models"
+import { STORAGE_KEYS } from "@/lib/storage"
+import type {
+    ModelConfig,
+    ProviderConfig,
+    ProviderName,
+} from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -64,56 +85,6 @@ interface ModelConfigDialogProps {
 }
 
 type ValidationStatus = "idle" | "validating" | "success" | "error"
-
-// Map provider names to models.dev logo names
-const PROVIDER_LOGO_MAP: Record<string, string> = {
-    openai: "openai",
-    anthropic: "anthropic",
-    google: "google",
-    azure: "azure",
-    bedrock: "amazon-bedrock",
-    openrouter: "openrouter",
-    deepseek: "deepseek",
-    siliconflow: "siliconflow",
-    sglang: "openai", // SGLang is OpenAI-compatible
-    gateway: "vercel",
-    edgeone: "tencent-cloud",
-    vertexai: "google",
-    doubao: "bytedance",
-    modelscope: "modelscope",
-}
-
-// Provider logo component
-function ProviderLogo({
-    provider,
-    className,
-}: {
-    provider: ProviderName
-    className?: string
-}) {
-    // Use Lucide icons for providers without models.dev logos
-    if (provider === "bedrock") {
-        return <Cloud className={cn("size-4", className)} />
-    }
-    if (provider === "sglang") {
-        return <Server className={cn("size-4", className)} />
-    }
-    if (provider === "doubao") {
-        return <Sparkles className={cn("size-4", className)} />
-    }
-
-    const logoName = PROVIDER_LOGO_MAP[provider] || provider
-    return (
-        // biome-ignore lint/performance/noImgElement: External URL from models.dev
-        <img
-            alt={`${provider} logo`}
-            className={cn("size-4 dark:invert", className)}
-            height={16}
-            src={`https://models.dev/logos/${logoName}.svg`}
-            width={16}
-        />
-    )
-}
 
 // Configuration section with title and optional action
 function ConfigSection({
@@ -172,14 +143,31 @@ export function ModelConfigDialog({
     > | null>(null)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [deleteConfirmText, setDeleteConfirmText] = useState("")
-    const [validatingModelIndex, setValidatingModelIndex] = useState<
-        number | null
-    >(null)
+    // Models whose test is running (they are all tested at once)
+    const [validatingModelIds, setValidatingModelIds] = useState<Set<string>>(
+        () => new Set(),
+    )
     const [duplicateError, setDuplicateError] = useState<string>("")
     const [editError, setEditError] = useState<{
         modelId: string
         message: string
     } | null>(null)
+    // Model ID being typed; written to the config only when valid on blur
+    const [modelIdDraft, setModelIdDraft] = useState<{
+        id: string
+        value: string
+    } | null>(null)
+    // Models fetched from the provider, per provider config
+    const [fetchedModels, setFetchedModels] = useState<
+        Record<string, ListedModel[]>
+    >({})
+    const [fetchingModels, setFetchingModels] = useState(false)
+    const [fetchModelsError, setFetchModelsError] = useState("")
+    const [modelPickerOpen, setModelPickerOpen] = useState(false)
+    // models.dev data for hints, loaded with the dialog (it is ~180 KB)
+    const [getModelInfo, setGetModelInfo] = useState<
+        typeof import("@/lib/model-catalog").getModelInfo | null
+    >(null)
 
     const {
         config,
@@ -195,6 +183,35 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
+    // For requests that finish after the user switched provider or edited
+    // a model id
+    const selectedProviderIdRef = useRef(selectedProviderId)
+    selectedProviderIdRef.current = selectedProviderId
+    const configRef = useRef(config)
+    configRef.current = config
+    // Number of the latest Test click: only that test may reset the busy
+    // state when its credentials changed meanwhile
+    const validationRunRef = useRef(0)
+    // A model list or test result belongs to the credentials it was asked
+    // with; they can change meanwhile, here or in another tab
+    const credentialsOf = (providerId: string) => {
+        const p = configRef.current.providers.find((x) => x.id === providerId)
+        return JSON.stringify([
+            p?.provider,
+            p?.apiKey,
+            p?.baseUrl,
+            p?.awsAccessKeyId,
+            p?.awsSecretAccessKey,
+            p?.awsRegion,
+            p?.awsSessionToken,
+            p?.vertexApiKey,
+        ])
+    }
+
+    // Discard an unfinished model ID edit when the dialog closes
+    useEffect(() => {
+        if (!open) setModelIdDraft(null)
+    }, [open])
 
     // Cleanup validation reset timeout on unmount
     useEffect(() => {
@@ -205,23 +222,98 @@ export function ModelConfigDialog({
         }
     }, [])
 
-    // Get suggested models for current provider
-    const suggestedModels = selectedProvider
-        ? SUGGESTED_MODELS[selectedProvider.provider] || []
+    useEffect(() => {
+        if (!open || getModelInfo) return
+        import("@/lib/model-catalog").then((catalog) =>
+            setGetModelInfo(() => catalog.getModelInfo),
+        )
+    }, [open, getModelInfo])
+
+    const handleFetchModels = async () => {
+        if (!selectedProvider) return
+        const providerId = selectedProvider.id
+        const askedWith = credentialsOf(providerId)
+        setFetchingModels(true)
+        setFetchModelsError("")
+        try {
+            const response = await fetch(
+                getApiEndpoint("/api/provider-models"),
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-code":
+                            localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+                    },
+                    body: JSON.stringify({
+                        provider: selectedProvider.provider,
+                        apiKey: selectedProvider.apiKey,
+                        baseUrl: selectedProvider.baseUrl,
+                    }),
+                },
+            )
+            const data = await response.json().catch(() => ({}))
+            if (credentialsOf(providerId) !== askedWith) return
+            // The picker and the error belong to the provider shown
+            const stillShown = selectedProviderIdRef.current === providerId
+            if (Array.isArray(data.models)) {
+                setFetchedModels((current) => ({
+                    ...current,
+                    [providerId]: data.models,
+                }))
+                if (stillShown) setModelPickerOpen(true)
+            } else if (stillShown) {
+                const hints = dict.errors.llm as Record<string, string>
+                setFetchModelsError(
+                    [hints[data.code], data.error].filter(Boolean).join(" ") ||
+                        `Request failed (${response.status})`,
+                )
+            }
+        } catch {
+            if (
+                selectedProviderIdRef.current === providerId &&
+                credentialsOf(providerId) === askedWith
+            ) {
+                setFetchModelsError(dict.errors.networkError)
+            }
+        } finally {
+            setFetchingModels(false)
+        }
+    }
+
+    // The provider's own list once fetched, else the suggested models
+    const suggestedModels: ListedModel[] = selectedProvider
+        ? fetchedModels[selectedProvider.id] ||
+          (SUGGESTED_MODELS[selectedProvider.provider] || []).map((id) => ({
+              id,
+          }))
         : []
+    // Tool calls are what drawing needs: false when known to be missing
+    const supportsTools = (model: ListedModel) =>
+        selectedProvider
+            ? (model.tools ??
+              getModelInfo?.(selectedProvider.provider, model.id)?.tools)
+            : undefined
 
     // Filter out already-added models from suggestions
     const existingModelIds =
         selectedProvider?.models.map((m) => m.modelId) || []
     const availableSuggestions = suggestedModels.filter(
-        (modelId) => !existingModelIds.includes(modelId),
+        (model) => !existingModelIds.includes(model.id),
     )
+    const emptyStateSuggestions = selectedProvider
+        ? (SUGGESTED_MODELS[selectedProvider.provider] || [])
+              .filter((modelId) => !existingModelIds.includes(modelId))
+              .slice(0, 4)
+        : []
 
     // Handle adding a new provider
     const handleAddProvider = (providerType: ProviderName) => {
         const newProvider = addProvider(providerType)
         setSelectedProviderId(newProvider.id)
         setValidationStatus("idle")
+        setFetchModelsError("")
+        setModelPickerOpen(false)
     }
 
     // Handle provider field updates
@@ -229,9 +321,9 @@ export function ModelConfigDialog({
         field: keyof ProviderConfig,
         value: string | boolean,
     ) => {
-        if (!selectedProviderId) return
-        updateProvider(selectedProviderId, { [field]: value })
-        // Reset validation when credentials change
+        if (!selectedProviderId || !selectedProvider) return
+        const updates: Partial<ProviderConfig> = { [field]: value }
+        // Reset validation of the provider and its models when credentials change
         const credentialFields = [
             "apiKey",
             "baseUrl",
@@ -242,8 +334,19 @@ export function ModelConfigDialog({
         ]
         if (credentialFields.includes(field)) {
             setValidationStatus("idle")
-            updateProvider(selectedProviderId, { validated: false })
+            setValidatingModelIds(new Set())
+            setFetchedModels(({ [selectedProviderId]: _, ...rest }) => rest)
+            setFetchModelsError("")
+            updates.validated = false
+            updates.models = selectedProvider.models.map((m) => ({
+                ...m,
+                validated: undefined,
+                validationError: undefined,
+                validationWarning: undefined,
+                responseTime: undefined,
+            }))
         }
+        updateProvider(selectedProviderId, updates)
     }
 
     // Handle adding a model to current provider
@@ -313,77 +416,164 @@ export function ModelConfigDialog({
 
         let allValid = true
         let errorCount = 0
+        let idChanged = false
+        const askedWith = credentialsOf(selectedProviderId)
+        const run = ++validationRunRef.current
 
-        // Validate each model
-        for (let i = 0; i < selectedProvider.models.length; i++) {
-            const model = selectedProvider.models[i]
-            setValidatingModelIndex(i)
+        // For EdgeOne, construct baseUrl from current origin
+        const baseUrl = isEdgeOne
+            ? `${window.location.origin}/api/edgeai`
+            : selectedProvider.baseUrl
 
-            try {
-                // For EdgeOne, construct baseUrl from current origin
-                const baseUrl = isEdgeOne
-                    ? `${window.location.origin}/api/edgeai`
-                    : selectedProvider.baseUrl
-
-                const response = await fetch("/api/validate-model", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        provider: selectedProvider.provider,
-                        apiKey: selectedProvider.apiKey,
-                        baseUrl,
-                        modelId: model.modelId,
-                        // AWS Bedrock credentials
-                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
-                        awsRegion: selectedProvider.awsRegion,
-                        // Vertex AI credentials (Express Mode)
-                        vertexApiKey: selectedProvider.vertexApiKey,
-                    }),
-                })
-                const data = await response.json()
-
-                if (data.valid) {
-                    updateModel(selectedProviderId, model.id, {
-                        validated: true,
-                        validationError: undefined,
+        // Test every model at once; each row updates when its answer arrives
+        setValidatingModelIds(new Set(selectedProvider.models.map((m) => m.id)))
+        await Promise.all(
+            selectedProvider.models.map(async (model) => {
+                let update: Partial<ModelConfig>
+                try {
+                    const response = await fetch(
+                        getApiEndpoint("/api/validate-model"),
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "x-access-code":
+                                    localStorage.getItem(
+                                        STORAGE_KEYS.accessCode,
+                                    ) || "",
+                            },
+                            body: JSON.stringify({
+                                provider: selectedProvider.provider,
+                                apiKey: selectedProvider.apiKey,
+                                baseUrl,
+                                modelId: model.modelId,
+                                // AWS Bedrock credentials
+                                awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                                awsSecretAccessKey:
+                                    selectedProvider.awsSecretAccessKey,
+                                awsRegion: selectedProvider.awsRegion,
+                                // Temporary AWS credentials, as the chat sends
+                                awsSessionToken:
+                                    selectedProvider.awsSessionToken,
+                                // Vertex AI credentials (Express Mode)
+                                vertexApiKey: selectedProvider.vertexApiKey,
+                            }),
+                        },
+                    )
+                    const data = await response.json().catch(() => ({}))
+                    update = data.valid
+                        ? {
+                              validated: true,
+                              validationError: undefined,
+                              validationWarning: data.warning,
+                              responseTime: data.responseTime,
+                          }
+                        : {
+                              validated: false,
+                              // The hint for the error's kind, then the
+                              // provider's own message
+                              validationError:
+                                  [
+                                      (
+                                          dict.errors.llm as Record<
+                                              string,
+                                              string
+                                          >
+                                      )[data.code],
+                                      data.error,
+                                  ]
+                                      .filter(Boolean)
+                                      .join(" ") ||
+                                  (response.ok
+                                      ? "Validation failed"
+                                      : `Request failed (${response.status})`),
+                              validationWarning: undefined,
+                          }
+                } catch {
+                    update = {
+                        validated: false,
+                        validationError: "Network error",
+                        validationWarning: undefined,
+                    }
+                }
+                // A newer test started: its own results and spinners count,
+                // whatever the credentials are now (they may have come back)
+                if (run !== validationRunRef.current) return
+                // Credentials changed during the test: drop the result. A
+                // change in another tab left the spinner on, so clear it
+                // (model ids are unique, whatever provider is shown).
+                if (credentialsOf(selectedProviderId) !== askedWith) {
+                    setValidatingModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.delete(model.id)
+                        return next
                     })
-                } else {
+                    return
+                }
+                // So did this model's id: the result is for the old one
+                const current = configRef.current.providers
+                    .find((p) => p.id === selectedProviderId)
+                    ?.models.find((m) => m.id === model.id)
+                if (current?.modelId !== model.modelId) {
+                    idChanged = true
+                    setValidatingModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.delete(model.id)
+                        return next
+                    })
+                    return
+                }
+                if (update.validated === false) {
                     allValid = false
                     errorCount++
-                    updateModel(selectedProviderId, model.id, {
-                        validated: false,
-                        validationError: data.error || "Validation failed",
-                    })
                 }
-            } catch {
-                allValid = false
-                errorCount++
-                updateModel(selectedProviderId, model.id, {
-                    validated: false,
-                    validationError: "Network error",
+                updateModel(selectedProviderId, model.id, update)
+                setValidatingModelIds((prev) => {
+                    const next = new Set(prev)
+                    next.delete(model.id)
+                    return next
                 })
+            }),
+        )
+        if (run !== validationRunRef.current) return
+        if (credentialsOf(selectedProviderId) !== askedWith) {
+            // The status line is about the provider shown now
+            if (selectedProviderIdRef.current === selectedProviderId) {
+                setValidationStatus("idle")
             }
+            return
         }
 
-        setValidatingModelIndex(null)
-
-        if (allValid) {
-            setValidationStatus("success")
+        // A model whose id changed was not tested
+        if (allValid && !idChanged) {
             updateProvider(selectedProviderId, { validated: true })
+        }
+        // The status line is about the provider shown now
+        if (selectedProviderIdRef.current !== selectedProviderId) return
+        if (idChanged) {
+            setValidationStatus("idle")
+        } else if (allValid) {
+            setValidationStatus("success")
             // Reset to idle after showing success briefly (with cleanup)
             if (validationResetTimeoutRef.current) {
                 clearTimeout(validationResetTimeoutRef.current)
             }
             validationResetTimeoutRef.current = setTimeout(() => {
-                setValidationStatus("idle")
                 validationResetTimeoutRef.current = null
+                if (run !== validationRunRef.current) return
+                setValidationStatus("idle")
             }, 1500)
         } else {
             setValidationStatus("error")
             setValidationError(`${errorCount} model(s) failed validation`)
         }
-    }, [selectedProvider, selectedProviderId, updateProvider, updateModel])
+    }, [
+        selectedProvider,
+        selectedProviderId,
+        updateProvider,
+        updateModel,
+        dict,
+    ])
 
     // Get all available provider types
     const availableProviders = Object.keys(PROVIDER_INFO) as ProviderName[]
@@ -391,6 +581,104 @@ export function ModelConfigDialog({
     // Get display name for provider
     const getProviderDisplayName = (provider: ProviderConfig) => {
         return provider.name || PROVIDER_INFO[provider.provider].label
+    }
+
+    // Inline Test button + error, shared across credential layouts. Disabled
+    // until the relevant credentials are present.
+    const renderTestButton = (canValidate: boolean) => (
+        <div className="flex items-center gap-2">
+            <Button
+                variant={validationStatus === "success" ? "outline" : "default"}
+                size="sm"
+                onClick={handleValidate}
+                disabled={!canValidate || validationStatus === "validating"}
+                className={cn(
+                    "h-9 px-4",
+                    validationStatus === "success" &&
+                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
+                )}
+            >
+                {validationStatus === "validating" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                ) : validationStatus === "success" ? (
+                    <>
+                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
+                        {dict.modelConfig.verified}
+                    </>
+                ) : (
+                    dict.modelConfig.test
+                )}
+            </Button>
+            {validationStatus === "error" && validationError && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                    <X className="h-3 w-3" />
+                    {validationError}
+                </p>
+            )}
+        </div>
+    )
+
+    // Plaintext secret input with show/hide toggle (the user dialog stores
+    // keys client-side, so values are shown directly — unlike the masked
+    // admin panel). The primary key field carries the inline Test button.
+    const renderProviderSecret = (field: SecretField, id: string) => {
+        if (!selectedProvider) return null
+        const value = (selectedProvider[field] as string | undefined) ?? ""
+        // The "primary" credential sits beside the Test button; for Bedrock
+        // the test lives below the region, so its inputs have no inline test.
+        const isBedrock = selectedProvider.provider === "bedrock"
+        const withInlineTest =
+            !isBedrock && (field === "apiKey" || field === "vertexApiKey")
+        const canValidate =
+            field === "vertexApiKey"
+                ? !!selectedProvider.vertexApiKey
+                : selectedProvider.provider === "ollama" ||
+                  !!selectedProvider.apiKey
+        const input = (
+            <div className="relative flex-1">
+                <Input
+                    id={id}
+                    type={showApiKey ? "text" : "password"}
+                    value={value}
+                    onChange={(e) =>
+                        handleProviderUpdate(field, e.target.value)
+                    }
+                    placeholder={
+                        field === "awsSecretAccessKey"
+                            ? dict.modelConfig.enterSecretKey
+                            : field === "awsAccessKeyId"
+                              ? "AKIA..."
+                              : dict.modelConfig.enterApiKey
+                    }
+                    className="h-9 pr-10 font-mono text-xs"
+                />
+                <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    aria-label={
+                        showApiKey
+                            ? dict.modelConfig.hideValue
+                            : dict.modelConfig.showValue
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                >
+                    {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                    ) : (
+                        <Eye className="h-4 w-4" />
+                    )}
+                </button>
+            </div>
+        )
+        if (!withInlineTest) return input
+        return (
+            <div className="space-y-2">
+                <div className="flex gap-2">
+                    {input}
+                    {renderTestButton(canValidate)}
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -419,7 +707,7 @@ export function ModelConfigDialog({
                             </span>
                         </div>
 
-                        <ScrollArea className="flex-1 px-2">
+                        <ScrollArea className="flex-1 px-2 min-h-0">
                             <div className="space-y-1 pb-2">
                                 {config.providers.length === 0 ? (
                                     <div className="px-3 py-8 text-center">
@@ -441,6 +729,10 @@ export function ModelConfigDialog({
                                                 )
                                                 setValidationStatus("idle")
                                                 setShowApiKey(false)
+                                                // These belong to the
+                                                // provider shown before
+                                                setFetchModelsError("")
+                                                setModelPickerOpen(false)
                                             }}
                                             className={cn(
                                                 "group flex items-center gap-3 px-3 py-2.5 rounded-xl w-full",
@@ -493,7 +785,9 @@ export function ModelConfigDialog({
 
                         {/* Add Provider */}
                         <div className="p-3 border-t border-border-subtle">
+                            {/* Always empty so picking the same type again still fires */}
                             <Select
+                                value=""
                                 onValueChange={(v) =>
                                     handleAddProvider(v as ProviderName)
                                 }
@@ -527,7 +821,7 @@ export function ModelConfigDialog({
                     </div>
 
                     {/* Provider Details (Right Panel) */}
-                    <div className="flex-1 min-w-0 flex flex-col overflow-auto [&::-webkit-scrollbar]:hidden ">
+                    <div className="flex-1 min-w-0 flex flex-col overflow-auto scrollbar-thin">
                         {selectedProvider ? (
                             <ScrollArea className="flex-1" ref={scrollRef}>
                                 <div className="p-6 space-y-8">
@@ -593,671 +887,45 @@ export function ModelConfigDialog({
                                         icon={Settings2}
                                     >
                                         <ConfigCard>
-                                            {/* Display Name */}
-                                            <div className="space-y-2">
-                                                <Label
-                                                    htmlFor="provider-name"
-                                                    className="text-xs font-medium flex items-center gap-1.5"
-                                                >
-                                                    <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    {
-                                                        dict.modelConfig
-                                                            .displayName
-                                                    }
-                                                </Label>
-                                                <Input
-                                                    id="provider-name"
-                                                    value={
-                                                        selectedProvider.name ||
-                                                        ""
-                                                    }
-                                                    onChange={(e) =>
-                                                        handleProviderUpdate(
-                                                            "name",
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder={
-                                                        PROVIDER_INFO[
-                                                            selectedProvider
-                                                                .provider
-                                                        ].label
-                                                    }
-                                                    className="h-9"
-                                                />
-                                            </div>
-
-                                            {/* Credentials - different for Bedrock vs other providers */}
-                                            {selectedProvider.provider ===
-                                            "bedrock" ? (
-                                                <>
-                                                    {/* AWS Access Key ID */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="aws-access-key-id"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {
-                                                                dict.modelConfig
-                                                                    .awsAccessKeyId
-                                                            }
-                                                        </Label>
-                                                        <Input
-                                                            id="aws-access-key-id"
-                                                            type={
-                                                                showApiKey
-                                                                    ? "text"
-                                                                    : "password"
-                                                            }
-                                                            value={
-                                                                selectedProvider.awsAccessKeyId ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleProviderUpdate(
-                                                                    "awsAccessKeyId",
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder="AKIA..."
-                                                            className="h-9 font-mono text-xs"
-                                                        />
-                                                    </div>
-
-                                                    {/* AWS Secret Access Key */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="aws-secret-access-key"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {
-                                                                dict.modelConfig
-                                                                    .awsSecretAccessKey
-                                                            }
-                                                        </Label>
-                                                        <div className="relative">
-                                                            <Input
-                                                                id="aws-secret-access-key"
-                                                                type={
-                                                                    showApiKey
-                                                                        ? "text"
-                                                                        : "password"
-                                                                }
-                                                                value={
-                                                                    selectedProvider.awsSecretAccessKey ||
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    handleProviderUpdate(
-                                                                        "awsSecretAccessKey",
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                }
-                                                                placeholder={
-                                                                    dict
-                                                                        .modelConfig
-                                                                        .enterSecretKey
-                                                                }
-                                                                className="h-9 pr-10 font-mono text-xs"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setShowApiKey(
-                                                                        !showApiKey,
-                                                                    )
-                                                                }
-                                                                aria-label={
-                                                                    showApiKey
-                                                                        ? "Hide secret access key"
-                                                                        : "Show secret access key"
-                                                                }
-                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-                                                            >
-                                                                {showApiKey ? (
-                                                                    <EyeOff className="h-4 w-4" />
-                                                                ) : (
-                                                                    <Eye className="h-4 w-4" />
-                                                                )}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* AWS Region */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="aws-region"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {
-                                                                dict.modelConfig
-                                                                    .awsRegion
-                                                            }
-                                                        </Label>
-                                                        <Select
-                                                            value={
-                                                                selectedProvider.awsRegion ||
-                                                                ""
-                                                            }
-                                                            onValueChange={(
-                                                                v,
-                                                            ) =>
-                                                                handleProviderUpdate(
-                                                                    "awsRegion",
-                                                                    v,
-                                                                )
-                                                            }
-                                                        >
-                                                            <SelectTrigger className="h-9 font-mono text-xs hover:bg-accent">
-                                                                <SelectValue
-                                                                    placeholder={
-                                                                        dict
-                                                                            .modelConfig
-                                                                            .selectRegion
-                                                                    }
-                                                                />
-                                                            </SelectTrigger>
-                                                            <SelectContent className="max-h-64">
-                                                                <SelectItem value="us-east-1">
-                                                                    us-east-1
-                                                                    (N.
-                                                                    Virginia)
-                                                                </SelectItem>
-                                                                <SelectItem value="us-east-2">
-                                                                    us-east-2
-                                                                    (Ohio)
-                                                                </SelectItem>
-                                                                <SelectItem value="us-west-2">
-                                                                    us-west-2
-                                                                    (Oregon)
-                                                                </SelectItem>
-                                                                <SelectItem value="eu-west-1">
-                                                                    eu-west-1
-                                                                    (Ireland)
-                                                                </SelectItem>
-                                                                <SelectItem value="eu-west-2">
-                                                                    eu-west-2
-                                                                    (London)
-                                                                </SelectItem>
-                                                                <SelectItem value="eu-west-3">
-                                                                    eu-west-3
-                                                                    (Paris)
-                                                                </SelectItem>
-                                                                <SelectItem value="eu-central-1">
-                                                                    eu-central-1
-                                                                    (Frankfurt)
-                                                                </SelectItem>
-                                                                <SelectItem value="ap-south-1">
-                                                                    ap-south-1
-                                                                    (Mumbai)
-                                                                </SelectItem>
-                                                                <SelectItem value="ap-northeast-1">
-                                                                    ap-northeast-1
-                                                                    (Tokyo)
-                                                                </SelectItem>
-                                                                <SelectItem value="ap-northeast-2">
-                                                                    ap-northeast-2
-                                                                    (Seoul)
-                                                                </SelectItem>
-                                                                <SelectItem value="ap-southeast-1">
-                                                                    ap-southeast-1
-                                                                    (Singapore)
-                                                                </SelectItem>
-                                                                <SelectItem value="ap-southeast-2">
-                                                                    ap-southeast-2
-                                                                    (Sydney)
-                                                                </SelectItem>
-                                                                <SelectItem value="sa-east-1">
-                                                                    sa-east-1
-                                                                    (São Paulo)
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-
-                                                    {/* Test Button for Bedrock */}
-                                                    <div className="flex items-center gap-2">
-                                                        <Button
-                                                            variant={
-                                                                validationStatus ===
-                                                                "success"
-                                                                    ? "outline"
-                                                                    : "default"
-                                                            }
-                                                            size="sm"
-                                                            onClick={
-                                                                handleValidate
-                                                            }
-                                                            disabled={
-                                                                !selectedProvider.awsAccessKeyId ||
-                                                                !selectedProvider.awsSecretAccessKey ||
-                                                                !selectedProvider.awsRegion ||
-                                                                validationStatus ===
-                                                                    "validating"
-                                                            }
-                                                            className={cn(
-                                                                "h-9 px-4",
-                                                                validationStatus ===
-                                                                    "success" &&
-                                                                    "text-success border-success/30 bg-success-muted hover:bg-success-muted",
-                                                            )}
-                                                        >
-                                                            {validationStatus ===
-                                                            "validating" ? (
-                                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                            ) : validationStatus ===
-                                                              "success" ? (
-                                                                <>
-                                                                    <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
-                                                                    {
-                                                                        dict
-                                                                            .modelConfig
-                                                                            .verified
-                                                                    }
-                                                                </>
-                                                            ) : (
-                                                                dict.modelConfig
-                                                                    .test
-                                                            )}
-                                                        </Button>
-                                                        {validationStatus ===
-                                                            "error" &&
-                                                            validationError && (
-                                                                <p className="text-xs text-destructive flex items-center gap-1">
-                                                                    <X className="h-3 w-3" />
-                                                                    {
-                                                                        validationError
-                                                                    }
-                                                                </p>
-                                                            )}
-                                                    </div>
-                                                </>
-                                            ) : selectedProvider.provider ===
-                                              "vertexai" ? (
-                                                <>
-                                                    {/* Vertex AI API Key */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="vertex-api-key"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            API Key
-                                                        </Label>
-                                                        <div className="flex gap-2">
-                                                            <div className="relative flex-1">
-                                                                <Input
-                                                                    id="vertex-api-key"
-                                                                    type={
-                                                                        showApiKey
-                                                                            ? "text"
-                                                                            : "password"
-                                                                    }
-                                                                    value={
-                                                                        selectedProvider.vertexApiKey ||
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleProviderUpdate(
-                                                                            "vertexApiKey",
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                    placeholder="Enter your Vertex AI API key"
-                                                                    className="h-9 pr-10 font-mono text-xs"
-                                                                />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setShowApiKey(
-                                                                            !showApiKey,
-                                                                        )
-                                                                    }
-                                                                    aria-label={
-                                                                        showApiKey
-                                                                            ? "Hide API key"
-                                                                            : "Show API key"
-                                                                    }
-                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-                                                                >
-                                                                    {showApiKey ? (
-                                                                        <EyeOff className="h-4 w-4" />
-                                                                    ) : (
-                                                                        <Eye className="h-4 w-4" />
-                                                                    )}
-                                                                </button>
-                                                            </div>
-                                                            <Button
-                                                                variant={
-                                                                    validationStatus ===
-                                                                    "success"
-                                                                        ? "outline"
-                                                                        : "default"
-                                                                }
-                                                                size="sm"
-                                                                onClick={
-                                                                    handleValidate
-                                                                }
-                                                                disabled={
-                                                                    !selectedProvider.vertexApiKey ||
-                                                                    validationStatus ===
-                                                                        "validating"
-                                                                }
-                                                                className={cn(
-                                                                    "h-9 px-4",
-                                                                    validationStatus ===
-                                                                        "success" &&
-                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
-                                                                )}
-                                                            >
-                                                                {validationStatus ===
-                                                                "validating" ? (
-                                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                                ) : validationStatus ===
-                                                                  "success" ? (
-                                                                    <>
-                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
-                                                                        {
-                                                                            dict
-                                                                                .modelConfig
-                                                                                .verified
-                                                                        }
-                                                                    </>
-                                                                ) : (
-                                                                    dict
-                                                                        .modelConfig
-                                                                        .test
-                                                                )}
-                                                            </Button>
-                                                        </div>
-                                                        {validationStatus ===
-                                                            "error" &&
-                                                            validationError && (
-                                                                <p className="text-xs text-destructive flex items-center gap-1">
-                                                                    <X className="h-3 w-3" />
-                                                                    {
-                                                                        validationError
-                                                                    }
-                                                                </p>
-                                                            )}
-                                                    </div>
-
-                                                    {/* Base URL (optional) */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="vertex-base-url"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {formatMessage(
-                                                                dict.modelConfig
-                                                                    .baseUrlWithExample,
-                                                                {
-                                                                    example:
-                                                                        PROVIDER_INFO[
-                                                                            selectedProvider
-                                                                                .provider
-                                                                        ]
-                                                                            .defaultBaseUrl ||
-                                                                        "https://api.example.com/v1",
-                                                                },
-                                                            )}
-                                                        </Label>
-                                                        <Input
-                                                            id="vertex-base-url"
-                                                            value={
-                                                                selectedProvider.baseUrl ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleProviderUpdate(
-                                                                    "baseUrl",
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder="Custom endpoint URL"
-                                                            className="h-9 font-mono text-xs"
-                                                        />
-                                                    </div>
-                                                </>
-                                            ) : selectedProvider.provider ===
-                                              "edgeone" ? (
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <Button
-                                                            variant={
-                                                                validationStatus ===
-                                                                "success"
-                                                                    ? "outline"
-                                                                    : "default"
-                                                            }
-                                                            size="sm"
-                                                            onClick={
-                                                                handleValidate
-                                                            }
-                                                            disabled={
-                                                                validationStatus ===
-                                                                "validating"
-                                                            }
-                                                            className={cn(
-                                                                "h-9 px-4",
-                                                                validationStatus ===
-                                                                    "success" &&
-                                                                    "text-success border-success/30 bg-success-muted hover:bg-success-muted",
-                                                            )}
-                                                        >
-                                                            {validationStatus ===
-                                                            "validating" ? (
-                                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                            ) : validationStatus ===
-                                                              "success" ? (
-                                                                <>
-                                                                    <Check className="h-4 w-4 mr-1.5" />
-                                                                    {
-                                                                        dict
-                                                                            .modelConfig
-                                                                            .verified
-                                                                    }
-                                                                </>
-                                                            ) : (
-                                                                dict.modelConfig
-                                                                    .test
-                                                            )}
-                                                        </Button>
-                                                        {validationStatus ===
-                                                            "error" &&
-                                                            validationError && (
-                                                                <p className="text-xs text-destructive flex items-center gap-1">
-                                                                    <X className="h-3 w-3" />
-                                                                    {
-                                                                        validationError
-                                                                    }
-                                                                </p>
-                                                            )}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {/* API Key */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="api-key"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {
-                                                                dict.modelConfig
-                                                                    .apiKey
-                                                            }
-                                                            {selectedProvider.provider ===
-                                                                "ollama" &&
-                                                                ` ${dict.modelConfig.optional}`}
-                                                        </Label>
-                                                        <div className="flex gap-2">
-                                                            <div className="relative flex-1">
-                                                                <Input
-                                                                    id="api-key"
-                                                                    type={
-                                                                        showApiKey
-                                                                            ? "text"
-                                                                            : "password"
-                                                                    }
-                                                                    value={
-                                                                        selectedProvider.apiKey
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleProviderUpdate(
-                                                                            "apiKey",
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                    placeholder={
-                                                                        dict
-                                                                            .modelConfig
-                                                                            .enterApiKey
-                                                                    }
-                                                                    className="h-9 pr-10 font-mono text-xs"
-                                                                />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setShowApiKey(
-                                                                            !showApiKey,
-                                                                        )
-                                                                    }
-                                                                    aria-label={
-                                                                        showApiKey
-                                                                            ? "Hide API key"
-                                                                            : "Show API key"
-                                                                    }
-                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-                                                                >
-                                                                    {showApiKey ? (
-                                                                        <EyeOff className="h-4 w-4" />
-                                                                    ) : (
-                                                                        <Eye className="h-4 w-4" />
-                                                                    )}
-                                                                </button>
-                                                            </div>
-                                                            <Button
-                                                                variant={
-                                                                    validationStatus ===
-                                                                    "success"
-                                                                        ? "outline"
-                                                                        : "default"
-                                                                }
-                                                                size="sm"
-                                                                onClick={
-                                                                    handleValidate
-                                                                }
-                                                                disabled={
-                                                                    (selectedProvider.provider !==
-                                                                        "ollama" &&
-                                                                        !selectedProvider.apiKey) ||
-                                                                    validationStatus ===
-                                                                        "validating"
-                                                                }
-                                                                className={cn(
-                                                                    "h-9 px-4",
-                                                                    validationStatus ===
-                                                                        "success" &&
-                                                                        "text-success border-success/30 bg-success-muted hover:bg-success-muted",
-                                                                )}
-                                                            >
-                                                                {validationStatus ===
-                                                                "validating" ? (
-                                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                                ) : validationStatus ===
-                                                                  "success" ? (
-                                                                    <>
-                                                                        <Check className="h-4 w-4 mr-1.5 animate-check-pop" />
-                                                                        {
-                                                                            dict
-                                                                                .modelConfig
-                                                                                .verified
-                                                                        }
-                                                                    </>
-                                                                ) : (
-                                                                    dict
-                                                                        .modelConfig
-                                                                        .test
-                                                                )}
-                                                            </Button>
-                                                        </div>
-                                                        {validationStatus ===
-                                                            "error" &&
-                                                            validationError && (
-                                                                <p className="text-xs text-destructive flex items-center gap-1">
-                                                                    <X className="h-3 w-3" />
-                                                                    {
-                                                                        validationError
-                                                                    }
-                                                                </p>
-                                                            )}
-                                                    </div>
-
-                                                    {/* Base URL */}
-                                                    <div className="space-y-2">
-                                                        <Label
-                                                            htmlFor="base-url"
-                                                            className="text-xs font-medium flex items-center gap-1.5"
-                                                        >
-                                                            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                                            {formatMessage(
-                                                                dict.modelConfig
-                                                                    .baseUrlWithExample,
-                                                                {
-                                                                    example:
-                                                                        PROVIDER_INFO[
-                                                                            selectedProvider
-                                                                                .provider
-                                                                        ]
-                                                                            .defaultBaseUrl ||
-                                                                        "https://api.example.com/v1",
-                                                                },
-                                                            )}
-                                                        </Label>
-                                                        <Input
-                                                            id="base-url"
-                                                            value={
-                                                                selectedProvider.baseUrl ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleProviderUpdate(
-                                                                    "baseUrl",
-                                                                    e.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder={
-                                                                PROVIDER_INFO[
-                                                                    selectedProvider
-                                                                        .provider
-                                                                ]
-                                                                    .defaultBaseUrl ||
-                                                                dict.modelConfig
-                                                                    .customEndpoint
-                                                            }
-                                                            className="h-9 rounded-xl font-mono text-xs"
-                                                        />
-                                                    </div>
-                                                </>
-                                            )}
+                                            <ProviderCredentialsFields
+                                                provider={
+                                                    selectedProvider.provider
+                                                }
+                                                name={selectedProvider.name}
+                                                baseUrl={
+                                                    selectedProvider.baseUrl
+                                                }
+                                                awsRegion={
+                                                    selectedProvider.awsRegion
+                                                }
+                                                onChange={(field, value) =>
+                                                    handleProviderUpdate(
+                                                        field,
+                                                        value,
+                                                    )
+                                                }
+                                                renderSecret={({ field, id }) =>
+                                                    renderProviderSecret(
+                                                        field,
+                                                        id,
+                                                    )
+                                                }
+                                                footer={
+                                                    selectedProvider.provider ===
+                                                    "bedrock"
+                                                        ? renderTestButton(
+                                                              !!selectedProvider.awsAccessKeyId &&
+                                                                  !!selectedProvider.awsSecretAccessKey &&
+                                                                  !!selectedProvider.awsRegion,
+                                                          )
+                                                        : selectedProvider.provider ===
+                                                            "edgeone"
+                                                          ? renderTestButton(
+                                                                true,
+                                                            )
+                                                          : undefined
+                                                }
+                                            />
                                         </ConfigCard>
                                     </ConfigSection>
 
@@ -1340,21 +1008,55 @@ export function ModelConfigDialog({
                                                 >
                                                     <Plus className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Select
-                                                    onValueChange={(value) => {
-                                                        if (value) {
-                                                            handleAddModel(
-                                                                value,
-                                                            )
+                                                {PROVIDER_INFO[
+                                                    selectedProvider.provider
+                                                ].modelList && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 rounded-lg"
+                                                        onClick={
+                                                            handleFetchModels
                                                         }
-                                                    }}
-                                                    disabled={
-                                                        availableSuggestions.length ===
-                                                        0
+                                                        disabled={
+                                                            fetchingModels
+                                                        }
+                                                        title={
+                                                            dict.modelConfig
+                                                                .fetchModels
+                                                        }
+                                                        aria-label={
+                                                            dict.modelConfig
+                                                                .fetchModels
+                                                        }
+                                                    >
+                                                        {fetchingModels ? (
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        ) : (
+                                                            <RefreshCw className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
+                                                )}
+                                                {/* modal: the dialog blocks the
+                                                wheel outside itself, and the
+                                                list is rendered outside it */}
+                                                <Popover
+                                                    modal
+                                                    open={modelPickerOpen}
+                                                    onOpenChange={
+                                                        setModelPickerOpen
                                                     }
                                                 >
-                                                    <SelectTrigger className="w-28 h-8 rounded-lg hover:bg-interactive-hover">
-                                                        <span className="text-xs">
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-28 h-8 rounded-lg text-xs"
+                                                            disabled={
+                                                                availableSuggestions.length ===
+                                                                0
+                                                            }
+                                                        >
                                                             {availableSuggestions.length ===
                                                             0
                                                                 ? dict
@@ -1363,36 +1065,91 @@ export function ModelConfigDialog({
                                                                 : dict
                                                                       .modelConfig
                                                                       .suggested}
-                                                        </span>
-                                                    </SelectTrigger>
-                                                    <SelectContent className="max-h-72">
-                                                        {availableSuggestions.map(
-                                                            (modelId) => (
-                                                                <SelectItem
-                                                                    key={
-                                                                        modelId
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent
+                                                        className="w-80 p-0"
+                                                        align="end"
+                                                    >
+                                                        <Command>
+                                                            <CommandInput
+                                                                placeholder={
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .searchModels
+                                                                }
+                                                            />
+                                                            <CommandList className="max-h-72">
+                                                                <CommandEmpty>
+                                                                    {
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .noModelsFound
                                                                     }
-                                                                    value={
-                                                                        modelId
-                                                                    }
-                                                                    className="font-mono text-xs"
-                                                                >
-                                                                    {modelId}
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                                </CommandEmpty>
+                                                                {availableSuggestions.map(
+                                                                    (model) => (
+                                                                        <CommandItem
+                                                                            key={
+                                                                                model.id
+                                                                            }
+                                                                            value={
+                                                                                model.id
+                                                                            }
+                                                                            onSelect={() => {
+                                                                                handleAddModel(
+                                                                                    model.id,
+                                                                                )
+                                                                                setModelPickerOpen(
+                                                                                    false,
+                                                                                )
+                                                                            }}
+                                                                            className="font-mono text-xs"
+                                                                        >
+                                                                            <span className="truncate">
+                                                                                {
+                                                                                    model.id
+                                                                                }
+                                                                            </span>
+                                                                            {supportsTools(
+                                                                                model,
+                                                                            ) ===
+                                                                                false && (
+                                                                                <span className="ml-auto shrink-0 font-sans text-[10px] text-amber-600 dark:text-amber-400">
+                                                                                    {
+                                                                                        dict
+                                                                                            .modelConfig
+                                                                                            .noTools
+                                                                                    }
+                                                                                </span>
+                                                                            )}
+                                                                        </CommandItem>
+                                                                    ),
+                                                                )}
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
                                         }
                                     >
+                                        {fetchModelsError && (
+                                            <p className="mb-2 text-xs text-destructive">
+                                                {fetchModelsError}
+                                            </p>
+                                        )}
                                         {/* Model List */}
                                         <div className="rounded-2xl border border-border-subtle bg-surface-2/30 overflow-hidden min-h-[120px]">
                                             {selectedProvider.models.length ===
                                             0 ? (
                                                 <div className="p-6 text-center h-full flex flex-col items-center justify-center">
                                                     <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface-2 mb-3">
-                                                        <Sparkles className="h-5 w-5 text-muted-foreground" />
+                                                        <ProviderLogo
+                                                            provider={
+                                                                selectedProvider.provider
+                                                            }
+                                                            className="size-5 text-muted-foreground"
+                                                        />
                                                     </div>
                                                     <p className="text-sm text-muted-foreground">
                                                         {
@@ -1400,11 +1157,41 @@ export function ModelConfigDialog({
                                                                 .noModelsConfigured
                                                         }
                                                     </p>
+                                                    {emptyStateSuggestions.length >
+                                                        0 && (
+                                                        <div className="mt-4 flex max-w-full flex-wrap items-center justify-center gap-2">
+                                                            {emptyStateSuggestions.map(
+                                                                (modelId) => (
+                                                                    <Button
+                                                                        key={
+                                                                            modelId
+                                                                        }
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 max-w-[220px] rounded-lg px-2 font-mono text-[11px]"
+                                                                        onClick={() =>
+                                                                            handleAddModel(
+                                                                                modelId,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Plus className="h-3 w-3 shrink-0" />
+                                                                        <span className="truncate">
+                                                                            {
+                                                                                modelId
+                                                                            }
+                                                                        </span>
+                                                                    </Button>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="divide-y divide-border-subtle">
                                                     {selectedProvider.models.map(
-                                                        (model, index) => (
+                                                        (model) => (
                                                             <div
                                                                 key={model.id}
                                                                 className={cn(
@@ -1414,28 +1201,24 @@ export function ModelConfigDialog({
                                                                 <div className="flex items-center gap-3 p-3 min-w-0">
                                                                     {/* Status icon */}
                                                                     <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
-                                                                        {validatingModelIndex !==
-                                                                            null &&
-                                                                        index ===
-                                                                            validatingModelIndex ? (
+                                                                        {validatingModelIds.has(
+                                                                            model.id,
+                                                                        ) ? (
                                                                             // Currently validating
                                                                             <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
                                                                                 <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
                                                                             </div>
-                                                                        ) : validatingModelIndex !==
-                                                                              null &&
-                                                                          index >
-                                                                              validatingModelIndex &&
-                                                                          model.validated ===
-                                                                              undefined ? (
-                                                                            // Queued
-                                                                            <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
-                                                                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                            </div>
                                                                         ) : model.validated ===
                                                                           true ? (
-                                                                            // Valid
-                                                                            <div className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center">
+                                                                            // Valid, with the time the test took
+                                                                            <div
+                                                                                className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center"
+                                                                                title={
+                                                                                    model.responseTime
+                                                                                        ? `${(model.responseTime / 1000).toFixed(1)} s`
+                                                                                        : undefined
+                                                                                }
+                                                                            >
                                                                                 <Check className="h-4 w-4 text-success" />
                                                                             </div>
                                                                         ) : model.validated ===
@@ -1453,7 +1236,10 @@ export function ModelConfigDialog({
                                                                     </div>
                                                                     <Input
                                                                         value={
-                                                                            model.modelId
+                                                                            modelIdDraft?.id ===
+                                                                            model.id
+                                                                                ? modelIdDraft.value
+                                                                                : model.modelId
                                                                         }
                                                                         title={
                                                                             model.modelId
@@ -1471,24 +1257,14 @@ export function ModelConfigDialog({
                                                                                     null,
                                                                                 )
                                                                             }
-                                                                            if (
-                                                                                selectedProviderId
-                                                                            ) {
-                                                                                updateModel(
-                                                                                    selectedProviderId,
-                                                                                    model.id,
-                                                                                    {
-                                                                                        modelId:
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
-                                                                                        validated:
-                                                                                            undefined,
-                                                                                        validationError:
-                                                                                            undefined,
-                                                                                    },
-                                                                                )
-                                                                            }
+                                                                            setModelIdDraft(
+                                                                                {
+                                                                                    id: model.id,
+                                                                                    value: e
+                                                                                        .target
+                                                                                        .value,
+                                                                                },
+                                                                            )
                                                                         }}
                                                                         onKeyDown={(
                                                                             e,
@@ -1505,6 +1281,10 @@ export function ModelConfigDialog({
                                                                         ) => {
                                                                             const newModelId =
                                                                                 e.target.value.trim()
+                                                                            // Drop the draft; an invalid ID falls back to the saved one
+                                                                            setModelIdDraft(
+                                                                                null,
+                                                                            )
 
                                                                             // Helper to show error with shake
                                                                             const showError =
@@ -1599,6 +1379,28 @@ export function ModelConfigDialog({
                                                                             setEditError(
                                                                                 null,
                                                                             )
+                                                                            if (
+                                                                                selectedProviderId &&
+                                                                                newModelId !==
+                                                                                    model.modelId
+                                                                            ) {
+                                                                                updateModel(
+                                                                                    selectedProviderId,
+                                                                                    model.id,
+                                                                                    {
+                                                                                        modelId:
+                                                                                            newModelId,
+                                                                                        validated:
+                                                                                            undefined,
+                                                                                        validationError:
+                                                                                            undefined,
+                                                                                        validationWarning:
+                                                                                            undefined,
+                                                                                        responseTime:
+                                                                                            undefined,
+                                                                                    },
+                                                                                )
+                                                                            }
                                                                         }}
                                                                         className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                     />
@@ -1623,6 +1425,28 @@ export function ModelConfigDialog({
                                                                         <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
                                                                             {
                                                                                 model.validationError
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                {!model.validationWarning &&
+                                                                    getModelInfo?.(
+                                                                        selectedProvider.provider,
+                                                                        model.modelId,
+                                                                    )?.tools ===
+                                                                        false && (
+                                                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 px-3 pb-2 pl-14">
+                                                                            {
+                                                                                dict
+                                                                                    .modelConfig
+                                                                                    .mayNotDraw
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                {model.validated &&
+                                                                    model.validationWarning && (
+                                                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 px-3 pb-2 pl-14">
+                                                                            {
+                                                                                model.validationWarning
                                                                             }
                                                                         </p>
                                                                     )}

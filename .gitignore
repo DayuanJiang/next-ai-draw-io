@@ -72,3 +72,10 @@ CLAUDE.md
 .edgeone
 opencode.json
 ai-models.json
+
+# local backups
+*.bak
+.gstack/
+
+# admin panel settings (contains secrets)
+data/

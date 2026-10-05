@@ -10,18 +10,24 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { type DrawioTheme, isDrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
 export default function Home() {
-    const { drawioRef, handleDiagramExport, onDrawioLoad, resetDrawioReady } =
-        useDiagram()
+    const {
+        drawioRef,
+        handleDiagramExport,
+        handleDiagramAutoSave,
+        onDrawioLoad,
+        resetDrawioReady,
+    } = useDiagram()
     const router = useRouter()
     const pathname = usePathname()
     // Extract current language from pathname (e.g., "/zh/about" → "zh")
     const currentLang = (pathname.split("/")[1] || i18n.defaultLocale) as Locale
     const [isMobile, setIsMobile] = useState(false)
     const [isChatVisible, setIsChatVisible] = useState(true)
-    const [drawioUi, setDrawioUi] = useState<"min" | "sketch">("min")
+    const [drawioUi, setDrawioUi] = useState<DrawioTheme>("kennedy")
     const [darkMode, setDarkMode] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
@@ -31,7 +37,6 @@ export default function Home() {
     )
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
-    const isMobileRef = useRef(false)
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -42,13 +47,15 @@ export default function Home() {
             const currentLocale = pathParts[0]
             if (currentLocale !== savedLocale) {
                 pathParts[0] = savedLocale
-                router.replace(`/${pathParts.join("/")}`)
+                // Keep the query (e.g. ?session=) and hash
+                const { search, hash } = window.location
+                router.replace(`/${pathParts.join("/")}${search}${hash}`)
                 return // Wait for redirect
             }
         }
 
         const savedUi = localStorage.getItem("drawio-theme")
-        if (savedUi === "min" || savedUi === "sketch") {
+        if (isDrawioTheme(savedUi)) {
             setDrawioUi(savedUi)
         }
 
@@ -93,35 +100,32 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    const handleDrawioUiChange = () => {
-        const newUi = drawioUi === "min" ? "sketch" : "min"
-        localStorage.setItem("drawio-theme", newUi)
-        setDrawioUi(newUi)
+    const handleDrawioUiChange = (theme: DrawioTheme) => {
+        localStorage.setItem("drawio-theme", theme)
+        setDrawioUi(theme)
         setIsDrawioReady(false)
         resetDrawioReady()
     }
 
-    // Check mobile - reset draw.io before crossing breakpoint
-    const isInitialRenderRef = useRef(true)
+    // Check mobile. No panel is remounted when crossing the breakpoint, so
+    // the draw.io ready state and the chat's turn stay as they are.
     useEffect(() => {
         const checkMobile = () => {
-            const newIsMobile = window.innerWidth < 768
-            if (
-                !isInitialRenderRef.current &&
-                newIsMobile !== isMobileRef.current
-            ) {
-                setIsDrawioReady(false)
-                resetDrawioReady()
-            }
-            isMobileRef.current = newIsMobile
-            isInitialRenderRef.current = false
-            setIsMobile(newIsMobile)
+            setIsMobile(window.innerWidth < 768)
         }
 
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [resetDrawioReady])
+    }, [])
+
+    // Give the chat panel the size of this side of the breakpoint. It is
+    // open on both sides: the mobile panel cannot be collapsed, and one
+    // collapsed on desktop comes back open
+    useEffect(() => {
+        chatPanelRef.current?.resize(isMobile ? 50 : 33)
+        setIsChatVisible(true)
+    }, [isMobile])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -174,6 +178,8 @@ export default function Home() {
                                     <DrawIoEmbed
                                         key={`${drawioUi}-${darkMode}-${currentLang}-${isElectron}`}
                                         ref={drawioRef}
+                                        autosave
+                                        onAutoSave={handleDiagramAutoSave}
                                         onExport={handleDiagramExport}
                                         onLoad={handleDrawioLoad}
                                         baseUrl={drawioBaseUrl}
@@ -184,8 +190,13 @@ export default function Home() {
                                             saveAndExit: false,
                                             noSaveBtn: true,
                                             noExitBtn: true,
-                                            dark: darkMode,
-                                            lang: currentLang,
+                                            dark:
+                                                darkMode || drawioUi === "dark",
+                                            // draw.io names Traditional Chinese "zh-tw"
+                                            lang:
+                                                currentLang === "zh-Hant"
+                                                    ? "zh-tw"
+                                                    : currentLang,
                                             // Enable offline mode in Electron to disable external service calls
                                             ...(isElectron && {
                                                 offline: true,
@@ -209,7 +220,6 @@ export default function Home() {
 
                 {/* Chat Panel */}
                 <ResizablePanel
-                    key={isMobile ? "mobile" : "desktop"}
                     id="chat-panel"
                     ref={chatPanelRef}
                     defaultSize={isMobile ? 50 : 33}
@@ -232,7 +242,7 @@ export default function Home() {
                                 isVisible={isChatVisible}
                                 onToggleVisibility={toggleChatPanel}
                                 drawioUi={drawioUi}
-                                onToggleDrawioUi={handleDrawioUiChange}
+                                onDrawioUiChange={handleDrawioUiChange}
                                 darkMode={darkMode}
                                 onToggleDarkMode={handleDarkModeChange}
                                 isMobile={isMobile}

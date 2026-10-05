@@ -27,7 +27,10 @@ import {
 } from "@/components/ai-elements/model-selector"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { useDictionary } from "@/hooks/use-dictionary"
-import type { FlattenedModel } from "@/lib/types/model-config"
+import {
+    type FlattenedModel,
+    PROVIDER_LOGO_MAP,
+} from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
 interface ModelSelectorProps {
@@ -37,24 +40,6 @@ interface ModelSelectorProps {
     onConfigure?: () => void
     disabled?: boolean
     showUnvalidatedModels?: boolean
-}
-
-// Map our provider names to models.dev logo names
-const PROVIDER_LOGO_MAP: Record<string, string> = {
-    openai: "openai",
-    anthropic: "anthropic",
-    google: "google",
-    azure: "azure",
-    bedrock: "amazon-bedrock",
-    openrouter: "openrouter",
-    deepseek: "deepseek",
-    siliconflow: "siliconflow",
-    sglang: "openai", // SGLang is OpenAI-compatible, use OpenAI logo
-    gateway: "vercel",
-    edgeone: "tencent-cloud",
-    vertexai: "google",
-    doubao: "bytedance",
-    modelscope: "modelscope",
 }
 
 // Group models by providerLabel (handles duplicate providers)
@@ -173,7 +158,7 @@ export function ModelSelector({
     }, [])
 
     return (
-        <div ref={wrapperRef} className="inline-block">
+        <div ref={wrapperRef} className="min-w-0 max-w-48">
             <ModelSelectorRoot open={open} onOpenChange={setOpen}>
                 <ModelSelectorTrigger asChild>
                     <ButtonWithTooltip
@@ -182,7 +167,7 @@ export function ModelSelector({
                         size="sm"
                         disabled={disabled}
                         className={cn(
-                            "hover:bg-accent gap-1.5 h-8 px-2 transition-[padding,background-color] duration-150 ease-in-out",
+                            "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent",
                             !showLabel && "px-1.5 justify-center",
                         )}
                         // accessibility: expose label to screen readers
@@ -191,7 +176,7 @@ export function ModelSelector({
                         <Bot className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                         {/* show/hide visible label based on measured width */}
                         {showLabel ? (
-                            <span className="text-xs truncate">
+                            <span className="min-w-0 truncate text-xs">
                                 {selectedModel
                                     ? selectedModel.modelId
                                     : dict.modelConfig.default}
@@ -214,7 +199,7 @@ export function ModelSelector({
                     />
                     <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
                         <div className="flex-1 min-h-0 overflow-hidden">
-                            <ModelSelectorList className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                            <ModelSelectorList className="overflow-y-auto scrollbar-thin">
                                 <ModelSelectorEmpty>
                                     {displayModels.length === 0 &&
                                     models.length > 0
@@ -279,9 +264,13 @@ export function ModelSelector({
                                                         (model) => (
                                                             <ModelSelectorItem
                                                                 key={model.id}
-                                                                value={
-                                                                    model.modelId
-                                                                }
+                                                                // Unique value so same-named models highlight
+                                                                // separately; keywords keep search by name
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
                                                                 onSelect={() =>
                                                                     handleSelect(
                                                                         model.id,
@@ -366,9 +355,11 @@ export function ModelSelector({
                                                         (model) => (
                                                             <ModelSelectorItem
                                                                 key={model.id}
-                                                                value={
-                                                                    model.modelId
-                                                                }
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
                                                                 onSelect={() =>
                                                                     handleSelect(
                                                                         model.id,
