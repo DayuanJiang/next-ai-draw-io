@@ -13,7 +13,12 @@ import {
 } from "@/components/ui/select"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
-import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
+import {
+    chatRequestUrl,
+    normalizeBaseUrl,
+    PROVIDER_INFO,
+    type ProviderName,
+} from "@/lib/types/model-config"
 
 // Logical secret field. The caller owns the actual input — plaintext for the
 // user dialog, write-only masked for the admin panel — supplied via
@@ -26,7 +31,7 @@ export type SecretField =
     | "vertexApiKey"
 
 // AWS regions offered for Bedrock (shared by both screens)
-const AWS_REGIONS: Array<[string, string]> = [
+export const AWS_REGIONS: Array<[string, string]> = [
     ["us-east-1", "N. Virginia"],
     ["us-east-2", "Ohio"],
     ["us-west-2", "Oregon"],
@@ -77,6 +82,7 @@ export function ProviderCredentialsFields({
     const baseUrlLabel = formatMessage(dict.modelConfig.baseUrlWithExample, {
         example: info.defaultBaseUrl || "https://api.example.com/v1",
     })
+    const requestUrl = baseUrl ? chatRequestUrl(provider, baseUrl) : null
 
     // EdgeOne needs no credentials — the caller supplies just a test button
     if (provider === "edgeone") {
@@ -208,17 +214,29 @@ export function ProviderCredentialsFields({
                 </>
             ) : (
                 <>
-                    {/* API Key */}
+                    {/* API Key, with a link to where the provider issues keys */}
                     <div className="space-y-2">
-                        <Label
-                            htmlFor="api-key"
-                            className="text-xs font-medium flex items-center gap-1.5"
-                        >
-                            <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                            {dict.modelConfig.apiKey}
-                            {provider === "ollama" &&
-                                ` ${dict.modelConfig.optional}`}
-                        </Label>
+                        <div className="flex items-center justify-between">
+                            <Label
+                                htmlFor="api-key"
+                                className="text-xs font-medium flex items-center gap-1.5"
+                            >
+                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                {dict.modelConfig.apiKey}
+                                {provider === "ollama" &&
+                                    ` ${dict.modelConfig.optional}`}
+                            </Label>
+                            {info.apiKeyUrl && (
+                                <a
+                                    href={info.apiKeyUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline"
+                                >
+                                    {dict.modelConfig.getApiKey}
+                                </a>
+                            )}
+                        </div>
                         {renderSecret({ field: "apiKey", id: "api-key" })}
                     </div>
 
@@ -238,12 +256,28 @@ export function ProviderCredentialsFields({
                             onChange={(e) =>
                                 onChange("baseUrl", e.target.value)
                             }
+                            // Drop a pasted endpoint path such as /chat/completions
+                            onBlur={(e) => {
+                                const normalized = normalizeBaseUrl(
+                                    e.target.value,
+                                )
+                                if (normalized !== e.target.value) {
+                                    onChange("baseUrl", normalized)
+                                }
+                            }}
                             placeholder={
                                 info.defaultBaseUrl ||
                                 dict.modelConfig.customEndpoint
                             }
                             className="h-9 rounded-xl font-mono text-xs"
                         />
+                        {requestUrl && (
+                            <p className="text-xs text-muted-foreground font-mono break-all">
+                                {formatMessage(dict.modelConfig.requestUrl, {
+                                    url: requestUrl,
+                                })}
+                            </p>
+                        )}
                         {provider === "minimax" && (
                             <p className="text-xs text-muted-foreground">
                                 {dict.modelConfig.minimaxBaseUrlHint}

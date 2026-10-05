@@ -18,10 +18,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     maximize: () => ipcRenderer.send("window-maximize"),
     close: () => ipcRenderer.send("window-close"),
 
-    // File operations
-    openFile: () => ipcRenderer.invoke("dialog-open-file"),
-    saveFile: (data: string) => ipcRenderer.invoke("dialog-save-file", data),
-
     // Proxy settings
     getProxy: () => ipcRenderer.invoke("get-proxy"),
     setProxy: (config: { httpProxy?: string; httpsProxy?: string }) =>
@@ -31,4 +27,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getUserLocale: () => ipcRenderer.invoke("get-user-locale"),
     setUserLocale: (locale: string) =>
         ipcRenderer.invoke("set-user-locale", locale),
+
+    // A chat was saved, or the page loaded with this many chats: the next
+    // launch opens the port where the chats are
+    chatSaved: () => ipcRenderer.invoke("chat-saved"),
+    chatsLoaded: (count: number) => ipcRenderer.invoke("chats-loaded", count),
+
+    // The server restarted on the same port (another preset)
+    onServerRestarted: (callback: () => void) => {
+        const listener = () => callback()
+        ipcRenderer.on("server-restarted", listener)
+        return () => {
+            ipcRenderer.removeListener("server-restarted", listener)
+        }
+    },
 })

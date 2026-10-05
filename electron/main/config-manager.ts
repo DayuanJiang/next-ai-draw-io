@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    renameSync,
+    writeFileSync,
+} from "node:fs"
 import path from "node:path"
 import { app, safeStorage } from "electron"
 
@@ -30,7 +36,9 @@ let hasWarnedAboutPlaintext = false
  * Warns if encryption is not available (API key stored in plaintext)
  */
 function encryptValue(value: string): string {
-    if (!value) {
+    // Already encrypted (a value that could not be decrypted): keep it as is
+    // instead of wrapping it in a second layer of encryption
+    if (!value || value.startsWith(ENCRYPTED_PREFIX)) {
         return value
     }
 
@@ -61,6 +69,7 @@ function encryptValue(value: string): string {
 /**
  * Decrypt a sensitive value using safeStorage
  * Returns the original value if it's not encrypted or decryption fails
+ * (so saving writes the stored ciphertext back unchanged)
  */
 function decryptValue(value: string): string {
     if (!value || !value.startsWith(ENCRYPTED_PREFIX)) {
@@ -150,6 +159,10 @@ function getConfigFilePath(): string {
     return path.join(userDataPath, CONFIG_FILE_NAME)
 }
 
+// The presets file exists but the last read failed: a save now would
+// replace the user's presets with the empty list that read returned
+let presetsUnreadable = false
+
 /**
  * Load presets from the config file
  * Decrypts sensitive fields automatically
@@ -158,6 +171,25 @@ export function loadPresets(): ConfigPresetsFile {
     const configPath = getConfigFilePath()
 
     if (!existsSync(configPath)) {
+        // Nothing left that a save could overwrite
+        presetsUnreadable = false
+        return {
+            version: 1,
+            currentPresetId: null,
+            presets: [],
+            userLocale: undefined,
+        }
+    }
+
+    let content: string
+    try {
+        content = readFileSync(configPath, "utf-8")
+        presetsUnreadable = false
+    } catch (error) {
+        // Often only for now (on Windows an antivirus scanner can hold the
+        // file): keep the file, and refuse saves based on this empty list
+        console.error("Failed to read config presets:", error)
+        presetsUnreadable = true
         return {
             version: 1,
             currentPresetId: null,
@@ -167,7 +199,6 @@ export function loadPresets(): ConfigPresetsFile {
     }
 
     try {
-        const content = readFileSync(configPath, "utf-8")
         const data = JSON.parse(content) as ConfigPresetsFile
 
         // Decrypt sensitive fields in each preset
@@ -179,6 +210,17 @@ export function loadPresets(): ConfigPresetsFile {
         return data
     } catch (error) {
         console.error("Failed to load config presets:", error)
+        // Move the unreadable file aside so the next save can't overwrite
+        // the user's presets with an empty list
+        const backupPath = `${configPath}.corrupt-${Date.now()}`
+        try {
+            renameSync(configPath, backupPath)
+            console.error(`Unreadable config presets moved to ${backupPath}`)
+        } catch (renameError) {
+            // Still there: refuse saves that would overwrite it
+            console.error("Failed to back up config presets:", renameError)
+            presetsUnreadable = true
+        }
         return {
             version: 1,
             currentPresetId: null,
@@ -193,6 +235,11 @@ export function loadPresets(): ConfigPresetsFile {
  * Encrypts sensitive fields automatically
  */
 export function savePresets(data: ConfigPresetsFile): void {
+    if (presetsUnreadable) {
+        throw new Error(
+            "The presets file could not be read, so it was not overwritten. Please try again.",
+        )
+    }
     const configPath = getConfigFilePath()
     const userDataPath = app.getPath("userData")
 
@@ -211,7 +258,11 @@ export function savePresets(data: ConfigPresetsFile): void {
     }
 
     try {
-        writeFileSync(configPath, JSON.stringify(dataToSave, null, 2), "utf-8")
+        // Write a temp file and rename it, so a crash mid-write can't leave
+        // a truncated config file
+        const tempPath = `${configPath}.tmp`
+        writeFileSync(tempPath, JSON.stringify(dataToSave, null, 2), "utf-8")
+        renameSync(tempPath, configPath)
     } catch (error) {
         console.error("Failed to save config presets:", error)
         throw error
@@ -307,9 +358,10 @@ export function deletePreset(id: string): boolean {
 
     data.presets.splice(index, 1)
 
-    // Clear current preset if it was deleted
+    // Clear current preset (and its env vars) if it was deleted
     if (data.currentPresetId === id) {
         data.currentPresetId = null
+        setPresetEnv(null)
     }
 
     savePresets(data)
@@ -322,13 +374,15 @@ export function deletePreset(id: string): boolean {
 export function setCurrentPreset(id: string | null): boolean {
     const data = loadPresets()
 
+    let preset: ConfigPreset | null = null
     if (id !== null) {
-        const preset = data.presets.find((p) => p.id === id)
+        preset = data.presets.find((p) => p.id === id) || null
         if (!preset) {
             return false
         }
     }
 
+    setPresetEnv(preset)
     data.currentPresetId = id
     savePresets(data)
     return true
@@ -365,78 +419,23 @@ const PROVIDER_ENV_MAP: Record<string, { apiKey: string; baseUrl: string }> = {
 }
 
 /**
- * Apply preset environment variables to the current process
- * Returns the environment variables that were applied
- */
-export function applyPresetToEnv(id: string): Record<string, string> | null {
-    const data = loadPresets()
-    const preset = data.presets.find((p) => p.id === id)
-
-    if (!preset) {
-        return null
-    }
-
-    const appliedEnv: Record<string, string> = {}
-    const provider = preset.config.AI_PROVIDER?.toLowerCase()
-
-    for (const [key, value] of Object.entries(preset.config)) {
-        if (value !== undefined && value !== "") {
-            // Map generic AI_API_KEY to provider-specific key
-            if (
-                key === "AI_API_KEY" &&
-                provider &&
-                PROVIDER_ENV_MAP[provider]
-            ) {
-                const providerApiKey = PROVIDER_ENV_MAP[provider].apiKey
-                if (providerApiKey) {
-                    process.env[providerApiKey] = value
-                    appliedEnv[providerApiKey] = value
-                }
-            }
-            // Map generic AI_BASE_URL to provider-specific key
-            else if (
-                key === "AI_BASE_URL" &&
-                provider &&
-                PROVIDER_ENV_MAP[provider]
-            ) {
-                const providerBaseUrl = PROVIDER_ENV_MAP[provider].baseUrl
-                if (providerBaseUrl) {
-                    process.env[providerBaseUrl] = value
-                    appliedEnv[providerBaseUrl] = value
-                }
-            }
-            // Apply other env vars directly
-            else {
-                process.env[key] = value
-                appliedEnv[key] = value
-            }
-        }
-    }
-
-    // Set as current preset
-    data.currentPresetId = id
-    savePresets(data)
-
-    return appliedEnv
-}
-
-/**
- * Get environment variables from current preset
+ * Map a preset's config to environment variables
  * Maps generic AI_API_KEY/AI_BASE_URL to provider-specific keys
  */
-export function getCurrentPresetEnv(): Record<string, string> {
-    const preset = getCurrentPreset()
-    if (!preset) {
-        return {}
-    }
-
+function presetToEnv(preset: ConfigPreset): Record<string, string> {
     const env: Record<string, string> = {}
     const provider = preset.config.AI_PROVIDER?.toLowerCase()
 
     for (const [key, value] of Object.entries(preset.config)) {
         if (value !== undefined && value !== "") {
+            // A key that could not be decrypted is useless to the server
+            if (value.startsWith(ENCRYPTED_PREFIX)) {
+                console.warn(
+                    `Preset "${preset.name}": ${key} could not be decrypted. Please enter it again in Settings.`,
+                )
+            }
             // Map generic AI_API_KEY to provider-specific key
-            if (
+            else if (
                 key === "AI_API_KEY" &&
                 provider &&
                 PROVIDER_ENV_MAP[provider]
@@ -464,6 +463,90 @@ export function getCurrentPresetEnv(): Record<string, string> {
         }
     }
     return env
+}
+
+/**
+ * Values that env vars had before a preset first set them
+ * (from the system or .env files), and the keys the active preset set
+ */
+const originalEnv: Record<string, string | undefined> = {}
+let presetEnvKeys: string[] = []
+
+/**
+ * Replace the env vars of the previous preset with those of the given preset
+ * (null leaves no preset applied). Restoring first means switching presets
+ * never leaves the previous preset's base URL, model or key behind.
+ */
+function setPresetEnv(preset: ConfigPreset | null): Record<string, string> {
+    for (const key of presetEnvKeys) {
+        if (originalEnv[key] === undefined) {
+            delete process.env[key]
+        } else {
+            process.env[key] = originalEnv[key]
+        }
+    }
+
+    const env = preset ? presetToEnv(preset) : {}
+    for (const [key, value] of Object.entries(env)) {
+        if (!(key in originalEnv)) {
+            originalEnv[key] = process.env[key]
+        }
+        process.env[key] = value
+    }
+    presetEnvKeys = Object.keys(env)
+
+    writeDevPresetEnv(env)
+    return env
+}
+
+const DEV_ENV_FILE_NAME = "dev-preset-env.json"
+
+/**
+ * Development only: write the active preset's env vars (decrypted and mapped)
+ * for scripts/electron-dev.mjs, which restarts the Next.js dev server when
+ * this file changes. The dev server can't decrypt the config file itself.
+ */
+function writeDevPresetEnv(env: Record<string, string>): void {
+    if (app.isPackaged) {
+        return
+    }
+    try {
+        const filePath = path.join(app.getPath("userData"), DEV_ENV_FILE_NAME)
+        writeFileSync(filePath, JSON.stringify(env, null, 2), {
+            encoding: "utf-8",
+            mode: 0o600,
+        })
+    } catch (error) {
+        console.error("Failed to write dev preset env:", error)
+    }
+}
+
+/**
+ * Apply preset environment variables to the current process
+ * Returns the environment variables that were applied
+ */
+export function applyPresetToEnv(id: string): Record<string, string> | null {
+    const data = loadPresets()
+    const preset = data.presets.find((p) => p.id === id)
+
+    if (!preset) {
+        return null
+    }
+
+    const appliedEnv = setPresetEnv(preset)
+
+    // Set as current preset
+    data.currentPresetId = id
+    savePresets(data)
+
+    return appliedEnv
+}
+
+/**
+ * Apply the saved current preset's environment variables (used at startup)
+ */
+export function applyCurrentPresetToEnv(): void {
+    setPresetEnv(getCurrentPreset())
 }
 
 /**

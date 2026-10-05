@@ -124,6 +124,13 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 
 图表会实时显示在浏览器中！
 
+MCP服务器包含网页版的大部分画图功能：
+
+-   与网页版相同的画图规则和形状库（AWS、Azure、GCP、Kubernetes等）
+-   截图工具，AI可以查看画好的图并自行修正
+-   版本历史、多页图表，以及下载为`.drawio`、`.png`、`.svg`或`.drawio.svg`格式
+-   自动保存到`~/.next-ai-drawio/`，重启后可以接着画
+
 详情请参阅[MCP服务器README](../../packages/mcp-server/README.md)，了解VS Code、Cursor等客户端配置。
 
 ## 快速开始

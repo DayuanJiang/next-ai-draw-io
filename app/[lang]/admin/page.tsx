@@ -37,6 +37,19 @@ import { SettingField } from "./setting-field"
 
 const NAV_GROUP_IDS = ["models", ...SETTING_GROUPS.map((g) => g.id)]
 
+// For each toggleable group, whether any of its settings has a value (from
+// the settings file or the environment)
+function groupsWithValues(map: SettingsMap): Record<string, boolean> {
+    const result: Record<string, boolean> = {}
+    for (const group of SETTING_GROUPS) {
+        if (!group.toggleable) continue
+        result[group.id] = !!SETTINGS_BY_GROUP.get(group.id)?.some(
+            (d) => map[d.key]?.source !== "default",
+        )
+    }
+    return result
+}
+
 export default function AdminPage() {
     const dict = useDictionary()
     // Localized group title/description, keyed by group id
@@ -62,6 +75,8 @@ export default function AdminPage() {
     // Models section state
     const [providers, setProviders] = useState<AdminProvider[]>([])
     const [envProviders, setEnvProviders] = useState<EnvProvider[]>([])
+    // Whether .env itself sets AI_MODEL (a default the panel would override)
+    const [envHasDefaultModel, setEnvHasDefaultModel] = useState(false)
     const [savedProviders, setSavedProviders] = useState<string>("[]")
     const providersDirty = JSON.stringify(providers) !== savedProviders
 
@@ -88,15 +103,13 @@ export default function AdminPage() {
             const map: SettingsMap = {}
             for (const s of data.settings) map[s.key] = s
             setSettings(map)
-            // Seed each toggle once from whether the group has configured
-            // values; don't stomp a user's explicit toggle on later saves
+            // A group stays on while it still has values (e.g. from env vars
+            // that saving can't remove); a user's explicit "on" for a group
+            // with no values yet is kept across saves
             setEnabledGroups((prev) => {
-                const next = { ...prev }
-                for (const group of SETTING_GROUPS) {
-                    if (!group.toggleable || group.id in next) continue
-                    next[group.id] = !!SETTINGS_BY_GROUP.get(group.id)?.some(
-                        (d) => map[d.key]?.source !== "default",
-                    )
+                const next = groupsWithValues(map)
+                for (const id of Object.keys(next)) {
+                    next[id] = next[id] || !!prev[id]
                 }
                 return next
             })
@@ -108,10 +121,12 @@ export default function AdminPage() {
         (data: {
             providers: AdminProvider[]
             envProviders?: EnvProvider[]
+            envHasDefaultModel?: boolean
         }) => {
             setProviders(data.providers)
             setSavedProviders(JSON.stringify(data.providers))
             setEnvProviders(data.envProviders ?? [])
+            setEnvHasDefaultModel(!!data.envHasDefaultModel)
         },
         [],
     )
@@ -181,8 +196,9 @@ export default function AdminPage() {
         return () => observer.disconnect()
     }, [authedPassword])
 
+    // value undefined drops the pending change (back to the saved value)
     const handleChange = useCallback(
-        (key: string, value: string | null) => {
+        (key: string, value: string | null | undefined) => {
             setSaveMessage(null)
             setErrors((prev) => {
                 if (!(key in prev)) return prev
@@ -201,7 +217,7 @@ export default function AdminPage() {
                     value === "" &&
                     (!state || state.source !== "file") &&
                     !isSecretValue(state?.value)
-                if (isRevert || isNoop) {
+                if (value === undefined || isRevert || isNoop) {
                     const next = { ...prev }
                     delete next[key]
                     return next
@@ -225,9 +241,10 @@ export default function AdminPage() {
                 const next = { ...prev }
                 for (const key of keys) {
                     if (!enabled) {
-                        // Stage deletion only for values currently set
-                        if (settings[key]?.source !== "default")
-                            next[key] = null
+                        // Stage deletion of saved values; drop unsaved input
+                        if (settings[key]?.source === "default")
+                            delete next[key]
+                        else next[key] = null
                     } else if (next[key] === null) {
                         delete next[key]
                     }
@@ -447,6 +464,7 @@ export default function AdminPage() {
                             <ModelsSection
                                 providers={providers}
                                 envProviders={envProviders}
+                                envHasDefaultModel={envHasDefaultModel}
                                 disabled={!writable || saving}
                                 password={authedPassword}
                                 onChange={(next) => {
@@ -462,6 +480,11 @@ export default function AdminPage() {
                         const defs = SETTINGS_BY_GROUP.get(group.id) ?? []
                         const groupOff =
                             group.toggleable && !enabledGroups[group.id]
+                        // Values from env vars can't be removed here, so the
+                        // group can't be turned off from the panel
+                        const envLocked = defs.some(
+                            (d) => settings[d.key]?.source === "env",
+                        )
                         const fieldsDisabled = !writable || saving || !!groupOff
                         const gt = groupText(group.id)
                         const title = gt?.title ?? group.title
@@ -480,6 +503,11 @@ export default function AdminPage() {
                                     </h2>
                                     {group.toggleable && (
                                         <label
+                                            title={
+                                                envLocked
+                                                    ? dict.admin.sourceEnvTitle
+                                                    : undefined
+                                            }
                                             className={cn(
                                                 "flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors motion-reduce:transition-none",
                                                 enabledGroups[group.id]
@@ -494,7 +522,11 @@ export default function AdminPage() {
                                                 checked={
                                                     !!enabledGroups[group.id]
                                                 }
-                                                disabled={!writable || saving}
+                                                disabled={
+                                                    !writable ||
+                                                    saving ||
+                                                    envLocked
+                                                }
                                                 aria-label={formatMessage(
                                                     dict.admin.enableGroup,
                                                     { group: title },
@@ -579,6 +611,9 @@ export default function AdminPage() {
                                         setPending({})
                                         setErrors({})
                                         setProviders(JSON.parse(savedProviders))
+                                        setEnabledGroups(
+                                            groupsWithValues(settings),
+                                        )
                                     }}
                                 >
                                     {dict.admin.discard}

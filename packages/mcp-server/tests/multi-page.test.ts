@@ -15,24 +15,16 @@
  * (diagram-operations.ts) — i.e. the layers underneath the MCP tool surface.
  */
 
-import { DOMParser } from "linkedom"
 import { beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.ts"
 
 // Install the DOM polyfill exactly as index.ts does at runtime — the
 // helpers under test rely on it.
 beforeAll(() => {
-    ;(globalThis as any).DOMParser = DOMParser
-    class XMLSerializerPolyfill {
-        serializeToString(node: any): string {
-            if (node.outerHTML !== undefined) return node.outerHTML
-            if (node.documentElement) return node.documentElement.outerHTML
-            return ""
-        }
-    }
-    ;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
+    installDomPolyfill()
 })
 
-import { applyDiagramOperations } from "../src/diagram-operations.js"
+import { applyDiagramOperations } from "../src/diagram-operations.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
@@ -47,8 +39,8 @@ import {
     projectPage,
     renamePageInDoc,
     serializeMxfile,
-} from "../src/pages.js"
-import { validateAndFixXml } from "../src/xml-validation.js"
+} from "../src/pages.ts"
+import { validateAndFixXml } from "../src/xml-validation.ts"
 
 const BARE_MODEL_ONE_CELL = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" vertex="1" parent="1" value="Hello"><mxGeometry x="40" y="40" width="100" height="40" as="geometry"/></mxCell></root></mxGraphModel>`
 
@@ -302,6 +294,26 @@ describe("xml-validation.ts — multi-page support", () => {
         const result = validateAndFixXml(bad)
         expect(result.valid).toBe(false)
         expect(result.error).toMatch(/duplicate cell ID/i)
+    })
+
+    it("counts the id of a UserObject/object, not of the mxCell it wraps", () => {
+        const page = (cells: string) =>
+            `<mxfile><diagram id="p1" name="P1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
+        const wrapped = (id: string) =>
+            `<UserObject id="${id}" link="x"><mxCell id="${id}" vertex="1" parent="1"/></UserObject>`
+        expect(validateAndFixXml(page(wrapped("u"))).valid).toBe(true)
+        const clash = validateAndFixXml(
+            page(`${wrapped("2")}<mxCell id="2" vertex="1" parent="1"/>`),
+        )
+        expect(clash.valid).toBe(false)
+        expect(clash.error).toMatch(/duplicate cell ID/i)
+    })
+
+    it("can skip the strict checks for diagrams with user content", () => {
+        const custom = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><MyObj id="5" label="x"><mxCell vertex="1" parent="1"/></MyObj></root></mxGraphModel>`
+        expect(validateAndFixXml(custom).valid).toBe(true) // fixed by removal
+        const lenient = validateAndFixXml(custom, { strict: false })
+        expect(lenient).toMatchObject({ valid: true, fixed: null })
     })
 
     it("rejects duplicate <diagram> ids across the file", () => {

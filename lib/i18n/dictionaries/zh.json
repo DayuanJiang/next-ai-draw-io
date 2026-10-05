@@ -132,6 +132,8 @@
         "customSystemMessage": "自定义系统消息",
         "customSystemMessageDescription": "添加自定义指令，将附加到 AI 的系统提示末尾。",
         "customSystemMessagePlaceholder": "例如：图表始终使用蓝色配色方案...",
+        "maxOutputTokens": "最大输出 token 数",
+        "maxOutputTokensDescription": "单次回复的额度，思考过程和图表 XML 共用。如果 AI 一直在思考却没有生成图表，请把它调大。留空则使用默认值。",
         "panelVisibility": "大厅面板",
         "panelVisibilityDescription": "选择在聊天大厅显示哪些面板。",
         "showRecentChats": "最近聊天",
@@ -176,9 +178,6 @@
         "networkError": "网络错误。请检查您的连接。",
         "retryLimit": "已达到自动重试限制（{max}）。请手动重试。",
         "continuationRetryLimit": "已达到继续重试限制（{max}）。图表可能过于复杂。",
-        "validationFailed": "图表验证失败。请尝试重新生成。",
-        "malformedXml": "AI 生成的图表 XML 无效。请尝试重新生成。",
-        "failedToProcess": "无法处理图表。请尝试重新生成。",
         "sessionCorrupted": "会话数据已损坏。重新开始。",
         "failedToSave": "无法保存消息到 localStorage",
         "failedToRestore": "无法从 localStorage 恢复",
@@ -186,7 +185,25 @@
         "failedToExport": "获取图表数据时出错",
         "failedToLoadExample": "加载示例图片时出错",
         "failedToRecordFeedback": "记录您的反馈失败。请重试。",
-        "storageUpdateFailed": "聊天已清除，但无法更新浏览器存储"
+        "storageUpdateFailed": "聊天已清除，但无法更新浏览器存储",
+        "sessionSaveFailed": "无法保存这个对话。浏览器存储空间可能已满，请在历史记录里删除旧对话后重试。",
+        "sessionSaveFailedLeave": "无法保存这个对话，浏览器存储空间可能已满。可以不保存它、直接继续，再在新对话的列表里删除旧对话。",
+        "continueWithoutSaving": "不保存，继续",
+        "llm": {
+            "invalid_api_key": "服务商拒绝了这个 API Key，请在模型设置里检查。",
+            "forbidden": "服务商拒绝了这次请求。这个 Key 可能没有使用该模型或该地区的权限。",
+            "model_not_found": "服务商找不到这个模型，请在模型设置里检查模型 ID。",
+            "insufficient_quota": "服务商账户的余额或额度已经用完。",
+            "rate_limited": "服务商正在限制请求频率，请稍等片刻再试。",
+            "context_too_long": "对话内容超过了这个模型能处理的长度。请新开一个对话，或换一个上下文更长的模型。",
+            "images_unsupported": "这个模型不支持图片输入。",
+            "tools_unsupported": "这个模型不支持工具调用，而画图需要工具调用。请换一个模型。",
+            "output_truncated": "输出在图画完之前就被截断了。请简化请求，或在设置里调高输出上限。",
+            "provider_unavailable": "服务商出了问题，请稍后再试。",
+            "cannot_connect": "连接不上服务商，请检查 Base URL 和网络。",
+            "timeout": "服务商没有及时响应。",
+            "openModelSettings": "打开模型设置"
+        }
     },
     "quota": {
         "dailyLimit": "已达每日配额",
@@ -233,6 +250,7 @@
     "reasoning": {
         "thinking": "思考中...",
         "thoughtFor": "思考了 {duration} 秒",
+        "thoughtForOne": "思考了 1 秒",
         "thoughtBrief": "思考了几秒钟"
     },
     "dev": {
@@ -369,6 +387,11 @@
         "enterSecretKey": "输入您的 Secret Key",
         "baseUrl": "基础 URL",
         "optional": "（可选）",
+        "getApiKey": "获取 API Key",
+        "fetchModels": "从服务商获取模型列表",
+        "noTools": "不支持工具调用",
+        "mayNotDraw": "models.dev 显示这个模型不支持工具调用，可能无法画图。",
+        "requestUrl": "请求将发往 {url}",
         "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "customEndpoint": "自定义端点 URL",
         "minimaxBaseUrlHint": "使用 /anthropic 端点为 Anthropic 兼容 API（推荐），或使用 /v1 端点为 OpenAI 兼容 API",

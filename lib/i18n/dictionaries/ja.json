@@ -132,6 +132,8 @@
         "customSystemMessage": "カスタムシステムメッセージ",
         "customSystemMessageDescription": "AIのシステムプロンプトに追加されるカスタム指示を入力します。",
         "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用...",
+        "maxOutputTokens": "最大出力トークン数",
+        "maxOutputTokensDescription": "1回の応答の予算で、思考過程とダイアグラムの XML が共有します。AI が考え続けてダイアグラムが生成されない場合は大きくしてください。空欄ならデフォルト値を使います。",
         "panelVisibility": "ロビーパネル",
         "panelVisibilityDescription": "チャットロビーに表示するパネルを選択します。",
         "showRecentChats": "最近のチャット",
@@ -176,9 +178,6 @@
         "networkError": "ネットワークエラー。接続を確認してください。",
         "retryLimit": "自動再試行制限に達しました（{max}）。手動で再試行してください。",
         "continuationRetryLimit": "継続再試行制限に達しました（{max}）。ダイアグラムが複雑すぎる可能性があります。",
-        "validationFailed": "ダイアグラムの検証に失敗しました。再生成してみてください。",
-        "malformedXml": "AI が無効なダイアグラム XML を生成しました。再生成してみてください。",
-        "failedToProcess": "ダイアグラムの処理に失敗しました。再生成してみてください。",
         "sessionCorrupted": "セッションデータが破損しました。最初からやり直します。",
         "failedToSave": "localStorage へのメッセージの保存に失敗しました",
         "failedToRestore": "localStorage からの復元に失敗しました",
@@ -186,7 +185,25 @@
         "failedToExport": "チャートデータの取得エラー",
         "failedToLoadExample": "例の画像の読み込みエラー",
         "failedToRecordFeedback": "フィードバックの記録に失敗しました。もう一度お試しください。",
-        "storageUpdateFailed": "チャットはクリアされましたが、ブラウザストレージを更新できませんでした"
+        "storageUpdateFailed": "チャットはクリアされましたが、ブラウザストレージを更新できませんでした",
+        "sessionSaveFailed": "このチャットを保存できませんでした。ブラウザのストレージがいっぱいの可能性があります。履歴から古いチャットを削除して、もう一度お試しください。",
+        "sessionSaveFailedLeave": "このチャットを保存できませんでした。ブラウザのストレージがいっぱいの可能性があります。保存せずに続けて、新しいチャットの一覧から古いチャットを削除できます。",
+        "continueWithoutSaving": "保存せずに続ける",
+        "llm": {
+            "invalid_api_key": "プロバイダーが API キーを拒否しました。モデル設定で確認してください。",
+            "forbidden": "プロバイダーがリクエストを拒否しました。このキーにはこのモデルまたはリージョンの利用権限がない可能性があります。",
+            "model_not_found": "プロバイダーがこのモデルを認識できません。モデル設定でモデル ID を確認してください。",
+            "insufficient_quota": "プロバイダーのアカウントの残高または利用枠がなくなりました。",
+            "rate_limited": "プロバイダーがリクエスト数を制限しています。少し待ってから再試行してください。",
+            "context_too_long": "会話がこのモデルで扱える長さを超えています。新しいチャットを始めるか、より長いコンテキストに対応したモデルを選んでください。",
+            "images_unsupported": "このモデルは画像入力に対応していません。",
+            "tools_unsupported": "このモデルはツール呼び出しに対応していません。作図にはツール呼び出しが必要です。別のモデルを選んでください。",
+            "output_truncated": "ダイアグラムが完成する前に出力が途中で切れました。リクエストを簡単にするか、設定で出力上限を上げてください。",
+            "provider_unavailable": "プロバイダーで問題が発生しています。しばらくしてから再試行してください。",
+            "cannot_connect": "プロバイダーに接続できません。Base URL とネットワークを確認してください。",
+            "timeout": "プロバイダーから時間内に応答がありませんでした。",
+            "openModelSettings": "モデル設定を開く"
+        }
     },
     "quota": {
         "dailyLimit": "1日の割当量に達しました",
@@ -233,6 +250,7 @@
     "reasoning": {
         "thinking": "考え中...",
         "thoughtFor": "{duration} 秒考えました",
+        "thoughtForOne": "1 秒考えました",
         "thoughtBrief": "数秒考えました"
     },
     "dev": {
@@ -323,6 +341,11 @@
         "enterSecretKey": "シークレットアクセスキーを入力",
         "baseUrl": "ベース URL",
         "optional": "（オプション）",
+        "getApiKey": "API キーを取得",
+        "fetchModels": "プロバイダーからモデル一覧を取得",
+        "noTools": "ツール呼び出し非対応",
+        "mayNotDraw": "models.dev によると、このモデルはツール呼び出しに対応していないため、作図できない可能性があります。",
+        "requestUrl": "リクエスト先: {url}",
         "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
         "minimaxBaseUrlHint": "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",

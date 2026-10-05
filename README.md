@@ -21,6 +21,17 @@ A Next.js web application that integrates AI capabilities with draw.io diagrams.
 
 > Note: Thanks to <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) sponsorship, the demo site now uses the powerful glm-4.7 model!
 
+<p align="center">
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./public/atlas-cloud-logo-white.svg">
+      <img src="./public/atlas-cloud-logo.svg" alt="Atlas Cloud" width="200">
+    </picture>
+  </a>
+</p>
+
+> 🎁 Thanks to **[Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io)** for sponsoring next-ai-draw-io. Its OpenAI-compatible API gives diagram workflows one provider connection for DeepSeek, Qwen, GLM, Kimi, MiniMax, and more. Budget-friendly access is available through the [Coding Plan](https://www.atlascloud.ai/console/coding-plan).
+
 
 https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
 
@@ -127,6 +138,13 @@ Then ask Claude to create diagrams:
 
 The diagram appears in your browser in real-time!
 
+The MCP server includes most of the web app's drawing features:
+
+-   The same drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes and more)
+-   A screenshot tool, so the AI can check the rendered diagram and fix it
+-   Version history, multi-page diagrams, and download as `.drawio`, `.png`, `.svg`, or `.drawio.svg`
+-   Auto-save to `~/.next-ai-drawio/`, so you can continue a diagram after a restart
+
 See the [MCP Server README](./packages/mcp-server/README.md) for VS Code, Cursor, and other client configurations.
 
 ## Getting Started
@@ -217,6 +235,7 @@ See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-
 -   ModelScope
 -   SGLang
 -   Vercel AI Gateway
+-   [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io)
 
 
 All providers except AWS Bedrock and OpenRouter support custom endpoints.
@@ -252,6 +271,8 @@ Diagrams are represented as XML that can be rendered in draw.io. The AI processe
 ## Support & Contact
 
 **Special thanks to [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) for sponsoring the API token usage of the demo site!** Register on the ARK platform to get 500K free tokens for all models!
+
+**Special thanks to [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io) for sponsoring next-ai-draw-io and supporting its multi-provider ecosystem!** Try its OpenAI-compatible LLM API through the [Atlas Cloud Coding Plan](https://www.atlascloud.ai/console/coding-plan).
 
 If you find this project useful, please consider [sponsoring](https://github.com/sponsors/DayuanJiang) to help me host the live demo site!
 

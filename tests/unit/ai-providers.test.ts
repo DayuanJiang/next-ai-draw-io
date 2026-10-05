@@ -4,33 +4,7 @@ import {
     isAihubmixStandardBaseURL,
     resolveBaseURL,
     supportsPromptCaching,
-    supportsTemperature,
 } from "@/lib/ai-providers"
-import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
-
-describe("extractAihubmixModelIds", () => {
-    it("extracts unique chat model IDs from the AIHubMix model list payload", () => {
-        const models = extractAihubmixModelIds({
-            data: [
-                { model_id: "claude-sonnet-4-5-20250929", types: "llm" },
-                { model_id: "gpt-5.1", types: "llm" },
-                { model_id: "gpt-5.1", types: "llm" },
-                { model_id: "gpt-image-2", types: "image_generation,llm" },
-                { model_id: "cohere-rerank-v4.0", types: "rerank" },
-                { model_id: "", types: "llm" },
-                { types: "llm" },
-            ],
-        })
-
-        expect(models).toEqual(["claude-sonnet-4-5-20250929", "gpt-5.1"])
-    })
-
-    it("returns an empty list for malformed payloads", () => {
-        expect(extractAihubmixModelIds({ data: null })).toEqual([])
-        expect(extractAihubmixModelIds({})).toEqual([])
-        expect(extractAihubmixModelIds(null)).toEqual([])
-    })
-})
 
 describe("resolveBaseURL", () => {
     const SERVER_BASE_URL = "https://server-proxy.example.com"
@@ -183,30 +157,6 @@ describe("supportsPromptCaching", () => {
     })
 })
 
-describe("supportsTemperature", () => {
-    it.each([
-        "claude-opus-4-7-20260416",
-        "anthropic.claude-opus-4-7-v1:0",
-        "us.anthropic.claude-opus-4-8-20260528-v1:0",
-        "global.anthropic.claude-opus-4-8",
-        "anthropic/claude-opus-4.7",
-        "anthropic/claude-opus-4.8",
-    ])("returns false for Claude Opus models without temperature (%s)", (modelId) => {
-        expect(supportsTemperature(modelId)).toBe(false)
-    })
-
-    it.each([
-        "claude-sonnet-4-5",
-        "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "gpt-4o",
-        "gemini-2.0-flash",
-        "",
-        "unknown-model",
-    ])("returns true for models that may support temperature (%s)", (modelId) => {
-        expect(supportsTemperature(modelId)).toBe(true)
-    })
-})
-
 vi.mock("ollama-ai-provider-v2", () => {
     const mockModel = { modelId: "test-model" }
     const mockProviderFn = vi.fn(() => mockModel)
@@ -229,6 +179,16 @@ vi.mock("@aihubmix/ai-sdk-provider", () => {
     const mockCreateAihubmix = vi.fn(() => mockProviderFn)
     const mockAihubmix = vi.fn(() => mockModel)
     return { aihubmix: mockAihubmix, createAihubmix: mockCreateAihubmix }
+})
+
+vi.mock("@ai-sdk/openai", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockChat = vi.fn(() => mockModel)
+    const mockProviderFn = vi.fn(() => mockModel) as any
+    mockProviderFn.chat = mockChat
+    const mockCreateOpenAI = vi.fn(() => mockProviderFn)
+    const mockOpenai = vi.fn(() => mockModel)
+    return { createOpenAI: mockCreateOpenAI, openai: mockOpenai }
 })
 
 describe("AIHubMix provider", () => {
@@ -283,6 +243,83 @@ describe("AIHubMix provider", () => {
         expect(isAihubmixStandardBaseURL("https://aihubmix.com/v1/")).toBe(true)
         expect(isAihubmixStandardBaseURL("https://proxy.example.com/v1")).toBe(
             false,
+        )
+    })
+})
+
+vi.mock("@ai-sdk/openai-compatible", () => {
+    const mockModel = { specificationVersion: "v3", modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreate = vi.fn(() => mockProviderFn)
+    return { createOpenAICompatible: mockCreate }
+})
+
+describe("Atlas Cloud provider", () => {
+    let createCompatibleMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY
+        savedEnv.ATLASCLOUD_BASE_URL = process.env.ATLASCLOUD_BASE_URL
+        delete process.env.ATLASCLOUD_BASE_URL
+
+        const mod = await import("@ai-sdk/openai-compatible")
+        createCompatibleMock = mod.createOpenAICompatible as ReturnType<
+            typeof vi.fn
+        >
+        createCompatibleMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.ATLASCLOUD_API_KEY = savedEnv.ATLASCLOUD_API_KEY
+        process.env.ATLASCLOUD_BASE_URL = savedEnv.ATLASCLOUD_BASE_URL
+    })
+
+    it("uses Atlas Cloud default endpoint with ATLASCLOUD_API_KEY", () => {
+        process.env.ATLASCLOUD_API_KEY = "server-atlas-key"
+
+        getAIModel({
+            provider: "atlascloud",
+            modelId: "qwen/qwen3.5-flash",
+        })
+
+        // An OpenAI-compatible API; includeUsage keeps quota tracking working
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
+            apiKey: "server-atlas-key",
+            baseURL: "https://api.atlascloud.ai/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("uses custom Atlas Cloud base URL when provided", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseURL: "https://proxy.example.com/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("drops an endpoint path pasted along with the base URL", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1/chat/completions/",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://proxy.example.com/v1",
+            }),
         )
     })
 })
@@ -425,6 +462,8 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledTimes(1)
         const callArgs = createOllamaMock.mock.calls[0][0]
+        // The SDK's local default: the desktop app's "Ollama (Local)"
+        // preset puts its API Key field into OLLAMA_API_KEY
         expect(callArgs).not.toHaveProperty("baseURL")
         expect(callArgs).toEqual(
             expect.objectContaining({
