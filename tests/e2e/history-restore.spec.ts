@@ -48,6 +48,43 @@ test.describe("History and Session Restore", () => {
         })
     })
 
+    test("new chat keeps a conversation that could not be saved", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(
+                    SINGLE_BOX_XML,
+                    "Created your test diagram.",
+                ),
+            })
+        })
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await sendMessage(page, "Create a test diagram")
+        await waitForText(page, "Created your test diagram.")
+
+        // Browser storage is full from now on
+        await page.evaluate(() => {
+            IDBObjectStore.prototype.put = () => {
+                throw new DOMException("Storage is full", "QuotaExceededError")
+            }
+        })
+        await page.locator('[data-testid="new-chat-button"]').click()
+
+        await expect(
+            page.getByText(/Could not save this chat/).first(),
+        ).toBeVisible({ timeout: 5000 })
+        await page.waitForTimeout(1000)
+        // Still the conversation and its diagram, not the empty chat's examples
+        await expect(page.getByText("Paper to Diagram")).toHaveCount(0)
+        await expect(
+            getIframeContent(page).getByText("Test Box", { exact: true }),
+        ).toBeVisible()
+    })
+
     test("chat history sidebar shows past conversations", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })

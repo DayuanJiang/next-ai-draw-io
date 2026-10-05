@@ -186,6 +186,12 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
+    // For requests that finish after the user switched provider or edited
+    // a model id
+    const selectedProviderIdRef = useRef(selectedProviderId)
+    selectedProviderIdRef.current = selectedProviderId
+    const configRef = useRef(config)
+    configRef.current = config
 
     // Discard an unfinished model ID edit when the dialog closes
     useEffect(() => {
@@ -231,13 +237,15 @@ export function ModelConfigDialog({
                 },
             )
             const data = await response.json().catch(() => ({}))
+            // The picker and the error belong to the provider shown
+            const stillShown = selectedProviderIdRef.current === providerId
             if (Array.isArray(data.models)) {
                 setFetchedModels((current) => ({
                     ...current,
                     [providerId]: data.models,
                 }))
-                setModelPickerOpen(true)
-            } else {
+                if (stillShown) setModelPickerOpen(true)
+            } else if (stillShown) {
                 const hints = dict.errors.llm as Record<string, string>
                 setFetchModelsError(
                     [hints[data.code], data.error].filter(Boolean).join(" ") ||
@@ -245,7 +253,9 @@ export function ModelConfigDialog({
                 )
             }
         } catch {
-            setFetchModelsError(dict.errors.networkError)
+            if (selectedProviderIdRef.current === providerId) {
+                setFetchModelsError(dict.errors.networkError)
+            }
         } finally {
             setFetchingModels(false)
         }
@@ -387,6 +397,7 @@ export function ModelConfigDialog({
 
         let allValid = true
         let errorCount = 0
+        let idChanged = false
         const credentialsVersion = credentialsVersionRef.current
 
         // For EdgeOne, construct baseUrl from current origin
@@ -464,6 +475,19 @@ export function ModelConfigDialog({
                 }
                 // Credentials changed during the test: drop the result
                 if (credentialsVersionRef.current !== credentialsVersion) return
+                // So did this model's id: the result is for the old one
+                const current = configRef.current.providers
+                    .find((p) => p.id === selectedProviderId)
+                    ?.models.find((m) => m.id === model.id)
+                if (current?.modelId !== model.modelId) {
+                    idChanged = true
+                    setValidatingModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.delete(model.id)
+                        return next
+                    })
+                    return
+                }
                 if (update.validated === false) {
                     allValid = false
                     errorCount++
@@ -478,9 +502,16 @@ export function ModelConfigDialog({
         )
         if (credentialsVersionRef.current !== credentialsVersion) return
 
-        if (allValid) {
-            setValidationStatus("success")
+        // A model whose id changed was not tested
+        if (allValid && !idChanged) {
             updateProvider(selectedProviderId, { validated: true })
+        }
+        // The status line is about the provider shown now
+        if (selectedProviderIdRef.current !== selectedProviderId) return
+        if (idChanged) {
+            setValidationStatus("idle")
+        } else if (allValid) {
+            setValidationStatus("success")
             // Reset to idle after showing success briefly (with cleanup)
             if (validationResetTimeoutRef.current) {
                 clearTimeout(validationResetTimeoutRef.current)

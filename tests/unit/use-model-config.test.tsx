@@ -70,6 +70,31 @@ describe("useModelConfig server model selection", () => {
         expect(result.current.selectedModelId).toBe("server:openai-main:gpt-4o")
     })
 
+    it("keeps a server model saved under its old id", async () => {
+        // Before non-ASCII provider names got their own slug, "主力 OpenAI"
+        // became "openai"
+        const renamed: FlattenedServerModel = {
+            id: "server:4e3b-529b-openai:gpt-4o-mini",
+            modelId: "gpt-4o-mini",
+            provider: "openai",
+            providerLabel: "主力 OpenAI",
+            isDefault: false,
+        }
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => ({
+                ok: true,
+                json: async () => ({ models: [...SERVER_MODELS, renamed] }),
+            })),
+        )
+        storeConfig({
+            ...USER_CONFIG,
+            selectedModelId: "server:openai:gpt-4o-mini",
+        })
+        const { result } = await renderLoaded()
+        expect(result.current.selectedModelId).toBe(renamed.id)
+    })
+
     it("keeps a saved server model that still exists", async () => {
         storeConfig({
             ...USER_CONFIG,

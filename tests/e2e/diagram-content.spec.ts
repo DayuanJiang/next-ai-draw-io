@@ -67,24 +67,32 @@ const editDeltas = (id: string) =>
 /**
  * Answer each chat request with the next reply. Each string in a reply is
  * one network chunk, sent 300 ms apart, so the throttled UI renders between
- * chunks like with a real model.
+ * chunks like with a real model. A number in a reply sets the wait before
+ * the next chunk instead.
  */
-async function chunkedReplies(p: Page, replies: string[][]) {
+async function chunkedReplies(p: Page, replies: (string | number)[][]) {
     await p.addInitScript((replies) => {
         const realFetch = window.fetch
         let n = 0
         window.fetch = async (input, init) => {
-            const url =
-                typeof input === "string" ? input : (input as Request).url
+            // Next.js passes URL objects for its own requests
+            const url = input instanceof Request ? input.url : String(input)
             if (!url.endsWith("/api/chat")) return realFetch(input, init)
             const chunks = replies[n++] ?? [
                 'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
             ]
             const body = new ReadableStream({
                 async start(controller) {
-                    for (const chunk of chunks) {
+                    for (const [i, chunk] of chunks.entries()) {
+                        if (typeof chunk === "number") continue
                         controller.enqueue(new TextEncoder().encode(chunk))
-                        await new Promise((r) => setTimeout(r, 300))
+                        const next = chunks[i + 1]
+                        await new Promise((r) =>
+                            setTimeout(
+                                r,
+                                typeof next === "number" ? next : 300,
+                            ),
+                        )
                     }
                     controller.close()
                 },
@@ -379,5 +387,175 @@ test("a request that fails during an edit undoes its preview", async ({
         timeout: 15000,
     })
     await expect(canvas.getByText("Gamma", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
+/** A streamed tool call split into its start, input deltas and finished input */
+function toolCallEvents(id: string, toolName: string, input: unknown) {
+    const deltas = (JSON.stringify(input).match(/[\s\S]{1,40}/g) ?? []).map(
+        (d) => ({
+            type: "tool-input-delta",
+            toolCallId: id,
+            inputTextDelta: d,
+        }),
+    )
+    return {
+        start: { type: "tool-input-start", toolCallId: id, toolName },
+        deltas,
+        done: { type: "tool-input-available", toolCallId: id, toolName, input },
+    }
+}
+const drawReply = (id: string, xml: string) => {
+    const call = toolCallEvents(id, "display_diagram", { xml })
+    return `${sse([{ type: "start" }, call.start, ...call.deltas, call.done, { type: "finish" }])}data: [DONE]\n\n`
+}
+// SSE comments keep a stream open without sending anything
+const KEEP_OPEN = Array(20).fill(":\n\n")
+
+test("an error after a finished edit keeps the current diagram", async ({
+    page: p,
+}) => {
+    const edit = toolCallEvents("e1", "edit_diagram", EDIT_GAMMA)
+    const half = Math.ceil(edit.deltas.length / 2)
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        [
+            sse([
+                { type: "start" },
+                { type: "start-step" },
+                edit.start,
+                ...edit.deltas.slice(0, half),
+            ]),
+            // The last input and the finished call arrive together, so the
+            // tool handler runs before the UI shows the call as finished
+            `${sse([...edit.deltas.slice(half), edit.done, { type: "finish-step" }, { type: "finish" }])}data: [DONE]\n\n`,
+        ],
+        [drawReply("d2", cell("b", "Beta", 40))],
+        [
+            `${sse([{ type: "start" }, { type: "error", errorText: "Upstream down" }])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Add a box")
+    await waitForCompleteCount(p, 2)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await sendMessage(p, "Start over")
+    await waitForCompleteCount(p, 3)
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await sendMessage(p, "Once more")
+    await expect(p.getByText("Upstream down").first()).toBeVisible({
+        timeout: 15000,
+    })
+    await p.waitForTimeout(1000)
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible()
+    await expect(canvas.getByText("Alpha", { exact: true })).toHaveCount(0)
+})
+
+// The broken call's error and the whole next edit arrive together. 220 ms
+// after the preview: the UI (throttled to 150 ms) shows the error only after
+// the next edit was applied. 600 ms: the UI undoes the preview first.
+for (const gap of [220, 600]) {
+    test(`an edit that arrives with a broken edit's error keeps its change (${gap} ms)`, async ({
+        page: p,
+    }) => {
+        const delta = toolCallEvents("e2", "edit_diagram", {
+            operations: [
+                {
+                    operation: "add",
+                    cell_id: "d",
+                    new_xml: cell("d", "Delta", 220),
+                },
+            ],
+        })
+        const canvas = await chunkedReplies(p, [
+            [drawReply("d1", cell("a", "Alpha", 40))],
+            [
+                sse([{ type: "start" }, { type: "start-step" }]),
+                sse([editStart("e1"), ...editDeltas("e1")]),
+                gap,
+                `${sse([
+                    {
+                        type: "tool-input-error",
+                        toolCallId: "e1",
+                        toolName: "edit_diagram",
+                        input: "{broken",
+                        errorText: "JSON parsing failed",
+                    },
+                    { type: "finish-step" },
+                    { type: "start-step" },
+                    delta.start,
+                    ...delta.deltas,
+                    delta.done,
+                    { type: "finish-step" },
+                    { type: "finish" },
+                ])}data: [DONE]\n\n`,
+            ],
+        ])
+        await sendMessage(p, "Draw a box")
+        await waitForCompleteCount(p, 1)
+        await sendMessage(p, "Add another box")
+        await expect(canvas.getByText("Delta", { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+        await p.waitForTimeout(1000)
+        await expect(canvas.getByText("Delta", { exact: true })).toBeVisible()
+        await expect(canvas.getByText("Gamma", { exact: true })).toHaveCount(0)
+        await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+        await expect(p.getByText(/No changes were made/)).toHaveCount(0)
+    })
+}
+
+test("a request that fails while drawing undoes the half drawn diagram", async ({
+    page: p,
+}) => {
+    const redraw = toolCallEvents("d2", "display_diagram", {
+        xml: cell("b", "Beta", 40) + cell("c", "Gamma", 220),
+    })
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        [
+            sse([{ type: "start" }, redraw.start, ...redraw.deltas]),
+            `${sse([{ type: "error", errorText: "Upstream connection lost" }])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw it again")
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(p.getByText("Upstream connection lost").first()).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
+test("stopping while drawing undoes the half drawn diagram", async ({
+    page: p,
+}) => {
+    const redraw = toolCallEvents("d2", "display_diagram", {
+        xml: cell("b", "Beta", 40) + cell("c", "Gamma", 220),
+    })
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        [
+            sse([{ type: "start" }, redraw.start, ...redraw.deltas]),
+            ...KEEP_OPEN,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw it again")
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await p.getByRole("button", { name: "Stop generation" }).click()
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
     await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
 })

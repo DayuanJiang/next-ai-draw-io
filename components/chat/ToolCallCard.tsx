@@ -93,12 +93,14 @@ export function ToolCallCard({
     }
 
     // Incomplete XML means the output hit the length limit, unless the user
-    // stopped the generation themselves
+    // stopped the generation themselves. Without an input the JSON was
+    // broken (the server repairs JSON cut short by the limit).
     const isTruncated =
         state === "output-error" &&
         errorText !== "Stopped by user" &&
         (toolName === "display_diagram" || toolName === "append_diagram") &&
-        !isMxCellXmlComplete(input?.xml)
+        typeof input?.xml === "string" &&
+        !isMxCellXmlComplete(input.xml)
 
     const handleCopy = () => {
         let textToCopy = ""

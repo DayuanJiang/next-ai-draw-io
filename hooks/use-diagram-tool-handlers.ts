@@ -52,6 +52,8 @@ type ValidateDiagramFn = (
 interface UseDiagramToolHandlersParams {
     partialXmlRef: MutableRefObject<string>
     editDiagramOriginalXmlRef: MutableRefObject<Map<string, string>>
+    // Tool calls the streaming preview must leave alone (shared with it)
+    processedToolCallsRef: MutableRefObject<Set<string>>
     // Failed VLM validations in the current user turn (reset on each user message)
     validationRetryCountRef: MutableRefObject<number>
     chartXMLRef: MutableRefObject<string>
@@ -78,6 +80,7 @@ interface UseDiagramToolHandlersParams {
 export function useDiagramToolHandlers({
     partialXmlRef,
     editDiagramOriginalXmlRef,
+    processedToolCallsRef,
     validationRetryCountRef,
     chartXMLRef,
     onDisplayChart,
@@ -118,10 +121,22 @@ export function useDiagramToolHandlers({
             )
         }
 
+        // Stored originals belong to previews not handled yet: this call's,
+        // and those of earlier calls with invalid input, which never get
+        // here. The first is the diagram before all of them. This call's
+        // result replaces those previews, so the preview code must neither
+        // draw them again nor undo them later.
+        const [originalXml] = editDiagramOriginalXmlRef.current.values()
+        for (const id of editDiagramOriginalXmlRef.current.keys()) {
+            processedToolCallsRef.current.add(id)
+        }
+        processedToolCallsRef.current.add(toolCall.toolCallId)
+        editDiagramOriginalXmlRef.current.clear()
+
         if (toolCall.toolName === "display_diagram") {
             await handleDisplayDiagram(toolCall, addToolOutput)
         } else if (toolCall.toolName === "edit_diagram") {
-            await handleEditDiagram(toolCall, addToolOutput)
+            await handleEditDiagram(toolCall, addToolOutput, originalXml)
         } else if (toolCall.toolName === "append_diagram") {
             handleAppendDiagram(toolCall, addToolOutput)
         }
@@ -369,20 +384,18 @@ ${finalXml}
         }
     }
 
+    // originalXml: the diagram before the streamed previews, if any were drawn.
+    // Operations apply to it, the same base XML that streaming used.
     const handleEditDiagram = async (
         toolCall: ToolCall,
         addToolOutput: AddToolOutputFn,
+        originalXml: string | undefined,
     ) => {
         const { operations } = toolCall.input as {
             operations: DiagramOperation[]
         }
 
         let currentXml = ""
-        // Use the original XML captured during streaming (shared with chat-message-display)
-        // This ensures we apply operations to the same base XML that streaming used
-        const originalXml = editDiagramOriginalXmlRef.current.get(
-            toolCall.toolCallId,
-        )
         // On failure, undo the streaming preview so the canvas matches the XML
         // reported back to the model
         const restoreOriginal = () => {
@@ -423,8 +436,6 @@ ${currentXml}
 
 Please check the cell IDs and retry.`,
                 })
-                // Clean up the shared original XML ref
-                editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
                 return
             }
 
@@ -435,8 +446,6 @@ Please check the cell IDs and retry.`,
                 toolCallId: toolCall.toolCallId,
                 output: `Successfully applied ${outcome.applied} operation(s) to the diagram.`,
             })
-            // Clean up the shared original XML ref
-            editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
         } catch (error) {
             console.error("[edit_diagram] Failed:", error)
 
@@ -457,8 +466,6 @@ ${currentXml || "No XML available"}
 
 Please check cell IDs and retry, or use display_diagram to regenerate.`,
             })
-            // Clean up the shared original XML ref even on error
-            editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
         }
     }
 

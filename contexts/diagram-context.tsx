@@ -15,6 +15,8 @@ import { extractDiagramXML, isRealDiagram } from "../lib/utils"
 
 interface DiagramContextType {
     chartXML: string
+    // chartXML right away, before the re-render (loadDiagram sets both)
+    chartXMLRef: React.MutableRefObject<string>
     latestSvg: string
     diagramHistory: { svg: string; xml: string }[]
     setDiagramHistory: (history: { svg: string; xml: string }[]) => void
@@ -43,10 +45,12 @@ interface DiagramContextType {
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
 
-// Exports for thumbnails, validation PNGs and file saves carry a tag in the
-// request's `message` field. draw.io echoes the request back in the export
-// event, so each result reaches its own caller; untagged exports (chat-panel's
-// onFetchChart) resolve resolverRef.
+// Exports for thumbnails, validation PNGs, history entries and file saves
+// carry a tag in the request's `message` field. draw.io echoes the request
+// back in the export event, so each result reaches its own caller; untagged
+// exports (chat-panel's onFetchChart) resolve resolverRef. Thumbnail,
+// validation and history tags end in a request number, so a late result
+// never answers a newer request.
 type ExportTag = "thumbnail" | "validation"
 
 export function DiagramProvider({ children }: { children: React.ReactNode }) {
@@ -61,11 +65,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
     const resolverRef = useRef<((value: string) => void) | null>(null)
     // Pending thumbnail and validation PNG exports, keyed by their export tag
-    const taggedResolversRef = useRef<
-        Partial<Record<ExportTag, (value: string) => void>>
-    >({})
-    // Track if we're expecting an export for history (user-initiated)
-    const expectHistoryExportRef = useRef<boolean>(false)
+    const taggedResolversRef = useRef<Record<string, (value: string) => void>>(
+        {},
+    )
+    // Pending history exports: the document each one was asked for
+    const historyXmlRef = useRef(new Map<string, string>())
+    const exportSeqRef = useRef(0)
     // Track latest chartXML for restoration after remount
     const chartXMLRef = useRef<string>("")
 
@@ -100,10 +105,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     const handleExport = () => {
         if (drawioRef.current) {
-            // Mark that this export should be saved to history
-            expectHistoryExportRef.current = true
+            // Save this export to history, with the document shown now:
+            // chartXML can change before the result comes back
+            const tag = `history-${++exportSeqRef.current}`
+            historyXmlRef.current.set(tag, chartXMLRef.current)
             drawioRef.current.exportDiagram({
                 format: "xmlsvg",
+                message: tag,
             })
         }
     }
@@ -126,16 +134,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         timeoutMs: number,
     ) =>
         new Promise<string | null>((resolve) => {
+            const id = `${tag}-${++exportSeqRef.current}`
             const finish = (value: string | null) => {
                 clearTimeout(timer)
-                if (taggedResolversRef.current[tag] === finish) {
-                    delete taggedResolversRef.current[tag]
-                }
+                delete taggedResolversRef.current[id]
                 resolve(value)
             }
             const timer = setTimeout(() => finish(null), timeoutMs)
-            taggedResolversRef.current[tag] = finish
-            drawioRef.current?.exportDiagram({ format, message: tag })
+            taggedResolversRef.current[id] = finish
+            drawioRef.current?.exportDiagram({ format, message: id })
         })
 
     // Get current diagram as SVG for thumbnail (used by session storage)
@@ -209,8 +216,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Tagged exports (thumbnail, validation PNG, file save) go only to
         // their own caller, so they never take the result meant for resolverRef
         const tag = data.message?.message
-        if (tag === "thumbnail" || tag === "validation") {
-            taggedResolversRef.current[tag]?.(data.data)
+        if (/^(thumbnail|validation)-/.test(tag ?? "")) {
+            taggedResolversRef.current[tag as string]?.(data.data)
             return
         }
         if (tag === "save") {
@@ -229,10 +236,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Only add to history if this was a user-initiated export
         // Limit to 20 entries to prevent memory leaks during long sessions
         const MAX_HISTORY_SIZE = 20
-        if (expectHistoryExportRef.current) {
+        const askedXml =
+            tag !== undefined ? historyXmlRef.current.get(tag) : undefined
+        if (askedXml !== undefined) {
+            historyXmlRef.current.delete(tag as string)
             // Store the full multi-page document (extractedXML is only the
             // first page), so restoring a version keeps every page
-            const historyXml = chartXMLRef.current || extractedXML
+            const historyXml = askedXml || extractedXML
             setDiagramHistory((prev) => {
                 const newHistory = [
                     ...prev,
@@ -244,7 +254,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 // Keep only the last MAX_HISTORY_SIZE entries (circular buffer)
                 return newHistory.slice(-MAX_HISTORY_SIZE)
             })
-            expectHistoryExportRef.current = false
         }
 
         if (resolverRef.current) {
@@ -391,6 +400,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         <DiagramContext.Provider
             value={{
                 chartXML,
+                chartXMLRef,
                 latestSvg,
                 diagramHistory,
                 setDiagramHistory,

@@ -112,6 +112,7 @@ export default function ChatPanel({
         handleExportWithoutHistory,
         resolverRef,
         chartXML,
+        chartXMLRef: liveChartXMLRef,
         latestSvg,
         clearDiagram,
         getThumbnailSvg,
@@ -280,8 +281,9 @@ export default function ChatPanel({
     // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
     const processedToolCallsRef = useRef<Set<string>>(new Set())
 
-    // Store original XML for edit_diagram streaming - shared between streaming preview and tool handler
-    // Key: toolCallId, Value: original XML before any operations applied
+    // Store original XML for display_diagram and edit_diagram streaming -
+    // shared between streaming preview and tool handler
+    // Key: toolCallId, Value: XML before the call's preview was drawn
     const editDiagramOriginalXmlRef = useRef<Map<string, string>>(new Map())
 
     // Debounce timeout for localStorage writes (prevents blocking during streaming)
@@ -336,8 +338,10 @@ export default function ChatPanel({
     const { handleToolCall } = useDiagramToolHandlers({
         partialXmlRef,
         editDiagramOriginalXmlRef,
+        processedToolCallsRef,
         validationRetryCountRef,
-        chartXMLRef,
+        // A preview undone just before the tool call is in this one already
+        chartXMLRef: liveChartXMLRef,
         onDisplayChart,
         onFetchChart,
         onExport,
@@ -363,10 +367,22 @@ export default function ChatPanel({
         onToolCall: async ({ toolCall }) => {
             await handleToolCall({ toolCall }, addToolOutput)
         },
+        onFinish: ({ message, isAbort, isError }) => {
+            // Stopped or failed: tool calls still streaming never reach the
+            // tool handler. Mark them handled so a later render of the
+            // stream does not draw their preview again.
+            if (!isAbort && !isError) return
+            for (const part of message.parts as any[]) {
+                if (part.state === "input-streaming" && part.toolCallId) {
+                    processedToolCallsRef.current.add(part.toolCallId)
+                }
+            }
+        },
         onError: (error) => {
-            // An edit still streaming when the request failed never reaches
-            // the tool handler: undo its preview. The first stored original
-            // is the diagram before any of them.
+            // A diagram still streaming when the request failed never
+            // reaches the tool handler: undo its preview. Only previews not
+            // handled yet are stored, and the first one holds the diagram
+            // before any of them.
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
             if (originalXml) onDisplayChart(originalXml, true)
             editDiagramOriginalXmlRef.current.clear()
@@ -948,7 +964,8 @@ export default function ChatPanel({
         // Save current session before creating new one
         if (sessionManager.isAvailable && messages.length > 0) {
             const sessionData = await buildSessionData({ withThumbnail: true })
-            await sessionManager.saveCurrentSession(sessionData)
+            // Not saved (storage full): keep the chat on screen
+            if (!(await sessionManager.saveCurrentSession(sessionData))) return
             // Refresh sessions list to ensure dropdown shows the saved session
             await sessionManager.refreshSessions()
         }

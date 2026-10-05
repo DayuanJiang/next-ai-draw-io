@@ -157,3 +157,78 @@ test("editing a model id clears the old test warning", async ({ page }) => {
     await expect(dialog.getByText(warning)).toHaveCount(0)
     await expect(dialog.getByText("may not be able to draw")).toBeVisible()
 })
+
+/** Hold requests to an endpoint until release() answers them with json */
+async function holdRoute(page: Page, url: string, json: object) {
+    let release!: () => void
+    const released = new Promise<void>((r) => {
+        release = r
+    })
+    await page.route(url, async (route) => {
+        await released
+        await route.fulfill({ status: 200, json })
+    })
+    return release
+}
+
+const TWO_PROVIDERS = {
+    version: 1,
+    providers: [
+        {
+            ...CONFIG.providers[0],
+            models: [{ id: "m1", modelId: "qwen-max" }],
+        },
+        { id: "p2", provider: "glm", apiKey: "k", models: [] },
+    ],
+}
+
+test("a model list that arrives after switching provider stays with its provider", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/provider-models", {
+        code: "invalid_api_key",
+        error: "Incorrect API key",
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog
+        .getByRole("button", { name: "Fetch models from the provider" })
+        .click()
+    await dialog.getByText("GLM (Zhipu)").first().click()
+    release()
+    await page.waitForTimeout(500)
+    await expect(dialog.getByText("Incorrect API key")).toHaveCount(0)
+})
+
+test("a test result that arrives after switching provider stays with its provider", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: false,
+        error: "Model not found",
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await dialog.getByText("GLM (Zhipu)").first().click()
+    release()
+    await page.waitForTimeout(500)
+    await expect(dialog.getByText(/model\(s\) failed validation/)).toHaveCount(
+        0,
+    )
+})
+
+test("a test result does not count for a model id changed meanwhile", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: true,
+        responseTime: 1000,
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    const input = dialog.locator('input[title="qwen-max"]')
+    await input.fill("qwen-plus")
+    await input.blur()
+    release()
+    await page.waitForTimeout(500)
+    await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(0)
+})

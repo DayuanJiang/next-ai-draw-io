@@ -38,10 +38,11 @@ export interface UseSessionManagerReturn {
     switchSession: (id: string) => Promise<SessionData | null>
     deleteSession: (id: string) => Promise<{ wasCurrentSession: boolean }>
     // forSessionId: optional session ID to verify save targets correct session (prevents stale debounce writes)
+    // Resolves to false when the save failed (the user was told)
     saveCurrentSession: (
         data: SessionData,
         forSessionId?: string | null,
-    ) => Promise<void>
+    ) => Promise<boolean>
     refreshSessions: () => Promise<void>
     clearCurrentSession: () => void
 }
@@ -247,17 +248,17 @@ export function useSessionManager(
         async (
             data: SessionData,
             forSessionId?: string | null,
-        ): Promise<void> => {
+        ): Promise<boolean> => {
             // If forSessionId is provided, verify it matches current session
             // This prevents stale debounced saves from overwriting a newly switched session
             if (
                 forSessionId !== undefined &&
                 forSessionId !== currentSessionId
             ) {
-                return
+                return true
             }
             // Nothing can be stored without IndexedDB
-            if (!isIndexedDBAvailable()) return
+            if (!isIndexedDBAvailable()) return true
 
             if (!currentSession) {
                 // Create a new session if none exists
@@ -274,13 +275,13 @@ export function useSessionManager(
                 // up in the URL and point to nothing after a reload)
                 if (!(await saveSession(newSession))) {
                     notifySaveFailed(dict.errors.sessionSaveFailed)
-                    return
+                    return false
                 }
                 await enforceSessionLimit()
                 setCurrentSession(newSession)
                 setCurrentSessionId(newSession.id)
                 await refreshSessions()
-                return
+                return true
             }
 
             // Update existing session
@@ -304,7 +305,7 @@ export function useSessionManager(
 
             if (!(await saveSession(updatedSession))) {
                 notifySaveFailed(dict.errors.sessionSaveFailed)
-                return
+                return false
             }
             setCurrentSession(updatedSession)
 
@@ -325,6 +326,7 @@ export function useSessionManager(
                         : s,
                 ),
             )
+            return true
         },
         [currentSession, currentSessionId, refreshSessions, dict],
     )

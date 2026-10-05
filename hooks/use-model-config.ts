@@ -192,7 +192,19 @@ export function useModelConfig(): UseModelConfigReturn {
                         id?.startsWith("server:") &&
                         !raw.some((m) => m.id === id)
                     if (id && !isStale) return prev
-                    const fallback = defaultServerModelId(raw)
+                    // Saved before non-ASCII characters in provider names
+                    // got into the id: they were dropped from it
+                    const renamed = raw.filter(
+                        (m) =>
+                            `server:${m.providerLabel
+                                .toLowerCase()
+                                .replace(/[^a-z0-9]+/g, "-")
+                                .replace(/^-|-$/g, "")}:${m.modelId}` === id,
+                    )
+                    const fallback =
+                        renamed.length === 1
+                            ? renamed[0].id
+                            : defaultServerModelId(raw)
                     return fallback === id
                         ? prev
                         : { ...prev, selectedModelId: fallback }

@@ -453,71 +453,81 @@ export function ChatMessageDisplay({
                         if (isRestoredMessage) return
 
                         if (
-                            part.type === "tool-display_diagram" &&
-                            input?.xml
+                            part.type !== "tool-display_diagram" &&
+                            part.type !== "tool-edit_diagram"
                         ) {
-                            const xml = input.xml as string
+                            return
+                        }
 
+                        // Failed or stopped: if the original XML is still
+                        // stored, the tool handler never ran (invalid JSON,
+                        // or the user pressed stop), so undo the streamed
+                        // preview here. Invalid JSON leaves no input, so
+                        // check this first.
+                        if (state === "output-error") {
+                            const originalXml =
+                                editDiagramOriginalXmlRef.current.get(
+                                    toolCallId,
+                                )
+                            if (originalXml) {
+                                editDiagramOriginalXmlRef.current.delete(
+                                    toolCallId,
+                                )
+                                onDisplayChart(originalXml, true)
+                                baseXml = originalXml
+                            }
+                            return
+                        }
+
+                        // Input complete, or the tool handler, a stop or an
+                        // error took the call already: the tool handler loads
+                        // the checked diagram (with the original XML). The
+                        // messages update at most every 150 ms (useChat
+                        // throttle in chat-panel), so they can still show the
+                        // call streaming after that.
+                        if (
+                            state !== "input-streaming" ||
+                            processedToolCalls.current.has(toolCallId)
+                        ) {
+                            processedToolCalls.current.add(toolCallId)
+                            lastProcessedXmlRef.current.delete(toolCallId)
+                            lastProcessedXmlRef.current.delete(
+                                `${toolCallId}-opCount`,
+                            )
+                            return
+                        }
+
+                        if (part.type === "tool-display_diagram") {
+                            const xml = input?.xml as string | undefined
                             // Skip if XML hasn't changed since last processing
-                            const lastXml =
-                                lastProcessedXmlRef.current.get(toolCallId)
-                            if (lastXml === xml) {
-                                return // Skip redundant processing
-                            }
-
-                            // Messages update at most every 150 ms while
-                            // streaming (useChat throttle in chat-panel)
-                            if (state === "input-streaming") {
-                                handleDisplayChart(xml)
-                                lastProcessedXmlRef.current.set(toolCallId, xml)
-                            } else if (
-                                !processedToolCalls.current.has(toolCallId)
+                            if (
+                                !xml ||
+                                lastProcessedXmlRef.current.get(toolCallId) ===
+                                    xml
                             ) {
-                                // Input complete: the tool handler loads the
-                                // validated diagram
-                                processedToolCalls.current.add(toolCallId)
-                                lastProcessedXmlRef.current.delete(toolCallId)
+                                return
                             }
+                            // Keep the diagram from before the preview, to
+                            // undo it on a stop or an error
+                            if (
+                                !editDiagramOriginalXmlRef.current.has(
+                                    toolCallId,
+                                )
+                            ) {
+                                editDiagramOriginalXmlRef.current.set(
+                                    toolCallId,
+                                    baseXml || BLANK_MXFILE,
+                                )
+                            }
+                            handleDisplayChart(xml)
+                            lastProcessedXmlRef.current.set(toolCallId, xml)
+                            return
                         }
 
                         // Handle edit_diagram streaming - apply operations incrementally for preview
                         // Uses shared editDiagramOriginalXmlRef to coordinate with tool handler
                         if (part.type === "tool-edit_diagram") {
-                            // Failed or stopped: if the original XML is still
-                            // stored, the tool handler never ran (invalid
-                            // JSON, or the user pressed stop), so undo the
-                            // streamed preview here. Invalid JSON leaves no
-                            // operations in the input, so check this first.
-                            if (state === "output-error") {
-                                const originalXml =
-                                    editDiagramOriginalXmlRef.current.get(
-                                        toolCallId,
-                                    )
-                                if (originalXml) {
-                                    editDiagramOriginalXmlRef.current.delete(
-                                        toolCallId,
-                                    )
-                                    onDisplayChart(originalXml, true)
-                                    baseXml = originalXml
-                                }
-                                return
-                            }
                             if (!input?.operations) return
-
-                            if (state !== "input-streaming") {
-                                // Input complete: the tool handler applies the
-                                // checked edit (it reads the original XML too)
-                                if (
-                                    !processedToolCalls.current.has(toolCallId)
-                                ) {
-                                    lastProcessedXmlRef.current.delete(
-                                        toolCallId + "-opCount",
-                                    )
-                                    processedToolCalls.current.add(toolCallId)
-                                }
-                                return
-                            }
-
                             const completeOps = getCompleteOperations(
                                 input.operations as DiagramOperation[],
                             )
