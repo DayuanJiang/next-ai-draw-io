@@ -33,8 +33,10 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
+import { STORAGE_KEYS } from "@/lib/storage"
 import {
     FIXED_CRED_PROVIDERS,
+    generateId,
     PROVIDER_INFO,
     type ProviderName,
     SUGGESTED_MODELS,
@@ -87,6 +89,11 @@ function ProviderDetail({
         try {
             const data = await adminFetch("/api/admin/test-model", password, {
                 method: "POST",
+                // EdgeOne's function also checks the access code
+                headers: {
+                    "x-access-code":
+                        localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+                },
                 body: JSON.stringify({ provider, modelId }),
             })
             setTestResults((prev) => ({
@@ -225,6 +232,7 @@ function ProviderDetail({
                         </Button>
                         {suggestions.length > 0 && (
                             <Select
+                                value=""
                                 disabled={disabled}
                                 onValueChange={(v) => addModel(v)}
                             >
@@ -390,12 +398,14 @@ function ProviderDetail({
 export function ModelsSection({
     providers,
     envProviders,
+    envHasDefaultModel,
     disabled,
     password,
     onChange,
 }: {
     providers: AdminProvider[]
     envProviders: EnvProvider[]
+    envHasDefaultModel: boolean
     disabled: boolean
     password: string
     onChange: (providers: AdminProvider[]) => void
@@ -409,10 +419,16 @@ export function ModelsSection({
 
     const addProvider = (provider: ProviderName) => {
         const newProvider: AdminProvider = {
-            id: crypto.randomUUID(),
+            // generateId works over plain HTTP; crypto.randomUUID needs HTTPS
+            id: generateId(),
             provider,
             models: [],
-            isDefault: providers.length === 0,
+            // Only the very first provider becomes the default, and only when
+            // the env config has no default that it would replace on save
+            isDefault:
+                providers.length === 0 &&
+                !envProviders.some((p) => p.isDefault) &&
+                !envHasDefaultModel,
         }
         onChange([...providers, newProvider])
         setSelectedId(newProvider.id)
@@ -496,7 +512,9 @@ export function ModelsSection({
                     ))}
                 </div>
                 <div className="border-t p-2">
+                    {/* Always empty so picking the same type again still fires */}
                     <Select
+                        value=""
                         disabled={disabled}
                         onValueChange={(v) => addProvider(v as ProviderName)}
                     >

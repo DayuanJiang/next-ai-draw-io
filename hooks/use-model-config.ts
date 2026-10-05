@@ -13,6 +13,7 @@ import {
     flattenModels,
     type ModelConfig,
     type MultiModelConfig,
+    PROVIDER_INFO,
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
@@ -63,6 +64,28 @@ function migrateOldConfig(): MultiModelConfig | null {
     return config
 }
 
+const isKnownProvider = (p: { provider: string }) =>
+    Object.hasOwn(PROVIDER_INFO, p.provider)
+
+/**
+ * The stored config without providers this version does not know (saved
+ * by another version, or edited by hand): they would break every list of
+ * models. They stay in storage (saveConfig keeps them). Throws on bad JSON.
+ */
+function parseStoredConfig(stored: string): MultiModelConfig {
+    const config = JSON.parse(stored) as MultiModelConfig
+    const known = config.providers.filter(isKnownProvider)
+    if (known.length < config.providers.length) {
+        console.warn(
+            "Skipped saved providers this version does not know:",
+            config.providers
+                .filter((p) => !isKnownProvider(p))
+                .map((p) => p.provider),
+        )
+    }
+    return { ...config, providers: known }
+}
+
 /**
  * Load config from localStorage
  */
@@ -73,7 +96,7 @@ function loadConfig(): MultiModelConfig {
     const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
     if (stored) {
         try {
-            return JSON.parse(stored) as MultiModelConfig
+            return parseStoredConfig(stored)
         } catch {
             console.error("Failed to parse model config")
         }
@@ -98,7 +121,35 @@ function loadConfig(): MultiModelConfig {
  */
 function saveConfig(config: MultiModelConfig): void {
     if (typeof window === "undefined") return
-    localStorage.setItem(STORAGE_KEYS.modelConfigs, JSON.stringify(config))
+    // Providers this version does not know are not in config: keep them,
+    // with their keys, for the version that saved them
+    let unknown: MultiModelConfig["providers"] = []
+    try {
+        const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
+        if (stored) {
+            unknown = (JSON.parse(stored) as MultiModelConfig).providers.filter(
+                (p) => !isKnownProvider(p),
+            )
+        }
+    } catch {
+        // Unreadable: nothing to keep
+    }
+    localStorage.setItem(
+        STORAGE_KEYS.modelConfigs,
+        JSON.stringify({
+            ...config,
+            providers: [...config.providers, ...unknown],
+        }),
+    )
+}
+
+/**
+ * Server model to fall back to: the one marked default, else the first one
+ */
+function defaultServerModelId(
+    serverModels: FlattenedServerModel[],
+): string | undefined {
+    return (serverModels.find((m) => m.isDefault) ?? serverModels[0])?.id
 }
 
 export interface UseModelConfigReturn {
@@ -144,10 +195,25 @@ export function useModelConfig(): UseModelConfigReturn {
         setIsLoaded(true)
     }, [])
 
-    // Load server models on mount (if any)
+    // Pick up config changes saved by other tabs, so this tab neither shows a
+    // stale model nor overwrites their changes on its next save
+    useEffect(() => {
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === STORAGE_KEYS.modelConfigs) setConfig(loadConfig())
+        }
+        window.addEventListener("storage", handleStorage)
+        return () => window.removeEventListener("storage", handleStorage)
+    }, [])
+
+    // Load server models on mount (if any), and again when the desktop app
+    // restarted its server for another preset
     useEffect(() => {
         if (typeof window === "undefined") return
+        loadServerModels()
+        return window.electronAPI?.onServerRestarted?.(loadServerModels)
+    }, [])
 
+    function loadServerModels() {
         fetch(getApiEndpoint("/api/server-models"))
             .then((res) => {
                 if (!res.ok) {
@@ -165,24 +231,37 @@ export function useModelConfig(): UseModelConfigReturn {
                 setServerModels(raw)
                 setServerLoaded(true)
 
-                // Auto-select default server model if no model is currently selected
+                // Auto-select the default server model if no model is selected,
+                // or if the saved server model is gone (renamed or removed)
                 setConfig((prev) => {
-                    if (!prev.selectedModelId && raw.length > 0) {
-                        const defaultModel = raw.find((m) => m.isDefault)
-                        if (defaultModel) {
-                            return { ...prev, selectedModelId: defaultModel.id }
-                        }
-                        // If no default marked, use first server model
-                        return { ...prev, selectedModelId: raw[0].id }
-                    }
-                    return prev
+                    const id = prev.selectedModelId
+                    const isStale =
+                        id?.startsWith("server:") &&
+                        !raw.some((m) => m.id === id)
+                    if (id && !isStale) return prev
+                    // Saved before non-ASCII characters in provider names
+                    // got into the id: they were dropped from it
+                    const renamed = raw.filter(
+                        (m) =>
+                            `server:${m.providerLabel
+                                .toLowerCase()
+                                .replace(/[^a-z0-9]+/g, "-")
+                                .replace(/^-|-$/g, "")}:${m.modelId}` === id,
+                    )
+                    const fallback =
+                        renamed.length === 1
+                            ? renamed[0].id
+                            : defaultServerModelId(raw)
+                    return fallback === id
+                        ? prev
+                        : { ...prev, selectedModelId: fallback }
                 })
             })
             .catch((error) => {
                 console.error("Error while loading server models:", error)
                 setServerLoaded(true)
             })
-    }, [])
+    }
 
     // Save config whenever it changes (after initial load)
     useEffect(() => {
@@ -260,24 +339,31 @@ export function useModelConfig(): UseModelConfigReturn {
         [],
     )
 
-    const deleteProvider = useCallback((providerId: string) => {
-        setConfig((prev) => {
-            const provider = prev.providers.find((p) => p.id === providerId)
-            const modelIds = provider?.models.map((m) => m.id) || []
+    const deleteProvider = useCallback(
+        (providerId: string) => {
+            setConfig((prev) => {
+                const provider = prev.providers.find((p) => p.id === providerId)
+                const modelIds = provider?.models.map((m) => m.id) || []
 
-            // Clear selected model if it belongs to deleted provider
-            const newSelectedId =
-                prev.selectedModelId && modelIds.includes(prev.selectedModelId)
-                    ? undefined
-                    : prev.selectedModelId
+                // Fall back to the default server model if the selected model
+                // belongs to the deleted provider
+                const newSelectedId =
+                    prev.selectedModelId &&
+                    modelIds.includes(prev.selectedModelId)
+                        ? defaultServerModelId(serverModels)
+                        : prev.selectedModelId
 
-            return {
-                ...prev,
-                providers: prev.providers.filter((p) => p.id !== providerId),
-                selectedModelId: newSelectedId,
-            }
-        })
-    }, [])
+                return {
+                    ...prev,
+                    providers: prev.providers.filter(
+                        (p) => p.id !== providerId,
+                    ),
+                    selectedModelId: newSelectedId,
+                }
+            })
+        },
+        [serverModels],
+    )
 
     const addModel = useCallback(
         (providerId: string, modelId: string): ModelConfig => {
@@ -334,14 +420,15 @@ export function useModelConfig(): UseModelConfigReturn {
                           }
                         : p,
                 ),
-                // Clear selected model if it was deleted
+                // Fall back to the default server model if the selected model
+                // was deleted
                 selectedModelId:
                     prev.selectedModelId === modelConfigId
-                        ? undefined
+                        ? defaultServerModelId(serverModels)
                         : prev.selectedModelId,
             }))
         },
-        [],
+        [serverModels],
     )
 
     const resetConfig = useCallback(() => {
@@ -428,7 +515,8 @@ export function getSelectedAIConfig(): {
 
     let config: MultiModelConfig
     try {
-        config = JSON.parse(stored)
+        // Unknown providers would break the model lookup below
+        config = parseStoredConfig(stored)
     } catch {
         return { ...empty, accessCode }
     }

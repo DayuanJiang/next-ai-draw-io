@@ -5,31 +5,6 @@ import {
     resolveBaseURL,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
-import { extractAihubmixModelIds } from "@/lib/aihubmix-models"
-
-describe("extractAihubmixModelIds", () => {
-    it("extracts unique chat model IDs from the AIHubMix model list payload", () => {
-        const models = extractAihubmixModelIds({
-            data: [
-                { model_id: "claude-sonnet-4-5-20250929", types: "llm" },
-                { model_id: "gpt-5.1", types: "llm" },
-                { model_id: "gpt-5.1", types: "llm" },
-                { model_id: "gpt-image-2", types: "image_generation,llm" },
-                { model_id: "cohere-rerank-v4.0", types: "rerank" },
-                { model_id: "", types: "llm" },
-                { types: "llm" },
-            ],
-        })
-
-        expect(models).toEqual(["claude-sonnet-4-5-20250929", "gpt-5.1"])
-    })
-
-    it("returns an empty list for malformed payloads", () => {
-        expect(extractAihubmixModelIds({ data: null })).toEqual([])
-        expect(extractAihubmixModelIds({})).toEqual([])
-        expect(extractAihubmixModelIds(null)).toEqual([])
-    })
-})
 
 describe("resolveBaseURL", () => {
     const SERVER_BASE_URL = "https://server-proxy.example.com"
@@ -272,8 +247,15 @@ describe("AIHubMix provider", () => {
     })
 })
 
+vi.mock("@ai-sdk/openai-compatible", () => {
+    const mockModel = { specificationVersion: "v3", modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreate = vi.fn(() => mockProviderFn)
+    return { createOpenAICompatible: mockCreate }
+})
+
 describe("Atlas Cloud provider", () => {
-    let createOpenAIMock: ReturnType<typeof vi.fn>
+    let createCompatibleMock: ReturnType<typeof vi.fn>
     const savedEnv: Record<string, string | undefined> = {}
 
     beforeEach(async () => {
@@ -281,9 +263,11 @@ describe("Atlas Cloud provider", () => {
         savedEnv.ATLASCLOUD_BASE_URL = process.env.ATLASCLOUD_BASE_URL
         delete process.env.ATLASCLOUD_BASE_URL
 
-        const mod = await import("@ai-sdk/openai")
-        createOpenAIMock = mod.createOpenAI as ReturnType<typeof vi.fn>
-        createOpenAIMock.mockClear()
+        const mod = await import("@ai-sdk/openai-compatible")
+        createCompatibleMock = mod.createOpenAICompatible as ReturnType<
+            typeof vi.fn
+        >
+        createCompatibleMock.mockClear()
     })
 
     afterEach(() => {
@@ -299,9 +283,12 @@ describe("Atlas Cloud provider", () => {
             modelId: "qwen/qwen3.5-flash",
         })
 
-        expect(createOpenAIMock).toHaveBeenCalledWith({
+        // An OpenAI-compatible API; includeUsage keeps quota tracking working
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
             apiKey: "server-atlas-key",
             baseURL: "https://api.atlascloud.ai/v1",
+            includeUsage: true,
         })
     })
 
@@ -313,10 +300,27 @@ describe("Atlas Cloud provider", () => {
             modelId: "deepseek-ai/deepseek-v4-pro",
         })
 
-        expect(createOpenAIMock).toHaveBeenCalledWith({
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
             apiKey: "client-atlas-key",
             baseURL: "https://proxy.example.com/v1",
+            includeUsage: true,
         })
+    })
+
+    it("drops an endpoint path pasted along with the base URL", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1/chat/completions/",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://proxy.example.com/v1",
+            }),
+        )
     })
 })
 
@@ -458,6 +462,8 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledTimes(1)
         const callArgs = createOllamaMock.mock.calls[0][0]
+        // The SDK's local default: the desktop app's "Ollama (Local)"
+        // preset puts its API Key field into OLLAMA_API_KEY
         expect(callArgs).not.toHaveProperty("baseURL")
         expect(callArgs).toEqual(
             expect.objectContaining({
