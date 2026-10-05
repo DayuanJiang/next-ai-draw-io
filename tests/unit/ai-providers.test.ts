@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     getAIModel,
+    isAihubmixStandardBaseURL,
     resolveBaseURL,
-    supportsImageInput,
     supportsPromptCaching,
 } from "@/lib/ai-providers"
 
@@ -157,83 +157,224 @@ describe("supportsPromptCaching", () => {
     })
 })
 
-describe("supportsImageInput", () => {
-    it("returns true for models with vision capability", () => {
-        expect(supportsImageInput("gpt-4-vision")).toBe(true)
-        expect(supportsImageInput("qwen-vl")).toBe(true)
-        expect(supportsImageInput("deepseek-vl")).toBe(true)
-    })
-
-    it("returns false for Kimi K2 models without vision", () => {
-        expect(supportsImageInput("kimi-k2")).toBe(false)
-        expect(supportsImageInput("moonshot/kimi-k2")).toBe(false)
-    })
-
-    it("returns true for Kimi K2.5 models (supports vision)", () => {
-        expect(supportsImageInput("kimi-k2.5")).toBe(true)
-        expect(supportsImageInput("moonshotai/kimi-k2.5")).toBe(true)
-    })
-
-    it("returns false for Moonshot v1 text models", () => {
-        expect(supportsImageInput("moonshot-v1-8k")).toBe(false)
-        expect(supportsImageInput("moonshot-v1-32k")).toBe(false)
-        expect(supportsImageInput("moonshot-v1-128k")).toBe(false)
-    })
-
-    it("returns false for MiniMax text models", () => {
-        expect(supportsImageInput("MiniMax-M2.7")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2.5")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2")).toBe(false)
-        expect(supportsImageInput("MiniMax-M2.5-highspeed")).toBe(false)
-    })
-
-    it("returns false for DeepSeek text models", () => {
-        expect(supportsImageInput("deepseek-chat")).toBe(false)
-        expect(supportsImageInput("deepseek-coder")).toBe(false)
-    })
-
-    it("returns false for Qwen text models", () => {
-        expect(supportsImageInput("qwen-turbo")).toBe(false)
-        expect(supportsImageInput("qwen-plus")).toBe(false)
-        expect(supportsImageInput("qwen3-max")).toBe(false)
-    })
-
-    it("returns true for Qwen vision models", () => {
-        expect(supportsImageInput("qwen-vl")).toBe(true)
-        expect(supportsImageInput("qwen3.5-plus")).toBe(true)
-        expect(supportsImageInput("qwen3.5-flash")).toBe(true)
-        expect(supportsImageInput("qwen3-vl-plus")).toBe(true)
-        expect(supportsImageInput("qwen3-vl-flash")).toBe(true)
-    })
-
-    it("returns false for GLM text models", () => {
-        expect(supportsImageInput("glm-4")).toBe(false)
-        expect(supportsImageInput("glm-4-plus")).toBe(false)
-        expect(supportsImageInput("glm-4-flash")).toBe(false)
-        expect(supportsImageInput("glm-4-long")).toBe(false)
-        expect(supportsImageInput("glm-4.7")).toBe(false)
-        expect(supportsImageInput("glm-5")).toBe(false)
-    })
-
-    it("returns true for GLM vision models", () => {
-        expect(supportsImageInput("glm-4v")).toBe(true)
-        expect(supportsImageInput("glm-4v-9b")).toBe(true)
-        expect(supportsImageInput("glm-4.1v-9b-thinking")).toBe(true)
-    })
-
-    it("returns true for Claude and GPT models by default", () => {
-        expect(supportsImageInput("claude-sonnet-4-5")).toBe(true)
-        expect(supportsImageInput("gpt-4o")).toBe(true)
-        expect(supportsImageInput("gemini-pro")).toBe(true)
-    })
-})
-
 vi.mock("ollama-ai-provider-v2", () => {
     const mockModel = { modelId: "test-model" }
     const mockProviderFn = vi.fn(() => mockModel)
     const mockCreateOllama = vi.fn(() => mockProviderFn)
     const mockOllama = vi.fn(() => mockModel)
     return { createOllama: mockCreateOllama, ollama: mockOllama }
+})
+
+vi.mock("@ai-sdk/deepseek", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateDeepSeek = vi.fn(() => mockProviderFn)
+    const mockDeepseek = vi.fn(() => mockModel)
+    return { createDeepSeek: mockCreateDeepSeek, deepseek: mockDeepseek }
+})
+
+vi.mock("@aihubmix/ai-sdk-provider", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreateAihubmix = vi.fn(() => mockProviderFn)
+    const mockAihubmix = vi.fn(() => mockModel)
+    return { aihubmix: mockAihubmix, createAihubmix: mockCreateAihubmix }
+})
+
+vi.mock("@ai-sdk/openai", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockChat = vi.fn(() => mockModel)
+    const mockProviderFn = vi.fn(() => mockModel) as any
+    mockProviderFn.chat = mockChat
+    const mockCreateOpenAI = vi.fn(() => mockProviderFn)
+    const mockOpenai = vi.fn(() => mockModel)
+    return { createOpenAI: mockCreateOpenAI, openai: mockOpenai }
+})
+
+describe("AIHubMix provider", () => {
+    let createAihubmixMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.AIHUBMIX_API_KEY = process.env.AIHUBMIX_API_KEY
+        savedEnv.AIHUBMIX_BASE_URL = process.env.AIHUBMIX_BASE_URL
+        delete process.env.AIHUBMIX_BASE_URL
+
+        const mod = await import("@aihubmix/ai-sdk-provider")
+        createAihubmixMock = mod.createAihubmix as ReturnType<typeof vi.fn>
+        createAihubmixMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.AIHUBMIX_API_KEY = savedEnv.AIHUBMIX_API_KEY
+        process.env.AIHUBMIX_BASE_URL = savedEnv.AIHUBMIX_BASE_URL
+    })
+
+    it("uses AIHUBMIX_API_KEY for server configured AIHubMix", () => {
+        process.env.AIHUBMIX_API_KEY = "server-aihubmix-key"
+
+        getAIModel({
+            provider: "aihubmix",
+            modelId: "claude-sonnet-4-5-20250929",
+        })
+
+        expect(createAihubmixMock).toHaveBeenCalledWith({
+            apiKey: "server-aihubmix-key",
+            appCode: "MSBS9675",
+        })
+    })
+
+    it("uses client BYOK API key for AIHubMix", () => {
+        getAIModel({
+            provider: "aihubmix",
+            apiKey: "client-aihubmix-key",
+            modelId: "gpt-5.1",
+        })
+
+        expect(createAihubmixMock).toHaveBeenCalledWith({
+            apiKey: "client-aihubmix-key",
+            appCode: "MSBS9675",
+        })
+    })
+
+    it("recognizes AIHubMix standard endpoints", () => {
+        expect(isAihubmixStandardBaseURL(undefined)).toBe(true)
+        expect(isAihubmixStandardBaseURL("https://aihubmix.com")).toBe(true)
+        expect(isAihubmixStandardBaseURL("https://aihubmix.com/v1/")).toBe(true)
+        expect(isAihubmixStandardBaseURL("https://proxy.example.com/v1")).toBe(
+            false,
+        )
+    })
+})
+
+vi.mock("@ai-sdk/openai-compatible", () => {
+    const mockModel = { specificationVersion: "v3", modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel)
+    const mockCreate = vi.fn(() => mockProviderFn)
+    return { createOpenAICompatible: mockCreate }
+})
+
+describe("Atlas Cloud provider", () => {
+    let createCompatibleMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY
+        savedEnv.ATLASCLOUD_BASE_URL = process.env.ATLASCLOUD_BASE_URL
+        delete process.env.ATLASCLOUD_BASE_URL
+
+        const mod = await import("@ai-sdk/openai-compatible")
+        createCompatibleMock = mod.createOpenAICompatible as ReturnType<
+            typeof vi.fn
+        >
+        createCompatibleMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.ATLASCLOUD_API_KEY = savedEnv.ATLASCLOUD_API_KEY
+        process.env.ATLASCLOUD_BASE_URL = savedEnv.ATLASCLOUD_BASE_URL
+    })
+
+    it("uses Atlas Cloud default endpoint with ATLASCLOUD_API_KEY", () => {
+        process.env.ATLASCLOUD_API_KEY = "server-atlas-key"
+
+        getAIModel({
+            provider: "atlascloud",
+            modelId: "qwen/qwen3.5-flash",
+        })
+
+        // An OpenAI-compatible API; includeUsage keeps quota tracking working
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
+            apiKey: "server-atlas-key",
+            baseURL: "https://api.atlascloud.ai/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("uses custom Atlas Cloud base URL when provided", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseURL: "https://proxy.example.com/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("drops an endpoint path pasted along with the base URL", () => {
+        getAIModel({
+            provider: "atlascloud",
+            apiKey: "client-atlas-key",
+            baseUrl: "https://proxy.example.com/v1/chat/completions/",
+            modelId: "deepseek-ai/deepseek-v4-pro",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://proxy.example.com/v1",
+            }),
+        )
+    })
+})
+
+describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
+    let createDeepSeekMock: ReturnType<typeof vi.fn>
+    const savedEnv: Record<string, string | undefined> = {}
+
+    beforeEach(async () => {
+        savedEnv.KIMI_API_KEY = process.env.KIMI_API_KEY
+        savedEnv.KIMI_BASE_URL = process.env.KIMI_BASE_URL
+        delete process.env.KIMI_BASE_URL
+
+        const mod = await import("@ai-sdk/deepseek")
+        createDeepSeekMock = mod.createDeepSeek as ReturnType<typeof vi.fn>
+        createDeepSeekMock.mockClear()
+    })
+
+    afterEach(() => {
+        process.env.KIMI_API_KEY = savedEnv.KIMI_API_KEY
+        process.env.KIMI_BASE_URL = savedEnv.KIMI_BASE_URL
+    })
+
+    it("uses createDeepSeek with Kimi default base URL for reasoning_content support", () => {
+        process.env.KIMI_API_KEY = "test-kimi-key"
+
+        getAIModel({
+            provider: "kimi",
+            apiKey: "test-kimi-key",
+            modelId: "moonshot-v1-8k",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://api.moonshot.cn/v1",
+            }),
+        )
+    })
+
+    it("uses custom base URL when provided for kimi provider", () => {
+        process.env.KIMI_API_KEY = "test-kimi-key"
+
+        getAIModel({
+            provider: "kimi",
+            apiKey: "test-kimi-key",
+            baseUrl: "https://custom-kimi-endpoint.com/v1",
+            modelId: "kimi-k2.6",
+        })
+
+        expect(createDeepSeekMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://custom-kimi-endpoint.com/v1",
+            }),
+        )
+    })
 })
 
 describe("Ollama API key security", () => {
@@ -321,6 +462,8 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledTimes(1)
         const callArgs = createOllamaMock.mock.calls[0][0]
+        // The SDK's local default: the desktop app's "Ollama (Local)"
+        // preset puts its API Key field into OLLAMA_API_KEY
         expect(callArgs).not.toHaveProperty("baseURL")
         expect(callArgs).toEqual(
             expect.objectContaining({

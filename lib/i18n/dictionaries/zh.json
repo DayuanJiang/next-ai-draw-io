@@ -34,7 +34,8 @@
         "glm": "GLM",
         "qwen": "Qwen",
         "kimi": "Kimi",
-        "qiniu": "Qiniu"
+        "qiniu": "Qiniu",
+        "mimo": "MiMo (小米)"
     },
     "chat": {
         "placeholder": "描述您的图表或上传文件...",
@@ -76,8 +77,7 @@
         "creativeDescription": "绘制有趣且富有创意的内容",
         "cachedNote": "示例已缓存，可即时响应",
         "mcpServer": "MCP 服务器",
-        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用",
-        "preview": "预览"
+        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用"
     },
     "settings": {
         "title": "设置",
@@ -103,10 +103,12 @@
         "theme": "主题",
         "themeDescription": "界面和 DrawIO 画布的深色/浅色模式。",
         "drawioStyle": "DrawIO 样式",
-        "drawioStyleDescription": "画布样式：",
-        "switchTo": "切换到",
-        "minimal": "简约",
-        "sketch": "草图",
+        "drawioStyleDescription": "画布样式",
+        "themeDefault": "默认",
+        "themeDark": "深色",
+        "themeMinimal": "简约",
+        "themeSketch": "草图",
+        "themeSimple": "简单",
         "diagramStyle": "图表样式",
         "diagramStyleDescription": "切换简约与精致图表输出模式。",
         "sendShortcut": "发送快捷键",
@@ -130,6 +132,8 @@
         "customSystemMessage": "自定义系统消息",
         "customSystemMessageDescription": "添加自定义指令，将附加到 AI 的系统提示末尾。",
         "customSystemMessagePlaceholder": "例如：图表始终使用蓝色配色方案...",
+        "maxOutputTokens": "最大输出 token 数",
+        "maxOutputTokensDescription": "单次回复的额度，思考过程和图表 XML 共用。如果 AI 一直在思考却没有生成图表，请把它调大。留空则使用默认值。",
         "panelVisibility": "大厅面板",
         "panelVisibilityDescription": "选择在聊天大厅显示哪些面板。",
         "showRecentChats": "最近聊天",
@@ -174,9 +178,6 @@
         "networkError": "网络错误。请检查您的连接。",
         "retryLimit": "已达到自动重试限制（{max}）。请手动重试。",
         "continuationRetryLimit": "已达到继续重试限制（{max}）。图表可能过于复杂。",
-        "validationFailed": "图表验证失败。请尝试重新生成。",
-        "malformedXml": "AI 生成的图表 XML 无效。请尝试重新生成。",
-        "failedToProcess": "无法处理图表。请尝试重新生成。",
         "sessionCorrupted": "会话数据已损坏。重新开始。",
         "failedToSave": "无法保存消息到 localStorage",
         "failedToRestore": "无法从 localStorage 恢复",
@@ -184,7 +185,25 @@
         "failedToExport": "获取图表数据时出错",
         "failedToLoadExample": "加载示例图片时出错",
         "failedToRecordFeedback": "记录您的反馈失败。请重试。",
-        "storageUpdateFailed": "聊天已清除，但无法更新浏览器存储"
+        "storageUpdateFailed": "聊天已清除，但无法更新浏览器存储",
+        "sessionSaveFailed": "无法保存这个对话。浏览器存储空间可能已满，请在历史记录里删除旧对话后重试。",
+        "sessionSaveFailedLeave": "无法保存这个对话，浏览器存储空间可能已满。可以不保存它、直接继续，再在新对话的列表里删除旧对话。",
+        "continueWithoutSaving": "不保存，继续",
+        "llm": {
+            "invalid_api_key": "服务商拒绝了这个 API Key，请在模型设置里检查。",
+            "forbidden": "服务商拒绝了这次请求。这个 Key 可能没有使用该模型或该地区的权限。",
+            "model_not_found": "服务商找不到这个模型，请在模型设置里检查模型 ID。",
+            "insufficient_quota": "服务商账户的余额或额度已经用完。",
+            "rate_limited": "服务商正在限制请求频率，请稍等片刻再试。",
+            "context_too_long": "对话内容超过了这个模型能处理的长度。请新开一个对话，或换一个上下文更长的模型。",
+            "images_unsupported": "这个模型不支持图片输入。",
+            "tools_unsupported": "这个模型不支持工具调用，而画图需要工具调用。请换一个模型。",
+            "output_truncated": "输出在图画完之前就被截断了。请简化请求，或在设置里调高输出上限。",
+            "provider_unavailable": "服务商出了问题，请稍后再试。",
+            "cannot_connect": "连接不上服务商，请检查 Base URL 和网络。",
+            "timeout": "服务商没有及时响应。",
+            "openModelSettings": "打开模型设置"
+        }
     },
     "quota": {
         "dailyLimit": "已达每日配额",
@@ -231,6 +250,7 @@
     "reasoning": {
         "thinking": "思考中...",
         "thoughtFor": "思考了 {duration} 秒",
+        "thoughtForOne": "思考了 1 秒",
         "thoughtBrief": "思考了几秒钟"
     },
     "dev": {
@@ -367,9 +387,15 @@
         "enterSecretKey": "输入您的 Secret Key",
         "baseUrl": "基础 URL",
         "optional": "（可选）",
+        "getApiKey": "获取 API Key",
+        "fetchModels": "从服务商获取模型列表",
+        "noTools": "不支持工具调用",
+        "mayNotDraw": "models.dev 显示这个模型不支持工具调用，可能无法画图。",
+        "requestUrl": "请求将发往 {url}",
         "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "customEndpoint": "自定义端点 URL",
         "minimaxBaseUrlHint": "使用 /anthropic 端点为 Anthropic 兼容 API（推荐），或使用 /v1 端点为 OpenAI 兼容 API",
+        "mimoBaseUrlHint": "默认地址适用于按量付费密钥（sk-...）。Token Plan 订阅用户（tp-... 密钥）请设置为 https://token-plan-cn.xiaomimimo.com/v1",
         "models": "模型",
         "customModelId": "自定义模型 ID...",
         "allAdded": "已全部添加",
@@ -401,6 +427,152 @@
         "showUnvalidatedModels": "显示未验证的模型",
         "allModelsShown": "显示所有模型（包括未验证的）",
         "unvalidatedModelWarning": "此模型尚未验证",
-        "serverDefaultModel": "服务器默认模型"
+        "serverDefaultModel": "服务器默认模型",
+        "showValue": "显示值",
+        "hideValue": "隐藏值"
+    },
+    "admin": {
+        "title": "管理员设置",
+        "loginPrompt": "输入管理员密码（即 ADMIN_PASSWORD 环境变量）以管理服务器设置。",
+        "password": "密码",
+        "signIn": "登录",
+        "signingIn": "正在登录…",
+        "loginFailed": "登录失败",
+        "precedence": "文件覆盖环境变量 · 环境变量覆盖默认值",
+        "notWritable": "此部署环境下设置文件不可写（无服务器平台没有持久化磁盘）。设置以只读方式显示——请改用环境变量进行配置。",
+        "settingGroups": "设置分组",
+        "enabled": "已启用",
+        "disabled": "已禁用",
+        "enableGroup": "启用 {group}",
+        "unsavedChanges": "有未保存的更改",
+        "saved": "设置已保存，更改立即生效。",
+        "saveFailed": "保存失败。请检查网络连接后重试。",
+        "invalidSettings": "部分设置无效。",
+        "discard": "放弃",
+        "saveChanges": "保存更改",
+        "saving": "正在保存…",
+        "sourceSaved": "已保存",
+        "sourceEnv": "环境变量",
+        "sourceSavedTitle": "在管理员设置文件中设置",
+        "sourceEnvTitle": "通过环境变量设置",
+        "restartRequired": "需要重启",
+        "modified": "已修改",
+        "notSet": "未设置",
+        "savedReplace": "已保存（{hint}）——输入以替换",
+        "showValue": "显示值",
+        "hideValue": "隐藏值",
+        "removeValue": "移除值",
+        "removeValueTitle": "移除已保存的值",
+        "resetToDefault": "恢复默认",
+        "models": "模型",
+        "modelsDescription": "面向所有用户的服务端 provider 和模型——无需个人 API 密钥。当用户未选择模型时，使用默认 provider 的第一个模型。",
+        "addProviderHint": "添加一个 provider，为所有用户提供服务端模型。",
+        "selectProviderHint": "选择或添加一个 provider 以配置其凭证和模型。",
+        "addProviderToOfferModels": "至少添加一个模型，才能向用户开放此 provider。",
+        "managedViaEnv": "（通过环境变量管理）",
+        "envReadOnly": "在 AI_MODELS_CONFIG / ai-models.json 中定义——此处只读。请编辑环境配置以更改。",
+        "defaultModel": "默认模型",
+        "noModelsConfigured": "未配置模型",
+        "modelCount": "{count} 个模型",
+        "modelCountPlural": "{count} 个模型",
+        "default": "默认",
+        "setAsDefault": "设为默认 provider",
+        "defaultProvider": "默认 provider",
+        "modelIdPlaceholder": "模型 ID…",
+        "addModel": "添加模型",
+        "suggested": "推荐",
+        "test": "测试",
+        "testOk": "正常（{ms} 毫秒）",
+        "testFailed": "失败",
+        "removeModel": "移除 {model}",
+        "deleteProviderTitle": "删除 {name}？",
+        "deleteProviderDesc": "保存后，其凭证和模型将从服务器上移除。",
+        "cancel": "取消",
+        "delete": "删除",
+        "groups": {
+            "generation": {
+                "title": "生成",
+                "description": "应用于所有聊天请求的输出参数。"
+            },
+            "access": {
+                "title": "访问控制",
+                "description": "限制谁可以使用此部署。"
+            },
+            "features": {
+                "title": "功能",
+                "description": "可选功能和安全开关。"
+            },
+            "observability": {
+                "title": "可观测性",
+                "description": "对 LLM 调用进行 Langfuse 追踪。"
+            },
+            "quota": {
+                "title": "配额与速率限制",
+                "description": "按 IP 的用量限制。强制执行需要 DynamoDB 表。"
+            }
+        },
+        "settings": {
+            "TEMPERATURE": {
+                "label": "温度",
+                "description": "对于拒绝温度参数的推理模型，请留空。"
+            },
+            "MAX_OUTPUT_TOKENS": {
+                "label": "最大输出 token 数"
+            },
+            "ACCESS_CODE_LIST": {
+                "label": "访问码",
+                "description": "以逗号分隔的列表。用户需输入其中之一才能聊天。留空 = 开放访问。"
+            },
+            "ENABLE_VLM_VALIDATION": {
+                "label": "VLM 图表验证",
+                "description": "使用视觉模型对生成的图表进行可视化验证。"
+            },
+            "VALIDATION_MODEL": {
+                "label": "验证模型",
+                "description": "留空时回退到默认 AI 模型。"
+            },
+            "VALIDATION_TIMEOUT": {
+                "label": "验证超时（毫秒）"
+            },
+            "ENABLE_HISTORY_XML_REPLACE": {
+                "label": "历史 XML 压缩",
+                "description": "用占位符替换历史记录中的旧图表 XML。"
+            },
+            "ALLOW_PRIVATE_URLS": {
+                "label": "允许私有 URL",
+                "description": "关闭以阻止对私有 IP 和内部主机名的请求（SSRF 防护）。"
+            },
+            "LANGFUSE_PUBLIC_KEY": {
+                "label": "Langfuse Public Key"
+            },
+            "LANGFUSE_SECRET_KEY": {
+                "label": "Langfuse Secret Key"
+            },
+            "LANGFUSE_BASEURL": {
+                "label": "Langfuse Base URL"
+            },
+            "DAILY_REQUEST_LIMIT": {
+                "label": "每日请求上限",
+                "description": "每个 IP 每天。"
+            },
+            "DAILY_TOKEN_LIMIT": {
+                "label": "每日 token 上限",
+                "description": "每个 IP 每天。"
+            },
+            "TPM_LIMIT": {
+                "label": "每分钟 token 数"
+            },
+            "DYNAMODB_QUOTA_TABLE": {
+                "label": "DynamoDB 表",
+                "description": "留空时配额强制执行被禁用。"
+            },
+            "DYNAMODB_REGION": {
+                "label": "DynamoDB 区域"
+            },
+            "QUOTA_TIMEZONE": {
+                "label": "配额时区",
+                "description": "每日重置边界所用的时区。"
+            }
+        }
     }
 }

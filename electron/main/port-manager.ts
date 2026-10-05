@@ -1,4 +1,6 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import net from "node:net"
+import path from "node:path"
 import { app } from "electron"
 
 /**
@@ -24,6 +26,69 @@ const PORT_CONFIG = {
 let allocatedPort: number | null = null
 
 /**
+ * Whether chats are saved under http://127.0.0.1:<port>: Electron keeps
+ * each origin's IndexedDB in its own folder
+ */
+function hasStoredData(port: number): boolean {
+    return existsSync(
+        path.join(
+            app.getPath("userData"),
+            "IndexedDB",
+            `http_127.0.0.1_${port}.indexeddb.leveldb`,
+        ),
+    )
+}
+
+// The two fixed production ports, the only ones whose origin (and so its
+// chats and settings) is the same at every launch
+const HOME_PORTS = [PORT_CONFIG.legacyProduction, PORT_CONFIG.production]
+
+const chatPortFile = () => path.join(app.getPath("userData"), "chat-port.json")
+
+/** The fixed port where a chat was last saved, if known */
+function readChatPort(): number | null {
+    try {
+        const { port } = JSON.parse(readFileSync(chatPortFile(), "utf-8"))
+        return HOME_PORTS.includes(port) ? port : null
+    } catch {
+        return null
+    }
+}
+
+function writeChatPort(port: number): void {
+    try {
+        writeFileSync(chatPortFile(), JSON.stringify({ port }))
+    } catch (error) {
+        console.warn("Could not save the chat port:", error)
+    }
+}
+
+/**
+ * The page saved a chat: open on this port next time. Chats of the two
+ * ports cannot be shown together (each origin has its own storage), so the
+ * app opens where the user last worked. A launch that had to use the other
+ * port and saved nothing does not move it.
+ */
+export function rememberChatPort(): void {
+    const port = allocatedPort
+    if (!app.isPackaged || port === null || !HOME_PORTS.includes(port)) return
+    if (readChatPort() !== port) writeChatPort(port)
+}
+
+/**
+ * The page loaded without any chats. Before any chat was saved under this
+ * version (no file yet), the user's chats may be on the other fixed port,
+ * where an older version opened: try it first next time.
+ */
+export function noteNoChats(): void {
+    const port = allocatedPort
+    if (!app.isPackaged || port === null || !HOME_PORTS.includes(port)) return
+    if (existsSync(chatPortFile())) return
+    const other = HOME_PORTS.find((p) => p !== port)
+    if (other !== undefined && hasStoredData(other)) writeChatPort(other)
+}
+
+/**
  * Check if a specific port is available
  */
 export function isPortAvailable(port: number): Promise<boolean> {
@@ -44,7 +109,8 @@ export function isPortAvailable(port: number): Promise<boolean> {
 /**
  * Find an available port
  * - In development: uses fixed port (6002)
- * - In production: uses fixed port (13370) to preserve localStorage
+ * - In production: uses the legacy port (61337), then 13370, to preserve
+ *   localStorage; 13370 first when only it has saved chats
  * - Falls back to sequential ports if preferred port is unavailable
  * - Last resort: lets the OS assign a port (port 0)
  *
@@ -69,19 +135,24 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
         allocatedPort = null
     }
 
-    // In production, try legacy port first to preserve existing users' localStorage
-    if (!isDev) {
-        const legacyPort = PORT_CONFIG.legacyProduction
-        if (await isPortAvailable(legacyPort)) {
-            allocatedPort = legacyPort
-            return legacyPort
+    // In production, first the port where a chat was last saved. Without
+    // one, the legacy port first to preserve existing users' data, unless
+    // only the new port has data: their app started on 13370 while Windows
+    // reserved 61337, and 61337 being free now would hide it
+    const chatPort = isDev ? null : readChatPort()
+    const candidates = isDev
+        ? [preferredPort]
+        : chatPort !== null
+          ? [chatPort, ...HOME_PORTS.filter((p) => p !== chatPort)]
+          : hasStoredData(PORT_CONFIG.production) &&
+              !hasStoredData(PORT_CONFIG.legacyProduction)
+            ? [PORT_CONFIG.production, PORT_CONFIG.legacyProduction]
+            : [PORT_CONFIG.legacyProduction, PORT_CONFIG.production]
+    for (const port of candidates) {
+        if (await isPortAvailable(port)) {
+            allocatedPort = port
+            return port
         }
-    }
-
-    // Try preferred port
-    if (await isPortAvailable(preferredPort)) {
-        allocatedPort = preferredPort
-        return preferredPort
     }
 
     console.warn(

@@ -141,9 +141,6 @@ export default function ExamplePanel({
                                     <span className="text-sm font-medium text-foreground group-hover:text-purple-500 transition-colors">
                                         {dict.examples.mcpServer}
                                     </span>
-                                    <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-500 text-white rounded">
-                                        {dict.examples.preview}
-                                    </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                     {dict.examples.mcpDescription}

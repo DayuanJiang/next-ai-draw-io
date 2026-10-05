@@ -2,7 +2,7 @@
 
 /**
  * Development script for running Electron with Next.js
- * 1. Reads preset configuration (if exists)
+ * 1. Reads the active preset's env vars (if any)
  * 2. Starts Next.js dev server with preset env vars
  * 3. Waits for it to be ready
  * 4. Compiles Electron TypeScript
@@ -47,37 +47,39 @@ function getUserDataPath() {
 }
 
 /**
- * Load preset configuration from config file
+ * File where the Electron main process (in development) writes the active
+ * preset's env vars, already decrypted and mapped to provider-specific keys
+ * (see writeDevPresetEnv in electron/main/config-manager.ts)
  */
-function loadPresetConfig() {
-    const configPath = path.join(getUserDataPath(), "config-presets.json")
+const PRESET_ENV_FILE = "dev-preset-env.json"
 
-    if (!existsSync(configPath)) {
-        console.log("📋 No preset configuration found, using .env.local")
-        return null
-    }
-
+/**
+ * Read the active preset's env vars as JSON text (null if not available)
+ */
+function readPresetEnvFile() {
     try {
-        const content = readFileSync(configPath, "utf-8")
-        const data = JSON.parse(content)
-
-        if (!data.currentPresetId) {
-            console.log("📋 No active preset, using .env.local")
-            return null
-        }
-
-        const preset = data.presets.find((p) => p.id === data.currentPresetId)
-        if (!preset) {
-            console.log("📋 Active preset not found, using .env.local")
-            return null
-        }
-
-        console.log(`📋 Using preset: "${preset.name}"`)
-        return preset.config
-    } catch (error) {
-        console.error("Failed to load preset config:", error.message)
+        const content = readFileSync(
+            path.join(getUserDataPath(), PRESET_ENV_FILE),
+            "utf-8",
+        )
+        JSON.parse(content) // Ignore a half-written file
+        return content
+    } catch {
         return null
     }
+}
+
+/**
+ * Load the active preset's env vars
+ */
+function loadPresetEnv(content) {
+    const env = content ? JSON.parse(content) : {}
+    if (Object.keys(env).length === 0) {
+        console.log("📋 No active preset, using .env.local")
+        return null
+    }
+    console.log(`📋 Using preset env: ${Object.keys(env).join(", ")}`)
+    return env
 }
 
 /**
@@ -129,10 +131,23 @@ function runCommand(command, args, options = {}) {
 }
 
 /**
+ * Kill a process started with shell: true. On Windows, kill() only ends the
+ * cmd.exe wrapper and leaves next dev running, so kill the whole tree.
+ */
+function killProcess(proc) {
+    if (process.platform === "win32" && proc.pid) {
+        spawn("taskkill", ["/pid", String(proc.pid), "/T", "/F"])
+    } else {
+        proc.kill()
+    }
+}
+
+/**
  * Start Next.js dev server with preset environment
  */
 function startNextServer(presetEnv) {
-    const env = { ...process.env }
+    // The preset keys are the user's own, not a server's
+    const env = { ...process.env, NEXT_AI_DRAWIO_DESKTOP: "1" }
 
     // Apply preset environment variables
     if (presetEnv) {
@@ -164,7 +179,8 @@ async function main() {
     console.log("🚀 Starting Electron development environment...\n")
 
     // Load preset configuration
-    const presetEnv = loadPresetConfig()
+    let presetEnvContent = readPresetEnvFile()
+    const presetEnv = loadPresetEnv(presetEnvContent)
 
     // Start Next.js dev server with preset env
     console.log("1. Starting Next.js development server...")
@@ -176,7 +192,7 @@ async function main() {
         console.log("")
     } catch (err) {
         console.error("\n❌ Next.js server failed to start:", err.message)
-        nextProcess.kill()
+        killProcess(nextProcess)
         process.exit(1)
     }
 
@@ -186,7 +202,7 @@ async function main() {
         await runCommand("npm", ["run", "electron:compile"])
     } catch (err) {
         console.error("❌ Electron compilation failed:", err.message)
-        nextProcess.kill()
+        killProcess(nextProcess)
         process.exit(1)
     }
 
@@ -203,76 +219,83 @@ async function main() {
         },
     })
 
-    // Watch for preset config changes
-    const configPath = path.join(getUserDataPath(), "config-presets.json")
+    // Watch for preset env changes
+    const userDataPath = getUserDataPath()
     let configWatcher = null
     let restartPending = false
 
+    // Restart Next.js when the preset env vars really changed
+    async function applyPresetChange() {
+        if (restartPending) return
+        const newContent = readPresetEnvFile()
+        if (newContent === null || newContent === presetEnvContent) return
+
+        restartPending = true
+        presetEnvContent = newContent
+        console.log(
+            "\n🔄 Preset configuration changed, restarting Next.js server...",
+        )
+
+        // Kill current Next.js process
+        killProcess(nextProcess)
+
+        // Wait a bit for process to die
+        await new Promise((r) => setTimeout(r, 1000))
+
+        // Reload preset and restart
+        nextProcess = startNextServer(loadPresetEnv(newContent))
+
+        try {
+            await waitForServer(NEXT_URL)
+            console.log("✅ Next.js server restarted with new configuration\n")
+        } catch (err) {
+            console.error("❌ Failed to restart Next.js:", err.message)
+        }
+
+        restartPending = false
+        // A change written during the restart was skipped above
+        applyPresetChange()
+    }
+
     function setupConfigWatcher() {
-        if (!existsSync(path.dirname(configPath))) {
+        if (!existsSync(userDataPath)) {
             // Directory doesn't exist yet, check again later
             setTimeout(setupConfigWatcher, 5000)
             return
         }
 
         try {
+            // Watch the directory, since the file may not exist yet
             configWatcher = watch(
-                configPath,
+                userDataPath,
                 { persistent: false },
-                async (eventType) => {
-                    if (eventType === "change" && !restartPending) {
-                        restartPending = true
-                        console.log(
-                            "\n🔄 Preset configuration changed, restarting Next.js server...",
-                        )
-
-                        // Kill current Next.js process
-                        nextProcess.kill()
-
-                        // Wait a bit for process to die
-                        await new Promise((r) => setTimeout(r, 1000))
-
-                        // Reload preset and restart
-                        const newPresetEnv = loadPresetConfig()
-                        nextProcess = startNextServer(newPresetEnv)
-
-                        try {
-                            await waitForServer(NEXT_URL)
-                            console.log(
-                                "✅ Next.js server restarted with new configuration\n",
-                            )
-                        } catch (err) {
-                            console.error(
-                                "❌ Failed to restart Next.js:",
-                                err.message,
-                            )
-                        }
-
-                        restartPending = false
-                    }
+                (_eventType, filename) => {
+                    if (filename === PRESET_ENV_FILE) applyPresetChange()
                 },
             )
             console.log("👀 Watching for preset configuration changes...")
+            // Electron may have written its preset before the watch started
+            applyPresetChange()
         } catch (_err) {
-            // File might not exist yet, that's ok
+            // Directory might not be ready yet, try again later
             setTimeout(setupConfigWatcher, 5000)
         }
     }
 
-    // Start watching after a delay (config file might not exist yet)
+    // Start watching after a delay (user data directory might not exist yet)
     setTimeout(setupConfigWatcher, 2000)
 
     electronProcess.on("close", (code) => {
         console.log(`\nElectron exited with code ${code}`)
         if (configWatcher) configWatcher.close()
-        nextProcess.kill()
+        killProcess(nextProcess)
         process.exit(code || 0)
     })
 
     electronProcess.on("error", (err) => {
         console.error("Electron error:", err)
         if (configWatcher) configWatcher.close()
-        nextProcess.kill()
+        killProcess(nextProcess)
         process.exit(1)
     })
 
@@ -280,8 +303,8 @@ async function main() {
     const cleanup = () => {
         console.log("\n🛑 Shutting down...")
         if (configWatcher) configWatcher.close()
-        electronProcess.kill()
-        nextProcess.kill()
+        killProcess(electronProcess)
+        killProcess(nextProcess)
         process.exit(0)
     }
 

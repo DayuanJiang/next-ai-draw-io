@@ -34,7 +34,8 @@
         "glm": "GLM",
         "qwen": "Qwen",
         "kimi": "Kimi",
-        "qiniu": "Qiniu"
+        "qiniu": "Qiniu",
+        "mimo": "MiMo (Xiaomi)"
     },
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",
@@ -76,8 +77,7 @@
         "creativeDescription": "楽しくてクリエイティブなものを描く",
         "cachedNote": "例はキャッシュされ、即座に応答します",
         "mcpServer": "MCP サーバー",
-        "mcpDescription": "Claude Desktop、VS Code、Cursor で使用",
-        "preview": "プレビュー"
+        "mcpDescription": "Claude Desktop、VS Code、Cursor で使用"
     },
     "settings": {
         "title": "設定",
@@ -103,10 +103,12 @@
         "theme": "テーマ",
         "themeDescription": "インターフェースと DrawIO キャンバスのダーク/ライトモード。",
         "drawioStyle": "DrawIO スタイル",
-        "drawioStyleDescription": "キャンバススタイル：",
-        "switchTo": "切り替え",
-        "minimal": "ミニマル",
-        "sketch": "スケッチ",
+        "drawioStyleDescription": "キャンバススタイル",
+        "themeDefault": "デフォルト",
+        "themeDark": "ダーク",
+        "themeMinimal": "ミニマル",
+        "themeSketch": "スケッチ",
+        "themeSimple": "シンプル",
         "diagramStyle": "ダイアグラムスタイル",
         "diagramStyleDescription": "ミニマルとスタイル付きの出力を切り替えます。",
         "sendShortcut": "送信ショートカット",
@@ -130,6 +132,8 @@
         "customSystemMessage": "カスタムシステムメッセージ",
         "customSystemMessageDescription": "AIのシステムプロンプトに追加されるカスタム指示を入力します。",
         "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用...",
+        "maxOutputTokens": "最大出力トークン数",
+        "maxOutputTokensDescription": "1回の応答の予算で、思考過程とダイアグラムの XML が共有します。AI が考え続けてダイアグラムが生成されない場合は大きくしてください。空欄ならデフォルト値を使います。",
         "panelVisibility": "ロビーパネル",
         "panelVisibilityDescription": "チャットロビーに表示するパネルを選択します。",
         "showRecentChats": "最近のチャット",
@@ -174,9 +178,6 @@
         "networkError": "ネットワークエラー。接続を確認してください。",
         "retryLimit": "自動再試行制限に達しました（{max}）。手動で再試行してください。",
         "continuationRetryLimit": "継続再試行制限に達しました（{max}）。ダイアグラムが複雑すぎる可能性があります。",
-        "validationFailed": "ダイアグラムの検証に失敗しました。再生成してみてください。",
-        "malformedXml": "AI が無効なダイアグラム XML を生成しました。再生成してみてください。",
-        "failedToProcess": "ダイアグラムの処理に失敗しました。再生成してみてください。",
         "sessionCorrupted": "セッションデータが破損しました。最初からやり直します。",
         "failedToSave": "localStorage へのメッセージの保存に失敗しました",
         "failedToRestore": "localStorage からの復元に失敗しました",
@@ -184,7 +185,25 @@
         "failedToExport": "チャートデータの取得エラー",
         "failedToLoadExample": "例の画像の読み込みエラー",
         "failedToRecordFeedback": "フィードバックの記録に失敗しました。もう一度お試しください。",
-        "storageUpdateFailed": "チャットはクリアされましたが、ブラウザストレージを更新できませんでした"
+        "storageUpdateFailed": "チャットはクリアされましたが、ブラウザストレージを更新できませんでした",
+        "sessionSaveFailed": "このチャットを保存できませんでした。ブラウザのストレージがいっぱいの可能性があります。履歴から古いチャットを削除して、もう一度お試しください。",
+        "sessionSaveFailedLeave": "このチャットを保存できませんでした。ブラウザのストレージがいっぱいの可能性があります。保存せずに続けて、新しいチャットの一覧から古いチャットを削除できます。",
+        "continueWithoutSaving": "保存せずに続ける",
+        "llm": {
+            "invalid_api_key": "プロバイダーが API キーを拒否しました。モデル設定で確認してください。",
+            "forbidden": "プロバイダーがリクエストを拒否しました。このキーにはこのモデルまたはリージョンの利用権限がない可能性があります。",
+            "model_not_found": "プロバイダーがこのモデルを認識できません。モデル設定でモデル ID を確認してください。",
+            "insufficient_quota": "プロバイダーのアカウントの残高または利用枠がなくなりました。",
+            "rate_limited": "プロバイダーがリクエスト数を制限しています。少し待ってから再試行してください。",
+            "context_too_long": "会話がこのモデルで扱える長さを超えています。新しいチャットを始めるか、より長いコンテキストに対応したモデルを選んでください。",
+            "images_unsupported": "このモデルは画像入力に対応していません。",
+            "tools_unsupported": "このモデルはツール呼び出しに対応していません。作図にはツール呼び出しが必要です。別のモデルを選んでください。",
+            "output_truncated": "ダイアグラムが完成する前に出力が途中で切れました。リクエストを簡単にするか、設定で出力上限を上げてください。",
+            "provider_unavailable": "プロバイダーで問題が発生しています。しばらくしてから再試行してください。",
+            "cannot_connect": "プロバイダーに接続できません。Base URL とネットワークを確認してください。",
+            "timeout": "プロバイダーから時間内に応答がありませんでした。",
+            "openModelSettings": "モデル設定を開く"
+        }
     },
     "quota": {
         "dailyLimit": "1日の割当量に達しました",
@@ -231,6 +250,7 @@
     "reasoning": {
         "thinking": "考え中...",
         "thoughtFor": "{duration} 秒考えました",
+        "thoughtForOne": "1 秒考えました",
         "thoughtBrief": "数秒考えました"
     },
     "dev": {
@@ -321,9 +341,15 @@
         "enterSecretKey": "シークレットアクセスキーを入力",
         "baseUrl": "ベース URL",
         "optional": "（オプション）",
+        "getApiKey": "API キーを取得",
+        "fetchModels": "プロバイダーからモデル一覧を取得",
+        "noTools": "ツール呼び出し非対応",
+        "mayNotDraw": "models.dev によると、このモデルはツール呼び出しに対応していないため、作図できない可能性があります。",
+        "requestUrl": "リクエスト先: {url}",
         "baseUrlWithExample": "ベース URL（オプション、例: {example}）",
         "customEndpoint": "カスタムエンドポイント URL",
         "minimaxBaseUrlHint": "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",
+        "mimoBaseUrlHint": "デフォルトは従量課金キー（sk-...）用です。Token Plan 加入者（tp-... キー）は https://token-plan-cn.xiaomimimo.com/v1 を設定してください",
         "models": "モデル",
         "customModelId": "カスタムモデル ID...",
         "allAdded": "すべて追加済み",
@@ -355,7 +381,9 @@
         "showUnvalidatedModels": "未検証のモデルを表示",
         "allModelsShown": "すべてのモデルを表示（未検証を含む）",
         "unvalidatedModelWarning": "このモデルは検証されていません",
-        "serverDefaultModel": "サーバーデフォルトモデル"
+        "serverDefaultModel": "サーバーデフォルトモデル",
+        "showValue": "値を表示",
+        "hideValue": "値を非表示"
     },
     "templates": {
         "title": "マイテンプレート",
@@ -402,5 +430,149 @@
         "importNoFile": "JSON ファイルを選択してください",
         "importFailed": "インポートに失敗しました：{error}",
         "importSuccess": "{imported} 件インポート、{skipped} 件の重複をスキップしました"
+    },
+    "admin": {
+        "title": "管理者設定",
+        "loginPrompt": "サーバー設定を管理するには、管理者パスワード（ADMIN_PASSWORD 環境変数）を入力してください。",
+        "password": "パスワード",
+        "signIn": "ログイン",
+        "signingIn": "ログイン中…",
+        "loginFailed": "ログインに失敗しました",
+        "precedence": "ファイルが環境変数を上書き · 環境変数がデフォルトを上書き",
+        "notWritable": "このデプロイ環境では設定ファイルに書き込めません（サーバーレス環境には永続ディスクがありません）。設定は読み取り専用で表示されます——代わりに環境変数で構成してください。",
+        "settingGroups": "設定グループ",
+        "enabled": "有効",
+        "disabled": "無効",
+        "enableGroup": "{group} を有効化",
+        "unsavedChanges": "未保存の変更があります",
+        "saved": "設定を保存しました。変更は即座に反映されます。",
+        "saveFailed": "保存に失敗しました。接続を確認して再試行してください。",
+        "invalidSettings": "一部の設定が無効です。",
+        "discard": "破棄",
+        "saveChanges": "変更を保存",
+        "saving": "保存中…",
+        "sourceSaved": "保存済み",
+        "sourceEnv": "環境変数",
+        "sourceSavedTitle": "管理者設定ファイルで設定",
+        "sourceEnvTitle": "環境変数で設定",
+        "restartRequired": "再起動が必要",
+        "modified": "変更済み",
+        "notSet": "未設定",
+        "savedReplace": "保存済み（{hint}）——入力して置き換え",
+        "showValue": "値を表示",
+        "hideValue": "値を非表示",
+        "removeValue": "値を削除",
+        "removeValueTitle": "保存された値を削除",
+        "resetToDefault": "デフォルトに戻す",
+        "models": "モデル",
+        "modelsDescription": "全ユーザーが利用できるサーバー側のプロバイダーとモデル——個人の API キーは不要です。ユーザーがモデルを選択しない場合、デフォルトプロバイダーの最初のモデルが使用されます。",
+        "addProviderHint": "プロバイダーを追加して、全ユーザーにサーバー側モデルを提供します。",
+        "selectProviderHint": "プロバイダーを選択または追加して、その資格情報とモデルを構成します。",
+        "addProviderToOfferModels": "ユーザーにこのプロバイダーを公開するには、モデルを少なくとも 1 つ追加してください。",
+        "managedViaEnv": "（環境変数で管理）",
+        "envReadOnly": "AI_MODELS_CONFIG / ai-models.json で定義——ここでは読み取り専用です。変更するには環境構成を編集してください。",
+        "defaultModel": "デフォルトモデル",
+        "noModelsConfigured": "モデルが構成されていません",
+        "modelCount": "{count} 個のモデル",
+        "modelCountPlural": "{count} 個のモデル",
+        "default": "デフォルト",
+        "setAsDefault": "デフォルトプロバイダーに設定",
+        "defaultProvider": "デフォルトプロバイダー",
+        "modelIdPlaceholder": "モデル ID…",
+        "addModel": "モデルを追加",
+        "suggested": "おすすめ",
+        "test": "テスト",
+        "testOk": "正常（{ms}ms）",
+        "testFailed": "失敗",
+        "removeModel": "{model} を削除",
+        "deleteProviderTitle": "{name} を削除しますか？",
+        "deleteProviderDesc": "保存後、その資格情報とモデルはサーバーから削除されます。",
+        "cancel": "キャンセル",
+        "delete": "削除",
+        "groups": {
+            "generation": {
+                "title": "生成",
+                "description": "すべてのチャットリクエストに適用される出力パラメーター。"
+            },
+            "access": {
+                "title": "アクセス制御",
+                "description": "このデプロイを使用できるユーザーを制限します。"
+            },
+            "features": {
+                "title": "機能",
+                "description": "オプション機能とセキュリティの切り替え。"
+            },
+            "observability": {
+                "title": "オブザーバビリティ",
+                "description": "LLM 呼び出しの Langfuse トレース。"
+            },
+            "quota": {
+                "title": "クォータとレート制限",
+                "description": "IP ごとの使用制限。強制には DynamoDB テーブルが必要です。"
+            }
+        },
+        "settings": {
+            "TEMPERATURE": {
+                "label": "温度",
+                "description": "温度を受け付けない推論モデルの場合は未設定のままにしてください。"
+            },
+            "MAX_OUTPUT_TOKENS": {
+                "label": "最大出力トークン数"
+            },
+            "ACCESS_CODE_LIST": {
+                "label": "アクセスコード",
+                "description": "カンマ区切りのリスト。チャットにはいずれかの入力が必要です。空 = オープンアクセス。"
+            },
+            "ENABLE_VLM_VALIDATION": {
+                "label": "VLM 図検証",
+                "description": "ビジョンモデルで生成された図を視覚的に検証します。"
+            },
+            "VALIDATION_MODEL": {
+                "label": "検証モデル",
+                "description": "空の場合はデフォルトの AI モデルにフォールバックします。"
+            },
+            "VALIDATION_TIMEOUT": {
+                "label": "検証タイムアウト（ms）"
+            },
+            "ENABLE_HISTORY_XML_REPLACE": {
+                "label": "履歴 XML 圧縮",
+                "description": "履歴内の古い図 XML をプレースホルダーで置き換えます。"
+            },
+            "ALLOW_PRIVATE_URLS": {
+                "label": "プライベート URL を許可",
+                "description": "オフにすると、プライベート IP や内部ホスト名へのリクエストをブロックします（SSRF 保護）。"
+            },
+            "LANGFUSE_PUBLIC_KEY": {
+                "label": "Langfuse Public Key"
+            },
+            "LANGFUSE_SECRET_KEY": {
+                "label": "Langfuse Secret Key"
+            },
+            "LANGFUSE_BASEURL": {
+                "label": "Langfuse Base URL"
+            },
+            "DAILY_REQUEST_LIMIT": {
+                "label": "1 日あたりのリクエスト上限",
+                "description": "IP ごと 1 日あたり。"
+            },
+            "DAILY_TOKEN_LIMIT": {
+                "label": "1 日あたりのトークン上限",
+                "description": "IP ごと 1 日あたり。"
+            },
+            "TPM_LIMIT": {
+                "label": "1 分あたりのトークン数"
+            },
+            "DYNAMODB_QUOTA_TABLE": {
+                "label": "DynamoDB テーブル",
+                "description": "空の場合、クォータの強制は無効になります。"
+            },
+            "DYNAMODB_REGION": {
+                "label": "DynamoDB リージョン"
+            },
+            "QUOTA_TIMEZONE": {
+                "label": "クォータタイムゾーン",
+                "description": "1 日のリセット境界に使用するタイムゾーン。"
+            }
+        }
     }
 }

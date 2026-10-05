@@ -107,8 +107,8 @@ export function ChatLobby({
     currentInput = "",
     dict,
 }: ChatLobbyProps) {
-    const [templatesExpanded, setTemplatesExpanded] = useState(false)
-    const [examplesExpanded, setExamplesExpanded] = useState(false)
+    const [templatesExpanded, setTemplatesExpanded] = useState(true)
+    const [examplesExpanded, setExamplesExpanded] = useState(true)
     const [panelVisibility, setPanelVisibility] = useState(getPanelVisibility)
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
@@ -125,19 +125,25 @@ export function ChatLobby({
     const hasHistory = sessions.length > 0
 
     if (!hasHistory) {
-        if (panelVisibility.myTemplates) {
-            return (
-                <TemplatePanel
-                    setInput={setInput}
-                    onSendTemplate={onSendTemplate}
-                    currentInput={currentInput}
-                />
-            )
+        if (!panelVisibility.myTemplates && !panelVisibility.quickExamples) {
+            return null
         }
-        if (panelVisibility.quickExamples) {
-            return <ExamplePanel setInput={setInput} setFiles={setFiles} />
-        }
-        return null
+        return (
+            <div className="animate-fade-in">
+                {panelVisibility.myTemplates && (
+                    <TemplatePanel
+                        setInput={setInput}
+                        onSendTemplate={onSendTemplate}
+                        currentInput={currentInput}
+                    />
+                )}
+                {panelVisibility.quickExamples && (
+                    <div className={panelVisibility.myTemplates ? "mt-6" : ""}>
+                        <ExamplePanel setInput={setInput} setFiles={setFiles} />
+                    </div>
+                )}
+            </div>
+        )
     }
 
     // Show history + collapsible examples when there are sessions
@@ -188,6 +194,8 @@ export function ChatLobby({
                                     className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
                                     onClick={() => onSelectSession(session.id)}
                                     onKeyDown={(e) => {
+                                        // Ignore keys bubbling up from the delete button
+                                        if (e.target !== e.currentTarget) return
                                         if (
                                             e.key === "Enter" ||
                                             e.key === " "

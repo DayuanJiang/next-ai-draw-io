@@ -168,93 +168,106 @@ export default function AboutJA() {
                     </p>
 
                     <div className="space-y-8">
-                        {/* Animated Transformer */}
+                        {/* ResNet50 Architecture */}
                         <div className="text-center">
                             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                アニメーションTransformerコネクタ
+                                ResNet50モデルアーキテクチャアニメーション
                             </h3>
                             <p className="text-gray-600 mb-4">
-                                <strong>プロンプト：</strong>{" "}
-                                <strong>アニメーションコネクタ</strong>
-                                付きのTransformerアーキテクチャ図を作成してください。
+                                <strong>Prompt:</strong> Give me an{" "}
+                                <strong>animated</strong> architecture diagram
+                                of the ResNet50 model.
                             </p>
-                            <Image
-                                src="/animated_connectors.svg"
-                                alt="アニメーションコネクタ付きTransformerアーキテクチャ"
-                                width={480}
-                                height={360}
-                                className="mx-auto"
-                            />
+                            <div className="bg-neutral-950 rounded-lg p-4 inline-block">
+                                <Image
+                                    src="/resnet50.svg"
+                                    alt="ResNet50モデルアーキテクチャ図"
+                                    width={480}
+                                    height={360}
+                                    className="mx-auto"
+                                />
+                            </div>
                         </div>
 
-                        {/* Cloud Architecture Grid */}
+                        {/* Diagram Grid */}
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    GCPアーキテクチャ図
+                                    RAG技術ダイアグラム
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong>{" "}
-                                    <strong>GCPアイコン</strong>
-                                    を使用してGCPアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
+                                    <strong>Prompt:</strong> Generate a RAG
+                                    architecture diagram for{" "}
+                                    <strong>chat application</strong>. Use
+                                    connected diagram for data ingestion
                                 </p>
-                                <Image
-                                    src="/gcp_demo.svg"
-                                    alt="GCPアーキテクチャ図"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/rag_prod.svg"
+                                        alt="RAGアーキテクチャ図"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    AWSアーキテクチャ図
+                                    ReactとAWSによる認証
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong>{" "}
-                                    <strong>AWSアイコン</strong>
-                                    を使用してAWSアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
+                                    <strong>Prompt:</strong> Generate
+                                    authentication process using React with{" "}
+                                    <strong>AWS</strong>. Use Serverless
+                                    architecture.
                                 </p>
-                                <Image
-                                    src="/aws_demo.svg"
-                                    alt="AWSアーキテクチャ図"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/auth.svg"
+                                        alt="認証アーキテクチャ図"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Azureアーキテクチャ図
+                                    アジャイルスクラムプロセス
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong>{" "}
-                                    <strong>Azureアイコン</strong>
-                                    を使用してAzureアーキテクチャ図を生成してください。ユーザーがインスタンス上でホストされているフロントエンドに接続します。
+                                    <strong>Prompt:</strong> Generate agile
+                                    scrum workflow diagram for software
+                                    development team.
                                 </p>
-                                <Image
-                                    src="/azure_demo.svg"
-                                    alt="Azureアーキテクチャ図"
-                                    width={400}
-                                    height={300}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/agile_scrum.svg"
+                                        alt="アジャイルスクラム図"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    猫のスケッチ
+                                    オープンイノベーション
                                 </h3>
                                 <p className="text-gray-600 text-sm mb-4">
-                                    <strong>プロンプト：</strong>{" "}
-                                    かわいい猫を描いてください。
+                                    <strong>Prompt:</strong> Create
+                                    visualization of Henry Chesbrough&apos;s
+                                    Open Innovation model.
                                 </p>
-                                <Image
-                                    src="/cat_demo.svg"
-                                    alt="猫の絵"
-                                    width={240}
-                                    height={240}
-                                    className="mx-auto"
-                                />
+                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
+                                    <Image
+                                        src="/inno.svg"
+                                        alt="オープンイノベーション図"
+                                        width={480}
+                                        height={360}
+                                        className="max-w-full max-h-full object-contain"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
