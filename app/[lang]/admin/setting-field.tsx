@@ -73,8 +73,10 @@ export function SecretInput({
 }) {
     const dict = useDictionary()
     const [show, setShow] = useState(false)
-    // The stored marker as it was at mount, to revert to on empty
-    const [original] = useState(value)
+    // The stored marker to revert to on empty. Refreshed whenever the parent
+    // passes server state (a marker or nothing), e.g. after a save.
+    const [original, setOriginal] = useState(value)
+    if (typeof value !== "string" && value !== original) setOriginal(value)
     const hadStored = isSecretValue(original)
     const text = typeof value === "string" ? value : ""
     const placeholder = isSecretValue(value)
@@ -146,7 +148,8 @@ export function SettingField({
     pendingValue: string | null | undefined
     error?: string
     disabled: boolean
-    onChange: (value: string | null) => void
+    // undefined drops the pending change (back to the saved value)
+    onChange: (value: string | null | undefined) => void
 }) {
     const dict = useDictionary()
     const isDirty = pendingValue !== undefined
@@ -226,16 +229,18 @@ export function SettingField({
         case "secret":
             control = (
                 <div className="w-full max-w-md">
+                    {/* Clearing a saved secret reverts to it; the X button deletes */}
                     <SecretInput
                         id={inputId}
+                        keepOnEmpty={source === "file"}
                         value={
                             isDirty
                                 ? (pendingValue ?? "")
-                                : (secretState ?? currentValue)
+                                : (secretState ?? undefined)
                         }
                         disabled={disabled}
                         onChange={(v) =>
-                            onChange(typeof v === "string" ? v : "")
+                            onChange(typeof v === "string" ? v : undefined)
                         }
                     />
                 </div>

@@ -20,11 +20,17 @@ interface ToolCallCardProps {
 }
 
 function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
+    // Streamed or invalid input can hold anything: show only what React can
+    // render (an object in place of a string would crash the whole chat)
+    const shown = operations.filter(
+        (op) => typeof (op as { operation?: unknown })?.operation === "string",
+    )
+    const text = (value: unknown) => (typeof value === "string" ? value : "")
     return (
         <div className="space-y-3">
-            {operations.map((op, index) => (
+            {shown.map((op, index) => (
                 <div
-                    key={`${op.operation}-${op.cell_id}-${index}`}
+                    key={`${op.operation}-${text(op.cell_id)}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">
@@ -40,13 +46,13 @@ function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
                             {op.operation}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                            cell_id: {op.cell_id}
+                            cell_id: {text(op.cell_id)}
                         </span>
                     </div>
-                    {op.new_xml && (
+                    {text(op.new_xml) && (
                         <div className="px-3 py-2">
                             <pre className="text-[11px] font-mono text-foreground/80 bg-muted/30 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
-                                {op.new_xml}
+                                {text(op.new_xml)}
                             </pre>
                         </div>
                     )}
@@ -66,7 +72,7 @@ export function ToolCallCard({
     dict,
 }: ToolCallCardProps) {
     const callId = part.toolCallId
-    const { state, input, output } = part
+    const { state, input, output, errorText } = part
     // Default to expanded for all states (user can manually collapse if needed)
     const isExpanded = expandedTools[callId] ?? true
     const toolName = part.type?.replace("tool-", "")
@@ -91,6 +97,16 @@ export function ToolCallCard({
                 return name
         }
     }
+
+    // Incomplete XML means the output hit the length limit, unless the user
+    // stopped the generation themselves. Without an input the JSON was
+    // broken (the server repairs JSON cut short by the limit).
+    const isTruncated =
+        state === "output-error" &&
+        errorText !== "Stopped by user" &&
+        (toolName === "display_diagram" || toolName === "append_diagram") &&
+        typeof input?.xml === "string" &&
+        !isMxCellXmlComplete(input.xml)
 
     const handleCopy = () => {
         let textToCopy = ""
@@ -161,22 +177,15 @@ export function ToolCallCard({
                         </>
                     )}
                     {state === "output-error" &&
-                        (() => {
-                            // Check if this is a truncation (incomplete XML) vs real error
-                            const isTruncated =
-                                (toolName === "display_diagram" ||
-                                    toolName === "append_diagram") &&
-                                !isMxCellXmlComplete(input?.xml)
-                            return isTruncated ? (
-                                <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
-                                    Truncated
-                                </span>
-                            ) : (
-                                <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                                    Error
-                                </span>
-                            )
-                        })()}
+                        (isTruncated ? (
+                            <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full">
+                                Truncated
+                            </span>
+                        ) : (
+                            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                                Error
+                            </span>
+                        ))}
                     {input && Object.keys(input).length > 0 && (
                         <button
                             type="button"
@@ -224,23 +233,16 @@ export function ToolCallCard({
                     ) : null}
                 </div>
             )}
-            {output &&
-                state === "output-error" &&
-                (() => {
-                    const isTruncated =
-                        (toolName === "display_diagram" ||
-                            toolName === "append_diagram") &&
-                        !isMxCellXmlComplete(input?.xml)
-                    return (
-                        <div
-                            className={`px-4 py-3 border-t border-border/40 text-sm ${isTruncated ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                            {isTruncated
-                                ? "Output truncated due to length limits. Try a simpler request or increase the maxOutputLength."
-                                : output}
-                        </div>
-                    )
-                })()}
+            {/* AI SDK stores tool errors in errorText */}
+            {state === "output-error" && (errorText || output) && (
+                <div
+                    className={`px-4 py-3 border-t border-border/40 text-sm whitespace-pre-wrap break-words ${isTruncated ? "text-yellow-600" : "text-red-600"}`}
+                >
+                    {isTruncated
+                        ? "Output truncated due to length limits. Try a simpler request or increase Max Output Tokens in Settings."
+                        : (errorText ?? output)}
+                </div>
+            )}
             {/* Show get_shape_library output on success */}
             {output &&
                 toolName === "get_shape_library" &&

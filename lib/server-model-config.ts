@@ -47,11 +47,14 @@ export interface FlattenedServerModel {
 
 /**
  * Convert provider name to URL-safe slug for use in model ID
- * e.g., "OpenAI Production" → "openai-production"
+ * e.g., "OpenAI Production" → "openai-production", "主力" → "4e3b-529b"
+ * Non-ASCII characters become their hex code point so CJK names stay
+ * distinct; the id is sent in HTTP headers, which must be ASCII.
  */
-function slugify(name: string): string {
+export function slugify(name: string): string {
     return name
         .toLowerCase()
+        .replace(/[^\p{ASCII}]/gu, (c) => `-${c.codePointAt(0)?.toString(16)}-`)
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
 }
@@ -189,6 +192,7 @@ export async function loadFlattenedServerModels(): Promise<
     const defaultModelId = process.env.AI_MODEL
 
     const flattened: FlattenedServerModel[] = []
+    const seenIds = new Set<string>()
 
     for (const p of cfg.providers) {
         const providerLabel =
@@ -199,6 +203,16 @@ export async function loadFlattenedServerModels(): Promise<
 
         for (const modelId of p.models) {
             const id = `server:${nameSlug}:${modelId}`
+            // Names that differ only in case or punctuation share a slug.
+            // A repeated id would always resolve to the first provider's
+            // credentials, so drop it instead.
+            if (seenIds.has(id)) {
+                console.warn(
+                    `[server-model-config] Skipping duplicate model id "${id}". Provider names must differ in letters or digits.`,
+                )
+                continue
+            }
+            seenIds.add(id)
 
             // Default model priority:
             // 1. From ai-models.json: first model of provider with default: true

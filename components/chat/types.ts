@@ -1,8 +1,6 @@
-export interface DiagramOperation {
-    operation: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
+import type { DiagramOperation } from "@/packages/mcp-server/src/diagram-operations.ts"
+
+export type { DiagramOperation }
 
 export interface ToolPartLike {
     type: string
@@ -13,4 +11,5 @@ export interface ToolPartLike {
         operations?: DiagramOperation[]
     } & Record<string, unknown>
     output?: string
+    errorText?: string
 }

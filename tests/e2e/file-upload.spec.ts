@@ -24,7 +24,8 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const fileInput = page.locator('input[type="file"]')
+        // The chat attachment input; the template panel has its own file input
+        const fileInput = page.locator('input[type="file"][multiple]')
 
         await fileInput.setInputFiles({
             name: "test-image.png",
@@ -44,7 +45,8 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const fileInput = page.locator('input[type="file"]')
+        // The chat attachment input; the template panel has its own file input
+        const fileInput = page.locator('input[type="file"][multiple]')
 
         await fileInput.setInputFiles({
             name: "test-image.png",
@@ -91,7 +93,8 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const fileInput = page.locator('input[type="file"]')
+        // The chat attachment input; the template panel has its own file input
+        const fileInput = page.locator('input[type="file"][multiple]')
 
         await fileInput.setInputFiles({
             name: "architecture.png",
@@ -115,7 +118,8 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const fileInput = page.locator('input[type="file"]')
+        // The chat attachment input; the template panel has its own file input
+        const fileInput = page.locator('input[type="file"][multiple]')
         const largeBuffer = Buffer.alloc(3 * 1024 * 1024, "x")
 
         await fileInput.setInputFiles({

@@ -1,9 +1,12 @@
 import { extractFromHtml } from "@extractus/article-extractor"
 import { NextResponse } from "next/server"
 import TurndownService from "turndown"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
+import { readLimitedBody } from "@/lib/read-limited-body"
 import { isPrivateUrl } from "@/lib/ssrf-protection"
 
 const MAX_CONTENT_LENGTH = 150000 // Match PDF limit
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 const EXTRACT_TIMEOUT_MS = 15000
 const USER_AGENT = "Mozilla/5.0 (compatible; NextAIDrawio/1.0)"
 
@@ -33,6 +36,11 @@ function detectCharset(
 }
 
 export async function POST(req: Request) {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
+    const accessError = checkAccessCode(req)
+    if (accessError) return accessError
+
     try {
         const { url } = await req.json()
 
@@ -97,7 +105,15 @@ export async function POST(req: Request) {
                 )
             }
 
-            const buffer = await response.arrayBuffer()
+            const buffer = await readLimitedBody(response, MAX_RESPONSE_BYTES)
+            if (!buffer) {
+                return NextResponse.json(
+                    {
+                        error: `Page exceeds the ${MAX_RESPONSE_BYTES / 1024 / 1024} MB download limit`,
+                    },
+                    { status: 413 },
+                )
+            }
             const charset = detectCharset(contentType, buffer)
             html = new TextDecoder(charset).decode(buffer)
         } catch (err: any) {
@@ -115,6 +131,9 @@ export async function POST(req: Request) {
             )
         } finally {
             clearTimeout(timeoutId)
+            // Ends a download left unread (too large, PDF, error status);
+            // a body already read is not affected
+            controller.abort()
         }
 
         // extractFromHtml throws (not returns null) on empty/non-HTML bodies,

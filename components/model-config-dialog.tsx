@@ -4,12 +4,12 @@ import {
     AlertCircle,
     Check,
     ChevronRight,
-    Clock,
     Eye,
     EyeOff,
     Key,
     Loader2,
     Plus,
+    RefreshCw,
     Server,
     Settings2,
     Sparkles,
@@ -35,6 +35,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
+    Command,
+    CommandEmpty,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command"
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -43,6 +50,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Select,
@@ -56,7 +68,13 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
-import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
+import type { ListedModel } from "@/lib/provider-models"
+import { STORAGE_KEYS } from "@/lib/storage"
+import type {
+    ModelConfig,
+    ProviderConfig,
+    ProviderName,
+} from "@/lib/types/model-config"
 import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -125,22 +143,31 @@ export function ModelConfigDialog({
     > | null>(null)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [deleteConfirmText, setDeleteConfirmText] = useState("")
-    const [validatingModelIndex, setValidatingModelIndex] = useState<
-        number | null
-    >(null)
+    // Models whose test is running (they are all tested at once)
+    const [validatingModelIds, setValidatingModelIds] = useState<Set<string>>(
+        () => new Set(),
+    )
     const [duplicateError, setDuplicateError] = useState<string>("")
     const [editError, setEditError] = useState<{
         modelId: string
         message: string
     } | null>(null)
-    const [dynamicSuggestedModels, setDynamicSuggestedModels] = useState<
-        Partial<Record<ProviderName, string[]>>
+    // Model ID being typed; written to the config only when valid on blur
+    const [modelIdDraft, setModelIdDraft] = useState<{
+        id: string
+        value: string
+    } | null>(null)
+    // Models fetched from the provider, per provider config
+    const [fetchedModels, setFetchedModels] = useState<
+        Record<string, ListedModel[]>
     >({})
-    const [loadedSuggestedProviders, setLoadedSuggestedProviders] = useState<
-        Partial<Record<ProviderName, boolean>>
-    >({})
-    const [loadingSuggestedProvider, setLoadingSuggestedProvider] =
-        useState<ProviderName | null>(null)
+    const [fetchingModels, setFetchingModels] = useState(false)
+    const [fetchModelsError, setFetchModelsError] = useState("")
+    const [modelPickerOpen, setModelPickerOpen] = useState(false)
+    // models.dev data for hints, loaded with the dialog (it is ~180 KB)
+    const [getModelInfo, setGetModelInfo] = useState<
+        typeof import("@/lib/model-catalog").getModelInfo | null
+    >(null)
 
     const {
         config,
@@ -156,6 +183,35 @@ export function ModelConfigDialog({
     const selectedProvider = config.providers.find(
         (p) => p.id === selectedProviderId,
     )
+    // For requests that finish after the user switched provider or edited
+    // a model id
+    const selectedProviderIdRef = useRef(selectedProviderId)
+    selectedProviderIdRef.current = selectedProviderId
+    const configRef = useRef(config)
+    configRef.current = config
+    // Number of the latest Test click: only that test may reset the busy
+    // state when its credentials changed meanwhile
+    const validationRunRef = useRef(0)
+    // A model list or test result belongs to the credentials it was asked
+    // with; they can change meanwhile, here or in another tab
+    const credentialsOf = (providerId: string) => {
+        const p = configRef.current.providers.find((x) => x.id === providerId)
+        return JSON.stringify([
+            p?.provider,
+            p?.apiKey,
+            p?.baseUrl,
+            p?.awsAccessKeyId,
+            p?.awsSecretAccessKey,
+            p?.awsRegion,
+            p?.awsSessionToken,
+            p?.vertexApiKey,
+        ])
+    }
+
+    // Discard an unfinished model ID edit when the dialog closes
+    useEffect(() => {
+        if (!open) setModelIdDraft(null)
+    }, [open])
 
     // Cleanup validation reset timeout on unmount
     useEffect(() => {
@@ -167,73 +223,83 @@ export function ModelConfigDialog({
     }, [])
 
     useEffect(() => {
-        if (
-            !open ||
-            selectedProvider?.provider !== "aihubmix" ||
-            loadedSuggestedProviders.aihubmix
-        ) {
-            return
-        }
+        if (!open || getModelInfo) return
+        import("@/lib/model-catalog").then((catalog) =>
+            setGetModelInfo(() => catalog.getModelInfo),
+        )
+    }, [open, getModelInfo])
 
-        let cancelled = false
-        setLoadingSuggestedProvider("aihubmix")
-
-        fetch(getApiEndpoint("/api/aihubmix-models"))
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Failed to load models: ${response.status}`)
-                }
-                return response.json()
-            })
-            .then((data: { models?: unknown }) => {
-                if (cancelled || !Array.isArray(data.models)) {
-                    return
-                }
-
-                const models = data.models.filter(
-                    (model): model is string => typeof model === "string",
-                )
-                if (models.length > 0) {
-                    setDynamicSuggestedModels((current) => ({
-                        ...current,
-                        aihubmix: models,
-                    }))
-                }
-            })
-            .catch((error) => {
-                console.warn("Failed to load AIHubMix models:", error)
-            })
-            .finally(() => {
-                if (cancelled) {
-                    return
-                }
-
-                setLoadedSuggestedProviders((current) => ({
+    const handleFetchModels = async () => {
+        if (!selectedProvider) return
+        const providerId = selectedProvider.id
+        const askedWith = credentialsOf(providerId)
+        setFetchingModels(true)
+        setFetchModelsError("")
+        try {
+            const response = await fetch(
+                getApiEndpoint("/api/provider-models"),
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-code":
+                            localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+                    },
+                    body: JSON.stringify({
+                        provider: selectedProvider.provider,
+                        apiKey: selectedProvider.apiKey,
+                        baseUrl: selectedProvider.baseUrl,
+                    }),
+                },
+            )
+            const data = await response.json().catch(() => ({}))
+            if (credentialsOf(providerId) !== askedWith) return
+            // The picker and the error belong to the provider shown
+            const stillShown = selectedProviderIdRef.current === providerId
+            if (Array.isArray(data.models)) {
+                setFetchedModels((current) => ({
                     ...current,
-                    aihubmix: true,
+                    [providerId]: data.models,
                 }))
-                setLoadingSuggestedProvider(null)
-            })
-
-        return () => {
-            cancelled = true
+                if (stillShown) setModelPickerOpen(true)
+            } else if (stillShown) {
+                const hints = dict.errors.llm as Record<string, string>
+                setFetchModelsError(
+                    [hints[data.code], data.error].filter(Boolean).join(" ") ||
+                        `Request failed (${response.status})`,
+                )
+            }
+        } catch {
+            if (
+                selectedProviderIdRef.current === providerId &&
+                credentialsOf(providerId) === askedWith
+            ) {
+                setFetchModelsError(dict.errors.networkError)
+            }
+        } finally {
+            setFetchingModels(false)
         }
-    }, [open, selectedProvider?.provider, loadedSuggestedProviders.aihubmix])
+    }
 
-    // Get suggested models for current provider
-    const suggestedModels = selectedProvider
-        ? dynamicSuggestedModels[selectedProvider.provider] ||
-          SUGGESTED_MODELS[selectedProvider.provider] ||
-          []
+    // The provider's own list once fetched, else the suggested models
+    const suggestedModels: ListedModel[] = selectedProvider
+        ? fetchedModels[selectedProvider.id] ||
+          (SUGGESTED_MODELS[selectedProvider.provider] || []).map((id) => ({
+              id,
+          }))
         : []
-    const isLoadingSuggestedModels =
-        selectedProvider?.provider === loadingSuggestedProvider
+    // Tool calls are what drawing needs: false when known to be missing
+    const supportsTools = (model: ListedModel) =>
+        selectedProvider
+            ? (model.tools ??
+              getModelInfo?.(selectedProvider.provider, model.id)?.tools)
+            : undefined
 
     // Filter out already-added models from suggestions
     const existingModelIds =
         selectedProvider?.models.map((m) => m.modelId) || []
     const availableSuggestions = suggestedModels.filter(
-        (modelId) => !existingModelIds.includes(modelId),
+        (model) => !existingModelIds.includes(model.id),
     )
     const emptyStateSuggestions = selectedProvider
         ? (SUGGESTED_MODELS[selectedProvider.provider] || [])
@@ -246,6 +312,8 @@ export function ModelConfigDialog({
         const newProvider = addProvider(providerType)
         setSelectedProviderId(newProvider.id)
         setValidationStatus("idle")
+        setFetchModelsError("")
+        setModelPickerOpen(false)
     }
 
     // Handle provider field updates
@@ -253,9 +321,9 @@ export function ModelConfigDialog({
         field: keyof ProviderConfig,
         value: string | boolean,
     ) => {
-        if (!selectedProviderId) return
-        updateProvider(selectedProviderId, { [field]: value })
-        // Reset validation when credentials change
+        if (!selectedProviderId || !selectedProvider) return
+        const updates: Partial<ProviderConfig> = { [field]: value }
+        // Reset validation of the provider and its models when credentials change
         const credentialFields = [
             "apiKey",
             "baseUrl",
@@ -266,8 +334,19 @@ export function ModelConfigDialog({
         ]
         if (credentialFields.includes(field)) {
             setValidationStatus("idle")
-            updateProvider(selectedProviderId, { validated: false })
+            setValidatingModelIds(new Set())
+            setFetchedModels(({ [selectedProviderId]: _, ...rest }) => rest)
+            setFetchModelsError("")
+            updates.validated = false
+            updates.models = selectedProvider.models.map((m) => ({
+                ...m,
+                validated: undefined,
+                validationError: undefined,
+                validationWarning: undefined,
+                responseTime: undefined,
+            }))
         }
+        updateProvider(selectedProviderId, updates)
     }
 
     // Handle adding a model to current provider
@@ -337,77 +416,164 @@ export function ModelConfigDialog({
 
         let allValid = true
         let errorCount = 0
+        let idChanged = false
+        const askedWith = credentialsOf(selectedProviderId)
+        const run = ++validationRunRef.current
 
-        // Validate each model
-        for (let i = 0; i < selectedProvider.models.length; i++) {
-            const model = selectedProvider.models[i]
-            setValidatingModelIndex(i)
+        // For EdgeOne, construct baseUrl from current origin
+        const baseUrl = isEdgeOne
+            ? `${window.location.origin}/api/edgeai`
+            : selectedProvider.baseUrl
 
-            try {
-                // For EdgeOne, construct baseUrl from current origin
-                const baseUrl = isEdgeOne
-                    ? `${window.location.origin}/api/edgeai`
-                    : selectedProvider.baseUrl
-
-                const response = await fetch("/api/validate-model", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        provider: selectedProvider.provider,
-                        apiKey: selectedProvider.apiKey,
-                        baseUrl,
-                        modelId: model.modelId,
-                        // AWS Bedrock credentials
-                        awsAccessKeyId: selectedProvider.awsAccessKeyId,
-                        awsSecretAccessKey: selectedProvider.awsSecretAccessKey,
-                        awsRegion: selectedProvider.awsRegion,
-                        // Vertex AI credentials (Express Mode)
-                        vertexApiKey: selectedProvider.vertexApiKey,
-                    }),
-                })
-                const data = await response.json()
-
-                if (data.valid) {
-                    updateModel(selectedProviderId, model.id, {
-                        validated: true,
-                        validationError: undefined,
+        // Test every model at once; each row updates when its answer arrives
+        setValidatingModelIds(new Set(selectedProvider.models.map((m) => m.id)))
+        await Promise.all(
+            selectedProvider.models.map(async (model) => {
+                let update: Partial<ModelConfig>
+                try {
+                    const response = await fetch(
+                        getApiEndpoint("/api/validate-model"),
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "x-access-code":
+                                    localStorage.getItem(
+                                        STORAGE_KEYS.accessCode,
+                                    ) || "",
+                            },
+                            body: JSON.stringify({
+                                provider: selectedProvider.provider,
+                                apiKey: selectedProvider.apiKey,
+                                baseUrl,
+                                modelId: model.modelId,
+                                // AWS Bedrock credentials
+                                awsAccessKeyId: selectedProvider.awsAccessKeyId,
+                                awsSecretAccessKey:
+                                    selectedProvider.awsSecretAccessKey,
+                                awsRegion: selectedProvider.awsRegion,
+                                // Temporary AWS credentials, as the chat sends
+                                awsSessionToken:
+                                    selectedProvider.awsSessionToken,
+                                // Vertex AI credentials (Express Mode)
+                                vertexApiKey: selectedProvider.vertexApiKey,
+                            }),
+                        },
+                    )
+                    const data = await response.json().catch(() => ({}))
+                    update = data.valid
+                        ? {
+                              validated: true,
+                              validationError: undefined,
+                              validationWarning: data.warning,
+                              responseTime: data.responseTime,
+                          }
+                        : {
+                              validated: false,
+                              // The hint for the error's kind, then the
+                              // provider's own message
+                              validationError:
+                                  [
+                                      (
+                                          dict.errors.llm as Record<
+                                              string,
+                                              string
+                                          >
+                                      )[data.code],
+                                      data.error,
+                                  ]
+                                      .filter(Boolean)
+                                      .join(" ") ||
+                                  (response.ok
+                                      ? "Validation failed"
+                                      : `Request failed (${response.status})`),
+                              validationWarning: undefined,
+                          }
+                } catch {
+                    update = {
+                        validated: false,
+                        validationError: "Network error",
+                        validationWarning: undefined,
+                    }
+                }
+                // A newer test started: its own results and spinners count,
+                // whatever the credentials are now (they may have come back)
+                if (run !== validationRunRef.current) return
+                // Credentials changed during the test: drop the result. A
+                // change in another tab left the spinner on, so clear it
+                // (model ids are unique, whatever provider is shown).
+                if (credentialsOf(selectedProviderId) !== askedWith) {
+                    setValidatingModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.delete(model.id)
+                        return next
                     })
-                } else {
+                    return
+                }
+                // So did this model's id: the result is for the old one
+                const current = configRef.current.providers
+                    .find((p) => p.id === selectedProviderId)
+                    ?.models.find((m) => m.id === model.id)
+                if (current?.modelId !== model.modelId) {
+                    idChanged = true
+                    setValidatingModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.delete(model.id)
+                        return next
+                    })
+                    return
+                }
+                if (update.validated === false) {
                     allValid = false
                     errorCount++
-                    updateModel(selectedProviderId, model.id, {
-                        validated: false,
-                        validationError: data.error || "Validation failed",
-                    })
                 }
-            } catch {
-                allValid = false
-                errorCount++
-                updateModel(selectedProviderId, model.id, {
-                    validated: false,
-                    validationError: "Network error",
+                updateModel(selectedProviderId, model.id, update)
+                setValidatingModelIds((prev) => {
+                    const next = new Set(prev)
+                    next.delete(model.id)
+                    return next
                 })
+            }),
+        )
+        if (run !== validationRunRef.current) return
+        if (credentialsOf(selectedProviderId) !== askedWith) {
+            // The status line is about the provider shown now
+            if (selectedProviderIdRef.current === selectedProviderId) {
+                setValidationStatus("idle")
             }
+            return
         }
 
-        setValidatingModelIndex(null)
-
-        if (allValid) {
-            setValidationStatus("success")
+        // A model whose id changed was not tested
+        if (allValid && !idChanged) {
             updateProvider(selectedProviderId, { validated: true })
+        }
+        // The status line is about the provider shown now
+        if (selectedProviderIdRef.current !== selectedProviderId) return
+        if (idChanged) {
+            setValidationStatus("idle")
+        } else if (allValid) {
+            setValidationStatus("success")
             // Reset to idle after showing success briefly (with cleanup)
             if (validationResetTimeoutRef.current) {
                 clearTimeout(validationResetTimeoutRef.current)
             }
             validationResetTimeoutRef.current = setTimeout(() => {
-                setValidationStatus("idle")
                 validationResetTimeoutRef.current = null
+                if (run !== validationRunRef.current) return
+                setValidationStatus("idle")
             }, 1500)
         } else {
             setValidationStatus("error")
             setValidationError(`${errorCount} model(s) failed validation`)
         }
-    }, [selectedProvider, selectedProviderId, updateProvider, updateModel])
+    }, [
+        selectedProvider,
+        selectedProviderId,
+        updateProvider,
+        updateModel,
+        dict,
+    ])
 
     // Get all available provider types
     const availableProviders = Object.keys(PROVIDER_INFO) as ProviderName[]
@@ -563,6 +729,10 @@ export function ModelConfigDialog({
                                                 )
                                                 setValidationStatus("idle")
                                                 setShowApiKey(false)
+                                                // These belong to the
+                                                // provider shown before
+                                                setFetchModelsError("")
+                                                setModelPickerOpen(false)
                                             }}
                                             className={cn(
                                                 "group flex items-center gap-3 px-3 py-2.5 rounded-xl w-full",
@@ -615,7 +785,9 @@ export function ModelConfigDialog({
 
                         {/* Add Provider */}
                         <div className="p-3 border-t border-border-subtle">
+                            {/* Always empty so picking the same type again still fires */}
                             <Select
+                                value=""
                                 onValueChange={(v) =>
                                     handleAddProvider(v as ProviderName)
                                 }
@@ -836,57 +1008,136 @@ export function ModelConfigDialog({
                                                 >
                                                     <Plus className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <Select
-                                                    onValueChange={(value) => {
-                                                        if (value) {
-                                                            handleAddModel(
-                                                                value,
-                                                            )
+                                                {PROVIDER_INFO[
+                                                    selectedProvider.provider
+                                                ].modelList && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 rounded-lg"
+                                                        onClick={
+                                                            handleFetchModels
                                                         }
-                                                    }}
-                                                    disabled={
-                                                        isLoadingSuggestedModels ||
-                                                        availableSuggestions.length ===
-                                                            0
-                                                    }
-                                                >
-                                                    <SelectTrigger className="w-28 h-8 rounded-lg hover:bg-interactive-hover">
-                                                        {isLoadingSuggestedModels ? (
+                                                        disabled={
+                                                            fetchingModels
+                                                        }
+                                                        title={
+                                                            dict.modelConfig
+                                                                .fetchModels
+                                                        }
+                                                        aria-label={
+                                                            dict.modelConfig
+                                                                .fetchModels
+                                                        }
+                                                    >
+                                                        {fetchingModels ? (
                                                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                         ) : (
-                                                            <span className="text-xs">
-                                                                {availableSuggestions.length ===
+                                                            <RefreshCw className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
+                                                )}
+                                                {/* modal: the dialog blocks the
+                                                wheel outside itself, and the
+                                                list is rendered outside it */}
+                                                <Popover
+                                                    modal
+                                                    open={modelPickerOpen}
+                                                    onOpenChange={
+                                                        setModelPickerOpen
+                                                    }
+                                                >
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-28 h-8 rounded-lg text-xs"
+                                                            disabled={
+                                                                availableSuggestions.length ===
                                                                 0
-                                                                    ? dict
-                                                                          .modelConfig
-                                                                          .allAdded
-                                                                    : dict
-                                                                          .modelConfig
-                                                                          .suggested}
-                                                            </span>
-                                                        )}
-                                                    </SelectTrigger>
-                                                    <SelectContent className="max-h-72">
-                                                        {availableSuggestions.map(
-                                                            (modelId) => (
-                                                                <SelectItem
-                                                                    key={
-                                                                        modelId
+                                                            }
+                                                        >
+                                                            {availableSuggestions.length ===
+                                                            0
+                                                                ? dict
+                                                                      .modelConfig
+                                                                      .allAdded
+                                                                : dict
+                                                                      .modelConfig
+                                                                      .suggested}
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent
+                                                        className="w-80 p-0"
+                                                        align="end"
+                                                    >
+                                                        <Command>
+                                                            <CommandInput
+                                                                placeholder={
+                                                                    dict
+                                                                        .modelConfig
+                                                                        .searchModels
+                                                                }
+                                                            />
+                                                            <CommandList className="max-h-72">
+                                                                <CommandEmpty>
+                                                                    {
+                                                                        dict
+                                                                            .modelConfig
+                                                                            .noModelsFound
                                                                     }
-                                                                    value={
-                                                                        modelId
-                                                                    }
-                                                                    className="font-mono text-xs"
-                                                                >
-                                                                    {modelId}
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                                </CommandEmpty>
+                                                                {availableSuggestions.map(
+                                                                    (model) => (
+                                                                        <CommandItem
+                                                                            key={
+                                                                                model.id
+                                                                            }
+                                                                            value={
+                                                                                model.id
+                                                                            }
+                                                                            onSelect={() => {
+                                                                                handleAddModel(
+                                                                                    model.id,
+                                                                                )
+                                                                                setModelPickerOpen(
+                                                                                    false,
+                                                                                )
+                                                                            }}
+                                                                            className="font-mono text-xs"
+                                                                        >
+                                                                            <span className="truncate">
+                                                                                {
+                                                                                    model.id
+                                                                                }
+                                                                            </span>
+                                                                            {supportsTools(
+                                                                                model,
+                                                                            ) ===
+                                                                                false && (
+                                                                                <span className="ml-auto shrink-0 font-sans text-[10px] text-amber-600 dark:text-amber-400">
+                                                                                    {
+                                                                                        dict
+                                                                                            .modelConfig
+                                                                                            .noTools
+                                                                                    }
+                                                                                </span>
+                                                                            )}
+                                                                        </CommandItem>
+                                                                    ),
+                                                                )}
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
                                         }
                                     >
+                                        {fetchModelsError && (
+                                            <p className="mb-2 text-xs text-destructive">
+                                                {fetchModelsError}
+                                            </p>
+                                        )}
                                         {/* Model List */}
                                         <div className="rounded-2xl border border-border-subtle bg-surface-2/30 overflow-hidden min-h-[120px]">
                                             {selectedProvider.models.length ===
@@ -940,7 +1191,7 @@ export function ModelConfigDialog({
                                             ) : (
                                                 <div className="divide-y divide-border-subtle">
                                                     {selectedProvider.models.map(
-                                                        (model, index) => (
+                                                        (model) => (
                                                             <div
                                                                 key={model.id}
                                                                 className={cn(
@@ -950,28 +1201,24 @@ export function ModelConfigDialog({
                                                                 <div className="flex items-center gap-3 p-3 min-w-0">
                                                                     {/* Status icon */}
                                                                     <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0">
-                                                                        {validatingModelIndex !==
-                                                                            null &&
-                                                                        index ===
-                                                                            validatingModelIndex ? (
+                                                                        {validatingModelIds.has(
+                                                                            model.id,
+                                                                        ) ? (
                                                                             // Currently validating
                                                                             <div className="w-full h-full rounded-lg bg-blue-500/10 flex items-center justify-center">
                                                                                 <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
                                                                             </div>
-                                                                        ) : validatingModelIndex !==
-                                                                              null &&
-                                                                          index >
-                                                                              validatingModelIndex &&
-                                                                          model.validated ===
-                                                                              undefined ? (
-                                                                            // Queued
-                                                                            <div className="w-full h-full rounded-lg bg-muted flex items-center justify-center">
-                                                                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                            </div>
                                                                         ) : model.validated ===
                                                                           true ? (
-                                                                            // Valid
-                                                                            <div className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center">
+                                                                            // Valid, with the time the test took
+                                                                            <div
+                                                                                className="w-full h-full rounded-lg bg-success-muted flex items-center justify-center"
+                                                                                title={
+                                                                                    model.responseTime
+                                                                                        ? `${(model.responseTime / 1000).toFixed(1)} s`
+                                                                                        : undefined
+                                                                                }
+                                                                            >
                                                                                 <Check className="h-4 w-4 text-success" />
                                                                             </div>
                                                                         ) : model.validated ===
@@ -989,7 +1236,10 @@ export function ModelConfigDialog({
                                                                     </div>
                                                                     <Input
                                                                         value={
-                                                                            model.modelId
+                                                                            modelIdDraft?.id ===
+                                                                            model.id
+                                                                                ? modelIdDraft.value
+                                                                                : model.modelId
                                                                         }
                                                                         title={
                                                                             model.modelId
@@ -1007,24 +1257,14 @@ export function ModelConfigDialog({
                                                                                     null,
                                                                                 )
                                                                             }
-                                                                            if (
-                                                                                selectedProviderId
-                                                                            ) {
-                                                                                updateModel(
-                                                                                    selectedProviderId,
-                                                                                    model.id,
-                                                                                    {
-                                                                                        modelId:
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
-                                                                                        validated:
-                                                                                            undefined,
-                                                                                        validationError:
-                                                                                            undefined,
-                                                                                    },
-                                                                                )
-                                                                            }
+                                                                            setModelIdDraft(
+                                                                                {
+                                                                                    id: model.id,
+                                                                                    value: e
+                                                                                        .target
+                                                                                        .value,
+                                                                                },
+                                                                            )
                                                                         }}
                                                                         onKeyDown={(
                                                                             e,
@@ -1041,6 +1281,10 @@ export function ModelConfigDialog({
                                                                         ) => {
                                                                             const newModelId =
                                                                                 e.target.value.trim()
+                                                                            // Drop the draft; an invalid ID falls back to the saved one
+                                                                            setModelIdDraft(
+                                                                                null,
+                                                                            )
 
                                                                             // Helper to show error with shake
                                                                             const showError =
@@ -1135,6 +1379,28 @@ export function ModelConfigDialog({
                                                                             setEditError(
                                                                                 null,
                                                                             )
+                                                                            if (
+                                                                                selectedProviderId &&
+                                                                                newModelId !==
+                                                                                    model.modelId
+                                                                            ) {
+                                                                                updateModel(
+                                                                                    selectedProviderId,
+                                                                                    model.id,
+                                                                                    {
+                                                                                        modelId:
+                                                                                            newModelId,
+                                                                                        validated:
+                                                                                            undefined,
+                                                                                        validationError:
+                                                                                            undefined,
+                                                                                        validationWarning:
+                                                                                            undefined,
+                                                                                        responseTime:
+                                                                                            undefined,
+                                                                                    },
+                                                                                )
+                                                                            }
                                                                         }}
                                                                         className="flex-1 min-w-0 font-mono text-sm h-8 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
                                                                     />
@@ -1159,6 +1425,28 @@ export function ModelConfigDialog({
                                                                         <p className="text-[11px] text-destructive px-3 pb-2 pl-14">
                                                                             {
                                                                                 model.validationError
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                {!model.validationWarning &&
+                                                                    getModelInfo?.(
+                                                                        selectedProvider.provider,
+                                                                        model.modelId,
+                                                                    )?.tools ===
+                                                                        false && (
+                                                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 px-3 pb-2 pl-14">
+                                                                            {
+                                                                                dict
+                                                                                    .modelConfig
+                                                                                    .mayNotDraw
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                {model.validated &&
+                                                                    model.validationWarning && (
+                                                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 px-3 pb-2 pl-14">
+                                                                            {
+                                                                                model.validationWarning
                                                                             }
                                                                         </p>
                                                                     )}
