@@ -17,7 +17,8 @@
  *   - how to add/rename/delete pages without re-parsing ad-hoc.
  */
 
-import { DOMParser } from "linkedom"
+import { readAttributes } from "./xml-attributes.ts"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export interface PageInfo {
     id: string
@@ -52,6 +53,15 @@ export function generatePageId(): string {
     return `${a}-${b}`
 }
 
+/**
+ * Any cell besides the root cells "0" and "1", or a page in draw.io's
+ * compressed format (text instead of a model), which is not checked further
+ */
+export const hasCells = (xml: string) =>
+    /<(mxCell\b[^>]*\bid\s*=\s*["'](?![01]["'])|UserObject\b|object\b)|<diagram\b[^>]*>\s*[^\s<]/.test(
+        xml,
+    )
+
 /** Cheap regex check — does the XML start with an <mxfile> root? */
 export function isMxFile(xml: string): boolean {
     return /^\s*(<\?xml[^>]*\?>\s*)?<mxfile[\s>]/i.test(xml)
@@ -78,6 +88,53 @@ function escapeAttr(s: string): string {
  */
 function stripXmlDeclaration(xml: string): string {
     return xml.replace(/^\s*<\?xml[^>]*\?>\s*/i, "")
+}
+
+const ROOT_CELLS = '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+
+/** A one-page document with only the root cells */
+export const BLANK_MXFILE = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root>${ROOT_CELLS}</root></mxGraphModel></diagram></mxfile>`
+
+/**
+ * Turn a list of bare cells (optionally inside <root>) into a one-page
+ * <mxGraphModel>, adding the "0" and "1" root cells. The model then only
+ * writes its own cells, as in the web app (wrapWithMxFile in lib/utils.ts).
+ * Root cells the model wrote anyway are replaced, and comments or text
+ * before the first cell and trailing closing tags some providers append
+ * are dropped. <mxfile>, <mxGraphModel> and anything else are returned
+ * unchanged.
+ */
+export function wrapCellsInModel(xml: string): string {
+    let content = stripXmlDeclaration(xml.trim())
+    const start = content.search(/<(mxCell|UserObject|object|root)[\s/>]/)
+    if (start === -1) return xml
+    // Only comments and plain text may come before the first cell
+    if (!/^(?:<!--[\s\S]*?-->|[^<])*$/.test(content.slice(0, start))) {
+        return xml
+    }
+
+    content = content
+        .slice(start)
+        .replace(/<\/?root>/g, "")
+        .trim()
+    // End of the last cell, counting wrapped cells (</UserObject>, </object>)
+    let end = -1
+    for (const close of ["/>", "</mxCell>", "</UserObject>", "</object>"]) {
+        const at = content.lastIndexOf(close)
+        if (at !== -1) end = Math.max(end, at + close.length)
+    }
+    if (end !== -1 && /^(\s*<\/[^>]+>)*\s*$/.test(content.slice(end))) {
+        content = content.slice(0, end)
+    }
+    // The root cells come with the wrapper (a label holding id='1' is not
+    // an id)
+    content = content
+        .replace(/<mxCell\b[^>]*?(?:\/>|>\s*<\/mxCell>)/g, (cell) => {
+            const id = readAttributes(cell).find((a) => a.name === "id")?.value
+            return id === "0" || id === "1" ? "" : cell
+        })
+        .trim()
+    return `<mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel>`
 }
 
 /**
@@ -110,8 +167,8 @@ export function normalizeToMxfile(
  */
 export function parseMxfile(xml: string): Document | null {
     try {
+        if (getXmlSyntaxError(xml)) return null
         const doc = new DOMParser().parseFromString(xml, "text/xml")
-        if (doc.querySelector("parsererror")) return null
         if (doc.documentElement?.tagName !== "mxfile") return null
         return doc as unknown as Document
     } catch {
@@ -254,16 +311,16 @@ export function addPageToDoc(
         }
         inner = trimmed
     } else {
-        inner = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>`
+        inner = `<mxGraphModel><root>${ROOT_CELLS}</root></mxGraphModel>`
     }
 
     const snippet = `<wrapper><diagram id="${escapeAttr(id)}" name="${escapeAttr(name)}">${inner}</diagram></wrapper>`
-    const tempDoc = new DOMParser().parseFromString(snippet, "text/xml")
-    if (tempDoc.querySelector("parsererror")) {
+    if (getXmlSyntaxError(snippet)) {
         throw new Error(
             "Failed to parse new page xml — make sure it is a valid <mxGraphModel>",
         )
     }
+    const tempDoc = new DOMParser().parseFromString(snippet, "text/xml")
     const newDiagram = tempDoc.querySelector("diagram")
     if (!newDiagram) {
         throw new Error("Failed to construct <diagram> element for new page")
@@ -301,13 +358,14 @@ export function deletePageFromDoc(
     doc: Document,
     selector: PageSelector,
 ): { ok: boolean; reason?: string; deletedId?: string; deletedIndex?: number } {
-    const pages = listPagesFromDoc(doc)
-    if (pages.length <= 1) {
-        return { ok: false, reason: "Cannot delete the only remaining page" }
-    }
+    // Match first, so a wrong selector reports "not found" even on a
+    // one-page document
     const found = findPageElement(doc, selector)
     if (!found) {
         return { ok: false, reason: "Page not found" }
+    }
+    if (listPagesFromDoc(doc).length <= 1) {
+        return { ok: false, reason: "Cannot delete the only remaining page" }
     }
     const id = found.element.getAttribute("id") || ""
     const index = found.index

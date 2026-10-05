@@ -149,8 +149,10 @@ AZURE_REASONING_SUMMARY=detailed  # 可选：none, brief, detailed
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
-AI_MODEL=anthropic.claude-sonnet-4-5-20250514-v1:0
+AI_MODEL=global.anthropic.claude-sonnet-5-5
 ```
+
+较新的 Claude 模型只能通过推理配置文件（inference profile）的 ID 调用，这种 ID 以地区前缀开头，例如 `global.` 或 `us.`。直接用 `anthropic.claude-sonnet-5-5` 这样的 ID 会报错 “on-demand throughput isn't supported”。
 
 注意：在 AWS 环境（Lambda、带有 IAM 角色的 EC2）中，凭证会自动从 IAM 角色获取。
 

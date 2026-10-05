@@ -9,14 +9,18 @@
  * reads as a user edit.
  */
 
-import { DOMParser } from "linkedom"
 import { beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.ts"
 
 beforeAll(() => {
-    ;(globalThis as any).DOMParser = DOMParser
+    installDomPolyfill()
 })
 
-import { checkEditGate, contentFingerprint } from "../src/edit-gate.js"
+import {
+    checkEditGate,
+    contentFingerprint,
+    markPageSeen,
+} from "../src/edit-gate.ts"
 
 const XML_A = `<mxfile host="app.diagrams.net"><diagram id="p1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="box1" value="Hello" style="rounded=0;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
 
@@ -128,5 +132,39 @@ describe("contentFingerprint", () => {
 
     it("falls back to the raw string for unparseable input", () => {
         expect(contentFingerprint("not xml at all")).toBe("not xml at all")
+    })
+})
+
+describe("markPageSeen", () => {
+    const page = (id: string, label: string) =>
+        `<diagram id="${id}" name="${id}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="c" value="${label}" vertex="1" parent="1"/></root></mxGraphModel></diagram>`
+    const doc = (a: string, b: string) =>
+        `<mxfile>${page("A", a)}${page("B", b)}</mxfile>`
+
+    it("counts the whole document as seen when the other pages are unchanged", () => {
+        const seen = doc("a1", "b1")
+        const live = doc("a2", "b1")
+        expect(markPageSeen(seen, live, { page_id: "A" })).toBe(live)
+    })
+
+    it("does not count a changed page the model was not shown", () => {
+        // The user edited page B; the model looked at page A only
+        const seen = doc("a1", "b1")
+        const live = doc("a1", "b2")
+        const marked = markPageSeen(seen, live, { page_id: "A" })
+        expect(marked).toBe(seen)
+        expect(checkEditGate(marked, live).ok).toBe(false)
+    })
+
+    it("does not count other pages when the record of what was seen is empty", () => {
+        // Empty also after load_diagram or a page tool on unseen changes,
+        // when the model may still remember an older copy of the pages
+        const live = doc("a1", "b1")
+        expect(markPageSeen("", live, { page_id: "A" })).toBe("")
+    })
+
+    it("counts a one-page document as seen from its only page", () => {
+        const live = `<mxfile>${page("A", "a1")}</mxfile>`
+        expect(markPageSeen("", live, { page_id: "A" })).toBe(live)
     })
 })

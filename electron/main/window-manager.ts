@@ -3,6 +3,9 @@ import { app, BrowserWindow, screen } from "electron"
 
 let mainWindow: BrowserWindow | null = null
 
+// URL of the app server the main window loads
+let appUrl: string | null = null
+
 /**
  * Get the icon path based on platform
  * Note: electron-builder converts icon.png during packaging,
@@ -28,6 +31,7 @@ function getIconPath(): string | undefined {
  * Create the main application window
  */
 export function createWindow(serverUrl: string): BrowserWindow {
+    appUrl = serverUrl
     const { width, height } = screen.getPrimaryDisplay().workAreaSize
 
     mainWindow = new BrowserWindow({
@@ -56,7 +60,7 @@ export function createWindow(serverUrl: string): BrowserWindow {
     })
 
     // Open DevTools in development
-    if (process.env.NODE_ENV === "development") {
+    if (!app.isPackaged) {
         mainWindow.webContents.openDevTools()
     }
 
@@ -92,4 +96,40 @@ export function createWindow(serverUrl: string): BrowserWindow {
  */
 export function getMainWindow(): BrowserWindow | null {
     return mainWindow
+}
+
+/**
+ * Get the app server URL the main window loads
+ */
+export function getAppUrl(): string | null {
+    return appUrl
+}
+
+/**
+ * Point the main window at the restarted app server (it can come up on a
+ * different port). On the same port the page fetches the new preset's
+ * server models instead of sending the old preset's choice; it is not
+ * reloaded, which would drop unsent attachments.
+ */
+export function setAppUrl(url: string): void {
+    if (url === appUrl) {
+        mainWindow?.webContents.send("server-restarted")
+        return
+    }
+    appUrl = url
+    mainWindow?.loadURL(url)
+}
+
+/**
+ * Check if a URL belongs to the app server (same origin)
+ */
+export function isAppUrl(url: string | undefined): boolean {
+    if (!url || !appUrl) {
+        return false
+    }
+    try {
+        return new URL(url).origin === new URL(appUrl).origin
+    } catch {
+        return false
+    }
 }

@@ -14,10 +14,33 @@ describe("findCachedResponse", () => {
         expect(result?.xml).toContain("Transformer Architecture")
     })
 
-    it("returns cached response for exact match with image", () => {
-        const result = findCachedResponse("Replicate this in aws style", true)
+    it("returns cached response for exact match with the example file", () => {
+        const result = findCachedResponse(
+            "Replicate this in aws style",
+            true,
+            "architecture.png",
+        )
         expect(result).toBeDefined()
         expect(result?.xml).toContain("AWS")
+    })
+
+    it("returns undefined when the user attached their own file", () => {
+        expect(
+            findCachedResponse("Replicate this flowchart.", true, "mine.png"),
+        ).toBeUndefined()
+        expect(
+            findCachedResponse(
+                "Summarize this paper as a diagram",
+                true,
+                "thesis.pdf",
+            ),
+        ).toBeUndefined()
+    })
+
+    it("returns undefined for file examples when the file name is unknown", () => {
+        // The server only knows whether a file is attached, not which one
+        const result = findCachedResponse("Replicate this in aws style", true)
+        expect(result).toBeUndefined()
     })
 
     it("returns undefined for non-matching prompt", () => {

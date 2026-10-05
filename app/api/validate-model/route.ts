@@ -1,27 +1,28 @@
-import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
-import { createAnthropic } from "@ai-sdk/anthropic"
-import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
-import { createGateway } from "@ai-sdk/gateway"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { createVertex } from "@ai-sdk/google-vertex"
-import { createOpenAI } from "@ai-sdk/openai"
-import { createAihubmix } from "@aihubmix/ai-sdk-provider"
-import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { generateText } from "ai"
+import { streamText, tool } from "ai"
 import { NextResponse } from "next/server"
-import { createOllama } from "ollama-ai-provider-v2"
+import { z } from "zod"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
+import { checkAdminAuth } from "@/lib/admin/auth"
 import {
-    AIHUBMIX_APP_CODE,
-    isAihubmixStandardBaseURL,
-    normalizeMiniMaxBaseURL,
+    edgeOneEndpoint,
+    getAIModel,
+    globalBaseUrl,
+    usesServerCredentials,
+    usesServerEndpoint,
 } from "@/lib/ai-providers"
+import {
+    checkAndIncrementRequest,
+    isQuotaEnabled,
+} from "@/lib/dynamo-quota-manager"
+import { classifyLLMError } from "@/lib/llm-errors"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
-import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
+import { normalizeBaseUrl, type ProviderName } from "@/lib/types/model-config"
+import { getUserIdFromRequest } from "@/lib/user-id"
 
 export const runtime = "nodejs"
 
 interface ValidateRequest {
-    provider: string
+    provider: ProviderName
     apiKey: string
     baseUrl?: string
     modelId: string
@@ -29,21 +30,42 @@ interface ValidateRequest {
     awsAccessKeyId?: string
     awsSecretAccessKey?: string
     awsRegion?: string
+    awsSessionToken?: string
     // Vertex AI specific
     vertexApiKey?: string // Express Mode API key
+    // Set by the admin panel's Test: baseUrl is the server's <P>_BASE_URL
+    serverBaseUrl?: boolean
 }
 
+const TEST_TIMEOUT_MS = 15_000
+
+// Drawing works through tool calls, so the test asks for one
+const PING_TOOL = tool({
+    description: "Report that the connection works.",
+    inputSchema: z.object({}),
+})
+
+const NO_TOOL_CALL_WARNING =
+    "Connected, but the model answered without calling a tool. It may not support tool calls, which drawing needs."
+
 export async function POST(req: Request) {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
+    // Lets the server send requests to arbitrary URLs, so require the access
+    // code, or the admin password (the admin panel's Test button)
+    const accessError = checkAccessCode(req)
+    if (accessError && checkAdminAuth(req)) return accessError
+
     try {
         const body: ValidateRequest = await req.json()
         const {
             provider,
             apiKey,
-            baseUrl,
             modelId,
             awsAccessKeyId,
             awsSecretAccessKey,
             awsRegion,
+            awsSessionToken,
             // Note: Express Mode only needs vertexApiKey
             vertexApiKey,
         } = body
@@ -54,9 +76,26 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
+        // EdgeOne is this site's own function, as in the chat; the admin
+        // panel's Test sends no URL, and a relative one cannot be fetched
+        const baseUrl =
+            provider === "edgeone" ? edgeOneEndpoint(req) : body.baseUrl
+        // The admin panel's Test of an entry without a URL sends the
+        // server's own <P>_BASE_URL, which chat uses as it is: not a URL a
+        // user chose, so no private-address or redirect rules
+        const serverUrl =
+            body.serverBaseUrl === true &&
+            !!baseUrl &&
+            baseUrl === globalBaseUrl(provider) &&
+            !checkAdminAuth(req)
 
         // SECURITY: Block SSRF attacks via custom baseUrl
-        if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
+        if (
+            baseUrl &&
+            !serverUrl &&
+            !allowPrivateUrls() &&
+            (await isPrivateUrl(baseUrl))
+        ) {
             return NextResponse.json(
                 { valid: false, error: "Invalid base URL" },
                 { status: 400 },
@@ -90,369 +129,117 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
-
-        let model: any
-
-        switch (provider) {
-            case "openai": {
-                const openai = createOpenAI({
-                    apiKey,
-                    ...(baseUrl && { baseURL: baseUrl }),
-                })
-                model = openai.chat(modelId)
-                break
-            }
-
-            case "anthropic": {
-                const anthropic = createAnthropic({
-                    apiKey,
-                    baseURL: baseUrl || "https://api.anthropic.com/v1",
-                })
-                model = anthropic(modelId)
-                break
-            }
-
-            case "google": {
-                const google = createGoogleGenerativeAI({
-                    apiKey,
-                    ...(baseUrl && { baseURL: baseUrl }),
-                })
-                model = google(modelId)
-                break
-            }
-
-            case "vertexai": {
-                const vertex = createVertex({
-                    apiKey: vertexApiKey,
-                    ...(baseUrl && { baseURL: baseUrl }),
-                })
-                model = vertex(modelId)
-                break
-            }
-
-            case "azure": {
-                const azure = createOpenAI({
-                    apiKey,
-                    baseURL: baseUrl,
-                })
-                model = azure.chat(modelId)
-                break
-            }
-
-            case "bedrock": {
-                const bedrock = createAmazonBedrock({
-                    accessKeyId: awsAccessKeyId,
-                    secretAccessKey: awsSecretAccessKey,
-                    region: awsRegion,
-                })
-                model = bedrock(modelId)
-                break
-            }
-
-            case "openrouter": {
-                const openrouter = createOpenRouter({
-                    apiKey,
-                    ...(baseUrl && { baseURL: baseUrl }),
-                })
-                model = openrouter(modelId)
-                break
-            }
-
-            case "aihubmix": {
-                const defaultBaseURL = PROVIDER_INFO.aihubmix.defaultBaseUrl
-
-                if (
-                    isAihubmixStandardBaseURL(baseUrl) ||
-                    baseUrl === defaultBaseURL
-                ) {
-                    const aihubmix = createAihubmix({
-                        apiKey,
-                        appCode: AIHUBMIX_APP_CODE,
-                    })
-                    model = aihubmix(modelId)
-                } else {
-                    const aihubmixCompatible = createOpenAI({
-                        apiKey,
-                        baseURL: baseUrl,
-                    })
-                    model = aihubmixCompatible.chat(modelId)
-                }
-                break
-            }
-
-            case "deepseek": {
-                if (baseUrl || apiKey) {
-                    const ds = createDeepSeek({
-                        apiKey,
-                        ...(baseUrl && { baseURL: baseUrl }),
-                    })
-                    model = ds(modelId)
-                } else {
-                    model = deepseek(modelId)
-                }
-                break
-            }
-
-            case "siliconflow": {
-                const sf = createOpenAI({
-                    apiKey,
-                    baseURL: baseUrl || "https://api.siliconflow.cn/v1",
-                })
-                model = sf.chat(modelId)
-                break
-            }
-
-            case "ollama": {
-                // SECURITY: Mirror ai-providers.ts guard — only use server
-                // OLLAMA_API_KEY when the URL is also from server config.
-                const ollamaApiKey = baseUrl
-                    ? apiKey || undefined
-                    : apiKey || process.env.OLLAMA_API_KEY || undefined
-                const ollamaProvider = createOllama({
-                    baseURL:
-                        baseUrl ||
-                        process.env.OLLAMA_BASE_URL ||
-                        "https://ollama.com/api",
-                    ...(ollamaApiKey && {
-                        headers: { Authorization: `Bearer ${ollamaApiKey}` },
-                    }),
-                })
-                model = ollamaProvider(modelId)
-                break
-            }
-
-            case "gateway": {
-                const gw = createGateway({
-                    apiKey,
-                    ...(baseUrl && { baseURL: baseUrl }),
-                })
-                model = gw(modelId)
-                break
-            }
-
-            case "edgeone": {
-                // EdgeOne uses OpenAI-compatible API via Edge Functions
-                // Need to pass cookies for EdgeOne Pages authentication
-                const cookieHeader = req.headers.get("cookie") || ""
-                const edgeone = createOpenAI({
-                    apiKey: "edgeone", // EdgeOne doesn't require API key
-                    baseURL: baseUrl || "/api/edgeai",
-                    headers: {
-                        cookie: cookieHeader,
-                    },
-                })
-                model = edgeone.chat(modelId)
-                break
-            }
-
-            case "sglang": {
-                // SGLang is OpenAI-compatible
-                const sglang = createOpenAI({
-                    apiKey: apiKey || "not-needed",
-                    baseURL: baseUrl || "http://127.0.0.1:8000/v1",
-                })
-                model = sglang.chat(modelId)
-                break
-            }
-
-            case "doubao": {
-                // ByteDance Doubao: use DeepSeek for DeepSeek/Kimi models, OpenAI for others
-                const doubaoBaseUrl =
-                    baseUrl || "https://ark.cn-beijing.volces.com/api/v3"
-                const lowerModelId = modelId.toLowerCase()
-                if (
-                    lowerModelId.includes("deepseek") ||
-                    lowerModelId.includes("kimi")
-                ) {
-                    const doubao = createDeepSeek({
-                        apiKey,
-                        baseURL: doubaoBaseUrl,
-                    })
-                    model = doubao(modelId)
-                } else {
-                    const doubao = createOpenAI({
-                        apiKey,
-                        baseURL: doubaoBaseUrl,
-                    })
-                    model = doubao.chat(modelId)
-                }
-                break
-            }
-
-            case "modelscope": {
-                const baseURL =
-                    baseUrl || "https://api-inference.modelscope.cn/v1"
-                const startTime = Date.now()
-
-                try {
-                    // Initiate a streaming request (required for QwQ-32B and certain Qwen3 models)
-                    const response = await fetch(
-                        `${baseURL}/chat/completions`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${apiKey}`,
-                            },
-                            body: JSON.stringify({
-                                model: modelId,
-                                messages: [
-                                    { role: "user", content: "Say 'OK'" },
-                                ],
-                                max_tokens: 20,
-                                stream: true,
-                                enable_thinking: false,
-                            }),
-                        },
-                    )
-
-                    if (!response.ok) {
-                        const errorText = await response.text()
-                        throw new Error(
-                            `ModelScope API error (${response.status}): ${errorText}`,
-                        )
-                    }
-
-                    const contentType =
-                        response.headers.get("content-type") || ""
-                    const isValidStreamingResponse =
-                        response.status === 200 &&
-                        (contentType.includes("text/event-stream") ||
-                            contentType.includes("application/json"))
-
-                    if (!isValidStreamingResponse) {
-                        throw new Error(
-                            `Unexpected response format: ${contentType}`,
-                        )
-                    }
-
-                    const responseTime = Date.now() - startTime
-
-                    if (response.body) {
-                        response.body.cancel().catch(() => {
-                            /* Ignore cancellation errors */
-                        })
-                    }
-
-                    return NextResponse.json({
-                        valid: true,
-                        responseTime,
-                        note: "ModelScope model validated (using streaming API)",
-                    })
-                } catch (error) {
-                    console.error(
-                        "[validate-model] ModelScope validation failed:",
-                        error,
-                    )
-                    throw error
-                }
-            }
-
-            case "minimax": {
-                const rawUrl =
-                    baseUrl ||
-                    PROVIDER_INFO.minimax?.defaultBaseUrl ||
-                    "https://api.minimaxi.com/anthropic"
-                const { baseURL: minimaxBaseUrl, isAnthropicCompatible } =
-                    normalizeMiniMaxBaseURL(rawUrl)
-
-                if (isAnthropicCompatible) {
-                    const minimax = createAnthropic({
-                        apiKey,
-                        baseURL: minimaxBaseUrl,
-                    })
-                    model = minimax.chat(modelId)
-                } else {
-                    const minimax = createOpenAI({
-                        apiKey,
-                        baseURL: minimaxBaseUrl,
-                    })
-                    model = minimax.chat(modelId)
-                }
-                break
-            }
-
-            // GLM, Qwen, Kimi, Qiniu, Novita, MiMo, Atlas Cloud - OpenAI compatible
-            case "glm":
-            case "qwen":
-            case "kimi":
-            case "qiniu":
-            case "novita":
-            case "atlascloud":
-            case "mimo": {
-                const baseURL =
-                    baseUrl ||
-                    PROVIDER_INFO[provider as ProviderName]?.defaultBaseUrl ||
-                    ""
-
-                if (!baseURL) {
-                    return NextResponse.json(
-                        {
-                            valid: false,
-                            error: `No base URL configured for provider: ${provider}`,
-                        },
-                        { status: 400 },
-                    )
-                }
-
-                const openai = createOpenAI({
-                    apiKey,
-                    baseURL,
-                })
-                model = openai.chat(modelId)
-                break
-            }
-
-            default:
-                return NextResponse.json(
-                    { valid: false, error: `Unknown provider: ${provider}` },
-                    { status: 400 },
-                )
+        // The Test button checks the user's own provider. On the server's
+        // keys (Ollama Cloud without a key or URL) anyone could run any model.
+        if (
+            usesServerCredentials(provider, {
+                apiKey,
+                baseUrl,
+                awsAccessKeyId,
+                awsSecretAccessKey,
+                vertexApiKey,
+            })
+        ) {
+            return NextResponse.json(
+                { valid: false, error: "API key is required" },
+                { status: 400 },
+            )
         }
 
-        // Make a minimal test request
-        const startTime = Date.now()
-        await generateText({
-            model,
-            prompt: "Say 'OK'",
-            maxOutputTokens: 20,
+        // On the deployment's own endpoints a Test runs a model as a chat
+        // does, so with the quota on it counts as a chat request (an
+        // admin's Test of the server's URL does not)
+        const userId = getUserIdFromRequest(req)
+        if (
+            isQuotaEnabled() &&
+            !serverUrl &&
+            userId !== "anonymous" &&
+            (await usesServerEndpoint(
+                provider,
+                normalizeBaseUrl(body.baseUrl ?? ""),
+                apiKey,
+            ))
+        ) {
+            const quotaCheck = await checkAndIncrementRequest(userId, {
+                requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+                tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+                tpm: Number(process.env.TPM_LIMIT) || 20000,
+            })
+            if (!quotaCheck.allowed) {
+                return NextResponse.json(
+                    { valid: false, error: quotaCheck.error },
+                    { status: 429 },
+                )
+            }
+        }
+
+        // The same model the chat would use. A client base URL makes it
+        // refuse redirects to internal hosts.
+        const { model } = getAIModel({
+            provider,
+            modelId,
+            apiKey,
+            baseUrl,
+            trustedBaseUrl: serverUrl,
+            awsAccessKeyId,
+            awsSecretAccessKey,
+            awsRegion,
+            // Temporary AWS credentials need it, as in the chat
+            awsSessionToken,
+            vertexApiKey,
+            // EdgeOne checks the Pages cookies and the access code
+            ...(provider === "edgeone" && {
+                headers: {
+                    cookie: req.headers.get("cookie") || "",
+                    "x-access-code": req.headers.get("x-access-code") || "",
+                },
+            }),
         })
+
+        // Streaming, like the chat (some models only stream). Stop at the
+        // first tool call; a reasoning model that runs out of tokens first
+        // proves the connection but not tool support.
+        const startTime = Date.now()
+        const result = streamText({
+            model,
+            prompt: "Call the ping tool.",
+            tools: { ping: PING_TOOL },
+            maxOutputTokens: 1024,
+            maxRetries: 0,
+            abortSignal: AbortSignal.timeout(TEST_TIMEOUT_MS),
+        })
+        let calledTool = false
+        let finishReason: string | undefined
+        for await (const part of result.fullStream) {
+            if (part.type === "error") throw part.error
+            // The timeout ends the stream with an abort part, not an error
+            if (part.type === "abort") {
+                const timeout = new Error(
+                    `The model did not answer within ${TEST_TIMEOUT_MS / 1000} s.`,
+                )
+                timeout.name = "TimeoutError"
+                throw timeout
+            }
+            if (part.type === "tool-call") {
+                calledTool = true
+                break
+            }
+            if (part.type === "finish") finishReason = part.finishReason
+        }
         const responseTime = Date.now() - startTime
 
         return NextResponse.json({
             valid: true,
             responseTime,
+            ...(!calledTool &&
+                finishReason !== "length" && { warning: NO_TOOL_CALL_WARNING }),
         })
     } catch (error) {
         console.error("[validate-model] Error:", error)
 
-        let errorMessage = "Validation failed"
-        if (error instanceof Error) {
-            // Extract meaningful error message
-            if (
-                error.message.includes("401") ||
-                error.message.includes("Unauthorized")
-            ) {
-                errorMessage = "Invalid API key"
-            } else if (
-                error.message.includes("404") ||
-                error.message.includes("not found")
-            ) {
-                errorMessage = "Model not found"
-            } else if (
-                error.message.includes("429") ||
-                error.message.includes("rate limit")
-            ) {
-                errorMessage = "Rate limited - try again later"
-            } else if (error.message.includes("ECONNREFUSED")) {
-                errorMessage = "Cannot connect to server"
-            } else {
-                errorMessage = error.message.slice(0, 100)
-            }
-        }
-
+        const { code, message } = classifyLLMError(error)
         return NextResponse.json(
-            { valid: false, error: errorMessage },
+            { valid: false, code, error: message },
             { status: 200 }, // Return 200 so client can read error message
         )
     }

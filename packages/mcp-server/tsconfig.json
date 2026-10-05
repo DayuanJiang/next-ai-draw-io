@@ -13,6 +13,7 @@
         "declarationMap": true,
         "sourceMap": true,
         "resolveJsonModule": true,
+        "rewriteRelativeImportExtensions": true,
         "types": ["node"]
     },
     "include": ["src/**/*"],

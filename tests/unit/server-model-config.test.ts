@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { _resetForTests } from "@/lib/admin/settings"
 import {
-    findServerModelById,
     loadFlattenedServerModels,
     type ServerModelsConfig,
     ServerModelsConfigSchema,
+    slugify,
 } from "@/lib/server-model-config"
 
 const ORIGINAL_ENV = { ...process.env }
@@ -233,74 +233,51 @@ describe("loadFlattenedServerModels", () => {
         expect(models.length).toBe(1)
         expect(models[0].apiKeyEnv).toEqual(["OPENAI_KEY_1", "OPENAI_KEY_2"])
     })
+})
 
-    it("keeps colliding provider name slugs routed to the right credentials", async () => {
-        const config: ServerModelsConfig = {
-            providers: [
-                {
-                    name: "Open AI",
-                    provider: "openai",
-                    models: ["shared-model"],
-                    apiKeyEnv: "OPENAI_KEY_PRIMARY",
-                },
-                {
-                    name: "Open-AI",
-                    provider: "openai",
-                    models: ["shared-model"],
-                    apiKeyEnv: "OPENAI_KEY_BACKUP",
-                },
-            ],
-        }
-        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
-
-        const models = await loadFlattenedServerModels()
-
-        expect(new Set(models.map((model) => model.id)).size).toBe(2)
-        const backup = await findServerModelById(models[1].id)
-        expect(backup?.apiKeyEnv).toBe("OPENAI_KEY_BACKUP")
+describe("slugify", () => {
+    it("keeps ASCII names readable", () => {
+        expect(slugify("OpenAI Production")).toBe("openai-production")
     })
 
-    it("creates distinct IDs for non-Latin provider names", async () => {
-        const config: ServerModelsConfig = {
-            providers: [
-                {
-                    name: "生产环境",
-                    provider: "openai",
-                    models: ["shared-model"],
-                    apiKeyEnv: "OPENAI_KEY_PRIMARY",
-                },
-                {
-                    name: "备用环境",
-                    provider: "openai",
-                    models: ["shared-model"],
-                    apiKeyEnv: "OPENAI_KEY_BACKUP",
-                },
-            ],
-        }
-        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
-
-        const models = await loadFlattenedServerModels()
-
-        expect(new Set(models.map((model) => model.id)).size).toBe(2)
-        expect(models.every((model) => !model.id.startsWith("server::"))).toBe(
-            true,
+    it("gives distinct ASCII slugs to distinct CJK names", () => {
+        const slugs = ["主力", "备用", "DeepSeek 官方", "DeepSeek 备用"].map(
+            slugify,
         )
+        expect(new Set(slugs).size).toBe(4)
+        for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9-]+$/)
     })
+})
 
-    it("preserves existing IDs when provider slugs do not collide", async () => {
+describe("loadFlattenedServerModels id collisions", () => {
+    it("drops a model whose id repeats an earlier provider's", async () => {
         const config: ServerModelsConfig = {
             providers: [
+                { name: "OpenAI", provider: "openai", models: ["gpt-4o"] },
                 {
-                    name: "OpenAI Production",
+                    name: "openai",
                     provider: "openai",
                     models: ["gpt-4o"],
+                    apiKeyEnv: "OTHER_KEY",
+                },
+                {
+                    name: "主力",
+                    provider: "deepseek",
+                    models: ["deepseek-chat"],
+                },
+                {
+                    name: "备用",
+                    provider: "deepseek",
+                    models: ["deepseek-chat"],
                 },
             ],
         }
         process.env.AI_MODELS_CONFIG = JSON.stringify(config)
 
         const models = await loadFlattenedServerModels()
-
-        expect(models[0].id).toBe("server:openai-production:gpt-4o")
+        const ids = models.map((m) => m.id)
+        expect(new Set(ids).size).toBe(ids.length)
+        expect(ids).toHaveLength(3)
+        expect(models[0].apiKeyEnv).toBeUndefined()
     })
 })

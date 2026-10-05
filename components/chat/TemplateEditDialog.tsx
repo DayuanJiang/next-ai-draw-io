@@ -39,16 +39,16 @@ export function TemplateEditDialog({
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
-    // Populate form when template changes
+    // Populate form each time the dialog opens, dropping any cancelled edits
     useEffect(() => {
-        if (template) {
+        if (open && template) {
             setTitle(template.title || "")
             setDescription(template.description || "")
             setPrompt(template.prompt || "")
             setPinned(template.pinned || false)
             setError(null)
         }
-    }, [template])
+    }, [open, template])
 
     const handleOpenChange = (newOpen: boolean) => {
         if (!newOpen) {
@@ -59,6 +59,9 @@ export function TemplateEditDialog({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        // React submit events bubble through the portal; keep them away from
+        // any form this dialog may be rendered in
+        e.stopPropagation()
 
         if (!template) return
 
