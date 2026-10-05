@@ -36,6 +36,11 @@ vi.mock("@aws-sdk/credential-providers", () => ({
     fromNodeProviderChain: vi.fn(() => "node-chain"),
 }))
 
+vi.mock("ollama-ai-provider-v2", () => {
+    const mockProviderFn = vi.fn(() => ({ modelId: "test-model" }))
+    return { createOllama: vi.fn(() => mockProviderFn) }
+})
+
 vi.mock("@openrouter/ai-sdk-provider", () => {
     const mockProviderFn = vi.fn(() => ({ modelId: "test-model" }))
     return { createOpenRouter: vi.fn(() => mockProviderFn) }
@@ -60,6 +65,8 @@ const ENV_KEYS = [
     "NEXT_AI_DRAWIO_DESKTOP",
     "SGLANG_API_KEY",
     "SGLANG_BASE_URL",
+    "AZURE_RESOURCE_NAME",
+    "OLLAMA_BASE_URL",
 ]
 const savedEnv: Record<string, string | undefined> = {}
 
@@ -173,6 +180,8 @@ describe("Bedrock admin panel credentials", () => {
             region: "ap-northeast-1",
             accessKeyId: "client-id",
             secretAccessKey: "client-secret",
+            // The SDK would otherwise use the server's AWS_BEARER_TOKEN_BEDROCK
+            apiKey: "",
         })
     })
 
@@ -310,6 +319,42 @@ describe("whose keys a request uses", () => {
         // Still the Responses API, like without a base URL
         const provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
         expect(provider.chat).not.toHaveBeenCalled()
+    })
+
+    it("uses Chat Completions for any configured base URL", () => {
+        // The settings form fills in the official URL for a new provider
+        getAIModel({
+            provider: "openai",
+            apiKey: "user-key",
+            baseUrl: "https://api.openai.com/v1",
+            modelId: "gpt-5.5",
+        })
+        const provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
+        expect(provider.chat).toHaveBeenCalledWith("gpt-5.5")
+    })
+
+    it("sends a user's Ollama key to Ollama Cloud, not the server's Ollama", async () => {
+        process.env.OLLAMA_BASE_URL = "http://ollama.internal:11434/api"
+        const { createOllama } = await import("ollama-ai-provider-v2")
+        getAIModel({ provider: "ollama", apiKey: "user-key", modelId: "m" })
+        expect(createOllama).toHaveBeenLastCalledWith(
+            expect.objectContaining({ baseURL: "https://ollama.com/api" }),
+        )
+        // Without a key: the server's Ollama
+        getAIModel({ provider: "ollama", modelId: "m" })
+        expect(createOllama).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                baseURL: "http://ollama.internal:11434/api",
+            }),
+        )
+    })
+
+    it("needs a base URL with a user's Azure key", () => {
+        // The SDK would otherwise read the server's AZURE_RESOURCE_NAME
+        process.env.AZURE_RESOURCE_NAME = "operator-resource"
+        expect(() =>
+            getAIModel({ provider: "azure", apiKey: "k", modelId: "gpt-4o" }),
+        ).toThrow(/base URL/)
     })
 
     it("needs a base URL for SGLang instead of using 127.0.0.1", () => {

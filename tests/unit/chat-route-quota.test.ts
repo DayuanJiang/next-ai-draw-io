@@ -20,7 +20,15 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
 
 import { POST as chat } from "@/app/api/chat/route"
 
-const ENV = ["AI_PROVIDER", "AI_MODEL", "OPENAI_API_KEY"]
+const ENV = [
+    "AI_PROVIDER",
+    "AI_MODEL",
+    "OPENAI_API_KEY",
+    "OLLAMA_BASE_URL",
+    "OLLAMA_API_KEY",
+    "AI_GATEWAY_API_KEY",
+    "ALLOW_PRIVATE_URLS",
+]
 const saved: Record<string, string | undefined> = {}
 
 beforeEach(() => {
@@ -86,6 +94,46 @@ describe("chat quota", () => {
             "x-ai-model": "gpt-5.5",
         })
         expect(res.status).not.toBe(429)
+        expect(quota.checks).toBe(0)
+    })
+
+    it("counts the server's keyless Ollama and EdgeOne", async () => {
+        process.env.AI_PROVIDER = "ollama"
+        process.env.AI_MODEL = "llama3.2"
+        process.env.OLLAMA_BASE_URL = "http://ollama.internal:11434/api"
+        expect((await send({})).status).toBe(429)
+        expect(
+            (
+                await send({
+                    "x-ai-provider": "edgeone",
+                    "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
+                })
+            ).status,
+        ).toBe(429)
+        expect(quota.checks).toBe(2)
+    })
+
+    it("does not count Ollama on the user's own server", async () => {
+        const res = await send({
+            "x-ai-provider": "ollama",
+            "x-ai-base-url": "https://ollama.example.com/api",
+            "x-ai-model": "llama3.2",
+        })
+        expect(res.status).not.toBe(429)
+        expect(quota.checks).toBe(0)
+    })
+})
+
+describe("server model allowlist", () => {
+    it("runs AI_MODEL only on the server's AI_PROVIDER", async () => {
+        // Another provider's server key must not run it
+        process.env.AI_GATEWAY_API_KEY = "server-gateway-key"
+        const res = await send({
+            "x-ai-provider": "gateway",
+            "x-ai-model": "gpt-5.5",
+        })
+        expect(res.status).toBe(400)
+        expect(await res.text()).toMatch(/not available on this server/)
         expect(quota.checks).toBe(0)
     })
 })

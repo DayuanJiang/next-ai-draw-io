@@ -50,7 +50,11 @@ export async function POST(req: Request) {
     return validateModel(
         new Request(new URL("/api/validate-model", req.url), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                // Checked again there, in place of an access code
+                "x-admin-password": req.headers.get("x-admin-password") || "",
+            },
             body: JSON.stringify({
                 provider: resolved.provider,
                 apiKey: resolved.apiKey,

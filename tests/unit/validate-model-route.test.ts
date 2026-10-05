@@ -1,8 +1,12 @@
 // @vitest-environment node
 import { streamText } from "ai"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { POST as testModel } from "@/app/api/admin/test-model/route"
 import { POST as validateModel } from "@/app/api/validate-model/route"
 import { getAIModel } from "@/lib/ai-providers"
+
+// No saved admin providers
+vi.mock("@/lib/admin/settings", () => ({ loadSettings: () => ({}) }))
 
 // Treat every URL as public so no test hits DNS
 vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
@@ -156,5 +160,39 @@ describe("chat requests to a client base URL", () => {
         })
         await result.consumeStream()
         expect(String(error)).toMatch(/Redirects are not allowed/)
+    })
+})
+
+describe("the admin panel's Test button", () => {
+    it("works when access codes are set", async () => {
+        // The admin password stands in for the visitor access code
+        process.env.ACCESS_CODE_LIST = "visitor-code"
+        process.env.ADMIN_PASSWORD = "admin-pw"
+        try {
+            streamReply({ role: "assistant", content: "OK" })
+            const res = await testModel(
+                new Request("http://localhost/api/admin/test-model", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-admin-password": "admin-pw",
+                    },
+                    body: JSON.stringify({
+                        provider: {
+                            id: "p1",
+                            provider: "glm",
+                            apiKey: "key",
+                            models: ["glm-5"],
+                        },
+                        modelId: "glm-5",
+                    }),
+                }),
+            )
+            expect(res.status).toBe(200)
+            expect((await res.json()).valid).toBe(true)
+        } finally {
+            delete process.env.ACCESS_CODE_LIST
+            delete process.env.ADMIN_PASSWORD
+        }
     })
 })

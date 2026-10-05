@@ -97,11 +97,13 @@ function hasValidAccessCode(request: Request, env: any): boolean {
 
 export async function onRequest({ request, env }: any) {
     // Requiring JSON also makes any cross-site browser request need a CORS
-    // preflight, which fails without CORS headers
-    if (
-        request.method !== "POST" ||
-        !request.headers.get("content-type")?.includes("application/json")
-    ) {
+    // preflight, which fails without CORS headers. Only the type before any
+    // parameters counts: "text/plain; x=application/json" needs none.
+    const mediaType = (request.headers.get("content-type") ?? "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase()
+    if (request.method !== "POST" || mediaType !== "application/json") {
         return createResponse(
             {
                 error: {

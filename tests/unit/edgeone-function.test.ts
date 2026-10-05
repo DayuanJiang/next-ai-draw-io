@@ -26,6 +26,21 @@ describe("EdgeOne chat completions function", () => {
             env: {},
         })
         expect(res.status).toBe(400)
+        // A plain-text type that only mentions JSON needs no CORS preflight
+        const disguised = await onRequest({
+            request: request({
+                "Content-Type": "text/plain; x=application/json",
+            }),
+            env: {},
+        })
+        expect(disguised.status).toBe(400)
+        const withCharset = await onRequest({
+            request: request({
+                "Content-Type": "application/json; charset=utf-8",
+            }),
+            env: {},
+        })
+        expect(withCharset.status).toBe(200)
     })
 
     it("checks the access code when ACCESS_CODE_LIST is set", async () => {

@@ -77,11 +77,12 @@ async function getJson(
 
 /**
  * Where to list from without the user's base URL: where chat goes then. For
- * Ollama that is the server's Ollama, else the SDK's local default; a local
- * default in PROVIDER_INFO (SGLang's) only fills the settings form.
+ * Ollama without a key that is the server's Ollama, else the SDK's local
+ * default; a local default in PROVIDER_INFO (SGLang's) only fills the
+ * settings form.
  */
-function listFallbackUrl(provider: ProviderName): string {
-    if (provider === "ollama") {
+function listFallbackUrl(provider: ProviderName, apiKey?: string): string {
+    if (provider === "ollama" && !apiKey) {
         return process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434/api"
     }
     const url = PROVIDER_INFO[provider].defaultBaseUrl
@@ -98,7 +99,7 @@ export async function listProviderModels(
     { apiKey, baseUrl }: { apiKey?: string; baseUrl?: string },
     fetchFn: typeof fetch = fetch,
 ): Promise<ListedModel[]> {
-    const base = normalizeBaseUrl(baseUrl || listFallbackUrl(provider))
+    const base = normalizeBaseUrl(baseUrl || listFallbackUrl(provider, apiKey))
     const bearer: Record<string, string> = apiKey
         ? { Authorization: `Bearer ${apiKey}` }
         : {}

@@ -224,6 +224,39 @@ async function main() {
     let configWatcher = null
     let restartPending = false
 
+    // Restart Next.js when the preset env vars really changed
+    async function applyPresetChange() {
+        if (restartPending) return
+        const newContent = readPresetEnvFile()
+        if (newContent === null || newContent === presetEnvContent) return
+
+        restartPending = true
+        presetEnvContent = newContent
+        console.log(
+            "\n🔄 Preset configuration changed, restarting Next.js server...",
+        )
+
+        // Kill current Next.js process
+        killProcess(nextProcess)
+
+        // Wait a bit for process to die
+        await new Promise((r) => setTimeout(r, 1000))
+
+        // Reload preset and restart
+        nextProcess = startNextServer(loadPresetEnv(newContent))
+
+        try {
+            await waitForServer(NEXT_URL)
+            console.log("✅ Next.js server restarted with new configuration\n")
+        } catch (err) {
+            console.error("❌ Failed to restart Next.js:", err.message)
+        }
+
+        restartPending = false
+        // A change written during the restart was skipped above
+        applyPresetChange()
+    }
+
     function setupConfigWatcher() {
         if (!existsSync(userDataPath)) {
             // Directory doesn't exist yet, check again later
@@ -236,45 +269,13 @@ async function main() {
             configWatcher = watch(
                 userDataPath,
                 { persistent: false },
-                async (_eventType, filename) => {
-                    if (filename !== PRESET_ENV_FILE || restartPending) return
-
-                    // Only restart when the preset env vars really changed
-                    const newContent = readPresetEnvFile()
-                    if (newContent === null || newContent === presetEnvContent)
-                        return
-
-                    restartPending = true
-                    presetEnvContent = newContent
-                    console.log(
-                        "\n🔄 Preset configuration changed, restarting Next.js server...",
-                    )
-
-                    // Kill current Next.js process
-                    killProcess(nextProcess)
-
-                    // Wait a bit for process to die
-                    await new Promise((r) => setTimeout(r, 1000))
-
-                    // Reload preset and restart
-                    nextProcess = startNextServer(loadPresetEnv(newContent))
-
-                    try {
-                        await waitForServer(NEXT_URL)
-                        console.log(
-                            "✅ Next.js server restarted with new configuration\n",
-                        )
-                    } catch (err) {
-                        console.error(
-                            "❌ Failed to restart Next.js:",
-                            err.message,
-                        )
-                    }
-
-                    restartPending = false
+                (_eventType, filename) => {
+                    if (filename === PRESET_ENV_FILE) applyPresetChange()
                 },
             )
             console.log("👀 Watching for preset configuration changes...")
+            // Electron may have written its preset before the watch started
+            applyPresetChange()
         } catch (_err) {
             // Directory might not be ready yet, try again later
             setTimeout(setupConfigWatcher, 5000)

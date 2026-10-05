@@ -14,6 +14,7 @@ import { checkAccessCode } from "@/lib/access-code"
 import {
     CACHE_POINT,
     getAIModel,
+    getServerProvider,
     SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
     usesServerCredentials,
@@ -49,6 +50,7 @@ import {
 } from "@/lib/server-model-config"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
+import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import {
@@ -245,15 +247,17 @@ async function handleChatRequest(req: Request): Promise<Response> {
     } = getAIModel(clientOverrides)
 
     // On the server's own keys, only run models the server offers: a server
-    // model picked by id (its model name is fixed above) or one in AI_MODEL.
-    // With their own key, users can run any model.
+    // model picked by id (its model name is fixed above) or one in AI_MODEL
+    // on AI_PROVIDER. With their own key, users can run any model.
     const onServerCredentials = usesServerCredentials(
         resolvedProvider,
         clientOverrides,
     )
     const envModels =
         process.env.AI_MODEL?.split(",").map((m) => m.trim()) || []
-    if (onServerCredentials && !serverModel && !envModels.includes(modelId)) {
+    const offeredInEnv =
+        envModels.includes(modelId) && resolvedProvider === getServerProvider()
+    if (onServerCredentials && !serverModel && !offeredInEnv) {
         return Response.json(
             {
                 error: `Model "${modelId}" is not available on this server. Add your own API key in Settings to use it.`,
@@ -264,10 +268,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
-    // server's keys. Decided by the key actually used: a key header the
-    // provider never reads must not skip it.
+    // server's keys, or on its keyless Ollama or EdgeOne. Decided by the key
+    // actually used: a key header the provider never reads must not skip it.
+    const onServerEndpoint =
+        (resolvedProvider === "ollama" || resolvedProvider === "edgeone") &&
+        !clientOverrides.apiKey &&
+        !normalizeBaseUrl(req.headers.get("x-ai-base-url") ?? "")
     const countsQuota =
-        isQuotaEnabled() && onServerCredentials && userId !== "anonymous"
+        isQuotaEnabled() &&
+        (onServerCredentials || onServerEndpoint) &&
+        userId !== "anonymous"
     if (countsQuota) {
         const quotaCheck = await checkAndIncrementRequest(userId, {
             requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,

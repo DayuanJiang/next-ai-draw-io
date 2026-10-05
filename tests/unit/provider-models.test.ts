@@ -118,6 +118,18 @@ describe("listProviderModels", () => {
         ])
     })
 
+    it("lists Ollama Cloud with a user's key, like chat", async () => {
+        // The user's key must not go to the server's Ollama
+        const { fn, calls } = answer({ models: [{ name: "gpt-oss:120b" }] })
+        process.env.OLLAMA_BASE_URL = "http://ollama.internal:11434"
+        try {
+            await listProviderModels("ollama", { apiKey: "user-key" }, fn)
+        } finally {
+            delete process.env.OLLAMA_BASE_URL
+        }
+        expect(calls[0].url).toBe("https://ollama.com/api/tags")
+    })
+
     it("does not use SGLang's local address as a default", async () => {
         const { fn, calls } = answer({ data: [] })
         await expect(

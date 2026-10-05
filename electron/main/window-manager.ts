@@ -106,11 +106,13 @@ export function getAppUrl(): string | null {
 }
 
 /**
- * Point the main window at a new app server URL
- * (the restarted server can come up on a different port)
+ * Point the main window at the restarted app server (it can come up on a
+ * different port). On the same port the page reloads, so it fetches the new
+ * preset's server models instead of sending the old preset's choice.
  */
 export function setAppUrl(url: string): void {
     if (url === appUrl) {
+        mainWindow?.webContents.reload()
         return
     }
     appUrl = url

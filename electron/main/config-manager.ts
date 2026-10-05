@@ -159,6 +159,10 @@ function getConfigFilePath(): string {
     return path.join(userDataPath, CONFIG_FILE_NAME)
 }
 
+// The presets file exists but the last read failed: a save now would
+// replace the user's presets with the empty list that read returned
+let presetsUnreadable = false
+
 /**
  * Load presets from the config file
  * Decrypts sensitive fields automatically
@@ -175,8 +179,24 @@ export function loadPresets(): ConfigPresetsFile {
         }
     }
 
+    let content: string
     try {
-        const content = readFileSync(configPath, "utf-8")
+        content = readFileSync(configPath, "utf-8")
+        presetsUnreadable = false
+    } catch (error) {
+        // Often only for now (on Windows an antivirus scanner can hold the
+        // file): keep the file, and refuse saves based on this empty list
+        console.error("Failed to read config presets:", error)
+        presetsUnreadable = true
+        return {
+            version: 1,
+            currentPresetId: null,
+            presets: [],
+            userLocale: undefined,
+        }
+    }
+
+    try {
         const data = JSON.parse(content) as ConfigPresetsFile
 
         // Decrypt sensitive fields in each preset
@@ -211,6 +231,11 @@ export function loadPresets(): ConfigPresetsFile {
  * Encrypts sensitive fields automatically
  */
 export function savePresets(data: ConfigPresetsFile): void {
+    if (presetsUnreadable) {
+        throw new Error(
+            "The presets file could not be read, so it was not overwritten. Please try again.",
+        )
+    }
     const configPath = getConfigFilePath()
     const userDataPath = app.getPath("userData")
 

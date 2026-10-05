@@ -44,14 +44,28 @@ function loadSavedPort(): number | null {
 }
 
 /**
+ * Why the legacy port was not used at this launch: "EACCES" when the system
+ * reserves it (Windows excludes port ranges for Hyper-V, which can change
+ * on each boot), "EADDRINUSE" when another process holds it for now
+ */
+let legacyPortError: string | null = null
+
+/**
  * Remember the port of the first production launch. A later launch that
  * found it taken keeps it remembered: the user's data lives under that
- * origin, and the next launch goes back to it once it is free.
+ * origin, and the next launch goes back to it once it is free. Only the two
+ * fixed ports count, and 13370 only when the system reserves the legacy
+ * port: while another process holds it (such as the previous version still
+ * quitting after an update), the next launch tries it again.
  */
 export function saveServerPort(port: number): void {
     if (!app.isPackaged || loadSavedPort() !== null) {
         return
     }
+    const fixed =
+        port === PORT_CONFIG.legacyProduction ||
+        (port === PORT_CONFIG.production && legacyPortError === "EACCES")
+    if (!fixed) return
     try {
         writeFileSync(getSavedPortPath(), JSON.stringify({ port }), "utf-8")
     } catch (error) {
@@ -60,21 +74,29 @@ export function saveServerPort(port: number): void {
 }
 
 /**
- * Check if a specific port is available
+ * Try to listen on a port. Resolves to null when it is free, else to the
+ * error code.
  */
-export function isPortAvailable(port: number): Promise<boolean> {
+function portError(port: number): Promise<string | null> {
     return new Promise((resolve) => {
         const server = net.createServer()
         server.once("error", (err: NodeJS.ErrnoException) => {
             console.warn(`Port ${port} unavailable: ${err.code}`)
-            resolve(false)
+            resolve(err.code ?? "unknown")
         })
         server.once("listening", () => {
             server.close()
-            resolve(true)
+            resolve(null)
         })
         server.listen(port, "127.0.0.1")
     })
+}
+
+/**
+ * Check if a specific port is available
+ */
+export async function isPortAvailable(port: number): Promise<boolean> {
+    return (await portError(port)) === null
 }
 
 /**
@@ -123,7 +145,8 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
     // In production, try legacy port first to preserve existing users' localStorage
     if (!isDev) {
         const legacyPort = PORT_CONFIG.legacyProduction
-        if (await isPortAvailable(legacyPort)) {
+        legacyPortError = await portError(legacyPort)
+        if (legacyPortError === null) {
             allocatedPort = legacyPort
             return legacyPort
         }

@@ -229,6 +229,27 @@ describe("streamErrorText", () => {
             message: "bad key",
         })
     })
+
+    it("classifies a provider error sent as plain text", () => {
+        // DeepSeek's SDK sends errors in the stream as a string
+        const text = "Insufficient Balance for account 42"
+        expect(JSON.parse(streamErrorText(text))).toEqual({
+            type: "provider",
+            code: "insufficient_quota",
+            message: text,
+        })
+        expect(JSON.parse(streamErrorText(text, true)).message).not.toMatch(
+            /account 42/,
+        )
+    })
+
+    it("classifies Bedrock's throttling sent in the stream", () => {
+        // Bedrock's ThrottlingException as a plain object, not an API error
+        const throttled = {
+            message: "Too many tokens, please wait before trying again.",
+        }
+        expect(JSON.parse(streamErrorText(throttled)).code).toBe("rate_limited")
+    })
 })
 
 describe("isToolCallError", () => {

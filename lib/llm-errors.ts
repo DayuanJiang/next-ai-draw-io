@@ -80,7 +80,8 @@ const GENERAL_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         /invalid[_ ]api[_ ]key|incorrect api key|unauthorized/i,
         "invalid_api_key",
     ],
-    [/rate limit|too many requests/i, "rate_limited"],
+    // "too many tokens": Bedrock's throttling
+    [/rate limit|too many requests|too many tokens/i, "rate_limited"],
     [
         /Cannot connect to API|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|fetch failed/i,
         "cannot_connect",
@@ -115,8 +116,16 @@ function problemDetail(body: string): string | undefined {
  * it can name the server's account, role or internal hosts.
  */
 export function streamErrorText(error: unknown, hideDetails = false): string {
-    // The SDK passes an invalid tool call's error as a plain string
-    if (typeof error === "string") return error
+    // The SDK passes an invalid tool call's error as a plain string. Other
+    // strings come from providers (DeepSeek's SDK sends stream errors so).
+    if (
+        typeof error === "string" &&
+        /^(Invalid input for tool|Model tried to call unavailable tool)/.test(
+            error,
+        )
+    ) {
+        return error
+    }
     if (isToolCallError(error)) return (error as Error).message
     const classified = classifyLLMError(error)
     if (hideDetails) {

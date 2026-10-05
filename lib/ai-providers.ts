@@ -639,6 +639,8 @@ interface Endpoint {
     fetch?: typeof fetch
     authToken?: string // Anthropic Bearer auth
     resourceName?: string // Azure
+    // baseURL comes from the settings or env, not the provider's default
+    configuredBaseURL?: boolean
 }
 
 /**
@@ -679,11 +681,10 @@ function createModel(
     switch (provider) {
         case "openai": {
             const openaiProvider = createOpenAI(opts)
-            // A custom base URL is usually a proxy that only has Chat
-            // Completions; the official endpoint uses the Responses API,
-            // which returns reasoning for the o-series and gpt-5 or later
-            return e.baseURL &&
-                e.baseURL !== PROVIDER_INFO.openai.defaultBaseUrl
+            // A configured base URL is usually a proxy that only has Chat
+            // Completions; without one the Responses API is used, which
+            // returns reasoning for the o-series and gpt-5 or later
+            return e.configuredBaseURL
                 ? openaiProvider.chat(modelId)
                 : openaiProvider(modelId)
         }
@@ -899,6 +900,9 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                       ...(overrides?.awsSessionToken && {
                           sessionToken: overrides.awsSessionToken,
                       }),
+                      // Without an apiKey the SDK reads the server's
+                      // AWS_BEARER_TOKEN_BEDROCK, which wins over the keys
+                      apiKey: "",
                   })
                 : adminAccessKeyId && adminSecretAccessKey
                   ? createAmazonBedrock({
@@ -955,7 +959,13 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
         }
 
         case "ollama": {
-            const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
+            // Like other providers, a user's key never goes to the server's
+            // base URL; without a base URL it is an Ollama Cloud key
+            const baseURL =
+                overrides?.baseUrl ||
+                (overrides?.apiKey
+                    ? PROVIDER_INFO.ollama.defaultBaseUrl
+                    : process.env.OLLAMA_BASE_URL)
             // SECURITY: When client provides a custom base URL, only use
             // client-provided API key. Never fall back to server OLLAMA_API_KEY
             // to prevent leaking server credentials to user-controlled endpoints.
@@ -1003,16 +1013,24 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             const publicDefault = defaultUrl?.startsWith("https://")
                 ? defaultUrl
                 : undefined
-            const baseURL = resolveBaseURL(
+            const configuredBaseURL = resolveBaseURL(
                 overrides?.apiKey,
                 overrides?.baseUrl,
                 resolveBaseUrlEnv(overrides, baseUrlEnv),
-                SDK_KNOWS_ENDPOINT.has(provider) &&
-                    !(provider === "openai" && overrides?.apiKey)
-                    ? undefined
-                    : publicDefault,
             )
-            if (!baseURL && !SDK_KNOWS_ENDPOINT.has(provider)) {
+            const baseURL =
+                configuredBaseURL ||
+                (SDK_KNOWS_ENDPOINT.has(provider) &&
+                !(provider === "openai" && overrides?.apiKey)
+                    ? undefined
+                    : publicDefault)
+            // With a user's Azure key the SDK would read the server's
+            // AZURE_RESOURCE_NAME
+            if (
+                !baseURL &&
+                (!SDK_KNOWS_ENDPOINT.has(provider) ||
+                    (provider === "azure" && overrides?.apiKey))
+            ) {
                 throw new Error(
                     `${PROVIDER_INFO[provider].label} needs a base URL. Add it in the model settings.`,
                 )
@@ -1020,6 +1038,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             model = createModel(provider, modelId, {
                 apiKey,
                 baseURL,
+                configuredBaseURL: !!configuredBaseURL,
                 fetch: guardedFetch,
                 // Bearer auth for Anthropic when there is no API key
                 authToken:
@@ -1036,6 +1055,11 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     }
 
     return { model, providerOptions, modelId, provider }
+}
+
+/** The provider of the server's own config: AI_PROVIDER, or the one with a key */
+export function getServerProvider(): ProviderName | null {
+    return (process.env.AI_PROVIDER as ProviderName) || detectProvider()
 }
 
 /**
