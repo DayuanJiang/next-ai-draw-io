@@ -16,14 +16,31 @@ export type NewDiagram =
  * or null.
  */
 export function reservedIdError(input: string): string | null {
-    const ID = String.raw`\bid\s*=\s*["'][01]["']`
-    const shape = new RegExp(
-        String.raw`<mxCell\b(?=[^>]*${ID})(?=[^>]*\b(?:vertex|edge)\s*=\s*["']1["'])|<(?:UserObject|object)\b[^>]*${ID}`,
+    if (/<(mxGraphModel|mxfile)\b/.test(input)) return null
+    // Each opening tag with its attributes; quoted values are read as a
+    // whole, so text such as label="id='1'" is not an attribute
+    const tags = input.matchAll(
+        /<(mxCell|UserObject|object)\b((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*\/?>/g,
     )
-    if (/<(mxGraphModel|mxfile)\b/.test(input) || !shape.test(input)) {
-        return null
+    for (const [, tag, attrText] of tags) {
+        const attrs = new Map<string, string>()
+        for (const [, name, double, single] of attrText.matchAll(
+            /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g,
+        )) {
+            attrs.set(name, double ?? single)
+        }
+        const id = attrs.get("id")
+        if (id !== "0" && id !== "1") continue
+        // A wrapper's id is its cell's; an mxCell counts as a shape or edge
+        if (
+            tag !== "mxCell" ||
+            attrs.get("vertex") === "1" ||
+            attrs.get("edge") === "1"
+        ) {
+            return 'Cell ids "0" and "1" are the root cells, which are added automatically. Give shapes and edges ids starting at "2".'
+        }
     }
-    return 'Cell ids "0" and "1" are the root cells, which are added automatically. Give shapes and edges ids starting at "2".'
+    return null
 }
 
 /**

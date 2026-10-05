@@ -156,9 +156,15 @@ describe("markPageSeen", () => {
         expect(checkEditGate(marked, live).ok).toBe(false)
     })
 
-    it("counts everything as seen when the model saw nothing before", () => {
-        // It has no old copy of the other pages to edit from
+    it("does not count other pages when the record of what was seen is empty", () => {
+        // Empty also after load_diagram or a page tool on unseen changes,
+        // when the model may still remember an older copy of the pages
         const live = doc("a1", "b1")
+        expect(markPageSeen("", live, { page_id: "A" })).toBe("")
+    })
+
+    it("counts a one-page document as seen from its only page", () => {
+        const live = `<mxfile>${page("A", "a1")}</mxfile>`
         expect(markPageSeen("", live, { page_id: "A" })).toBe(live)
     })
 })

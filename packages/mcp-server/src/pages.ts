@@ -52,9 +52,12 @@ export function generatePageId(): string {
     return `${a}-${b}`
 }
 
-/** Any cell besides the root cells "0" and "1" */
+/**
+ * Any cell besides the root cells "0" and "1", or a page in draw.io's
+ * compressed format (text instead of a model), which is not checked further
+ */
 export const hasCells = (xml: string) =>
-    /<(mxCell\b[^>]*\bid\s*=\s*["'](?![01]["'])|UserObject\b|object\b)/.test(
+    /<(mxCell\b[^>]*\bid\s*=\s*["'](?![01]["'])|UserObject\b|object\b)|<diagram\b[^>]*>\s*[^\s<]/.test(
         xml,
     )
 

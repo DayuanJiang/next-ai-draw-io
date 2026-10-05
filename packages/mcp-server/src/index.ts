@@ -38,6 +38,7 @@ import {
     onStateChange,
     requestExport,
     requestSync,
+    restoreSavedSession,
     setState,
     shutdown,
     startHttpServer,
@@ -77,6 +78,21 @@ const config = {
 const autosaver = new Autosaver(defaultDataDir())
 onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
 onSessionRecreate((sessionId) => autosaver.load(sessionId))
+
+// A one-page view that does not count for the whole document (edit-gate.ts)
+const OTHER_PAGES_UNSEEN =
+    "You have not seen the other pages in their current state."
+
+/**
+ * The browser's state of a session. After it expired (or the process
+ * restarted) the saved file comes back first, so a tool never builds on an
+ * older copy and then overwrites the file. Call it before requestSync or
+ * requestExport, which need the state.
+ */
+function sessionState(sessionId: string) {
+    restoreSavedSession(sessionId)
+    return getState(sessionId)
+}
 
 // Session state (single session for simplicity)
 let currentSession: {
@@ -353,7 +369,7 @@ Rules: cells are siblings (never nested), ids are unique per page and start from
             log.info(`Setting diagram content, ${xml.length} chars`)
 
             // Sync from browser state first
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
             }
@@ -481,7 +497,7 @@ server.registerTool(
 
             // Save the user's current state before replacing (same flow as
             // create_new_diagram).
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
             }
@@ -605,7 +621,7 @@ server.registerTool(
             // embed/sync path can hand back a bare <mxGraphModel>, and adopting
             // it verbatim would silently strip a multi-page document down to
             // one page on the next write.
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
@@ -660,7 +676,7 @@ server.registerTool(
                 const next =
                     currentSession.lastSeenXml === liveXml
                         ? "Build your operations on this XML and retry."
-                        : "Other pages changed too: call get_diagram without a page selector, then retry."
+                        : `${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector, then retry.`
                 return {
                     content: [
                         {
@@ -775,8 +791,10 @@ server.registerTool(
                 }
             }
 
-            // Request browser to push fresh state and wait for it
+            // Request browser to push fresh state and wait for it (an
+            // expired session first gets its saved file back to sync)
             let staleNote = ""
+            restoreSavedSession(currentSession.id)
             const syncRequested = requestSync(currentSession.id)
             if (syncRequested) {
                 const synced = await waitForSync(currentSession.id)
@@ -790,7 +808,7 @@ server.registerTool(
             // Fetch latest state from browser, re-normalising to mxfile so a
             // bare <mxGraphModel> pushed back by the embed/sync path doesn't
             // strip page structure (see edit_diagram for the same guard).
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
@@ -816,19 +834,7 @@ server.registerTool(
             // The model is now looking at the current state. Record the raw
             // store value — the gate's fast path is plain string equality
             // against the store, with a structural comparison as fallback.
-            // One page shown counts for all only if the others are unchanged.
             const liveXml = browserState?.xml || currentSession.xml
-            currentSession.lastSeenXml = hasPageSelector(pageSelector)
-                ? markPageSeen(
-                      currentSession.lastSeenXml,
-                      liveXml,
-                      pageSelector,
-                  )
-                : liveXml
-            const otherPagesNote =
-                currentSession.lastSeenXml === liveXml
-                    ? ""
-                    : "\n\nNote: other pages changed since you last saw them. Call get_diagram without a page selector before editing."
             const doc = parseMxfile(currentSession.xml)
             const pages = doc ? listPagesFromDoc(doc) : []
             const pageList = pages.length
@@ -837,6 +843,7 @@ server.registerTool(
 
             // No selector → return full mxfile
             if (!hasPageSelector(pageSelector)) {
+                currentSession.lastSeenXml = liveXml
                 return {
                     content: [
                         {
@@ -863,6 +870,17 @@ server.registerTool(
                     isError: true,
                 }
             }
+            // One page shown counts for all only if the others are as the
+            // model saw them last
+            currentSession.lastSeenXml = markPageSeen(
+                currentSession.lastSeenXml,
+                liveXml,
+                pageSelector,
+            )
+            const otherPagesNote =
+                currentSession.lastSeenXml === liveXml
+                    ? ""
+                    : `\n\nNote: ${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector before editing.`
             return {
                 content: [
                     {
@@ -1002,7 +1020,8 @@ server.registerTool(
             if (previewStalled(currentSession.id)) {
                 return previewStalledError(currentSession.id)
             }
-            const xml = getState(currentSession.id)?.xml || currentSession.xml
+            const xml =
+                sessionState(currentSession.id)?.xml || currentSession.xml
             if (!hasCells(xml)) {
                 return {
                     content: [{ type: "text", text: "The diagram is empty." }],
@@ -1131,7 +1150,7 @@ server.registerTool(
 
             // Fetch latest state, re-normalised to mxfile so a page
             // selector works on a bare <mxGraphModel> pushed by the browser
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
@@ -1229,7 +1248,7 @@ server.registerTool(
             const browserFormat =
                 detectedFormat === "drawio.svg" ? "xmlsvg" : detectedFormat
 
-            const state = getState(currentSession.id)
+            const state = sessionState(currentSession.id)
             if (!state) {
                 return {
                     content: [
@@ -1363,7 +1382,7 @@ async function loadMxfileForMutation(): Promise<
         }
     }
     // Pull latest from browser so we don't clobber autosaved changes.
-    const browserState = getState(currentSession.id)
+    const browserState = sessionState(currentSession.id)
     if (browserState?.xml) {
         currentSession.xml = browserState.xml
     }

@@ -85,6 +85,15 @@ describe("hasCells", () => {
         )
     })
 
+    it("counts a compressed page as having cells", () => {
+        // draw.io's compressed format: the page's model is text
+        expect(
+            hasCells(
+                `<mxfile><diagram id="p" name="P">dZHBDoIwDIafhjtsGPWM6MkTB8/LVmBxrGQMQZ/eLRuIUS/bv/VfmybF</diagram></mxfile>`,
+            ),
+        ).toBe(true)
+    })
+
     it("counts cells with spaces around the =", () => {
         expect(hasCells(`<mxCell id = "a" vertex="1" parent="1"/>`)).toBe(true)
         expect(
@@ -106,6 +115,27 @@ describe("reservedIdError", () => {
                 `<UserObject id="1" label="Docs"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>`,
             ),
         ).toMatch(/"0" and "1"/)
+        // Other attributes ending in id, and id text inside a label
+        expect(
+            reservedIdError(
+                `<UserObject label="Server" rack-id="1" id="7"><mxCell vertex="1" parent="1"/></UserObject>`,
+            ),
+        ).toBeNull()
+        expect(
+            reservedIdError(
+                `<UserObject id="u" label="Example: id='1'"><mxCell vertex="1" parent="1"/></UserObject>`,
+            ),
+        ).toBeNull()
+        expect(
+            reservedIdError(
+                `<mxCell id="5" data-id="0" vertex="1" parent="1"/>`,
+            ),
+        ).toBeNull()
+        expect(
+            reservedIdError(
+                `<mxCell id="5" value="id=&quot;1&quot; vertex=&quot;1&quot;" vertex="1" parent="1"/>`,
+            ),
+        ).toBeNull()
         // A whole model has its own root cells
         expect(
             reservedIdError(

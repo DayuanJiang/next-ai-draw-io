@@ -32,6 +32,7 @@ function readBody(
     req.on("end", () => cb(Buffer.concat(chunks).toString("utf8")))
 }
 
+import { contentFingerprint } from "./edit-gate.ts"
 import {
     addHistory,
     clearHistory,
@@ -40,7 +41,7 @@ import {
     updateLastHistorySvg,
 } from "./history.ts"
 import { log } from "./logger.ts"
-import { BLANK_MXFILE, hasCells } from "./pages.ts"
+import { BLANK_MXFILE } from "./pages.ts"
 
 // Configurable draw.io embed URL for private deployments
 const DRAWIO_BASE_URL =
@@ -82,17 +83,28 @@ function getMostRecentSessionId(): string | null {
     return mostRecent?.id || null
 }
 
+/**
+ * Give a session whose state is gone (it expired, or the MCP process
+ * restarted) its auto-saved diagram back. The MCP tools call this before
+ * they read the state, so they never build on an older copy and then
+ * overwrite the file. Not a change worth saving again.
+ */
+export function restoreSavedSession(sessionId: string): void {
+    if (stateStore.has(sessionId) || !isValidSessionId(sessionId)) return
+    const saved = savedStateLoader?.(sessionId)
+    if (saved) setState(sessionId, saved, undefined, false, false)
+}
+
 function ensureSessionStateInitialized(sessionId: string): void {
     if (!sessionId) return
     if (!isValidSessionId(sessionId)) return
+    restoreSavedSession(sessionId)
     if (stateStore.has(sessionId)) return
 
-    // The session's saved diagram, so a blank page never replaces that file.
     // Not a change worth saving: the browser fills it on its next push
     // A blank diagram keeps the draw.io spinner (spin=1) from waiting
     // forever when no load(xml) is ever sent
-    const saved = savedStateLoader?.(sessionId)
-    setState(sessionId, saved || BLANK_MXFILE, undefined, false, false)
+    setState(sessionId, BLANK_MXFILE, undefined, false, false)
 }
 
 interface SessionState {
@@ -169,7 +181,9 @@ export function setState(
         serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
         lastUpdated: new Date(),
         lastPolled: existing?.lastPolled,
-        svg: svg || existing?.svg, // Preserve cached SVG if not provided
+        // The image of this XML, never an older one's: a write without an
+        // image (AI write, sync reply) leaves none until the browser sends it
+        svg: svg || undefined,
         syncRequested: undefined, // Clear sync request when browser pushes state
         exportFormat: existing?.exportFormat, // Preserve pending export request
         exportXml: existing?.exportXml, // Preserve pending projection
@@ -584,8 +598,14 @@ function handleRestoreApi(
 
             // Edits in the browser since the last entry are not in history
             // yet: keep them, so the restore can be undone
+            // (any state besides a blank page; a cleared document with its
+            // own pages counts)
             const current = stateStore.get(sessionId)
-            if (current && hasCells(current.xml)) {
+            if (
+                current &&
+                contentFingerprint(current.xml) !==
+                    contentFingerprint(BLANK_MXFILE)
+            ) {
                 addHistory(sessionId, current.xml, current.svg)
             }
             const newVersion = setState(sessionId, entry.xml)
@@ -621,7 +641,12 @@ function handleHistorySvgApi(
                 return
             }
 
-            updateLastHistorySvg(sessionId, svg)
+            // The browser took it of the diagram it just loaded: the state
+            const state = stateStore.get(sessionId)
+            if (state) {
+                updateLastHistorySvg(sessionId, svg, state.xml)
+                state.svg = svg
+            }
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true }))
         } catch {

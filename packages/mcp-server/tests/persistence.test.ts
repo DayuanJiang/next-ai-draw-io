@@ -3,6 +3,7 @@
  */
 
 import {
+    chmodSync,
     existsSync,
     mkdtempSync,
     readdirSync,
@@ -82,6 +83,23 @@ describe("Autosaver", () => {
         saver.flush()
         expect(saver.load("mcp-back")).toBe(DIAGRAM)
         expect(new Autosaver(null).load("mcp-back")).toBeNull()
+    })
+
+    it("never replaces a saved file it could not read", () => {
+        const saver = new Autosaver(tempDir(), 10)
+        saver.schedule("mcp-locked", DIAGRAM)
+        saver.flush()
+        const path = saver.pathFor("mcp-locked") as string
+        chmodSync(path, 0o000)
+        try {
+            expect(saver.load("mcp-locked")).toBeNull()
+            // The blank page shown instead must not overwrite the diagram
+            saver.schedule("mcp-locked", BLANK)
+            saver.flush()
+        } finally {
+            chmodSync(path, 0o644)
+        }
+        expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
     })
 
     it("does nothing when saving is off", () => {

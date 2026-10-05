@@ -144,7 +144,14 @@ function showNotice(text) {
     noticeTimer = setTimeout(() => el.classList.remove('open'), 8000);
 }
 
-// source is 'sync' for replies to a server sync request, else 'edit'
+// Same rule as hasCells in pages.ts: a cell besides the root cells, or a
+// compressed page
+function hasCells(xml) {
+    return /<(mxCell\b[^>]*\bid\s*=\s*["'](?![01]["'])|UserObject\b|object\b)|<diagram\b[^>]*>\s*[^\s<]/.test(xml || '');
+}
+
+// source is 'sync' for replies to a server sync request, 'recover' for the
+// tab's copy after the server recovered the session, else 'edit'
 async function pushState(xml, svg = '', baseVersion = currentVersion, source = 'edit') {
     if (!sessionId) return;
     try {
@@ -157,7 +164,11 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
         // 409: the AI wrote a newer version; load it now
         else if (r.status === 409) {
             const d = await r.json().catch(() => ({}));
-            if (d.savedToHistory) showNotice('The AI changed the diagram while you were editing. Your last change was saved in History.');
+            if (d.savedToHistory) {
+                showNotice(source === 'recover'
+                    ? 'The diagram was restored from its saved file. What this tab showed before is in History.'
+                    : 'The AI changed the diagram while you were editing. Your last change was saved in History.');
+            }
             poll();
         }
     } catch (e) { console.error('Push failed:', e); }
@@ -174,10 +185,18 @@ async function poll() {
         const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
         if (!r.ok) return;
         const s = await r.json();
-        // The server lost this session (e.g. it expired) and rebuilt it
-        // with a blank diagram: push back what the browser shows.
+        // The server lost this session (it expired, or the MCP process
+        // restarted) and rebuilt it. Blank: push back what the browser
+        // shows. From the auto-save file, which can hold an AI write this
+        // tab never loaded: show that, and keep this tab's copy in History
+        // (a push based on version 0 is refused and saved there).
         if (s.version < knownVersion && lastXml) {
-            pushState(lastXml);
+            if (!hasCells(s.xml)) {
+                pushState(lastXml);
+            } else {
+                currentVersion = 0;
+                if (s.xml !== lastXml) pushState(lastXml, '', 0, 'recover');
+            }
         }
         // Load new diagram from server (before export, so we export latest).
         // While a page-targeted projection is on screen, only the restore

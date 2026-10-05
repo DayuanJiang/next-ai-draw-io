@@ -8,6 +8,7 @@
 
 import http from "node:http"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
     getState,
@@ -23,6 +24,8 @@ import {
 let port = 0
 
 beforeAll(async () => {
+    // XML parsing, as the server installs it at startup
+    installDomPolyfill()
     port = await startHttpServer(40000 + Math.floor(Math.random() * 10000))
 })
 
@@ -348,6 +351,67 @@ describe("history restore", () => {
         })
         expect(res.status).toBe(200)
         expect(getState(id)?.xml).toBe("<mxfile>5</mxfile>")
+    })
+
+    const page = (cellId: string) =>
+        `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+
+    it("gives a thumbnail only to the entry it shows", async () => {
+        const id = "mcp-history-thumb"
+        setState(id, page("shown"))
+        // The last entry is another diagram (a tab's copy kept on recovery)
+        addHistory(id, page("other"))
+        await postJson("/api/history-svg", {
+            sessionId: id,
+            svg: "SVG-OF-SHOWN",
+        })
+        expect(getHistory(id).at(-1)?.svg).toBe("")
+        addHistory(id, page("shown"))
+        await postJson("/api/history-svg", {
+            sessionId: id,
+            svg: "SVG-OF-SHOWN",
+        })
+        expect(getHistory(id).at(-1)?.svg).toBe("SVG-OF-SHOWN")
+    })
+
+    it("never pairs the image of an older diagram with a newer one", async () => {
+        const id = "mcp-history-stale-svg"
+        const version = setState(id, page("user"))
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: page("user2"),
+            svg: "SVG-OF-USER2",
+            baseVersion: version,
+        })
+        // An AI write without an image of its own
+        setState(id, page("ai"))
+        addHistory(id, page("older"))
+        const [entry] = getHistory(id)
+        await postJson("/api/restore", { sessionId: id, id: entry.id })
+        const kept = getHistory(id).find((e) => e.xml === page("ai"))
+        expect(kept?.svg).toBe("")
+    })
+
+    it("keeps a cleared document with renamed pages before restoring", async () => {
+        const id = "mcp-history-empty-pages"
+        const emptyPage = (name: string) =>
+            `<diagram id="${name}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>`
+        const cleared = `<mxfile>${emptyPage("Planning")}${emptyPage("Notes")}</mxfile>`
+        addHistory(id, page("before"))
+        setState(id, cleared, undefined, true)
+        const [entry] = getHistory(id)
+        await postJson("/api/restore", { sessionId: id, id: entry.id })
+        expect(getHistory(id).map((e) => e.xml)).toContain(cleared)
+    })
+
+    it("adds no entry for a re-serialized copy of the last one", () => {
+        const id = "mcp-history-dedupe"
+        addHistory(id, page("same"))
+        addHistory(
+            id,
+            page("same").replace("<mxGraphModel>", '<mxGraphModel dx="10">'),
+        )
+        expect(getHistory(id)).toHaveLength(1)
     })
 
     it("keeps manual edits in history before restoring", async () => {

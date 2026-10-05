@@ -120,10 +120,19 @@ export function markPageSeen(
     liveXml: string,
     selector: PageSelector,
 ): string {
-    if (!lastSeenXml) return liveXml
-    const otherPages = (xml: string) => {
+    const parse = (xml: string) => {
         const normalized = normalizeToMxfile(xml)
-        const doc = normalized ? parseMxfile(normalized) : null
+        return normalized ? parseMxfile(normalized) : null
+    }
+    // An empty record also follows load_diagram and page tools that wrote
+    // over unseen changes, when the model may remember older pages: only
+    // a one-page document is then fully seen
+    if (!lastSeenXml) {
+        const pages = parse(liveXml)?.querySelectorAll("diagram").length ?? 1
+        return pages <= 1 ? liveXml : lastSeenXml
+    }
+    const otherPages = (xml: string) => {
+        const doc = parse(xml)
         if (!doc) return null
         findPageElement(doc, selector)?.element.remove()
         return contentFingerprint(serializeMxfile(doc))
