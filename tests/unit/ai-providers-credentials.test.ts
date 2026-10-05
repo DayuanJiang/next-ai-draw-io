@@ -378,25 +378,6 @@ describe("whose keys a request uses", () => {
         expect(provider.chat).not.toHaveBeenCalled()
     })
 
-    it("sends an admin OpenAI key without a URL to the official endpoint", () => {
-        // Its URL variable is named but empty; the SDK would otherwise read
-        // the server's OPENAI_BASE_URL, a proxy for another key
-        process.env.OPENAI_BASE_URL = "https://operator-proxy.example.com/v1"
-        process.env.ADMIN_OPENAI_API_KEY = "panel-key"
-        getAIModel({
-            provider: "openai",
-            modelId: "gpt-5.5",
-            apiKeyEnv: "ADMIN_OPENAI_API_KEY",
-            baseUrlEnv: "ADMIN_OPENAI_BASE_URL",
-        })
-        expect(createOpenAI).toHaveBeenLastCalledWith(
-            expect.objectContaining({
-                apiKey: "panel-key",
-                baseURL: "https://api.openai.com/v1",
-            }),
-        )
-    })
-
     it("uses Chat Completions for any configured base URL", () => {
         // The settings form fills in the official URL for a new provider
         getAIModel({
@@ -425,21 +406,44 @@ describe("whose keys a request uses", () => {
         )
     })
 
-    it("sends the server's Ollama key without a base URL to Ollama Cloud", async () => {
-        // An Ollama key is an Ollama Cloud key: local Ollama has none.
-        // The admin panel saves it as OLLAMA_API_KEY, without a base URL.
+    it("sends the server's Ollama key where OLLAMA_BASE_URL says, or to local Ollama", async () => {
+        // The desktop app's "Ollama (Local)" preset puts its API Key field
+        // into OLLAMA_API_KEY; with no base URL that is the local Ollama
         process.env.OLLAMA_API_KEY = "server-key"
         const { createOllama } = await import("ollama-ai-provider-v2")
-        getAIModel({ provider: "ollama", modelId: "m" })
-        expect(createOllama).toHaveBeenLastCalledWith(
-            expect.objectContaining({ baseURL: "https://ollama.com/api" }),
-        )
-        // Without a key: the SDK's local default
-        delete process.env.OLLAMA_API_KEY
         getAIModel({ provider: "ollama", modelId: "m" })
         expect(vi.mocked(createOllama).mock.lastCall?.[0]).not.toHaveProperty(
             "baseURL",
         )
+        process.env.OLLAMA_BASE_URL = "https://ollama.com/api"
+        getAIModel({ provider: "ollama", modelId: "m" })
+        expect(createOllama).toHaveBeenLastCalledWith(
+            expect.objectContaining({ baseURL: "https://ollama.com/api" }),
+        )
+    })
+
+    it("uses a server model's own Ollama URL variable", async () => {
+        process.env.OLLAMA_BASE_URL = "http://other.internal:11434/api"
+        process.env.MY_OLLAMA_URL = "https://ollama.proxy.example/api"
+        process.env.MY_OLLAMA_KEY = "proxy-key"
+        try {
+            const { createOllama } = await import("ollama-ai-provider-v2")
+            getAIModel({
+                provider: "ollama",
+                modelId: "m",
+                apiKeyEnv: "MY_OLLAMA_KEY",
+                baseUrlEnv: "MY_OLLAMA_URL",
+            })
+            expect(createOllama).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    baseURL: "https://ollama.proxy.example/api",
+                    headers: { Authorization: "Bearer proxy-key" },
+                }),
+            )
+        } finally {
+            delete process.env.MY_OLLAMA_URL
+            delete process.env.MY_OLLAMA_KEY
+        }
     })
 
     it("needs a base URL with a user's Azure key", () => {

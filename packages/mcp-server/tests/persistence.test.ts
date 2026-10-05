@@ -8,6 +8,7 @@ import {
     mkdtempSync,
     readdirSync,
     readFileSync,
+    rmSync,
     utimesSync,
     writeFileSync,
 } from "node:fs"
@@ -99,6 +100,33 @@ describe("Autosaver", () => {
         } finally {
             chmodSync(path, 0o644)
         }
+        expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
+    })
+
+    it("saves again once the file was read, or is gone", () => {
+        const saver = new Autosaver(tempDir(), 10)
+        saver.schedule("mcp-fixed", DIAGRAM)
+        saver.flush()
+        const path = saver.pathFor("mcp-fixed") as string
+        chmodSync(path, 0o000)
+        expect(saver.load("mcp-fixed")).toBeNull()
+        // Permissions fixed; the session is recreated and reads the file
+        chmodSync(path, 0o644)
+        expect(saver.load("mcp-fixed")).toBe(DIAGRAM)
+        const edited = DIAGRAM.replace('id="a"', 'id="b"')
+        saver.schedule("mcp-fixed", edited)
+        saver.flush()
+        expect(readFileSync(path, "utf-8")).toBe(edited)
+
+        // A file that could not be read and was then deleted protects
+        // nothing any more
+        chmodSync(path, 0o000)
+        expect(saver.load("mcp-fixed")).toBeNull()
+        chmodSync(path, 0o644)
+        rmSync(path)
+        expect(saver.load("mcp-fixed")).toBeNull()
+        saver.schedule("mcp-fixed", DIAGRAM)
+        saver.flush()
         expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
     })
 

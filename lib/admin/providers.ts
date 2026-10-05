@@ -213,17 +213,12 @@ export function adminProvidersToConfig(
         indexByProvider.set(p.provider, index + 1)
         if (p.models.length === 0) continue
         const env = credEnvNames(p.provider, index)
-        // An entry with its own key also names its own URL variable, unset
-        // when the URL is empty: the global <P>_BASE_URL may be a proxy for
-        // another key, and the Test used the official endpoint. An Azure
-        // key belongs to one resource, so it keeps the server's.
-        const ownUrl = !!p.baseUrl || (!!p.apiKey && p.provider !== "azure")
         config.providers.push({
             name: displayName(p),
             provider: p.provider,
             models: p.models,
             ...(env.key && p.apiKey ? { apiKeyEnv: env.key } : {}),
-            ...(env.url && ownUrl ? { baseUrlEnv: env.url } : {}),
+            ...(env.url && p.baseUrl ? { baseUrlEnv: env.url } : {}),
             ...(p.isDefault ? { default: true } : {}),
         })
     }
@@ -262,7 +257,12 @@ export function deriveEnvUpdates(
             if (p.baseUrl) updates.GOOGLE_VERTEX_BASE_URL = p.baseUrl
         } else if (p.provider === "ollama") {
             if (p.apiKey) updates.OLLAMA_API_KEY = p.apiKey
-            if (p.baseUrl) updates.OLLAMA_BASE_URL = p.baseUrl
+            // A key without a URL is an Ollama Cloud key, as its Test sends
+            // it; chat sends a server key to OLLAMA_BASE_URL or local Ollama
+            if (p.baseUrl || p.apiKey) {
+                updates.OLLAMA_BASE_URL =
+                    p.baseUrl || PROVIDER_INFO.ollama.defaultBaseUrl || null
+            }
         } else {
             const env = credEnvNames(p.provider, index)
             if (env.key && p.apiKey) updates[env.key] = p.apiKey

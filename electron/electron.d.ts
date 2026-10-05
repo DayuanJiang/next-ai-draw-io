@@ -75,6 +75,10 @@ declare global {
              * preset); returns a function that stops the calls
              */
             onServerRestarted?: (callback: () => void) => () => void
+            /** A chat was saved: open this port next launch */
+            chatSaved?: () => Promise<void>
+            /** The page loaded with this many chats */
+            chatsLoaded?: (count: number) => Promise<void>
         }
 
         /** Settings window Electron API */

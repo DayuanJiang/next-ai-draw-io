@@ -1,0 +1,82 @@
+import { renderHook } from "@testing-library/react"
+import { describe, expect, it, vi } from "vitest"
+import { useDiagramToolHandlers } from "@/hooks/use-diagram-tool-handlers"
+
+const geometry =
+    '<mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>'
+const box = (id: string) =>
+    `<mxCell id="${id}" value="${id}" vertex="1" parent="1">${geometry}</mxCell>`
+
+function setup(partialXml: string) {
+    const refs = {
+        partialXmlRef: { current: partialXml },
+        // A failed edit's preview is still on the canvas, its original kept
+        editDiagramOriginalXmlRef: {
+            current: new Map([["edit-1", "<mxfile>original</mxfile>"]]),
+        },
+        processedToolCallsRef: { current: new Set<string>() },
+        validationRetryCountRef: { current: 0 },
+        chartXMLRef: { current: "" },
+    }
+    const onDisplayChart = vi.fn(
+        (_xml: string, _skipValidation?: boolean): string | null => null,
+    )
+    const { result } = renderHook(() =>
+        useDiagramToolHandlers({
+            ...refs,
+            onDisplayChart,
+            onFetchChart: async () => "",
+            onExport: () => {},
+            enableVlmValidation: false,
+        }),
+    )
+    const addToolOutput = vi.fn()
+    const append = (xml: string) =>
+        result.current.handleToolCall(
+            {
+                toolCall: {
+                    toolCallId: "append-1",
+                    toolName: "append_diagram",
+                    input: { xml },
+                },
+            },
+            addToolOutput,
+        )
+    return { refs, onDisplayChart, addToolOutput, append }
+}
+
+describe("append_diagram and the stored previews", () => {
+    it("takes the stored originals when it draws the completed diagram", async () => {
+        // Otherwise the preview code later loads the failed edit's original
+        // over the completed diagram
+        const { refs, onDisplayChart, append } = setup(
+            `${box("2")}<mxCell id="3" value="3" vertex="1" parent="1"><mxGeometry x="0" y="0" width="8`,
+        )
+        await append('0" height="40" as="geometry"/></mxCell>')
+        expect(onDisplayChart).toHaveBeenCalledTimes(1)
+        expect(onDisplayChart.mock.calls[0][0]).toContain('id="3"')
+        expect(refs.editDiagramOriginalXmlRef.current.size).toBe(0)
+        expect(refs.processedToolCallsRef.current.has("edit-1")).toBe(true)
+    })
+
+    it("leaves them while the diagram is still incomplete", async () => {
+        // Nothing is drawn, so the failed edit's preview must still be undone
+        const { refs, onDisplayChart, append } = setup(
+            `${box("2")}<mxCell id="3" value="3" vertex="1" parent="1"><mxGeometry x="0" y="0" width="8`,
+        )
+        await append('0" height="40"')
+        expect(onDisplayChart).not.toHaveBeenCalled()
+        expect(refs.editDiagramOriginalXmlRef.current.size).toBe(1)
+        expect(refs.processedToolCallsRef.current.has("edit-1")).toBe(false)
+    })
+
+    it("leaves them when the assembled diagram is invalid", async () => {
+        const { refs, onDisplayChart, addToolOutput, append } = setup(
+            `<mxCell id="1" value="root id" vertex="1" parent="1">${geometry}</mxCell><mxCell id="3" value="3" vertex="1" parent="1"><mxGeometry x="0" y="0" width="8`,
+        )
+        await append('0" height="40" as="geometry"/></mxCell>')
+        expect(onDisplayChart).not.toHaveBeenCalled()
+        expect(addToolOutput.mock.calls[0][0].state).toBe("output-error")
+        expect(refs.editDiagramOriginalXmlRef.current.size).toBe(1)
+    })
+})

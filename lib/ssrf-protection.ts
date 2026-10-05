@@ -116,6 +116,14 @@ export function allowPrivateUrls(): boolean {
     return process.env.ALLOW_PRIVATE_URLS !== "false"
 }
 
+/** A redirect the guard below refused; its text is safe to show */
+export class RedirectRefusedError extends Error {
+    constructor() {
+        super("Redirects are not allowed for custom base URLs")
+        this.name = "RedirectRefusedError"
+    }
+}
+
 /**
  * A fetch for requests to a base URL the client chose. With private URLs
  * blocked, a public URL could still redirect the request to an internal
@@ -126,7 +134,7 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
     return async (input, init) => {
         const response = await fetch(input, { ...init, redirect: "manual" })
         if (response.status >= 300 && response.status < 400) {
-            throw new Error("Redirects are not allowed for custom base URLs")
+            throw new RedirectRefusedError()
         }
         return response
     }

@@ -997,17 +997,15 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 ? overrides?.apiKey || undefined
                 : resolveApiKey(overrides, "OLLAMA_API_KEY")
             // Like other providers, a user's key never goes to the server's
-            // base URL. A key without a base URL is an Ollama Cloud key
-            // (local Ollama has no keys); without either, the SDK's local
-            // default.
+            // base URL: without a URL of their own it goes to Ollama Cloud.
+            // The server's key goes to OLLAMA_BASE_URL (or a server model's
+            // own variable), else to the SDK's local default: the desktop
+            // app's "Ollama (Local)" preset puts its key field there too.
             const baseURL =
                 overrides?.baseUrl ||
                 (overrides?.apiKey
                     ? PROVIDER_INFO.ollama.defaultBaseUrl
-                    : process.env.OLLAMA_BASE_URL ||
-                      (apiKey
-                          ? PROVIDER_INFO.ollama.defaultBaseUrl
-                          : undefined))
+                    : resolveBaseUrlEnv(overrides, "OLLAMA_BASE_URL"))
             model = createOllama({
                 ...(baseURL && { baseURL }),
                 ...(apiKey && {
@@ -1043,9 +1041,8 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                     : `${provider.toUpperCase()}_BASE_URL`
             // A local default (SGLang's 127.0.0.1) only fills the settings
             // form; the server must not call its own machine for it. With a
-            // user's key, or an admin entry's own (empty) URL variable, the
-            // OpenAI SDK would read the server's OPENAI_BASE_URL, so name
-            // the official endpoint.
+            // user's key the OpenAI SDK would read the server's
+            // OPENAI_BASE_URL, so name the official endpoint.
             const defaultUrl = PROVIDER_INFO[provider].defaultBaseUrl
             const publicDefault = defaultUrl?.startsWith("https://")
                 ? defaultUrl
@@ -1058,10 +1055,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             const baseURL =
                 configuredBaseURL ||
                 (SDK_KNOWS_ENDPOINT.has(provider) &&
-                !(
-                    provider === "openai" &&
-                    (overrides?.apiKey || overrides?.baseUrlEnv)
-                )
+                !(provider === "openai" && overrides?.apiKey)
                     ? undefined
                     : publicDefault)
             // With a user's Azure key the SDK would read the server's
@@ -1095,6 +1089,23 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     }
 
     return { model, providerOptions, modelId, provider }
+}
+
+/**
+ * The server's <P>_BASE_URL for a provider, which getAIModel uses for a
+ * server model without a URL variable of its own (an admin panel entry
+ * without a URL). Bedrock, EdgeOne and Ollama (the panel writes
+ * OLLAMA_BASE_URL itself) have none.
+ */
+export function globalBaseUrl(provider: ProviderName): string | undefined {
+    if (["bedrock", "edgeone", "ollama"].includes(provider)) return undefined
+    const name =
+        provider === "vertexai"
+            ? "GOOGLE_VERTEX_BASE_URL"
+            : provider === "gateway"
+              ? "AI_GATEWAY_BASE_URL"
+              : `${provider.toUpperCase()}_BASE_URL`
+    return process.env[name] || undefined
 }
 
 /** The provider of the server's own config: AI_PROVIDER, or the one with a key */

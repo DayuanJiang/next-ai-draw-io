@@ -1,7 +1,16 @@
 const iframe = document.getElementById('drawio');
 let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
+// The server state this tab is in step with (see stateId in http-server.ts);
+// null until the first poll
+let stateId = null;
+// The newest diagram on the canvas, saved to the server or not: lastXml is
+// the last one the server has
+let latestXml = null;
+let pushFailing = false; // the last push could not reach the server
+let pollSeq = 0, lastHandledPoll = 0; // polls overlap; older answers are dropped
 let pendingSvgExport = null;
 let pendingSvgBase = 0; // version the pending autosave was based on
+let pendingSvgStateId = null; // and the state it belonged to
 let pendingAiSvg = false;
 let pendingMcpExport = null; // 'png', 'svg' or 'xmlsvg' when MCP requested export
 let mcpExportSeq = 0; // number of the latest MCP export
@@ -17,19 +26,24 @@ window.addEventListener('message', (e) => {
         if (msg.event === 'init') {
             isReady = true;
             if (pendingXml) { loadDiagram(pendingXml); pendingXml = null; }
-        } else if ((msg.event === 'save' || msg.event === 'autosave') && msg.xml && msg.xml !== lastXml) {
+        } else if ((msg.event === 'save' || msg.event === 'autosave') && msg.xml) {
             // Ignore autosave while a single-page projection is on screen
             // for a page-targeted export — otherwise we'd push the
             // transient projection back as the canonical session state.
             if (projectionExportActive) return;
+            // Also an edit undone back to what the server has
+            latestXml = msg.xml;
+            if (msg.xml === lastXml) return;
             // Request SVG export, then push state with SVG. Remember the
-            // version this edit is based on, so the server can reject it
-            // if the AI wrote a newer version that is not loaded yet.
+            // version and state this edit is based on, so the server can
+            // reject it if the AI wrote a newer version that is not loaded
+            // yet, or if it lost that state.
             pendingSvgExport = msg.xml;
             pendingSvgBase = currentVersion;
+            pendingSvgStateId = stateId;
             iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
             // Fallback if export doesn't respond
-            setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, '', pendingSvgBase); pendingSvgExport = null; } }, 2000);
+            setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, '', pendingSvgBase, 'edit', pendingSvgStateId); pendingSvgExport = null; } }, 2000);
         } else if (msg.event === 'export' && msg.format === 'xml') {
             // Sync export requested by the server (get_diagram).
             // draw.io returns the XML in msg.xml, with no msg.data. A late
@@ -39,7 +53,7 @@ window.addEventListener('message', (e) => {
                 // Push with the version the export was taken at: a
                 // newer AI write may have loaded meanwhile, and this
                 // older XML must not overwrite it.
-                pushState(msg.xml, '', pendingSyncBase, 'sync');
+                pushState(msg.xml, '', pendingSyncBase, 'sync', pendingSyncStateId);
             }
         } else if (msg.event === 'export' && msg.data) {
             // Handle MCP server export request (png/svg). fireExport tags
@@ -98,7 +112,7 @@ window.addEventListener('message', (e) => {
             if (pendingSvgExport) {
                 const xml = pendingSvgExport;
                 pendingSvgExport = null;
-                pushState(xml, svg, pendingSvgBase);
+                pushState(xml, svg, pendingSvgBase, 'edit', pendingSvgStateId);
             } else if (pendingAiSvg) {
                 pendingAiSvg = false;
                 fetch('/api/history-svg', {
@@ -114,6 +128,7 @@ window.addEventListener('message', (e) => {
 function loadDiagram(xml, capturePreview = false) {
     if (!isReady) { pendingXml = xml; return; }
     lastXml = xml;
+    latestXml = xml;
     iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml, autosave: 1 }), '*');
     if (capturePreview) {
         setTimeout(() => {
@@ -144,24 +159,27 @@ function showNotice(text) {
     noticeTimer = setTimeout(() => el.classList.remove('open'), 8000);
 }
 
-// Same rule as hasCells in pages.ts: a cell besides the root cells, or a
-// compressed page
-function hasCells(xml) {
-    return /<(mxCell\b[^>]*\bid\s*=\s*["'](?![01]["'])|UserObject\b|object\b)|<diagram\b[^>]*>\s*[^\s<]/.test(xml || '');
-}
-
 // source is 'sync' for replies to a server sync request, 'recover' for the
-// tab's copy after the server recovered the session, else 'edit'
-async function pushState(xml, svg = '', baseVersion = currentVersion, source = 'edit') {
+// tab's copy after the server recovered the session, else 'edit'. sid is the
+// server state the push is based on.
+async function pushState(xml, svg = '', baseVersion = currentVersion, source = 'edit', sid = stateId) {
     if (!sessionId) return;
     try {
         const r = await fetch('/api/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, xml, svg, baseVersion, source })
+            body: JSON.stringify({ sessionId, xml, svg, baseVersion, source, stateId: sid })
         });
-        if (r.ok) { const d = await r.json(); currentVersion = d.version; lastXml = xml; }
-        // 409: the AI wrote a newer version; load it now
+        pushFailing = false;
+        if (r.ok) {
+            const d = await r.json();
+            // An answer about a state this tab has left since
+            if (sid !== stateId) return;
+            currentVersion = d.version;
+            lastXml = xml;
+        }
+        // 409: the AI wrote a newer version, or the server lost the state
+        // this push was based on; the next poll sorts it out
         else if (r.status === 409) {
             const d = await r.json().catch(() => ({}));
             if (d.savedToHistory) {
@@ -171,33 +189,63 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
             }
             poll();
         }
-    } catch (e) { console.error('Push failed:', e); }
+    } catch (e) {
+        console.error('Push failed:', e);
+        if (!pushFailing) {
+            pushFailing = true;
+            showNotice("Can't reach the MCP server. Your changes are only in this tab for now; use Download to keep a copy.");
+        }
+    }
+}
+
+// The server made a new state for this session: it expired, or the MCP
+// process restarted. Decide whose diagram wins.
+function recoverState(s) {
+    stateId = s.stateId;
+    // The old state's pending work is gone with it
+    const projectionShown = projectionExportActive;
+    projectionExportActive = false;
+    forceReload = false;
+    pendingMcpExport = null;
+    pendingSyncExport = false;
+    const mine = latestXml;
+    currentVersion = s.version;
+    if (s.blank || s.xml === lastXml) {
+        // The server knows nothing, or exactly what this tab last saved:
+        // the canvas can only be newer, so it wins (edits made while the
+        // server was down are saved now)
+        if (projectionShown && mine) {
+            iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: mine, autosave: 1 }), '*');
+        }
+        if (mine && mine !== s.xml) pushState(mine, '', s.version);
+    } else {
+        // The server has a diagram this tab never showed (an AI write it
+        // missed, a saved file): show that, and keep this tab's copy in
+        // History unless it is the same
+        loadDiagram(s.xml, true);
+        if (mine && mine !== s.xml) pushState(mine, '', s.version, 'recover');
+    }
 }
 
 let pendingSyncExport = false;
 let pendingSyncBase = 0; // version the pending sync export was taken at
+let pendingSyncStateId = null; // and the state it belonged to
 let syncExportSeq = 0; // number of the latest sync export
 
 async function poll() {
     if (!sessionId) return;
-    const knownVersion = currentVersion;
+    const seq = ++pollSeq;
     try {
         const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
         if (!r.ok) return;
         const s = await r.json();
-        // The server lost this session (it expired, or the MCP process
-        // restarted) and rebuilt it. Blank: push back what the browser
-        // shows. From the auto-save file, which can hold an AI write this
-        // tab never loaded: show that, and keep this tab's copy in History
-        // (a push based on version 0 is refused and saved there).
-        if (s.version < knownVersion && lastXml) {
-            if (!hasCells(s.xml)) {
-                pushState(lastXml);
-            } else {
-                currentVersion = 0;
-                if (s.xml !== lastXml) pushState(lastXml, '', 0, 'recover');
-            }
-        }
+        // An older answer than one already handled (the interval, the 409
+        // handler and the projection restore each poll): it could name a
+        // state that is gone
+        if (seq < lastHandledPoll) return;
+        lastHandledPoll = seq;
+        if (stateId === null) stateId = s.stateId;
+        else if (s.stateId && s.stateId !== stateId) recoverState(s);
         // Load new diagram from server (before export, so we export latest).
         // While a page-targeted projection is on screen, only the restore
         // (forceReload) replaces it, so a new version doesn't fight the
@@ -217,6 +265,7 @@ async function poll() {
         if (s.syncRequested && !pendingSyncExport && isReady && !projectionExportActive) {
             pendingSyncExport = true;
             pendingSyncBase = currentVersion;
+            pendingSyncStateId = stateId;
             // draw.io echoes the request in msg.message, so the reply can
             // be matched to this request
             const seq = ++syncExportSeq;
@@ -324,7 +373,8 @@ saveConfirmBtn.onclick = () => {
         // so no wrapper injection is needed. The legacy fallback below
         // remains only for documents that somehow slipped past
         // normalisation (e.g. an older session loaded from external state).
-        let xmlData = lastXml || '';
+        // The canvas as it is, also edits not saved to the server yet
+        let xmlData = latestXml || lastXml || '';
         if (xmlData && !xmlData.includes('<mxfile')) {
             xmlData = '<mxfile host="mcp"><diagram name="Page-1">' + xmlData + '</diagram></mxfile>';
         }

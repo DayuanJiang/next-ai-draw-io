@@ -271,4 +271,60 @@ test("a test result for an old API key is dropped", async ({ page }) => {
     release()
     await page.waitForTimeout(500)
     await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(0)
+    // The test is over: the button works again and nothing spins
+    await expect(
+        dialog.getByRole("button", { name: "Test", exact: true }),
+    ).toBeEnabled()
+    await expect(dialog.locator(".animate-spin")).toHaveCount(0)
+})
+
+test("an older test does not end a newer one's spinners", async ({ page }) => {
+    // Each validate request waits for its own release
+    const releases: Array<() => void> = []
+    await page.route("**/api/validate-model", async (route) => {
+        await new Promise<void>((r) => releases.push(r))
+        await route.fulfill({
+            status: 200,
+            json: { valid: true, responseTime: 1000 },
+        })
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await expect.poll(() => releases.length).toBe(1)
+    // The user corrects the key and tests again
+    await dialog.locator("#api-key").fill("new-key")
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await expect.poll(() => releases.length).toBe(2)
+    releases[0]()
+    await page.waitForTimeout(500)
+    await expect(dialog.locator(".animate-spin").first()).toBeVisible()
+    releases[1]()
+    await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(1)
+})
+
+test("no spinner stays after another tab's change while elsewhere", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: true,
+        responseTime: 1000,
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    // The user looks at the other provider while another tab changes the key
+    await dialog.getByText("GLM (Zhipu)").first().click()
+    await page.evaluate(() => {
+        const key = "next-ai-draw-io-model-configs"
+        const config = JSON.parse(localStorage.getItem(key) ?? "{}")
+        config.providers[0].apiKey = "key-from-another-tab"
+        const value = JSON.stringify(config)
+        localStorage.setItem(key, value)
+        window.dispatchEvent(
+            new StorageEvent("storage", { key, newValue: value }),
+        )
+    })
+    release()
+    await page.waitForTimeout(500)
+    await dialog.getByText("Qwen (Alibaba)").first().click()
+    await expect(dialog.locator(".animate-spin")).toHaveCount(0)
 })

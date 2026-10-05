@@ -3,6 +3,7 @@
  * Serves draw.io embed with state sync and history UI
  */
 
+import { randomUUID } from "node:crypto"
 import { readFileSync } from "node:fs"
 import http from "node:http"
 import { dirname, join } from "node:path"
@@ -105,11 +106,22 @@ function ensureSessionStateInitialized(sessionId: string): void {
     // A blank diagram keeps the draw.io spinner (spin=1) from waiting
     // forever when no load(xml) is ever sent
     setState(sessionId, BLANK_MXFILE, undefined, false, false)
+    // Nothing is known about this session: a tab that still shows it keeps
+    // its diagram
+    const state = stateStore.get(sessionId)
+    if (state) state.blank = true
 }
 
 interface SessionState {
     xml: string
     version: number
+    // Made when the state is created (first use, or again after it expired
+    // or the MCP process restarted) and kept by every write. A tab tells by
+    // it that the server lost what it knew, and every push names the state
+    // it was based on, so one based on a lost state is refused.
+    stateId: string
+    // Created blank because nothing was saved; cleared by the first write
+    blank?: boolean
     // Version of the last write the browser did not make itself (AI edit,
     // restore). A browser push based on an older version is rejected.
     serverVersion?: number
@@ -178,6 +190,7 @@ export function setState(
     stateStore.set(sessionId, {
         xml,
         version: newVersion,
+        stateId: existing?.stateId ?? randomUUID(),
         serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
         lastUpdated: new Date(),
         lastPolled: existing?.lastPolled,
@@ -444,6 +457,8 @@ function handleStateApi(
             JSON.stringify({
                 xml: state?.xml || null,
                 version: state?.version || 0,
+                stateId: state?.stateId ?? null,
+                blank: !!state?.blank,
                 syncRequested: !!state?.syncRequested,
                 exportFormat: state?.exportFormat || null,
                 exportXml: state?.exportXml || null,
@@ -486,12 +501,58 @@ function handleStateApi(
                     return
                 }
 
+                // A push can come before the tab's first poll after a
+                // restart: recover the saved file first, so it is compared
+                // with that and never overwrites it unseen
+                ensureSessionStateInitialized(sessionId)
+                const current = stateStore.get(sessionId)
+
+                // A tab of this version names the state its push is based
+                // on. Another state (the server lost the one it knew, or
+                // the tab has not polled yet): refused, and the tab's next
+                // poll decides whose diagram wins.
+                if (current && "stateId" in data) {
+                    if (data.stateId !== current.stateId) {
+                        res.writeHead(409, {
+                            "Content-Type": "application/json",
+                        })
+                        res.end(
+                            JSON.stringify({
+                                error: "Session was recreated",
+                                stateChanged: true,
+                                version: current.version,
+                            }),
+                        )
+                        return
+                    }
+                    // What a recovering tab showed: kept in history only
+                    if (data.source === "recover") {
+                        const saved =
+                            typeof data.xml === "string" &&
+                            !!data.xml &&
+                            data.xml !== current.xml
+                        if (saved) {
+                            addHistory(sessionId, data.xml, data.svg || "")
+                        }
+                        res.writeHead(409, {
+                            "Content-Type": "application/json",
+                        })
+                        res.end(
+                            JSON.stringify({
+                                error: "Diagram changed on the server",
+                                version: current.version,
+                                savedToHistory: saved,
+                            }),
+                        )
+                        return
+                    }
+                }
+
                 // The browser edited a version older than the latest AI write
                 // (it has not loaded that write yet). Keep the AI write; the
                 // browser loads it on its next poll. A sync reply is also
                 // stale after a newer write of the browser's own (a user
                 // edit saved while the export ran).
-                const current = stateStore.get(sessionId)
                 if (
                     typeof data.baseVersion === "number" &&
                     (data.baseVersion < (current?.serverVersion ?? 0) ||

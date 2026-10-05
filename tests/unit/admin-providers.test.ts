@@ -69,6 +69,34 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY_2).toBe("sk-second")
     })
 
+    it("sends an Ollama key without a URL to Ollama Cloud, like its Test", () => {
+        // Chat sends a server Ollama key to OLLAMA_BASE_URL, or to local
+        // Ollama without one; the Test sends it to Ollama Cloud
+        const cloud = deriveEnvUpdates(
+            [provider({ provider: "ollama", apiKey: "ollama-key" })],
+            [],
+        )
+        expect(cloud.OLLAMA_API_KEY).toBe("ollama-key")
+        expect(cloud.OLLAMA_BASE_URL).toBe("https://ollama.com/api")
+        const own = deriveEnvUpdates(
+            [
+                provider({
+                    provider: "ollama",
+                    apiKey: "k",
+                    baseUrl: "https://ollama.internal/api",
+                }),
+            ],
+            [],
+        )
+        expect(own.OLLAMA_BASE_URL).toBe("https://ollama.internal/api")
+        // No key: local Ollama, nothing to write
+        const local = deriveEnvUpdates(
+            [provider({ provider: "ollama", apiKey: undefined })],
+            [],
+        )
+        expect(local.OLLAMA_BASE_URL ?? null).toBeNull()
+    })
+
     it("maps bedrock credentials to ADMIN_AWS_* env vars", () => {
         const updates = deriveEnvUpdates(
             [
@@ -154,29 +182,6 @@ describe("adminProvidersToConfig", () => {
             }),
         ])
         expect(config.providers[1].apiKeyEnv).toBe("ADMIN_OPENAI_API_KEY_2")
-    })
-
-    it("names its own URL variable when it has its own key, even empty", () => {
-        // Otherwise chat reads the global OPENAI_BASE_URL, which may be a
-        // proxy for another key, while the Test used the official endpoint
-        const own = adminProvidersToConfig([provider()]).providers[0]
-        expect(own.baseUrlEnv).toBe("ADMIN_OPENAI_BASE_URL")
-        // Without a key or URL of its own: the global key and URL, a pair
-        const shared = adminProvidersToConfig([provider({ apiKey: undefined })])
-            .providers[0]
-        expect(shared.baseUrlEnv).toBeUndefined()
-        // An Azure key belongs to one resource: AZURE_BASE_URL stays
-        const azure = adminProvidersToConfig([provider({ provider: "azure" })])
-            .providers[0]
-        expect(azure.baseUrlEnv).toBeUndefined()
-        expect(
-            adminProvidersToConfig([
-                provider({
-                    provider: "azure",
-                    baseUrl: "https://r.openai.azure.com/openai",
-                }),
-            ]).providers[0].baseUrlEnv,
-        ).toBe("ADMIN_AZURE_BASE_URL")
     })
 
     it("skips providers without models and carries the default flag", () => {

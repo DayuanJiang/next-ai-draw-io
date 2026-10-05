@@ -1,7 +1,8 @@
 /**
  * Read a response body, giving up once it passes maxBytes, so a huge
  * download from a URL the client chose can't exhaust server memory.
- * Returns null when it is too large.
+ * Returns null when it is too large; the caller then aborts the request,
+ * which ends the download.
  */
 export async function readLimitedBody(
     response: Response,
@@ -20,7 +21,9 @@ export async function readLimitedBody(
         if (done) break
         total += value.byteLength
         if (total > maxBytes) {
-            await reader.cancel()
+            // Not awaited: a copy of the body that Next.js keeps (its fetch
+            // dedupe) can hold the cancel back until it is read
+            reader.cancel().catch(() => {})
             return null
         }
         chunks.push(value)

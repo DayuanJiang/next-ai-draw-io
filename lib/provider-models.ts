@@ -78,16 +78,25 @@ const MAX_LIST_BYTES = 2 * 1024 * 1024
 /** A fetch that reads at most MAX_LIST_BYTES of each response */
 function sizeLimitedFetch(fetchFn: typeof fetch): typeof fetch {
     return async (input, init) => {
-        const response = await fetchFn(input, init)
+        // Ends a download that is too large (the Gateway SDK passes no
+        // signal of its own)
+        const download = new AbortController()
+        const signal = init?.signal
+            ? AbortSignal.any([init.signal, download.signal])
+            : download.signal
+        const response = await fetchFn(input, { ...init, signal })
         const body = await readLimitedBody(response, MAX_LIST_BYTES)
         if (body === null) {
+            download.abort()
             throw new ModelListError("The model list is too large.")
         }
         // The body is already decoded and has its own length now
         const headers = new Headers(response.headers)
         headers.delete("content-encoding")
         headers.delete("content-length")
-        return new Response(body, {
+        // Some statuses must have no body at all
+        const noBody = [101, 204, 205, 304].includes(response.status)
+        return new Response(noBody ? null : body, {
             status: response.status,
             statusText: response.statusText,
             headers,

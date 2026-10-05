@@ -189,6 +189,9 @@ export function ModelConfigDialog({
     selectedProviderIdRef.current = selectedProviderId
     const configRef = useRef(config)
     configRef.current = config
+    // Number of the latest Test click: only that test may reset the busy
+    // state when its credentials changed meanwhile
+    const validationRunRef = useRef(0)
     // A model list or test result belongs to the credentials it was asked
     // with; they can change meanwhile, here or in another tab
     const credentialsOf = (providerId: string) => {
@@ -414,6 +417,7 @@ export function ModelConfigDialog({
         let errorCount = 0
         let idChanged = false
         const askedWith = credentialsOf(selectedProviderId)
+        const run = ++validationRunRef.current
 
         // For EdgeOne, construct baseUrl from current origin
         const baseUrl = isEdgeOne
@@ -488,8 +492,21 @@ export function ModelConfigDialog({
                         validationWarning: undefined,
                     }
                 }
-                // Credentials changed during the test: drop the result
-                if (credentialsOf(selectedProviderId) !== askedWith) return
+                // Credentials changed during the test: drop the result. A
+                // change made in this tab already reset the spinners (and a
+                // newer test may show its own); one from another tab did
+                // not, so the latest test clears its own (model ids are
+                // unique, whatever provider is shown).
+                if (credentialsOf(selectedProviderId) !== askedWith) {
+                    if (run === validationRunRef.current) {
+                        setValidatingModelIds((prev) => {
+                            const next = new Set(prev)
+                            next.delete(model.id)
+                            return next
+                        })
+                    }
+                    return
+                }
                 // So did this model's id: the result is for the old one
                 const current = configRef.current.providers
                     .find((p) => p.id === selectedProviderId)
@@ -515,7 +532,17 @@ export function ModelConfigDialog({
                 })
             }),
         )
-        if (credentialsOf(selectedProviderId) !== askedWith) return
+        if (credentialsOf(selectedProviderId) !== askedWith) {
+            // The status line belongs to the latest test, and to the
+            // provider shown now
+            if (
+                run === validationRunRef.current &&
+                selectedProviderIdRef.current === selectedProviderId
+            ) {
+                setValidationStatus("idle")
+            }
+            return
+        }
 
         // A model whose id changed was not tested
         if (allValid && !idChanged) {

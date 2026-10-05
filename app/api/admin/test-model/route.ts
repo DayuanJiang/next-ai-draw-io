@@ -5,6 +5,7 @@ import {
     loadAdminProviders,
     mergeSecrets,
 } from "@/lib/admin/providers"
+import { globalBaseUrl } from "@/lib/ai-providers"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -58,7 +59,10 @@ export async function POST(req: Request) {
             body: JSON.stringify({
                 provider: resolved.provider,
                 apiKey: resolved.apiKey,
-                baseUrl: resolved.baseUrl,
+                // Without a URL of its own, chat sends the entry's key to
+                // the server's <P>_BASE_URL: test that endpoint, not
+                // another one
+                baseUrl: resolved.baseUrl || globalBaseUrl(resolved.provider),
                 modelId: body.modelId,
                 awsAccessKeyId: resolved.awsAccessKeyId,
                 awsSecretAccessKey: resolved.awsSecretAccessKey,

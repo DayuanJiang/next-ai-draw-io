@@ -56,15 +56,22 @@ export class Autosaver {
     }
 
     // Saved files that could not be read back: never written over, since
-    // the session then shows something else than what they hold
+    // the session then shows something else than what they hold. Cleared
+    // once the file is read, or is gone.
     private unreadable = new Set<string>()
 
     /** The session's saved diagram, or null. */
     load(sessionId: string): string | null {
         const path = this.pathFor(sessionId)
-        if (!path || !existsSync(path)) return null
+        if (!path) return null
+        if (!existsSync(path)) {
+            this.unreadable.delete(path)
+            return null
+        }
         try {
-            return readFileSync(path, "utf-8")
+            const xml = readFileSync(path, "utf-8")
+            this.unreadable.delete(path)
+            return xml
         } catch (error) {
             log.warn(`Could not read the saved diagram ${path}: ${error}`)
             this.unreadable.add(path)
@@ -93,7 +100,13 @@ export class Autosaver {
         const entry = this.pending.get(sessionId)
         this.pending.delete(sessionId)
         const path = this.pathFor(sessionId)
-        if (!entry || !this.dir || !path || this.unreadable.has(path)) return
+        if (!entry || !this.dir || !path) return
+        if (this.unreadable.has(path)) {
+            log.warn(
+                `Not saving ${path}: it could not be read, so it may hold work this session does not show`,
+            )
+            return
+        }
         try {
             const isNew = !existsSync(path)
             // A blank page the browser shows before any drawing: nothing to keep

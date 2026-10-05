@@ -738,9 +738,10 @@ Call this tool to get shape names and usage syntax for a specific library.`,
 
     const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
-        // The provider's text can name the server's account or hosts
-        onError: (error) =>
-            streamErrorText(error, onServerCredentials || onServerEndpoint),
+        // On the server's keys the provider's text can name its account.
+        // Keyless endpoints keep theirs: the desktop app's Ollama is the
+        // user's own, and EdgeOne's text is our function's explanation.
+        onError: (error) => streamErrorText(error, onServerCredentials),
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage

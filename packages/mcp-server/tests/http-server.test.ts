@@ -337,6 +337,87 @@ describe("export requests", () => {
     })
 })
 
+describe("a session state recreated after it was lost", () => {
+    const SAVED = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="saved" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+    const getJson = async (id: string) =>
+        JSON.parse((await request(`/api/state?sessionId=${id}`)).body)
+
+    it("names each state, and says when it was made blank", async () => {
+        const first = await getJson("mcp-sid-blank")
+        expect(first.stateId).toMatch(/^[0-9a-f-]{36}$/)
+        expect(first.blank).toBe(true)
+        setState("mcp-sid-blank", "<mxfile>AI write</mxfile>")
+        const after = await getJson("mcp-sid-blank")
+        // Same state, no longer blank
+        expect(after.stateId).toBe(first.stateId)
+        expect(after.blank).toBe(false)
+    })
+
+    it("refuses a push made for another state, also before any poll", async () => {
+        // The MCP process restarted; the tab's push comes before its poll
+        onSessionRecreate((id) => (id === "mcp-sid-restart" ? SAVED : null))
+        try {
+            for (const stateId of ["from-before", null]) {
+                const res = await postJson("/api/state", {
+                    sessionId: "mcp-sid-restart",
+                    xml: "<mxfile>tab's old copy</mxfile>",
+                    baseVersion: 7,
+                    stateId,
+                })
+                expect(res.status).toBe(409)
+                expect(JSON.parse(res.body).stateChanged).toBe(true)
+                // The saved file was recovered first and is kept
+                expect(getState("mcp-sid-restart")?.xml).toBe(SAVED)
+            }
+        } finally {
+            onSessionRecreate(() => null)
+        }
+    })
+
+    it("accepts a push for the current state", async () => {
+        const { stateId, version } = await getJson("mcp-sid-ok")
+        const res = await postJson("/api/state", {
+            sessionId: "mcp-sid-ok",
+            xml: "<mxfile>user edit</mxfile>",
+            baseVersion: version,
+            stateId,
+        })
+        expect(res.status).toBe(200)
+        expect(getState("mcp-sid-ok")?.xml).toBe("<mxfile>user edit</mxfile>")
+    })
+
+    it("keeps a recovering tab's copy in history, never on the canvas", async () => {
+        setState("mcp-sid-recover", SAVED)
+        const { stateId, version } = await getJson("mcp-sid-recover")
+        const before = getHistory("mcp-sid-recover").length
+        const res = await postJson("/api/state", {
+            sessionId: "mcp-sid-recover",
+            xml: "<mxfile>what the tab showed</mxfile>",
+            baseVersion: version,
+            stateId,
+            source: "recover",
+        })
+        expect(res.status).toBe(409)
+        expect(JSON.parse(res.body).savedToHistory).toBe(true)
+        expect(getState("mcp-sid-recover")?.xml).toBe(SAVED)
+        expect(getHistory("mcp-sid-recover")).toHaveLength(before + 1)
+        expect(getHistory("mcp-sid-recover").at(-1)?.xml).toBe(
+            "<mxfile>what the tab showed</mxfile>",
+        )
+    })
+
+    it("keeps the old rules for a tab from an older version", async () => {
+        // Its pushes have no stateId field
+        const version = setState("mcp-sid-legacy", "<mxfile>AI</mxfile>")
+        const res = await postJson("/api/state", {
+            sessionId: "mcp-sid-legacy",
+            xml: "<mxfile>edit</mxfile>",
+            baseVersion: version,
+        })
+        expect(res.status).toBe(200)
+    })
+})
+
 describe("preview page", () => {
     it("shows the saved diagram of a session whose state expired", async () => {
         const saved = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="kept" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`

@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     setUserLocale: (locale: string) =>
         ipcRenderer.invoke("set-user-locale", locale),
 
+    // A chat was saved, or the page loaded with this many chats: the next
+    // launch opens the port where the chats are
+    chatSaved: () => ipcRenderer.invoke("chat-saved"),
+    chatsLoaded: (count: number) => ipcRenderer.invoke("chats-loaded", count),
+
     // The server restarted on the same port (another preset)
     onServerRestarted: (callback: () => void) => {
         const listener = () => callback()

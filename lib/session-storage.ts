@@ -176,6 +176,8 @@ export async function saveSession(session: ChatSession): Promise<boolean> {
     try {
         const db = await getDB()
         await db.put(STORE_NAME, session)
+        // The desktop app opens this port (this origin's chats) next launch
+        window.electronAPI?.chatSaved?.().catch(() => {})
         return true
     } catch (error) {
         console.error("Failed to save session:", error)

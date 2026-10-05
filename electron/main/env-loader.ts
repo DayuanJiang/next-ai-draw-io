@@ -51,17 +51,25 @@ function loadEnvFromFile(filePath: string): void {
             const quote = value[0]
             const closingQuote =
                 quote === '"' || quote === "'" ? value.indexOf(quote, 1) : -1
-            if (value.length > 1 && value.endsWith(quote) && closingQuote > 0) {
-                // Quoted from start to end: the quotes inside belong to the
-                // value (JSON with an apostrophe), as dotenv reads it
-                value = value.slice(1, -1)
-            } else if (closingQuote > 0) {
-                // Quoted value: keep what's inside the quotes and drop
-                // anything after them (e.g. a comment)
+            if (
+                closingQuote > 0 &&
+                /^\s*(#.*)?$/.test(value.slice(closingQuote + 1))
+            ) {
+                // Quoted value, then nothing or a comment: keep what is
+                // inside the quotes, as dotenv reads it
                 value = value.slice(1, closingQuote)
             } else {
-                // Unquoted value: drop an inline comment ("value  # comment")
+                // Unquoted value: drop an inline comment ("value  # comment").
+                // A value quoted from start to end with quotes inside (JSON
+                // with an apostrophe) loses only the outer two, as in dotenv.
                 value = value.replace(/\s+#.*$/, "")
+                if (
+                    closingQuote > 0 &&
+                    value.length > 1 &&
+                    value.endsWith(quote)
+                ) {
+                    value = value.slice(1, -1)
+                }
             }
 
             // Don't override existing environment variables

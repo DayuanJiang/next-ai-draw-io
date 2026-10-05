@@ -122,32 +122,31 @@ export function useDiagramToolHandlers({
         }
 
         processedToolCallsRef.current.add(toolCall.toolCallId)
-        // Only these two put their result on the canvas. Other tools
-        // (get_shape_library, which the server runs, still arrives here)
-        // leave the stored originals for the preview code to undo.
-        const drawsDiagram =
-            toolCall.toolName === "display_diagram" ||
-            toolCall.toolName === "edit_diagram"
-        // Stored originals belong to previews not handled yet: this call's,
-        // and those of earlier calls with invalid input, which never get
-        // here. The first is the diagram before all of them. This call's
-        // result replaces those previews, so the preview code must neither
-        // draw them again nor undo them later.
-        const [originalXml] = editDiagramOriginalXmlRef.current.values()
-        if (drawsDiagram) {
-            for (const id of editDiagramOriginalXmlRef.current.keys()) {
-                processedToolCallsRef.current.add(id)
-            }
-            editDiagramOriginalXmlRef.current.clear()
-        }
-
+        // Only display_diagram, edit_diagram and a completing append_diagram
+        // put their result on the canvas. Other tools (get_shape_library,
+        // which the server runs, still arrives here) leave the stored
+        // originals for the preview code to undo.
         if (toolCall.toolName === "display_diagram") {
-            await handleDisplayDiagram(toolCall, addToolOutput, originalXml)
+            await handleDisplayDiagram(toolCall, addToolOutput, takeOriginals())
         } else if (toolCall.toolName === "edit_diagram") {
-            await handleEditDiagram(toolCall, addToolOutput, originalXml)
+            await handleEditDiagram(toolCall, addToolOutput, takeOriginals())
         } else if (toolCall.toolName === "append_diagram") {
             handleAppendDiagram(toolCall, addToolOutput)
         }
+    }
+
+    // Stored originals belong to previews not handled yet: this call's, and
+    // those of earlier calls with invalid input, which never get to the
+    // handler. The first is the diagram before all of them. A call that
+    // draws its result replaces those previews, so the preview code must
+    // neither draw them again nor undo them later. Returns that first one.
+    const takeOriginals = (): string | undefined => {
+        const [originalXml] = editDiagramOriginalXmlRef.current.values()
+        for (const id of editDiagramOriginalXmlRef.current.keys()) {
+            processedToolCallsRef.current.add(id)
+        }
+        editDiagramOriginalXmlRef.current.clear()
+        return originalXml
     }
 
     // originalXml: the diagram before the streamed previews, if any were drawn
@@ -540,11 +539,17 @@ Start your continuation with the NEXT character after where it stopped.`,
             partialXmlRef.current = "" // Reset
 
             const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+            // It draws now: it takes the stored originals, as display_diagram
+            const originalXml = prepared.ok ? takeOriginals() : undefined
             const validationError = prepared.ok
                 ? onDisplayChart(prepared.xml, true)
                 : prepared.error
 
             if (validationError) {
+                // Loading failed: back to the diagram before the previews
+                if (prepared.ok && originalXml) {
+                    onDisplayChart(originalXml, true)
+                }
                 addToolOutput({
                     tool: "append_diagram",
                     toolCallId: toolCall.toolCallId,

@@ -9,6 +9,7 @@ import {
 import {
     allowPrivateUrls,
     isPrivateUrl,
+    RedirectRefusedError,
     redirectGuardedFetch,
 } from "@/lib/ssrf-protection"
 import type { ProviderName } from "@/lib/types/model-config"
@@ -65,13 +66,10 @@ export async function POST(req: Request) {
         // Only our own explanations go back: the URL may be an internal
         // address, whose answer or host names must not reach the caller.
         // The Gateway SDK wraps them, keeping ours as the cause.
+        const isOwn = (e: unknown): e is Error =>
+            e instanceof ModelListError || e instanceof RedirectRefusedError
         const cause = (error as { cause?: unknown })?.cause
-        const own =
-            error instanceof ModelListError
-                ? error
-                : cause instanceof ModelListError
-                  ? cause
-                  : null
+        const own = isOwn(error) ? error : isOwn(cause) ? cause : null
         const { code } = classifyLLMError(own ?? error)
         return NextResponse.json({
             code,

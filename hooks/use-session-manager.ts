@@ -114,6 +114,11 @@ export function useSessionManager(
                 // Load sessions list
                 const metadata = await getAllSessionMetadata()
                 setSessions(metadata)
+                // The desktop app may try its other port next launch, where
+                // an older version may have saved the chats
+                window.electronAPI
+                    ?.chatsLoaded?.(metadata.length)
+                    .catch(() => {})
 
                 // Only load a session if initialSessionId is provided (from URL param)
                 if (initialSessionId) {

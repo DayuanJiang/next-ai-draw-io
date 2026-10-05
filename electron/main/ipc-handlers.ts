@@ -13,6 +13,7 @@ import {
     updatePreset,
 } from "./config-manager"
 import { restartNextServer } from "./next-server"
+import { noteNoChats, rememberChatPort } from "./port-manager"
 import {
     applyProxyToEnv,
     getProxyConfig,
@@ -75,6 +76,15 @@ export function registerIpcHandlers(): void {
 
     handle("get-version", () => {
         return app.getVersion()
+    })
+
+    // ==================== Where the chats are ====================
+
+    // The page saved a chat, or loaded without any: decides which port
+    // (and so which origin's chats) the next launch opens
+    handle("chat-saved", () => rememberChatPort())
+    handle("chats-loaded", (_event, count: unknown) => {
+        if (count === 0) noteNoChats()
     })
 
     // ==================== Window Controls ====================

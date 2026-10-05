@@ -34,6 +34,8 @@ vi.mock("node:net", () => ({
 
 import {
     findAvailablePort,
+    noteNoChats,
+    rememberChatPort,
     resetAllocatedPort,
 } from "@/electron/main/port-manager"
 
@@ -95,5 +97,57 @@ describe("findAvailablePort", () => {
         expect(await launch()).toBe(61337)
         busy.ports[61337] = "EACCES"
         expect(await launch()).toBe(13371)
+    })
+})
+
+describe("the port where chats were last saved", () => {
+    it("opens there first", async () => {
+        // Windows reserved 61337 for a while, and the user kept working
+        storeData(61337)
+        busy.ports[61337] = "EACCES"
+        expect(await launch()).toBe(13370)
+        storeData(13370)
+        rememberChatPort()
+        busy.ports = {}
+        expect(await launch()).toBe(13370)
+    })
+
+    it("does not move after a launch elsewhere that saved nothing", async () => {
+        storeData(61337)
+        expect(await launch()).toBe(61337)
+        rememberChatPort()
+        busy.ports[61337] = "EADDRINUSE"
+        expect(await launch()).toBe(13370)
+        storeData(13370)
+        busy.ports = {}
+        expect(await launch()).toBe(61337)
+    })
+
+    it("never stores a last-resort port, which changes between launches", async () => {
+        busy.ports[61337] = "EACCES"
+        busy.ports[13370] = "EADDRINUSE"
+        expect(await launch()).toBe(13371)
+        rememberChatPort()
+        busy.ports = {}
+        expect(await launch()).toBe(61337)
+    })
+
+    it("tries the other port after opening on one without chats", async () => {
+        // Split before this version: chats only on 13370, and a launch on
+        // 61337 created that origin's folder
+        storeData(13370)
+        storeData(61337)
+        expect(await launch()).toBe(61337)
+        noteNoChats()
+        expect(await launch()).toBe(13370)
+        // Once a choice is stored, an empty page changes nothing
+        noteNoChats()
+        expect(await launch()).toBe(13370)
+    })
+
+    it("stays put for a new user", async () => {
+        expect(await launch()).toBe(61337)
+        noteNoChats()
+        expect(await launch()).toBe(61337)
     })
 })

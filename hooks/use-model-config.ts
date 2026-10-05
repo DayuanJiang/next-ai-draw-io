@@ -64,6 +64,28 @@ function migrateOldConfig(): MultiModelConfig | null {
     return config
 }
 
+const isKnownProvider = (p: { provider: string }) =>
+    Object.hasOwn(PROVIDER_INFO, p.provider)
+
+/**
+ * The stored config without providers this version does not know (saved
+ * by another version, or edited by hand): they would break every list of
+ * models. They stay in storage (saveConfig keeps them). Throws on bad JSON.
+ */
+function parseStoredConfig(stored: string): MultiModelConfig {
+    const config = JSON.parse(stored) as MultiModelConfig
+    const known = config.providers.filter(isKnownProvider)
+    if (known.length < config.providers.length) {
+        console.warn(
+            "Skipped saved providers this version does not know:",
+            config.providers
+                .filter((p) => !isKnownProvider(p))
+                .map((p) => p.provider),
+        )
+    }
+    return { ...config, providers: known }
+}
+
 /**
  * Load config from localStorage
  */
@@ -74,21 +96,7 @@ function loadConfig(): MultiModelConfig {
     const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
     if (stored) {
         try {
-            const config = JSON.parse(stored) as MultiModelConfig
-            // A provider this version does not know (saved by another
-            // version, or edited by hand) would break every list of models
-            const known = config.providers.filter((p) =>
-                Object.hasOwn(PROVIDER_INFO, p.provider),
-            )
-            if (known.length < config.providers.length) {
-                console.warn(
-                    "Skipped saved providers this version does not know:",
-                    config.providers
-                        .filter((p) => !known.includes(p))
-                        .map((p) => p.provider),
-                )
-            }
-            return { ...config, providers: known }
+            return parseStoredConfig(stored)
         } catch {
             console.error("Failed to parse model config")
         }
@@ -113,7 +121,26 @@ function loadConfig(): MultiModelConfig {
  */
 function saveConfig(config: MultiModelConfig): void {
     if (typeof window === "undefined") return
-    localStorage.setItem(STORAGE_KEYS.modelConfigs, JSON.stringify(config))
+    // Providers this version does not know are not in config: keep them,
+    // with their keys, for the version that saved them
+    let unknown: MultiModelConfig["providers"] = []
+    try {
+        const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
+        if (stored) {
+            unknown = (JSON.parse(stored) as MultiModelConfig).providers.filter(
+                (p) => !isKnownProvider(p),
+            )
+        }
+    } catch {
+        // Unreadable: nothing to keep
+    }
+    localStorage.setItem(
+        STORAGE_KEYS.modelConfigs,
+        JSON.stringify({
+            ...config,
+            providers: [...config.providers, ...unknown],
+        }),
+    )
 }
 
 /**
@@ -488,7 +515,8 @@ export function getSelectedAIConfig(): {
 
     let config: MultiModelConfig
     try {
-        config = JSON.parse(stored)
+        // Unknown providers would break the model lookup below
+        config = parseStoredConfig(stored)
     } catch {
         return { ...empty, accessCode }
     }

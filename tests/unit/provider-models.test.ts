@@ -1,5 +1,13 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest"
+
+// No DNS in tests: only loopback addresses are private
+vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/lib/ssrf-protection")>()),
+    isPrivateUrl: async (url: string) =>
+        /^https?:\/\/(127\.0\.0\.1|localhost)\b/.test(url),
+}))
+
 import { POST as providerModels } from "@/app/api/provider-models/route"
 import {
     canListModels,
@@ -224,6 +232,64 @@ describe("POST /api/provider-models", () => {
             const data = await (await post(body)).json()
             expect(data.error).toBe("The model list is too large.")
             expect(data.models).toBeUndefined()
+        }
+    })
+
+    it("ends the download of a list that is too large", async () => {
+        // The answer announces 4 MB and never finishes
+        let signal: AbortSignal | undefined
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (_url: string, init?: RequestInit) => {
+                signal = init?.signal ?? undefined
+                const body = new ReadableStream({ start() {} })
+                return new Response(body, {
+                    headers: { "content-length": String(4 * 1024 * 1024) },
+                })
+            }),
+        )
+        const data = await (
+            await post({
+                provider: "ollama",
+                baseUrl: "https://big.example.com",
+            })
+        ).json()
+        expect(data.error).toBe("The model list is too large.")
+        expect(signal?.aborted).toBe(true)
+    })
+
+    it("handles answers without a body", async () => {
+        for (const status of [204, 304]) {
+            vi.stubGlobal(
+                "fetch",
+                vi.fn(async () => new Response(null, { status })),
+            )
+            const data = await (
+                await post({ provider: "ollama", baseUrl: "https://x.example" })
+            ).json()
+            expect(data.error).toMatch(/not valid JSON|failed \(304\)/)
+        }
+    })
+
+    it("explains a refused redirect", async () => {
+        process.env.ALLOW_PRIVATE_URLS = "false"
+        try {
+            vi.stubGlobal(
+                "fetch",
+                vi.fn(
+                    async () =>
+                        new Response(null, {
+                            status: 301,
+                            headers: { location: "https://elsewhere.example" },
+                        }),
+                ),
+            )
+            const data = await (
+                await post({ provider: "ollama", baseUrl: "https://x.example" })
+            ).json()
+            expect(data.error).toMatch(/Redirects are not allowed/)
+        } finally {
+            delete process.env.ALLOW_PRIVATE_URLS
         }
     })
 

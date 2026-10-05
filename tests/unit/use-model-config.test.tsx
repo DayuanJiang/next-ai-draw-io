@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { useModelConfig } from "@/hooks/use-model-config"
+import { getSelectedAIConfig, useModelConfig } from "@/hooks/use-model-config"
 import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type { MultiModelConfig } from "@/lib/types/model-config"
@@ -124,6 +124,43 @@ describe("useModelConfig server model selection", () => {
         const { result } = await renderLoaded()
         expect(result.current.config.providers.map((p) => p.id)).toEqual(["p1"])
         expect(result.current.models.map((m) => m.id)).toContain("m1")
+    })
+
+    it("keeps an unknown provider and its key in storage", async () => {
+        // The version that saved it may be opened again (an older desktop
+        // build, another tab): the provider must still be there
+        storeConfig({
+            ...USER_CONFIG,
+            providers: [
+                ...USER_CONFIG.providers,
+                {
+                    id: "p9",
+                    provider: "not-a-provider" as any,
+                    apiKey: "k9",
+                    models: [{ id: "m9", modelId: "x" }],
+                },
+            ],
+            selectedModelId: "m1",
+        })
+        const { result } = await renderLoaded()
+        act(() => result.current.setSelectedModelId(undefined))
+        await waitFor(() => {
+            const stored = JSON.parse(
+                localStorage.getItem(STORAGE_KEYS.modelConfigs) ?? "{}",
+            )
+            expect(stored.selectedModelId).toBeUndefined()
+            expect(stored.providers.map((p: { id: string }) => p.id)).toEqual([
+                "p1",
+                "p9",
+            ])
+            expect(stored.providers[1].apiKey).toBe("k9")
+        })
+        // Sending reads the stored config too, and must not trip over it
+        act(() => result.current.setSelectedModelId("m1"))
+        expect(getSelectedAIConfig()).toMatchObject({
+            aiProvider: "openai",
+            aiModel: "gpt-4o",
+        })
     })
 
     it("keeps a selected user model", async () => {
