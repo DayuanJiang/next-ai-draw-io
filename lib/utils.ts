@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx"
 import * as pako from "pako"
 import { twMerge } from "tailwind-merge"
+import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -17,12 +18,14 @@ export function cn(...inputs: ClassValue[]) {
 export const MIN_REAL_DIAGRAM_LENGTH = 300
 
 /**
- * Check if diagram XML represents a real diagram (not just empty template).
+ * Check if diagram XML represents a real diagram (not just empty template):
+ * it has a shape (however short), or is long enough to hold pages worth
+ * keeping.
  * @param xml - The diagram XML string to check
  * @returns true if the XML is a real diagram with content
  */
 export function isRealDiagram(xml: string | undefined | null): boolean {
-    return !!xml && xml.length > MIN_REAL_DIAGRAM_LENGTH
+    return !!xml && (hasCells(xml) || xml.length > MIN_REAL_DIAGRAM_LENGTH)
 }
 
 // ============================================================================

@@ -21,9 +21,14 @@ interface DiagramContextType {
     diagramHistory: { svg: string; xml: string }[]
     setDiagramHistory: (history: { svg: string; xml: string }[]) => void
     loadDiagram: (chart: string, skipValidation?: boolean) => string | null
-    handleExport: () => void
-    handleExportWithoutHistory: () => void
-    resolverRef: React.MutableRefObject<((value: string) => void) | null>
+    // Both return the export's tag (empty when draw.io is not there yet)
+    handleExport: () => string
+    handleExportWithoutHistory: () => string
+    // Pending exports by tag; a history or plain export's resolver gets the
+    // first page's XML
+    exportResolversRef: React.MutableRefObject<
+        Record<string, (data: string, xml?: string) => void>
+    >
     drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>
     handleDiagramExport: (data: EventExport) => void
     handleDiagramAutoSave: (data: { xml?: string }) => void
@@ -45,12 +50,10 @@ interface DiagramContextType {
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
 
-// Exports for thumbnails, validation PNGs, history entries and file saves
-// carry a tag in the request's `message` field. draw.io echoes the request
-// back in the export event, so each result reaches its own caller; untagged
-// exports (chat-panel's onFetchChart) resolve resolverRef. Thumbnail,
-// validation and history tags end in a request number, so a late result
-// never answers a newer request.
+// Every export carries a tag in the request's `message` field. draw.io
+// echoes the request back in the export event, so each result reaches its
+// own caller. Tags end in a request number, so a late result never answers
+// a newer request.
 type ExportTag = "thumbnail" | "validation"
 
 export function DiagramProvider({ children }: { children: React.ReactNode }) {
@@ -63,11 +66,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [showSaveDialog, setShowSaveDialog] = useState(false)
     const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
-    const resolverRef = useRef<((value: string) => void) | null>(null)
-    // Pending thumbnail and validation PNG exports, keyed by their export tag
-    const taggedResolversRef = useRef<Record<string, (value: string) => void>>(
-        {},
-    )
+    // Pending exports, keyed by their export tag
+    const exportResolversRef = useRef<
+        Record<string, (data: string, xml?: string) => void>
+    >({})
     // Pending history exports: the document each one was asked for
     const historyXmlRef = useRef(new Map<string, string>())
     const exportSeqRef = useRef(0)
@@ -97,32 +99,28 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setChartXML(xml)
     }
 
-    // Track if we're expecting an export for file save (stores raw export data)
-    const saveResolverRef = useRef<{
-        resolver: ((data: string, fullDiagramXML?: string) => void) | null
-        format: ExportFormat | null
-    }>({ resolver: null, format: null })
-
     const handleExport = () => {
-        if (drawioRef.current) {
-            // Save this export to history, with the document shown now:
-            // chartXML can change before the result comes back
-            const tag = `history-${++exportSeqRef.current}`
-            historyXmlRef.current.set(tag, chartXMLRef.current)
-            drawioRef.current.exportDiagram({
-                format: "xmlsvg",
-                message: tag,
-            })
-        }
+        if (!drawioRef.current) return ""
+        // Save this export to history, with the document shown now:
+        // chartXML can change before the result comes back
+        const tag = `history-${++exportSeqRef.current}`
+        historyXmlRef.current.set(tag, chartXMLRef.current)
+        drawioRef.current.exportDiagram({
+            format: "xmlsvg",
+            message: tag,
+        })
+        return tag
     }
 
     const handleExportWithoutHistory = () => {
-        if (drawioRef.current) {
-            // Export without saving to history (for edit_diagram fetching current state)
-            drawioRef.current.exportDiagram({
-                format: "xmlsvg",
-            })
-        }
+        if (!drawioRef.current) return ""
+        // Export without saving to history (for edit_diagram fetching current state)
+        const tag = `fetch-${++exportSeqRef.current}`
+        drawioRef.current.exportDiagram({
+            format: "xmlsvg",
+            message: tag,
+        })
+        return tag
     }
 
     // Export with a tag in `message` (draw.io echoes it back in the export
@@ -137,11 +135,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             const id = `${tag}-${++exportSeqRef.current}`
             const finish = (value: string | null) => {
                 clearTimeout(timer)
-                delete taggedResolversRef.current[id]
+                delete exportResolversRef.current[id]
                 resolve(value)
             }
             const timer = setTimeout(() => finish(null), timeoutMs)
-            taggedResolversRef.current[id] = finish
+            exportResolversRef.current[id] = finish
             drawioRef.current?.exportDiagram({ format, message: id })
         })
 
@@ -213,16 +211,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleDiagramExport = (data: EventExport) => {
-        // Tagged exports (thumbnail, validation PNG, file save) go only to
-        // their own caller, so they never take the result meant for resolverRef
+        // Thumbnail, validation PNG and file save exports go only to their
+        // own caller
         const tag = data.message?.message
-        if (/^(thumbnail|validation)-/.test(tag ?? "")) {
-            taggedResolversRef.current[tag as string]?.(data.data)
-            return
-        }
-        if (tag === "save") {
-            saveResolverRef.current.resolver?.(data.data, data.xml)
-            saveResolverRef.current = { resolver: null, format: null }
+        if (/^(thumbnail|validation|save)-/.test(tag ?? "")) {
+            exportResolversRef.current[tag as string]?.(data.data, data.xml)
             return
         }
 
@@ -256,9 +249,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             })
         }
 
-        if (resolverRef.current) {
-            resolverRef.current(extractedXML)
-            resolverRef.current = null
+        // The chat's own export (onFetchChart), not another one in flight
+        const resolve =
+            tag !== undefined ? exportResolversRef.current[tag] : undefined
+        if (resolve) {
+            delete exportResolversRef.current[tag as string]
+            resolve(extractedXML)
         }
     }
 
@@ -297,85 +293,87 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         const drawioFormat =
             format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
 
-        // Set up the resolver before triggering export
-        saveResolverRef.current = {
-            resolver: (exportData: string, fullDiagramXML?: string) => {
-                let fileContent: string | Blob
-                let mimeType: string
-                let extension: string
+        // Each save has its own tag, so two at once never swap results
+        const tag = `save-${++exportSeqRef.current}`
+        exportResolversRef.current[tag] = (
+            exportData: string,
+            fullDiagramXML?: string,
+        ) => {
+            delete exportResolversRef.current[tag]
+            let fileContent: string | Blob
+            let mimeType: string
+            let extension: string
 
-                if (format === "drawio") {
-                    // Prefer the complete document from the export event so all pages are saved.
-                    const xml = fullDiagramXML?.trim()
-                        ? fullDiagramXML
-                        : extractDiagramXML(exportData)
-                    fileContent =
-                        normalizeToMxfile(xml, {
-                            pageId: "page-1",
-                            pageName: "Page-1",
-                        }) ?? xml
-                    mimeType = "application/xml"
-                    extension = ".drawio"
-                } else if (format === "png") {
-                    // PNG data comes as base64 data URL
-                    fileContent = exportData
-                    mimeType = "image/png"
-                    extension = ".png"
-                } else if (format === "xmlsvg") {
-                    // Editable SVG: pass data URL directly (like PNG)
-                    fileContent = exportData
-                    mimeType = "image/svg+xml"
-                    extension = ".drawio.svg"
-                } else {
-                    // SVG format (view-only)
-                    fileContent = exportData
-                    mimeType = "image/svg+xml"
-                    extension = ".svg"
-                }
+            if (format === "drawio") {
+                // Prefer the complete document from the export event so all pages are saved.
+                const xml = fullDiagramXML?.trim()
+                    ? fullDiagramXML
+                    : extractDiagramXML(exportData)
+                fileContent =
+                    normalizeToMxfile(xml, {
+                        pageId: "page-1",
+                        pageName: "Page-1",
+                    }) ?? xml
+                mimeType = "application/xml"
+                extension = ".drawio"
+            } else if (format === "png") {
+                // PNG data comes as base64 data URL
+                fileContent = exportData
+                mimeType = "image/png"
+                extension = ".png"
+            } else if (format === "xmlsvg") {
+                // Editable SVG: pass data URL directly (like PNG)
+                fileContent = exportData
+                mimeType = "image/svg+xml"
+                extension = ".drawio.svg"
+            } else {
+                // SVG format (view-only)
+                fileContent = exportData
+                mimeType = "image/svg+xml"
+                extension = ".svg"
+            }
 
-                // Log save event to Langfuse (flags the trace)
-                logSaveToLangfuse(filename, format, sessionId)
+            // Log save event to Langfuse (flags the trace)
+            logSaveToLangfuse(filename, format, sessionId)
 
-                // Handle download
-                let url: string
-                if (
-                    typeof fileContent === "string" &&
-                    fileContent.startsWith("data:")
-                ) {
-                    // Already a data URL (PNG)
-                    url = fileContent
-                } else {
-                    const blob = new Blob([fileContent], { type: mimeType })
-                    url = URL.createObjectURL(blob)
-                }
+            // Handle download
+            let url: string
+            if (
+                typeof fileContent === "string" &&
+                fileContent.startsWith("data:")
+            ) {
+                // Already a data URL (PNG)
+                url = fileContent
+            } else {
+                const blob = new Blob([fileContent], { type: mimeType })
+                url = URL.createObjectURL(blob)
+            }
 
-                const a = document.createElement("a")
-                a.href = url
-                a.download = `${filename}${extension}`
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${filename}${extension}`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
 
-                // Show success toast after download is initiated
-                if (successMessage) {
-                    toast.success(successMessage, {
-                        position: "bottom-left",
-                        duration: 2500,
-                    })
-                }
+            // Show success toast after download is initiated
+            if (successMessage) {
+                toast.success(successMessage, {
+                    position: "bottom-left",
+                    duration: 2500,
+                })
+            }
 
-                // Delay URL revocation to ensure download completes
-                if (!url.startsWith("data:")) {
-                    setTimeout(() => URL.revokeObjectURL(url), 100)
-                }
-            },
-            format,
+            // Delay URL revocation to ensure download completes
+            if (!url.startsWith("data:")) {
+                setTimeout(() => URL.revokeObjectURL(url), 100)
+            }
         }
 
         // Export diagram - callback will be handled in handleDiagramExport
         drawioRef.current.exportDiagram({
             format: drawioFormat,
-            message: "save",
+            message: tag,
         })
     }
 
@@ -407,7 +405,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 loadDiagram,
                 handleExport,
                 handleExportWithoutHistory,
-                resolverRef,
+                exportResolversRef,
                 drawioRef,
                 handleDiagramExport,
                 handleDiagramAutoSave,

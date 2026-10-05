@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { isPrivateUrl } from "@/lib/ssrf-protection"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
 
 // Mock DNS so tests are deterministic and never hit the network.
 const lookupMock = vi.hoisted(() => vi.fn())
@@ -75,5 +75,76 @@ describe("isPrivateUrl", () => {
         expect(await isPrivateUrl("http://does-not-resolve.example/")).toBe(
             true,
         )
+    })
+})
+
+describe("redirectGuardedFetch with the quota on", () => {
+    const answers = (map: Record<string, Response>) =>
+        vi.fn(
+            async (url: string) =>
+                map[String(url)] ?? new Response("?", { status: 404 }),
+        )
+
+    beforeEach(() => {
+        lookupMock.mockReset()
+        // Hosts ending in .example are public
+        lookupMock.mockImplementation(async (host: string) =>
+            host.endsWith(".example")
+                ? [{ address: "93.184.216.34", family: 4 }]
+                : [],
+        )
+        process.env.DYNAMODB_QUOTA_TABLE = "quota"
+        delete process.env.ALLOW_PRIVATE_URLS
+    })
+
+    afterEach(() => {
+        delete process.env.DYNAMODB_QUOTA_TABLE
+        vi.unstubAllGlobals()
+    })
+
+    it("follows a redirect to a public address", async () => {
+        // A user's own proxy that moves http to https
+        vi.stubGlobal(
+            "fetch",
+            answers({
+                "http://proxy.example/v1/chat": new Response(null, {
+                    status: 308,
+                    headers: { location: "https://proxy.example/v1/chat" },
+                }),
+                "https://proxy.example/v1/chat": new Response("ok"),
+            }),
+        )
+        const guarded = redirectGuardedFetch()
+        expect(guarded).toBeDefined()
+        const res = await guarded?.("http://proxy.example/v1/chat", {
+            method: "POST",
+            body: "{}",
+        })
+        expect(await res?.text()).toBe("ok")
+    })
+
+    it("refuses a redirect to the server's own network", async () => {
+        // It would be counted as a public endpoint while using the server's
+        vi.stubGlobal(
+            "fetch",
+            answers({
+                "https://public.example/api/chat": new Response(null, {
+                    status: 307,
+                    headers: { location: "http://127.0.0.1:11434/api/chat" },
+                }),
+            }),
+        )
+        await expect(
+            redirectGuardedFetch()?.("https://public.example/api/chat", {
+                method: "POST",
+                body: "{}",
+            }),
+        ).rejects.toThrow(/private addresses/)
+        expect(fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it("is not used without the quota", () => {
+        delete process.env.DYNAMODB_QUOTA_TABLE
+        expect(redirectGuardedFetch()).toBeUndefined()
     })
 })

@@ -257,12 +257,7 @@ export function deriveEnvUpdates(
             if (p.baseUrl) updates.GOOGLE_VERTEX_BASE_URL = p.baseUrl
         } else if (p.provider === "ollama") {
             if (p.apiKey) updates.OLLAMA_API_KEY = p.apiKey
-            // A key without a URL is an Ollama Cloud key, as its Test sends
-            // it; chat sends a server key to OLLAMA_BASE_URL or local Ollama
-            if (p.baseUrl || p.apiKey) {
-                updates.OLLAMA_BASE_URL =
-                    p.baseUrl || PROVIDER_INFO.ollama.defaultBaseUrl || null
-            }
+            if (p.baseUrl) updates.OLLAMA_BASE_URL = p.baseUrl
         } else {
             const env = credEnvNames(p.provider, index)
             if (env.key && p.apiKey) updates[env.key] = p.apiKey

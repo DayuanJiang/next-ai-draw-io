@@ -28,6 +28,7 @@ import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
 import { checkEditGate, markPageSeen } from "./edit-gate.ts"
+import { createExclusive } from "./exclusive.ts"
 import { addHistory } from "./history.ts"
 import {
     type ExportFormat,
@@ -142,6 +143,18 @@ const server = new McpServer(
     { instructions: INSTRUCTIONS },
 )
 
+// The tools that write the diagram, and start_session, run one at a time:
+// two writes at once would both build on the same document, and the second
+// would drop the first one's change. start_session in the queue keeps a
+// session switch from landing in the middle of a write.
+const exclusive = createExclusive()
+const registerWriteTool = ((name: string, config: any, handler: any) =>
+    server.registerTool(
+        name,
+        config,
+        exclusive(handler),
+    )) as typeof server.registerTool
+
 // Shared Zod schema fragment for page-targeting parameters.
 // Every multi-page-aware tool reuses these three optional fields so the LLM
 // learns one consistent interface.
@@ -254,7 +267,7 @@ server.registerTool(
 )
 
 // Tool: start_session
-server.registerTool(
+registerWriteTool(
     "start_session",
     {
         title: "Start session",
@@ -312,7 +325,7 @@ server.registerTool(
 )
 
 // Tool: create_new_diagram
-server.registerTool(
+registerWriteTool(
     "create_new_diagram",
     {
         title: "Create new diagram",
@@ -430,7 +443,7 @@ Rules: cells are siblings (never nested), ids are unique per page and start from
 )
 
 // Tool: load_diagram
-server.registerTool(
+registerWriteTool(
     "load_diagram",
     {
         title: "Load .drawio file",
@@ -549,7 +562,7 @@ server.registerTool(
 )
 
 // Tool: edit_diagram
-server.registerTool(
+registerWriteTool(
     "edit_diagram",
     {
         title: "Edit diagram",
@@ -791,13 +804,15 @@ server.registerTool(
                 }
             }
 
+            // start_session may replace currentSession while this waits
+            const session = currentSession
             // Request browser to push fresh state and wait for it (an
             // expired session first gets its saved file back to sync)
             let staleNote = ""
-            restoreSavedSession(currentSession.id)
-            const syncRequested = requestSync(currentSession.id)
+            restoreSavedSession(session.id)
+            const syncRequested = requestSync(session.id)
             if (syncRequested) {
-                const synced = await waitForSync(currentSession.id)
+                const synced = await waitForSync(session.id)
                 if (!synced) {
                     log.warn("get_diagram: sync timeout - state may be stale")
                     staleNote =
@@ -808,13 +823,13 @@ server.registerTool(
             // Fetch latest state from browser, re-normalising to mxfile so a
             // bare <mxGraphModel> pushed back by the embed/sync path doesn't
             // strip page structure (see edit_diagram for the same guard).
-            const browserState = sessionState(currentSession.id)
+            const browserState = sessionState(session.id)
             if (browserState?.xml) {
-                currentSession.xml =
+                session.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
             }
 
-            if (!currentSession.xml) {
+            if (!session.xml) {
                 return {
                     content: [
                         {
@@ -834,8 +849,8 @@ server.registerTool(
             // The model is now looking at the current state. Record the raw
             // store value — the gate's fast path is plain string equality
             // against the store, with a structural comparison as fallback.
-            const liveXml = browserState?.xml || currentSession.xml
-            const doc = parseMxfile(currentSession.xml)
+            const liveXml = browserState?.xml || session.xml
+            const doc = parseMxfile(session.xml)
             const pages = doc ? listPagesFromDoc(doc) : []
             const pageList = pages.length
                 ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
@@ -843,19 +858,19 @@ server.registerTool(
 
             // No selector → return full mxfile
             if (!hasPageSelector(pageSelector)) {
-                currentSession.lastSeenXml = liveXml
+                session.lastSeenXml = liveXml
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Current diagram XML:\n\n${currentSession.xml}\n\n${pageList}${staleNote}`,
+                            text: `Current diagram XML:\n\n${session.xml}\n\n${pageList}${staleNote}`,
                         },
                     ],
                 }
             }
 
             // Selector → return a single-page projection
-            const projection = projectPage(currentSession.xml, pageSelector)
+            const projection = projectPage(session.xml, pageSelector)
             if (!projection.ok) {
                 return {
                     content: [
@@ -872,13 +887,13 @@ server.registerTool(
             }
             // One page shown counts for all only if the others are as the
             // model saw them last
-            currentSession.lastSeenXml = markPageSeen(
-                currentSession.lastSeenXml,
+            session.lastSeenXml = markPageSeen(
+                session.lastSeenXml,
                 liveXml,
                 pageSelector,
             )
             const otherPagesNote =
-                currentSession.lastSeenXml === liveXml
+                session.lastSeenXml === liveXml
                     ? ""
                     : `\n\nNote: ${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector before editing.`
             return {
@@ -1148,15 +1163,48 @@ server.registerTool(
                 }
             }
 
+            // start_session may replace currentSession while this waits
+            const session = currentSession
+
+            // Detect format from extension if not specified
+            const lowerPath = path.toLowerCase()
+            const detectedFormat =
+                format ||
+                (lowerPath.endsWith(".drawio.svg")
+                    ? "drawio.svg"
+                    : lowerPath.endsWith(".png")
+                      ? "png"
+                      : lowerPath.endsWith(".svg")
+                        ? "svg"
+                        : "drawio")
+
+            // The .drawio file is written from the state, so get the
+            // user's latest edits into it first, as get_diagram does (the
+            // images are made by the browser from its canvas)
+            let syncNote = ""
+            if (detectedFormat === "drawio") {
+                restoreSavedSession(session.id)
+                if (!requestSync(session.id)) {
+                    syncNote =
+                        "\n\nNote: the preview was not reachable, so the file may not include the user's latest manual edits."
+                } else if (!(await waitForSync(session.id))) {
+                    log.warn(
+                        "export_diagram: sync timeout - state may be stale",
+                    )
+                    syncNote =
+                        "\n\nNote: the browser did not respond, so the file may not include the user's latest manual edits (is the preview tab open?)."
+                }
+            }
+
             // Fetch latest state, re-normalised to mxfile so a page
             // selector works on a bare <mxGraphModel> pushed by the browser
-            const browserState = sessionState(currentSession.id)
+            const browserState = sessionState(session.id)
             if (browserState?.xml) {
-                currentSession.xml =
+                session.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
             }
 
-            if (!currentSession.xml) {
+            if (!session.xml) {
                 return {
                     content: [
                         {
@@ -1177,18 +1225,6 @@ server.registerTool(
             const fs = await import("node:fs/promises")
             const nodePath = await import("node:path")
 
-            // Detect format from extension if not specified
-            const lowerPath = path.toLowerCase()
-            const detectedFormat =
-                format ||
-                (lowerPath.endsWith(".drawio.svg")
-                    ? "drawio.svg"
-                    : lowerPath.endsWith(".png")
-                      ? "png"
-                      : lowerPath.endsWith(".svg")
-                        ? "svg"
-                        : "drawio")
-
             // .drawio path - write XML directly (no browser round-trip).
             if (detectedFormat === "drawio") {
                 let filePath = path
@@ -1197,12 +1233,9 @@ server.registerTool(
                 }
                 const absolutePath = nodePath.resolve(filePath)
 
-                let outXml = currentSession.xml
+                let outXml = session.xml
                 if (hasPageSelector(pageSelector)) {
-                    const projection = projectPage(
-                        currentSession.xml,
-                        pageSelector,
-                    )
+                    const projection = projectPage(session.xml, pageSelector)
                     if (!projection.ok) {
                         return {
                             content: [
@@ -1226,7 +1259,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${outXml.length} characters`,
+                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${outXml.length} characters${syncNote}`,
                         },
                     ],
                 }
@@ -1248,7 +1281,7 @@ server.registerTool(
             const browserFormat =
                 detectedFormat === "drawio.svg" ? "xmlsvg" : detectedFormat
 
-            const state = sessionState(currentSession.id)
+            const state = sessionState(session.id)
             if (!state) {
                 return {
                     content: [
@@ -1260,8 +1293,8 @@ server.registerTool(
                     isError: true,
                 }
             }
-            if (previewStalled(currentSession.id)) {
-                return previewStalledError(currentSession.id)
+            if (previewStalled(session.id)) {
+                return previewStalledError(session.id)
             }
 
             // -----------------------------------------------------------------
@@ -1281,10 +1314,10 @@ server.registerTool(
             let projectionXml: string | undefined
             let pngPageId: string | undefined
             if (hasPageSelector(pageSelector) && detectedFormat === "png") {
-                pngPageId = pageIdFor(currentSession.xml, pageSelector)
+                pngPageId = pageIdFor(session.xml, pageSelector)
             }
             if (hasPageSelector(pageSelector) && !pngPageId) {
-                const projection = projectPage(currentSession.xml, pageSelector)
+                const projection = projectPage(session.xml, pageSelector)
                 if (!projection.ok) {
                     return {
                         content: [
@@ -1303,7 +1336,7 @@ server.registerTool(
             }
 
             const exportData = await exportViaBrowser(
-                currentSession.id,
+                session.id,
                 browserFormat,
                 projectionXml,
                 pngPageId ? { pageId: pngPageId } : undefined,
@@ -1493,7 +1526,7 @@ server.registerTool(
 )
 
 // Tool: add_page
-server.registerTool(
+registerWriteTool(
     "add_page",
     {
         title: "Add page",
@@ -1610,7 +1643,7 @@ server.registerTool(
 )
 
 // Tool: rename_page
-server.registerTool(
+registerWriteTool(
     "rename_page",
     {
         title: "Rename page",
@@ -1692,7 +1725,7 @@ server.registerTool(
 )
 
 // Tool: delete_page
-server.registerTool(
+registerWriteTool(
     "delete_page",
     {
         title: "Delete page",

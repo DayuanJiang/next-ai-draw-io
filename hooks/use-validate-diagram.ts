@@ -104,8 +104,21 @@ export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
     )
 
     /**
+     * End a running check (the user pressed Stop): its promise rejects with
+     * an AbortError, so the tool handler can finish at once.
+     */
+    const cancel = useCallback(() => {
+        const pending = pendingValidationRef.current
+        if (!pending) return
+        pendingValidationRef.current = null
+        stop()
+        pending.reject(new DOMException("Validation cancelled", "AbortError"))
+    }, [stop])
+
+    /**
      * Validate with fallback - returns default valid result on error.
      * Use this to avoid blocking the user on validation failures.
+     * A cancelled check is passed on as its AbortError.
      */
     const validateWithFallback = useCallback(
         async (
@@ -115,6 +128,7 @@ export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
             try {
                 return await validate(imageData, sessionId)
             } catch (error) {
+                if ((error as Error)?.name === "AbortError") throw error
                 console.warn(
                     "[useValidateDiagram] Validation failed, using fallback:",
                     error,
@@ -130,6 +144,7 @@ export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
         validate,
         validateWithFallback,
         stop,
+        cancel,
 
         // State
         isValidating: isLoading,

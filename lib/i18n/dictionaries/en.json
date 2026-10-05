@@ -187,6 +187,8 @@
         "failedToRecordFeedback": "Failed to record your feedback. Please try again.",
         "storageUpdateFailed": "Chat cleared but browser storage could not be updated",
         "sessionSaveFailed": "Could not save this chat. Browser storage may be full: delete old chats from history and try again.",
+        "sessionSaveFailedLeave": "Could not save this chat. Browser storage may be full. You can go on without saving it, then delete old chats from the list in the new chat.",
+        "continueWithoutSaving": "Continue without saving",
         "llm": {
             "invalid_api_key": "The provider rejected the API key. Check it in model settings.",
             "forbidden": "The provider refused the request. The key may not have access to this model or region.",

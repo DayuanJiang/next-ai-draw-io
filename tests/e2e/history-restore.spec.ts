@@ -86,6 +86,40 @@ test.describe("History and Session Restore", () => {
         ).toBeVisible()
     })
 
+    test("new chat can go on without saving when storage is full", async ({
+        page,
+    }) => {
+        // Old chats can only be deleted from the empty chat's list, so the
+        // user must be able to get there
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(
+                    SINGLE_BOX_XML,
+                    "Created your test diagram.",
+                ),
+            })
+        })
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await sendMessage(page, "Create a test diagram")
+        await waitForText(page, "Created your test diagram.")
+        await page.evaluate(() => {
+            IDBObjectStore.prototype.put = () => {
+                throw new DOMException("Storage is full", "QuotaExceededError")
+            }
+        })
+        await page.locator('[data-testid="new-chat-button"]').click()
+        await page
+            .getByRole("button", { name: "Continue without saving" })
+            .click({ timeout: 5000 })
+        await expect(
+            page.locator('text="Created your test diagram."'),
+        ).toHaveCount(0, { timeout: 5000 })
+        await expect(page.getByText("Paper to Diagram")).toBeVisible()
+    })
+
     // A diagram drawn by hand, without chat messages: loaded into draw.io
     // directly, then moved with an arrow key, which draw.io reports as an
     // edit like any manual change
@@ -337,4 +371,56 @@ test.describe("History and Session Restore", () => {
             localStorage.removeItem("test-large-data")
         })
     })
+})
+
+/** Number of chats stored in this origin's IndexedDB */
+const countSessions = (page: Page) =>
+    page.evaluate(
+        () =>
+            new Promise<number>((resolve, reject) => {
+                const open = indexedDB.open("next-ai-drawio")
+                open.onerror = () => reject(open.error)
+                open.onsuccess = () => {
+                    const db = open.result
+                    if (!db.objectStoreNames.contains("sessions")) {
+                        db.close()
+                        return resolve(0)
+                    }
+                    const count = db
+                        .transaction("sessions", "readonly")
+                        .objectStore("sessions")
+                        .count()
+                    count.onsuccess = () => {
+                        db.close()
+                        resolve(count.result)
+                    }
+                }
+            }),
+    )
+
+test("new chat right after an answer saves that chat once", async ({
+    page,
+}) => {
+    test.setTimeout(180_000)
+    await page.route("**/api/chat", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: createMockSSEResponse(SINGLE_BOX_XML, "Drew the box."),
+        })
+    })
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    const newChat = page.locator('[data-testid="new-chat-button"]')
+    // The auto-save runs a second after the answer; New Chat around then
+    // waits for its thumbnail while the auto-save starts
+    for (let run = 1; run <= 10; run++) {
+        await sendMessage(page, `Draw box ${run}`)
+        await waitForText(page, "Drew the box.")
+        await page.waitForTimeout(500 + run * 100)
+        await newChat.click()
+        await expect(page.getByText("Drew the box.")).toHaveCount(0)
+        await page.waitForTimeout(2500)
+        expect(await countSessions(page), `run ${run}`).toBe(run)
+    }
 })

@@ -6,6 +6,12 @@
 import { Output, streamText } from "ai"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import { getValidationModel } from "@/lib/ai-providers"
+import {
+    checkAndIncrementRequest,
+    isQuotaEnabled,
+    recordTokenUsage,
+} from "@/lib/dynamo-quota-manager"
+import { getUserIdFromRequest } from "@/lib/user-id"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
 import {
     type ValidationResult,
@@ -78,6 +84,35 @@ export async function POST(req: Request): Promise<Response> {
             )
         }
 
+        // It runs the server's vision model: with the quota on, the daily
+        // and per-minute token limits apply, and its tokens are counted. Not
+        // the request limit, which is for chats: the day's last chat still
+        // gets its check, and a check does not count as a chat.
+        const userId = getUserIdFromRequest(req)
+        const countsQuota = isQuotaEnabled() && userId !== "anonymous"
+        if (countsQuota) {
+            const quotaCheck = await checkAndIncrementRequest(
+                userId,
+                {
+                    requests: 0,
+                    tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+                    tpm: Number(process.env.TPM_LIMIT) || 20000,
+                },
+                0,
+            )
+            if (!quotaCheck.allowed) {
+                return Response.json(
+                    {
+                        error: quotaCheck.error,
+                        type: quotaCheck.type,
+                        used: quotaCheck.used,
+                        limit: quotaCheck.limit,
+                    },
+                    { status: 429 },
+                )
+            }
+        }
+
         // Get the validation model
         let model
         try {
@@ -120,7 +155,14 @@ export async function POST(req: Request): Promise<Response> {
             ],
             maxOutputTokens: 1024,
             abortSignal: AbortSignal.timeout(timeout),
-            onFinish: ({ output }) => {
+            onFinish: ({ output, totalUsage }) => {
+                if (countsQuota && totalUsage) {
+                    recordTokenUsage(
+                        userId,
+                        (totalUsage.inputTokens || 0) +
+                            (totalUsage.outputTokens || 0),
+                    )
+                }
                 if (sessionId && output) {
                     console.log(
                         `[validate-diagram] Session ${sessionId}: valid=${output.valid}, issues=${output.issues?.length ?? 0}`,

@@ -7,11 +7,16 @@ let stateId = null;
 // the last one the server has
 let latestXml = null;
 let pushFailing = false; // the last push could not reach the server
+// After recovery replaced the canvas, until draw.io reports the load: an
+// autosave still on its way belongs to the canvas being replaced
+let awaitingLoad = false;
 let pollSeq = 0, lastHandledPoll = 0; // polls overlap; older answers are dropped
 let pendingSvgExport = null;
 let pendingSvgBase = 0; // version the pending autosave was based on
 let pendingSvgStateId = null; // and the state it belonged to
-let pendingAiSvg = false;
+// The latest thumbnail export of a loaded server write: its number (echoed
+// by draw.io), the state and version it showed, and the XML loaded
+let thumbExportSeq = 0, thumbExport = null;
 let pendingMcpExport = null; // 'png', 'svg' or 'xmlsvg' when MCP requested export
 let mcpExportSeq = 0; // number of the latest MCP export
 let mcpExportId = null; // the server's id for it, sent back with the result
@@ -26,11 +31,16 @@ window.addEventListener('message', (e) => {
         if (msg.event === 'init') {
             isReady = true;
             if (pendingXml) { loadDiagram(pendingXml); pendingXml = null; }
+        } else if (msg.event === 'load') {
+            awaitingLoad = false;
         } else if ((msg.event === 'save' || msg.event === 'autosave') && msg.xml) {
             // Ignore autosave while a single-page projection is on screen
             // for a page-targeted export — otherwise we'd push the
             // transient projection back as the canonical session state.
             if (projectionExportActive) return;
+            // An edit of the canvas that recovery is replacing: kept in
+            // History, never over the recovered diagram
+            if (awaitingLoad) { pushState(msg.xml, '', currentVersion, 'recover'); return; }
             // Also an edit undone back to what the server has
             latestXml = msg.xml;
             if (msg.xml === lastXml) return;
@@ -109,17 +119,21 @@ window.addEventListener('message', (e) => {
             // Handle SVG export
             let svg = msg.data;
             if (!svg.startsWith('data:')) svg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-            if (pendingSvgExport) {
-                const xml = pendingSvgExport;
-                pendingSvgExport = null;
-                pushState(xml, svg, pendingSvgBase, 'edit', pendingSvgStateId);
-            } else if (pendingAiSvg) {
-                pendingAiSvg = false;
+            if (msg.message && msg.message.thumbExport) {
+                // Only for the latest load, and only if the canvas still
+                // shows it: the export pictures the canvas as it is now
+                const t = thumbExport;
+                if (!t || msg.message.thumbExport !== t.n || latestXml !== t.xml) return;
+                thumbExport = null;
                 fetch('/api/history-svg', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, svg })
+                    body: JSON.stringify({ sessionId, svg, stateId: t.stateId, version: t.version })
                 }).catch(() => {});
+            } else if (pendingSvgExport) {
+                const xml = pendingSvgExport;
+                pendingSvgExport = null;
+                pushState(xml, svg, pendingSvgBase, 'edit', pendingSvgStateId);
             }
         }
     } catch {}
@@ -131,9 +145,12 @@ function loadDiagram(xml, capturePreview = false) {
     latestXml = xml;
     iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml, autosave: 1 }), '*');
     if (capturePreview) {
+        // A server write: currentVersion is its version
+        const t = { n: ++thumbExportSeq, stateId, version: currentVersion, xml };
+        thumbExport = t;
         setTimeout(() => {
-            pendingAiSvg = true;
-            iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
+            if (thumbExport !== t) return; // a newer load takes its own
+            iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg', thumbExport: t.n }), '*');
         }, 500);
     }
 }
@@ -177,6 +194,19 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
             if (sid !== stateId) return;
             currentVersion = d.version;
             lastXml = xml;
+            // The canvas changed while this edit was on its way, to
+            // something no pending autosave will send (an undo back to the
+            // previous version): send it now. A sync reply is draw.io's
+            // export of the canvas, in another format than its autosave.
+            if (latestXml && latestXml !== xml && pendingSvgExport !== latestXml && source === 'edit') {
+                pushState(latestXml);
+            }
+        }
+        // Over the server's size limit: the image is most of it, so try once
+        // without it
+        else if (r.status === 413) {
+            if (svg) pushState(xml, '', baseVersion, source, sid);
+            else showNotice('This diagram is too large to save to the MCP server (over 10 MB). Use Download to keep it.');
         }
         // 409: the AI wrote a newer version, or the server lost the state
         // this push was based on; the next poll sorts it out
@@ -216,6 +246,7 @@ function recoverState(s) {
         // server was down are saved now)
         if (projectionShown && mine) {
             iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: mine, autosave: 1 }), '*');
+            expectLoad();
         }
         if (mine && mine !== s.xml) pushState(mine, '', s.version);
     } else {
@@ -223,8 +254,16 @@ function recoverState(s) {
         // missed, a saved file): show that, and keep this tab's copy in
         // History unless it is the same
         loadDiagram(s.xml, true);
+        expectLoad();
         if (mine && mine !== s.xml) pushState(mine, '', s.version, 'recover');
     }
+}
+
+// Until draw.io reports the load (its messages come in order), an autosave
+// is from the canvas being replaced; in case no report comes, not for long
+function expectLoad() {
+    awaitingLoad = true;
+    setTimeout(() => { awaitingLoad = false; }, 5000);
 }
 
 let pendingSyncExport = false;
@@ -368,7 +407,7 @@ saveConfirmBtn.onclick = () => {
     saveConfirmBtn.textContent = 'Exporting...';
 
     if (format === 'drawio') {
-        // Use lastXml directly instead of requesting export (avoids race with SVG exports).
+        // Use the XML directly instead of requesting export (avoids race with SVG exports).
         // session.xml is canonically <mxfile> after the multi-page refactor,
         // so no wrapper injection is needed. The legacy fallback below
         // remains only for documents that somehow slipped past

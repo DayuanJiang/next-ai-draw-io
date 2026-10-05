@@ -17,6 +17,7 @@
  *   - how to add/rename/delete pages without re-parsing ad-hoc.
  */
 
+import { readAttributes } from "./xml-attributes.ts"
 import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export interface PageInfo {
@@ -125,15 +126,13 @@ export function wrapCellsInModel(xml: string): string {
     if (end !== -1 && /^(\s*<\/[^>]+>)*\s*$/.test(content.slice(end))) {
         content = content.slice(0, end)
     }
+    // The root cells come with the wrapper (a label holding id='1' is not
+    // an id)
     content = content
-        .replace(
-            /<mxCell[^>]*\bid\s*=\s*["']0["'][^>]*(?:\/>|>\s*<\/mxCell>)/g,
-            "",
-        )
-        .replace(
-            /<mxCell[^>]*\bid\s*=\s*["']1["'][^>]*(?:\/>|>\s*<\/mxCell>)/g,
-            "",
-        )
+        .replace(/<mxCell\b[^>]*?(?:\/>|>\s*<\/mxCell>)/g, (cell) => {
+            const id = readAttributes(cell).find((a) => a.name === "id")?.value
+            return id === "0" || id === "1" ? "" : cell
+        })
         .trim()
     return `<mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel>`
 }

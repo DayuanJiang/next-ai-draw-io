@@ -13,6 +13,7 @@ import { z } from "zod"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import {
     CACHE_POINT,
+    edgeOneEndpoint,
     getAIModel,
     getServerProvider,
     SINGLE_SYSTEM_PROVIDERS,
@@ -189,15 +190,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
     }
 
     // A server model's provider comes from its config: for one set up in
-    // the admin panel the header holds the provider name's slug
-    const isEdgeOne = (serverModelConfig.provider || provider) === "edgeone"
+    // the admin panel the header holds the provider name's slug. Without
+    // either, the server's own AI_PROVIDER.
+    const isEdgeOne =
+        (serverModelConfig.provider || provider || getServerProvider()) ===
+        "edgeone"
 
-    // For EdgeOne provider, construct full URL from request origin
-    // because createOpenAI needs absolute URL, not relative path
-    if (isEdgeOne && !baseUrl) {
-        const origin = req.headers.get("origin") || new URL(req.url).origin
-        baseUrl = `${origin}/api/edgeai`
-    }
+    // EdgeOne is this deployment's own function, whatever URL the request
+    // names: another host would get the user's EdgeOne cookies, and the
+    // quota counts it. Absolute, as the SDK needs.
+    if (isEdgeOne) baseUrl = edgeOneEndpoint(req)
 
     // Same rule as validate-model: with ALLOW_PRIVATE_URLS=false a request may
     // not point the server at a private or internal address
@@ -212,8 +214,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const cookieHeader = req.headers.get("cookie")
 
     const clientOverrides = {
-        // Server model provider takes precedence over client header
-        provider: serverModelConfig.provider || provider,
+        // Server model provider takes precedence over client header; EdgeOne
+        // named only in AI_PROVIDER is named here, for its own base URL
+        provider:
+            serverModelConfig.provider ||
+            provider ||
+            (isEdgeOne ? "edgeone" : null),
         baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
         // A server model runs the model it was configured with, whatever the header says
@@ -274,18 +280,24 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
-    // server's keys, or on its keyless Ollama or EdgeOne. Decided by the key
-    // actually used: a key header the provider never reads must not skip it.
-    // EdgeOne never reads one; keyless Ollama at a private address is the
-    // server's own network.
+    // server's keys, or on the server's own endpoints: EdgeOne, its keyless
+    // Ollama, and anything at a private address (the server's network,
+    // which ignores a dummy key header). Bedrock and EdgeOne never use the
+    // base URL header. In the desktop app every endpoint is the user's.
     const clientBaseUrl = normalizeBaseUrl(
         req.headers.get("x-ai-base-url") ?? "",
     )
+    const usesClientBaseUrl =
+        resolvedProvider !== "bedrock" && resolvedProvider !== "edgeone"
     const onServerEndpoint =
-        (resolvedProvider === "edgeone" && !clientBaseUrl) ||
-        (resolvedProvider === "ollama" &&
-            !clientOverrides.apiKey &&
-            (!clientBaseUrl || (await isPrivateUrl(clientBaseUrl))))
+        process.env.NEXT_AI_DRAWIO_DESKTOP !== "1" &&
+        (resolvedProvider === "edgeone" ||
+            (resolvedProvider === "ollama" &&
+                !clientBaseUrl &&
+                !clientOverrides.apiKey) ||
+            (usesClientBaseUrl &&
+                !!clientBaseUrl &&
+                (await isPrivateUrl(clientBaseUrl))))
     const countsQuota =
         isQuotaEnabled() &&
         (onServerCredentials || onServerEndpoint) &&
@@ -317,11 +329,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // The user setting can raise the budget only on their own key (in the
-    // desktop app every key is the user's); on the server's keys it can only
-    // lower it
+    // desktop app every key is the user's); on the server's keys or own
+    // endpoints it can only lower it
     const maxOutputTokens = resolveMaxOutputTokens(
         req.headers.get("x-max-output-tokens"),
-        onServerCredentials,
+        onServerCredentials || onServerEndpoint,
     )
     console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
@@ -353,8 +365,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
 ${userInputText}
 """`
 
-    // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = await convertToModelMessages(messages)
+    // Convert UIMessages to ModelMessages and add system message. A tool
+    // call that never got its result (the user stopped while it ran) is
+    // left out: the SDK would refuse this and every later request of the
+    // chat (MissingToolResultsError)
+    const modelMessages = await convertToModelMessages(messages, {
+        ignoreIncompleteToolCalls: true,
+    })
 
     // DEBUG_LLM_PAYLOAD=true logs the incoming message structure
     if (DEBUG_LLM_PAYLOAD) {
@@ -541,6 +558,8 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
+    // Set by onAbort, which records the finished steps' tokens itself
+    let stopped = false
     const result = streamText({
         model,
         // The system messages carry cache points, so they go in messages.
@@ -606,7 +625,7 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
             // Record token usage for server-side quota tracking (if enabled)
             // Use totalUsage (cumulative across all steps) instead of usage (final step only)
             // inputTokens already includes cache reads and writes in AI SDK 6
-            if (countsQuota && totalUsage) {
+            if (countsQuota && totalUsage && !stopped) {
                 const totalTokens =
                     (totalUsage.inputTokens || 0) +
                     (totalUsage.outputTokens || 0)
@@ -618,7 +637,23 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
             console.error(error) // what AI SDK does without an onError
             endTrace()
         },
-        onAbort: () => endTrace(),
+        onAbort: ({ steps }) => {
+            stopped = true
+            endTrace()
+            // Stopped (or disconnected) after some steps finished: their
+            // tokens were used, or stopping every request after a costly
+            // first step would get around the token limits
+            if (countsQuota) {
+                const tokens = steps.reduce(
+                    (sum, step) =>
+                        sum +
+                        (step.usage.inputTokens || 0) +
+                        (step.usage.outputTokens || 0),
+                    0,
+                )
+                if (tokens > 0) recordTokenUsage(userId, tokens)
+            }
+        },
         tools: {
             // Client-side tool that will be executed on the client
             display_diagram: {

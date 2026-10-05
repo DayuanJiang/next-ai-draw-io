@@ -66,6 +66,13 @@ describe("parseDrawioFileContent", () => {
         }
     })
 
+    it("rejects a bare mxGraphModel that is not closed", () => {
+        const r = parseDrawioFileContent(
+            MODEL_XML.replace("</root></mxGraphModel>", ""),
+        )
+        expect(r.ok).toBe(false)
+    })
+
     it("decompresses a compressed mxfile into plain XML pages", () => {
         const r = parseDrawioFileContent(COMPRESSED_MXFILE)
         expect(r.ok).toBe(true)

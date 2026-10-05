@@ -28,6 +28,14 @@ vi.mock("@ai-sdk/openai", () => {
     }
 })
 
+vi.mock("@ai-sdk/azure", () => {
+    const mockModel = { modelId: "test-model" }
+    const mockProviderFn = vi.fn(() => mockModel) as any
+    mockProviderFn.chat = vi.fn(() => mockModel)
+    mockProviderFn.responses = vi.fn(() => mockModel)
+    return { createAzure: vi.fn(() => mockProviderFn) }
+})
+
 vi.mock("@ai-sdk/amazon-bedrock", () => {
     const mockProviderFn = vi.fn(() => ({ modelId: "test-model" }))
     return { createAmazonBedrock: vi.fn(() => mockProviderFn) }
@@ -443,6 +451,43 @@ describe("whose keys a request uses", () => {
         } finally {
             delete process.env.MY_OLLAMA_URL
             delete process.env.MY_OLLAMA_KEY
+        }
+    })
+
+    it("runs an Azure entry set up only in the admin panel", async () => {
+        // No AZURE_BASE_URL or AZURE_RESOURCE_NAME: the entry's own
+        // variables hold the key and the resource URL
+        process.env.ADMIN_AZURE_API_KEY = "panel-key"
+        process.env.ADMIN_AZURE_BASE_URL = "https://res.openai.azure.com/openai"
+        try {
+            const { createAzure } = await import("@ai-sdk/azure")
+            expect(() =>
+                getAIModel({
+                    provider: "azure",
+                    modelId: "gpt-4o",
+                    apiKeyEnv: "ADMIN_AZURE_API_KEY",
+                    baseUrlEnv: "ADMIN_AZURE_BASE_URL",
+                }),
+            ).not.toThrow()
+            expect(createAzure).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    apiKey: "panel-key",
+                    baseURL: "https://res.openai.azure.com/openai",
+                }),
+            )
+            // Without any URL it still says what is missing
+            delete process.env.ADMIN_AZURE_BASE_URL
+            expect(() =>
+                getAIModel({
+                    provider: "azure",
+                    modelId: "gpt-4o",
+                    apiKeyEnv: "ADMIN_AZURE_API_KEY",
+                    baseUrlEnv: "ADMIN_AZURE_BASE_URL",
+                }),
+            ).toThrow(/AZURE_BASE_URL/)
+        } finally {
+            delete process.env.ADMIN_AZURE_API_KEY
+            delete process.env.ADMIN_AZURE_BASE_URL
         }
     })
 

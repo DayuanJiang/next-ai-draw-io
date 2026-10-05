@@ -326,3 +326,30 @@ describe("text directly under a page", () => {
         expect(r.error).toMatch(/not-base64/)
     })
 })
+
+describe("attributes inside quoted values", () => {
+    const labelled = `<mxCell id="2" value="Use parent='1'" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+
+    it("are not duplicates of the real ones", () => {
+        const r = validateAndFixXml(model(labelled))
+        expect(r.valid).toBe(true)
+        expect(r.fixed ?? model(labelled)).toContain(labelled)
+    })
+
+    it("are kept when a real duplicate is removed", () => {
+        // The bare & makes the repair run on the whole document
+        const cell = `<mxCell id="3" value="Use parent='1'" vertex="1" parent="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+        const r = validateAndFixXml(model(cell + BROKEN_CELL))
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain(
+            `<mxCell id="3" value="Use parent='1'" vertex="1" parent="1">`,
+        )
+    })
+
+    it("leave two cells with an unbalanced quote their ids and parents", () => {
+        const broken = `<mxCell id="4" style="rounded=1;fillColor="#dae8fc" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><mxCell id="5" value="B" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+        const r = validateAndFixXml(model(broken))
+        expect(r.fixed).toContain(`id="5" value="B" vertex="1" parent="1"`)
+        expect(r.fixed).toMatch(/id="4"[^>]*vertex="1" parent="1"/)
+    })
+})

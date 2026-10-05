@@ -20,17 +20,28 @@ function readBody(
     // across two chunks.
     const chunks: Buffer[] = []
     let size = 0
+    let tooLarge = false
     req.on("data", (chunk: Buffer) => {
+        if (tooLarge) return
         size += chunk.length
         if (size > MAX_BODY_BYTES) {
-            res.writeHead(413, { "Content-Type": "application/json" })
-            res.end(JSON.stringify({ error: "Payload too large" }))
-            req.destroy()
+            // Read the rest without keeping it and answer at the end: a
+            // connection closed mid-upload reaches the browser as a network
+            // error, without this answer
+            tooLarge = true
+            chunks.length = 0
             return
         }
         chunks.push(chunk)
     })
-    req.on("end", () => cb(Buffer.concat(chunks).toString("utf8")))
+    req.on("end", () => {
+        if (tooLarge) {
+            res.writeHead(413, { "Content-Type": "application/json" })
+            res.end(JSON.stringify({ error: "Payload too large" }))
+            return
+        }
+        cb(Buffer.concat(chunks).toString("utf8"))
+    })
 }
 
 import { contentFingerprint } from "./edit-gate.ts"
@@ -125,6 +136,8 @@ interface SessionState {
     // Version of the last write the browser did not make itself (AI edit,
     // restore). A browser push based on an older version is rejected.
     serverVersion?: number
+    // The XML of that write: what a thumbnail taken after loading it shows
+    serverXml?: string
     lastUpdated: Date
     lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
@@ -192,11 +205,15 @@ export function setState(
         version: newVersion,
         stateId: existing?.stateId ?? randomUUID(),
         serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
+        serverXml: fromBrowser ? existing?.serverXml : xml,
         lastUpdated: new Date(),
         lastPolled: existing?.lastPolled,
         // The image of this XML, never an older one's: a write without an
-        // image (AI write, sync reply) leaves none until the browser sends it
-        svg: svg || undefined,
+        // image (AI write, sync reply) leaves none until the browser sends
+        // it, unless it is the same XML
+        svg:
+            svg ||
+            (existing && existing.xml === xml ? existing.svg : undefined),
         syncRequested: undefined, // Clear sync request when browser pushes state
         exportFormat: existing?.exportFormat, // Preserve pending export request
         exportXml: existing?.exportXml, // Preserve pending projection
@@ -696,18 +713,26 @@ function handleHistorySvgApi(
 
     readBody(req, res, (body) => {
         try {
-            const { sessionId, svg } = JSON.parse(body)
+            const { sessionId, svg, stateId, version } = JSON.parse(body)
             if (!sessionId || !svg) {
                 res.writeHead(400, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "sessionId and svg required" }))
                 return
             }
 
-            // The browser took it of the diagram it just loaded: the state
+            // The browser took it of the server write it loaded, named by
+            // the state and version. One that arrives after the next server
+            // write, or for a state since lost, is dropped; a browser write
+            // since (a sync reply) leaves that write's image valid.
             const state = stateStore.get(sessionId)
-            if (state) {
-                updateLastHistorySvg(sessionId, svg, state.xml)
-                state.svg = svg
+            if (
+                state &&
+                state.stateId === stateId &&
+                state.serverVersion === version &&
+                state.serverXml !== undefined
+            ) {
+                updateLastHistorySvg(sessionId, svg, state.serverXml)
+                if (state.xml === state.serverXml) state.svg = svg
             }
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true }))

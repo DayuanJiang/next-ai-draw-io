@@ -48,6 +48,7 @@ export async function POST(req: Request) {
         sameEndpoint && stored ? [stored] : [],
     )
 
+    const serverUrl = globalBaseUrl(resolved.provider)
     return validateModel(
         new Request(new URL("/api/validate-model", req.url), {
             method: "POST",
@@ -55,14 +56,23 @@ export async function POST(req: Request) {
                 "Content-Type": "application/json",
                 // Checked again there, in place of an access code
                 "x-admin-password": req.headers.get("x-admin-password") || "",
+                // The EdgeOne function checks the access code and Pages
+                // cookies, and its URL is built from the page's origin
+                "x-access-code": req.headers.get("x-access-code") || "",
+                cookie: req.headers.get("cookie") || "",
+                ...(req.headers.get("origin") && {
+                    origin: req.headers.get("origin") as string,
+                }),
             },
             body: JSON.stringify({
                 provider: resolved.provider,
                 apiKey: resolved.apiKey,
                 // Without a URL of its own, chat sends the entry's key to
                 // the server's <P>_BASE_URL: test that endpoint, not
-                // another one
-                baseUrl: resolved.baseUrl || globalBaseUrl(resolved.provider),
+                // another one. It is the server's own, which chat uses
+                // without the checks for a URL a user typed.
+                baseUrl: resolved.baseUrl || serverUrl,
+                ...(!resolved.baseUrl && serverUrl && { serverBaseUrl: true }),
                 modelId: body.modelId,
                 awsAccessKeyId: resolved.awsAccessKeyId,
                 awsSecretAccessKey: resolved.awsSecretAccessKey,

@@ -1,5 +1,37 @@
 import { describe, expect, it } from "vitest"
-import { cn, extractCompleteMxCells, isMxCellXmlComplete } from "@/lib/utils"
+import {
+    cn,
+    extractCompleteMxCells,
+    isMxCellXmlComplete,
+    isRealDiagram,
+} from "@/lib/utils"
+import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
+
+describe("isRealDiagram", () => {
+    it("counts a small diagram with one shape", () => {
+        // 234 characters: valid, shown, and saved with its chat
+        const xml =
+            '<mxfile><diagram id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry width="80" height="30" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>'
+        expect(xml.length).toBeLessThan(300)
+        expect(isRealDiagram(xml)).toBe(true)
+    })
+
+    it("does not count a blank page or nothing", () => {
+        expect(isRealDiagram(BLANK_MXFILE)).toBe(false)
+        expect(isRealDiagram("")).toBe(false)
+        expect(isRealDiagram(null)).toBe(false)
+    })
+
+    it("still counts a longer document of empty named pages", () => {
+        // Pages and page settings are worth keeping, as before
+        const pages = Array.from(
+            { length: 3 },
+            (_, i) =>
+                `<diagram id="p${i}" name="Page ${i}"><mxGraphModel pageWidth="1600" pageHeight="900"><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>`,
+        ).join("")
+        expect(isRealDiagram(`<mxfile>${pages}</mxfile>`)).toBe(true)
+    })
+})
 
 describe("isMxCellXmlComplete", () => {
     it("returns false for empty/null input", () => {

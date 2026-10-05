@@ -467,22 +467,82 @@ describe("history restore", () => {
     const page = (cellId: string) =>
         `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
 
+    // A thumbnail the tab took after loading the server write at `version`
+    const thumbnail = (id: string, svg: string, version: number) =>
+        postJson("/api/history-svg", {
+            sessionId: id,
+            svg,
+            stateId: getState(id)?.stateId,
+            version,
+        })
+
     it("gives a thumbnail only to the entry it shows", async () => {
         const id = "mcp-history-thumb"
-        setState(id, page("shown"))
+        const version = setState(id, page("shown"))
         // The last entry is another diagram (a tab's copy kept on recovery)
         addHistory(id, page("other"))
-        await postJson("/api/history-svg", {
-            sessionId: id,
-            svg: "SVG-OF-SHOWN",
-        })
+        await thumbnail(id, "SVG-OF-SHOWN", version)
         expect(getHistory(id).at(-1)?.svg).toBe("")
+        addHistory(id, page("shown"))
+        await thumbnail(id, "SVG-OF-SHOWN", version)
+        expect(getHistory(id).at(-1)?.svg).toBe("SVG-OF-SHOWN")
+        expect(getState(id)?.svg).toBe("SVG-OF-SHOWN")
+    })
+
+    it("drops a thumbnail that arrives after the next AI write", async () => {
+        const id = "mcp-history-thumb-late"
+        const first = setState(id, page("first"))
+        addHistory(id, page("first"))
+        setState(id, page("second"))
+        addHistory(id, page("second"))
+        await thumbnail(id, "SVG-OF-FIRST", first)
+        expect(getHistory(id).map((e) => e.svg)).toEqual(["", ""])
+        expect(getState(id)?.svg).toBeUndefined()
+    })
+
+    it("drops a thumbnail of a state the server has since lost", async () => {
+        const id = "mcp-history-thumb-state"
+        const version = setState(id, page("shown"))
         addHistory(id, page("shown"))
         await postJson("/api/history-svg", {
             sessionId: id,
             svg: "SVG-OF-SHOWN",
+            stateId: "another-state",
+            version,
         })
-        expect(getHistory(id).at(-1)?.svg).toBe("SVG-OF-SHOWN")
+        expect(getHistory(id).at(-1)?.svg).toBe("")
+    })
+
+    it("keeps a thumbnail in time after a sync reply", async () => {
+        const id = "mcp-history-thumb-sync"
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        // draw.io's copy of the same diagram, sent back for a sync
+        const synced = page("ai").replace(
+            "<mxGraphModel>",
+            '<mxGraphModel dx="10">',
+        )
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: synced,
+            baseVersion: version,
+            source: "sync",
+            stateId: getState(id)?.stateId,
+        })
+        await thumbnail(id, "SVG-OF-AI", version)
+        expect(getHistory(id).at(-1)?.svg).toBe("SVG-OF-AI")
+        // The state's own image is of the synced XML only
+        expect(getState(id)?.svg).toBeUndefined()
+    })
+
+    it("keeps the image when a write repeats the same XML", async () => {
+        const id = "mcp-history-thumb-same"
+        const version = setState(id, page("same"))
+        await thumbnail(id, "SVG-OF-SAME", version)
+        setState(id, page("same"), undefined, true)
+        expect(getState(id)?.svg).toBe("SVG-OF-SAME")
+        setState(id, page("changed"), undefined, true)
+        expect(getState(id)?.svg).toBeUndefined()
     })
 
     it("never pairs the image of an older diagram with a newer one", async () => {
@@ -515,14 +575,26 @@ describe("history restore", () => {
         expect(getHistory(id).map((e) => e.xml)).toContain(cleared)
     })
 
-    it("adds no entry for a re-serialized copy of the last one", () => {
+    it("adds no entry for a copy of the last one", () => {
         const id = "mcp-history-dedupe"
+        addHistory(id, page("same"))
+        addHistory(id, page("same"), "SVG")
+        expect(getHistory(id)).toHaveLength(1)
+        // The missing image is filled in
+        expect(getHistory(id)[0].svg).toBe("SVG")
+    })
+
+    it("keeps a version that changed only the background", () => {
+        const id = "mcp-history-background"
         addHistory(id, page("same"))
         addHistory(
             id,
-            page("same").replace("<mxGraphModel>", '<mxGraphModel dx="10">'),
+            page("same").replace(
+                "<mxGraphModel>",
+                '<mxGraphModel background="#FFE6CC">',
+            ),
         )
-        expect(getHistory(id)).toHaveLength(1)
+        expect(getHistory(id)).toHaveLength(2)
     })
 
     it("keeps manual edits in history before restoring", async () => {
@@ -543,5 +615,48 @@ describe("history restore", () => {
         await postJson("/api/restore", { sessionId: id, id: entry.id })
         expect(getState(id)?.xml).toBe(doc("ai"))
         expect(getHistory(id).map((e) => e.xml)).toContain(doc("manual"))
+    })
+})
+
+describe("bodies over the size limit", () => {
+    it("answers 413 after reading the whole body", async () => {
+        const mib = Buffer.alloc(1024 * 1024, "x")
+        // Still sending when the limit is passed, as a browser would be.
+        // A browser whose upload is cut off reports a network error.
+        const result = await new Promise<{ status?: number; sent: boolean }>(
+            (resolve) => {
+                let sent = false
+                const req = http.request(
+                    {
+                        host: "127.0.0.1",
+                        port,
+                        path: "/api/state",
+                        method: "POST",
+                        headers: {
+                            host: `localhost:${port}`,
+                            "content-type": "application/json",
+                        },
+                    },
+                    (res) => {
+                        res.resume()
+                        res.on("end", () =>
+                            resolve({ status: res.statusCode, sent }),
+                        )
+                    },
+                )
+                req.on("error", () => resolve({ sent }))
+                const writeNext = (i: number) => {
+                    if (i === 15) {
+                        req.end(() => {
+                            sent = true
+                        })
+                        return
+                    }
+                    req.write(mib, () => setTimeout(() => writeNext(i + 1), 10))
+                }
+                writeNext(0)
+            },
+        )
+        expect(result).toEqual({ status: 413, sent: true })
     })
 })

@@ -140,6 +140,67 @@ describe("chat quota", () => {
         expect(quota.checks).toBe(1)
     })
 
+    it("counts the server's network whatever key header comes along", async () => {
+        // A keyless Ollama or a local SGLang ignores a dummy key
+        for (const headers of [
+            {
+                "x-ai-provider": "ollama",
+                "x-ai-base-url": "http://127.0.0.1:11434/api",
+                "x-ai-api-key": "dummy",
+                "x-ai-model": "llama3.2",
+            },
+            {
+                "x-ai-provider": "openai",
+                "x-ai-base-url": "http://127.0.0.1:30000/v1",
+                "x-ai-api-key": "dummy",
+                "x-ai-model": "m",
+            },
+        ]) {
+            expect((await send(headers)).status).toBe(429)
+        }
+        expect(quota.checks).toBe(2)
+    })
+
+    it("does not count a provider that never uses the base URL header", async () => {
+        // Bedrock on the user's own AWS keys goes to AWS, whatever the
+        // leftover base URL says
+        const res = await send({
+            "x-ai-provider": "bedrock",
+            "x-ai-model": "amazon.nova-lite-v1:0",
+            "x-ai-base-url": "http://127.0.0.1:8080",
+            "x-aws-access-key-id": "id",
+            "x-aws-secret-access-key": "secret",
+            "x-aws-region": "us-east-1",
+        })
+        expect(res.status).not.toBe(429)
+        expect(quota.checks).toBe(0)
+    })
+
+    it("counts EdgeOne even with a base URL header", async () => {
+        const res = await send({
+            "x-ai-provider": "edgeone",
+            "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
+            "x-ai-base-url": "https://this-site.example/api/edgeai",
+        })
+        expect(res.status).toBe(429)
+        expect(quota.checks).toBe(1)
+    })
+
+    it("never counts in the desktop app, where every endpoint is the user's", async () => {
+        process.env.NEXT_AI_DRAWIO_DESKTOP = "1"
+        try {
+            const res = await send({
+                "x-ai-provider": "ollama",
+                "x-ai-base-url": "http://127.0.0.1:11434/api",
+                "x-ai-model": "llama3.2",
+            })
+            expect(res.status).not.toBe(429)
+            expect(quota.checks).toBe(0)
+        } finally {
+            delete process.env.NEXT_AI_DRAWIO_DESKTOP
+        }
+    })
+
     it("does not count Ollama on the user's own server", async () => {
         const res = await send({
             "x-ai-provider": "ollama",

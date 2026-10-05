@@ -64,6 +64,9 @@ interface UseDiagramToolHandlersParams {
     validateDiagram?: ValidateDiagramFn
     enableVlmValidation?: boolean
     sessionId?: string
+    // The user pressed Stop: a screenshot check that has not started is
+    // skipped (one already running is cancelled by the caller)
+    isStopped?: () => boolean
     onValidationStateChange?: (
         toolCallId: string,
         state: ValidationState,
@@ -90,6 +93,7 @@ export function useDiagramToolHandlers({
     validateDiagram,
     enableVlmValidation = true,
     sessionId,
+    isStopped,
     onValidationStateChange,
 }: UseDiagramToolHandlersParams) {
     // Helper to update validation state
@@ -257,7 +261,11 @@ ${finalXml}
                     await new Promise((resolve) => setTimeout(resolve, 100))
 
                     capturedPngData = await captureValidationPng()
-                    if (capturedPngData) {
+                    // Stopped while the screenshot was taken: no check. The
+                    // chat waits for this handler, so it must end now.
+                    if (isStopped?.()) {
+                        updateValidationState(toolCall.toolCallId, "skipped")
+                    } else if (capturedPngData) {
                         if (DEBUG) {
                             console.log(
                                 "[display_diagram] Captured PNG for validation",
@@ -363,6 +371,16 @@ ${finalXml}
                         updateValidationState(toolCall.toolCallId, "skipped")
                     }
                 } catch (error) {
+                    // Cancelled by Stop: the diagram stays, unchecked
+                    if ((error as Error)?.name === "AbortError") {
+                        updateValidationState(toolCall.toolCallId, "skipped")
+                        addToolOutput({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Successfully displayed the diagram.",
+                        })
+                        return
+                    }
                     // VLM validation error - log but don't block the user
                     console.warn(
                         "[display_diagram] VLM validation error:",

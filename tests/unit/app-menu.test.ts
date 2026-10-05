@@ -64,4 +64,20 @@ describe("switchPreset", () => {
         await toC
         expect(state.current).toBe("C")
     })
+
+    it("keeps a newer choice of the same preset", async () => {
+        // A, then B, C, and B again while the first restart is pending
+        const first = switchPreset("B").catch(() => {})
+        const second = switchPreset("C").catch(() => {})
+        const third = switchPreset("B")
+        // The first restart fails: the current preset is B again, but it is
+        // the third switch's, which must not be undone
+        state.restarts[0].reject(new Error("timed out"))
+        await new Promise((r) => setTimeout(r, 0))
+        for (const r of state.restarts.slice(1)) r.resolve()
+        await first
+        await second
+        await third
+        expect(state.current).toBe("B")
+    })
 })

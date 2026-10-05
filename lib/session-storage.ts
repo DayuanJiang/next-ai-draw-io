@@ -199,13 +199,18 @@ export async function deleteSession(id: string): Promise<void> {
 }
 
 export async function getSessionCount(): Promise<number> {
-    if (!isIndexedDBAvailable()) return 0
+    return (await readSessionCount()) ?? 0
+}
+
+/** The number of saved chats, or null when it could not be read */
+export async function readSessionCount(): Promise<number | null> {
+    if (!isIndexedDBAvailable()) return null
     try {
         const db = await getDB()
         return await db.count(STORE_NAME)
     } catch (error) {
         console.error("Failed to get session count:", error)
-        return 0
+        return null
     }
 }
 

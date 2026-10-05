@@ -165,3 +165,18 @@ describe("prepareNewDiagram", () => {
         expect(out.ok).toBe(true)
     })
 })
+
+describe("labels that look like attributes", () => {
+    const layer = `<mxCell id="5" value="Move to id='1'" vertex="1" parent="1"/>`
+
+    it("keep their cell when the root cells are stripped", () => {
+        const wrapped = wrapCellsInModel(ROOTS + layer)
+        expect(wrapped).toBe(
+            `<mxGraphModel><root>${ROOTS}${layer}</root></mxGraphModel>`,
+        )
+    })
+
+    it("are not taken for a reserved id", () => {
+        expect(reservedIdError(layer)).toBeNull()
+    })
+})

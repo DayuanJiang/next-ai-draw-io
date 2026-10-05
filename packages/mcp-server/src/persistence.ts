@@ -38,6 +38,16 @@ export function defaultDataDir(): string | null {
     return dir ? expandHome(dir) : join(homedir(), ".next-ai-drawio")
 }
 
+/** The file surely does not exist (not merely out of reach) */
+function isGone(path: string): boolean {
+    try {
+        statSync(path)
+        return false
+    } catch (error) {
+        return (error as NodeJS.ErrnoException).code === "ENOENT"
+    }
+}
+
 export class Autosaver {
     private pending = new Map<
         string,
@@ -57,22 +67,23 @@ export class Autosaver {
 
     // Saved files that could not be read back: never written over, since
     // the session then shows something else than what they hold. Cleared
-    // once the file is read, or is gone.
+    // once the file is read, or is surely gone (a folder without permission
+    // also makes a file look missing).
     private unreadable = new Set<string>()
 
     /** The session's saved diagram, or null. */
     load(sessionId: string): string | null {
         const path = this.pathFor(sessionId)
         if (!path) return null
-        if (!existsSync(path)) {
-            this.unreadable.delete(path)
-            return null
-        }
         try {
             const xml = readFileSync(path, "utf-8")
             this.unreadable.delete(path)
             return xml
         } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                this.unreadable.delete(path)
+                return null
+            }
             log.warn(`Could not read the saved diagram ${path}: ${error}`)
             this.unreadable.add(path)
             return null
@@ -102,10 +113,15 @@ export class Autosaver {
         const path = this.pathFor(sessionId)
         if (!entry || !this.dir || !path) return
         if (this.unreadable.has(path)) {
-            log.warn(
-                `Not saving ${path}: it could not be read, so it may hold work this session does not show`,
-            )
-            return
+            // Deleted meanwhile: nothing left to protect
+            if (isGone(path)) {
+                this.unreadable.delete(path)
+            } else {
+                log.warn(
+                    `Not saving ${path}: it could not be read, so it may hold work this session does not show`,
+                )
+                return
+            }
         }
         try {
             const isNew = !existsSync(path)

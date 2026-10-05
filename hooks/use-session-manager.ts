@@ -13,10 +13,12 @@ import {
     getSession,
     isIndexedDBAvailable,
     migrateFromLocalStorage,
+    readSessionCount,
     type SessionMetadata,
     type StoredMessage,
     saveSession,
 } from "@/lib/session-storage"
+import { STORAGE_KEYS } from "@/lib/storage"
 
 export interface SessionData {
     messages: StoredMessage[]
@@ -37,14 +39,17 @@ export interface UseSessionManagerReturn {
     // Actions
     switchSession: (id: string) => Promise<SessionData | null>
     deleteSession: (id: string) => Promise<{ wasCurrentSession: boolean }>
-    // forSessionId: optional session ID to verify save targets correct session (prevents stale debounce writes)
+    // chatGeneration: getChatGeneration() when the save was scheduled (by
+    // default, now); the save is dropped if another chat is on screen when
+    // its turn comes
     // Resolves to false when the save failed (the user was told)
     saveCurrentSession: (
         data: SessionData,
-        forSessionId?: string | null,
+        chatGeneration?: number,
     ) => Promise<boolean>
     refreshSessions: () => Promise<void>
     clearCurrentSession: () => void
+    getChatGeneration: () => number
 }
 
 // Reading the session list loads every stored session in full, and window
@@ -79,6 +84,20 @@ export function useSessionManager(
     const isInitializedRef = useRef(false)
     // Sequence guard for URL changes - prevents out-of-order async resolution
     const urlChangeSequenceRef = useRef(0)
+    // The chat on screen, read by saves that run after a render or a wait
+    const currentSessionRef = useRef<ChatSession | null>(null)
+    // Goes up each time another chat is put on screen (creating the
+    // session of the chat on screen does not count)
+    const chatGenerationRef = useRef(0)
+    // Saves run one at a time, so two saves of a new chat create it once
+    const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+
+    const changeChat = useCallback((session: ChatSession | null) => {
+        chatGenerationRef.current++
+        currentSessionRef.current = session
+        setCurrentSession(session)
+        setCurrentSessionId(session?.id ?? null)
+    }, [])
 
     // Load sessions list
     const refreshSessions = useCallback(async () => {
@@ -115,18 +134,32 @@ export function useSessionManager(
                 const metadata = await getAllSessionMetadata()
                 setSessions(metadata)
                 // The desktop app may try its other port next launch, where
-                // an older version may have saved the chats
-                window.electronAPI
-                    ?.chatsLoaded?.(metadata.length)
-                    .catch(() => {})
+                // an older version may have saved the chats: only when this
+                // origin surely has none (a failed read is not "none") and
+                // keeps no model settings or keys either
+                if (window.electronAPI?.chatsLoaded) {
+                    const count = await readSessionCount()
+                    // The app saves an empty config on its first load; the
+                    // providers are what holds the keys
+                    let hasSettings = true
+                    try {
+                        const config = JSON.parse(
+                            localStorage.getItem(STORAGE_KEYS.modelConfigs) ??
+                                "{}",
+                        )
+                        hasSettings = (config.providers?.length ?? 0) > 0
+                    } catch {
+                        // Unreadable: treat as settings, and stay
+                    }
+                    if (count !== null && !hasSettings) {
+                        window.electronAPI.chatsLoaded(count).catch(() => {})
+                    }
+                }
 
                 // Only load a session if initialSessionId is provided (from URL param)
                 if (initialSessionId) {
                     const session = await getSession(initialSessionId)
-                    if (session) {
-                        setCurrentSession(session)
-                        setCurrentSessionId(session.id)
-                    }
+                    if (session) changeChat(session)
                     // If session not found, stay in blank state (URL has invalid session ID)
                 }
                 // If no initialSessionId, start with blank state (no auto-restore)
@@ -138,7 +171,7 @@ export function useSessionManager(
         }
 
         init()
-    }, [initialSessionId])
+    }, [initialSessionId, changeChat])
 
     // Handle URL session ID changes after initialization
     // Note: intentionally NOT including currentSessionId in deps to avoid race conditions
@@ -153,6 +186,7 @@ export function useSessionManager(
 
         async function handleSessionIdChange() {
             if (initialSessionId) {
+                const generation = chatGenerationRef.current
                 // URL has session ID - load it
                 const session = await getSession(initialSessionId)
 
@@ -161,16 +195,13 @@ export function useSessionManager(
                 if (currentSequence !== urlChangeSequenceRef.current) {
                     return
                 }
+                // Another chat was put on screen meanwhile (New Chat right
+                // after this one got its session id in the URL): keep it
+                if (generation !== chatGenerationRef.current) return
 
-                if (session) {
-                    // Only update if the session is different from current
-                    setCurrentSessionId((current) => {
-                        if (current !== session.id) {
-                            setCurrentSession(session)
-                            return session.id
-                        }
-                        return current
-                    })
+                // Only update if the session is different from current
+                if (session && currentSessionRef.current?.id !== session.id) {
+                    changeChat(session)
                 }
             }
             // Removed: else clause that clears session
@@ -179,7 +210,7 @@ export function useSessionManager(
         }
 
         handleSessionIdChange()
-    }, [initialSessionId, isAvailable])
+    }, [initialSessionId, isAvailable, changeChat])
 
     // Refresh sessions on window focus (multi-tab sync), at most once per interval
     const lastFocusRefreshRef = useRef(0)
@@ -201,9 +232,11 @@ export function useSessionManager(
         async (id: string): Promise<SessionData | null> => {
             if (id === currentSessionId) return null
 
-            // Save current session first if it has messages
-            if (currentSession && currentSession.messages.length > 0) {
-                await saveSession(currentSession)
+            // Save current session first if it has messages (as saved
+            // last: the caller may have just saved it)
+            const current = currentSessionRef.current
+            if (current && current.messages.length > 0) {
+                await saveSession(current)
             }
 
             // Load the target session
@@ -213,9 +246,7 @@ export function useSessionManager(
                 return null
             }
 
-            // Update state
-            setCurrentSession(session)
-            setCurrentSessionId(session.id)
+            changeChat(session)
 
             return {
                 messages: session.messages,
@@ -225,7 +256,7 @@ export function useSessionManager(
                 diagramHistory: session.diagramHistory,
             }
         },
-        [currentSessionId, currentSession],
+        [currentSessionId, changeChat],
     )
 
     // Delete a session
@@ -235,112 +266,121 @@ export function useSessionManager(
             await deleteSessionFromDB(id)
 
             // If deleting current session, clear state (caller will show new empty session)
-            if (wasCurrentSession) {
-                setCurrentSession(null)
-                setCurrentSessionId(null)
-            }
+            if (wasCurrentSession) changeChat(null)
 
             await refreshSessions()
 
             return { wasCurrentSession }
         },
-        [currentSessionId, refreshSessions],
+        [currentSessionId, refreshSessions, changeChat],
     )
 
     // Save current session data (debounced externally by caller)
-    // forSessionId: if provided, verify save targets correct session (prevents stale debounce writes)
     const saveCurrentSession = useCallback(
-        async (
-            data: SessionData,
-            forSessionId?: string | null,
-        ): Promise<boolean> => {
-            // If forSessionId is provided, verify it matches current session
-            // This prevents stale debounced saves from overwriting a newly switched session
-            if (
-                forSessionId !== undefined &&
-                forSessionId !== currentSessionId
-            ) {
-                return true
-            }
-            // Nothing can be stored without IndexedDB
-            if (!isIndexedDBAvailable()) return true
+        (data: SessionData, chatGeneration?: number): Promise<boolean> => {
+            // The data is of the chat on screen when the save was asked for
+            const generation = chatGeneration ?? chatGenerationRef.current
+            const run = async (): Promise<boolean> => {
+                // That chat is no longer on screen (leaving it saved it)
+                if (generation !== chatGenerationRef.current) return true
+                // Nothing can be stored without IndexedDB
+                if (!isIndexedDBAvailable()) return true
+                // The user may put another chat on screen while this one is
+                // written; the stored copy is still right, the state is not
+                const stillOnScreen = () =>
+                    chatGenerationRef.current === generation
+                const currentSession = currentSessionRef.current
 
-            if (!currentSession) {
-                // Create a new session if none exists
-                const newSession: ChatSession = {
-                    ...createEmptySession(),
+                if (!currentSession) {
+                    // Create a new session if none exists
+                    const newSession: ChatSession = {
+                        ...createEmptySession(),
+                        messages: data.messages,
+                        xmlSnapshots: data.xmlSnapshots,
+                        diagramXml: data.diagramXml,
+                        thumbnailDataUrl: data.thumbnailDataUrl,
+                        diagramHistory: data.diagramHistory,
+                        title: extractTitle(data.messages),
+                    }
+                    // Without a stored session, keep no session id (it would end
+                    // up in the URL and point to nothing after a reload)
+                    if (!(await saveSession(newSession))) {
+                        notifySaveFailed(dict.errors.sessionSaveFailed)
+                        return false
+                    }
+                    await enforceSessionLimit()
+                    if (stillOnScreen()) {
+                        currentSessionRef.current = newSession
+                        setCurrentSession(newSession)
+                        setCurrentSessionId(newSession.id)
+                    }
+                    await refreshSessions()
+                    return true
+                }
+
+                // Update existing session
+                const updatedSession: ChatSession = {
+                    ...currentSession,
                     messages: data.messages,
                     xmlSnapshots: data.xmlSnapshots,
                     diagramXml: data.diagramXml,
-                    thumbnailDataUrl: data.thumbnailDataUrl,
-                    diagramHistory: data.diagramHistory,
-                    title: extractTitle(data.messages),
+                    thumbnailDataUrl:
+                        data.thumbnailDataUrl ??
+                        currentSession.thumbnailDataUrl,
+                    diagramHistory:
+                        data.diagramHistory ?? currentSession.diagramHistory,
+                    updatedAt: Date.now(),
+                    // Update title if it's still default and we have messages
+                    title:
+                        currentSession.title === "New Chat" &&
+                        data.messages.length > 0
+                            ? extractTitle(data.messages)
+                            : currentSession.title,
                 }
-                // Without a stored session, keep no session id (it would end
-                // up in the URL and point to nothing after a reload)
-                if (!(await saveSession(newSession))) {
+
+                if (!(await saveSession(updatedSession))) {
                     notifySaveFailed(dict.errors.sessionSaveFailed)
                     return false
                 }
-                await enforceSessionLimit()
-                setCurrentSession(newSession)
-                setCurrentSessionId(newSession.id)
-                await refreshSessions()
+                if (stillOnScreen()) {
+                    currentSessionRef.current = updatedSession
+                    setCurrentSession(updatedSession)
+                }
+
+                // Update sessions list metadata
+                setSessions((prev) =>
+                    prev.map((s) =>
+                        s.id === updatedSession.id
+                            ? {
+                                  ...s,
+                                  title: updatedSession.title,
+                                  updatedAt: updatedSession.updatedAt,
+                                  messageCount: updatedSession.messages.length,
+                                  hasDiagram:
+                                      !!updatedSession.diagramXml &&
+                                      updatedSession.diagramXml.trim().length >
+                                          0,
+                                  thumbnailDataUrl:
+                                      updatedSession.thumbnailDataUrl,
+                              }
+                            : s,
+                    ),
+                )
                 return true
             }
-
-            // Update existing session
-            const updatedSession: ChatSession = {
-                ...currentSession,
-                messages: data.messages,
-                xmlSnapshots: data.xmlSnapshots,
-                diagramXml: data.diagramXml,
-                thumbnailDataUrl:
-                    data.thumbnailDataUrl ?? currentSession.thumbnailDataUrl,
-                diagramHistory:
-                    data.diagramHistory ?? currentSession.diagramHistory,
-                updatedAt: Date.now(),
-                // Update title if it's still default and we have messages
-                title:
-                    currentSession.title === "New Chat" &&
-                    data.messages.length > 0
-                        ? extractTitle(data.messages)
-                        : currentSession.title,
-            }
-
-            if (!(await saveSession(updatedSession))) {
-                notifySaveFailed(dict.errors.sessionSaveFailed)
-                return false
-            }
-            setCurrentSession(updatedSession)
-
-            // Update sessions list metadata
-            setSessions((prev) =>
-                prev.map((s) =>
-                    s.id === updatedSession.id
-                        ? {
-                              ...s,
-                              title: updatedSession.title,
-                              updatedAt: updatedSession.updatedAt,
-                              messageCount: updatedSession.messages.length,
-                              hasDiagram:
-                                  !!updatedSession.diagramXml &&
-                                  updatedSession.diagramXml.trim().length > 0,
-                              thumbnailDataUrl: updatedSession.thumbnailDataUrl,
-                          }
-                        : s,
-                ),
-            )
-            return true
+            const result = saveQueueRef.current.then(run)
+            saveQueueRef.current = result.catch(() => {})
+            return result
         },
-        [currentSession, currentSessionId, refreshSessions, dict],
+        [refreshSessions, dict],
     )
 
     // Clear current session state (for starting fresh without loading another session)
     const clearCurrentSession = useCallback(() => {
-        setCurrentSession(null)
-        setCurrentSessionId(null)
-    }, [])
+        changeChat(null)
+    }, [changeChat])
+
+    const getChatGeneration = useCallback(() => chatGenerationRef.current, [])
 
     return {
         sessions,
@@ -353,5 +393,6 @@ export function useSessionManager(
         saveCurrentSession,
         refreshSessions,
         clearCurrentSession,
+        getChatGeneration,
     }
 }

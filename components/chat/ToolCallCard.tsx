@@ -20,9 +20,15 @@ interface ToolCallCardProps {
 }
 
 function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
+    // Streamed or invalid input can hold anything: show only what React can
+    // render (an object in place of a string would crash the whole chat)
+    const shown = operations.filter(
+        (op) => typeof (op as { operation?: unknown })?.operation === "string",
+    )
+    const text = (value: unknown) => (typeof value === "string" ? value : "")
     return (
         <div className="space-y-3">
-            {operations.map((op, index) => (
+            {shown.map((op, index) => (
                 <div
                     key={`${op.operation}-${op.cell_id}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
@@ -40,13 +46,13 @@ function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
                             {op.operation}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                            cell_id: {op.cell_id}
+                            cell_id: {text(op.cell_id)}
                         </span>
                     </div>
-                    {op.new_xml && (
+                    {text(op.new_xml) && (
                         <div className="px-3 py-2">
                             <pre className="text-[11px] font-mono text-foreground/80 bg-muted/30 rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap break-all">
-                                {op.new_xml}
+                                {text(op.new_xml)}
                             </pre>
                         </div>
                     )}

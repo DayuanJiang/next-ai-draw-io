@@ -45,6 +45,77 @@ function setup(partialXml: string) {
     return { refs, onDisplayChart, addToolOutput, append }
 }
 
+describe("the screenshot check and Stop", () => {
+    const draw = async (opts: {
+        isStopped: () => boolean
+        validateDiagram: () => Promise<any>
+    }) => {
+        const onValidationStateChange = vi.fn()
+        const { result } = renderHook(() =>
+            useDiagramToolHandlers({
+                partialXmlRef: { current: "" },
+                editDiagramOriginalXmlRef: { current: new Map() },
+                processedToolCallsRef: { current: new Set() },
+                validationRetryCountRef: { current: 0 },
+                chartXMLRef: { current: "" },
+                onDisplayChart: () => null,
+                onFetchChart: async () => "",
+                onExport: () => {},
+                enableVlmValidation: true,
+                captureValidationPng: async () => "data:image/png;base64,AA",
+                validateDiagram: opts.validateDiagram,
+                isStopped: opts.isStopped,
+                onValidationStateChange,
+            }),
+        )
+        const addToolOutput = vi.fn()
+        await result.current.handleToolCall(
+            {
+                toolCall: {
+                    toolCallId: "d1",
+                    toolName: "display_diagram",
+                    input: { xml: box("2") },
+                },
+            },
+            addToolOutput,
+        )
+        return { addToolOutput, onValidationStateChange }
+    }
+
+    it("skips a check that had not started when the user stopped", async () => {
+        const validateDiagram = vi.fn(async () => ({
+            valid: true,
+            issues: [],
+            suggestions: [],
+        }))
+        const { addToolOutput, onValidationStateChange } = await draw({
+            isStopped: () => true,
+            validateDiagram,
+        })
+        expect(validateDiagram).not.toHaveBeenCalled()
+        expect(onValidationStateChange.mock.lastCall?.[1].status).toBe(
+            "skipped",
+        )
+        expect(addToolOutput.mock.lastCall?.[0].output).toMatch(
+            /Successfully displayed/,
+        )
+    })
+
+    it("ends with the diagram's result when Stop cancels a running check", async () => {
+        const { addToolOutput, onValidationStateChange } = await draw({
+            isStopped: () => false,
+            validateDiagram: async () => {
+                throw new DOMException("Validation cancelled", "AbortError")
+            },
+        })
+        expect(onValidationStateChange.mock.lastCall?.[1].status).toBe(
+            "skipped",
+        )
+        expect(addToolOutput).toHaveBeenCalledTimes(1)
+        expect(addToolOutput.mock.lastCall?.[0].state).toBeUndefined()
+    })
+})
+
 describe("append_diagram and the stored previews", () => {
     it("takes the stored originals when it draws the completed diagram", async () => {
         // Otherwise the preview code later loads the failed edit's original

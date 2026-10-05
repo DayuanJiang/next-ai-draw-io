@@ -409,6 +409,14 @@ const drawReply = (id: string, xml: string) => {
     const call = toolCallEvents(id, "display_diagram", { xml })
     return `${sse([{ type: "start" }, call.start, ...call.deltas, call.done, { type: "finish" }])}data: [DONE]\n\n`
 }
+const textReply = (text: string) =>
+    `${sse([
+        { type: "start" },
+        { type: "text-start", id: "t" },
+        { type: "text-delta", id: "t", delta: text },
+        { type: "text-end", id: "t" },
+        { type: "finish" },
+    ])}data: [DONE]\n\n`
 // SSE comments keep a stream open without sending anything
 const KEEP_OPEN = Array(20).fill(":\n\n")
 
@@ -684,4 +692,46 @@ test("stopping during the screenshot check starts no new request", async ({
     await p.getByRole("button", { name: "Stop generation" }).click()
     await p.waitForTimeout(5000)
     expect(chatRequests).toBe(1)
+})
+
+test("stopping during the screenshot check lets the next message go at once", async ({
+    page: p,
+}) => {
+    // The check was still running when the user stopped; it held up the
+    // chat until it ended, and its call never got a result
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    const bodies: Array<{ messages: any[] }> = []
+    await p.route("**/api/chat", async (route) => {
+        bodies.push(route.request().postDataJSON())
+        const n = bodies.length
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body:
+                n === 1
+                    ? drawReply("d1", cell("a", "Alpha", 40))
+                    : textReply("Second answer"),
+        })
+    })
+    let checking = false
+    await p.route("**/api/validate-diagram", async (route) => {
+        checking = true
+        // Much longer than this test waits for the second answer
+        await new Promise((r) => setTimeout(r, 30000))
+        await route.fulfill({ status: 200, body: "{}" }).catch(() => {})
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "Draw a box")
+    await expect.poll(() => checking, { timeout: 15000 }).toBe(true)
+    await p.getByRole("button", { name: "Stop generation" }).click()
+    await sendMessage(p, "Thanks")
+    await expect(p.getByText("Second answer")).toBeVisible({ timeout: 8000 })
+    // The drawing call had its result when the next message was sent
+    const draw = bodies[1].messages
+        .flatMap((m: any) => m.parts ?? [])
+        .find((part: any) => part.type === "tool-display_diagram")
+    expect(draw?.state).toBe("output-available")
 })

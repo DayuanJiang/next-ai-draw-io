@@ -107,8 +107,8 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile. The draw.io iframe is not remounted when crossing the
-    // breakpoint (only the chat panel is), so its ready state stays as is.
+    // Check mobile. No panel is remounted when crossing the breakpoint, so
+    // the draw.io ready state and the chat's turn stay as they are.
     useEffect(() => {
         const checkMobile = () => {
             setIsMobile(window.innerWidth < 768)
@@ -118,6 +118,14 @@ export default function Home() {
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
     }, [])
+
+    // Give the chat panel the size of this side of the breakpoint. It is
+    // open on both sides: the mobile panel cannot be collapsed, and one
+    // collapsed on desktop comes back open
+    useEffect(() => {
+        chatPanelRef.current?.resize(isMobile ? 50 : 33)
+        setIsChatVisible(true)
+    }, [isMobile])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -212,7 +220,6 @@ export default function Home() {
 
                 {/* Chat Panel */}
                 <ResizablePanel
-                    key={isMobile ? "mobile" : "desktop"}
                     id="chat-panel"
                     ref={chatPanelRef}
                     defaultSize={isMobile ? 50 : 33}

@@ -48,6 +48,8 @@ describe("admin Test of an entry without a URL", () => {
         process.env.OPENAI_BASE_URL = "https://operator-proxy.example.com/v1"
         await test({ provider: "openai", apiKey: "panel-key" })
         expect(sent.body.baseUrl).toBe("https://operator-proxy.example.com/v1")
+        // The server's own URL, tested without the rules for typed URLs
+        expect(sent.body.serverBaseUrl).toBe(true)
 
         process.env.AI_GATEWAY_BASE_URL = "https://gateway.example.com/v3/ai"
         await test({ provider: "gateway", apiKey: "k" })
@@ -64,5 +66,16 @@ describe("admin Test of an entry without a URL", () => {
         expect(sent.body.baseUrl).toBe("http://other:8000/v1")
         await test({ provider: "deepseek", apiKey: "k" })
         expect(sent.body.baseUrl).toBeUndefined()
+    })
+
+    it("does not use Vertex's variable, which the panel writes itself", async () => {
+        // Before a save it still holds the entry's previous URL
+        process.env.GOOGLE_VERTEX_BASE_URL = "https://old-proxy.example.com"
+        try {
+            await test({ provider: "vertexai", vertexApiKey: "new-key" })
+            expect(sent.body.baseUrl).toBeUndefined()
+        } finally {
+            delete process.env.GOOGLE_VERTEX_BASE_URL
+        }
     })
 })

@@ -49,15 +49,73 @@ vi.mock("@/lib/ai-providers", () => ({
         }),
 }))
 
+// The quota, off unless a test turns it on
+const quota = vi.hoisted(() => ({
+    enabled: false,
+    allowed: true,
+    checks: [] as Array<{ limits: any; increment?: number }>,
+    recorded: [] as number[],
+}))
+vi.mock("@/lib/dynamo-quota-manager", () => ({
+    isQuotaEnabled: () => quota.enabled,
+    checkAndIncrementRequest: async (
+        _ip: string,
+        limits: unknown,
+        increment?: number,
+    ) => {
+        quota.checks.push({ limits, increment })
+        return quota.allowed
+            ? { allowed: true }
+            : {
+                  allowed: false,
+                  type: "token",
+                  error: "Daily token limit exceeded",
+                  used: 10,
+                  limit: 10,
+              }
+    },
+    recordTokenUsage: async (_ip: string, tokens: number) => {
+        quota.recorded.push(tokens)
+    },
+}))
+
 const post = () =>
     new Request("http://localhost/api/validate-diagram", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "x-forwarded-for": "203.0.113.7",
+        },
         body: JSON.stringify({ imageData: "data:image/png;base64,AAAA" }),
     })
 
 afterEach(() => {
     delete process.env.ENABLE_VLM_VALIDATION
+    quota.enabled = false
+    quota.allowed = true
+    quota.checks = []
+    quota.recorded = []
+})
+
+describe("the quota", () => {
+    it("refuses a check once the daily tokens are used up", async () => {
+        quota.enabled = true
+        quota.allowed = false
+        const res = await validateDiagram(post())
+        expect(res.status).toBe(429)
+    })
+
+    it("applies the token limits only, and records the tokens", async () => {
+        // The request limit is for chats: the day's last chat must still
+        // get its check, and the check does not count as a chat
+        quota.enabled = true
+        const res = await validateDiagram(post())
+        expect(JSON.parse(await res.text())).toEqual(RESULT)
+        expect(quota.checks).toHaveLength(1)
+        expect(quota.checks[0].increment).toBe(0)
+        expect(quota.checks[0].limits.requests).toBe(0)
+        await vi.waitFor(() => expect(quota.recorded).toEqual([2]))
+    })
 })
 
 describe("POST /api/validate-diagram", () => {

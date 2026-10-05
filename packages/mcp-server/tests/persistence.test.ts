@@ -130,6 +130,43 @@ describe("Autosaver", () => {
         expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
     })
 
+    it("saves again when the unreadable file is deleted during the session", () => {
+        const saver = new Autosaver(tempDir(), 10)
+        saver.schedule("mcp-live", DIAGRAM)
+        saver.flush()
+        const path = saver.pathFor("mcp-live") as string
+        chmodSync(path, 0o000)
+        expect(saver.load("mcp-live")).toBeNull()
+        // The session goes on (load is not called again); the user removes
+        // the broken file
+        chmodSync(path, 0o644)
+        rmSync(path)
+        saver.schedule("mcp-live", DIAGRAM)
+        saver.flush()
+        expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
+    })
+
+    it("keeps protecting a file it cannot even look at", () => {
+        // A folder without permission makes the file look missing; it is not
+        const dir = tempDir()
+        const saver = new Autosaver(dir, 10)
+        saver.schedule("mcp-hidden", DIAGRAM)
+        saver.flush()
+        const path = saver.pathFor("mcp-hidden") as string
+        chmodSync(path, 0o000)
+        expect(saver.load("mcp-hidden")).toBeNull()
+        chmodSync(dir, 0o000)
+        try {
+            expect(saver.load("mcp-hidden")).toBeNull()
+        } finally {
+            chmodSync(dir, 0o755)
+        }
+        chmodSync(path, 0o644)
+        saver.schedule("mcp-hidden", BLANK)
+        saver.flush()
+        expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
+    })
+
     it("does nothing when saving is off", () => {
         const saver = new Autosaver(null)
         expect(saver.pathFor("mcp-x")).toBeNull()

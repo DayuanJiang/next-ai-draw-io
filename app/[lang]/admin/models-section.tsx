@@ -33,6 +33,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
+import { STORAGE_KEYS } from "@/lib/storage"
 import {
     FIXED_CRED_PROVIDERS,
     generateId,
@@ -88,6 +89,11 @@ function ProviderDetail({
         try {
             const data = await adminFetch("/api/admin/test-model", password, {
                 method: "POST",
+                // EdgeOne's function also checks the access code
+                headers: {
+                    "x-access-code":
+                        localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+                },
                 body: JSON.stringify({ provider, modelId }),
             })
             setTestResults((prev) => ({

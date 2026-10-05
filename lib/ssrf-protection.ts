@@ -118,24 +118,52 @@ export function allowPrivateUrls(): boolean {
 
 /** A redirect the guard below refused; its text is safe to show */
 export class RedirectRefusedError extends Error {
-    constructor() {
-        super("Redirects are not allowed for custom base URLs")
+    constructor(message = "Redirects are not allowed for custom base URLs") {
+        super(message)
         this.name = "RedirectRefusedError"
     }
 }
 
+const MAX_REDIRECTS = 5
+
 /**
  * A fetch for requests to a base URL the client chose. With private URLs
  * blocked, a public URL could still redirect the request to an internal
- * host, so redirects are refused. Undefined when private URLs are allowed.
+ * host, so redirects are refused. With private URLs allowed but the quota
+ * on (DYNAMODB_QUOTA_TABLE), a request to a private address counts as the
+ * server's: redirects are followed only to public addresses, or a public
+ * URL could reach the server's own network uncounted. Undefined otherwise.
  */
 export function redirectGuardedFetch(): typeof fetch | undefined {
-    if (allowPrivateUrls()) return undefined
+    const blockAll = !allowPrivateUrls()
+    if (!blockAll && !process.env.DYNAMODB_QUOTA_TABLE) return undefined
     return async (input, init) => {
-        const response = await fetch(input, { ...init, redirect: "manual" })
-        if (response.status >= 300 && response.status < 400) {
-            throw new RedirectRefusedError()
+        let url = input instanceof Request ? input.url : String(input)
+        let next = init
+        for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+            const response = await fetch(url, { ...next, redirect: "manual" })
+            const location = response.headers.get("location")
+            if (response.status < 300 || response.status >= 400 || !location) {
+                return response
+            }
+            if (blockAll) throw new RedirectRefusedError()
+            url = new URL(location, url).toString()
+            if (await isPrivateUrl(url)) {
+                throw new RedirectRefusedError(
+                    "Redirects to private addresses are not allowed",
+                )
+            }
+            // As fetch itself does: 303, and 301 or 302 after a POST, go on
+            // as a GET without the body
+            const method = (next?.method ?? "GET").toUpperCase()
+            if (
+                response.status === 303 ||
+                ((response.status === 301 || response.status === 302) &&
+                    method === "POST")
+            ) {
+                next = { ...next, method: "GET", body: undefined }
+            }
         }
-        return response
+        throw new RedirectRefusedError("Too many redirects")
     }
 }

@@ -3,7 +3,12 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import { checkAdminAuth } from "@/lib/admin/auth"
-import { getAIModel, usesServerCredentials } from "@/lib/ai-providers"
+import {
+    edgeOneEndpoint,
+    getAIModel,
+    globalBaseUrl,
+    usesServerCredentials,
+} from "@/lib/ai-providers"
 import { classifyLLMError } from "@/lib/llm-errors"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import type { ProviderName } from "@/lib/types/model-config"
@@ -19,8 +24,11 @@ interface ValidateRequest {
     awsAccessKeyId?: string
     awsSecretAccessKey?: string
     awsRegion?: string
+    awsSessionToken?: string
     // Vertex AI specific
     vertexApiKey?: string // Express Mode API key
+    // Set by the admin panel's Test: baseUrl is the server's <P>_BASE_URL
+    serverBaseUrl?: boolean
 }
 
 const TEST_TIMEOUT_MS = 15_000
@@ -47,11 +55,11 @@ export async function POST(req: Request) {
         const {
             provider,
             apiKey,
-            baseUrl,
             modelId,
             awsAccessKeyId,
             awsSecretAccessKey,
             awsRegion,
+            awsSessionToken,
             // Note: Express Mode only needs vertexApiKey
             vertexApiKey,
         } = body
@@ -62,9 +70,26 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
+        // EdgeOne is this site's own function, as in the chat; the admin
+        // panel's Test sends no URL, and a relative one cannot be fetched
+        const baseUrl =
+            provider === "edgeone" ? edgeOneEndpoint(req) : body.baseUrl
+        // The admin panel's Test of an entry without a URL sends the
+        // server's own <P>_BASE_URL, which chat uses as it is: not a URL a
+        // user chose, so no private-address or redirect rules
+        const serverUrl =
+            body.serverBaseUrl === true &&
+            !!baseUrl &&
+            baseUrl === globalBaseUrl(provider) &&
+            !checkAdminAuth(req)
 
         // SECURITY: Block SSRF attacks via custom baseUrl
-        if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
+        if (
+            baseUrl &&
+            !serverUrl &&
+            !allowPrivateUrls() &&
+            (await isPrivateUrl(baseUrl))
+        ) {
             return NextResponse.json(
                 { valid: false, error: "Invalid base URL" },
                 { status: 400 },
@@ -122,9 +147,12 @@ export async function POST(req: Request) {
             modelId,
             apiKey,
             baseUrl,
+            trustedBaseUrl: serverUrl,
             awsAccessKeyId,
             awsSecretAccessKey,
             awsRegion,
+            // Temporary AWS credentials need it, as in the chat
+            awsSessionToken,
             vertexApiKey,
             // EdgeOne checks the Pages cookies and the access code
             ...(provider === "edgeone" && {

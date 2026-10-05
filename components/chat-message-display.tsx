@@ -211,7 +211,7 @@ export function ChatMessageDisplay({
             </p>
         )
     }
-    const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
+    const { chartXML, chartXMLRef, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const scrollTopRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
@@ -422,10 +422,12 @@ export function ChatMessageDisplay({
         // Previous messages are already processed and won't change
         const messagesToProcess =
             messages.length > 0 ? [messages[messages.length - 1]] : []
-        // The diagram without streamed previews. Undoing a failed edit's
-        // preview below changes it before chartXML catches up, and an edit
-        // streaming right after must start from the undone diagram.
-        let baseXml = chartXML
+        // The diagram without streamed previews, as loaded last: the tool
+        // handler's result of an earlier edit is there before the chartXML
+        // state catches up. Undoing a failed edit's preview below changes it
+        // too, and an edit streaming right after must start from the undone
+        // diagram.
+        let baseXml = chartXMLRef.current
 
         messagesToProcess.forEach((message) => {
             // Messages restored from a saved session were applied before it was
@@ -587,7 +589,7 @@ export function ChatMessageDisplay({
                 })
             }
         })
-    }, [messages, handleDisplayChart, chartXML])
+    }, [messages, handleDisplayChart, chartXMLRef])
 
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">

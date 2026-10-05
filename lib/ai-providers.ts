@@ -21,6 +21,7 @@ import {
     adminProvidersToConfig,
     loadAdminProviders,
 } from "@/lib/admin/providers"
+import { getApiEndpoint } from "@/lib/base-path"
 import { redirectGuardedFetch } from "@/lib/ssrf-protection"
 import {
     normalizeBaseUrl,
@@ -100,6 +101,9 @@ export interface ClientOverrides {
     awsSessionToken?: string | null
     // Vertex AI config
     vertexApiKey?: string | null // Express Mode API key
+    // baseUrl is the server's own <P>_BASE_URL (the admin panel's Test),
+    // not one a user chose: no redirect guard
+    trustedBaseUrl?: boolean
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
     // Custom env var name(s) for server models
@@ -569,6 +573,7 @@ function detectProvider(): ProviderName | null {
 function validateProviderCredentials(
     provider: ProviderName,
     customApiKeyEnv?: string | string[],
+    customBaseUrlEnv?: string,
 ): void {
     // Handle array of env var names - at least one must be set
     if (Array.isArray(customApiKeyEnv)) {
@@ -604,9 +609,12 @@ function validateProviderCredentials(
         }
     }
 
-    // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition to API key
+    // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition
+    // to API key, or a server model's own URL variable (an admin panel entry)
     if (provider === "azure") {
-        const hasBaseUrl = !!process.env.AZURE_BASE_URL
+        const hasBaseUrl =
+            !!process.env.AZURE_BASE_URL ||
+            !!(customBaseUrlEnv && process.env[customBaseUrlEnv])
         const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
         if (!hasBaseUrl && !hasResourceName) {
             throw new Error(
@@ -879,13 +887,20 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
 
     // Only validate server credentials if client isn't providing their own API key
     if (!isClientOverride) {
-        validateProviderCredentials(provider, overrides?.apiKeyEnv)
+        validateProviderCredentials(
+            provider,
+            overrides?.apiKeyEnv,
+            overrides?.baseUrlEnv,
+        )
     }
 
     console.log(`[AI Provider] Initializing ${provider} with model: ${modelId}`)
 
     // Requests to a base URL the client chose must not follow redirects
-    const guardedFetch = overrides?.baseUrl ? redirectGuardedFetch() : undefined
+    const guardedFetch =
+        overrides?.baseUrl && !overrides.trustedBaseUrl
+            ? redirectGuardedFetch()
+            : undefined
     // Build provider-specific options from environment variables
     let providerOptions = buildProviderOptions(provider, modelId)
     let model: LanguageModel
@@ -1092,19 +1107,29 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
 }
 
 /**
+ * The deployment's EdgeOne Pages function, as an absolute URL (the SDK
+ * needs one), under the deployment's base path
+ */
+export function edgeOneEndpoint(req: Request): string {
+    const origin = req.headers.get("origin") || new URL(req.url).origin
+    return `${origin}${getApiEndpoint("/api/edgeai")}`
+}
+
+/**
  * The server's <P>_BASE_URL for a provider, which getAIModel uses for a
  * server model without a URL variable of its own (an admin panel entry
- * without a URL). Bedrock, EdgeOne and Ollama (the panel writes
- * OLLAMA_BASE_URL itself) have none.
+ * without a URL). None for Bedrock and EdgeOne, and none for Ollama and
+ * Vertex AI, whose variables the panel writes itself (before a save they
+ * still hold the entry's previous URL).
  */
 export function globalBaseUrl(provider: ProviderName): string | undefined {
-    if (["bedrock", "edgeone", "ollama"].includes(provider)) return undefined
+    if (["bedrock", "edgeone", "ollama", "vertexai"].includes(provider)) {
+        return undefined
+    }
     const name =
-        provider === "vertexai"
-            ? "GOOGLE_VERTEX_BASE_URL"
-            : provider === "gateway"
-              ? "AI_GATEWAY_BASE_URL"
-              : `${provider.toUpperCase()}_BASE_URL`
+        provider === "gateway"
+            ? "AI_GATEWAY_BASE_URL"
+            : `${provider.toUpperCase()}_BASE_URL`
     return process.env[name] || undefined
 }
 

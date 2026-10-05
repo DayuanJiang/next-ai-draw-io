@@ -302,6 +302,35 @@ test("an older test does not end a newer one's spinners", async ({ page }) => {
     await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(1)
 })
 
+test("an older test touches nothing, also when the key came back", async ({
+    page,
+}) => {
+    const releases: Array<() => void> = []
+    await page.route("**/api/validate-model", async (route) => {
+        const n = releases.length
+        await new Promise<void>((r) => releases.push(r))
+        await route.fulfill({
+            status: 200,
+            // The older test's result would say 9.0 s
+            json: { valid: true, responseTime: n === 0 ? 9000 : 1000 },
+        })
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await expect.poll(() => releases.length).toBe(1)
+    // The key changes and comes back, and the user tests again
+    await dialog.locator("#api-key").fill("other-key")
+    await dialog.locator("#api-key").fill("test-key")
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await expect.poll(() => releases.length).toBe(2)
+    releases[0]()
+    await page.waitForTimeout(500)
+    await expect(dialog.locator(".animate-spin").first()).toBeVisible()
+    await expect(dialog.locator('[title="9.0 s"]')).toHaveCount(0)
+    releases[1]()
+    await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(1)
+})
+
 test("no spinner stays after another tab's change while elsewhere", async ({
     page,
 }) => {

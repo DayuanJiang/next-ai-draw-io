@@ -203,6 +203,7 @@ export function ModelConfigDialog({
             p?.awsAccessKeyId,
             p?.awsSecretAccessKey,
             p?.awsRegion,
+            p?.awsSessionToken,
             p?.vertexApiKey,
         ])
     }
@@ -451,6 +452,9 @@ export function ModelConfigDialog({
                                 awsSecretAccessKey:
                                     selectedProvider.awsSecretAccessKey,
                                 awsRegion: selectedProvider.awsRegion,
+                                // Temporary AWS credentials, as the chat sends
+                                awsSessionToken:
+                                    selectedProvider.awsSessionToken,
                                 // Vertex AI credentials (Express Mode)
                                 vertexApiKey: selectedProvider.vertexApiKey,
                             }),
@@ -492,19 +496,18 @@ export function ModelConfigDialog({
                         validationWarning: undefined,
                     }
                 }
+                // A newer test started: its own results and spinners count,
+                // whatever the credentials are now (they may have come back)
+                if (run !== validationRunRef.current) return
                 // Credentials changed during the test: drop the result. A
-                // change made in this tab already reset the spinners (and a
-                // newer test may show its own); one from another tab did
-                // not, so the latest test clears its own (model ids are
-                // unique, whatever provider is shown).
+                // change in another tab left the spinner on, so clear it
+                // (model ids are unique, whatever provider is shown).
                 if (credentialsOf(selectedProviderId) !== askedWith) {
-                    if (run === validationRunRef.current) {
-                        setValidatingModelIds((prev) => {
-                            const next = new Set(prev)
-                            next.delete(model.id)
-                            return next
-                        })
-                    }
+                    setValidatingModelIds((prev) => {
+                        const next = new Set(prev)
+                        next.delete(model.id)
+                        return next
+                    })
                     return
                 }
                 // So did this model's id: the result is for the old one
@@ -532,13 +535,10 @@ export function ModelConfigDialog({
                 })
             }),
         )
+        if (run !== validationRunRef.current) return
         if (credentialsOf(selectedProviderId) !== askedWith) {
-            // The status line belongs to the latest test, and to the
-            // provider shown now
-            if (
-                run === validationRunRef.current &&
-                selectedProviderIdRef.current === selectedProviderId
-            ) {
+            // The status line is about the provider shown now
+            if (selectedProviderIdRef.current === selectedProviderId) {
                 setValidationStatus("idle")
             }
             return

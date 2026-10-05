@@ -32,6 +32,9 @@ export function rebuildAppMenu(): void {
     buildAppMenu()
 }
 
+// Number of the latest preset switch
+let lastSwitch = 0
+
 /**
  * Apply a preset and restart the server so it takes effect.
  * If the restart fails, go back to the previous preset and restart again,
@@ -41,6 +44,7 @@ export function rebuildAppMenu(): void {
 export async function switchPreset(
     id: string,
 ): Promise<Record<string, string>> {
+    const switchNumber = ++lastSwitch
     const previousPresetId = getCurrentPresetId()
     const env = applyPresetToEnv(id)
     if (!env) {
@@ -60,8 +64,9 @@ export async function switchPreset(
         console.error("Failed to restart server:", error)
         const reason = error instanceof Error ? error.message : String(error)
 
-        // Another preset was chosen meanwhile: its own restart follows
-        if (getCurrentPresetId() !== id) {
+        // A newer switch started meanwhile (also of this same preset): its
+        // own restart follows, and undoing would lose that choice
+        if (switchNumber !== lastSwitch) {
             throw new Error(
                 `The server could not be restarted.\n\nError: ${reason}`,
             )

@@ -29,6 +29,20 @@ export function loadEnvFile(): void {
 }
 
 /**
+ * Index of the quote that closes a value starting with a quote, or -1. A
+ * backslash before the quote character escapes it, as in dotenv; the
+ * backslash stays in the value.
+ */
+function findClosingQuote(value: string): number {
+    const quote = value[0]
+    for (let i = 1; i < value.length; i++) {
+        if (value[i] === "\\" && value[i + 1] === quote) i++
+        else if (value[i] === quote) return i
+    }
+    return -1
+}
+
+/**
  * Parse and load environment variables from a file
  */
 function loadEnvFromFile(filePath: string): void {
@@ -50,7 +64,7 @@ function loadEnvFromFile(filePath: string): void {
 
             const quote = value[0]
             const closingQuote =
-                quote === '"' || quote === "'" ? value.indexOf(quote, 1) : -1
+                quote === '"' || quote === "'" ? findClosingQuote(value) : -1
             if (
                 closingQuote > 0 &&
                 /^\s*(#.*)?$/.test(value.slice(closingQuote + 1))

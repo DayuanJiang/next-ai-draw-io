@@ -25,6 +25,9 @@ const KEYS = [
     "T_HASH",
     "T_AFTER",
     "T_JOINED",
+    "T_ESC_HASH",
+    "T_ESC_INNER",
+    "T_ESC_COMMENT",
 ]
 afterEach(() => {
     for (const k of KEYS) delete process.env[k]
@@ -71,5 +74,22 @@ describe("loadEnvFile", () => {
         expect(process.env.T_AFTER).toBe(`'a' b`)
         expect(process.env.T_JOINED).toBe(`"a"b`)
         expect(process.env.T_HASH).toBe("http://host/#/x")
+    })
+
+    it("does not end a quoted value at an escaped quote, like dotenv", () => {
+        dir.path = mkdtempSync(join(tmpdir(), "env-loader-"))
+        writeFileSync(
+            join(dir.path, ".env"),
+            [
+                'T_ESC_HASH="abc\\" #def"',
+                'T_ESC_INNER="a # \\"b\\""',
+                'T_ESC_COMMENT="x\\"y" # c',
+            ].join("\n"),
+        )
+        loadEnvFile()
+        // Expected values from dotenv 16.6.1, which keeps the backslashes
+        expect(process.env.T_ESC_HASH).toBe('abc\\" #def')
+        expect(process.env.T_ESC_INNER).toBe('a # \\"b\\"')
+        expect(process.env.T_ESC_COMMENT).toBe('x\\"y')
     })
 })

@@ -69,15 +69,15 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY_2).toBe("sk-second")
     })
 
-    it("sends an Ollama key without a URL to Ollama Cloud, like its Test", () => {
-        // Chat sends a server Ollama key to OLLAMA_BASE_URL, or to local
-        // Ollama without one; the Test sends it to Ollama Cloud
-        const cloud = deriveEnvUpdates(
+    it("writes an Ollama URL only when the entry has one", () => {
+        // Without one, the operator's own OLLAMA_BASE_URL (or local Ollama)
+        // stays, also for the AI_PROVIDER=ollama default model
+        const keyOnly = deriveEnvUpdates(
             [provider({ provider: "ollama", apiKey: "ollama-key" })],
             [],
         )
-        expect(cloud.OLLAMA_API_KEY).toBe("ollama-key")
-        expect(cloud.OLLAMA_BASE_URL).toBe("https://ollama.com/api")
+        expect(keyOnly.OLLAMA_API_KEY).toBe("ollama-key")
+        expect(keyOnly.OLLAMA_BASE_URL ?? null).toBeNull()
         const own = deriveEnvUpdates(
             [
                 provider({

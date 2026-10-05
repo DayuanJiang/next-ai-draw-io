@@ -3,6 +3,7 @@
  * Copied from lib/utils.ts to avoid cross-package imports
  */
 
+import { readAttributes } from "./xml-attributes.ts"
 import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 // ============================================================================
@@ -156,16 +157,10 @@ function replaceInOpeningTags(
 /** Check for duplicate structural attributes in a tag */
 function checkDuplicateAttributes(xml: string): string | null {
     const structuralSet = new Set(STRUCTURAL_ATTRS)
-    const tagPattern = /<[^>]+>/g
-    let tagMatch
-    while ((tagMatch = tagPattern.exec(xml)) !== null) {
-        const tag = tagMatch[0]
-        const attrPattern = /\s([a-zA-Z_:][a-zA-Z0-9_:.-]*)\s*=/g
+    for (const [tag] of xml.matchAll(/<[^>]+>/g)) {
         const attributes = new Map<string, number>()
-        let attrMatch
-        while ((attrMatch = attrPattern.exec(tag)) !== null) {
-            const attrName = attrMatch[1]
-            attributes.set(attrName, (attributes.get(attrName) || 0) + 1)
+        for (const { name } of readAttributes(tag)) {
+            attributes.set(name, (attributes.get(name) || 0) + 1)
         }
         const duplicates = Array.from(attributes.entries())
             .filter(([name, count]) => count > 1 && structuralSet.has(name))
@@ -596,27 +591,23 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
 
     // 3. Fix duplicate attributes
     let dupAttrFixed = false
+    const structural = new Set(STRUCTURAL_ATTRS)
     fixed = fixed.replace(/<[^>]+>/g, (tag) => {
-        let newTag = tag
-        for (const attr of STRUCTURAL_ATTRS) {
-            const attrRegex = new RegExp(
-                `\\s${attr}\\s*=\\s*["'][^"']*["']`,
-                "gi",
-            )
-            const matches = tag.match(attrRegex)
-            if (matches && matches.length > 1) {
-                let firstKept = false
-                newTag = newTag.replace(attrRegex, (m) => {
-                    if (!firstKept) {
-                        firstKept = true
-                        return m
-                    }
-                    dupAttrFixed = true
-                    return ""
-                })
+        // Keep the first of each, drop the later ones
+        const seen = new Set<string>()
+        let newTag = ""
+        let last = 0
+        for (const attr of readAttributes(tag)) {
+            if (!structural.has(attr.name)) continue
+            if (!seen.has(attr.name)) {
+                seen.add(attr.name)
+                continue
             }
+            newTag += tag.slice(last, attr.start)
+            last = attr.end
+            dupAttrFixed = true
         }
-        return newTag
+        return newTag + tag.slice(last)
     })
     if (dupAttrFixed) {
         fixes.push("Removed duplicate structural attributes")

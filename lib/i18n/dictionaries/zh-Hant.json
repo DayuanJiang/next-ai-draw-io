@@ -187,6 +187,8 @@
         "failedToRecordFeedback": "記錄您的回饋失敗。請重試。",
         "storageUpdateFailed": "聊天已清除，但無法更新瀏覽器儲存空間",
         "sessionSaveFailed": "無法儲存這個對話。瀏覽器儲存空間可能已滿，請在歷史紀錄裡刪除舊對話後重試。",
+        "sessionSaveFailedLeave": "無法儲存這個對話，瀏覽器儲存空間可能已滿。可以不儲存它、直接繼續，再在新對話的列表裡刪除舊對話。",
+        "continueWithoutSaving": "不儲存，繼續",
         "llm": {
             "invalid_api_key": "服務商拒絕了這個 API Key，請在模型設定中檢查。",
             "forbidden": "服務商拒絕了這次請求。這個 Key 可能沒有使用該模型或該地區的權限。",

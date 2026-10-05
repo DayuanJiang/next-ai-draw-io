@@ -3,6 +3,7 @@
  * and the web app's display_diagram tool.
  */
 import { normalizeToMxfile, wrapCellsInModel } from "./pages.ts"
+import { readAttributes } from "./xml-attributes.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 export type NewDiagram =
@@ -23,12 +24,9 @@ export function reservedIdError(input: string): string | null {
         /<(mxCell|UserObject|object)\b((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*\/?>/g,
     )
     for (const [, tag, attrText] of tags) {
-        const attrs = new Map<string, string>()
-        for (const [, name, double, single] of attrText.matchAll(
-            /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g,
-        )) {
-            attrs.set(name, double ?? single)
-        }
+        const attrs = new Map(
+            readAttributes(attrText).map((a) => [a.name, a.value]),
+        )
         const id = attrs.get("id")
         if (id !== "0" && id !== "1") continue
         // A wrapper's id is its cell's; an mxCell counts as a shape or edge

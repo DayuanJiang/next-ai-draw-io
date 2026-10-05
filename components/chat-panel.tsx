@@ -110,7 +110,7 @@ export default function ChatPanel({
         loadDiagram: onDisplayChart,
         handleExport: onExport,
         handleExportWithoutHistory,
-        resolverRef,
+        exportResolversRef,
         chartXML,
         chartXMLRef: liveChartXMLRef,
         latestSvg,
@@ -128,21 +128,15 @@ export default function ChatPanel({
     const urlSessionId = searchParams.get("session")
 
     const onFetchChart = (saveToHistory = true) => {
+        // Waits for the reply to its own export, by its tag
+        const tag = saveToHistory ? onExport() : handleExportWithoutHistory()
         return Promise.race([
             new Promise<string>((resolve) => {
-                resolverRef.current = resolve
-                if (saveToHistory) {
-                    onExport()
-                } else {
-                    handleExportWithoutHistory()
-                }
+                if (tag) exportResolversRef.current[tag] = resolve
             }),
             new Promise<string>((_, reject) => {
-                const currentResolver = resolverRef.current
                 setTimeout(() => {
-                    if (resolverRef.current === currentResolver) {
-                        resolverRef.current = null
-                    }
+                    delete exportResolversRef.current[tag]
                     reject(new Error("Chart export timed out after 10 seconds"))
                 }, 10000)
             }),
@@ -335,7 +329,8 @@ export default function ChatPanel({
     const validationRetryCountRef = useRef(0)
 
     // VLM validation hook using AI SDK's useObject
-    const { validateWithFallback } = useValidateDiagram()
+    const { validateWithFallback, cancel: cancelValidation } =
+        useValidateDiagram()
 
     // Diagram tool handlers (display_diagram, edit_diagram, append_diagram)
     const { handleToolCall } = useDiagramToolHandlers({
@@ -352,6 +347,7 @@ export default function ChatPanel({
         validateDiagram: validateWithFallback,
         enableVlmValidation: vlmValidationEnabled,
         sessionId,
+        isStopped: () => stoppedRef.current,
         onValidationStateChange: handleValidationStateChange,
     })
 
@@ -675,6 +671,7 @@ export default function ChatPanel({
         isAvailable: sessionIsAvailable,
         currentSessionId,
         saveCurrentSession,
+        getChatGeneration,
     } = sessionManager
 
     // Use ref for saveCurrentSession to avoid infinite loop
@@ -699,13 +696,14 @@ export default function ChatPanel({
             clearTimeout(localStorageDebounceRef.current)
         }
 
-        // Capture current session ID at schedule time to verify at save time
-        const scheduledForSessionId = currentSessionId
+        // Capture the chat on screen at schedule time; the save is dropped
+        // if another chat is on screen by the time it runs
+        const scheduledForChat = getChatGeneration()
         // Capture whether there's a REAL diagram NOW (not just empty template)
         const hasDiagramNow = isRealDiagram(chartXMLRef.current)
         // Check if this session was just loaded without a diagram
         const isNodiagramSession =
-            justLoadedSessionIdRef.current === scheduledForSessionId
+            justLoadedSessionIdRef.current === currentSessionId
 
         // Debounce: save after 1 second of no changes
         localStorageDebounceRef.current = setTimeout(async () => {
@@ -717,7 +715,7 @@ export default function ChatPanel({
                     })
                     await saveCurrentSessionRef.current(
                         sessionData,
-                        scheduledForSessionId,
+                        scheduledForChat,
                     )
                 }
             } catch (error) {
@@ -737,6 +735,7 @@ export default function ChatPanel({
         status,
         sessionIsAvailable,
         currentSessionId,
+        getChatGeneration,
         buildSessionData,
     ])
 
@@ -921,25 +920,33 @@ export default function ChatPanel({
         }
     }
 
+    // The current chat could not be saved (storage full). The list where
+    // old chats can be deleted shows only in an empty chat, so let the user
+    // go on without saving (same toast id: it replaces the plain message)
+    const offerToContinueUnsaved = useCallback(
+        (proceed: () => void) => {
+            toast.error(dict.errors.sessionSaveFailedLeave, {
+                id: "session-save-failed",
+                duration: 15000,
+                action: {
+                    label: dict.errors.continueWithoutSaving,
+                    onClick: proceed,
+                },
+            })
+        },
+        [dict],
+    )
+
     // Handle session switching from history dropdown
     const handleSelectSession = useCallback(
         async (sessionId: string) => {
             if (!sessionManager.isAvailable) return
 
-            // Save current session before switching (also a diagram drawn
-            // without messages); if that failed (storage full), stay on it
-            if (messages.length > 0 || isRealDiagram(chartXMLRef.current)) {
-                const sessionData = await buildSessionData({
-                    withThumbnail: true,
-                })
-                if (!(await sessionManager.saveCurrentSession(sessionData))) {
-                    return
-                }
-            }
-
             // Switch to selected session
-            const sessionData = await sessionManager.switchSession(sessionId)
-            if (sessionData) {
+            const open = async () => {
+                const sessionData =
+                    await sessionManager.switchSession(sessionId)
+                if (!sessionData) return
                 const hasRealDiagram = isRealDiagram(sessionData.diagramXml)
                 justLoadedSessionRef.current = true
 
@@ -957,8 +964,29 @@ export default function ChatPanel({
                 syncUIWithSession(sessionData)
                 router.replace(`?session=${sessionId}`, { scroll: false })
             }
+
+            // Save current session before switching (also a diagram drawn
+            // without messages); if that failed (storage full), stay on it
+            // unless the user goes on without saving it
+            if (messages.length > 0 || isRealDiagram(chartXMLRef.current)) {
+                const sessionData = await buildSessionData({
+                    withThumbnail: true,
+                })
+                if (!(await sessionManager.saveCurrentSession(sessionData))) {
+                    offerToContinueUnsaved(open)
+                    return
+                }
+            }
+            await open()
         },
-        [sessionManager, messages, buildSessionData, syncUIWithSession, router],
+        [
+            sessionManager,
+            messages,
+            buildSessionData,
+            syncUIWithSession,
+            router,
+            offerToContinueUnsaved,
+        ],
     )
 
     // Handle session deletion from history dropdown
@@ -976,20 +1004,7 @@ export default function ChatPanel({
         [sessionManager, syncUIWithSession, router, pathname],
     )
 
-    const handleNewChat = useCallback(async () => {
-        // Save current session before creating new one (also a diagram
-        // drawn without messages)
-        if (
-            sessionManager.isAvailable &&
-            (messages.length > 0 || isRealDiagram(chartXMLRef.current))
-        ) {
-            const sessionData = await buildSessionData({ withThumbnail: true })
-            // Not saved (storage full): keep the chat on screen
-            if (!(await sessionManager.saveCurrentSession(sessionData))) return
-            // Refresh sessions list to ensure dropdown shows the saved session
-            await sessionManager.refreshSessions()
-        }
-
+    const startNewChat = useCallback(() => {
         // Clear session manager state BEFORE clearing URL to prevent race condition
         // (otherwise the URL update effect would restore the old session URL)
         sessionManager.clearCurrentSession()
@@ -1021,12 +1036,36 @@ export default function ChatPanel({
         setMessages,
         setSessionId,
         sessionManager,
-        messages,
         router,
         dict.dialogs.clearSuccess,
-        buildSessionData,
         setDiagramHistory,
         pathname,
+    ])
+
+    const handleNewChat = useCallback(async () => {
+        // Save current session before creating new one (also a diagram
+        // drawn without messages)
+        if (
+            sessionManager.isAvailable &&
+            (messages.length > 0 || isRealDiagram(chartXMLRef.current))
+        ) {
+            const sessionData = await buildSessionData({ withThumbnail: true })
+            // Not saved (storage full): keep the chat on screen, unless the
+            // user goes on without saving it
+            if (!(await sessionManager.saveCurrentSession(sessionData))) {
+                offerToContinueUnsaved(startNewChat)
+                return
+            }
+            // Refresh sessions list to ensure dropdown shows the saved session
+            await sessionManager.refreshSessions()
+        }
+        startNewChat()
+    }, [
+        sessionManager,
+        messages,
+        buildSessionData,
+        offerToContinueUnsaved,
+        startNewChat,
     ])
 
     // Handle sending a template directly (called from TemplatePanel)
@@ -1089,6 +1128,9 @@ export default function ChatPanel({
     // Handle stop button click
     const handleStop = useCallback(() => {
         stoppedRef.current = true
+        // A running screenshot check holds up the chat (the SDK waits for
+        // the tool handler): end it, so the call gets its result now
+        cancelValidation()
         const lastMessage = messages[messages.length - 1]
         // Calls the tool handler already took can still show as streaming:
         // the messages update at most every 150 ms (useChat throttle)
@@ -1111,7 +1153,7 @@ export default function ChatPanel({
         })
 
         stop()
-    }, [messages, addToolOutput, stop])
+    }, [messages, addToolOutput, stop, cancelValidation])
 
     // Send chat message with headers
     const sendChatMessage = (

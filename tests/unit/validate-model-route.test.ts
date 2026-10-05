@@ -8,10 +8,11 @@ import { getAIModel } from "@/lib/ai-providers"
 // No saved admin providers
 vi.mock("@/lib/admin/settings", () => ({ loadSettings: () => ({}) }))
 
-// Treat every URL as public so no test hits DNS
+// Every URL is public (no DNS in tests), unless a test says otherwise
+const privateUrls = vi.hoisted(() => ({ all: false }))
 vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/lib/ssrf-protection")>()),
-    isPrivateUrl: async () => false,
+    isPrivateUrl: async () => privateUrls.all,
 }))
 
 afterEach(() => {
@@ -160,6 +161,120 @@ describe("chat requests to a client base URL", () => {
         })
         await result.consumeStream()
         expect(String(error)).toMatch(/Redirects are not allowed/)
+    })
+})
+
+describe("testing EdgeOne", () => {
+    // The request validate-model sends to the EdgeOne function
+    const capture = () => {
+        const calls: Array<{ url: string; headers: Headers }> = []
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string, init?: RequestInit) => {
+                calls.push({
+                    url: String(url),
+                    headers: new Headers(init?.headers),
+                })
+                throw new Error("no network in tests")
+            }),
+        )
+        return calls
+    }
+
+    it("calls the site's own function, also without a base URL", async () => {
+        // The admin panel's Test sends none; a relative one cannot be fetched
+        const calls = capture()
+        await validateModel(
+            new Request("http://localhost/api/validate-model", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    origin: "https://draw.example",
+                },
+                body: JSON.stringify({
+                    provider: "edgeone",
+                    modelId: "@tx/deepseek-ai/deepseek-v3-0324",
+                    baseUrl: "https://elsewhere.example/api/edgeai",
+                }),
+            }),
+        )
+        expect(calls[0]?.url).toBe(
+            "https://draw.example/api/edgeai/chat/completions",
+        )
+    })
+
+    it("passes the admin's access code and cookies on", async () => {
+        // The EdgeOne function checks the access code too
+        process.env.ADMIN_PASSWORD = "admin-pw"
+        try {
+            const calls = capture()
+            await testModel(
+                new Request("http://localhost/api/admin/test-model", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-admin-password": "admin-pw",
+                        "x-access-code": "visitor-code",
+                        cookie: "eo_token=t",
+                        origin: "https://draw.example",
+                    },
+                    body: JSON.stringify({
+                        provider: {
+                            id: "p1",
+                            provider: "edgeone",
+                            models: ["@tx/deepseek-ai/deepseek-v3-0324"],
+                        },
+                        modelId: "@tx/deepseek-ai/deepseek-v3-0324",
+                    }),
+                }),
+            )
+            expect(calls[0]?.url).toBe(
+                "https://draw.example/api/edgeai/chat/completions",
+            )
+            expect(calls[0]?.headers.get("x-access-code")).toBe("visitor-code")
+            expect(calls[0]?.headers.get("cookie")).toBe("eo_token=t")
+        } finally {
+            delete process.env.ADMIN_PASSWORD
+        }
+    })
+})
+
+describe("the admin Test of the server's own base URL", () => {
+    const test = (headers: Record<string, string>) =>
+        validateModel(
+            new Request("http://localhost/api/validate-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...headers },
+                body: JSON.stringify({
+                    provider: "openai",
+                    apiKey: "panel-key",
+                    modelId: "gpt-5.5",
+                    baseUrl: "http://10.0.0.5:8000/v1",
+                    serverBaseUrl: true,
+                }),
+            }),
+        )
+
+    it("tests it as chat uses it: an internal address is allowed", async () => {
+        // ALLOW_PRIVATE_URLS=false guards URLs users type, not the server's
+        process.env.ALLOW_PRIVATE_URLS = "false"
+        process.env.OPENAI_BASE_URL = "http://10.0.0.5:8000/v1"
+        process.env.ADMIN_PASSWORD = "admin-pw"
+        privateUrls.all = true
+        try {
+            streamReply({ role: "assistant", content: "OK" })
+            const admin = await (
+                await test({ "x-admin-password": "admin-pw" })
+            ).json()
+            expect(admin.valid).toBe(true)
+            // Anyone else claiming it is still refused
+            const other = await test({})
+            expect(other.status).toBe(400)
+        } finally {
+            privateUrls.all = false
+            delete process.env.OPENAI_BASE_URL
+            delete process.env.ADMIN_PASSWORD
+        }
     })
 })
 

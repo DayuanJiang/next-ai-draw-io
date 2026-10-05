@@ -3,7 +3,6 @@
  * Stores {xml, svg} entries in a circular buffer
  */
 
-import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
 
 const MAX_HISTORY = 20
@@ -17,14 +16,6 @@ interface HistoryEntry {
 let nextEntryId = 0
 const historyStore = new Map<string, HistoryEntry[]>()
 
-// The same pages and cells; a document without pages has an empty
-// fingerprint and is compared as text only
-function sameDiagram(a: string, b: string): boolean {
-    if (a === b) return true
-    const fingerprint = contentFingerprint(a)
-    return fingerprint !== "" && fingerprint === contentFingerprint(b)
-}
-
 export function addHistory(sessionId: string, xml: string, svg = ""): number {
     let history = historyStore.get(sessionId)
     if (!history) {
@@ -32,10 +23,10 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
         historyStore.set(sessionId, history)
     }
 
-    // Dedupe: skip if same as last entry, also when only re-serialized
-    // (the browser's copy of the same diagram)
+    // Dedupe: skip if same as last entry (a change of page settings or
+    // background only is a new version)
     const last = history[history.length - 1]
-    if (last && sameDiagram(last.xml, xml)) {
+    if (last && last.xml === xml) {
         if (svg && !last.svg) last.svg = svg
         return history.length - 1
     }
@@ -79,7 +70,7 @@ export function updateLastHistorySvg(
     const history = historyStore.get(sessionId)
     if (!history || history.length === 0) return false
     const last = history[history.length - 1]
-    if (!last.svg && sameDiagram(last.xml, shownXml)) {
+    if (!last.svg && last.xml === shownXml) {
         last.svg = svg
         return true
     }

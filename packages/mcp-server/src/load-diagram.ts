@@ -50,14 +50,16 @@ export function decompressPageContent(compressed: string): string | null {
  * any compressed pages.
  */
 export function parseDrawioFileContent(content: string): LoadResult {
-    const trimmed = content.trim()
+    let trimmed = content.trim()
     if (!trimmed) return { ok: false, error: "File is empty." }
 
     if (isMxGraphModel(trimmed)) {
         const normalized = normalizeToMxfile(trimmed)
-        return normalized
-            ? { ok: true, xml: normalized }
-            : { ok: false, error: "Failed to parse <mxGraphModel> XML." }
+        if (!normalized) {
+            return { ok: false, error: "Failed to parse <mxGraphModel> XML." }
+        }
+        // Parsed below like any <mxfile>, so a broken model is an error
+        trimmed = normalized
     }
     if (!isMxFile(trimmed)) {
         return {
