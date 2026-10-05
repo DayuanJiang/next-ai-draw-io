@@ -1,12 +1,17 @@
-// Draw.io UI themes configuration
-export type DrawioTheme = "kennedy" | "simple" | "min" | "sketch" | "atlas"
-
-export const DRAWIO_THEMES: DrawioTheme[] = [
+export const DRAWIO_THEMES = [
     "kennedy",
-    "simple",
+    "atlas",
+    "dark",
     "min",
     "sketch",
-    "atlas",
-]
+    "simple",
+] as const
 
-export const DEFAULT_DRAWIO_THEME: DrawioTheme = "min"
+export type DrawioTheme = (typeof DRAWIO_THEMES)[number]
+
+export function isDrawioTheme(value: unknown): value is DrawioTheme {
+    return (
+        typeof value === "string" &&
+        (DRAWIO_THEMES as readonly string[]).includes(value)
+    )
+}

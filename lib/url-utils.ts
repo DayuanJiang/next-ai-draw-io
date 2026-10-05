@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { getApiEndpoint } from "@/lib/base-path"
+import { STORAGE_KEYS } from "@/lib/storage"
 
 export interface UrlData {
     url: string
@@ -15,9 +17,13 @@ const UrlResponseSchema = z.object({
 })
 
 export async function extractUrlContent(url: string): Promise<UrlData> {
-    const response = await fetch("/api/parse-url", {
+    const response = await fetch(getApiEndpoint("/api/parse-url"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "x-access-code":
+                localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+        },
         body: JSON.stringify({ url }),
     })
 

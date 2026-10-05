@@ -3,15 +3,57 @@
  * Serves draw.io embed with state sync and history UI
  */
 
+import { randomUUID } from "node:crypto"
+import { readFileSync } from "node:fs"
 import http from "node:http"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const MAX_BODY_BYTES = 10 * 1024 * 1024 // 10 MiB
+
+function readBody(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    cb: (body: string) => void,
+): void {
+    // Decode once at the end: a multi-byte UTF-8 character can be split
+    // across two chunks.
+    const chunks: Buffer[] = []
+    let size = 0
+    let tooLarge = false
+    req.on("data", (chunk: Buffer) => {
+        if (tooLarge) return
+        size += chunk.length
+        if (size > MAX_BODY_BYTES) {
+            // Read the rest without keeping it and answer at the end: a
+            // connection closed mid-upload reaches the browser as a network
+            // error, without this answer
+            tooLarge = true
+            chunks.length = 0
+            return
+        }
+        chunks.push(chunk)
+    })
+    req.on("end", () => {
+        if (tooLarge) {
+            res.writeHead(413, { "Content-Type": "application/json" })
+            res.end(JSON.stringify({ error: "Payload too large" }))
+            return
+        }
+        cb(Buffer.concat(chunks).toString("utf8"))
+    })
+}
+
+import { contentFingerprint } from "./edit-gate.ts"
 import {
     addHistory,
     clearHistory,
     getHistory,
     getHistoryEntry,
     updateLastHistorySvg,
-} from "./history.js"
-import { log } from "./logger.js"
+} from "./history.ts"
+import { log } from "./logger.ts"
+import { BLANK_MXFILE } from "./pages.ts"
 
 // Configurable draw.io embed URL for private deployments
 const DRAWIO_BASE_URL =
@@ -29,35 +71,97 @@ function getOrigin(url: string): string {
 
 const DRAWIO_ORIGIN = getOrigin(DRAWIO_BASE_URL)
 
-// Minimal blank diagram used to bootstrap new sessions.
-// This avoids the draw.io embed spinner (spin=1) getting stuck when no `load(xml)` is ever sent.
-const DEFAULT_DIAGRAM_XML = `<mxfile host="app.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
-
 // Normalize URL for iframe src - ensure no double slashes
 function normalizeUrl(url: string): string {
     // Remove trailing slash to avoid double slashes
     return url.replace(/\/$/, "")
 }
 
-function isLikelyMcpSessionId(sessionId: string): boolean {
-    // Keep this cheap and conservative to avoid creating state for arbitrary IDs.
-    return sessionId.startsWith("mcp-") && sessionId.length <= 128
+// Session ids look like "mcp-<base36 time>-<base36 random>" (start_session).
+// Only this charset is accepted, because ids are written into the page's
+// HTML and script and into the redirect Location header.
+function isValidSessionId(sessionId: string): boolean {
+    return /^mcp-[a-z0-9-]{1,64}$/.test(sessionId)
+}
+
+// Find the most recent active session (for auto-redirect when no sessionId provided)
+function getMostRecentSessionId(): string | null {
+    let mostRecent: { id: string; lastUpdated: Date } | null = null
+    for (const [sessionId, state] of stateStore) {
+        if (!mostRecent || state.lastUpdated > mostRecent.lastUpdated) {
+            mostRecent = { id: sessionId, lastUpdated: state.lastUpdated }
+        }
+    }
+    return mostRecent?.id || null
+}
+
+/**
+ * Give a session whose state is gone (it expired, or the MCP process
+ * restarted) its auto-saved diagram back. The MCP tools call this before
+ * they read the state, so they never build on an older copy and then
+ * overwrite the file. Not a change worth saving again.
+ */
+export function restoreSavedSession(sessionId: string): void {
+    if (stateStore.has(sessionId) || !isValidSessionId(sessionId)) return
+    const saved = savedStateLoader?.(sessionId)
+    if (saved) setState(sessionId, saved, undefined, false, false)
 }
 
 function ensureSessionStateInitialized(sessionId: string): void {
     if (!sessionId) return
-    if (!isLikelyMcpSessionId(sessionId)) return
+    if (!isValidSessionId(sessionId)) return
+    restoreSavedSession(sessionId)
     if (stateStore.has(sessionId)) return
 
-    setState(sessionId, DEFAULT_DIAGRAM_XML)
+    // Not a change worth saving: the browser fills it on its next push
+    // A blank diagram keeps the draw.io spinner (spin=1) from waiting
+    // forever when no load(xml) is ever sent
+    setState(sessionId, BLANK_MXFILE, undefined, false, false)
+    // Nothing is known about this session: a tab that still shows it keeps
+    // its diagram
+    const state = stateStore.get(sessionId)
+    if (state) state.blank = true
 }
 
 interface SessionState {
     xml: string
     version: number
+    // Made when the state is created (first use, or again after it expired
+    // or the MCP process restarted) and kept by every write. A tab tells by
+    // it that the server lost what it knew, and every push names the state
+    // it was based on, so one based on a lost state is refused.
+    stateId: string
+    // Created blank because nothing was saved; cleared by the first write
+    blank?: boolean
+    // Version of the last write the browser did not make itself (AI edit,
+    // restore). A browser push based on an older version is rejected.
+    serverVersion?: number
+    // The XML of that write: what a thumbnail taken after loading it shows
+    serverXml?: string
+    // The browser saved a change of the user's since that write (a sync
+    // reply is no change)
+    userEdited?: boolean
     lastUpdated: Date
+    lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
+    exportFormat?: ExportFormat // Set by MCP tool to request browser export
+    exportXml?: string // Single-page projection to load before a page-targeted export
+    exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
+    exportId?: number // Number of the pending export, echoed with its result
+    exportData?: string // Base64/SVG data returned by browser after export
+}
+
+/** draw.io export formats; xmlsvg is an SVG with the diagram embedded */
+export type ExportFormat = "png" | "svg" | "xmlsvg"
+
+/**
+ * draw.io's PNG export takes these directly: width caps the image size
+ * (never upscales), pageId renders a page other than the one on screen.
+ */
+export interface ExportOptions {
+    width?: number
+    pageId?: string
 }
 
 export const stateStore = new Map<string, SessionState>()
@@ -71,19 +175,106 @@ export function getState(sessionId: string): SessionState | undefined {
     return stateStore.get(sessionId)
 }
 
-export function setState(sessionId: string, xml: string, svg?: string): number {
+// Called after every state change (AI write, browser push, restore)
+let stateListener: ((sessionId: string, xml: string) => void) | null = null
+
+export function onStateChange(
+    listener: (sessionId: string, xml: string) => void,
+): void {
+    stateListener = listener
+}
+
+// Reads a session's saved diagram when its state is created again (it
+// expired, or the MCP process restarted)
+let savedStateLoader: ((sessionId: string) => string | null) | null = null
+
+export function onSessionRecreate(
+    loader: (sessionId: string) => string | null,
+): void {
+    savedStateLoader = loader
+}
+
+export function setState(
+    sessionId: string,
+    xml: string,
+    svg?: string,
+    fromBrowser = false,
+    notify = true,
+): number {
     const existing = stateStore.get(sessionId)
     const newVersion = (existing?.version || 0) + 1
     stateStore.set(sessionId, {
         xml,
         version: newVersion,
+        stateId: existing?.stateId ?? randomUUID(),
+        serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
+        serverXml: fromBrowser ? existing?.serverXml : xml,
+        userEdited: fromBrowser ? existing?.userEdited : false,
         lastUpdated: new Date(),
-        svg: svg || existing?.svg, // Preserve cached SVG if not provided
+        lastPolled: existing?.lastPolled,
+        // The image of this XML, never an older one's: a write without an
+        // image (AI write, sync reply) leaves none until the browser sends
+        // it, unless it is the same XML
+        svg:
+            svg ||
+            (existing && existing.xml === xml ? existing.svg : undefined),
         syncRequested: undefined, // Clear sync request when browser pushes state
+        exportFormat: existing?.exportFormat, // Preserve pending export request
+        exportXml: existing?.exportXml, // Preserve pending projection
+        exportOptions: existing?.exportOptions,
+        exportId: existing?.exportId,
+        exportData: existing?.exportData, // Preserve export result
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
+    if (notify) stateListener?.(sessionId, xml)
     return newVersion
 }
+
+/**
+ * Keep the session's diagram in History before a write replaces it.
+ * Nothing to keep when the browser saved no change of the user's since the
+ * last server write and History ends with that write: the state is that
+ * write, or draw.io's own copy of it from a sync (other text, same diagram).
+ */
+export function keepInHistory(sessionId: string, xml: string, svg = ""): void {
+    const state = stateStore.get(sessionId)
+    const last = getHistory(sessionId).at(-1)
+    if (state && !state.userEdited && last && last.xml === state.serverXml) {
+        return
+    }
+    addHistory(sessionId, xml, svg)
+}
+
+/**
+ * Ask the browser bridge to export the current diagram as png/svg.
+ *
+ * When `projectionXml` is given (a single-page <mxfile>), the bridge loads it
+ * first, waits for draw.io's own load event, exports, then reloads the
+ * session's real document — so a page-targeted export never mutates the
+ * canonical session state and needs no fixed-delay guessing on the server.
+ *
+ * Returns false when the session is unknown. Callers should then poll
+ * `getState(sessionId)?.exportData` for the result.
+ */
+export function requestExport(
+    sessionId: string,
+    format: ExportFormat,
+    projectionXml?: string,
+    options?: ExportOptions,
+): boolean {
+    const state = stateStore.get(sessionId)
+    if (!state) return false
+    state.exportData = undefined
+    state.exportXml = projectionXml
+    state.exportOptions = options
+    state.exportFormat = format
+    // The browser sends this back with the result, so a late result of an
+    // export that timed out is not taken for this one
+    state.exportId = ++lastExportId
+    return true
+}
+
+let lastExportId = 0
 
 export function requestSync(sessionId: string): boolean {
     const state = stateStore.get(sessionId)
@@ -140,7 +331,7 @@ export function startHttpServer(port = 6002): Promise<number> {
             }
         })
 
-        server.listen(port, () => {
+        server.listen(port, "127.0.0.1", () => {
             serverPort = port
             log.info(`HTTP server running on http://localhost:${port}`)
             resolve(port)
@@ -158,7 +349,11 @@ export function stopHttpServer(): void {
 function cleanupExpiredSessions(): void {
     const now = Date.now()
     for (const [sessionId, state] of stateStore) {
-        if (now - state.lastUpdated.getTime() > SESSION_TTL) {
+        const lastActive = Math.max(
+            state.lastUpdated.getTime(),
+            state.lastPolled ?? 0,
+        )
+        if (now - lastActive > SESSION_TTL) {
             stateStore.delete(sessionId)
             clearHistory(sessionId)
             log.info(`Cleaned up expired session: ${sessionId}`)
@@ -181,11 +376,56 @@ function handleRequest(
     req: http.IncomingMessage,
     res: http.ServerResponse,
 ): void {
-    const url = new URL(req.url || "/", `http://localhost:${serverPort}`)
+    // A bad request must never take down the MCP process
+    try {
+        routeRequest(req, res)
+    } catch (err) {
+        log.error("HTTP request failed:", err)
+        if (!res.headersSent) res.writeHead(500)
+        res.end()
+    }
+}
 
-    res.setHeader("Access-Control-Allow-Origin", "*")
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+// Serve only requests addressed to localhost, sent by the preview page
+// itself (Origin is the address it was opened at, the Host) or by a
+// non-browser client (no Origin header). This blocks DNS rebinding, other
+// websites, and pages on other localhost ports, whose plain text POSTs need
+// no CORS preflight.
+function isLocalRequest(req: http.IncomingMessage): boolean {
+    const host = req.headers.host ?? ""
+    const origin = req.headers.origin
+    return (
+        /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) &&
+        (origin === undefined || origin === `http://${host}`)
+    )
+}
+
+function routeRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+): void {
+    let url: URL
+    try {
+        url = new URL(req.url || "/", `http://localhost:${serverPort}`)
+    } catch {
+        // e.g. "//" is not a valid URL path
+        res.writeHead(400)
+        res.end("Bad Request")
+        return
+    }
+
+    if (!isLocalRequest(req)) {
+        res.writeHead(403)
+        res.end("Forbidden")
+        return
+    }
+
+    const requestOrigin = req.headers.origin
+    if (requestOrigin === `http://localhost:${serverPort}`) {
+        res.setHeader("Access-Control-Allow-Origin", requestOrigin)
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+    }
 
     if (req.method === "OPTIONS") {
         res.writeHead(204)
@@ -195,6 +435,24 @@ function handleRequest(
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
         const sessionId = url.searchParams.get("mcp") || ""
+        if (sessionId && !isValidSessionId(sessionId)) {
+            res.writeHead(400)
+            res.end("Invalid session id")
+            return
+        }
+
+        // Auto-redirect to most recent session if no sessionId provided
+        if (!sessionId) {
+            const recentSessionId = getMostRecentSessionId()
+            if (recentSessionId) {
+                res.writeHead(302, {
+                    Location: `/?mcp=${encodeURIComponent(recentSessionId)}`,
+                })
+                res.end()
+                return
+            }
+        }
+
         ensureSessionStateInitialized(sessionId)
 
         res.writeHead(200, { "Content-Type": "text/html" })
@@ -227,28 +485,146 @@ function handleStateApi(
         }
         ensureSessionStateInitialized(sessionId)
         const state = stateStore.get(sessionId)
+        // Polling counts as activity, so a session stays alive while its
+        // tab is open
+        if (state) state.lastPolled = Date.now()
         res.writeHead(200, { "Content-Type": "application/json" })
         res.end(
             JSON.stringify({
                 xml: state?.xml || null,
                 version: state?.version || 0,
+                stateId: state?.stateId ?? null,
+                blank: !!state?.blank,
                 syncRequested: !!state?.syncRequested,
+                exportFormat: state?.exportFormat || null,
+                exportXml: state?.exportXml || null,
+                exportOptions: state?.exportOptions || null,
+                exportId: state?.exportId ?? null,
             }),
         )
     } else if (req.method === "POST") {
-        let body = ""
-        req.on("data", (chunk) => {
-            body += chunk
-        })
-        req.on("end", () => {
+        readBody(req, res, (body) => {
             try {
-                const { sessionId, xml, svg } = JSON.parse(body)
-                if (!sessionId) {
+                const data = JSON.parse(body)
+                const { sessionId } = data
+                if (!sessionId || !isValidSessionId(sessionId)) {
                     res.writeHead(400, { "Content-Type": "application/json" })
-                    res.end(JSON.stringify({ error: "sessionId required" }))
+                    res.end(
+                        JSON.stringify({ error: "valid sessionId required" }),
+                    )
                     return
                 }
-                const version = setState(sessionId, xml, svg)
+
+                // Browser is returning export data (png/svg)
+                if (data.exportData !== undefined) {
+                    const state = stateStore.get(sessionId)
+                    if (state && data.exportId === state.exportId) {
+                        state.exportData = data.exportData
+                        state.exportFormat = undefined
+                        state.exportXml = undefined
+                        state.exportOptions = undefined
+                        state.exportId = undefined
+                        log.debug(
+                            `Export data received for session=${sessionId}`,
+                        )
+                    } else if (state) {
+                        log.debug(
+                            `Ignored a late export result for session=${sessionId}`,
+                        )
+                    }
+                    res.writeHead(200, { "Content-Type": "application/json" })
+                    res.end(JSON.stringify({ success: true }))
+                    return
+                }
+
+                // A push can come before the tab's first poll after a
+                // restart: recover the saved file first, so it is compared
+                // with that and never overwrites it unseen
+                ensureSessionStateInitialized(sessionId)
+                const current = stateStore.get(sessionId)
+
+                // A tab of this version names the state its push is based
+                // on. Another state (the server lost the one it knew, or
+                // the tab has not polled yet): refused, and the tab's next
+                // poll decides whose diagram wins.
+                if (current && "stateId" in data) {
+                    if (data.stateId !== current.stateId) {
+                        res.writeHead(409, {
+                            "Content-Type": "application/json",
+                        })
+                        res.end(
+                            JSON.stringify({
+                                error: "Session was recreated",
+                                stateChanged: true,
+                                version: current.version,
+                            }),
+                        )
+                        return
+                    }
+                    // What a recovering tab showed: kept in history only
+                    if (data.source === "recover") {
+                        const saved =
+                            typeof data.xml === "string" &&
+                            !!data.xml &&
+                            data.xml !== current.xml
+                        if (saved) {
+                            addHistory(sessionId, data.xml, data.svg || "")
+                        }
+                        res.writeHead(409, {
+                            "Content-Type": "application/json",
+                        })
+                        res.end(
+                            JSON.stringify({
+                                error: "Diagram changed on the server",
+                                version: current.version,
+                                savedToHistory: saved,
+                            }),
+                        )
+                        return
+                    }
+                }
+
+                // The browser edited a version older than the latest AI write
+                // (it has not loaded that write yet). Keep the AI write; the
+                // browser loads it on its next poll. A sync reply is also
+                // stale after a newer write of the browser's own (a user
+                // edit saved while the export ran).
+                if (
+                    typeof data.baseVersion === "number" &&
+                    (data.baseVersion < (current?.serverVersion ?? 0) ||
+                        (data.source === "sync" &&
+                            data.baseVersion < (current?.version ?? 0)))
+                ) {
+                    let savedToHistory = false
+                    if (data.source === "sync") {
+                        // A stale sync reply: the store already holds the
+                        // newer AI write, so the sync is done.
+                        if (current) current.syncRequested = undefined
+                    } else if (typeof data.xml === "string" && data.xml) {
+                        // A user edit lost the race with an AI write. Keep
+                        // it in history so the user can restore it.
+                        addHistory(sessionId, data.xml, data.svg || "")
+                        savedToHistory = true
+                    }
+                    res.writeHead(409, { "Content-Type": "application/json" })
+                    res.end(
+                        JSON.stringify({
+                            error: "Diagram changed on the server",
+                            version: current?.version,
+                            savedToHistory,
+                        }),
+                    )
+                    return
+                }
+
+                if (typeof data.xml !== "string") {
+                    res.writeHead(400, { "Content-Type": "application/json" })
+                    res.end(JSON.stringify({ error: "xml must be a string" }))
+                    return
+                }
+                const version = setState(sessionId, data.xml, data.svg, true)
+                const saved = stateStore.get(sessionId)
+                if (saved && data.source !== "sync") saved.userEdited = true
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ success: true, version }))
             } catch {
@@ -284,7 +660,11 @@ function handleHistoryApi(
     res.writeHead(200, { "Content-Type": "application/json" })
     res.end(
         JSON.stringify({
-            entries: history.map((entry, i) => ({ index: i, svg: entry.svg })),
+            entries: history.map((entry, i) => ({
+                index: i,
+                id: entry.id,
+                svg: entry.svg,
+            })),
             count: history.length,
         }),
     )
@@ -300,32 +680,38 @@ function handleRestoreApi(
         return
     }
 
-    let body = ""
-    req.on("data", (chunk) => {
-        body += chunk
-    })
-    req.on("end", () => {
+    readBody(req, res, (body) => {
         try {
-            const { sessionId, index } = JSON.parse(body)
-            if (!sessionId || index === undefined) {
+            const { sessionId, id } = JSON.parse(body)
+            if (!sessionId || typeof id !== "number") {
                 res.writeHead(400, { "Content-Type": "application/json" })
-                res.end(
-                    JSON.stringify({ error: "sessionId and index required" }),
-                )
+                res.end(JSON.stringify({ error: "sessionId and id required" }))
                 return
             }
 
-            const entry = getHistoryEntry(sessionId, index)
+            const entry = getHistoryEntry(sessionId, id)
             if (!entry) {
                 res.writeHead(404, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Entry not found" }))
                 return
             }
 
+            // Edits in the browser since the last entry are not in history
+            // yet: keep them, so the restore can be undone
+            // (any state besides a blank page; a cleared document with its
+            // own pages counts)
+            const current = stateStore.get(sessionId)
+            if (
+                current &&
+                contentFingerprint(current.xml) !==
+                    contentFingerprint(BLANK_MXFILE)
+            ) {
+                keepInHistory(sessionId, current.xml, current.svg)
+            }
             const newVersion = setState(sessionId, entry.xml)
             addHistory(sessionId, entry.xml, entry.svg)
 
-            log.info(`Restored session ${sessionId} to index ${index}`)
+            log.info(`Restored session ${sessionId} to history entry ${id}`)
 
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true, newVersion }))
@@ -346,20 +732,29 @@ function handleHistorySvgApi(
         return
     }
 
-    let body = ""
-    req.on("data", (chunk) => {
-        body += chunk
-    })
-    req.on("end", () => {
+    readBody(req, res, (body) => {
         try {
-            const { sessionId, svg } = JSON.parse(body)
+            const { sessionId, svg, stateId, version } = JSON.parse(body)
             if (!sessionId || !svg) {
                 res.writeHead(400, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "sessionId and svg required" }))
                 return
             }
 
-            updateLastHistorySvg(sessionId, svg)
+            // The browser took it of the server write it loaded, named by
+            // the state and version. One that arrives after the next server
+            // write, or for a state since lost, is dropped; a browser write
+            // since (a sync reply) leaves that write's image valid.
+            const state = stateStore.get(sessionId)
+            if (
+                state &&
+                state.stateId === stateId &&
+                state.serverVersion === version &&
+                state.serverXml !== undefined
+            ) {
+                updateLastHistorySvg(sessionId, svg, state.serverXml)
+                if (state.xml === state.serverXml) state.svg = svg
+            }
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true }))
         } catch {
@@ -369,265 +764,34 @@ function handleHistorySvgApi(
     })
 }
 
+// The preview page lives in src/preview (the build copies it to dist/preview)
+const PREVIEW_DIR = join(dirname(fileURLToPath(import.meta.url)), "preview")
+let previewTemplate: string | null = null
+
+function loadPreviewTemplate(): string {
+    if (!previewTemplate) {
+        const read = (file: string) =>
+            readFileSync(join(PREVIEW_DIR, file), "utf-8")
+        previewTemplate = read("index.html")
+            .replace("{{CSS}}", () => read("preview.css"))
+            .replace("{{SCRIPT}}", () => read("preview.js"))
+    }
+    return previewTemplate
+}
+
+/** A JSON string literal that is safe inside a <script> element */
+const scriptJson = (value: string) =>
+    JSON.stringify(value).replace(/</g, "\\u003c")
+
 function getHtmlPage(sessionId: string): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Draw.io MCP</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; overflow: hidden; }
-        #container { width: 100%; height: 100%; display: flex; flex-direction: column; }
-        #header {
-            padding: 8px 16px; background: #1a1a2e; color: #eee;
-            font-family: system-ui, sans-serif; font-size: 14px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        #header .session { color: #888; font-size: 12px; }
-        #header .status { font-size: 12px; }
-        #header .status.connected { color: #4ade80; }
-        #header .status.disconnected { color: #f87171; }
-        #drawio { flex: 1; border: none; }
-        #history-btn {
-            position: fixed; bottom: 24px; right: 24px;
-            width: 48px; height: 48px; border-radius: 50%;
-            background: #3b82f6; color: white; border: none; cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 1000;
-        }
-        #history-btn:hover { background: #2563eb; }
-        #history-btn:disabled { background: #6b7280; cursor: not-allowed; }
-        #history-btn svg { width: 24px; height: 24px; }
-        #history-modal {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.5); z-index: 2000;
-            align-items: center; justify-content: center;
-        }
-        #history-modal.open { display: flex; }
-        .modal-content {
-            background: white; border-radius: 12px;
-            width: 90%; max-width: 500px; max-height: 70vh;
-            display: flex; flex-direction: column;
-        }
-        .modal-header { padding: 16px; border-bottom: 1px solid #e5e7eb; }
-        .modal-header h2 { font-size: 18px; margin: 0; }
-        .modal-body { flex: 1; overflow-y: auto; padding: 16px; }
-        .modal-footer { padding: 12px 16px; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; justify-content: flex-end; }
-        .history-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .history-item {
-            border: 2px solid #e5e7eb; border-radius: 8px; padding: 8px;
-            cursor: pointer; text-align: center;
-        }
-        .history-item:hover { border-color: #3b82f6; }
-        .history-item.selected { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.3); }
-        .history-item .thumb {
-            aspect-ratio: 4/3; background: #f3f4f6; border-radius: 4px;
-            display: flex; align-items: center; justify-content: center;
-            margin-bottom: 4px; overflow: hidden;
-        }
-        .history-item .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .history-item .label { font-size: 12px; color: #666; }
-        .btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; border: none; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
-        .btn-secondary { background: #f3f4f6; color: #374151; }
-        .empty { text-align: center; padding: 40px; color: #666; }
-    </style>
-</head>
-<body>
-    <div id="container">
-        <div id="header">
-            <div>
-                <strong>Draw.io MCP</strong>
-                <span class="session">${sessionId ? `Session: ${sessionId}` : "No session"}</span>
-            </div>
-            <div id="status" class="status disconnected">Connecting...</div>
-        </div>
-        <iframe id="drawio" src="${normalizeUrl(DRAWIO_BASE_URL)}/?embed=1&proto=json&spin=1&libraries=1"></iframe>
-    </div>
-    <button id="history-btn" title="History" ${sessionId ? "" : "disabled"}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-    </button>
-    <div id="history-modal">
-        <div class="modal-content">
-            <div class="modal-header"><h2>History</h2></div>
-            <div class="modal-body">
-                <div id="history-grid" class="history-grid"></div>
-                <div id="history-empty" class="empty" style="display:none;">No history yet</div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
-                <button class="btn btn-primary" id="restore-btn" disabled>Restore</button>
-            </div>
-        </div>
-    </div>
-    <script>
-        const sessionId = "${sessionId}";
-        const iframe = document.getElementById('drawio');
-        const statusEl = document.getElementById('status');
-        let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
-        let pendingSvgExport = null;
-        let pendingAiSvg = false;
-
-        window.addEventListener('message', (e) => {
-            if (e.origin !== '${DRAWIO_ORIGIN}') return;
-            try {
-                const msg = JSON.parse(e.data);
-                if (msg.event === 'init') {
-                    isReady = true;
-                    statusEl.textContent = 'Ready';
-                    statusEl.className = 'status connected';
-                    if (pendingXml) { loadDiagram(pendingXml); pendingXml = null; }
-                } else if ((msg.event === 'save' || msg.event === 'autosave') && msg.xml && msg.xml !== lastXml) {
-                    // Request SVG export, then push state with SVG
-                    pendingSvgExport = msg.xml;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
-                    // Fallback if export doesn't respond
-                    setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, ''); pendingSvgExport = null; } }, 2000);
-                } else if (msg.event === 'export' && msg.data) {
-                    // Handle sync export (XML format) - server requested fresh state
-                    if (pendingSyncExport && !msg.data.startsWith('data:') && !msg.data.startsWith('<svg')) {
-                        pendingSyncExport = false;
-                        pushState(msg.data, '');
-                        return;
-                    }
-                    // Handle SVG export
-                    let svg = msg.data;
-                    if (!svg.startsWith('data:')) svg = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-                    if (pendingSvgExport) {
-                        const xml = pendingSvgExport;
-                        pendingSvgExport = null;
-                        pushState(xml, svg);
-                    } else if (pendingAiSvg) {
-                        pendingAiSvg = false;
-                        fetch('/api/history-svg', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sessionId, svg })
-                        }).catch(() => {});
-                    }
-                }
-            } catch {}
-        });
-
-        function loadDiagram(xml, capturePreview = false) {
-            if (!isReady) { pendingXml = xml; return; }
-            lastXml = xml;
-            iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml, autosave: 1 }), '*');
-            if (capturePreview) {
-                setTimeout(() => {
-                    pendingAiSvg = true;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'svg' }), '*');
-                }, 500);
-            }
-        }
-
-        async function pushState(xml, svg = '') {
-            if (!sessionId) return;
-            try {
-                const r = await fetch('/api/state', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, xml, svg })
-                });
-                if (r.ok) { const d = await r.json(); currentVersion = d.version; lastXml = xml; }
-            } catch (e) { console.error('Push failed:', e); }
-        }
-
-        let pendingSyncExport = false;
-
-        async function poll() {
-            if (!sessionId) return;
-            try {
-                const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
-                if (!r.ok) return;
-                const s = await r.json();
-                // Handle sync request - server needs fresh state
-                if (s.syncRequested && !pendingSyncExport) {
-                    pendingSyncExport = true;
-                    iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
-                }
-                // Load new diagram from server
-                if (s.version > currentVersion && s.xml) {
-                    currentVersion = s.version;
-                    loadDiagram(s.xml, true);
-                }
-            } catch {}
-        }
-
-        if (sessionId) { poll(); setInterval(poll, 2000); }
-
-        // History UI
-        const historyBtn = document.getElementById('history-btn');
-        const historyModal = document.getElementById('history-modal');
-        const historyGrid = document.getElementById('history-grid');
-        const historyEmpty = document.getElementById('history-empty');
-        const restoreBtn = document.getElementById('restore-btn');
-        const cancelBtn = document.getElementById('cancel-btn');
-        let historyData = [], selectedIdx = null;
-
-        historyBtn.onclick = async () => {
-            if (!sessionId) return;
-            try {
-                const r = await fetch('/api/history?sessionId=' + encodeURIComponent(sessionId));
-                if (r.ok) {
-                    const d = await r.json();
-                    historyData = d.entries || [];
-                    renderHistory();
-                }
-            } catch {}
-            historyModal.classList.add('open');
-        };
-
-        cancelBtn.onclick = () => { historyModal.classList.remove('open'); selectedIdx = null; restoreBtn.disabled = true; };
-        historyModal.onclick = (e) => { if (e.target === historyModal) cancelBtn.onclick(); };
-
-        function renderHistory() {
-            if (historyData.length === 0) {
-                historyGrid.style.display = 'none';
-                historyEmpty.style.display = 'block';
-                return;
-            }
-            historyGrid.style.display = 'grid';
-            historyEmpty.style.display = 'none';
-            historyGrid.innerHTML = historyData.map((e, i) => \`
-                <div class="history-item" data-idx="\${e.index}">
-                    <div class="thumb">\${e.svg ? \`<img src="\${e.svg}">\` : '#' + e.index}</div>
-                    <div class="label">#\${e.index}</div>
-                </div>
-            \`).join('');
-            historyGrid.querySelectorAll('.history-item').forEach(item => {
-                item.onclick = () => {
-                    const idx = parseInt(item.dataset.idx);
-                    if (selectedIdx === idx) { selectedIdx = null; restoreBtn.disabled = true; }
-                    else { selectedIdx = idx; restoreBtn.disabled = false; }
-                    historyGrid.querySelectorAll('.history-item').forEach(el => el.classList.toggle('selected', parseInt(el.dataset.idx) === selectedIdx));
-                };
-            });
-        }
-
-        restoreBtn.onclick = async () => {
-            if (selectedIdx === null) return;
-            restoreBtn.disabled = true;
-            restoreBtn.textContent = 'Restoring...';
-            try {
-                const r = await fetch('/api/restore', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, index: selectedIdx })
-                });
-                if (r.ok) { cancelBtn.onclick(); await poll(); }
-                else { alert('Restore failed'); }
-            } catch { alert('Restore failed'); }
-            restoreBtn.textContent = 'Restore';
-        };
-    </script>
-</body>
-</html>`
+    return loadPreviewTemplate()
+        .replace("{{SESSION_BADGE}}", () =>
+            sessionId
+                ? `<span class="session">${sessionId.slice(-8)}</span>`
+                : "",
+        )
+        .replaceAll("{{DISABLED}}", sessionId ? "" : "disabled")
+        .replace("{{DRAWIO_URL}}", () => normalizeUrl(DRAWIO_BASE_URL))
+        .replace("{{SESSION_JSON}}", () => scriptJson(sessionId))
+        .replace("{{ORIGIN_JSON}}", () => scriptJson(DRAWIO_ORIGIN))
 }

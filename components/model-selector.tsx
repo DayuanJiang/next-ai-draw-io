@@ -5,8 +5,10 @@ import {
     Bot,
     Check,
     ChevronDown,
+    Monitor,
     Server,
     Settings2,
+    User,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
@@ -19,38 +21,25 @@ import {
     ModelSelectorLogo,
     ModelSelectorName,
     ModelSelector as ModelSelectorRoot,
+    ModelSelectorSectionHeader,
     ModelSelectorSeparator,
     ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { useDictionary } from "@/hooks/use-dictionary"
-import type { FlattenedModel } from "@/lib/types/model-config"
+import {
+    type FlattenedModel,
+    PROVIDER_LOGO_MAP,
+} from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
 interface ModelSelectorProps {
     models: FlattenedModel[]
     selectedModelId: string | undefined
     onSelect: (modelId: string | undefined) => void
-    onConfigure: () => void
+    onConfigure?: () => void
     disabled?: boolean
     showUnvalidatedModels?: boolean
-}
-
-// Map our provider names to models.dev logo names
-const PROVIDER_LOGO_MAP: Record<string, string> = {
-    openai: "openai",
-    anthropic: "anthropic",
-    google: "google",
-    azure: "azure",
-    bedrock: "amazon-bedrock",
-    openrouter: "openrouter",
-    deepseek: "deepseek",
-    siliconflow: "siliconflow",
-    sglang: "openai", // SGLang is OpenAI-compatible, use OpenAI logo
-    gateway: "vercel",
-    edgeone: "tencent-cloud",
-    doubao: "bytedance",
-    modelscope: "modelscope",
 }
 
 // Group models by providerLabel (handles duplicate providers)
@@ -62,7 +51,11 @@ function groupModelsByProvider(
         { provider: string; models: FlattenedModel[] }
     >()
     for (const model of models) {
-        const key = model.providerLabel
+        // For server models, strip "Server · " prefix for cleaner grouping
+        const key =
+            model.source === "server"
+                ? model.providerLabel.replace(/^Server · /, "")
+                : model.providerLabel
         const existing = groups.get(key)
         if (existing) {
             existing.models.push(model)
@@ -90,9 +83,25 @@ export function ModelSelector({
         }
         return models.filter((m) => m.validated === true)
     }, [models, showUnvalidatedModels])
-    const groupedModels = useMemo(
-        () => groupModelsByProvider(displayModels),
+
+    // Separate server and user models
+    const serverModels = useMemo(
+        () => displayModels.filter((m) => m.source === "server"),
         [displayModels],
+    )
+    const userModels = useMemo(
+        () => displayModels.filter((m) => m.source !== "server"),
+        [displayModels],
+    )
+
+    // Group each category separately
+    const groupedServerModels = useMemo(
+        () => groupModelsByProvider(serverModels),
+        [serverModels],
+    )
+    const groupedUserModels = useMemo(
+        () => groupModelsByProvider(userModels),
+        [userModels],
     )
 
     // Find selected model for display
@@ -102,9 +111,7 @@ export function ModelSelector({
     )
 
     const handleSelect = (value: string) => {
-        if (value === "__configure__") {
-            onConfigure()
-        } else if (value === "__server_default__") {
+        if (value === "__server_default__") {
             onSelect(undefined)
         } else {
             onSelect(value)
@@ -151,7 +158,7 @@ export function ModelSelector({
     }, [])
 
     return (
-        <div ref={wrapperRef} className="inline-block">
+        <div ref={wrapperRef} className="min-w-0 max-w-48">
             <ModelSelectorRoot open={open} onOpenChange={setOpen}>
                 <ModelSelectorTrigger asChild>
                     <ButtonWithTooltip
@@ -160,7 +167,7 @@ export function ModelSelector({
                         size="sm"
                         disabled={disabled}
                         className={cn(
-                            "hover:bg-accent gap-1.5 h-8 px-2 transition-all duration-150 ease-in-out",
+                            "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent",
                             !showLabel && "px-1.5 justify-center",
                         )}
                         // accessibility: expose label to screen readers
@@ -169,7 +176,7 @@ export function ModelSelector({
                         <Bot className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                         {/* show/hide visible label based on measured width */}
                         {showLabel ? (
-                            <span className="text-xs truncate">
+                            <span className="min-w-0 truncate text-xs">
                                 {selectedModel
                                     ? selectedModel.modelId
                                     : dict.modelConfig.default}
@@ -190,113 +197,247 @@ export function ModelSelector({
                     <ModelSelectorInput
                         placeholder={dict.modelConfig.searchModels}
                     />
-                    <ModelSelectorList className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                        <ModelSelectorEmpty>
-                            {displayModels.length === 0 && models.length > 0
-                                ? dict.modelConfig.noVerifiedModels
-                                : dict.modelConfig.noModelsFound}
-                        </ModelSelectorEmpty>
+                    <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+                        <div className="flex-1 min-h-0 overflow-hidden">
+                            <ModelSelectorList className="overflow-y-auto scrollbar-thin">
+                                <ModelSelectorEmpty>
+                                    {displayModels.length === 0 &&
+                                    models.length > 0
+                                        ? dict.modelConfig.noVerifiedModels
+                                        : dict.modelConfig.noModelsFound}
+                                </ModelSelectorEmpty>
 
-                        {/* Server Default Option */}
-                        <ModelSelectorGroup heading={dict.modelConfig.default}>
-                            <ModelSelectorItem
-                                value="__server_default__"
-                                onSelect={handleSelect}
-                                className={cn(
-                                    "cursor-pointer",
-                                    !selectedModelId && "bg-accent",
-                                )}
-                            >
-                                <Check
-                                    className={cn(
-                                        "mr-2 h-4 w-4",
-                                        !selectedModelId
-                                            ? "opacity-100"
-                                            : "opacity-0",
-                                    )}
-                                />
-                                <Server className="mr-2 h-4 w-4 text-muted-foreground" />
-                                <ModelSelectorName>
-                                    {dict.modelConfig.serverDefault}
-                                </ModelSelectorName>
-                            </ModelSelectorItem>
-                        </ModelSelectorGroup>
-
-                        {/* Configured Models by Provider */}
-                        {Array.from(groupedModels.entries()).map(
-                            ([
-                                providerLabel,
-                                { provider, models: providerModels },
-                            ]) => (
-                                <ModelSelectorGroup
-                                    key={providerLabel}
-                                    heading={providerLabel}
-                                >
-                                    {providerModels.map((model) => (
+                                {/* Server Default Option - only show when no server models are configured */}
+                                {serverModels.length === 0 && (
+                                    <ModelSelectorGroup
+                                        heading={dict.modelConfig.default}
+                                    >
                                         <ModelSelectorItem
-                                            key={model.id}
-                                            value={model.modelId}
-                                            onSelect={() =>
-                                                handleSelect(model.id)
-                                            }
-                                            className="cursor-pointer"
+                                            value="__server_default__"
+                                            onSelect={handleSelect}
+                                            className={cn(
+                                                "cursor-pointer",
+                                                !selectedModelId && "bg-accent",
+                                            )}
                                         >
                                             <Check
                                                 className={cn(
                                                     "mr-2 h-4 w-4",
-                                                    selectedModelId === model.id
+                                                    !selectedModelId
                                                         ? "opacity-100"
                                                         : "opacity-0",
                                                 )}
                                             />
-                                            <ModelSelectorLogo
-                                                provider={
-                                                    PROVIDER_LOGO_MAP[
-                                                        provider
-                                                    ] || provider
-                                                }
-                                                className="mr-2"
-                                            />
+                                            <Server className="mr-2 h-4 w-4 text-muted-foreground" />
                                             <ModelSelectorName>
-                                                {model.modelId}
+                                                {dict.modelConfig.serverDefault}
                                             </ModelSelectorName>
-                                            {model.validated !== true && (
-                                                <span
-                                                    title={
-                                                        dict.modelConfig
-                                                            .unvalidatedModelWarning
-                                                    }
-                                                >
-                                                    <AlertTriangle className="ml-auto h-3 w-3 text-warning" />
-                                                </span>
-                                            )}
                                         </ModelSelectorItem>
-                                    ))}
-                                </ModelSelectorGroup>
-                            ),
-                        )}
+                                    </ModelSelectorGroup>
+                                )}
 
-                        {/* Configure Option */}
-                        <ModelSelectorSeparator />
-                        <ModelSelectorGroup>
-                            <ModelSelectorItem
-                                value="__configure__"
-                                onSelect={handleSelect}
-                                className="cursor-pointer"
-                            >
-                                <Settings2 className="mr-2 h-4 w-4" />
-                                <ModelSelectorName>
-                                    {dict.modelConfig.configureModels}
-                                </ModelSelectorName>
-                            </ModelSelectorItem>
-                        </ModelSelectorGroup>
-                        {/* Info text */}
-                        <div className="px-3 py-2 text-xs text-muted-foreground border-t">
-                            {showUnvalidatedModels
-                                ? dict.modelConfig.allModelsShown
-                                : dict.modelConfig.onlyVerifiedShown}
+                                {/* Server Models Section */}
+                                {serverModels.length > 0 && (
+                                    <>
+                                        <ModelSelectorSectionHeader
+                                            icon={<Monitor />}
+                                            label={
+                                                dict.modelConfig.serverModels
+                                            }
+                                        />
+                                        {Array.from(
+                                            groupedServerModels.entries(),
+                                        ).map(
+                                            ([
+                                                providerLabel,
+                                                {
+                                                    provider,
+                                                    models: providerModels,
+                                                },
+                                            ]) => (
+                                                <ModelSelectorGroup
+                                                    key={`server-${providerLabel}`}
+                                                    heading={providerLabel}
+                                                    className="[&>[cmdk-group-heading]]:pl-4"
+                                                >
+                                                    {providerModels.map(
+                                                        (model) => (
+                                                            <ModelSelectorItem
+                                                                key={model.id}
+                                                                // Unique value so same-named models highlight
+                                                                // separately; keywords keep search by name
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
+                                                                onSelect={() =>
+                                                                    handleSelect(
+                                                                        model.id,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        selectedModelId ===
+                                                                            model.id
+                                                                            ? "opacity-100"
+                                                                            : "opacity-0",
+                                                                    )}
+                                                                />
+                                                                <ModelSelectorLogo
+                                                                    provider={
+                                                                        PROVIDER_LOGO_MAP[
+                                                                            provider
+                                                                        ] ||
+                                                                        provider
+                                                                    }
+                                                                    className="mr-2"
+                                                                />
+                                                                <ModelSelectorName>
+                                                                    {
+                                                                        model.modelId
+                                                                    }
+                                                                </ModelSelectorName>
+                                                                {model.isDefault && (
+                                                                    <span
+                                                                        title={
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .serverDefaultModel
+                                                                        }
+                                                                        className="ml-auto text-xs text-muted-foreground"
+                                                                    >
+                                                                        {
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .default
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                            </ModelSelectorItem>
+                                                        ),
+                                                    )}
+                                                </ModelSelectorGroup>
+                                            ),
+                                        )}
+                                    </>
+                                )}
+
+                                {/* User Models Section */}
+                                {userModels.length > 0 && (
+                                    <>
+                                        {serverModels.length > 0 && (
+                                            <ModelSelectorSeparator />
+                                        )}
+                                        <ModelSelectorSectionHeader
+                                            icon={<User />}
+                                            label={dict.modelConfig.userModels}
+                                        />
+                                        {Array.from(
+                                            groupedUserModels.entries(),
+                                        ).map(
+                                            ([
+                                                providerLabel,
+                                                {
+                                                    provider,
+                                                    models: providerModels,
+                                                },
+                                            ]) => (
+                                                <ModelSelectorGroup
+                                                    key={`user-${providerLabel}`}
+                                                    heading={providerLabel}
+                                                    className="[&>[cmdk-group-heading]]:pl-4"
+                                                >
+                                                    {providerModels.map(
+                                                        (model) => (
+                                                            <ModelSelectorItem
+                                                                key={model.id}
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
+                                                                onSelect={() =>
+                                                                    handleSelect(
+                                                                        model.id,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        selectedModelId ===
+                                                                            model.id
+                                                                            ? "opacity-100"
+                                                                            : "opacity-0",
+                                                                    )}
+                                                                />
+                                                                <ModelSelectorLogo
+                                                                    provider={
+                                                                        PROVIDER_LOGO_MAP[
+                                                                            provider
+                                                                        ] ||
+                                                                        provider
+                                                                    }
+                                                                    className="mr-2"
+                                                                />
+                                                                <ModelSelectorName>
+                                                                    {
+                                                                        model.modelId
+                                                                    }
+                                                                </ModelSelectorName>
+                                                                {model.validated !==
+                                                                    true && (
+                                                                    <span
+                                                                        title={
+                                                                            dict
+                                                                                .modelConfig
+                                                                                .unvalidatedModelWarning
+                                                                        }
+                                                                    >
+                                                                        <AlertTriangle className="ml-auto h-3 w-3 text-warning" />
+                                                                    </span>
+                                                                )}
+                                                            </ModelSelectorItem>
+                                                        ),
+                                                    )}
+                                                </ModelSelectorGroup>
+                                            ),
+                                        )}
+                                    </>
+                                )}
+                            </ModelSelectorList>
                         </div>
-                    </ModelSelectorList>
+                        {/* Pinned footer: Configure Models... + info text (z-10 above list shadow) */}
+                        <div className="relative z-10 shrink-0 border-t bg-background">
+                            {onConfigure && (
+                                <div className="px-3 py-2">
+                                    <ModelSelectorItem
+                                        value="__configure_models__"
+                                        onSelect={() => {
+                                            onConfigure()
+                                            setOpen(false)
+                                        }}
+                                        className="flex cursor-pointer items-center gap-2 rounded-sm"
+                                    >
+                                        <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <ModelSelectorName>
+                                            {dict.modelConfig.configureModels}
+                                        </ModelSelectorName>
+                                    </ModelSelectorItem>
+                                </div>
+                            )}
+                            <div className="px-3 pb-2 text-xs text-muted-foreground">
+                                {showUnvalidatedModels
+                                    ? dict.modelConfig.allModelsShown
+                                    : dict.modelConfig.onlyVerifiedShown}
+                            </div>
+                        </div>
+                    </div>
                 </ModelSelectorContent>
             </ModelSelectorRoot>
         </div>

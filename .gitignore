@@ -56,6 +56,8 @@ push-via-ec2.sh
 /dist-electron/
 /release/
 /electron-standalone/
+# Draw.io static files (downloaded during CI build)
+public/drawio/
 *.dmg
 *.exe
 *.AppImage
@@ -69,3 +71,11 @@ CLAUDE.md
 # edgeone
 .edgeone
 opencode.json
+ai-models.json
+
+# local backups
+*.bak
+.gstack/
+
+# admin panel settings (contains secrets)
+data/

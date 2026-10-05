@@ -1,8 +1,8 @@
 "use client"
 
 import { FileCode, FileText, Link, Loader2, X } from "lucide-react"
-import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
+import Image from "@/components/image-with-basepath"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 

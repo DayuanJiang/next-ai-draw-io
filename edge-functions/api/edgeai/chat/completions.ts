@@ -67,41 +67,64 @@ const MODEL_ALIASES: Record<string, string> = {
     "deepseek-v3-0324": "@tx/deepseek-ai/deepseek-v3-0324",
 }
 
-const CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-}
-
 /**
- * Create standardized response with CORS headers
+ * Create standardized JSON response
  */
 function createResponse(body: any, status = 200, extraHeaders = {}): Response {
     return new Response(JSON.stringify(body), {
         status,
         headers: {
             "Content-Type": "application/json",
-            ...CORS_HEADERS,
             ...extraHeaders,
         },
     })
 }
 
-/**
- * Handle OPTIONS request for CORS preflight
- */
-function handleOptionsRequest(): Response {
-    return new Response(null, {
-        headers: {
-            ...CORS_HEADERS,
-            "Access-Control-Max-Age": "86400",
-        },
-    })
+// Only the app's own server (/api/chat, /api/validate-model) calls this
+// function, so no CORS headers are sent: other sites' pages can't call it
+// from a browser and spend the deployment's Edge AI quota.
+// Same rule as lib/access-code.ts, but reading the edge function's env.
+// No codes configured (or env unavailable) means no check.
+function hasValidAccessCode(request: Request, env: any): boolean {
+    const accessCodes: string[] =
+        env?.ACCESS_CODE_LIST?.split(",")
+            .map((code: string) => code.trim())
+            .filter(Boolean) || []
+    if (accessCodes.length === 0) return true
+    const accessCode = request.headers.get("x-access-code")
+    return !!accessCode && accessCodes.includes(accessCode)
 }
 
-export async function onRequest({ request, env: _env }: any) {
-    if (request.method === "OPTIONS") {
-        return handleOptionsRequest()
+export async function onRequest({ request, env }: any) {
+    // Requiring JSON also makes any cross-site browser request need a CORS
+    // preflight, which fails without CORS headers. Only the type before any
+    // parameters counts: "text/plain; x=application/json" needs none.
+    const mediaType = (request.headers.get("content-type") ?? "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase()
+    if (request.method !== "POST" || mediaType !== "application/json") {
+        return createResponse(
+            {
+                error: {
+                    message: "Expected a POST request with a JSON body",
+                    type: "invalid_request_error",
+                },
+            },
+            400,
+        )
+    }
+
+    if (!hasValidAccessCode(request, env)) {
+        return createResponse(
+            {
+                error: {
+                    message: "Invalid or missing access code",
+                    type: "invalid_request_error",
+                },
+            },
+            401,
+        )
     }
 
     request.headers.delete("accept-encoding")
@@ -153,7 +176,7 @@ export async function onRequest({ request, env: _env }: any) {
                         type: "invalid_request_error",
                     },
                 },
-                429,
+                400,
             )
         }
 
@@ -216,7 +239,6 @@ export async function onRequest({ request, env: _env }: any) {
                     "Cache-Control": "no-cache, no-store, no-transform",
                     "X-Accel-Buffering": "no",
                     Connection: "keep-alive",
-                    ...CORS_HEADERS,
                 },
             })
         } catch (error: any) {

@@ -1,5 +1,6 @@
 import { Cloud } from "lucide-react"
-import type { ComponentProps, ReactNode } from "react"
+import type { ComponentProps, ElementRef, ReactNode } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
     Command,
     CommandDialog,
@@ -69,20 +70,62 @@ export type ModelSelectorListProps = ComponentProps<typeof CommandList>
 export const ModelSelectorList = ({
     className,
     ...props
-}: ModelSelectorListProps) => (
-    <div className="relative">
-        <CommandList
-            className={cn(
-                // Hide scrollbar on all platforms
-                "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
-                className,
-            )}
-            {...props}
-        />
-        {/* Bottom shadow indicator for scrollable content */}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-muted/80 via-muted/40 to-transparent" />
-    </div>
-)
+}: ModelSelectorListProps) => {
+    const listRef = useRef<ElementRef<typeof CommandList>>(null)
+    const [showShadow, setShowShadow] = useState(false)
+
+    useEffect(() => {
+        const listElement = listRef.current
+        if (!listElement) return
+
+        const checkScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = listElement
+            // Show shadow if there is more content below
+            // Using a small threshold to handle fractional pixel rendering
+            setShowShadow(
+                scrollHeight > Math.ceil(scrollTop + clientHeight) + 1,
+            )
+        }
+
+        // Initial check
+        checkScroll()
+
+        // Event listeners
+        listElement.addEventListener("scroll", checkScroll)
+        window.addEventListener("resize", checkScroll)
+
+        // Observe content changes (e.g. async loading of items)
+        const observer = new MutationObserver(checkScroll)
+        observer.observe(listElement, { childList: true, subtree: true })
+
+        return () => {
+            listElement.removeEventListener("scroll", checkScroll)
+            window.removeEventListener("resize", checkScroll)
+            observer.disconnect()
+        }
+    }, [])
+
+    return (
+        <div className="relative">
+            <CommandList
+                ref={listRef}
+                className={cn(
+                    // Hide scrollbar on all platforms
+                    "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+                    className,
+                )}
+                {...props}
+            />
+            {/* Bottom shadow indicator for scrollable content */}
+            <div
+                className={cn(
+                    "pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-muted/80 via-muted/40 to-transparent transition-opacity duration-200",
+                    showShadow ? "opacity-100" : "opacity-0",
+                )}
+            />
+        </div>
+    )
+}
 
 export type ModelSelectorEmptyProps = ComponentProps<typeof CommandEmpty>
 
@@ -168,4 +211,28 @@ export const ModelSelectorName = ({
     ...props
 }: ModelSelectorNameProps) => (
     <span className={cn("flex-1 truncate text-left", className)} {...props} />
+)
+
+export type ModelSelectorSectionHeaderProps = {
+    icon: ReactNode
+    label: string
+    className?: string
+}
+
+export const ModelSelectorSectionHeader = ({
+    icon,
+    label,
+    className,
+}: ModelSelectorSectionHeaderProps) => (
+    <div
+        className={cn(
+            "flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/40 rounded-sm mx-1 mt-1",
+            className,
+        )}
+    >
+        <span className="[&>svg]:size-3.5" aria-hidden="true">
+            {icon}
+        </span>
+        <span>{label}</span>
+    </div>
 )

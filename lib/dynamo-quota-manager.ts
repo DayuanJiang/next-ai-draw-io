@@ -64,10 +64,13 @@ interface QuotaCheckResult {
  * Check all quotas and increment request count atomically.
  * Uses composite key (PK=user, SK=date) for per-day tracking.
  * Each day automatically gets a new item - no explicit reset needed.
+ * A request limit of 0 means none; increment 0 checks the limits without
+ * counting a request (the screenshot check).
  */
 export async function checkAndIncrementRequest(
     ip: string,
     limits: QuotaLimits,
+    increment = 1,
 ): Promise<QuotaCheckResult> {
     // Skip if quota tracking not enabled
     if (!client || !TABLE) {
@@ -99,7 +102,7 @@ export async function checkAndIncrementRequest(
                      attribute_not_exists(tpmCount) OR tpmCount < :tpmLimit)
                 `,
                 ExpressionAttributeValues: {
-                    ":one": { N: "1" },
+                    ":one": { N: String(increment) },
                     ":minute": { S: currentMinute },
                     ":reqLimit": { N: String(limits.requests || 999999) },
                     ":tokenLimit": { N: String(limits.tokens || 999999) },

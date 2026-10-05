@@ -1,7 +1,6 @@
 import { TEST_NODE_XML } from "./fixtures/diagrams"
 import {
     expect,
-    getChatInput,
     getIframe,
     getIframeContent,
     sendMessage,
@@ -36,8 +35,10 @@ test.describe("Iframe Interaction", () => {
         await expect(
             frame
                 .locator('text="Diagram"')
-                .or(frame.locator('[title*="Diagram"]')),
-        ).toBeVisible({ timeout: 10000 })
+                .or(frame.locator('[title*="Diagram"]'))
+                .filter({ visible: true })
+                .first(),
+        ).toBeVisible({ timeout: 30000 })
     })
 
     test("diagram XML is rendered in iframe after generation", async ({

@@ -38,6 +38,12 @@ interface SetProxyResult {
     devMode?: boolean
 }
 
+/** Result of setting user locale */
+interface SetUserLocaleResult {
+    success: boolean
+    error?: string
+}
+
 declare global {
     interface Window {
         /** Main window Electron API */
@@ -54,14 +60,25 @@ declare global {
             maximize: () => void
             /** Close the window */
             close: () => void
-            /** Open file dialog and return file path */
-            openFile: () => Promise<string | null>
-            /** Save data to file via save dialog */
-            saveFile: (data: string) => Promise<boolean>
             /** Get proxy configuration */
             getProxy: () => Promise<ProxyConfig>
             /** Set proxy configuration (saves and restarts server) */
             setProxy: (config: ProxyConfig) => Promise<SetProxyResult>
+            /** Get user's preferred locale */
+            getUserLocale: () => Promise<
+                "en" | "zh" | "ja" | "zh-Hant" | undefined
+            >
+            /** Set user's preferred locale */
+            setUserLocale: (locale: string) => Promise<SetUserLocaleResult>
+            /**
+             * Call back after the server restarted on the same port (another
+             * preset); returns a function that stops the calls
+             */
+            onServerRestarted?: (callback: () => void) => () => void
+            /** A chat was saved: open this port next launch */
+            chatSaved?: () => Promise<void>
+            /** The page loaded with this many chats */
+            chatsLoaded?: (count: number) => Promise<void>
         }
 
         /** Settings window Electron API */
@@ -88,4 +105,10 @@ declare global {
     }
 }
 
-export { ConfigPreset, ApplyPresetResult, ProxyConfig, SetProxyResult }
+export type {
+    ApplyPresetResult,
+    ConfigPreset,
+    ProxyConfig,
+    SetProxyResult,
+    SetUserLocaleResult,
+}

@@ -13,7 +13,7 @@
 
 ### Doubao (ByteDance Volcengine)
 
-> **無料トークン**: [Volcengine ARK プラットフォーム](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project)に登録すると、すべてのモデルで使える50万トークンが無料で入手できます！
+> **無料トークン**: [Volcengine ARK プラットフォーム](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)に登録すると、すべてのモデルで使える50万トークンが無料で入手できます！
 
 ```bash
 DOUBAO_API_KEY=your_api_key
@@ -46,10 +46,32 @@ AI_MODEL=gpt-4o
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+### AIHubMix
+
+AIHubMix は、単一の API キーで Claude、GPT、Gemini、DeepSeek などのモデルへのアクセスを提供します。
+
+```bash
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+任意のカスタムエンドポイント:
+
+```bash
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
 ### Anthropic
 
 ```bash
 ANTHROPIC_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
+または、Bearer 認証トークンを使用することもできます（OAuth スタイルのトークンを発行するゲートウェイ経由で利用する場合など）。`ANTHROPIC_AUTH_TOKEN` は `Authorization: Bearer <token>` ヘッダーで送信され、`ANTHROPIC_API_KEY` は `x-api-key` ヘッダーで送信されます。両者は排他的なので、いずれか一方のみを設定してください:
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
 AI_MODEL=claude-sonnet-4-5-20250514
 ```
 
@@ -127,8 +149,10 @@ AZURE_REASONING_SUMMARY=detailed  # 任意: none, brief, detailed
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
-AI_MODEL=anthropic.claude-sonnet-4-5-20250514-v1:0
+AI_MODEL=global.anthropic.claude-sonnet-5-5
 ```
+
+最近の Claude モデルは、推論プロファイル（inference profile）の ID でのみ呼び出せます。この ID は `global.` や `us.` などのリージョン接頭辞で始まります。`anthropic.claude-sonnet-5-5` のような接頭辞なしの ID では「on-demand throughput isn't supported」というエラーになります。
 
 注: AWS 上（IAM ロールを持つ Lambda や EC2）では、認証情報は IAM ロールから自動的に取得されます。
 
@@ -207,6 +231,98 @@ AI_MODEL=openai/gpt-4o
 
 [Vercel AI Gateway ダッシュボード](https://vercel.com/ai-gateway)から API キーを取得してください。
 
+### MiniMax
+
+MiniMax は 2 つの API 形式をサポートしています：
+- **Anthropic 互換**（`/anthropic` エンドポイント）— 推奨、インターリーブ思考をサポート
+- **OpenAI 互換**（`/v1` エンドポイント）— 標準 OpenAI チャット補完形式
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=MiniMax-M3
+```
+
+オプション設定：
+
+```bash
+# 中国大陸版、Anthropic 互換（デフォルト）
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+
+# 中国大陸版、OpenAI 互換
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+
+# 国際版、Anthropic 互換
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# 国際版、OpenAI 互換
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+```
+
+### GLM (Zhipu AI)
+
+```bash
+GLM_API_KEY=your_api_key
+AI_MODEL=glm-4
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+GLM_BASE_URL=https://your-custom-endpoint
+```
+
+### Qwen (Alibaba Cloud)
+
+```bash
+QWEN_API_KEY=your_api_key
+AI_MODEL=qwen-turbo
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+QWEN_BASE_URL=https://your-custom-endpoint
+```
+
+### Kimi (Moonshot AI)
+
+```bash
+KIMI_API_KEY=your_api_key
+AI_MODEL=kimi-latest
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+KIMI_BASE_URL=https://your-custom-endpoint
+```
+
+### Qiniu (Qiniu Cloud)
+
+```bash
+QINIU_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+オプションのカスタムエンドポイント：
+
+```bash
+QINIU_BASE_URL=https://your-custom-endpoint
+```
+
+### MiMo (Xiaomi)
+
+```bash
+MIMO_API_KEY=your_api_key
+AI_MODEL=mimo-v2.5-pro
+```
+
+オプションのカスタムエンドポイント（Token Plan 加入者は専用の Base URL を設定してください）：
+
+```bash
+MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
+```
+
 ## 自動検出
 
 **1つ**のプロバイダーの API キーのみを設定した場合、システムはそのプロバイダーを自動的に検出して使用します。`AI_PROVIDER` を設定する必要はありません。
@@ -214,8 +330,76 @@ AI_MODEL=openai/gpt-4o
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang
+AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
+
+## サーバーサイドマルチモデル設定
+
+管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。
+
+### 設定方法
+
+**方法1：環境変数**（クラウドデプロイ推奨）
+
+`AI_MODELS_CONFIG` をJSON文字列として設定：
+
+```bash
+AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
+```
+
+**方法2：設定ファイル**
+
+プロジェクトルートに `ai-models.json` ファイルを作成します（または `AI_MODELS_CONFIG_PATH` でパスを指定）。
+
+**方法3：`AI_MODEL` をカンマ区切りで指定**（単一プロバイダーの簡易設定）
+
+同一プロバイダー内の複数モデルだけを公開したい場合は、`AI_MODEL` にカンマ区切りで列挙できます。最初のモデルがデフォルトになります。
+
+```bash
+AI_PROVIDER=doubao
+AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+```
+
+これは等価な `ai-models.json` の簡易表記です。複数のプロバイダーや、カスタム `apiKeyEnv` / `baseUrlEnv` を使う場合は、方法1または方法2を使ってください。
+
+### 設定例
+
+```json
+{
+  "providers": [
+    {
+      "name": "OpenAI Production",
+      "provider": "openai",
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "default": true
+    },
+    {
+      "name": "Custom DeepSeek",
+      "provider": "deepseek",
+      "models": ["deepseek-chat"],
+      "apiKeyEnv": "MY_DEEPSEEK_KEY",
+      "baseUrlEnv": "MY_DEEPSEEK_URL"
+    }
+  ]
+}
+```
+
+### フィールド説明
+
+| フィールド | 必須 | 説明 |
+|------------|------|------|
+| `name` | はい | 表示名（同一プロバイダーの複数設定をサポート） |
+| `provider` | はい | プロバイダータイプ（`openai`, `anthropic`, `google`, `bedrock` など） |
+| `models` | はい | モデルIDのリスト |
+| `default` | いいえ | `true` に設定すると、そのプロバイダーの最初のモデルがデフォルトで選択されます |
+| `apiKeyEnv` | いいえ | カスタムAPIキー環境変数名（デフォルトは `OPENAI_API_KEY` などの標準変数） |
+| `baseUrlEnv` | いいえ | カスタムBase URL環境変数名 |
+
+### 備考
+
+- APIキーと認証情報は環境変数で提供します。デフォルトは標準変数名（例：`OPENAI_API_KEY`）を使用しますが、`apiKeyEnv` でカスタム変数名を指定できます。
+- `name` フィールドにより同一プロバイダーの複数設定が可能です（例：「OpenAI Production」と「OpenAI Staging」が両方とも `provider: "openai"` を使用しつつ、異なる `apiKeyEnv` を持つ）。
+- 設定が存在しない場合、アプリは `AI_PROVIDER`/`AI_MODEL` 環境変数設定にフォールバックします。
 
 ## モデル性能要件
 

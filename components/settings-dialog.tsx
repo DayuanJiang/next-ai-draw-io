@@ -1,8 +1,8 @@
 "use client"
 
-import { Github, Info, Moon, Sun, Tag } from "lucide-react"
+import { ChevronRight, Github, Info, Moon, Sun, Tag } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,9 +22,10 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
-import { DRAWIO_THEMES, type DrawioTheme } from "@/lib/drawio-themes"
+import type { DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
 
@@ -57,30 +58,25 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
     en: "English",
     zh: "中文",
     ja: "日本語",
-}
-
-// Mapping of Draw.io theme values to their translation dictionary keys
-const DRAWIO_THEME_LABELS: Record<
-    DrawioTheme,
-    keyof typeof DRAWIO_THEMES | string
-> = {
-    kennedy: "classic",
-    simple: "simple",
-    min: "minimal",
-    sketch: "sketch",
-    atlas: "atlas",
+    "zh-Hant": "繁體中文",
 }
 
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onCloseProtectionChange?: (enabled: boolean) => void
     drawioUi: DrawioTheme
     onDrawioUiChange: (theme: DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     minimalStyle?: boolean
     onMinimalStyleChange?: (value: boolean) => void
+    vlmValidationEnabled?: boolean
+    onVlmValidationChange?: (value: boolean) => void
+    onOpenModelConfig?: () => void
+    customSystemMessage?: string
+    onCustomSystemMessageChange?: (value: string) => void
+    maxOutputTokens?: string
+    onMaxOutputTokensChange?: (value: string) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -102,6 +98,13 @@ function SettingsContent({
     onToggleDarkMode,
     minimalStyle = false,
     onMinimalStyleChange = () => {},
+    vlmValidationEnabled = false,
+    onVlmValidationChange = () => {},
+    onOpenModelConfig,
+    customSystemMessage = "",
+    onCustomSystemMessageChange = () => {},
+    maxOutputTokens = "",
+    onMaxOutputTokensChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -116,14 +119,31 @@ function SettingsContent({
     const [currentLang, setCurrentLang] = useState("en")
     const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
 
+    // Panel visibility state
+    const [showRecentChats, setShowRecentChats] = useState(true)
+    const [showMyTemplates, setShowMyTemplates] = useState(true)
+    const [showQuickExamples, setShowQuickExamples] = useState(true)
+
+    const handlePanelToggle = useCallback(
+        (key: string, value: boolean, setter: (v: boolean) => void) => {
+            setter(value)
+            localStorage.setItem(key, String(value))
+            window.dispatchEvent(new CustomEvent("panelVisibilityChange"))
+        },
+        [],
+    )
+
     // Proxy settings state (Electron only)
     const [httpProxy, setHttpProxy] = useState("")
     const [httpsProxy, setHttpsProxy] = useState("")
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
 
     useEffect(() => {
-        // Only fetch if not cached in localStorage
-        if (getStoredAccessCodeRequired() !== null) return
+        // Re-fetch config whenever the dialog opens to ensure we always show
+        // the access code input if the server requires it. This fixes the case
+        // where a stale localStorage cache (from before ACCESS_CODE_LIST was
+        // configured) would hide the access code input.
+        if (!open) return
 
         fetch(getApiEndpoint("/api/config"))
             .then((res) => {
@@ -139,10 +159,9 @@ function SettingsContent({
                 setAccessCodeRequired(required)
             })
             .catch(() => {
-                // Don't cache on error - allow retry on next mount
-                setAccessCodeRequired(false)
+                // Keep existing cached value on error
             })
-    }, [])
+    }, [open])
 
     // Detect current language from pathname
     useEffect(() => {
@@ -166,6 +185,17 @@ function SettingsContent({
             )
             setSendShortcut(storedSendShortcut || "ctrl-enter")
 
+            setShowRecentChats(
+                localStorage.getItem(STORAGE_KEYS.showRecentChats) !== "false",
+            )
+            setShowMyTemplates(
+                localStorage.getItem(STORAGE_KEYS.showMyTemplates) !== "false",
+            )
+            setShowQuickExamples(
+                localStorage.getItem(STORAGE_KEYS.showQuickExamples) !==
+                    "false",
+            )
+
             setError("")
 
             // Load proxy settings (Electron only)
@@ -181,6 +211,13 @@ function SettingsContent({
     const changeLanguage = (lang: string) => {
         // Save locale to localStorage for persistence across restarts
         localStorage.setItem("next-ai-draw-io-locale", lang)
+
+        // Notify Electron main process to update its menu language
+        if (window.electronAPI?.setUserLocale) {
+            window.electronAPI.setUserLocale(lang).catch((error) => {
+                console.error("Failed to sync locale with Electron:", error)
+            })
+        }
 
         const parts = pathname.split("/")
         if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
@@ -274,7 +311,7 @@ function SettingsContent({
     }
 
     return (
-        <DialogContent className="sm:max-w-lg p-0 gap-0">
+        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
             <DialogHeader className="px-6 pt-6 pb-4">
                 <DialogTitle>{dict.settings.title}</DialogTitle>
@@ -284,8 +321,29 @@ function SettingsContent({
             </DialogHeader>
 
             {/* Content */}
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-6 overflow-y-auto flex-1 scrollbar-thin">
                 <div className="divide-y divide-border-subtle">
+                    {/* API Keys & Models */}
+                    {onOpenModelConfig && (
+                        <SettingItem
+                            label={dict.settings.apiKeysModels}
+                            description={dict.settings.apiKeysModelsDescription}
+                        >
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 p-0"
+                                onClick={() => {
+                                    onOpenChange(false)
+                                    onOpenModelConfig()
+                                }}
+                                aria-label={dict.settings.apiKeysModels}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </SettingItem>
+                    )}
+
                     {/* Access Code (conditional) */}
                     {accessCodeRequired && (
                         <div className="py-4 first:pt-0 space-y-3">
@@ -383,28 +441,34 @@ function SettingsContent({
                     >
                         <Select
                             value={drawioUi}
-                            onValueChange={(value) =>
-                                onDrawioUiChange(value as DrawioTheme)
+                            onValueChange={(v) =>
+                                onDrawioUiChange(v as DrawioTheme)
                             }
                         >
                             <SelectTrigger
-                                id="drawio-ui"
+                                id="drawio-ui-select"
+                                aria-label={dict.settings.drawioStyle}
                                 className="w-[120px] h-9 rounded-xl"
                             >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {DRAWIO_THEMES.map((theme) => (
-                                    <SelectItem key={theme} value={theme}>
-                                        {
-                                            dict.settings.themes[
-                                                DRAWIO_THEME_LABELS[
-                                                    theme
-                                                ] as keyof typeof dict.settings.themes
-                                            ]
-                                        }
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="kennedy">
+                                    {dict.settings.themeDefault}
+                                </SelectItem>
+                                <SelectItem value="atlas">Atlas</SelectItem>
+                                <SelectItem value="dark">
+                                    {dict.settings.themeDark}
+                                </SelectItem>
+                                <SelectItem value="min">
+                                    {dict.settings.themeMinimal}
+                                </SelectItem>
+                                <SelectItem value="sketch">
+                                    {dict.settings.themeSketch}
+                                </SelectItem>
+                                <SelectItem value="simple">
+                                    {dict.settings.themeSimple}
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </SettingItem>
@@ -426,6 +490,127 @@ function SettingsContent({
                                     : dict.chat.styledMode}
                             </span>
                         </div>
+                    </SettingItem>
+
+                    {/* Panel Visibility */}
+                    <SettingItem
+                        label={dict.settings.panelVisibility}
+                        description={dict.settings.panelVisibilityDescription}
+                    >
+                        <div className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-recent-chats"
+                                    checked={showRecentChats}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showRecentChats,
+                                            v,
+                                            setShowRecentChats,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showRecentChats}
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-my-templates"
+                                    checked={showMyTemplates}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showMyTemplates,
+                                            v,
+                                            setShowMyTemplates,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showMyTemplates}
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <Switch
+                                    id="show-quick-examples"
+                                    checked={showQuickExamples}
+                                    onCheckedChange={(v) =>
+                                        handlePanelToggle(
+                                            STORAGE_KEYS.showQuickExamples,
+                                            v,
+                                            setShowQuickExamples,
+                                        )
+                                    }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {dict.settings.showQuickExamples}
+                                </span>
+                            </label>
+                        </div>
+                    </SettingItem>
+
+                    {/* VLM Diagram Validation */}
+                    <SettingItem
+                        label={dict.settings.diagramValidation}
+                        description={dict.settings.diagramValidationDescription}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id="vlm-validation"
+                                checked={vlmValidationEnabled}
+                                onCheckedChange={onVlmValidationChange}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                                {vlmValidationEnabled
+                                    ? dict.settings.enabled
+                                    : dict.settings.disabled}
+                            </span>
+                        </div>
+                    </SettingItem>
+
+                    {/* Custom System Message */}
+                    <div className="py-4 space-y-3">
+                        <div className="space-y-0.5">
+                            <Label
+                                htmlFor="custom-system-message"
+                                className="text-sm font-medium"
+                            >
+                                {dict.settings.customSystemMessage}
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                {dict.settings.customSystemMessageDescription}
+                            </p>
+                        </div>
+                        <Textarea
+                            id="custom-system-message"
+                            value={customSystemMessage}
+                            onChange={(e) =>
+                                onCustomSystemMessageChange(e.target.value)
+                            }
+                            placeholder={
+                                dict.settings.customSystemMessagePlaceholder
+                            }
+                            className="min-h-[80px] max-h-[160px] text-sm"
+                            maxLength={5000}
+                        />
+                    </div>
+
+                    {/* Max Output Tokens */}
+                    <SettingItem
+                        label={dict.settings.maxOutputTokens}
+                        description={dict.settings.maxOutputTokensDescription}
+                    >
+                        <Input
+                            id="max-output-tokens"
+                            type="text"
+                            inputMode="numeric"
+                            value={maxOutputTokens}
+                            onChange={(e) =>
+                                onMaxOutputTokensChange(e.target.value)
+                            }
+                            placeholder="64000"
+                            className="h-9 w-28 text-sm"
+                        />
                     </SettingItem>
 
                     {/* Send Shortcut */}
@@ -450,7 +635,7 @@ function SettingsContent({
                         >
                             <SelectTrigger
                                 id="send-shortcut-select"
-                                className="w-[170px] h-9 rounded-xl"
+                                className="w-auto h-9 rounded-xl"
                             >
                                 <SelectValue />
                             </SelectTrigger>

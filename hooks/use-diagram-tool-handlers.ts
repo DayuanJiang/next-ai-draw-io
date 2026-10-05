@@ -1,8 +1,19 @@
 import type { MutableRefObject } from "react"
 import type { DiagramOperation } from "@/components/chat/types"
-import { isMxCellXmlComplete, wrapWithMxFile } from "@/lib/utils"
+import type {
+    ValidationState,
+    ValidationStatus,
+} from "@/components/chat/ValidationCard"
+import type { ValidationResult } from "@/lib/diagram-validator"
+import { formatValidationFeedback } from "@/lib/diagram-validator"
+import { isMxCellXmlComplete } from "@/lib/utils"
+import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
+import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 
 const DEBUG = process.env.NODE_ENV === "development"
+
+// display_diagram replaces the document with this one page
+const NEW_PAGE = { pageId: "page-1", pageName: "Page-1" }
 
 interface ToolCall {
     toolCallId: string
@@ -30,13 +41,38 @@ type AddToolOutputParams = AddToolOutputSuccess | AddToolOutputError
 
 type AddToolOutputFn = (params: AddToolOutputParams) => void
 
+const MAX_VALIDATION_RETRIES = 3
+
+// Type for the validation function passed from useValidateDiagram hook
+type ValidateDiagramFn = (
+    imageData: string,
+    sessionId?: string,
+) => Promise<ValidationResult>
+
 interface UseDiagramToolHandlersParams {
     partialXmlRef: MutableRefObject<string>
     editDiagramOriginalXmlRef: MutableRefObject<Map<string, string>>
+    // Tool calls the streaming preview must leave alone (shared with it)
+    processedToolCallsRef: MutableRefObject<Set<string>>
+    // Failed VLM validations in the current user turn (reset on each user message)
+    validationRetryCountRef: MutableRefObject<number>
     chartXMLRef: MutableRefObject<string>
     onDisplayChart: (xml: string, skipValidation?: boolean) => string | null
     onFetchChart: (saveToHistory?: boolean) => Promise<string>
     onExport: () => void
+    captureValidationPng?: () => Promise<string | null>
+    validateDiagram?: ValidateDiagramFn
+    enableVlmValidation?: boolean
+    sessionId?: string
+    // Called when a screenshot check begins; the function it returns
+    // tells whether the user pressed Stop in this turn, also after the next
+    // message was sent. A check that has not started then is skipped (one
+    // already running is cancelled by the caller).
+    watchStop?: () => () => boolean
+    onValidationStateChange?: (
+        toolCallId: string,
+        state: ValidationState,
+    ) => void
 }
 
 /**
@@ -49,11 +85,38 @@ interface UseDiagramToolHandlersParams {
 export function useDiagramToolHandlers({
     partialXmlRef,
     editDiagramOriginalXmlRef,
+    processedToolCallsRef,
+    validationRetryCountRef,
     chartXMLRef,
     onDisplayChart,
     onFetchChart,
     onExport,
+    captureValidationPng,
+    validateDiagram,
+    enableVlmValidation = true,
+    sessionId,
+    watchStop,
+    onValidationStateChange,
 }: UseDiagramToolHandlersParams) {
+    // Helper to update validation state
+    const updateValidationState = (
+        toolCallId: string,
+        status: ValidationStatus,
+        options?: {
+            attempt?: number
+            maxAttempts?: number
+            result?: ValidationResult
+            error?: string
+            imageData?: string
+        },
+    ) => {
+        if (onValidationStateChange) {
+            onValidationStateChange(toolCallId, {
+                status,
+                ...options,
+            })
+        }
+    }
     const handleToolCall = async (
         { toolCall }: { toolCall: ToolCall },
         addToolOutput: AddToolOutputFn,
@@ -64,18 +127,39 @@ export function useDiagramToolHandlers({
             )
         }
 
+        processedToolCallsRef.current.add(toolCall.toolCallId)
+        // Only display_diagram, edit_diagram and a completing append_diagram
+        // put their result on the canvas. Other tools (get_shape_library,
+        // which the server runs, still arrives here) leave the stored
+        // originals for the preview code to undo.
         if (toolCall.toolName === "display_diagram") {
-            await handleDisplayDiagram(toolCall, addToolOutput)
+            await handleDisplayDiagram(toolCall, addToolOutput, takeOriginals())
         } else if (toolCall.toolName === "edit_diagram") {
-            await handleEditDiagram(toolCall, addToolOutput)
+            await handleEditDiagram(toolCall, addToolOutput, takeOriginals())
         } else if (toolCall.toolName === "append_diagram") {
             handleAppendDiagram(toolCall, addToolOutput)
         }
     }
 
+    // Stored originals belong to previews not handled yet: this call's, and
+    // those of earlier calls with invalid input, which never get to the
+    // handler. The first is the diagram before all of them. A call that
+    // draws its result replaces those previews, so the preview code must
+    // neither draw them again nor undo them later. Returns that first one.
+    const takeOriginals = (): string | undefined => {
+        const [originalXml] = editDiagramOriginalXmlRef.current.values()
+        for (const id of editDiagramOriginalXmlRef.current.keys()) {
+            processedToolCallsRef.current.add(id)
+        }
+        editDiagramOriginalXmlRef.current.clear()
+        return originalXml
+    }
+
+    // originalXml: the diagram before the streamed previews, if any were drawn
     const handleDisplayDiagram = async (
         toolCall: ToolCall,
         addToolOutput: AddToolOutputFn,
+        originalXml: string | undefined,
     ) => {
         const { xml } = toolCall.input as { xml: string }
 
@@ -124,14 +208,18 @@ NEXT STEP: Call append_diagram with the continuation XML.
         const finalXml = xml
         partialXmlRef.current = "" // Reset any partial from previous truncation
 
-        // Wrap raw XML with full mxfile structure for draw.io
-        const fullXml = wrapWithMxFile(finalXml)
-
-        // loadDiagram validates and returns error if invalid
-        const validationError = onDisplayChart(fullXml)
+        // Wrap, validate and auto-fix the model's XML like the MCP server's
+        // create_new_diagram, then load it
+        const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+        const validationError = prepared.ok
+            ? onDisplayChart(prepared.xml, true)
+            : prepared.error
 
         if (validationError) {
             console.warn("[display_diagram] Validation error:", validationError)
+            // Undo the streamed preview, as a failed edit does: the canvas
+            // keeps the diagram from before this failed call
+            if (originalXml) onDisplayChart(originalXml, true)
             // Return error to model - sendAutomaticallyWhen will trigger retry
             if (DEBUG) {
                 console.log(
@@ -155,7 +243,163 @@ ${finalXml}
             // Success - diagram will be rendered by chat-message-display
             if (DEBUG) {
                 console.log(
-                    "[display_diagram] Success! Adding tool output with state: output-available",
+                    "[display_diagram] Success! Checking if VLM validation is enabled...",
+                )
+            }
+
+            // VLM validation after successful display
+            if (
+                enableVlmValidation &&
+                captureValidationPng &&
+                validateDiagram &&
+                // At most this many checks per user turn, passed or not
+                validationRetryCountRef.current < MAX_VALIDATION_RETRIES
+            ) {
+                let capturedPngData: string | null = null
+                const stopped = watchStop?.()
+                try {
+                    // Notify UI that we're starting capture
+                    updateValidationState(toolCall.toolCallId, "capturing")
+
+                    // Small delay (100ms) to allow diagram rendering to complete before capture.
+                    // This is a best-effort heuristic and may need adjustment for complex diagrams or slower devices.
+                    await new Promise((resolve) => setTimeout(resolve, 100))
+
+                    capturedPngData = await captureValidationPng()
+                    // Stopped while the screenshot was taken: no check. The
+                    // chat waits for this handler, so it must end now.
+                    if (stopped?.()) {
+                        updateValidationState(toolCall.toolCallId, "skipped")
+                    } else if (capturedPngData) {
+                        if (DEBUG) {
+                            console.log(
+                                "[display_diagram] Captured PNG for validation",
+                            )
+                        }
+
+                        // Each retry is a new tool call, so count attempts
+                        // per user turn (the chat resets it when the user sends)
+                        const attempt = validationRetryCountRef.current + 1
+                        validationRetryCountRef.current = attempt
+
+                        // Notify UI that we're validating (include the image)
+                        updateValidationState(
+                            toolCall.toolCallId,
+                            "validating",
+                            {
+                                attempt,
+                                maxAttempts: MAX_VALIDATION_RETRIES,
+                                imageData: capturedPngData,
+                            },
+                        )
+
+                        const result = await validateDiagram(
+                            capturedPngData,
+                            sessionId,
+                        )
+
+                        if (!result.valid) {
+                            if (attempt < MAX_VALIDATION_RETRIES) {
+                                const feedback =
+                                    formatValidationFeedback(result)
+                                if (DEBUG) {
+                                    console.log(
+                                        `[display_diagram] Validation failed (attempt ${attempt}/${MAX_VALIDATION_RETRIES}):`,
+                                        result.issues,
+                                    )
+                                }
+
+                                // Notify UI of validation failure (include the image)
+                                updateValidationState(
+                                    toolCall.toolCallId,
+                                    "failed",
+                                    {
+                                        attempt,
+                                        maxAttempts: MAX_VALIDATION_RETRIES,
+                                        result,
+                                        imageData: capturedPngData,
+                                    },
+                                )
+
+                                addToolOutput({
+                                    tool: "display_diagram",
+                                    toolCallId: toolCall.toolCallId,
+                                    state: "output-error",
+                                    errorText: `[Validation attempt ${attempt}/${MAX_VALIDATION_RETRIES}]\n${feedback}`,
+                                })
+                                return
+                            } else {
+                                // Last attempt - accept the diagram with warning
+                                if (DEBUG) {
+                                    console.log(
+                                        "[display_diagram] Max validation retries reached, accepting diagram",
+                                    )
+                                }
+                                // Notify UI that we're accepting with issues (include the image)
+                                updateValidationState(
+                                    toolCall.toolCallId,
+                                    "skipped",
+                                    { result, imageData: capturedPngData },
+                                )
+
+                                addToolOutput({
+                                    tool: "display_diagram",
+                                    toolCallId: toolCall.toolCallId,
+                                    output: "Diagram displayed (validation issues noted but max retries reached).",
+                                })
+                                return
+                            }
+                        } else {
+                            if (DEBUG) {
+                                console.log(
+                                    "[display_diagram] Validation passed!",
+                                )
+                            }
+
+                            // Notify UI of success (include the image)
+                            // Use "success_with_warnings" if valid but has issues
+                            const hasWarnings = result.issues.length > 0
+                            updateValidationState(
+                                toolCall.toolCallId,
+                                hasWarnings
+                                    ? "success_with_warnings"
+                                    : "success",
+                                { result, imageData: capturedPngData },
+                            )
+                        }
+                    } else {
+                        // PNG capture failed - skip validation
+                        updateValidationState(toolCall.toolCallId, "skipped")
+                    }
+                } catch (error) {
+                    // Cancelled by Stop: the diagram stays, unchecked
+                    if ((error as Error)?.name === "AbortError") {
+                        updateValidationState(toolCall.toolCallId, "skipped")
+                        addToolOutput({
+                            tool: "display_diagram",
+                            toolCallId: toolCall.toolCallId,
+                            output: "Successfully displayed the diagram.",
+                        })
+                        return
+                    }
+                    // VLM validation error - log but don't block the user
+                    console.warn(
+                        "[display_diagram] VLM validation error:",
+                        error,
+                    )
+                    updateValidationState(toolCall.toolCallId, "error", {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : "Validation failed",
+                        imageData: capturedPngData || undefined,
+                    })
+                }
+            }
+
+            if (DEBUG) {
+                console.log(
+                    "[display_diagram] Adding tool output with state: output-available",
                 )
             }
             addToolOutput({
@@ -171,21 +415,24 @@ ${finalXml}
         }
     }
 
+    // originalXml: the diagram before the streamed previews, if any were drawn.
+    // Operations apply to it, the same base XML that streaming used.
     const handleEditDiagram = async (
         toolCall: ToolCall,
         addToolOutput: AddToolOutputFn,
+        originalXml: string | undefined,
     ) => {
         const { operations } = toolCall.input as {
             operations: DiagramOperation[]
         }
 
         let currentXml = ""
+        // On failure, undo the streaming preview so the canvas matches the XML
+        // reported back to the model
+        const restoreOriginal = () => {
+            if (originalXml) onDisplayChart(originalXml, true)
+        }
         try {
-            // Use the original XML captured during streaming (shared with chat-message-display)
-            // This ensures we apply operations to the same base XML that streaming used
-            const originalXml = editDiagramOriginalXmlRef.current.get(
-                toolCall.toolCallId,
-            )
             if (originalXml) {
                 currentXml = originalXml
             } else {
@@ -199,26 +446,19 @@ ${finalXml}
                 }
             }
 
-            const { applyDiagramOperations } = await import("@/lib/utils")
-            const { result: editedXml, errors } = applyDiagramOperations(
-                currentXml,
-                operations,
-            )
-
-            // Check for operation errors
-            if (errors.length > 0) {
-                const errorMessages = errors
-                    .map(
-                        (e) =>
-                            `- ${e.type} on cell_id="${e.cellId}": ${e.message}`,
-                    )
-                    .join("\n")
-
+            // All or nothing, checked like the MCP server's edit_diagram.
+            // The model sees the first page, so edits target it.
+            const outcome = editDiagram(currentXml, operations, {})
+            if (!outcome.ok) {
+                const reason = outcome.pageError
+                    ? outcome.errors[0]
+                    : `No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}`
+                restoreOriginal()
                 addToolOutput({
                     tool: "edit_diagram",
                     toolCallId: toolCall.toolCallId,
                     state: "output-error",
-                    errorText: `Some operations failed:\n${errorMessages}
+                    errorText: `${reason}
 
 Current diagram XML:
 \`\`\`xml
@@ -227,49 +467,23 @@ ${currentXml}
 
 Please check the cell IDs and retry.`,
                 })
-                // Clean up the shared original XML ref
-                editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
                 return
             }
 
-            // loadDiagram validates and returns error if invalid
-            const validationError = onDisplayChart(editedXml)
-            if (validationError) {
-                console.warn(
-                    "[edit_diagram] Validation error:",
-                    validationError,
-                )
-                addToolOutput({
-                    tool: "edit_diagram",
-                    toolCallId: toolCall.toolCallId,
-                    state: "output-error",
-                    errorText: `Edit produced invalid XML: ${validationError}
-
-Current diagram XML:
-\`\`\`xml
-${currentXml}
-\`\`\`
-
-Please fix the operations to avoid structural issues.`,
-                })
-                // Clean up the shared original XML ref
-                editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
-                return
-            }
+            onDisplayChart(outcome.xml, true)
             onExport()
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
-                output: `Successfully applied ${operations.length} operation(s) to the diagram.`,
+                output: `Successfully applied ${outcome.applied} operation(s) to the diagram.`,
             })
-            // Clean up the shared original XML ref
-            editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
         } catch (error) {
             console.error("[edit_diagram] Failed:", error)
 
             const errorMessage =
                 error instanceof Error ? error.message : String(error)
 
+            restoreOriginal()
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
@@ -283,8 +497,6 @@ ${currentXml || "No XML available"}
 
 Please check cell IDs and retry, or use display_diagram to regenerate.`,
             })
-            // Clean up the shared original XML ref even on error
-            editDiagramOriginalXmlRef.current.delete(toolCall.toolCallId)
         }
     }
 
@@ -293,6 +505,19 @@ Please check cell IDs and retry, or use display_diagram to regenerate.`,
         addToolOutput: AddToolOutputFn,
     ) => {
         const { xml } = toolCall.input as { xml: string }
+
+        // Nothing to continue: loading the fragment alone would replace the whole diagram
+        if (!partialXmlRef.current) {
+            addToolOutput({
+                tool: "append_diagram",
+                toolCallId: toolCall.toolCallId,
+                state: "output-error",
+                errorText: `ERROR: There is no truncated diagram to continue, so append_diagram cannot be used now.
+
+Use display_diagram to create the complete diagram, or edit_diagram to change the current one.`,
+            })
+            return
+        }
 
         // Detect if LLM incorrectly started fresh instead of continuing
         // LLM should only output bare mxCells now, so wrapper tags indicate error
@@ -332,10 +557,18 @@ Start your continuation with the NEXT character after where it stopped.`,
             const finalXml = partialXmlRef.current
             partialXmlRef.current = "" // Reset
 
-            const fullXml = wrapWithMxFile(finalXml)
-            const validationError = onDisplayChart(fullXml)
+            const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+            // It draws now: it takes the stored originals, as display_diagram
+            const originalXml = prepared.ok ? takeOriginals() : undefined
+            const validationError = prepared.ok
+                ? onDisplayChart(prepared.xml, true)
+                : prepared.error
 
             if (validationError) {
+                // Loading failed: back to the diagram before the previews
+                if (prepared.ok && originalXml) {
+                    onDisplayChart(originalXml, true)
+                }
                 addToolOutput({
                     tool: "append_diagram",
                     toolCallId: toolCall.toolCallId,

@@ -13,7 +13,7 @@ This guide explains how to configure different AI model providers for next-ai-dr
 
 ### Doubao (ByteDance Volcengine)
 
-> **Free tokens**: Register on the [Volcengine ARK platform](https://console.volcengine.com/ark/region:ark+cn-beijing/overview?briefPage=0&briefType=introduce&type=new&utm_campaign=doubao&utm_content=aidrawio&utm_medium=github&utm_source=coopensrc&utm_term=project) to get 500K free tokens for all models!
+> **Free tokens**: Register on the [Volcengine ARK platform](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) to get 500K free tokens for all models!
 
 ```bash
 DOUBAO_API_KEY=your_api_key
@@ -33,6 +33,21 @@ Optional custom endpoint:
 GOOGLE_BASE_URL=https://your-custom-endpoint
 ```
 
+### Google Vertex AI (Enterprise GCP)
+
+Google Vertex AI offers enterprise-grade features and data residency. **Express Mode** allows for simple API key authentication, making it compatible with edge runtimes like Vercel and Cloudflare.
+
+```bash
+GOOGLE_VERTEX_API_KEY=your_api_key
+AI_MODEL=gemini-2.0-flash
+```
+
+Optional custom endpoint:
+
+```bash
+GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
+```
+
 ### OpenAI
 
 ```bash
@@ -46,10 +61,32 @@ Optional custom endpoint (for OpenAI-compatible services):
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+### AIHubMix
+
+AIHubMix provides access to Claude, GPT, Gemini, DeepSeek, and other models through a single API key.
+
+```bash
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+Optional custom endpoint:
+
+```bash
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
 ### Anthropic
 
 ```bash
 ANTHROPIC_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
+Or use a Bearer auth token instead of an API key (e.g. when going through a gateway that issues OAuth-style tokens). `ANTHROPIC_AUTH_TOKEN` is sent as `Authorization: Bearer <token>`, while `ANTHROPIC_API_KEY` is sent as `x-api-key`. The two are mutually exclusive — set only one:
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
 AI_MODEL=claude-sonnet-4-5-20250514
 ```
 
@@ -127,8 +164,10 @@ AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
-AI_MODEL=anthropic.claude-sonnet-4-5-20250514-v1:0
+AI_MODEL=global.anthropic.claude-sonnet-5-5
 ```
+
+Recent Claude models answer only through an inference profile id, which starts with a region prefix such as `global.` or `us.`. The plain id (`anthropic.claude-sonnet-5-5`) fails with "on-demand throughput isn't supported".
 
 Note: On AWS (Lambda, EC2 with IAM role), credentials are automatically obtained from the IAM role.
 
@@ -207,6 +246,98 @@ Model format uses `provider/model` syntax:
 
 Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
 
+### MiniMax
+
+MiniMax supports two API formats:
+- **Anthropic-compatible** (`/anthropic` endpoint) — recommended, supports interleaved thinking
+- **OpenAI-compatible** (`/v1` endpoint) — standard OpenAI chat completions format
+
+```bash
+MINIMAX_API_KEY=your_api_key
+AI_MODEL=MiniMax-M3
+```
+
+Optional configuration:
+
+```bash
+# China mainland, Anthropic-compatible (default)
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+
+# China mainland, OpenAI-compatible
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+
+# International, Anthropic-compatible
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+
+# International, OpenAI-compatible
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+```
+
+### GLM (Zhipu AI)
+
+```bash
+GLM_API_KEY=your_api_key
+AI_MODEL=glm-4
+```
+
+Optional custom endpoint:
+
+```bash
+GLM_BASE_URL=https://your-custom-endpoint
+```
+
+### Qwen (Alibaba Cloud)
+
+```bash
+QWEN_API_KEY=your_api_key
+AI_MODEL=qwen-turbo
+```
+
+Optional custom endpoint:
+
+```bash
+QWEN_BASE_URL=https://your-custom-endpoint
+```
+
+### Kimi (Moonshot AI)
+
+```bash
+KIMI_API_KEY=your_api_key
+AI_MODEL=kimi-latest
+```
+
+Optional custom endpoint:
+
+```bash
+KIMI_BASE_URL=https://your-custom-endpoint
+```
+
+### Qiniu (Qiniu Cloud)
+
+```bash
+QINIU_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+Optional custom endpoint:
+
+```bash
+QINIU_BASE_URL=https://your-custom-endpoint
+```
+
+### MiMo (Xiaomi)
+
+```bash
+MIMO_API_KEY=your_api_key
+AI_MODEL=mimo-v2.5-pro
+```
+
+Optional custom endpoint (Token Plan subscribers should set their dedicated Base URL):
+
+```bash
+MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
+```
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
@@ -214,8 +345,76 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope
+AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
 ```
+
+## Server-Side Multi-Model Configuration
+
+Administrators can configure multiple server-side models that are available to all users without requiring personal API keys.
+
+### Configuration Methods
+
+**Option 1: Environment Variable** (recommended for cloud deployments)
+
+Set `AI_MODELS_CONFIG` as a JSON string:
+
+```bash
+AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
+```
+
+**Option 2: Config File**
+
+Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PATH` to a custom location).
+
+**Option 3: Comma-separated `AI_MODEL`** (quick setup, single provider)
+
+If you only need multiple models from one provider, list them in `AI_MODEL` separated by commas. The first model is treated as the default.
+
+```bash
+AI_PROVIDER=doubao
+AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+```
+
+This is shorthand for the equivalent `ai-models.json`. For multiple providers or custom `apiKeyEnv` / `baseUrlEnv`, use Option 1 or 2 instead.
+
+### Example Configuration
+
+```json
+{
+  "providers": [
+    {
+      "name": "OpenAI Production",
+      "provider": "openai",
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "default": true
+    },
+    {
+      "name": "Custom DeepSeek",
+      "provider": "deepseek",
+      "models": ["deepseek-chat"],
+      "apiKeyEnv": "MY_DEEPSEEK_KEY",
+      "baseUrlEnv": "MY_DEEPSEEK_URL"
+    }
+  ]
+}
+```
+
+### Field Reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Display name (supports multiple configs for same provider) |
+| `provider` | Yes | Provider type (`openai`, `anthropic`, `google`, `bedrock`, etc.) |
+| `models` | Yes | List of model IDs |
+| `default` | No | Set to `true` to auto-select this provider's first model as default |
+| `apiKeyEnv` | No | Custom API key env var name (defaults to provider's standard var like `OPENAI_API_KEY`) |
+| `baseUrlEnv` | No | Custom base URL env var name |
+
+### Notes
+
+- API keys and credentials are provided via environment variables. By default, standard var names are used (e.g., `OPENAI_API_KEY`), but you can specify custom var names with `apiKeyEnv`.
+- The `name` field allows multiple configurations for the same provider (e.g., "OpenAI Production" and "OpenAI Staging" both using `provider: "openai"` but with different `apiKeyEnv` values).
+- If config is not present, the app falls back to `AI_PROVIDER`/`AI_MODEL` environment variable configuration.
 
 ## Model Capability Requirements
 
