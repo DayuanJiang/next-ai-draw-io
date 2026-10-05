@@ -1,8 +1,9 @@
 "use client"
 
-import { FileCode, FileText, Loader2, X } from "lucide-react"
-import Image from "next/image"
+import { FileCode, FileText, Link, Loader2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import Image from "@/components/image-with-basepath"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 
 function formatCharCount(count: number): string {
@@ -19,17 +20,24 @@ interface FilePreviewListProps {
         File,
         { text: string; charCount: number; isExtracting: boolean }
     >
+    urlData?: Map<
+        string,
+        { url: string; title: string; charCount: number; isExtracting: boolean }
+    >
+    onRemoveUrl?: (url: string) => void
 }
 
 export function FilePreviewList({
     files,
     onRemoveFile,
     pdfData = new Map(),
+    urlData,
+    onRemoveUrl,
 }: FilePreviewListProps) {
+    const dict = useDictionary()
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
     const [imageUrls, setImageUrls] = useState<Map<File, string>>(new Map())
     const imageUrlsRef = useRef<Map<File, string>>(new Map())
-
     // Create and cleanup object URLs when files change
     useEffect(() => {
         const currentUrls = imageUrlsRef.current
@@ -46,7 +54,6 @@ export function FilePreviewList({
                 }
             }
         })
-
         // Revoke URLs for files that are no longer in the list
         currentUrls.forEach((url, file) => {
             if (!newUrls.has(file)) {
@@ -57,7 +64,6 @@ export function FilePreviewList({
         imageUrlsRef.current = newUrls
         setImageUrls(newUrls)
     }, [files])
-
     // Cleanup all URLs on unmount only
     useEffect(() => {
         return () => {
@@ -68,7 +74,6 @@ export function FilePreviewList({
             imageUrlsRef.current = new Map()
         }
     }, [])
-
     // Clear selected image if its URL was revoked
     useEffect(() => {
         if (
@@ -79,7 +84,7 @@ export function FilePreviewList({
         }
     }, [imageUrls, selectedImage])
 
-    if (files.length === 0) return null
+    if (files.length === 0 && (!urlData || urlData.size === 0)) return null
 
     return (
         <>
@@ -126,14 +131,14 @@ export function FilePreviewList({
                                         </span>
                                         {pdfInfo?.isExtracting ? (
                                             <span className="text-[10px] text-muted-foreground">
-                                                Reading...
+                                                {dict.file.reading}
                                             </span>
                                         ) : pdfInfo?.charCount ? (
                                             <span className="text-[10px] text-green-600 font-medium">
                                                 {formatCharCount(
                                                     pdfInfo.charCount,
                                                 )}{" "}
-                                                chars
+                                                {dict.file.chars}
                                             </span>
                                         ) : null}
                                     </div>
@@ -147,15 +152,67 @@ export function FilePreviewList({
                                 type="button"
                                 onClick={() => onRemoveFile(file)}
                                 className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                aria-label="Remove file"
+                                aria-label={dict.file.removeFile}
                             >
                                 <X className="h-3 w-3" />
                             </button>
                         </div>
                     )
                 })}
+                {/* URL previews */}
+                {urlData && urlData.size > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {Array.from(urlData.entries()).map(
+                            ([url, data], index) => (
+                                <div
+                                    key={url + index}
+                                    className="relative group"
+                                >
+                                    <div className="w-20 h-20 border rounded-md overflow-hidden bg-muted">
+                                        <div className="flex flex-col items-center justify-center h-full p-1">
+                                            {data.isExtracting ? (
+                                                <>
+                                                    <Loader2 className="h-6 w-6 text-blue-500 mb-1 animate-spin" />
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {dict.file.reading}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Link className="h-6 w-6 text-blue-500 mb-1" />
+                                                    <span className="text-xs text-center truncate w-full px-1">
+                                                        {data.title.length > 10
+                                                            ? `${data.title.slice(0, 7)}...`
+                                                            : data.title}
+                                                    </span>
+                                                    {data.charCount && (
+                                                        <span className="text-[10px] text-green-600 font-medium">
+                                                            {formatCharCount(
+                                                                data.charCount,
+                                                            )}{" "}
+                                                            {dict.file.chars}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {onRemoveUrl && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRemoveUrl(url)}
+                                            className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            aria-label={dict.file.removeFile}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            ),
+                        )}
+                    </div>
+                )}
             </div>
-
             {/* Image Modal/Lightbox */}
             {selectedImage && (
                 <div
@@ -165,7 +222,7 @@ export function FilePreviewList({
                     <button
                         className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
                         onClick={() => setSelectedImage(null)}
-                        aria-label="Close"
+                        aria-label={dict.common.close}
                     >
                         <X className="h-6 w-6" />
                     </button>

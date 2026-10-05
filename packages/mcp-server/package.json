@@ -1,6 +1,6 @@
 {
     "name": "@next-ai-drawio/mcp-server",
-    "version": "0.1.2",
+    "version": "0.3.0",
     "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
     "type": "module",
     "main": "dist/index.js",
@@ -8,9 +8,12 @@
         "next-ai-drawio-mcp": "./dist/index.js"
     },
     "scripts": {
-        "build": "tsc",
+        "build": "tsc && node scripts/copy-assets.mjs",
+        "check-package": "node scripts/check-package.mjs",
         "dev": "tsx watch src/index.ts",
         "start": "node dist/index.js",
+        "test": "vitest run",
+        "test:watch": "vitest",
         "prepublishOnly": "npm run build"
     },
     "keywords": [
@@ -21,30 +24,34 @@
         "claude",
         "model-context-protocol"
     ],
-    "author": "Biki-dev",
+    "author": "DayuanJiang",
     "license": "Apache-2.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Biki-dev/next-ai-draw-io",
+        "url": "https://github.com/DayuanJiang/next-ai-draw-io",
         "directory": "packages/mcp-server"
     },
     "homepage": "https://next-ai-drawio.jiang.jp",
     "bugs": {
-        "url": "https://github.com/Biki-dev/next-ai-draw-io/issues"
+        "url": "https://github.com/DayuanJiang/next-ai-draw-io/issues"
     },
     "publishConfig": {
         "access": "public"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.0.4",
+        "@modelcontextprotocol/sdk": "^1.31.0",
         "linkedom": "^0.18.0",
-        "open": "^10.1.0",
-        "zod": "^3.24.0"
+        "open": "^11.0.0",
+        "pako": "^2.2.0",
+        "saxes": "^6.0.0",
+        "zod": "^4.0.0"
     },
     "devDependencies": {
-        "@types/node": "^20",
+        "@types/node": "^24.0.0",
+        "@types/pako": "^2.0.4",
         "tsx": "^4.19.0",
-        "typescript": "^5"
+        "typescript": "^5",
+        "vitest": "^4.1.8"
     },
     "engines": {
         "node": ">=18"

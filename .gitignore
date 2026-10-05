@@ -14,6 +14,8 @@ packages/*/dist
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
 
 # next.js
 /.next/
@@ -50,3 +52,30 @@ push-via-ec2.sh
 .wrangler/
 .env*.local
 
+# Electron
+/dist-electron/
+/release/
+/electron-standalone/
+# Draw.io static files (downloaded during CI build)
+public/drawio/
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+
+CLAUDE.md
+.spec-workflow
+
+# edgeone
+.edgeone
+opencode.json
+ai-models.json
+
+# local backups
+*.bak
+.gstack/
+
+# admin panel settings (contains secrets)
+data/

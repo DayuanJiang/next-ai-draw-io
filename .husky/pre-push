@@ -1,0 +1,4 @@
+# Skip if node_modules not installed (e.g., on EC2 push server)
+if [ -d "node_modules" ]; then
+  npm run test -- --run
+fi

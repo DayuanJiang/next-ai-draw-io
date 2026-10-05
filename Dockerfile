@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Next.js
 
 # Stage 1: Install dependencies
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -9,10 +9,11 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci
+ARG ELECTRON_SKIP_BINARY_DOWNLOAD=1
+RUN npm install
 
 # Stage 2: Build application
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Copy node_modules from deps stage
@@ -26,11 +27,24 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net
 ENV NEXT_PUBLIC_DRAWIO_BASE_URL=${NEXT_PUBLIC_DRAWIO_BASE_URL}
 
+# Build-time argument to show About link and Notice icon
+ARG NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=false
+ENV NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE=${NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE}
+
+# Build-time argument for subdirectory deployment (e.g., /nextaidrawio)
+ARG NEXT_PUBLIC_BASE_PATH=""
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+
+# Control sponsorship and self-hosting messaging in quota notifications.
+# Set NEXT_PUBLIC_SELFHOSTED="true" in self-hosted deployments to hide sponsorship/self-host links and related text in quota popups.
+ARG NEXT_PUBLIC_SELFHOSTED=""
+ENV NEXT_PUBLIC_SELFHOSTED="${NEXT_PUBLIC_SELFHOSTED}"
+
 # Build Next.js application (standalone mode)
 RUN npm run build
 
 # Stage 3: Production runtime
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -46,6 +60,9 @@ COPY --from=builder /app/public ./public
 # Copy standalone build output
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Writable dir for admin panel settings (data/settings.json)
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 USER nextjs
 

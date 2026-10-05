@@ -4,7 +4,7 @@
 
 **AI-Powered Diagram Creation Tool - Chat, Draw, Visualize**
 
-English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
+English | [中文](./docs/cn/README_CN.md) | [日本語](./docs/ja/README_JA.md)
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
@@ -19,6 +19,18 @@ English | [中文](./docs/README_CN.md) | [日本語](./docs/README_JA.md)
 
 A Next.js web application that integrates AI capabilities with draw.io diagrams. Create, modify, and enhance diagrams through natural language commands and AI-assisted visualization.
 
+> Note: Thanks to <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) sponsorship, the demo site now uses the powerful glm-4.7 model!
+
+<p align="center">
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./public/atlas-cloud-logo-white.svg">
+      <img src="./public/atlas-cloud-logo.svg" alt="Atlas Cloud" width="200">
+    </picture>
+  </a>
+</p>
+
+> 🎁 Thanks to **[Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io)** for sponsoring next-ai-draw-io. Its OpenAI-compatible API gives diagram workflows one provider connection for DeepSeek, Qwen, GLM, Kimi, MiniMax, and more. Budget-friendly access is available through the [Coding Plan](https://www.atlascloud.ai/console/coding-plan).
 
 
 https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
@@ -26,20 +38,27 @@ https://github.com/user-attachments/assets/9d60a3e8-4a1c-4b5e-acbb-26af2d3eabd1
 
 
 ## Table of Contents
-- [Next AI Draw.io ](#next-ai-drawio-)
+- [Next AI Draw.io](#next-ai-drawio)
   - [Table of Contents](#table-of-contents)
   - [Examples](#examples)
   - [Features](#features)
-  - [MCP Server (Preview)](#mcp-server-preview)
+  - [MCP Server](#mcp-server)
+    - [Claude Code CLI](#claude-code-cli)
   - [Getting Started](#getting-started)
     - [Try it Online](#try-it-online)
-    - [Run with Docker (Recommended)](#run-with-docker-recommended)
+    - [Desktop Application](#desktop-application)
+    - [Run with Docker](#run-with-docker)
     - [Installation](#installation)
   - [Deployment](#deployment)
+    - [Deploy to EdgeOne Pages](#deploy-to-edgeone-pages)
+    - [Deploy on Vercel](#deploy-on-vercel)
+    - [Deploy on Cloudflare Workers](#deploy-on-cloudflare-workers)
   - [Multi-Provider Support](#multi-provider-support)
+    - [Server-Side Multi-Model Configuration](#server-side-multi-model-configuration)
+    - [Admin Panel](#admin-panel)
   - [How It Works](#how-it-works)
-  - [Project Structure](#project-structure)
   - [Support \& Contact](#support--contact)
+  - [FAQ](#faq)
   - [Star History](#star-history)
 
 ## Examples
@@ -57,24 +76,24 @@ Here are some example prompts and their generated diagrams:
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>GCP architecture diagram</strong><br />
-      <p><strong>Prompt:</strong> Generate a GCP architecture diagram with **GCP icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
-      <img src="./public/gcp_demo.svg" alt="GCP Architecture Diagram" width="480" />
+      <strong>RAG Technique Diagram</strong><br />
+      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
+      <img src="./public/rag_prod.svg" alt="RAG Architecture Diagram" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>AWS architecture diagram</strong><br />
-      <p><strong>Prompt:</strong> Generate a AWS architecture diagram with **AWS icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
-      <img src="./public/aws_demo.svg" alt="AWS Architecture Diagram" width="480" />
+      <strong>Authentication using React and AWS</strong><br />
+      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
+      <img src="./public/auth.svg" alt="Authentication Architecture Diagram" width="480" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>Azure architecture diagram</strong><br />
-      <p><strong>Prompt:</strong> Generate a Azure architecture diagram with **Azure icons**. In this diagram, users connect to a frontend hosted on an instance.</p>
-      <img src="./public/azure_demo.svg" alt="Azure Architecture Diagram" width="480" />
+      <strong>Open Innovation</strong><br />
+      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
+      <img src="./public/inno.svg" alt="Open Innovation Diagram" width="480" />
     </td>
     <td width="50%" valign="top">
-      <strong>Cat sketch prompt</strong><br />
+      <strong>Cat sketch</strong><br />
       <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
       <img src="./public/cat_demo.svg" alt="Cat Drawing" width="240" />
     </td>
@@ -93,9 +112,7 @@ Here are some example prompts and their generated diagrams:
 -   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
 
-## MCP Server (Preview)
-
-> **Preview Feature**: This feature is experimental and may not stable.
+## MCP Server
 
 Use Next AI Draw.io with AI agents like Claude Desktop, Cursor, and VS Code via MCP (Model Context Protocol).
 
@@ -121,6 +138,13 @@ Then ask Claude to create diagrams:
 
 The diagram appears in your browser in real-time!
 
+The MCP server includes most of the web app's drawing features:
+
+-   The same drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes and more)
+-   A screenshot tool, so the AI can check the rendered diagram and fix it
+-   Version history, multi-page diagrams, and download as `.drawio`, `.png`, `.svg`, or `.drawio.svg`
+-   Auto-save to `~/.next-ai-drawio/`, so you can continue a diagram after a restart
+
 See the [MCP Server README](./packages/mcp-server/README.md) for VS Code, Cursor, and other client configurations.
 
 ## Getting Started
@@ -131,39 +155,19 @@ No installation needed! Try the app directly on our demo site:
 
 [![Live Demo](./public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
 
-> Note: Due to high traffic, the demo site currently uses minimax-m2. For best results, we recommend self-hosting with Claude Sonnet 4.5 or Claude Opus 4.5.
+
 
 > **Bring Your Own API Key**: You can use your own API key to bypass usage limits on the demo site. Click the Settings icon in the chat panel to configure your provider and API key. Your key is stored locally in your browser and is never stored on the server.
 
-### Run with Docker (Recommended)
+### Desktop Application
 
-If you just want to run it locally, the best way is to use Docker.
+Download the native desktop app for your platform from the [Releases page](https://github.com/DayuanJiang/next-ai-draw-io/releases):
 
-First, install Docker if you haven't already: [Get Docker](https://docs.docker.com/get-docker/)
+Supported platforms: Windows, macOS, Linux.
 
-Then run:
+### Run with Docker
 
-```bash
-docker run -d -p 3000:3000 \
-  -e AI_PROVIDER=openai \
-  -e AI_MODEL=gpt-4o \
-  -e OPENAI_API_KEY=your_api_key \
-  ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-Or use an env file:
-
-```bash
-cp env.example .env
-# Edit .env with your configuration
-docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-Replace the environment variables with your preferred AI provider configuration. See [Multi-Provider Support](#multi-provider-support) for available options.
-
-> **Offline Deployment:** If `embed.diagrams.net` is blocked, see [Offline Deployment](./docs/offline-deployment.md) for configuration options.
+[Go to Docker Guide](./docs/en/docker.md)
 
 ### Installation
 
@@ -172,73 +176,85 @@ Replace the environment variables with your preferred AI provider configuration.
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
-```
-
-2. Install dependencies:
-
-```bash
 npm install
-```
-
-3. Configure your AI provider:
-
-Create a `.env.local` file in the root directory:
-
-```bash
 cp env.example .env.local
 ```
 
-Edit `.env.local` and configure your chosen provider:
+See the [Provider Configuration Guide](./docs/en/ai-providers.md) for detailed setup instructions for each provider.
 
--   Set `AI_PROVIDER` to your chosen provider (bedrock, openai, anthropic, google, azure, ollama, openrouter, deepseek, siliconflow)
--   Set `AI_MODEL` to the specific model you want to use
--   Add the required API keys for your provider
--   `TEMPERATURE`: Optional temperature setting (e.g., `0` for deterministic output). Leave unset for models that don't support it (e.g., reasoning models).
--   `ACCESS_CODE_LIST`: Optional access password(s), can be comma-separated for multiple passwords.
-
-> Warning: If you do not set `ACCESS_CODE_LIST`, anyone can access your deployed site directly, which may lead to rapid depletion of your token. It is recommended to set this option.
-
-See the [Provider Configuration Guide](./docs/ai-providers.md) for detailed setup instructions for each provider.
-
-4. Run the development server:
+2. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+3. Open [http://localhost:6002](http://localhost:6002) in your browser to see the application.
 
 ## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new) from the creators of Next.js.
+### Deploy to EdgeOne Pages
 
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+You can deploy with one click using [Tencent EdgeOne Pages](https://pages.edgeone.ai/).
 
-Or you can deploy by this button.
+Deploy by this button: 
+
+[![Deploy to EdgeOne Pages](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+
+Check out the [Tencent EdgeOne Pages documentation](https://pages.edgeone.ai/document/deployment-overview) for more details.
+
+Additionally, deploying through Tencent EdgeOne Pages will also grant you a [daily free quota for DeepSeek models](https://pages.edgeone.ai/document/edge-ai).
+
+### Deploy on Vercel 
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
 
-Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
+The easiest way to deploy is using [Vercel](https://vercel.com/new), the creators of Next.js. Be sure to **set the environment variables** in the Vercel dashboard as you did in your local `.env.local` file.
+
+See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### Deploy on Cloudflare Workers
+
+[Go to Cloudflare Deploy Guide](./docs/en/cloudflare-deploy.md)
+
 
 
 ## Multi-Provider Support
 
+-   [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)
 -   AWS Bedrock (default)
 -   OpenAI
 -   Anthropic
 -   Google AI
+-   Google Vertex AI
 -   Azure OpenAI
 -   Ollama
 -   OpenRouter
+-   AIHubMix
 -   DeepSeek
 -   SiliconFlow
+-   ModelScope
+-   SGLang
+-   Vercel AI Gateway
+-   [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io)
+
 
 All providers except AWS Bedrock and OpenRouter support custom endpoints.
 
-📖 **[Detailed Provider Configuration Guide](./docs/ai-providers.md)** - See setup instructions for each provider.
+📖 **[Detailed Provider Configuration Guide](./docs/en/ai-providers.md)** - See setup instructions for each provider.
+
+### Server-Side Multi-Model Configuration
+
+Administrators can configure multiple server-side models that are available to all users without requiring personal API keys. Configure via `AI_MODELS_CONFIG` environment variable (JSON string) or `ai-models.json` file. For a single-provider quick setup, list comma-separated model IDs in `AI_MODEL`.
+
+### Admin Panel
+
+Set the `ADMIN_PASSWORD` environment variable and visit `/admin` to manage server settings (models, access codes, features, observability, quota) from a web panel instead of hand-editing `.env`.
+
+📖 **[Admin Panel Guide](./docs/en/admin-panel.md)** — setup, precedence rules, and notes.
 
 **Model Requirements**: This task requires strong model capabilities for generating long-form text with strict formatting constraints (draw.io XML). Recommended models include Claude Sonnet 4.5, GPT-5.1, Gemini 3 Pro, and DeepSeek V3.2/R1.
 
-Note that `claude` series has trained on draw.io diagrams with cloud architecture logos like AWS, Azure, GCP. So if you want to create cloud architecture diagrams, this is the best choice.
+Note that the `claude` series has been trained on draw.io diagrams with cloud architecture logos like AWS, Azure, GCP. So if you want to create cloud architecture diagrams, this is the best choice.
 
 
 ## How It Works
@@ -251,32 +267,22 @@ The application uses the following technologies:
 
 Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
 
-## Project Structure
-
-```
-app/                  # Next.js App Router
-  api/chat/           # Chat API endpoint with AI tools
-  page.tsx            # Main page with DrawIO embed
-components/           # React components
-  chat-panel.tsx      # Chat interface with diagram control
-  chat-input.tsx      # User input component with file upload
-  history-dialog.tsx  # Diagram version history viewer
-  ui/                 # UI components (buttons, cards, etc.)
-contexts/             # React context providers
-  diagram-context.tsx # Global diagram state management
-lib/                  # Utility functions and helpers
-  ai-providers.ts     # Multi-provider AI configuration
-  utils.ts            # XML processing and conversion utilities
-public/               # Static assets including example images
-```
 
 ## Support & Contact
+
+**Special thanks to [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) for sponsoring the API token usage of the demo site!** Register on the ARK platform to get 500K free tokens for all models!
+
+**Special thanks to [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=next-ai-draw-io) for sponsoring next-ai-draw-io and supporting its multi-provider ecosystem!** Try its OpenAI-compatible LLM API through the [Atlas Cloud Coding Plan](https://www.atlascloud.ai/console/coding-plan).
 
 If you find this project useful, please consider [sponsoring](https://github.com/sponsors/DayuanJiang) to help me host the live demo site!
 
 For support or inquiries, please open an issue on the GitHub repository or contact the maintainer at:
 
 -   Email: me[at]jiang.jp
+
+## FAQ
+
+See [FAQ](./docs/en/FAQ.md) for common issues and solutions.
 
 ## Star History
 
