@@ -1,5 +1,11 @@
 // @vitest-environment node
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs"
+import {
+    existsSync,
+    mkdtempSync,
+    readdirSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -52,6 +58,16 @@ describe("config presets file", () => {
             createPreset({ name: "New", config: { AI_PROVIDER: "openai" } }),
         ).toThrow()
         expect(loadPresets().presets.map((p) => p.name)).toEqual(["Mine"])
+    })
+
+    it("saves again once a file it could not read is gone", () => {
+        createPreset({ name: "Mine", config: { AI_PROVIDER: "openai" } })
+        readFails.next = true
+        loadPresets()
+        // The user removes the file to start over
+        rmSync(presetsFile())
+        createPreset({ name: "New", config: { AI_PROVIDER: "openai" } })
+        expect(loadPresets().presets.map((p) => p.name)).toEqual(["New"])
     })
 
     it("moves a file that is not JSON aside", () => {

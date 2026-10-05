@@ -18,6 +18,13 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
     recordTokenUsage: async () => {},
 }))
 
+// No DNS in tests: only loopback addresses are private
+vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/lib/ssrf-protection")>()),
+    isPrivateUrl: async (url: string) =>
+        /^https?:\/\/(127\.0\.0\.1|localhost)\b/.test(url),
+}))
+
 import { POST as chat } from "@/app/api/chat/route"
 
 const ENV = [
@@ -111,6 +118,26 @@ describe("chat quota", () => {
             ).status,
         ).toBe(429)
         expect(quota.checks).toBe(2)
+    })
+
+    it("counts EdgeOne with a key header it never reads", async () => {
+        const res = await send({
+            "x-ai-provider": "edgeone",
+            "x-ai-api-key": "ignored",
+            "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
+        })
+        expect(res.status).toBe(429)
+        expect(quota.checks).toBe(1)
+    })
+
+    it("counts Ollama at a private address, the server's network", async () => {
+        const res = await send({
+            "x-ai-provider": "ollama",
+            "x-ai-base-url": "http://127.0.0.1:11434/api",
+            "x-ai-model": "llama3.2",
+        })
+        expect(res.status).toBe(429)
+        expect(quota.checks).toBe(1)
     })
 
     it("does not count Ollama on the user's own server", async () => {

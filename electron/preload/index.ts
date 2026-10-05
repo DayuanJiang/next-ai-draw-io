@@ -27,4 +27,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getUserLocale: () => ipcRenderer.invoke("get-user-locale"),
     setUserLocale: (locale: string) =>
         ipcRenderer.invoke("set-user-locale", locale),
+
+    // The server restarted on the same port (another preset)
+    onServerRestarted: (callback: () => void) => {
+        const listener = () => callback()
+        ipcRenderer.on("server-restarted", listener)
+        return () => {
+            ipcRenderer.removeListener("server-restarted", listener)
+        }
+    },
 })

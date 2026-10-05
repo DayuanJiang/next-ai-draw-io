@@ -462,9 +462,11 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledTimes(1)
         const callArgs = createOllamaMock.mock.calls[0][0]
-        expect(callArgs).not.toHaveProperty("baseURL")
+        // As env.example says: without OLLAMA_BASE_URL, Ollama Cloud (the
+        // SDK's default is the local server, which has no keys)
         expect(callArgs).toEqual(
             expect.objectContaining({
+                baseURL: "https://ollama.com/api",
                 headers: { Authorization: "Bearer server-key" },
             }),
         )

@@ -60,6 +60,13 @@ export async function switchPreset(
         console.error("Failed to restart server:", error)
         const reason = error instanceof Error ? error.message : String(error)
 
+        // Another preset was chosen meanwhile: its own restart follows
+        if (getCurrentPresetId() !== id) {
+            throw new Error(
+                `The server could not be restarted.\n\nError: ${reason}`,
+            )
+        }
+
         // Revert to previous preset on failure
         if (!previousPresetId || !applyPresetToEnv(previousPresetId)) {
             setCurrentPreset(null)

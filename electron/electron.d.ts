@@ -70,6 +70,11 @@ declare global {
             >
             /** Set user's preferred locale */
             setUserLocale: (locale: string) => Promise<SetUserLocaleResult>
+            /**
+             * Call back after the server restarted on the same port (another
+             * preset); returns a function that stops the calls
+             */
+            onServerRestarted?: (callback: () => void) => () => void
         }
 
         /** Settings window Electron API */

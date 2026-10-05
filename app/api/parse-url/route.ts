@@ -154,6 +154,9 @@ export async function POST(req: Request) {
             )
         } finally {
             clearTimeout(timeoutId)
+            // Ends a download left unread (too large, PDF, error status);
+            // a body already read is not affected
+            controller.abort()
         }
 
         // extractFromHtml throws (not returns null) on empty/non-HTML bodies,

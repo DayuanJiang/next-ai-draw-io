@@ -107,12 +107,13 @@ export function getAppUrl(): string | null {
 
 /**
  * Point the main window at the restarted app server (it can come up on a
- * different port). On the same port the page reloads, so it fetches the new
- * preset's server models instead of sending the old preset's choice.
+ * different port). On the same port the page fetches the new preset's
+ * server models instead of sending the old preset's choice; it is not
+ * reloaded, which would drop unsent attachments.
  */
 export function setAppUrl(url: string): void {
     if (url === appUrl) {
-        mainWindow?.webContents.reload()
+        mainWindow?.webContents.send("server-restarted")
         return
     }
     appUrl = url

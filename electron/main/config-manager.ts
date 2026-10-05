@@ -171,6 +171,8 @@ export function loadPresets(): ConfigPresetsFile {
     const configPath = getConfigFilePath()
 
     if (!existsSync(configPath)) {
+        // Nothing left that a save could overwrite
+        presetsUnreadable = false
         return {
             version: 1,
             currentPresetId: null,

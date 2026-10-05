@@ -164,25 +164,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
     let baseUrl = req.headers.get("x-ai-base-url")
     const selectedModelId = req.headers.get("x-selected-model-id")
 
-    // For EdgeOne provider, construct full URL from request origin
-    // because createOpenAI needs absolute URL, not relative path
-    if (provider === "edgeone" && !baseUrl) {
-        const origin = req.headers.get("origin") || new URL(req.url).origin
-        baseUrl = `${origin}/api/edgeai`
-    }
-
-    // Same rule as validate-model: with ALLOW_PRIVATE_URLS=false a request may
-    // not point the server at a private or internal address
-    if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
-        return Response.json(
-            { error: "Private or internal base URLs are not allowed." },
-            { status: 400 },
-        )
-    }
-
-    // Get cookie header for EdgeOne authentication (eo_token, eo_time)
-    const cookieHeader = req.headers.get("cookie")
-
     // Check if this is a server model with custom env var names
     let serverModelConfig: {
         apiKeyEnv?: string | string[]
@@ -205,6 +186,29 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
+    // A server model's provider comes from its config: for one set up in
+    // the admin panel the header holds the provider name's slug
+    const isEdgeOne = (serverModelConfig.provider || provider) === "edgeone"
+
+    // For EdgeOne provider, construct full URL from request origin
+    // because createOpenAI needs absolute URL, not relative path
+    if (isEdgeOne && !baseUrl) {
+        const origin = req.headers.get("origin") || new URL(req.url).origin
+        baseUrl = `${origin}/api/edgeai`
+    }
+
+    // Same rule as validate-model: with ALLOW_PRIVATE_URLS=false a request may
+    // not point the server at a private or internal address
+    if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
+        return Response.json(
+            { error: "Private or internal base URLs are not allowed." },
+            { status: 400 },
+        )
+    }
+
+    // Get cookie header for EdgeOne authentication (eo_token, eo_time)
+    const cookieHeader = req.headers.get("cookie")
+
     const clientOverrides = {
         // Server model provider takes precedence over client header
         provider: serverModelConfig.provider || provider,
@@ -223,7 +227,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         vertexApiKey: req.headers.get("x-vertex-api-key"),
         // Pass cookies for EdgeOne Pages authentication, and the access code,
         // which the EdgeOne function checks too
-        ...(provider === "edgeone" && {
+        ...(isEdgeOne && {
             headers: {
                 ...(cookieHeader && { cookie: cookieHeader }),
                 "x-access-code": req.headers.get("x-access-code") || "",
@@ -270,10 +274,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
     // server's keys, or on its keyless Ollama or EdgeOne. Decided by the key
     // actually used: a key header the provider never reads must not skip it.
+    // EdgeOne never reads one; keyless Ollama at a private address is the
+    // server's own network.
+    const clientBaseUrl = normalizeBaseUrl(
+        req.headers.get("x-ai-base-url") ?? "",
+    )
     const onServerEndpoint =
-        (resolvedProvider === "ollama" || resolvedProvider === "edgeone") &&
-        !clientOverrides.apiKey &&
-        !normalizeBaseUrl(req.headers.get("x-ai-base-url") ?? "")
+        (resolvedProvider === "edgeone" && !clientBaseUrl) ||
+        (resolvedProvider === "ollama" &&
+            !clientOverrides.apiKey &&
+            (!clientBaseUrl || (await isPrivateUrl(clientBaseUrl))))
     const countsQuota =
         isQuotaEnabled() &&
         (onServerCredentials || onServerEndpoint) &&
@@ -726,7 +736,9 @@ Call this tool to get shape names and usage syntax for a specific library.`,
 
     const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
-        onError: (error) => streamErrorText(error, onServerCredentials),
+        // The provider's text can name the server's account or hosts
+        onError: (error) =>
+            streamErrorText(error, onServerCredentials || onServerEndpoint),
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage

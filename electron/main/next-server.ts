@@ -6,7 +6,6 @@ import {
     getAllocatedPort,
     getServerUrl,
     isPortAvailable,
-    saveServerPort,
 } from "./port-manager"
 import { setAppUrl } from "./window-manager"
 
@@ -145,7 +144,6 @@ async function startServer(): Promise<string> {
     const url = getServerUrl()
     await waitForServer(url)
     console.log(`Next.js server started at ${url}`)
-    saveServerPort(port)
 
     return url
 }

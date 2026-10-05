@@ -51,7 +51,11 @@ function loadEnvFromFile(filePath: string): void {
             const quote = value[0]
             const closingQuote =
                 quote === '"' || quote === "'" ? value.indexOf(quote, 1) : -1
-            if (closingQuote > 0) {
+            if (value.length > 1 && value.endsWith(quote) && closingQuote > 0) {
+                // Quoted from start to end: the quotes inside belong to the
+                // value (JSON with an apostrophe), as dotenv reads it
+                value = value.slice(1, -1)
+            } else if (closingQuote > 0) {
                 // Quoted value: keep what's inside the quotes and drop
                 // anything after them (e.g. a comment)
                 value = value.slice(1, closingQuote)

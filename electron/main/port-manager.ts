@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import net from "node:net"
 import path from "node:path"
 import { app } from "electron"
@@ -26,84 +26,42 @@ const PORT_CONFIG = {
 let allocatedPort: number | null = null
 
 /**
- * File that remembers the production port from the last launch, so the app
- * keeps the same origin (and its localStorage) instead of switching between
- * the legacy and new port depending on which one is free at startup
+ * Whether chats are saved under http://127.0.0.1:<port>: Electron keeps
+ * each origin's IndexedDB in its own folder
  */
-function getSavedPortPath(): string {
-    return path.join(app.getPath("userData"), "server-port.json")
-}
-
-function loadSavedPort(): number | null {
-    try {
-        const { port } = JSON.parse(readFileSync(getSavedPortPath(), "utf-8"))
-        return Number.isInteger(port) ? port : null
-    } catch {
-        return null
-    }
+function hasStoredData(port: number): boolean {
+    return existsSync(
+        path.join(
+            app.getPath("userData"),
+            "IndexedDB",
+            `http_127.0.0.1_${port}.indexeddb.leveldb`,
+        ),
+    )
 }
 
 /**
- * Why the legacy port was not used at this launch: "EACCES" when the system
- * reserves it (Windows excludes port ranges for Hyper-V, which can change
- * on each boot), "EADDRINUSE" when another process holds it for now
+ * Check if a specific port is available
  */
-let legacyPortError: string | null = null
-
-/**
- * Remember the port of the first production launch. A later launch that
- * found it taken keeps it remembered: the user's data lives under that
- * origin, and the next launch goes back to it once it is free. Only the two
- * fixed ports count, and 13370 only when the system reserves the legacy
- * port: while another process holds it (such as the previous version still
- * quitting after an update), the next launch tries it again.
- */
-export function saveServerPort(port: number): void {
-    if (!app.isPackaged || loadSavedPort() !== null) {
-        return
-    }
-    const fixed =
-        port === PORT_CONFIG.legacyProduction ||
-        (port === PORT_CONFIG.production && legacyPortError === "EACCES")
-    if (!fixed) return
-    try {
-        writeFileSync(getSavedPortPath(), JSON.stringify({ port }), "utf-8")
-    } catch (error) {
-        console.error("Failed to save server port:", error)
-    }
-}
-
-/**
- * Try to listen on a port. Resolves to null when it is free, else to the
- * error code.
- */
-function portError(port: number): Promise<string | null> {
+export function isPortAvailable(port: number): Promise<boolean> {
     return new Promise((resolve) => {
         const server = net.createServer()
         server.once("error", (err: NodeJS.ErrnoException) => {
             console.warn(`Port ${port} unavailable: ${err.code}`)
-            resolve(err.code ?? "unknown")
+            resolve(false)
         })
         server.once("listening", () => {
             server.close()
-            resolve(null)
+            resolve(true)
         })
         server.listen(port, "127.0.0.1")
     })
 }
 
 /**
- * Check if a specific port is available
- */
-export async function isPortAvailable(port: number): Promise<boolean> {
-    return (await portError(port)) === null
-}
-
-/**
  * Find an available port
  * - In development: uses fixed port (6002)
- * - In production: uses the port from the last launch, then the legacy
- *   port (61337), then 13370, to preserve localStorage
+ * - In production: uses the legacy port (61337), then 13370, to preserve
+ *   localStorage; 13370 first when only it has saved chats
  * - Falls back to sequential ports if preferred port is unavailable
  * - Last resort: lets the OS assign a port (port 0)
  *
@@ -128,34 +86,20 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
         allocatedPort = null
     }
 
-    // In production, use the port from the last launch first
-    if (!isDev) {
-        const savedPort = loadSavedPort()
-        if (savedPort !== null) {
-            if (await isPortAvailable(savedPort)) {
-                allocatedPort = savedPort
-                return savedPort
-            }
-            console.warn(
-                `Port ${savedPort} from the last launch is unavailable. Data saved under it will not show on the new port.`,
-            )
+    // In production, try the legacy port first to preserve existing users'
+    // data, unless only the new port has data: their app started on 13370
+    // while Windows reserved 61337, and 61337 being free now would hide it
+    const candidates = isDev
+        ? [preferredPort]
+        : hasStoredData(PORT_CONFIG.production) &&
+            !hasStoredData(PORT_CONFIG.legacyProduction)
+          ? [PORT_CONFIG.production, PORT_CONFIG.legacyProduction]
+          : [PORT_CONFIG.legacyProduction, PORT_CONFIG.production]
+    for (const port of candidates) {
+        if (await isPortAvailable(port)) {
+            allocatedPort = port
+            return port
         }
-    }
-
-    // In production, try legacy port first to preserve existing users' localStorage
-    if (!isDev) {
-        const legacyPort = PORT_CONFIG.legacyProduction
-        legacyPortError = await portError(legacyPort)
-        if (legacyPortError === null) {
-            allocatedPort = legacyPort
-            return legacyPort
-        }
-    }
-
-    // Try preferred port
-    if (await isPortAvailable(preferredPort)) {
-        allocatedPort = preferredPort
-        return preferredPort
     }
 
     console.warn(

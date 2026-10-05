@@ -159,6 +159,8 @@ describe("Bedrock admin panel credentials", () => {
             region: "eu-west-1",
             accessKeyId: "panel-id",
             secretAccessKey: "panel-secret",
+            // The keys the Test button checked, not AWS_BEARER_TOKEN_BEDROCK
+            apiKey: "",
         })
     })
 
@@ -182,6 +184,8 @@ describe("Bedrock admin panel credentials", () => {
             secretAccessKey: "client-secret",
             // The SDK would otherwise use the server's AWS_BEARER_TOKEN_BEDROCK
             apiKey: "",
+            // and the server's AWS_ENDPOINT_URL_BEDROCK_RUNTIME
+            baseURL: "https://bedrock-runtime.ap-northeast-1.amazonaws.com",
         })
     })
 
@@ -346,6 +350,23 @@ describe("whose keys a request uses", () => {
             expect.objectContaining({
                 baseURL: "http://ollama.internal:11434/api",
             }),
+        )
+    })
+
+    it("sends the server's Ollama key without a base URL to Ollama Cloud", async () => {
+        // An Ollama key is an Ollama Cloud key: local Ollama has none.
+        // The admin panel saves it as OLLAMA_API_KEY, without a base URL.
+        process.env.OLLAMA_API_KEY = "server-key"
+        const { createOllama } = await import("ollama-ai-provider-v2")
+        getAIModel({ provider: "ollama", modelId: "m" })
+        expect(createOllama).toHaveBeenLastCalledWith(
+            expect.objectContaining({ baseURL: "https://ollama.com/api" }),
+        )
+        // Without a key: the SDK's local default
+        delete process.env.OLLAMA_API_KEY
+        getAIModel({ provider: "ollama", modelId: "m" })
+        expect(vi.mocked(createOllama).mock.lastCall?.[0]).not.toHaveProperty(
+            "baseURL",
         )
     })
 

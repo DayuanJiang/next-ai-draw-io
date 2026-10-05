@@ -617,6 +617,20 @@ function validateProviderCredentials(
     }
 }
 
+/** AWS's Bedrock endpoint for a region, as the Bedrock SDK builds it */
+function bedrockRuntimeUrl(region: string): string {
+    const suffix =
+        [
+            ["cn-", "amazonaws.com.cn"],
+            ["us-iso-", "c2s.ic.gov"],
+            ["us-isob-", "sc2s.sgov.gov"],
+            ["eu-isoe-", "cloud.adc-e.uk"],
+            ["us-isof-", "csp.hci.ic.gov"],
+            ["eusc-", "amazonaws.eu"],
+        ].find(([prefix]) => region.startsWith(prefix))?.[1] ?? "amazonaws.com"
+    return `https://bedrock-runtime.${region}.${suffix}`
+}
+
 /**
  * Providers whose SDK has the official endpoint built in. The others are
  * OpenAI-compatible APIs (or Anthropic) that are called at
@@ -903,12 +917,17 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                       // Without an apiKey the SDK reads the server's
                       // AWS_BEARER_TOKEN_BEDROCK, which wins over the keys
                       apiKey: "",
+                      // Without a baseURL it reads the server's
+                      // AWS_ENDPOINT_URL_BEDROCK_RUNTIME / AWS_ENDPOINT_URL
+                      baseURL: bedrockRuntimeUrl(bedrockRegion),
                   })
                 : adminAccessKeyId && adminSecretAccessKey
                   ? createAmazonBedrock({
                         region: bedrockRegion,
                         accessKeyId: adminAccessKeyId,
                         secretAccessKey: adminSecretAccessKey,
+                        // The keys the admin panel's Test button checked
+                        apiKey: "",
                     })
                   : createAmazonBedrock({
                         region: bedrockRegion,
@@ -959,19 +978,24 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
         }
 
         case "ollama": {
-            // Like other providers, a user's key never goes to the server's
-            // base URL; without a base URL it is an Ollama Cloud key
-            const baseURL =
-                overrides?.baseUrl ||
-                (overrides?.apiKey
-                    ? PROVIDER_INFO.ollama.defaultBaseUrl
-                    : process.env.OLLAMA_BASE_URL)
             // SECURITY: When client provides a custom base URL, only use
             // client-provided API key. Never fall back to server OLLAMA_API_KEY
             // to prevent leaking server credentials to user-controlled endpoints.
             const apiKey = overrides?.baseUrl
                 ? overrides?.apiKey || undefined
                 : resolveApiKey(overrides, "OLLAMA_API_KEY")
+            // Like other providers, a user's key never goes to the server's
+            // base URL. A key without a base URL is an Ollama Cloud key
+            // (local Ollama has no keys); without either, the SDK's local
+            // default.
+            const baseURL =
+                overrides?.baseUrl ||
+                (overrides?.apiKey
+                    ? PROVIDER_INFO.ollama.defaultBaseUrl
+                    : process.env.OLLAMA_BASE_URL ||
+                      (apiKey
+                          ? PROVIDER_INFO.ollama.defaultBaseUrl
+                          : undefined))
             model = createOllama({
                 ...(baseURL && { baseURL }),
                 ...(apiKey && {
