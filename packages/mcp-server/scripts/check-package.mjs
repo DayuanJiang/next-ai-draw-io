@@ -11,9 +11,11 @@ const REQUIRED = [
     "dist/preview/preview.js",
 ]
 
-const [pack] = JSON.parse(
+const output = JSON.parse(
     execSync("npm pack --dry-run --json", { encoding: "utf8" }),
 )
+// npm 11 prints a list, npm 12 an object keyed by package name
+const pack = Array.isArray(output) ? output[0] : Object.values(output)[0]
 const files = new Set(pack.files.map((f) => f.path))
 const missing = REQUIRED.filter((f) => !files.has(f))
 if (missing.length > 0) {
