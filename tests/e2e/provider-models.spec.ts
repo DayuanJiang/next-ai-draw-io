@@ -232,3 +232,43 @@ test("a test result does not count for a model id changed meanwhile", async ({
     await page.waitForTimeout(500)
     await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(0)
 })
+
+test("a model list fetched with an old API key is dropped", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/provider-models", {
+        models: [{ id: "model-of-old-key", tools: true }],
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog
+        .getByRole("button", { name: "Fetch models from the provider" })
+        .click()
+    // The user corrects the key while the list is loading
+    await dialog.locator("#api-key").fill("new-key")
+    release()
+    await page.waitForTimeout(500)
+    await expect(page.getByText("model-of-old-key")).toHaveCount(0)
+})
+
+test("a test result for an old API key is dropped", async ({ page }) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: true,
+        responseTime: 1000,
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    // Another tab saves a different key for this provider
+    await page.evaluate(() => {
+        const key = "next-ai-draw-io-model-configs"
+        const config = JSON.parse(localStorage.getItem(key) ?? "{}")
+        config.providers[0].apiKey = "key-from-another-tab"
+        const value = JSON.stringify(config)
+        localStorage.setItem(key, value)
+        window.dispatchEvent(
+            new StorageEvent("storage", { key, newValue: value }),
+        )
+    })
+    release()
+    await page.waitForTimeout(500)
+    await expect(dialog.locator('[title="1.0 s"]')).toHaveCount(0)
+})

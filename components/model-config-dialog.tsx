@@ -157,9 +157,6 @@ export function ModelConfigDialog({
         id: string
         value: string
     } | null>(null)
-    // Bumped on every credential edit so a running test can tell that its
-    // results belong to the old credentials
-    const credentialsVersionRef = useRef(0)
     // Models fetched from the provider, per provider config
     const [fetchedModels, setFetchedModels] = useState<
         Record<string, ListedModel[]>
@@ -192,6 +189,20 @@ export function ModelConfigDialog({
     selectedProviderIdRef.current = selectedProviderId
     const configRef = useRef(config)
     configRef.current = config
+    // A model list or test result belongs to the credentials it was asked
+    // with; they can change meanwhile, here or in another tab
+    const credentialsOf = (providerId: string) => {
+        const p = configRef.current.providers.find((x) => x.id === providerId)
+        return JSON.stringify([
+            p?.provider,
+            p?.apiKey,
+            p?.baseUrl,
+            p?.awsAccessKeyId,
+            p?.awsSecretAccessKey,
+            p?.awsRegion,
+            p?.vertexApiKey,
+        ])
+    }
 
     // Discard an unfinished model ID edit when the dialog closes
     useEffect(() => {
@@ -217,6 +228,7 @@ export function ModelConfigDialog({
     const handleFetchModels = async () => {
         if (!selectedProvider) return
         const providerId = selectedProvider.id
+        const askedWith = credentialsOf(providerId)
         setFetchingModels(true)
         setFetchModelsError("")
         try {
@@ -237,6 +249,7 @@ export function ModelConfigDialog({
                 },
             )
             const data = await response.json().catch(() => ({}))
+            if (credentialsOf(providerId) !== askedWith) return
             // The picker and the error belong to the provider shown
             const stillShown = selectedProviderIdRef.current === providerId
             if (Array.isArray(data.models)) {
@@ -253,7 +266,10 @@ export function ModelConfigDialog({
                 )
             }
         } catch {
-            if (selectedProviderIdRef.current === providerId) {
+            if (
+                selectedProviderIdRef.current === providerId &&
+                credentialsOf(providerId) === askedWith
+            ) {
                 setFetchModelsError(dict.errors.networkError)
             }
         } finally {
@@ -313,7 +329,6 @@ export function ModelConfigDialog({
             "vertexApiKey",
         ]
         if (credentialFields.includes(field)) {
-            credentialsVersionRef.current++
             setValidationStatus("idle")
             setValidatingModelIds(new Set())
             setFetchedModels(({ [selectedProviderId]: _, ...rest }) => rest)
@@ -398,7 +413,7 @@ export function ModelConfigDialog({
         let allValid = true
         let errorCount = 0
         let idChanged = false
-        const credentialsVersion = credentialsVersionRef.current
+        const askedWith = credentialsOf(selectedProviderId)
 
         // For EdgeOne, construct baseUrl from current origin
         const baseUrl = isEdgeOne
@@ -474,7 +489,7 @@ export function ModelConfigDialog({
                     }
                 }
                 // Credentials changed during the test: drop the result
-                if (credentialsVersionRef.current !== credentialsVersion) return
+                if (credentialsOf(selectedProviderId) !== askedWith) return
                 // So did this model's id: the result is for the old one
                 const current = configRef.current.providers
                     .find((p) => p.id === selectedProviderId)
@@ -500,7 +515,7 @@ export function ModelConfigDialog({
                 })
             }),
         )
-        if (credentialsVersionRef.current !== credentialsVersion) return
+        if (credentialsOf(selectedProviderId) !== askedWith) return
 
         // A model whose id changed was not tested
         if (allValid && !idChanged) {

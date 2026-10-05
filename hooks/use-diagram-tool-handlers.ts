@@ -121,20 +121,28 @@ export function useDiagramToolHandlers({
             )
         }
 
+        processedToolCallsRef.current.add(toolCall.toolCallId)
+        // Only these two put their result on the canvas. Other tools
+        // (get_shape_library, which the server runs, still arrives here)
+        // leave the stored originals for the preview code to undo.
+        const drawsDiagram =
+            toolCall.toolName === "display_diagram" ||
+            toolCall.toolName === "edit_diagram"
         // Stored originals belong to previews not handled yet: this call's,
         // and those of earlier calls with invalid input, which never get
         // here. The first is the diagram before all of them. This call's
         // result replaces those previews, so the preview code must neither
         // draw them again nor undo them later.
         const [originalXml] = editDiagramOriginalXmlRef.current.values()
-        for (const id of editDiagramOriginalXmlRef.current.keys()) {
-            processedToolCallsRef.current.add(id)
+        if (drawsDiagram) {
+            for (const id of editDiagramOriginalXmlRef.current.keys()) {
+                processedToolCallsRef.current.add(id)
+            }
+            editDiagramOriginalXmlRef.current.clear()
         }
-        processedToolCallsRef.current.add(toolCall.toolCallId)
-        editDiagramOriginalXmlRef.current.clear()
 
         if (toolCall.toolName === "display_diagram") {
-            await handleDisplayDiagram(toolCall, addToolOutput)
+            await handleDisplayDiagram(toolCall, addToolOutput, originalXml)
         } else if (toolCall.toolName === "edit_diagram") {
             await handleEditDiagram(toolCall, addToolOutput, originalXml)
         } else if (toolCall.toolName === "append_diagram") {
@@ -142,9 +150,11 @@ export function useDiagramToolHandlers({
         }
     }
 
+    // originalXml: the diagram before the streamed previews, if any were drawn
     const handleDisplayDiagram = async (
         toolCall: ToolCall,
         addToolOutput: AddToolOutputFn,
+        originalXml: string | undefined,
     ) => {
         const { xml } = toolCall.input as { xml: string }
 
@@ -202,6 +212,9 @@ NEXT STEP: Call append_diagram with the continuation XML.
 
         if (validationError) {
             console.warn("[display_diagram] Validation error:", validationError)
+            // Undo the streamed preview, as a failed edit does: the canvas
+            // keeps the diagram from before this failed call
+            if (originalXml) onDisplayChart(originalXml, true)
             // Return error to model - sendAutomaticallyWhen will trigger retry
             if (DEBUG) {
                 console.log(

@@ -106,6 +106,26 @@ describe("useModelConfig server model selection", () => {
         )
     })
 
+    it("skips a saved provider this version does not know", async () => {
+        // Saved by another version, or edited by hand: it used to crash the
+        // whole page on load
+        storeConfig({
+            ...USER_CONFIG,
+            providers: [
+                ...USER_CONFIG.providers,
+                {
+                    id: "p9",
+                    provider: "not-a-provider" as any,
+                    apiKey: "k",
+                    models: [{ id: "m9", modelId: "x" }],
+                },
+            ],
+        })
+        const { result } = await renderLoaded()
+        expect(result.current.config.providers.map((p) => p.id)).toEqual(["p1"])
+        expect(result.current.models.map((m) => m.id)).toContain("m1")
+    })
+
     it("keeps a selected user model", async () => {
         storeConfig({ ...USER_CONFIG, selectedModelId: "m1" })
         const { result } = await renderLoaded()
@@ -124,6 +144,53 @@ describe("useModelConfig server model selection", () => {
         const { result } = await renderLoaded()
         act(() => result.current.deleteProvider("p1"))
         expect(result.current.selectedModelId).toBe("server:openai-main:gpt-4o")
+    })
+})
+
+describe("useModelConfig in the desktop app", () => {
+    it("reloads the server models after a preset switch restarts the server", async () => {
+        // The new preset offers other models; the saved one is gone
+        let restarted: (() => void) | undefined
+        ;(window as any).electronAPI = {
+            onServerRestarted: (callback: () => void) => {
+                restarted = callback
+                return () => {
+                    restarted = undefined
+                }
+            },
+        }
+        try {
+            storeConfig({
+                ...USER_CONFIG,
+                selectedModelId: "server:openai-main:gpt-4o-mini",
+            })
+            const { result } = await renderLoaded()
+            await waitFor(() => expect(restarted).toBeDefined())
+            const nextModels: FlattenedServerModel[] = [
+                {
+                    id: "server:claude:claude-sonnet-5-5",
+                    modelId: "claude-sonnet-5-5",
+                    provider: "anthropic",
+                    providerLabel: "Claude",
+                    isDefault: true,
+                },
+            ]
+            vi.stubGlobal(
+                "fetch",
+                vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ models: nextModels }),
+                })),
+            )
+            act(() => restarted?.())
+            await waitFor(() =>
+                expect(result.current.selectedModelId).toBe(
+                    "server:claude:claude-sonnet-5-5",
+                ),
+            )
+        } finally {
+            delete (window as any).electronAPI
+        }
     })
 })
 

@@ -559,3 +559,129 @@ test("stopping while drawing undoes the half drawn diagram", async ({
     await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
     await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
 })
+
+test("a broken edit's preview is undone after a shape library call", async ({
+    page: p,
+}) => {
+    // The server runs get_shape_library, but its call still reaches the
+    // browser's tool handler, before the UI shows the broken edit's error
+    const library = toolCallEvents("s1", "get_shape_library", {
+        library: "aws4",
+    })
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        [
+            sse([{ type: "start" }, { type: "start-step" }]),
+            sse([editStart("e1"), ...editDeltas("e1")]),
+            220,
+            `${sse([
+                {
+                    type: "tool-input-error",
+                    toolCallId: "e1",
+                    toolName: "edit_diagram",
+                    input: "{broken",
+                    errorText: "JSON parsing failed",
+                },
+                { type: "finish-step" },
+                { type: "start-step" },
+                library.start,
+                ...library.deltas,
+                library.done,
+                {
+                    type: "tool-output-available",
+                    toolCallId: "s1",
+                    output: "AWS shapes",
+                },
+                { type: "finish-step" },
+                { type: "finish" },
+            ])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Add another box")
+    // The preview shows Gamma only for a moment; afterwards it must be gone
+    await expect(p.getByText("Get Shape Library").first()).toBeVisible({
+        timeout: 15000,
+    })
+    await p.waitForTimeout(2000)
+    await expect(canvas.getByText("Gamma", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
+test("a drawing rejected by the checks undoes its preview", async ({
+    page: p,
+}) => {
+    // A linked shape that uses the root cell id "1": the finished XML is
+    // rejected, while the preview still draws the other shape
+    const redraw = toolCallEvents("d2", "display_diagram", {
+        xml:
+            cell("b", "Beta", 40) +
+            `<UserObject id="1" label="Bad" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry x="220" y="40" width="120" height="60" as="geometry"/></mxCell></UserObject>`,
+    })
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        [
+            sse([{ type: "start" }, redraw.start, ...redraw.deltas]),
+            `${sse([redraw.done, { type: "finish" }])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw it again")
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    // The tool card shows the rejection
+    await expect(p.locator('text="Error"').first()).toBeVisible({
+        timeout: 15000,
+    })
+    await p.waitForTimeout(1000)
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
+test("stopping during the screenshot check starts no new request", async ({
+    page: p,
+}) => {
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    let chatRequests = 0
+    await p.route("**/api/chat", async (route) => {
+        chatRequests++
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: drawReply(`d${chatRequests}`, cell("a", "Alpha", 40)),
+        })
+    })
+    // The check answers late, and finds a problem
+    let checking = false
+    await p.route("**/api/validate-diagram", async (route) => {
+        checking = true
+        await new Promise((r) => setTimeout(r, 3000))
+        await route.fulfill({
+            status: 200,
+            contentType: "text/plain",
+            body: JSON.stringify({
+                valid: false,
+                issues: [
+                    {
+                        type: "overlap",
+                        severity: "critical",
+                        description: "Boxes overlap",
+                    },
+                ],
+                suggestions: ["Move them apart"],
+            }),
+        })
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "Draw a box")
+    await expect.poll(() => checking, { timeout: 15000 }).toBe(true)
+    await p.getByRole("button", { name: "Stop generation" }).click()
+    await p.waitForTimeout(5000)
+    expect(chatRequests).toBe(1)
+})

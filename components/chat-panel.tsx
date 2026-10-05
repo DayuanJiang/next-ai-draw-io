@@ -281,6 +281,9 @@ export default function ChatPanel({
     // Persist processed tool call IDs so collapsing the chat doesn't replay old tool outputs
     const processedToolCallsRef = useRef<Set<string>>(new Set())
 
+    // Set by Stop until the user sends the next message
+    const stoppedRef = useRef(false)
+
     // Store original XML for display_diagram and edit_diagram streaming -
     // shared between streaming preview and tool handler
     // Key: toolCallId, Value: XML before the call's preview was drawn
@@ -458,6 +461,10 @@ export default function ChatPanel({
         // diagram preview draws on each update, so this also limits redraws
         experimental_throttle: 150,
         sendAutomaticallyWhen: ({ messages }) => {
+            // The user stopped: a tool result that arrives later (a VLM
+            // check still running) must not start a new request
+            if (stoppedRef.current) return false
+
             const isInContinuationMode = partialXmlRef.current.length > 0
 
             const shouldRetry = hasToolErrors(messages)
@@ -869,12 +876,12 @@ export default function ChatPanel({
                 // Add the combined text as the first part
                 parts.unshift({ type: "text", text: userText })
 
-                await sendWithCurrentDiagram(parts)
-
-                setInput("")
-                sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
-                setFiles([])
-                setUrlData(new Map())
+                await sendWithCurrentDiagram(parts, () => {
+                    setInput("")
+                    sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
+                    setFiles([])
+                    setUrlData(new Map())
+                })
             } catch (error) {
                 console.error("Error fetching chart data:", error)
                 toast.error(dict.errors.failedToExport)
@@ -882,8 +889,13 @@ export default function ChatPanel({
         }
     }
 
-    // Export the current diagram, snapshot it for this message, and send
-    const sendWithCurrentDiagram = async (parts: any[]) => {
+    // Export the current diagram, snapshot it for this message, and send.
+    // onSent runs right after sending, so the input empties as the message
+    // shows in the chat
+    const sendWithCurrentDiagram = async (
+        parts: any[],
+        onSent?: () => void,
+    ) => {
         const chartXml = formatXML(await onFetchChart())
         const previousXml = getPreviousXml(messages.length)
 
@@ -895,6 +907,7 @@ export default function ChatPanel({
         )
 
         sendChatMessage(parts, chartXml, previousXml, sessionId)
+        onSent?.()
     }
 
     // Send VLM validation feedback as a new user message through the normal send path
@@ -913,12 +926,15 @@ export default function ChatPanel({
         async (sessionId: string) => {
             if (!sessionManager.isAvailable) return
 
-            // Save current session before switching
-            if (messages.length > 0) {
+            // Save current session before switching (also a diagram drawn
+            // without messages); if that failed (storage full), stay on it
+            if (messages.length > 0 || isRealDiagram(chartXMLRef.current)) {
                 const sessionData = await buildSessionData({
                     withThumbnail: true,
                 })
-                await sessionManager.saveCurrentSession(sessionData)
+                if (!(await sessionManager.saveCurrentSession(sessionData))) {
+                    return
+                }
             }
 
             // Switch to selected session
@@ -961,8 +977,12 @@ export default function ChatPanel({
     )
 
     const handleNewChat = useCallback(async () => {
-        // Save current session before creating new one
-        if (sessionManager.isAvailable && messages.length > 0) {
+        // Save current session before creating new one (also a diagram
+        // drawn without messages)
+        if (
+            sessionManager.isAvailable &&
+            (messages.length > 0 || isRealDiagram(chartXMLRef.current))
+        ) {
             const sessionData = await buildSessionData({ withThumbnail: true })
             // Not saved (storage full): keep the chat on screen
             if (!(await sessionManager.saveCurrentSession(sessionData))) return
@@ -1068,11 +1088,15 @@ export default function ChatPanel({
 
     // Handle stop button click
     const handleStop = useCallback(() => {
+        stoppedRef.current = true
         const lastMessage = messages[messages.length - 1]
+        // Calls the tool handler already took can still show as streaming:
+        // the messages update at most every 150 ms (useChat throttle)
         const toolParts = lastMessage?.parts?.filter(
             (part: any) =>
                 part.type?.startsWith("tool-") &&
-                part.state === "input-streaming",
+                part.state === "input-streaming" &&
+                !processedToolCallsRef.current.has(part.toolCallId),
         )
 
         toolParts?.forEach((part: any) => {
@@ -1101,6 +1125,7 @@ export default function ChatPanel({
         continuationRetryCountRef.current = 0
         validationRetryCountRef.current = 0
         partialXmlRef.current = ""
+        stoppedRef.current = false
 
         const config = getSelectedAIConfig()
 

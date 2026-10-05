@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
@@ -82,6 +83,94 @@ test.describe("History and Session Restore", () => {
         await expect(page.getByText("Paper to Diagram")).toHaveCount(0)
         await expect(
             getIframeContent(page).getByText("Test Box", { exact: true }),
+        ).toBeVisible()
+    })
+
+    // A diagram drawn by hand, without chat messages: loaded into draw.io
+    // directly, then moved with an arrow key, which draw.io reports as an
+    // edit like any manual change
+    async function drawByHand(page: Page, label: string) {
+        const shape = getIframeContent(page).getByText(label, { exact: true })
+        // draw.io may still be starting (after a new chat): send until shown
+        for (let i = 0; i < 10 && (await shape.count()) === 0; i++) {
+            await page.evaluate((label) => {
+                const xml = `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="h" value="${label}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="60" y="60" width="140" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+                document
+                    .querySelector("iframe")
+                    ?.contentWindow?.postMessage(
+                        JSON.stringify({ action: "load", xml, autosave: 1 }),
+                        "*",
+                    )
+            }, label)
+            await page.waitForTimeout(1000)
+        }
+        await shape.click({ timeout: 10000 })
+        await page.keyboard.press("ArrowRight")
+        // The app saves the edit about a second later
+        await page.waitForTimeout(2000)
+    }
+    const storageFull = (page: Page) =>
+        page.evaluate(() => {
+            IDBObjectStore.prototype.put = () => {
+                throw new DOMException("Storage is full", "QuotaExceededError")
+            }
+        })
+
+    test("new chat keeps a diagram without messages that could not be saved", async ({
+        page,
+    }) => {
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await drawByHand(page, "Hand drawn")
+        await expect(
+            getIframeContent(page).getByText("Hand drawn", { exact: true }),
+        ).toBeVisible({ timeout: 10000 })
+        await storageFull(page)
+        await page.locator('[data-testid="new-chat-button"]').click()
+        await expect(
+            page.getByText(/Could not save this chat/).first(),
+        ).toBeVisible({ timeout: 5000 })
+        await expect(
+            getIframeContent(page).getByText("Hand drawn", { exact: true }),
+        ).toBeVisible()
+    })
+
+    test("opening another chat keeps a diagram that could not be saved", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(
+                    SINGLE_BOX_XML,
+                    "Created your test diagram.",
+                ),
+            })
+        })
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await sendMessage(page, "Create a test diagram")
+        await waitForText(page, "Created your test diagram.")
+        await page.waitForTimeout(1500)
+        await page.locator('[data-testid="new-chat-button"]').click()
+        // The empty chat lists the first one; draw something by hand
+        const firstChat = page.getByRole("button", {
+            name: /Create a test diagram/,
+        })
+        await expect(firstChat).toBeVisible({ timeout: 10000 })
+        await drawByHand(page, "Hand drawn")
+        await expect(
+            getIframeContent(page).getByText("Hand drawn", { exact: true }),
+        ).toBeVisible({ timeout: 10000 })
+        await storageFull(page)
+        await firstChat.click()
+        await expect(
+            page.getByText(/Could not save this chat/).first(),
+        ).toBeVisible({ timeout: 5000 })
+        await page.waitForTimeout(1000)
+        await expect(
+            getIframeContent(page).getByText("Hand drawn", { exact: true }),
         ).toBeVisible()
     })
 

@@ -13,6 +13,7 @@ import {
     flattenModels,
     type ModelConfig,
     type MultiModelConfig,
+    PROVIDER_INFO,
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
@@ -73,7 +74,21 @@ function loadConfig(): MultiModelConfig {
     const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
     if (stored) {
         try {
-            return JSON.parse(stored) as MultiModelConfig
+            const config = JSON.parse(stored) as MultiModelConfig
+            // A provider this version does not know (saved by another
+            // version, or edited by hand) would break every list of models
+            const known = config.providers.filter((p) =>
+                Object.hasOwn(PROVIDER_INFO, p.provider),
+            )
+            if (known.length < config.providers.length) {
+                console.warn(
+                    "Skipped saved providers this version does not know:",
+                    config.providers
+                        .filter((p) => !known.includes(p))
+                        .map((p) => p.provider),
+                )
+            }
+            return { ...config, providers: known }
         } catch {
             console.error("Failed to parse model config")
         }
@@ -163,10 +178,15 @@ export function useModelConfig(): UseModelConfigReturn {
         return () => window.removeEventListener("storage", handleStorage)
     }, [])
 
-    // Load server models on mount (if any)
+    // Load server models on mount (if any), and again when the desktop app
+    // restarted its server for another preset
     useEffect(() => {
         if (typeof window === "undefined") return
+        loadServerModels()
+        return window.electronAPI?.onServerRestarted?.(loadServerModels)
+    }, [])
 
+    function loadServerModels() {
         fetch(getApiEndpoint("/api/server-models"))
             .then((res) => {
                 if (!res.ok) {
@@ -214,7 +234,7 @@ export function useModelConfig(): UseModelConfigReturn {
                 console.error("Error while loading server models:", error)
                 setServerLoaded(true)
             })
-    }, [])
+    }
 
     // Save config whenever it changes (after initial load)
     useEffect(() => {
