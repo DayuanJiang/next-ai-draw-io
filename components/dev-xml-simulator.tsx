@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { wrapWithMxFile } from "@/lib/utils"
+import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 
 // Dev XML presets for streaming simulator
 const DEV_XML_PRESETS: Record<string, string> = {
@@ -237,8 +237,8 @@ export function DevXmlSimulator({
         })
 
         // Display the final diagram
-        const fullXml = wrapWithMxFile(xml)
-        onDisplayChart(fullXml)
+        const prepared = prepareNewDiagram(xml)
+        if (prepared.ok) onDisplayChart(prepared.xml)
 
         setIsSimulating(false)
     }

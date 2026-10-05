@@ -110,6 +110,10 @@ export function TemplatePanel({
 
     useEffect(() => {
         loadTemplates()
+        // Reload when a template is saved elsewhere, e.g. from the chat input
+        window.addEventListener("templatesChanged", loadTemplates)
+        return () =>
+            window.removeEventListener("templatesChanged", loadTemplates)
     }, [loadTemplates])
 
     const handleCreateSuccess = () => {
@@ -220,7 +224,8 @@ export function TemplatePanel({
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `templates-${new Date().toISOString().split("T")[0]}.json`
+            // Local date as YYYY-MM-DD (toISOString would give UTC)
+            a.download = `templates-${new Date().toLocaleDateString("sv-SE")}.json`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
@@ -302,6 +307,28 @@ export function TemplatePanel({
         }
     }
 
+    // Shared by the empty state and the list, so import works in both
+    const importInput = (
+        <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleImport}
+            className="hidden"
+        />
+    )
+    const importMessageBox = importMessage && (
+        <div
+            className={`text-xs px-3 py-2 rounded-lg ${
+                importMessage.type === "success"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+            }`}
+        >
+            {importMessage.text}
+        </div>
+    )
+
     // Empty state: no templates at all
     if (!loading && templates.length === 0) {
         return (
@@ -332,6 +359,18 @@ export function TemplatePanel({
                         <Plus className="w-4 h-4" />
                         {dict.templates.createFirst}
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                        <Upload className="w-3.5 h-3.5" />
+                        {dict.templates.importTemplates}
+                    </button>
+                    {importInput}
+                    {importMessageBox && (
+                        <div className="mt-3">{importMessageBox}</div>
+                    )}
 
                     <TemplateCreateDialog
                         open={createDialogOpen}
@@ -389,27 +428,11 @@ export function TemplatePanel({
                         <Upload className="w-3.5 h-3.5" />
                         {dict.templates.importTemplates}
                     </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="application/json,.json"
-                        onChange={handleImport}
-                        className="hidden"
-                    />
+                    {importInput}
                 </div>
 
                 {/* Import message */}
-                {importMessage && (
-                    <div
-                        className={`text-xs px-3 py-2 rounded-lg ${
-                            importMessage.type === "success"
-                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                        }`}
-                    >
-                        {importMessage.text}
-                    </div>
-                )}
+                {importMessageBox}
 
                 <div className="space-y-2">
                     {loading
@@ -447,6 +470,8 @@ export function TemplatePanel({
                                         handleTemplateClick(template)
                                     }
                                     onKeyDown={(e) => {
+                                        // Ignore keys bubbling up from the action buttons
+                                        if (e.target !== e.currentTarget) return
                                         if (
                                             e.key === "Enter" ||
                                             e.key === " "

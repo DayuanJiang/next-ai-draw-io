@@ -7,7 +7,10 @@
  * first page is targeted (the "active page by convention" — see pages.ts).
  */
 
-import { findPageElement, hasPageSelector, type PageSelector } from "./pages.js"
+import { decompressPageContent } from "./load-diagram.ts"
+import { log } from "./logger.ts"
+import { findPageElement, hasPageSelector, type PageSelector } from "./pages.ts"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export interface DiagramOperation {
     operation: "update" | "add" | "delete"
@@ -24,6 +27,56 @@ export interface OperationError {
 export interface ApplyOperationsResult {
     result: string
     errors: OperationError[]
+}
+
+// Cells with links, tooltips or custom data are stored as
+// <UserObject id="..."><mxCell .../></UserObject> (or <object>): the id sits
+// on the wrapper, so the wrapper is treated as the cell.
+const CELL_SELECTOR = "mxCell, UserObject, object"
+
+/**
+ * Return the <root> of a <diagram> page, creating it when missing. An empty
+ * page gets a blank model with the "0" and "1" root cells; a page whose text
+ * is draw.io's compressed format is decompressed in place. Returns null if
+ * the text is neither empty nor decompressible.
+ */
+function ensurePageRoot(doc: Document, page: Element): Element | null {
+    const existing = page.querySelector("root")
+    if (existing) return existing
+
+    let model = page.querySelector("mxGraphModel")
+    if (!model) {
+        const text = page.textContent?.trim() ?? ""
+        if (text) {
+            const xml = decompressPageContent(text)
+            if (!xml || getXmlSyntaxError(xml)) return null
+            const parsed = new DOMParser().parseFromString(xml, "text/xml")
+            if (parsed.documentElement?.tagName !== "mxGraphModel") return null
+            page.textContent = ""
+            model = page.appendChild(
+                doc.importNode(parsed.documentElement, true),
+            ) as Element
+            const decompressedRoot = model.querySelector("root")
+            if (decompressedRoot) return decompressedRoot
+        } else {
+            model = page.appendChild(doc.createElement("mxGraphModel"))
+        }
+    }
+
+    const blank = new DOMParser().parseFromString(
+        `<root><mxCell id="0"/><mxCell id="1" parent="0"/></root>`,
+        "text/xml",
+    )
+    return model.appendChild(
+        doc.importNode(blank.documentElement, true),
+    ) as Element
+}
+
+/** Read parent/source/target, which a wrapped cell keeps on its inner mxCell. */
+function cellAttr(cell: Element, name: string): string | null {
+    const inner =
+        cell.tagName === "mxCell" ? cell : cell.querySelector("mxCell")
+    return inner?.getAttribute(name) ?? null
 }
 
 /**
@@ -43,12 +96,8 @@ export function applyDiagramOperations(
 ): ApplyOperationsResult {
     const errors: OperationError[] = []
 
-    // Parse the XML
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xmlContent, "text/xml")
-
-    // Check for parse errors
-    const parseError = doc.querySelector("parsererror")
+    // Check for syntax errors, then parse the XML
+    const parseError = getXmlSyntaxError(xmlContent)
     if (parseError) {
         return {
             result: xmlContent,
@@ -56,11 +105,13 @@ export function applyDiagramOperations(
                 {
                     type: "update",
                     cellId: "",
-                    message: `XML parse error: ${parseError.textContent}`,
+                    message: `XML parse error: ${parseError}`,
                 },
             ],
         }
     }
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xmlContent, "text/xml")
 
     // Locate the <root> element to operate on.
     //
@@ -86,7 +137,7 @@ export function applyDiagramOperations(
                 ],
             }
         }
-        root = found.element.querySelector("root")
+        root = ensurePageRoot(doc as unknown as Document, found.element)
         if (!root) {
             const pageId =
                 found.element.getAttribute("id") || `(index ${found.index})`
@@ -96,7 +147,7 @@ export function applyDiagramOperations(
                     {
                         type: "update",
                         cellId: "",
-                        message: `Page "${pageId}" has no <root> element`,
+                        message: `Page "${pageId}" has no <root> element and its content could not be decompressed`,
                     },
                 ],
             }
@@ -132,10 +183,16 @@ export function applyDiagramOperations(
 
     // Build a map of cell IDs to elements (scoped to the resolved page).
     const cellMap = new Map<string, Element>()
-    root.querySelectorAll("mxCell").forEach((cell) => {
+    root.querySelectorAll(CELL_SELECTOR).forEach((cell) => {
         const id = cell.getAttribute("id")
-        if (id) cellMap.set(id, cell)
+        // A wrapped mxCell may repeat its wrapper's id; the wrapper is the cell
+        const wrapped =
+            cell.tagName === "mxCell" &&
+            /^(UserObject|object)$/.test(cell.parentElement?.tagName ?? "")
+        if (id && !wrapped) cellMap.set(id, cell)
     })
+    // Ids deleted so far in this batch; deleting one again is a no-op
+    const deletedIds = new Set<string>()
 
     // Process each operation
     for (const op of operations) {
@@ -164,7 +221,7 @@ export function applyDiagramOperations(
                 `<wrapper>${op.new_xml}</wrapper>`,
                 "text/xml",
             )
-            const newCell = newDoc.querySelector("mxCell")
+            const newCell = newDoc.querySelector(CELL_SELECTOR)
             if (!newCell) {
                 errors.push({
                     type: "update",
@@ -216,7 +273,7 @@ export function applyDiagramOperations(
                 `<wrapper>${op.new_xml}</wrapper>`,
                 "text/xml",
             )
-            const newCell = newDoc.querySelector("mxCell")
+            const newCell = newDoc.querySelector(CELL_SELECTOR)
             if (!newCell) {
                 errors.push({
                     type: "add",
@@ -256,8 +313,15 @@ export function applyDiagramOperations(
 
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
-                // Cell not found - might have been cascade-deleted by a previous operation
-                // Skip silently instead of erroring (AI may redundantly list children/edges)
+                // Skip cells already cascade-deleted by a previous operation
+                // (AI may redundantly list children/edges); warn otherwise
+                if (!deletedIds.has(op.cell_id)) {
+                    errors.push({
+                        type: "delete",
+                        cellId: op.cell_id,
+                        message: `Cell with id="${op.cell_id}" not found`,
+                    })
+                }
                 continue
             }
 
@@ -270,17 +334,17 @@ export function applyDiagramOperations(
                 cellsToDelete.add(cellId)
 
                 // Find children (cells where parent === cellId)
-                // Scoped to `root` so other pages' cells with the same parent id
-                // (notably "1") are never touched.
-                const children = root!.querySelectorAll(
-                    `mxCell[parent="${cellId}"]`,
-                )
-                children.forEach((child) => {
-                    const childId = child.getAttribute("id")
-                    if (childId && childId !== "0" && childId !== "1") {
+                // cellMap only holds this page's cells, so other pages' cells
+                // with the same parent id (notably "1") are never touched.
+                for (const [childId, child] of cellMap) {
+                    if (
+                        childId !== "0" &&
+                        childId !== "1" &&
+                        cellAttr(child, "parent") === cellId
+                    ) {
                         collectDescendants(childId)
                     }
-                })
+                }
             }
 
             // Collect the target cell and all its descendants
@@ -289,23 +353,23 @@ export function applyDiagramOperations(
             // Find edges referencing any of the cells to be deleted
             // Also recursively collect children of those edges (e.g., edge labels)
             for (const cellId of cellsToDelete) {
-                const referencingEdges = root.querySelectorAll(
-                    `mxCell[source="${cellId}"], mxCell[target="${cellId}"]`,
-                )
-                referencingEdges.forEach((edge) => {
-                    const edgeId = edge.getAttribute("id")
+                for (const [edgeId, edge] of cellMap) {
                     // Protect root cells from being added via edge references
-                    if (edgeId && edgeId !== "0" && edgeId !== "1") {
+                    if (edgeId === "0" || edgeId === "1") continue
+                    if (
+                        cellAttr(edge, "source") === cellId ||
+                        cellAttr(edge, "target") === cellId
+                    ) {
                         // Recurse to collect edge's children (like labels)
                         collectDescendants(edgeId)
                     }
-                })
+                }
             }
 
-            // Log what will be deleted
+            // Log what will be deleted (stderr: stdout carries JSON-RPC)
             if (cellsToDelete.size > 1) {
-                console.log(
-                    `[applyDiagramOperations] Cascade delete "${op.cell_id}" → deleting ${cellsToDelete.size} cells: ${Array.from(cellsToDelete).join(", ")}`,
+                log.debug(
+                    `Cascade delete "${op.cell_id}" → deleting ${cellsToDelete.size} cells: ${Array.from(cellsToDelete).join(", ")}`,
                 )
             }
 
@@ -316,6 +380,7 @@ export function applyDiagramOperations(
                     cell.parentNode?.removeChild(cell)
                     cellMap.delete(cellId)
                 }
+                deletedIds.add(cellId)
             }
         }
     }
