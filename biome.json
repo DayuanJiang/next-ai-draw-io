@@ -7,7 +7,12 @@
     },
     "files": {
         "ignoreUnknown": false,
-        "includes": ["**", "!public"]
+        "includes": [
+            "**",
+            "!public",
+            "!packages/mcp-server/src/preview",
+            "!lib/model-catalog.json"
+        ]
     },
     "formatter": {
         "enabled": true,

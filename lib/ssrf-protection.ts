@@ -115,3 +115,87 @@ export async function isPrivateUrl(urlString: string): Promise<boolean> {
 export function allowPrivateUrls(): boolean {
     return process.env.ALLOW_PRIVATE_URLS !== "false"
 }
+
+/** A redirect the guard below refused; its text is safe to show */
+export class RedirectRefusedError extends Error {
+    constructor(message = "Redirects are not allowed for custom base URLs") {
+        super(message)
+        this.name = "RedirectRefusedError"
+    }
+}
+
+const MAX_REDIRECTS = 5
+
+// Dropped when a redirect goes to another origin: those fetch drops, and
+// the key headers of providers that do not use Authorization (Anthropic,
+// Google, Azure)
+const CREDENTIAL_HEADERS = [
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "x-api-key",
+    "x-goog-api-key",
+    "api-key",
+]
+
+/**
+ * A fetch for requests to a base URL the client chose. With private URLs
+ * blocked, a public URL could still redirect the request to an internal
+ * host, so redirects are refused. With private URLs allowed but the quota
+ * on (DYNAMODB_QUOTA_TABLE), a request to a private address counts as the
+ * server's: a public URL's redirects are followed only to public addresses,
+ * or it could reach the server's own network uncounted. Undefined otherwise.
+ */
+export function redirectGuardedFetch(): typeof fetch | undefined {
+    const blockAll = !allowPrivateUrls()
+    if (!blockAll && !process.env.DYNAMODB_QUOTA_TABLE) return undefined
+    return async (input, init) => {
+        let url = input instanceof Request ? input.url : String(input)
+        let next = init
+        // A request to a private address already counts as the server's
+        let startsPrivate: boolean | undefined
+        for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+            const response = await fetch(url, { ...next, redirect: "manual" })
+            const location = response.headers.get("location")
+            if (response.status < 300 || response.status >= 400 || !location) {
+                return response
+            }
+            if (blockAll) throw new RedirectRefusedError()
+            startsPrivate ??= await isPrivateUrl(url)
+            const from = new URL(url)
+            url = new URL(location, url).toString()
+            if (!startsPrivate && (await isPrivateUrl(url))) {
+                throw new RedirectRefusedError(
+                    "Redirects to private addresses are not allowed",
+                )
+            }
+            // The rest as fetch itself does it. Another origin gets no
+            // credentials (the user's key, EdgeOne's cookies)
+            const headers = new Headers(next?.headers)
+            if (new URL(url).origin !== from.origin) {
+                for (const name of CREDENTIAL_HEADERS) headers.delete(name)
+            }
+            next = { ...next, headers }
+            // 303, and 301 or 302 after a POST, go on as a GET without the
+            // body
+            const method = (next.method ?? "GET").toUpperCase()
+            if (
+                response.status === 303 ||
+                ((response.status === 301 || response.status === 302) &&
+                    method === "POST")
+            ) {
+                for (const name of [
+                    "content-type",
+                    "content-length",
+                    "content-encoding",
+                    "content-language",
+                    "content-location",
+                ]) {
+                    headers.delete(name)
+                }
+                next = { ...next, method: "GET", body: undefined }
+            }
+        }
+        throw new RedirectRefusedError("Too many redirects")
+    }
+}

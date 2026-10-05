@@ -55,6 +55,9 @@ export function TemplateCreateDialog({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        // React submit events bubble through the portal; keep them away from
+        // the chat form this dialog may be rendered in
+        e.stopPropagation()
 
         const trimmedPrompt = prompt.trim()
         if (!trimmedPrompt) {

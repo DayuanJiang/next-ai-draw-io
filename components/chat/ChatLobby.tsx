@@ -194,6 +194,8 @@ export function ChatLobby({
                                     className="group w-full flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 cursor-pointer text-left"
                                     onClick={() => onSelectSession(session.id)}
                                     onKeyDown={(e) => {
+                                        // Ignore keys bubbling up from the delete button
+                                        if (e.target !== e.currentTarget) return
                                         if (
                                             e.key === "Enter" ||
                                             e.key === " "

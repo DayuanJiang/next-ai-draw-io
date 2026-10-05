@@ -13,18 +13,22 @@ function getConfigPath(): string {
 
 /**
  * Load proxy configuration from JSON file
+ * Returns null if the user never saved proxy settings (or the file is invalid)
  */
-export function loadProxyConfig(): ProxyConfig {
+export function loadProxyConfig(): ProxyConfig | null {
     try {
         const configPath = getConfigPath()
         if (fs.existsSync(configPath)) {
-            const data = fs.readFileSync(configPath, "utf-8")
-            return JSON.parse(data) as ProxyConfig
+            const data = JSON.parse(fs.readFileSync(configPath, "utf-8"))
+            if (data && typeof data === "object" && !Array.isArray(data)) {
+                return data as ProxyConfig
+            }
+            console.error("Ignoring invalid proxy config:", data)
         }
     } catch (error) {
         console.error("Failed to load proxy config:", error)
     }
-    return {}
+    return null
 }
 
 /**
@@ -33,7 +37,11 @@ export function loadProxyConfig(): ProxyConfig {
 export function saveProxyConfig(config: ProxyConfig): void {
     try {
         const configPath = getConfigPath()
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8")
+        // Write a temp file and rename it, so a crash mid-write can't leave
+        // a truncated file
+        const tempPath = `${configPath}.tmp`
+        fs.writeFileSync(tempPath, JSON.stringify(config, null, 2), "utf-8")
+        fs.renameSync(tempPath, configPath)
     } catch (error) {
         console.error("Failed to save proxy config:", error)
         throw error
@@ -46,6 +54,11 @@ export function saveProxyConfig(config: ProxyConfig): void {
  */
 export function applyProxyToEnv(): void {
     const config = loadProxyConfig()
+
+    // No saved settings: keep proxy vars inherited from the system or .env
+    if (!config) {
+        return
+    }
 
     if (config.httpProxy) {
         process.env.HTTP_PROXY = config.httpProxy

@@ -17,7 +17,14 @@
  * change: the set of pages, each page's name, and each page's cell tree
  * (tags + sorted attributes + text). Byte equality is kept as a fast path.
  */
-import { isMxGraphModel, normalizeToMxfile, parseMxfile } from "./pages.js"
+import {
+    findPageElement,
+    isMxGraphModel,
+    normalizeToMxfile,
+    type PageSelector,
+    parseMxfile,
+    serializeMxfile,
+} from "./pages.ts"
 
 export type EditGateResult =
     | { ok: true }
@@ -99,4 +106,39 @@ export function checkEditGate(
             return { ok: false, reason: "stale" }
     }
     return { ok: true }
+}
+
+/**
+ * The model was shown only the selected page of liveXml (get_diagram with a
+ * page selector, or a rejected edit's error). It has seen the whole document
+ * if the other pages are as it last saw them, or if it saw nothing before
+ * (it then has no old copy of them to edit from). Returns the new
+ * lastSeenXml: liveXml, or lastSeenXml unchanged.
+ */
+export function markPageSeen(
+    lastSeenXml: string,
+    liveXml: string,
+    selector: PageSelector,
+): string {
+    const parse = (xml: string) => {
+        const normalized = normalizeToMxfile(xml)
+        return normalized ? parseMxfile(normalized) : null
+    }
+    // An empty record also follows load_diagram and page tools that wrote
+    // over unseen changes, when the model may remember older pages: only
+    // a one-page document is then fully seen
+    if (!lastSeenXml) {
+        const pages = parse(liveXml)?.querySelectorAll("diagram").length ?? 1
+        return pages <= 1 ? liveXml : lastSeenXml
+    }
+    const otherPages = (xml: string) => {
+        const doc = parse(xml)
+        if (!doc) return null
+        findPageElement(doc, selector)?.element.remove()
+        return contentFingerprint(serializeMxfile(doc))
+    }
+    const before = otherPages(lastSeenXml)
+    return before !== null && before === otherPages(liveXml)
+        ? liveXml
+        : lastSeenXml
 }

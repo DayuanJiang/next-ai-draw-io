@@ -7,7 +7,11 @@ import {
     mergeSecrets,
     validateAdminProviders,
 } from "@/lib/admin/providers"
-import { isSettingsWritable, saveSettings } from "@/lib/admin/settings"
+import {
+    getEnvFallback,
+    isSettingsWritable,
+    saveSettings,
+} from "@/lib/admin/settings"
 import { loadEnvServerModelsConfig } from "@/lib/server-model-config"
 
 export const runtime = "nodejs"
@@ -33,6 +37,9 @@ async function payload() {
                 models: p.models,
                 isDefault: !!p.default && !adminHasDefault,
             })) ?? [],
+        // Whether .env sets a default model. getEnvFallback skips the value
+        // the panel overlays onto process.env, so a panel default doesn't count.
+        envHasDefaultModel: !!getEnvFallback("AI_MODEL"),
     }
 }
 

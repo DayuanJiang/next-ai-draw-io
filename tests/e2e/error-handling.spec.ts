@@ -133,4 +133,45 @@ test.describe("Error Handling", () => {
             timeout: 15000,
         })
     })
+
+    test("shows the error of a tool call with broken input", async ({
+        page,
+    }) => {
+        // Invalid JSON that the server could not repair: not a length limit
+        const toolCallId = `call_${Date.now()}`
+        const events = [
+            { type: "start", messageId: `msg_${Date.now()}` },
+            {
+                type: "tool-input-start",
+                toolCallId,
+                toolName: "display_diagram",
+            },
+            {
+                type: "tool-input-error",
+                toolCallId,
+                toolName: "display_diagram",
+                input: '{"xml": "<mxCell value="a"/>"}',
+                errorText: "Invalid input for tool display_diagram",
+            },
+            { type: "finish" },
+        ]
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    events
+                        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+                        .join("") + "data: [DONE]\n\n",
+            })
+        })
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await sendMessage(page, "Draw something")
+
+        await expect(
+            page.getByText("Invalid input for tool display_diagram").first(),
+        ).toBeVisible({ timeout: 15000 })
+        await expect(page.locator('text="Truncated"')).toHaveCount(0)
+    })
 })
