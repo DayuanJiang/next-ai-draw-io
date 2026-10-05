@@ -394,7 +394,6 @@ ${finalXml}
                                 : "Validation failed",
                         imageData: capturedPngData || undefined,
                     })
-                    validationRetryCountRef.current.delete(toolCall.toolCallId)
                 }
             }
 
