@@ -28,6 +28,8 @@ const KEYS = [
     "T_ESC_HASH",
     "T_ESC_INNER",
     "T_ESC_COMMENT",
+    "T_DIR",
+    "T_DIR_COMMENT",
 ]
 afterEach(() => {
     for (const k of KEYS) delete process.env[k]
@@ -91,5 +93,19 @@ describe("loadEnvFile", () => {
         expect(process.env.T_ESC_HASH).toBe('abc\\" #def')
         expect(process.env.T_ESC_INNER).toBe('a # \\"b\\"')
         expect(process.env.T_ESC_COMMENT).toBe('x\\"y')
+    })
+
+    it("keeps a backslash before the closing quote, like dotenv", () => {
+        dir.path = mkdtempSync(join(tmpdir(), "env-loader-"))
+        writeFileSync(
+            join(dir.path, ".env"),
+            ['T_DIR="C:\\dir\\"', 'T_DIR_COMMENT="C:\\data\\" # dir'].join(
+                "\n",
+            ),
+        )
+        loadEnvFile()
+        // Windows folders; dotenv 16.6.1 reads them the same
+        expect(process.env.T_DIR).toBe("C:\\dir\\")
+        expect(process.env.T_DIR_COMMENT).toBe("C:\\data\\")
     })
 })

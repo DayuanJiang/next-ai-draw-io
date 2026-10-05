@@ -582,6 +582,15 @@ describe("history restore", () => {
         expect(getHistory(id)).toHaveLength(1)
         // The missing image is filled in
         expect(getHistory(id)[0].svg).toBe("SVG")
+        // draw.io's copy of it, as a sync reply brings it back
+        addHistory(
+            id,
+            page("same").replace(
+                "<mxGraphModel>",
+                '<mxGraphModel dx="1244" dy="534" grid="1" pageWidth="850">',
+            ),
+        )
+        expect(getHistory(id)).toHaveLength(1)
     })
 
     it("keeps a version that changed only the background", () => {

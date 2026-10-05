@@ -190,8 +190,9 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
         pushFailing = false;
         if (r.ok) {
             const d = await r.json();
-            // An answer about a state this tab has left since
-            if (sid !== stateId) return;
+            // An answer about a state this tab has left since, or one that
+            // comes after a newer version was loaded or saved
+            if (sid !== stateId || d.version < currentVersion) return;
             currentVersion = d.version;
             lastXml = xml;
             // The canvas changed while this edit was on its way, to

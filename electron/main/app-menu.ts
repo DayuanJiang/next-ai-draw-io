@@ -44,12 +44,12 @@ let lastSwitch = 0
 export async function switchPreset(
     id: string,
 ): Promise<Record<string, string>> {
-    const switchNumber = ++lastSwitch
     const previousPresetId = getCurrentPresetId()
     const env = applyPresetToEnv(id)
     if (!env) {
         throw new Error("Preset not found")
     }
+    const switchNumber = ++lastSwitch
     rebuildAppMenu()
 
     // In development, scripts/electron-dev.mjs restarts the Next.js dev server
@@ -64,9 +64,10 @@ export async function switchPreset(
         console.error("Failed to restart server:", error)
         const reason = error instanceof Error ? error.message : String(error)
 
-        // A newer switch started meanwhile (also of this same preset): its
-        // own restart follows, and undoing would lose that choice
-        if (switchNumber !== lastSwitch) {
+        // A newer switch started meanwhile (also of this same preset), or
+        // the preset was deleted: its own restart follows, and undoing
+        // would lose that choice
+        if (switchNumber !== lastSwitch || getCurrentPresetId() !== id) {
             throw new Error(
                 `The server could not be restarted.\n\nError: ${reason}`,
             )

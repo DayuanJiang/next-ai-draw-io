@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock("@/electron/main/config-manager", () => ({
     applyPresetToEnv: (id: string) => {
+        if (id === "missing") return null
         state.current = id
         return { AI_PROVIDER: id }
     },
@@ -79,5 +80,25 @@ describe("switchPreset", () => {
         await second
         await third
         expect(state.current).toBe("B")
+    })
+
+    it("does not bring back the old preset over a deletion", async () => {
+        const toB = switchPreset("B").catch(() => {})
+        // B is deleted while its restart is pending
+        state.current = null
+        state.restarts[0].reject(new Error("timed out"))
+        await toB
+        expect(state.current).toBeNull()
+        expect(state.restarts).toHaveLength(1)
+    })
+
+    it("still rolls back when a later request named no preset", async () => {
+        const toB = switchPreset("B").catch(() => {})
+        await expect(switchPreset("missing")).rejects.toThrow("not found")
+        state.restarts[0].reject(new Error("timed out"))
+        await new Promise((r) => setTimeout(r, 0))
+        state.restarts[1]?.resolve()
+        await toB
+        expect(state.current).toBe("A")
     })
 })

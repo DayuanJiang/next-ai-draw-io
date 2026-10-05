@@ -131,8 +131,8 @@ const MAX_REDIRECTS = 5
  * blocked, a public URL could still redirect the request to an internal
  * host, so redirects are refused. With private URLs allowed but the quota
  * on (DYNAMODB_QUOTA_TABLE), a request to a private address counts as the
- * server's: redirects are followed only to public addresses, or a public
- * URL could reach the server's own network uncounted. Undefined otherwise.
+ * server's: a public URL's redirects are followed only to public addresses,
+ * or it could reach the server's own network uncounted. Undefined otherwise.
  */
 export function redirectGuardedFetch(): typeof fetch | undefined {
     const blockAll = !allowPrivateUrls()
@@ -140,6 +140,8 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
     return async (input, init) => {
         let url = input instanceof Request ? input.url : String(input)
         let next = init
+        // A request to a private address already counts as the server's
+        let startsPrivate: boolean | undefined
         for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
             const response = await fetch(url, { ...next, redirect: "manual" })
             const location = response.headers.get("location")
@@ -147,20 +149,40 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
                 return response
             }
             if (blockAll) throw new RedirectRefusedError()
+            startsPrivate ??= await isPrivateUrl(url)
+            const from = new URL(url)
             url = new URL(location, url).toString()
-            if (await isPrivateUrl(url)) {
+            if (!startsPrivate && (await isPrivateUrl(url))) {
                 throw new RedirectRefusedError(
                     "Redirects to private addresses are not allowed",
                 )
             }
-            // As fetch itself does: 303, and 301 or 302 after a POST, go on
-            // as a GET without the body
-            const method = (next?.method ?? "GET").toUpperCase()
+            // The rest as fetch itself does it. Another origin gets no
+            // credentials (the user's key, EdgeOne's cookies)
+            const headers = new Headers(next?.headers)
+            if (new URL(url).origin !== from.origin) {
+                headers.delete("authorization")
+                headers.delete("proxy-authorization")
+                headers.delete("cookie")
+            }
+            next = { ...next, headers }
+            // 303, and 301 or 302 after a POST, go on as a GET without the
+            // body
+            const method = (next.method ?? "GET").toUpperCase()
             if (
                 response.status === 303 ||
                 ((response.status === 301 || response.status === 302) &&
                     method === "POST")
             ) {
+                for (const name of [
+                    "content-type",
+                    "content-length",
+                    "content-encoding",
+                    "content-language",
+                    "content-location",
+                ]) {
+                    headers.delete(name)
+                }
                 next = { ...next, method: "GET", body: undefined }
             }
         }

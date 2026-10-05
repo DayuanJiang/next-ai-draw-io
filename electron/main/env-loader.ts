@@ -31,15 +31,20 @@ export function loadEnvFile(): void {
 /**
  * Index of the quote that closes a value starting with a quote, or -1. A
  * backslash before the quote character escapes it, as in dotenv; the
- * backslash stays in the value.
+ * backslash stays in the value. As in dotenv, an escaped quote with only a
+ * comment or nothing after it still closes the value when no other quote
+ * does ("C:\dir\" keeps its trailing backslash).
  */
 function findClosingQuote(value: string): number {
     const quote = value[0]
+    let lastEscaped = -1
     for (let i = 1; i < value.length; i++) {
-        if (value[i] === "\\" && value[i + 1] === quote) i++
-        else if (value[i] === quote) return i
+        if (value[i] === "\\" && value[i + 1] === quote) {
+            i++
+            if (/^\s*(#.*)?$/.test(value.slice(i + 1))) lastEscaped = i
+        } else if (value[i] === quote) return i
     }
-    return -1
+    return lastEscaped
 }
 
 /**

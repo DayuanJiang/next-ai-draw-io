@@ -30,7 +30,7 @@ function OperationsDisplay({ operations }: { operations: DiagramOperation[] }) {
         <div className="space-y-3">
             {shown.map((op, index) => (
                 <div
-                    key={`${op.operation}-${op.cell_id}-${index}`}
+                    key={`${op.operation}-${text(op.cell_id)}-${index}`}
                     className="rounded-lg border border-border/50 overflow-hidden bg-background/50"
                 >
                     <div className="px-3 py-1.5 bg-muted/40 border-b border-border/30 flex items-center gap-2">

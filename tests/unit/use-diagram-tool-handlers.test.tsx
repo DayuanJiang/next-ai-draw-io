@@ -47,8 +47,9 @@ function setup(partialXml: string) {
 
 describe("the screenshot check and Stop", () => {
     const draw = async (opts: {
-        isStopped: () => boolean
+        watchStop: () => () => boolean
         validateDiagram: () => Promise<any>
+        captureValidationPng?: () => Promise<string>
     }) => {
         const onValidationStateChange = vi.fn()
         const { result } = renderHook(() =>
@@ -62,9 +63,11 @@ describe("the screenshot check and Stop", () => {
                 onFetchChart: async () => "",
                 onExport: () => {},
                 enableVlmValidation: true,
-                captureValidationPng: async () => "data:image/png;base64,AA",
+                captureValidationPng:
+                    opts.captureValidationPng ??
+                    (async () => "data:image/png;base64,AA"),
                 validateDiagram: opts.validateDiagram,
-                isStopped: opts.isStopped,
+                watchStop: opts.watchStop,
                 onValidationStateChange,
             }),
         )
@@ -89,7 +92,7 @@ describe("the screenshot check and Stop", () => {
             suggestions: [],
         }))
         const { addToolOutput, onValidationStateChange } = await draw({
-            isStopped: () => true,
+            watchStop: () => () => true,
             validateDiagram,
         })
         expect(validateDiagram).not.toHaveBeenCalled()
@@ -103,7 +106,7 @@ describe("the screenshot check and Stop", () => {
 
     it("ends with the diagram's result when Stop cancels a running check", async () => {
         const { addToolOutput, onValidationStateChange } = await draw({
-            isStopped: () => false,
+            watchStop: () => () => false,
             validateDiagram: async () => {
                 throw new DOMException("Validation cancelled", "AbortError")
             },
@@ -113,6 +116,34 @@ describe("the screenshot check and Stop", () => {
         )
         expect(addToolOutput).toHaveBeenCalledTimes(1)
         expect(addToolOutput.mock.lastCall?.[0].state).toBeUndefined()
+    })
+
+    it("skips the check when Stop came during the screenshot", async () => {
+        // As the chat panel counts it: the next message already cleared
+        // the stop flag when the screenshot arrives
+        let stops = 0
+        let stoppedNow = false
+        const validateDiagram = vi.fn(async () => ({
+            valid: true,
+            issues: [],
+            suggestions: [],
+        }))
+        const { onValidationStateChange } = await draw({
+            watchStop: () => {
+                const before = stops
+                return () => stoppedNow || stops !== before
+            },
+            captureValidationPng: async () => {
+                stops++ // Stop
+                stoppedNow = false // the next message
+                return "data:image/png;base64,AA"
+            },
+            validateDiagram,
+        })
+        expect(validateDiagram).not.toHaveBeenCalled()
+        expect(onValidationStateChange.mock.lastCall?.[1].status).toBe(
+            "skipped",
+        )
     })
 })
 

@@ -559,8 +559,9 @@ export function ModelConfigDialog({
                 clearTimeout(validationResetTimeoutRef.current)
             }
             validationResetTimeoutRef.current = setTimeout(() => {
-                setValidationStatus("idle")
                 validationResetTimeoutRef.current = null
+                if (run !== validationRunRef.current) return
+                setValidationStatus("idle")
             }, 1500)
         } else {
             setValidationStatus("error")

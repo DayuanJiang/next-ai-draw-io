@@ -21,6 +21,7 @@ import {
     adminProvidersToConfig,
     loadAdminProviders,
 } from "@/lib/admin/providers"
+import { getEnvFallback } from "@/lib/admin/settings"
 import { getApiEndpoint } from "@/lib/base-path"
 import { redirectGuardedFetch } from "@/lib/ssrf-protection"
 import {
@@ -803,8 +804,11 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     // Exception: EdgeOne doesn't require API keys.
     // Ollama is exempt only when no server OLLAMA_API_KEY is configured;
     // when it IS configured, the outer guard also enforces client apiKey for custom baseUrls.
+    // A trusted URL is the server's own (the admin Test of an entry without
+    // one), not a user's
     if (
         overrides?.baseUrl &&
+        !overrides?.trustedBaseUrl &&
         !overrides?.apiKey &&
         !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
         overrides?.provider !== "edgeone" &&
@@ -1118,14 +1122,20 @@ export function edgeOneEndpoint(req: Request): string {
 /**
  * The server's <P>_BASE_URL for a provider, which getAIModel uses for a
  * server model without a URL variable of its own (an admin panel entry
- * without a URL). None for Bedrock and EdgeOne, and none for Ollama and
- * Vertex AI, whose variables the panel writes itself (before a save they
- * still hold the entry's previous URL).
+ * without a URL). None for Bedrock and EdgeOne. Ollama and Vertex AI share
+ * one variable with the panel, which writes an entry's URL into it: an
+ * entry without a URL gets the environment's value once saved (before a
+ * save the variable may still hold the entry's previous URL), and Ollama
+ * without one goes to the SDK's local default.
  */
 export function globalBaseUrl(provider: ProviderName): string | undefined {
-    if (["bedrock", "edgeone", "ollama", "vertexai"].includes(provider)) {
-        return undefined
+    if (provider === "ollama") {
+        return getEnvFallback("OLLAMA_BASE_URL") || "http://127.0.0.1:11434/api"
     }
+    if (provider === "vertexai") {
+        return getEnvFallback("GOOGLE_VERTEX_BASE_URL") || undefined
+    }
+    if (provider === "bedrock" || provider === "edgeone") return undefined
     const name =
         provider === "gateway"
             ? "AI_GATEWAY_BASE_URL"

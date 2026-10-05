@@ -143,6 +143,58 @@ describe("redirectGuardedFetch with the quota on", () => {
         expect(fetch).toHaveBeenCalledTimes(1)
     })
 
+    it("follows a private address's redirect to another one", async () => {
+        // Counted as the server's from the start
+        vi.stubGlobal(
+            "fetch",
+            answers({
+                "http://10.0.0.5:4000/v1/chat": new Response(null, {
+                    status: 307,
+                    headers: { location: "http://10.0.0.6:4000/v1/chat" },
+                }),
+                "http://10.0.0.6:4000/v1/chat": new Response("ok"),
+            }),
+        )
+        const res = await redirectGuardedFetch()?.(
+            "http://10.0.0.5:4000/v1/chat",
+            { method: "POST", body: "{}" },
+        )
+        expect(await res?.text()).toBe("ok")
+    })
+
+    it("sends no credentials to another origin", async () => {
+        const fetchMock = answers({
+            "https://proxy.example/v1/chat": new Response(null, {
+                status: 307,
+                headers: { location: "https://other.example/v1/chat" },
+            }),
+            "https://other.example/v1/chat": new Response("ok"),
+        })
+        vi.stubGlobal("fetch", fetchMock)
+        await redirectGuardedFetch()?.("https://proxy.example/v1/chat", {
+            method: "POST",
+            body: "{}",
+            headers: {
+                Authorization: "Bearer user-key",
+                Cookie: "eo_token=1",
+                "Content-Type": "application/json",
+            },
+        })
+        const sent = (call: number) =>
+            new Headers(
+                (
+                    fetchMock.mock.calls[call] as unknown as [
+                        string,
+                        RequestInit,
+                    ]
+                )[1].headers,
+            )
+        expect(sent(0).get("authorization")).toBe("Bearer user-key")
+        expect(sent(1).get("authorization")).toBeNull()
+        expect(sent(1).get("cookie")).toBeNull()
+        expect(sent(1).get("content-type")).toBe("application/json")
+    })
+
     it("is not used without the quota", () => {
         delete process.env.DYNAMODB_QUOTA_TABLE
         expect(redirectGuardedFetch()).toBeUndefined()

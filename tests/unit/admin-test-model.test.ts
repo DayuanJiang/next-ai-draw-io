@@ -11,13 +11,19 @@ vi.mock("@/app/api/validate-model/route", () => ({
     },
 }))
 vi.mock("@/lib/admin/auth", () => ({ checkAdminAuth: () => null }))
-vi.mock("@/lib/admin/settings", () => ({ loadSettings: () => ({}) }))
+// The environment's own values, under the panel's settings
+const envFallback = vi.hoisted(() => ({ values: {} as Record<string, string> }))
+vi.mock("@/lib/admin/settings", () => ({
+    loadSettings: () => ({}),
+    getEnvFallback: (key: string) => envFallback.values[key] ?? null,
+}))
 
 import { POST as testModel } from "@/app/api/admin/test-model/route"
 
 const ENV = ["OPENAI_BASE_URL", "SGLANG_BASE_URL", "AI_GATEWAY_BASE_URL"]
 const saved: Record<string, string | undefined> = {}
 beforeEach(() => {
+    envFallback.values = {}
     for (const k of ENV) {
         saved[k] = process.env[k]
         delete process.env[k]
@@ -74,8 +80,25 @@ describe("admin Test of an entry without a URL", () => {
         try {
             await test({ provider: "vertexai", vertexApiKey: "new-key" })
             expect(sent.body.baseUrl).toBeUndefined()
+            // The environment's own URL, which chat uses once it is saved
+            envFallback.values.GOOGLE_VERTEX_BASE_URL =
+                "https://vertex-proxy.example.com"
+            await test({ provider: "vertexai", vertexApiKey: "new-key" })
+            expect(sent.body.baseUrl).toBe("https://vertex-proxy.example.com")
+            expect(sent.body.serverBaseUrl).toBe(true)
         } finally {
             delete process.env.GOOGLE_VERTEX_BASE_URL
         }
+    })
+
+    it("tests Ollama where chat sends the entry's key", async () => {
+        // Chat on the saved entry: OLLAMA_BASE_URL of the environment, else
+        // the SDK's local default (the Test used to go to Ollama Cloud)
+        await test({ provider: "ollama", apiKey: "k" })
+        expect(sent.body.baseUrl).toBe("http://127.0.0.1:11434/api")
+        expect(sent.body.serverBaseUrl).toBe(true)
+        envFallback.values.OLLAMA_BASE_URL = "http://gpu:11434/api"
+        await test({ provider: "ollama", apiKey: "k" })
+        expect(sent.body.baseUrl).toBe("http://gpu:11434/api")
     })
 })

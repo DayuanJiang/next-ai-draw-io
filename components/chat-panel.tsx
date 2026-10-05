@@ -277,6 +277,9 @@ export default function ChatPanel({
 
     // Set by Stop until the user sends the next message
     const stoppedRef = useRef(false)
+    // Presses of Stop: a check that began before one still knows of it after
+    // the next message clears stoppedRef
+    const stopCountRef = useRef(0)
 
     // Store original XML for display_diagram and edit_diagram streaming -
     // shared between streaming preview and tool handler
@@ -347,7 +350,11 @@ export default function ChatPanel({
         validateDiagram: validateWithFallback,
         enableVlmValidation: vlmValidationEnabled,
         sessionId,
-        isStopped: () => stoppedRef.current,
+        watchStop: () => {
+            const stopsBefore = stopCountRef.current
+            return () =>
+                stoppedRef.current || stopCountRef.current !== stopsBefore
+        },
         onValidationStateChange: handleValidationStateChange,
     })
 
@@ -672,6 +679,7 @@ export default function ChatPanel({
         currentSessionId,
         saveCurrentSession,
         getChatGeneration,
+        getSaveTicket,
     } = sessionManager
 
     // Use ref for saveCurrentSession to avoid infinite loop
@@ -709,14 +717,17 @@ export default function ChatPanel({
         localStorageDebounceRef.current = setTimeout(async () => {
             try {
                 if (messages.length > 0 || hasDiagramNow) {
+                    // Taken before the data is read, for the chat it was
+                    // scheduled for
+                    const ticket = {
+                        ...getSaveTicket(),
+                        generation: scheduledForChat,
+                    }
                     const sessionData = await buildSessionData({
                         // Only capture thumbnail if there was a diagram AND this isn't a no-diagram session
                         withThumbnail: hasDiagramNow && !isNodiagramSession,
                     })
-                    await saveCurrentSessionRef.current(
-                        sessionData,
-                        scheduledForChat,
-                    )
+                    await saveCurrentSessionRef.current(sessionData, ticket)
                 }
             } catch (error) {
                 console.error("Failed to save session:", error)
@@ -736,6 +747,7 @@ export default function ChatPanel({
         sessionIsAvailable,
         currentSessionId,
         getChatGeneration,
+        getSaveTicket,
         buildSessionData,
     ])
 
@@ -768,10 +780,11 @@ export default function ChatPanel({
                 try {
                     // Attempt to save session - browser may not wait for completion
                     // Skip thumbnail capture as it may not complete in time
+                    const ticket = sessionManager.getSaveTicket()
                     const sessionData = await buildSessionData({
                         withThumbnail: false,
                     })
-                    await sessionManager.saveCurrentSession(sessionData)
+                    await sessionManager.saveCurrentSession(sessionData, ticket)
                 } catch (error) {
                     console.error(
                         "Failed to save session on visibility change:",
@@ -922,11 +935,13 @@ export default function ChatPanel({
 
     // The current chat could not be saved (storage full). The list where
     // old chats can be deleted shows only in an empty chat, so let the user
-    // go on without saving (same toast id: it replaces the plain message)
+    // go on without saving. It replaces the plain message, and has its own
+    // id so a later failed auto-save does not take its button away.
     const offerToContinueUnsaved = useCallback(
         (proceed: () => void) => {
+            toast.dismiss("session-save-failed")
             toast.error(dict.errors.sessionSaveFailedLeave, {
-                id: "session-save-failed",
+                id: "session-save-leave",
                 duration: 15000,
                 action: {
                     label: dict.errors.continueWithoutSaving,
@@ -936,6 +951,14 @@ export default function ChatPanel({
         },
         [dict],
     )
+
+    // A new turn makes the offer stale: going on would clear the chat while
+    // the answer streams in
+    useEffect(() => {
+        if (status === "submitted" || status === "streaming") {
+            toast.dismiss("session-save-leave")
+        }
+    }, [status])
 
     // Handle session switching from history dropdown
     const handleSelectSession = useCallback(
@@ -969,10 +992,18 @@ export default function ChatPanel({
             // without messages); if that failed (storage full), stay on it
             // unless the user goes on without saving it
             if (messages.length > 0 || isRealDiagram(chartXMLRef.current)) {
+                // Of the chat on screen now, also if another one comes on
+                // screen while the thumbnail is taken
+                const ticket = sessionManager.getSaveTicket()
                 const sessionData = await buildSessionData({
                     withThumbnail: true,
                 })
-                if (!(await sessionManager.saveCurrentSession(sessionData))) {
+                if (
+                    !(await sessionManager.saveCurrentSession(
+                        sessionData,
+                        ticket,
+                    ))
+                ) {
                     offerToContinueUnsaved(open)
                     return
                 }
@@ -1049,10 +1080,13 @@ export default function ChatPanel({
             sessionManager.isAvailable &&
             (messages.length > 0 || isRealDiagram(chartXMLRef.current))
         ) {
+            const ticket = sessionManager.getSaveTicket()
             const sessionData = await buildSessionData({ withThumbnail: true })
             // Not saved (storage full): keep the chat on screen, unless the
             // user goes on without saving it
-            if (!(await sessionManager.saveCurrentSession(sessionData))) {
+            if (
+                !(await sessionManager.saveCurrentSession(sessionData, ticket))
+            ) {
                 offerToContinueUnsaved(startNewChat)
                 return
             }
@@ -1128,6 +1162,7 @@ export default function ChatPanel({
     // Handle stop button click
     const handleStop = useCallback(() => {
         stoppedRef.current = true
+        stopCountRef.current++
         // A running screenshot check holds up the chat (the SDK waits for
         // the tool handler): end it, so the call gets its result now
         cancelValidation()

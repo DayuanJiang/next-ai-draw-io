@@ -6,7 +6,10 @@ import { POST as validateModel } from "@/app/api/validate-model/route"
 import { getAIModel } from "@/lib/ai-providers"
 
 // No saved admin providers
-vi.mock("@/lib/admin/settings", () => ({ loadSettings: () => ({}) }))
+vi.mock("@/lib/admin/settings", () => ({
+    loadSettings: () => ({}),
+    getEnvFallback: (key: string) => process.env[key] ?? null,
+}))
 
 // Every URL is public (no DNS in tests), unless a test says otherwise
 const privateUrls = vi.hoisted(() => ({ all: false }))

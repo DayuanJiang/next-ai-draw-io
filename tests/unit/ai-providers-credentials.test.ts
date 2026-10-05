@@ -11,6 +11,7 @@ const settings = vi.hoisted(() => ({ values: {} as Record<string, string> }))
 
 vi.mock("@/lib/admin/settings", () => ({
     loadSettings: () => settings.values,
+    getEnvFallback: (key: string) => process.env[key] ?? null,
 }))
 
 vi.mock("@ai-sdk/google-vertex", () => {

@@ -28,6 +28,13 @@ export interface SessionData {
     diagramHistory?: { svg: string; xml: string }[]
 }
 
+// Taken right before a save's data is read: the chat on screen then, and
+// the order of the reads
+export interface SaveTicket {
+    generation: number
+    seq: number
+}
+
 export interface UseSessionManagerReturn {
     // State
     sessions: SessionMetadata[]
@@ -39,17 +46,18 @@ export interface UseSessionManagerReturn {
     // Actions
     switchSession: (id: string) => Promise<SessionData | null>
     deleteSession: (id: string) => Promise<{ wasCurrentSession: boolean }>
-    // chatGeneration: getChatGeneration() when the save was scheduled (by
-    // default, now); the save is dropped if another chat is on screen when
-    // its turn comes
+    // ticket: getSaveTicket() before the data was read (by default, now).
+    // The save is dropped if another chat is on screen when its turn comes,
+    // or if a copy of this chat read later was saved already.
     // Resolves to false when the save failed (the user was told)
     saveCurrentSession: (
         data: SessionData,
-        chatGeneration?: number,
+        ticket?: SaveTicket,
     ) => Promise<boolean>
     refreshSessions: () => Promise<void>
     clearCurrentSession: () => void
     getChatGeneration: () => number
+    getSaveTicket: () => SaveTicket
 }
 
 // Reading the session list loads every stored session in full, and window
@@ -91,6 +99,9 @@ export function useSessionManager(
     const chatGenerationRef = useRef(0)
     // Saves run one at a time, so two saves of a new chat create it once
     const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+    // The last ticket number, and that of the newest data saved
+    const saveSeqRef = useRef(0)
+    const savedSeqRef = useRef(0)
 
     const changeChat = useCallback((session: ChatSession | null) => {
         chatGenerationRef.current++
@@ -140,14 +151,17 @@ export function useSessionManager(
                 if (window.electronAPI?.chatsLoaded) {
                     const count = await readSessionCount()
                     // The app saves an empty config on its first load; the
-                    // providers are what holds the keys
+                    // providers are what holds the keys, besides an access
+                    // code
                     let hasSettings = true
                     try {
                         const config = JSON.parse(
                             localStorage.getItem(STORAGE_KEYS.modelConfigs) ??
                                 "{}",
                         )
-                        hasSettings = (config.providers?.length ?? 0) > 0
+                        hasSettings =
+                            (config.providers?.length ?? 0) > 0 ||
+                            !!localStorage.getItem(STORAGE_KEYS.accessCode)
                     } catch {
                         // Unreadable: treat as settings, and stay
                     }
@@ -277,12 +291,18 @@ export function useSessionManager(
 
     // Save current session data (debounced externally by caller)
     const saveCurrentSession = useCallback(
-        (data: SessionData, chatGeneration?: number): Promise<boolean> => {
-            // The data is of the chat on screen when the save was asked for
-            const generation = chatGeneration ?? chatGenerationRef.current
+        (data: SessionData, ticket?: SaveTicket): Promise<boolean> => {
+            // The data is of the chat on screen when it was read
+            const { generation, seq } = ticket ?? {
+                generation: chatGenerationRef.current,
+                seq: ++saveSeqRef.current,
+            }
             const run = async (): Promise<boolean> => {
                 // That chat is no longer on screen (leaving it saved it)
                 if (generation !== chatGenerationRef.current) return true
+                // A copy read later was saved already (one that waited for
+                // its thumbnail must not undo it)
+                if (seq < savedSeqRef.current) return true
                 // Nothing can be stored without IndexedDB
                 if (!isIndexedDBAvailable()) return true
                 // The user may put another chat on screen while this one is
@@ -308,6 +328,7 @@ export function useSessionManager(
                         notifySaveFailed(dict.errors.sessionSaveFailed)
                         return false
                     }
+                    savedSeqRef.current = seq
                     await enforceSessionLimit()
                     if (stillOnScreen()) {
                         currentSessionRef.current = newSession
@@ -342,6 +363,7 @@ export function useSessionManager(
                     notifySaveFailed(dict.errors.sessionSaveFailed)
                     return false
                 }
+                savedSeqRef.current = seq
                 if (stillOnScreen()) {
                     currentSessionRef.current = updatedSession
                     setCurrentSession(updatedSession)
@@ -382,6 +404,14 @@ export function useSessionManager(
 
     const getChatGeneration = useCallback(() => chatGenerationRef.current, [])
 
+    const getSaveTicket = useCallback(
+        (): SaveTicket => ({
+            generation: chatGenerationRef.current,
+            seq: ++saveSeqRef.current,
+        }),
+        [],
+    )
+
     return {
         sessions,
         currentSessionId,
@@ -394,5 +424,6 @@ export function useSessionManager(
         refreshSessions,
         clearCurrentSession,
         getChatGeneration,
+        getSaveTicket,
     }
 }

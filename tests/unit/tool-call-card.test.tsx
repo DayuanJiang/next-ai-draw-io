@@ -16,6 +16,8 @@ describe("ToolCallCard", () => {
             null,
             { operation: {} },
             { operation: "add", cell_id: {} },
+            // JSON can hold an object that does not turn into text
+            JSON.parse('{"operation":"add","cell_id":{"toString":null}}'),
             { operation: "add", cell_id: "2", new_xml: {} },
             { operation: "update", cell_id: "3", new_xml: '<mxCell id="3"/>' },
         ]

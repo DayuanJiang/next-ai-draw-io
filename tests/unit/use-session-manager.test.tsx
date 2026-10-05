@@ -96,7 +96,7 @@ describe("saving the chat on screen", () => {
 
     it("drops a save scheduled before New Chat", async () => {
         const { result } = await setup()
-        const scheduled = result.current.getChatGeneration()
+        const scheduled = result.current.getSaveTicket()
         act(() => result.current.clearCurrentSession())
         let save!: Promise<boolean>
         act(() => {
@@ -110,7 +110,7 @@ describe("saving the chat on screen", () => {
     it("drops a save of the old chat waiting behind New Chat's save", async () => {
         const { result } = await setup()
         // The auto-save is scheduled, then New Chat saves and clears
-        const scheduled = result.current.getChatGeneration()
+        const scheduled = result.current.getSaveTicket()
         let newChatSave!: Promise<boolean>
         let autoSave!: Promise<boolean>
         act(() => {
@@ -166,5 +166,67 @@ describe("saving the chat on screen", () => {
         })
         readGate = Promise.resolve()
         expect(hook.result.current.currentSessionId).toBeNull()
+    })
+})
+
+describe("save tickets", () => {
+    beforeEach(() => {
+        stored.clear()
+        pendingWrites = []
+    })
+    const textOf = (session: any) => session?.messages[0].parts[0].text
+    const said = (text: string) => ({
+        ...data,
+        messages: [{ ...data.messages[0], parts: [{ type: "text", text }] }],
+    })
+
+    it("never put an older copy of a chat over a newer one", async () => {
+        const { result } = await setup()
+        let first!: Promise<boolean>
+        act(() => {
+            first = result.current.saveCurrentSession(said("first"))
+        })
+        await finishWrites()
+        await first
+        // An auto-save read its data, then waits for its thumbnail; a save
+        // without a thumbnail reads newer data and is done first
+        const older = result.current.getSaveTicket()
+        const newer = result.current.getSaveTicket()
+        let saves!: Promise<boolean[]>
+        act(() => {
+            saves = Promise.all([
+                result.current.saveCurrentSession(said("newer"), newer),
+                result.current.saveCurrentSession(said("older"), older),
+            ])
+        })
+        await finishWrites()
+        await saves
+        expect(textOf([...stored.values()][0])).toBe("newer")
+    })
+
+    it("keep a chat read before a switch out of the chat switched to", async () => {
+        stored.set("other", {
+            ...said("other chat"),
+            id: "other",
+            title: "Other",
+        })
+        const { result } = await setup()
+        // New Chat reads this chat, then waits for its thumbnail
+        const ticket = result.current.getSaveTicket()
+        // Meanwhile the user opens the other chat
+        let open!: Promise<unknown>
+        act(() => {
+            open = result.current.switchSession("other")
+        })
+        await finishWrites()
+        await open
+        let late!: Promise<boolean>
+        act(() => {
+            late = result.current.saveCurrentSession(said("this chat"), ticket)
+        })
+        await finishWrites()
+        await late
+        expect(textOf(stored.get("other"))).toBe("other chat")
+        expect(stored.size).toBe(1)
     })
 })

@@ -238,6 +238,27 @@ describe("MCP preview after the server recreated its session", () => {
         expect(t.next("POST").body.xml).toBe("<mxfile>A</mxfile>")
     })
 
+    it("ignores an edit's answer that comes after a newer AI write loaded", async () => {
+        const t = await inStep()
+        t.fromDrawio({ event: "autosave", xml: "<mxfile>B</mxfile>" })
+        t.fromDrawio({ event: "export", data: "<svg/>" })
+        await t.settle()
+        const pushB = t.next("POST")
+        // The AI wrote X after B; the poll's answer comes first
+        const poll = t.page.poll()
+        t.next("GET").answer(state("S1", 4, "<mxfile>X</mxfile>"))
+        await poll
+        pushB.answer({ status: 200, body: { success: true, version: 3 } })
+        await t.settle()
+        await t.settle()
+        expect(t.page.read()).toMatchObject({
+            currentVersion: 4,
+            lastXml: "<mxfile>X</mxfile>",
+        })
+        // No push of the AI's diagram as the user's edit
+        expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(0)
+    })
+
     it("sends nothing more after a sync reply", async () => {
         const t = await inStep()
         const poll = t.page.poll()
@@ -298,13 +319,27 @@ describe("MCP preview thumbnails and downloads", () => {
 
     it("drops the reply to an older thumbnail export", async () => {
         const { t, n } = await loadedB()
+        // The next AI write loads before draw.io answered the first export
+        const poll = t.page.poll()
+        t.next("GET").answer(state("S1", 4, "<mxfile>C</mxfile>"))
+        await poll
+        await new Promise((r) => setTimeout(r, 600))
+        const newer = t.toDrawio.at(-1).thumbExport
+        expect(newer).toBeGreaterThan(n)
         t.fromDrawio({
             event: "export",
-            data: "<svg/>",
-            message: { thumbExport: n - 1 },
+            data: "<svg>B</svg>",
+            message: { thumbExport: n },
         })
         await t.settle()
         expect(thumbnailPosts(t)).toHaveLength(0)
+        t.fromDrawio({
+            event: "export",
+            data: "<svg>C</svg>",
+            message: { thumbExport: newer },
+        })
+        await t.settle()
+        expect(thumbnailPosts(t).map((c) => c.body.version)).toEqual([4])
     })
 
     it("drops the image when the user changed the canvas since the load", async () => {
@@ -312,11 +347,17 @@ describe("MCP preview thumbnails and downloads", () => {
         t.fromDrawio({ event: "autosave", xml: "<mxfile>B edited</mxfile>" })
         t.fromDrawio({
             event: "export",
-            data: "<svg/>",
+            data: "<svg>thumbnail</svg>",
             message: { thumbExport: n },
         })
         await t.settle()
         expect(thumbnailPosts(t)).toHaveLength(0)
+        // The edit is saved with the image of its own export
+        t.fromDrawio({ event: "export", data: "<svg>edit</svg>" })
+        await t.settle()
+        const push = t.next("POST")
+        expect(push.body.xml).toBe("<mxfile>B edited</mxfile>")
+        expect(atob(push.body.svg.split(",")[1])).toBe("<svg>edit</svg>")
     })
 
     it("downloads the canvas with an edit the server did not get", async () => {

@@ -163,11 +163,13 @@ describe("chat quota", () => {
 
     it("does not count a provider that never uses the base URL header", async () => {
         // Bedrock on the user's own AWS keys goes to AWS, whatever the
-        // leftover base URL says
+        // leftover base URL says (with a key header too, so the request gets
+        // past the custom URL check to the quota decision)
         const res = await send({
             "x-ai-provider": "bedrock",
             "x-ai-model": "amazon.nova-lite-v1:0",
             "x-ai-base-url": "http://127.0.0.1:8080",
+            "x-ai-api-key": "leftover",
             "x-aws-access-key-id": "id",
             "x-aws-secret-access-key": "secret",
             "x-aws-region": "us-east-1",

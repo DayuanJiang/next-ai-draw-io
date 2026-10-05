@@ -64,9 +64,11 @@ interface UseDiagramToolHandlersParams {
     validateDiagram?: ValidateDiagramFn
     enableVlmValidation?: boolean
     sessionId?: string
-    // The user pressed Stop: a screenshot check that has not started is
-    // skipped (one already running is cancelled by the caller)
-    isStopped?: () => boolean
+    // Called when a screenshot check begins; the function it returns
+    // tells whether the user pressed Stop in this turn, also after the next
+    // message was sent. A check that has not started then is skipped (one
+    // already running is cancelled by the caller).
+    watchStop?: () => () => boolean
     onValidationStateChange?: (
         toolCallId: string,
         state: ValidationState,
@@ -93,7 +95,7 @@ export function useDiagramToolHandlers({
     validateDiagram,
     enableVlmValidation = true,
     sessionId,
-    isStopped,
+    watchStop,
     onValidationStateChange,
 }: UseDiagramToolHandlersParams) {
     // Helper to update validation state
@@ -252,6 +254,7 @@ ${finalXml}
                 validateDiagram
             ) {
                 let capturedPngData: string | null = null
+                const stopped = watchStop?.()
                 try {
                     // Notify UI that we're starting capture
                     updateValidationState(toolCall.toolCallId, "capturing")
@@ -263,7 +266,7 @@ ${finalXml}
                     capturedPngData = await captureValidationPng()
                     // Stopped while the screenshot was taken: no check. The
                     // chat waits for this handler, so it must end now.
-                    if (isStopped?.()) {
+                    if (stopped?.()) {
                         updateValidationState(toolCall.toolCallId, "skipped")
                     } else if (capturedPngData) {
                         if (DEBUG) {
