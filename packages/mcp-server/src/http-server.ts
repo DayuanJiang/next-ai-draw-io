@@ -138,6 +138,9 @@ interface SessionState {
     serverVersion?: number
     // The XML of that write: what a thumbnail taken after loading it shows
     serverXml?: string
+    // The browser saved a change of the user's since that write (a sync
+    // reply is no change)
+    userEdited?: boolean
     lastUpdated: Date
     lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
@@ -206,6 +209,7 @@ export function setState(
         stateId: existing?.stateId ?? randomUUID(),
         serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
         serverXml: fromBrowser ? existing?.serverXml : xml,
+        userEdited: fromBrowser ? existing?.userEdited : false,
         lastUpdated: new Date(),
         lastPolled: existing?.lastPolled,
         // The image of this XML, never an older one's: a write without an
@@ -224,6 +228,21 @@ export function setState(
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
     if (notify) stateListener?.(sessionId, xml)
     return newVersion
+}
+
+/**
+ * Keep the session's diagram in History before a write replaces it.
+ * Nothing to keep when the browser saved no change of the user's since the
+ * last server write and History ends with that write: the state is that
+ * write, or draw.io's own copy of it from a sync (other text, same diagram).
+ */
+export function keepInHistory(sessionId: string, xml: string, svg = ""): void {
+    const state = stateStore.get(sessionId)
+    const last = getHistory(sessionId).at(-1)
+    if (state && !state.userEdited && last && last.xml === state.serverXml) {
+        return
+    }
+    addHistory(sessionId, xml, svg)
 }
 
 /**
@@ -604,6 +623,8 @@ function handleStateApi(
                     return
                 }
                 const version = setState(sessionId, data.xml, data.svg, true)
+                const saved = stateStore.get(sessionId)
+                if (saved && data.source !== "sync") saved.userEdited = true
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ success: true, version }))
             } catch {
@@ -685,7 +706,7 @@ function handleRestoreApi(
                 contentFingerprint(current.xml) !==
                     contentFingerprint(BLANK_MXFILE)
             ) {
-                addHistory(sessionId, current.xml, current.svg)
+                keepInHistory(sessionId, current.xml, current.svg)
             }
             const newVersion = setState(sessionId, entry.xml)
             addHistory(sessionId, entry.xml, entry.svg)

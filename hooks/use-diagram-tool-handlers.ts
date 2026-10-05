@@ -251,7 +251,9 @@ ${finalXml}
             if (
                 enableVlmValidation &&
                 captureValidationPng &&
-                validateDiagram
+                validateDiagram &&
+                // At most this many checks per user turn, passed or not
+                validationRetryCountRef.current < MAX_VALIDATION_RETRIES
             ) {
                 let capturedPngData: string | null = null
                 const stopped = watchStop?.()
@@ -275,8 +277,10 @@ ${finalXml}
                             )
                         }
 
-                        // Each retry is a new tool call, so count attempts per user turn
+                        // Each retry is a new tool call, so count attempts
+                        // per user turn (the chat resets it when the user sends)
                         const attempt = validationRetryCountRef.current + 1
+                        validationRetryCountRef.current = attempt
 
                         // Notify UI that we're validating (include the image)
                         updateValidationState(
@@ -296,8 +300,6 @@ ${finalXml}
 
                         if (!result.valid) {
                             if (attempt < MAX_VALIDATION_RETRIES) {
-                                validationRetryCountRef.current = attempt
-
                                 const feedback =
                                     formatValidationFeedback(result)
                                 if (DEBUG) {
@@ -333,8 +335,6 @@ ${finalXml}
                                         "[display_diagram] Max validation retries reached, accepting diagram",
                                     )
                                 }
-                                validationRetryCountRef.current = 0
-
                                 // Notify UI that we're accepting with issues (include the image)
                                 updateValidationState(
                                     toolCall.toolCallId,
@@ -350,8 +350,6 @@ ${finalXml}
                                 return
                             }
                         } else {
-                            // Validation passed - reset retry count
-                            validationRetryCountRef.current = 0
                             if (DEBUG) {
                                 console.log(
                                     "[display_diagram] Validation passed!",

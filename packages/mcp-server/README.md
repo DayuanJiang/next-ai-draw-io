@@ -195,7 +195,7 @@ You can deploy your own draw.io instance using the official Docker image:
 docker run -d -p 8080:8080 jgraph/drawio
 ```
 
-Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL). The preview page loads nothing else from the internet, so with a local draw.io it works fully offline.
+Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL). The preview page loads nothing else from the internet, so with a local draw.io it works offline. One exception: shapes from the Material Design library show icons from `fonts.gstatic.com`.
 
 ## Troubleshooting
 

@@ -8,10 +8,16 @@ import {
     getAIModel,
     globalBaseUrl,
     usesServerCredentials,
+    usesServerEndpoint,
 } from "@/lib/ai-providers"
+import {
+    checkAndIncrementRequest,
+    isQuotaEnabled,
+} from "@/lib/dynamo-quota-manager"
 import { classifyLLMError } from "@/lib/llm-errors"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
-import type { ProviderName } from "@/lib/types/model-config"
+import { normalizeBaseUrl, type ProviderName } from "@/lib/types/model-config"
+import { getUserIdFromRequest } from "@/lib/user-id"
 
 export const runtime = "nodejs"
 
@@ -138,6 +144,33 @@ export async function POST(req: Request) {
                 { valid: false, error: "API key is required" },
                 { status: 400 },
             )
+        }
+
+        // On the deployment's own endpoints a Test runs a model as a chat
+        // does, so with the quota on it counts as a chat request (an
+        // admin's Test of the server's URL does not)
+        const userId = getUserIdFromRequest(req)
+        if (
+            isQuotaEnabled() &&
+            !serverUrl &&
+            userId !== "anonymous" &&
+            (await usesServerEndpoint(
+                provider,
+                normalizeBaseUrl(body.baseUrl ?? ""),
+                apiKey,
+            ))
+        ) {
+            const quotaCheck = await checkAndIncrementRequest(userId, {
+                requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+                tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+                tpm: Number(process.env.TPM_LIMIT) || 20000,
+            })
+            if (!quotaCheck.allowed) {
+                return NextResponse.json(
+                    { valid: false, error: quotaCheck.error },
+                    { status: 429 },
+                )
+            }
         }
 
         // The same model the chat would use. A client base URL makes it

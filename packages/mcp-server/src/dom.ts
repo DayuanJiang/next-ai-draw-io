@@ -60,6 +60,31 @@ export function serializeXml(node: Node): string {
     }
 }
 
+/**
+ * XML parsers read a literal tab or line break inside an attribute value as
+ * a space (a line break written as &#xa; stays one). linkedom keeps it, and
+ * serializeXml would then write it as a real line break, so an edit would
+ * change labels it never touched. Applied to the text before linkedom.
+ */
+function normalizeAttributeWhitespace(xml: string): string {
+    return xml.replace(
+        /<[A-Za-z][^"'<>]*(?:(?:"[^"]*"|'[^']*')[^"'<>]*)*>/g,
+        (tag) =>
+            tag.replace(/"[^"]*"|'[^']*'/g, (value) =>
+                value.replace(/\r\n|[\t\n\r]/g, " "),
+            ),
+    )
+}
+
+class XmlDomParser extends DOMParser {
+    parseFromString(text: string, type: string) {
+        return super.parseFromString(
+            type.includes("xml") ? normalizeAttributeWhitespace(text) : text,
+            type as any,
+        )
+    }
+}
+
 class XMLSerializerPolyfill {
     serializeToString(node: Node): string {
         return serializeXml(node)
@@ -68,6 +93,6 @@ class XMLSerializerPolyfill {
 
 /** Install the DOMParser and XMLSerializer globals the XML helpers use. */
 export function installDomPolyfill(): void {
-    ;(globalThis as any).DOMParser = DOMParser
+    ;(globalThis as any).DOMParser = XmlDomParser
     ;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
 }

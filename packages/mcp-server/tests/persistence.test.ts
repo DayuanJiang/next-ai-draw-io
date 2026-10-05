@@ -14,11 +14,16 @@ import {
 } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.ts"
 import { Autosaver, defaultDataDir } from "../src/persistence.ts"
 
+beforeAll(() => {
+    installDomPolyfill()
+})
+
 const DIAGRAM = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
-const BLANK = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+const BLANK = `<mxfile><diagram id="page-1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const tempDir = () => mkdtempSync(join(tmpdir(), "mcp-autosave-"))
 
@@ -33,6 +38,19 @@ describe("Autosaver", () => {
         await sleep(80)
         expect(readFileSync(path, "utf-8")).toBe(DIAGRAM)
         expect(readdirSync(dir)).toEqual(["mcp-a.drawio"])
+    })
+
+    it("saves a new document of empty pages the user named", async () => {
+        const dir = tempDir()
+        const saver = new Autosaver(dir, 10)
+        const emptyPage = (name: string) =>
+            `<diagram id="${name}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>`
+        const pages = `<mxfile>${emptyPage("Planning")}${emptyPage("Notes")}</mxfile>`
+        saver.schedule("mcp-pages", pages)
+        saver.flush()
+        expect(
+            readFileSync(saver.pathFor("mcp-pages") as string, "utf-8"),
+        ).toBe(pages)
     })
 
     it("skips a blank page that was never saved, but saves clearing a diagram", async () => {

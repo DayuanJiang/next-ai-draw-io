@@ -19,6 +19,7 @@ import {
     SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
     usesServerCredentials,
+    usesServerEndpoint,
 } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
@@ -287,17 +288,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const clientBaseUrl = normalizeBaseUrl(
         req.headers.get("x-ai-base-url") ?? "",
     )
-    const usesClientBaseUrl =
-        resolvedProvider !== "bedrock" && resolvedProvider !== "edgeone"
-    const onServerEndpoint =
-        process.env.NEXT_AI_DRAWIO_DESKTOP !== "1" &&
-        (resolvedProvider === "edgeone" ||
-            (resolvedProvider === "ollama" &&
-                !clientBaseUrl &&
-                !clientOverrides.apiKey) ||
-            (usesClientBaseUrl &&
-                !!clientBaseUrl &&
-                (await isPrivateUrl(clientBaseUrl))))
+    const onServerEndpoint = await usesServerEndpoint(
+        resolvedProvider,
+        clientBaseUrl,
+        clientOverrides.apiKey,
+    )
     const countsQuota =
         isQuotaEnabled() &&
         (onServerCredentials || onServerEndpoint) &&

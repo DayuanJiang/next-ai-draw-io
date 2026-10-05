@@ -22,8 +22,7 @@ import {
     loadAdminProviders,
 } from "@/lib/admin/providers"
 import { getEnvFallback } from "@/lib/admin/settings"
-import { getApiEndpoint } from "@/lib/base-path"
-import { redirectGuardedFetch } from "@/lib/ssrf-protection"
+import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
 import {
     normalizeBaseUrl,
     PROVIDER_INFO,
@@ -1112,11 +1111,12 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
 
 /**
  * The deployment's EdgeOne Pages function, as an absolute URL (the SDK
- * needs one), under the deployment's base path
+ * needs one). EdgeOne serves functions by their folder from the site root,
+ * so Next's base path does not apply.
  */
 export function edgeOneEndpoint(req: Request): string {
     const origin = req.headers.get("origin") || new URL(req.url).origin
-    return `${origin}${getApiEndpoint("/api/edgeai")}`
+    return `${origin}/api/edgeai`
 }
 
 /**
@@ -1136,6 +1136,14 @@ export function globalBaseUrl(provider: ProviderName): string | undefined {
         return getEnvFallback("GOOGLE_VERTEX_BASE_URL") || undefined
     }
     if (provider === "bedrock" || provider === "edgeone") return undefined
+    // Azure set up by resource name only: the URL the SDK builds from it
+    if (
+        provider === "azure" &&
+        !process.env.AZURE_BASE_URL &&
+        process.env.AZURE_RESOURCE_NAME
+    ) {
+        return `https://${process.env.AZURE_RESOURCE_NAME}.openai.azure.com/openai`
+    }
     const name =
         provider === "gateway"
             ? "AI_GATEWAY_BASE_URL"
@@ -1146,6 +1154,28 @@ export function globalBaseUrl(provider: ProviderName): string | undefined {
 /** The provider of the server's own config: AI_PROVIDER, or the one with a key */
 export function getServerProvider(): ProviderName | null {
     return (process.env.AI_PROVIDER as ProviderName) || detectProvider()
+}
+
+/**
+ * Whether a call made with the caller's own settings runs on an endpoint of
+ * the deployment: its EdgeOne function, the server's keyless Ollama, or an
+ * address on the server's network (which ignores a dummy key header).
+ * Bedrock and EdgeOne never use a client base URL. Never in the desktop
+ * app, where every endpoint is the user's. clientBaseUrl: normalized.
+ */
+export async function usesServerEndpoint(
+    provider: ProviderName | null | undefined,
+    clientBaseUrl: string,
+    apiKey: string | null | undefined,
+): Promise<boolean> {
+    if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
+    if (provider === "edgeone") return true
+    if (provider === "ollama" && !clientBaseUrl && !apiKey) return true
+    return (
+        provider !== "bedrock" &&
+        !!clientBaseUrl &&
+        (await isPrivateUrl(clientBaseUrl))
+    )
 }
 
 /**

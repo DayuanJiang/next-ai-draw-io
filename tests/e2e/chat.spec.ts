@@ -5,6 +5,7 @@ import {
     sendMessage,
     test,
 } from "./lib/fixtures"
+import { createTextOnlyResponse } from "./lib/helpers"
 
 test.describe("Chat Panel", () => {
     test.beforeEach(async ({ page }) => {
@@ -103,5 +104,32 @@ test.describe("Crossing the mobile breakpoint", () => {
 
         await page.setViewportSize({ width: 1280, height: 800 })
         await expect(getChatInput(page)).toBeVisible()
+    })
+})
+
+test.describe("Sending", () => {
+    test("a double Enter sends the message once", async ({ page }) => {
+        let requests = 0
+        await page.route("**/api/chat", async (route) => {
+            requests++
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse("Hello there."),
+            })
+        })
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        const input = getChatInput(page)
+        await input.fill("Hi")
+        // The second press comes while the diagram is being exported
+        await input.press("ControlOrMeta+Enter")
+        await input.press("ControlOrMeta+Enter")
+        await expect(page.getByText("Hello there.")).toBeVisible({
+            timeout: 10000,
+        })
+        await page.waitForTimeout(1500)
+        expect(requests).toBe(1)
+        await expect(page.getByText("Hello there.")).toHaveCount(1)
     })
 })

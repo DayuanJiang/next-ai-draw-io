@@ -217,7 +217,9 @@ export function loadPresets(): ConfigPresetsFile {
             renameSync(configPath, backupPath)
             console.error(`Unreadable config presets moved to ${backupPath}`)
         } catch (renameError) {
+            // Still there: refuse saves that would overwrite it
             console.error("Failed to back up config presets:", renameError)
+            presetsUnreadable = true
         }
         return {
             version: 1,

@@ -141,3 +141,23 @@ describe("targetPageXml", () => {
         expect(xml).not.toContain('id="a"')
     })
 })
+
+describe("labels an edit does not touch", () => {
+    it("keep their line breaks and spaces as draw.io reads them", () => {
+        // A literal line break in an attribute reads as a space; &#xa; is a
+        // real line break
+        const labels =
+            `<mxCell id="s" value="Hello
+world" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>` +
+            `<mxCell id="m" value="Line 1&#xa;Line 2" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+        const out = editDiagram(
+            `<mxfile>${page("p1", labels)}</mxfile>`,
+            [{ operation: "add", cell_id: "c", new_xml: cell("c") }],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(`value="Hello world"`)
+        expect(out.xml).toContain(`value="Line 1&#xa;Line 2"`)
+    })
+})

@@ -18,8 +18,22 @@ vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
     isPrivateUrl: async () => privateUrls.all,
 }))
 
+// The quota, off unless a test turns it on; every request is refused
+const quota = vi.hoisted(() => ({ enabled: false, checks: 0 }))
+vi.mock("@/lib/dynamo-quota-manager", () => ({
+    isQuotaEnabled: () => quota.enabled,
+    checkAndIncrementRequest: async () => {
+        quota.checks++
+        return { allowed: false, error: "Daily limit reached" }
+    },
+}))
+vi.mock("@/lib/user-id", () => ({ getUserIdFromRequest: () => "user-1" }))
+
 afterEach(() => {
     delete process.env.ALLOW_PRIVATE_URLS
+    quota.enabled = false
+    quota.checks = 0
+    privateUrls.all = false
     vi.unstubAllGlobals()
 })
 
@@ -312,5 +326,43 @@ describe("the admin panel's Test button", () => {
             delete process.env.ACCESS_CODE_LIST
             delete process.env.ADMIN_PASSWORD
         }
+    })
+})
+
+describe("the Test on the deployment's own endpoints", () => {
+    const test = (body: object) =>
+        validateModel(
+            new Request("http://localhost/api/validate-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ modelId: "m", ...body }),
+            }),
+        )
+
+    it("counts as a chat request with the quota on", async () => {
+        quota.enabled = true
+        // EdgeOne, and a model server on the server's network with a dummy key
+        const edgeone = await test({ provider: "edgeone" })
+        expect(edgeone.status).toBe(429)
+        privateUrls.all = true
+        const internal = await test({
+            provider: "openai",
+            apiKey: "x",
+            baseUrl: "http://10.0.0.5:8000/v1",
+        })
+        expect(internal.status).toBe(429)
+        expect(quota.checks).toBe(2)
+    })
+
+    it("does not count a user's own endpoint", async () => {
+        quota.enabled = true
+        streamReply({ role: "assistant", content: "OK" })
+        const res = await test({
+            provider: "openai",
+            apiKey: "user-key",
+            baseUrl: "https://api.example.com/v1",
+        })
+        expect(res.status).toBe(200)
+        expect(quota.checks).toBe(0)
     })
 })

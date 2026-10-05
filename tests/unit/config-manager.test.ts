@@ -3,6 +3,7 @@ import {
     existsSync,
     mkdtempSync,
     readdirSync,
+    readFileSync,
     rmSync,
     writeFileSync,
 } from "node:fs"
@@ -19,6 +20,8 @@ vi.mock("electron", () => ({
 // Make the next read of the presets file fail, like a file an antivirus
 // scanner holds on Windows
 const readFails = vi.hoisted(() => ({ next: false }))
+// Make renaming the presets file fail, as when a sync tool holds it
+const renameFails = vi.hoisted(() => ({ on: false }))
 vi.mock("node:fs", async (importOriginal) => {
     const fs = await importOriginal<typeof import("node:fs")>()
     return {
@@ -32,6 +35,17 @@ vi.mock("node:fs", async (importOriginal) => {
             }
             return fs.readFileSync(...args)
         }) as typeof fs.readFileSync,
+        renameSync: ((...args: Parameters<typeof fs.renameSync>) => {
+            if (renameFails.on && String(args[0]).endsWith(".json")) {
+                throw Object.assign(
+                    new Error("EPERM: operation not permitted"),
+                    {
+                        code: "EPERM",
+                    },
+                )
+            }
+            return fs.renameSync(...args)
+        }) as typeof fs.renameSync,
     }
 })
 
@@ -42,6 +56,7 @@ const presetsFile = () => join(userData.dir, "config-presets.json")
 beforeEach(() => {
     userData.dir = mkdtempSync(join(tmpdir(), "config-manager-"))
     readFails.next = false
+    renameFails.on = false
 })
 
 describe("config presets file", () => {
@@ -68,6 +83,17 @@ describe("config presets file", () => {
         rmSync(presetsFile())
         createPreset({ name: "New", config: { AI_PROVIDER: "openai" } })
         expect(loadPresets().presets.map((p) => p.name)).toEqual(["New"])
+    })
+
+    it("keeps a file that is not JSON when it cannot be moved aside", () => {
+        writeFileSync(presetsFile(), "{not json")
+        renameFails.on = true
+        expect(loadPresets().presets).toEqual([])
+        // A save based on that empty read must not replace it
+        expect(() =>
+            createPreset({ name: "New", config: { AI_PROVIDER: "openai" } }),
+        ).toThrow()
+        expect(readFileSync(presetsFile(), "utf-8")).toBe("{not json")
     })
 
     it("moves a file that is not JSON aside", () => {

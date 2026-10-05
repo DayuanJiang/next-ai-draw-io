@@ -126,6 +126,18 @@ export class RedirectRefusedError extends Error {
 
 const MAX_REDIRECTS = 5
 
+// Dropped when a redirect goes to another origin: those fetch drops, and
+// the key headers of providers that do not use Authorization (Anthropic,
+// Google, Azure)
+const CREDENTIAL_HEADERS = [
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "x-api-key",
+    "x-goog-api-key",
+    "api-key",
+]
+
 /**
  * A fetch for requests to a base URL the client chose. With private URLs
  * blocked, a public URL could still redirect the request to an internal
@@ -161,9 +173,7 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
             // credentials (the user's key, EdgeOne's cookies)
             const headers = new Headers(next?.headers)
             if (new URL(url).origin !== from.origin) {
-                headers.delete("authorization")
-                headers.delete("proxy-authorization")
-                headers.delete("cookie")
+                for (const name of CREDENTIAL_HEADERS) headers.delete(name)
             }
             next = { ...next, headers }
             // 303, and 301 or 302 after a POST, go on as a GET without the

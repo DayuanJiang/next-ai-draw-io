@@ -18,8 +18,15 @@ import {
 } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
-import { hasCells } from "./pages.ts"
+import { BLANK_MXFILE, hasCells } from "./pages.ts"
+
+// The blank page the browser shows before any drawing (page names count:
+// empty pages the user named or added are kept)
+const isBlank = (xml: string) =>
+    !hasCells(xml) &&
+    contentFingerprint(xml) === contentFingerprint(BLANK_MXFILE)
 
 const DELAY_MS = 1000
 const MAX_FILES = 50
@@ -126,7 +133,7 @@ export class Autosaver {
         try {
             const isNew = !existsSync(path)
             // A blank page the browser shows before any drawing: nothing to keep
-            if (isNew && !hasCells(entry.xml)) return
+            if (isNew && isBlank(entry.xml)) return
             mkdirSync(this.dir, { recursive: true })
             // Write to a temporary file first so a crash never leaves half a file
             writeFileSync(`${path}.tmp`, entry.xml, "utf-8")

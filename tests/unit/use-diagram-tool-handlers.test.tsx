@@ -50,6 +50,8 @@ describe("the screenshot check and Stop", () => {
         watchStop: () => () => boolean
         validateDiagram: () => Promise<any>
         captureValidationPng?: () => Promise<string>
+        // Checks already made in this user turn
+        retryCount?: { current: number }
     }) => {
         const onValidationStateChange = vi.fn()
         const { result } = renderHook(() =>
@@ -57,7 +59,7 @@ describe("the screenshot check and Stop", () => {
                 partialXmlRef: { current: "" },
                 editDiagramOriginalXmlRef: { current: new Map() },
                 processedToolCallsRef: { current: new Set() },
-                validationRetryCountRef: { current: 0 },
+                validationRetryCountRef: opts.retryCount ?? { current: 0 },
                 chartXMLRef: { current: "" },
                 onDisplayChart: () => null,
                 onFetchChart: async () => "",
@@ -116,6 +118,24 @@ describe("the screenshot check and Stop", () => {
         )
         expect(addToolOutput).toHaveBeenCalledTimes(1)
         expect(addToolOutput.mock.lastCall?.[0].state).toBeUndefined()
+    })
+
+    it("checks at most three diagrams in one user turn", async () => {
+        const validateDiagram = vi.fn(async () => ({
+            valid: true,
+            issues: [],
+            suggestions: [],
+        }))
+        const retryCount = { current: 0 }
+        for (let i = 0; i < 4; i++) {
+            await draw({
+                watchStop: () => () => false,
+                validateDiagram,
+                retryCount,
+            })
+        }
+        // Passed checks count too
+        expect(validateDiagram).toHaveBeenCalledTimes(3)
     })
 
     it("skips the check when Stop came during the screenshot", async () => {

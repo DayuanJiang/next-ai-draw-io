@@ -422,7 +422,7 @@ export function ModelConfigDialog({
 
         // For EdgeOne, construct baseUrl from current origin
         const baseUrl = isEdgeOne
-            ? `${window.location.origin}${getApiEndpoint("/api/edgeai")}`
+            ? `${window.location.origin}/api/edgeai`
             : selectedProvider.baseUrl
 
         // Test every model at once; each row updates when its answer arrives

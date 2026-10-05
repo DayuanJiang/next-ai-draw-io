@@ -277,6 +277,7 @@ export default function ChatPanel({
 
     // Set by Stop until the user sends the next message
     const stoppedRef = useRef(false)
+    const preparingSendRef = useRef(false)
     // Presses of Stop: a check that began before one still knows of it after
     // the next message clears stoppedRef
     const stopCountRef = useRef(0)
@@ -524,9 +525,10 @@ export default function ChatPanel({
 
     // Track last synced session ID to detect external changes (e.g., URL back/forward)
     const lastSyncedSessionIdRef = useRef<string | null>(null)
-    // Messages array from our latest save. A session holding this exact array was
-    // created by our own save, so it must not be treated as an external switch.
-    const lastSavedMessagesRef = useRef<unknown[] | null>(null)
+    // Message arrays of our own saves. A session holding one of them was
+    // created by our own save, so it must not be treated as an external
+    // switch (with two saves of a new chat at once, the first creates it).
+    const savedMessagesRef = useRef(new WeakSet<object>())
 
     // Helper: Sync UI state with session data (eliminates duplication)
     // Track message IDs that are being loaded from session (to skip animations/scroll)
@@ -594,7 +596,7 @@ export default function ChatPanel({
                 }
             }
             const messages = sanitizeMessages(messagesRef.current)
-            lastSavedMessagesRef.current = messages
+            savedMessagesRef.current.add(messages)
             return {
                 messages,
                 xmlSnapshots: Array.from(xmlSnapshotsRef.current.entries()),
@@ -651,7 +653,7 @@ export default function ChatPanel({
 
         // Our own save created this session; the UI already shows its content
         const isOwnNewSession =
-            newSession?.messages === lastSavedMessagesRef.current
+            !!newSession && savedMessagesRef.current.has(newSession.messages)
 
         // Update last synced ID
         lastSyncedSessionIdRef.current = newSessionId
@@ -802,8 +804,7 @@ export default function ChatPanel({
             )
     }, [sessionManager, buildSessionData])
 
-    const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
+    const submitInput = async () => {
         const isProcessing = status === "streaming" || status === "submitted"
         // Attachments still extracting have no text yet. Template sends call
         // requestSubmit() and skip the disabled send button, so check here too.
@@ -898,6 +899,20 @@ export default function ChatPanel({
                 console.error("Error fetching chart data:", error)
                 toast.error(dict.errors.failedToExport)
             }
+        }
+    }
+
+    const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault()
+        // While a send is prepared (attachments read, diagram exported) the
+        // status is still "ready": a second Enter or click would send the
+        // message again
+        if (preparingSendRef.current) return
+        preparingSendRef.current = true
+        try {
+            await submitInput()
+        } finally {
+            preparingSendRef.current = false
         }
     }
 

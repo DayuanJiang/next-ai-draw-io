@@ -12,6 +12,7 @@ import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
     getState,
+    keepInHistory,
     onSessionRecreate,
     requestExport,
     requestSync,
@@ -582,15 +583,53 @@ describe("history restore", () => {
         expect(getHistory(id)).toHaveLength(1)
         // The missing image is filled in
         expect(getHistory(id)[0].svg).toBe("SVG")
-        // draw.io's copy of it, as a sync reply brings it back
-        addHistory(
-            id,
-            page("same").replace(
-                "<mxGraphModel>",
-                '<mxGraphModel dx="1244" dy="534" grid="1" pageWidth="850">',
-            ),
+    })
+
+    // draw.io's own copy of a diagram, as a sync reply or an edit brings it
+    const drawioCopy = (xml: string, attrs = 'pageWidth="850"') =>
+        xml.replace(
+            "<mxGraphModel>",
+            `<mxGraphModel dx="1244" dy="534" grid="1" ${attrs}>`,
         )
+
+    it("keeps no copy of a server write that a sync brought back", async () => {
+        const id = "mcp-history-keep-sync"
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: drawioCopy(page("ai")),
+            baseVersion: version,
+            source: "sync",
+            stateId: getState(id)?.stateId,
+        })
+        // The next AI write keeps the state it replaces
+        keepInHistory(id, getState(id)?.xml ?? "")
         expect(getHistory(id)).toHaveLength(1)
+    })
+
+    it("keeps a change of page settings only before a write", async () => {
+        const id = "mcp-history-keep-settings"
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        // The user turns the page to A3 in the preview
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: drawioCopy(page("ai"), 'pageWidth="1169" pageHeight="1654"'),
+            baseVersion: version,
+            stateId: getState(id)?.stateId,
+        })
+        keepInHistory(id, getState(id)?.xml ?? "")
+        expect(getHistory(id)).toHaveLength(2)
+        expect(getHistory(id).at(-1)?.xml).toContain('pageWidth="1169"')
+    })
+
+    it("keeps a diagram restored from its file before a write", () => {
+        const id = "mcp-history-keep-restored"
+        // As restoreSavedSession puts it back after a restart
+        setState(id, page("from file"), undefined, false, false)
+        keepInHistory(id, page("from file"))
+        expect(getHistory(id).map((e) => e.xml)).toEqual([page("from file")])
     })
 
     it("keeps a version that changed only the background", () => {

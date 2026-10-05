@@ -3,9 +3,7 @@
  * Stores {xml, svg} entries in a circular buffer
  */
 
-import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
-import { normalizeToMxfile, parseMxfile } from "./pages.ts"
 
 const MAX_HISTORY = 20
 
@@ -18,30 +16,6 @@ interface HistoryEntry {
 let nextEntryId = 0
 const historyStore = new Map<string, HistoryEntry[]>()
 
-/** Each page's background colour */
-function backgrounds(xml: string): string {
-    const doc = parseMxfile(normalizeToMxfile(xml) ?? xml)
-    if (!doc) return ""
-    return Array.from(doc.querySelectorAll("mxGraphModel"))
-        .map((m) => m.getAttribute("background") || "none")
-        .join(",")
-}
-
-// The same pages, cells and backgrounds. draw.io's own copy of a diagram
-// (a sync reply) adds view and page attributes such as dx, grid and the
-// page size, which the model's XML leaves out, so those are not compared.
-// A document without pages has an empty fingerprint and is compared as
-// text only.
-function sameDiagram(a: string, b: string): boolean {
-    if (a === b) return true
-    const fingerprint = contentFingerprint(a)
-    return (
-        fingerprint !== "" &&
-        fingerprint === contentFingerprint(b) &&
-        backgrounds(a) === backgrounds(b)
-    )
-}
-
 export function addHistory(sessionId: string, xml: string, svg = ""): number {
     let history = historyStore.get(sessionId)
     if (!history) {
@@ -49,10 +23,11 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
         historyStore.set(sessionId, history)
     }
 
-    // Dedupe: skip if same as last entry, also when only re-serialized
-    // (a change of background only is a new version)
+    // Dedupe: skip if same as last entry (any other change, also of page
+    // settings only, is a new version; keepInHistory leaves out draw.io's
+    // copy of a server write)
     const last = history[history.length - 1]
-    if (last && sameDiagram(last.xml, xml)) {
+    if (last && last.xml === xml) {
         if (svg && !last.svg) last.svg = svg
         return history.length - 1
     }

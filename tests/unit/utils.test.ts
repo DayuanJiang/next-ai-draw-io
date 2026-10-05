@@ -44,6 +44,12 @@ describe("isMxCellXmlComplete", () => {
         const xml =
             '<mxCell id="2" value="Hello" style="rounded=1;" vertex="1" parent="1"/>'
         expect(isMxCellXmlComplete(xml)).toBe(true)
+        // A raw "<" in a value (escaped later by the auto-fix)
+        expect(
+            isMxCellXmlComplete(
+                '<mxCell id="3" value="<b>Title</b>" style="text;html=1;" vertex="1" parent="1"/>',
+            ),
+        ).toBe(true)
     })
 
     it("returns true for mxCell with closing tag", () => {

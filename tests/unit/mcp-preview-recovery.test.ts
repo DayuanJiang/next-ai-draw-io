@@ -259,6 +259,29 @@ describe("MCP preview after the server recreated its session", () => {
         expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(0)
     })
 
+    it("keeps an undo when a poll sees the tab's own push first", async () => {
+        const t = await inStep()
+        t.fromDrawio({ event: "autosave", xml: "<mxfile>B</mxfile>" })
+        t.fromDrawio({ event: "export", data: "<svg/>" })
+        await t.settle()
+        const pushB = t.next("POST")
+        // Undo back to A while B is on its way (equal to the saved A: not sent)
+        t.fromDrawio({ event: "autosave", xml: "<mxfile>A</mxfile>" })
+        // The server already has B, and the poll's answer comes first
+        const loadsBefore = t.toDrawio.filter((m) => m.action === "load").length
+        const poll = t.page.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>B</mxfile>"))
+        await poll
+        expect(t.toDrawio.filter((m) => m.action === "load")).toHaveLength(
+            loadsBefore,
+        )
+        pushB.answer({ status: 200, body: { success: true, version: 3 } })
+        await t.settle()
+        await t.settle()
+        // The undo is saved
+        expect(t.next("POST").body.xml).toBe("<mxfile>A</mxfile>")
+    })
+
     it("sends nothing more after a sync reply", async () => {
         const t = await inStep()
         const poll = t.page.poll()

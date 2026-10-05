@@ -59,7 +59,10 @@ export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
     const lastCellStart = trimmed.lastIndexOf("<mxCell")
     if (
         lastCellStart > lastMxCellClose &&
-        !/^<mxCell\b[^<]*\/>/.test(trimmed.slice(lastCellStart))
+        // (quoted values may hold a raw "<", which the auto-fix escapes)
+        !/^<mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*\/>/.test(
+            trimmed.slice(lastCellStart),
+        )
     ) {
         return false
     }

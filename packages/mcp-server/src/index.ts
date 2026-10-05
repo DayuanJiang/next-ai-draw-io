@@ -35,6 +35,7 @@ import {
     type ExportOptions,
     getServerPort,
     getState,
+    keepInHistory,
     onSessionRecreate,
     onStateChange,
     requestExport,
@@ -389,7 +390,7 @@ Rules: cells are siblings (never nested), ids are unique per page and start from
 
             // Save user's state before AI overwrites (with cached SVG)
             if (currentSession.xml) {
-                addHistory(
+                keepInHistory(
                     currentSession.id,
                     currentSession.xml,
                     browserState?.svg || "",
@@ -481,6 +482,11 @@ registerWriteTool(
 
             let content: string
             try {
+                // A pipe or device could be read forever, and the other
+                // write tools wait for this one
+                if (!(await fs.stat(absolutePath)).isFile()) {
+                    throw new Error("not a regular file")
+                }
                 content = await fs.readFile(absolutePath, "utf-8")
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e)
@@ -515,7 +521,7 @@ registerWriteTool(
                 currentSession.xml = browserState.xml
             }
             if (currentSession.xml) {
-                addHistory(
+                keepInHistory(
                     currentSession.id,
                     currentSession.xml,
                     browserState?.svg || "",
@@ -728,7 +734,7 @@ registerWriteTool(
             // Save the pre-edit state for undo (with cached SVG from browser).
             // Done only once the edit applied: a rejected edit returns above
             // without leaving a phantom history entry.
-            addHistory(
+            keepInHistory(
                 currentSession.id,
                 currentSession.xml,
                 browserState?.svg || "",
@@ -1456,7 +1462,11 @@ async function loadMxfileForMutation(): Promise<
                 browserState?.xml ?? "",
             ).ok
             // Save history before overwriting so the user can undo.
-            addHistory(sessionRef.id, sessionRef.xml, browserState?.svg || "")
+            keepInHistory(
+                sessionRef.id,
+                sessionRef.xml,
+                browserState?.svg || "",
+            )
             sessionRef.xml = newXml
             sessionRef.version++
             setState(sessionRef.id, newXml)

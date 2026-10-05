@@ -124,9 +124,11 @@ if (!gotTheLock) {
         })
 
         // Clicking a plain link would otherwise replace the app page with
-        // an external site that keeps the preload API
+        // an external site that keeps the preload API. Only the page
+        // itself may navigate there; draw.io stays in its frame (this event
+        // is for the main frame only)
         contents.on("will-navigate", (event) => {
-            if (isInAppUrl(event.url)) {
+            if (isAppUrl(event.url)) {
                 return
             }
             event.preventDefault()

@@ -20,7 +20,13 @@ vi.mock("@/lib/admin/settings", () => ({
 
 import { POST as testModel } from "@/app/api/admin/test-model/route"
 
-const ENV = ["OPENAI_BASE_URL", "SGLANG_BASE_URL", "AI_GATEWAY_BASE_URL"]
+const ENV = [
+    "OPENAI_BASE_URL",
+    "SGLANG_BASE_URL",
+    "AI_GATEWAY_BASE_URL",
+    "AZURE_BASE_URL",
+    "AZURE_RESOURCE_NAME",
+]
 const saved: Record<string, string | undefined> = {}
 beforeEach(() => {
     envFallback.values = {}
@@ -89,6 +95,15 @@ describe("admin Test of an entry without a URL", () => {
         } finally {
             delete process.env.GOOGLE_VERTEX_BASE_URL
         }
+    })
+
+    it("tests Azure set up by resource name where chat goes", async () => {
+        process.env.AZURE_RESOURCE_NAME = "team-openai"
+        await test({ provider: "azure", apiKey: "k" })
+        expect(sent.body.baseUrl).toBe(
+            "https://team-openai.openai.azure.com/openai",
+        )
+        expect(sent.body.serverBaseUrl).toBe(true)
     })
 
     it("tests Ollama where chat sends the entry's key", async () => {

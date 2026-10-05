@@ -7,6 +7,7 @@ let stateId = null;
 // the last one the server has
 let latestXml = null;
 let pushFailing = false; // the last push could not reach the server
+const pushesInFlight = []; // XML of pushes not answered yet
 // After recovery replaced the canvas, until draw.io reports the load: an
 // autosave still on its way belongs to the canvas being replaced
 let awaitingLoad = false;
@@ -181,6 +182,7 @@ function showNotice(text) {
 // server state the push is based on.
 async function pushState(xml, svg = '', baseVersion = currentVersion, source = 'edit', sid = stateId) {
     if (!sessionId) return;
+    pushesInFlight.push(xml);
     try {
         const r = await fetch('/api/state', {
             method: 'POST',
@@ -226,6 +228,8 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
             pushFailing = true;
             showNotice("Can't reach the MCP server. Your changes are only in this tab for now; use Download to keep a copy.");
         }
+    } finally {
+        pushesInFlight.splice(pushesInFlight.indexOf(xml), 1);
     }
 }
 
@@ -291,7 +295,10 @@ async function poll() {
         // (forceReload) replaces it, so a new version doesn't fight the
         // projection; currentVersion stays unadvanced until then, so the
         // bump is applied with the real document.
-        if ((forceReload || (s.version > currentVersion && !projectionExportActive)) && s.xml) {
+        // The tab's own push still on its way is not loaded back: the
+        // canvas may have moved on since (an undo), and its answer follows
+        const ownPush = pushesInFlight.includes(s.xml);
+        if ((forceReload || (s.version > currentVersion && !projectionExportActive && !ownPush)) && s.xml) {
             forceReload = false;
             projectionExportActive = false;
             currentVersion = s.version;

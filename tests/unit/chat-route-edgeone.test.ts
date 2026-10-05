@@ -119,7 +119,7 @@ describe("EdgeOne endpoints", () => {
         )
     })
 
-    it("keeps the deployment's base path", async () => {
+    it("calls the function at the site root, also with a base path", async () => {
         const savedPath = process.env.NEXT_PUBLIC_BASE_PATH
         process.env.NEXT_PUBLIC_BASE_PATH = "/draw"
         try {
@@ -128,7 +128,7 @@ describe("EdgeOne endpoints", () => {
                 "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
             })
             expect(calls[0]?.url).toBe(
-                "http://localhost/draw/api/edgeai/chat/completions",
+                "http://localhost/api/edgeai/chat/completions",
             )
         } finally {
             if (savedPath === undefined)
