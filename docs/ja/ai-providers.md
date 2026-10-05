@@ -149,8 +149,10 @@ AZURE_REASONING_SUMMARY=detailed  # 任意: none, brief, detailed
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
-AI_MODEL=anthropic.claude-sonnet-4-5-20250514-v1:0
+AI_MODEL=global.anthropic.claude-sonnet-5-5
 ```
+
+最近の Claude モデルは、推論プロファイル（inference profile）の ID でのみ呼び出せます。この ID は `global.` や `us.` などのリージョン接頭辞で始まります。`anthropic.claude-sonnet-5-5` のような接頭辞なしの ID では「on-demand throughput isn't supported」というエラーになります。
 
 注: AWS 上（IAM ロールを持つ Lambda や EC2）では、認証情報は IAM ロールから自動的に取得されます。
 

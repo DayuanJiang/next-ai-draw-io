@@ -11,7 +11,6 @@ Reference: `style="shape=mxgraph.<library>.<shape_name>"`
 | gcp2 | 297 | `mxgraph.gcp2` | Google Cloud Platform - Compute Engine, BigQuery, GKE, etc. | [gcp2.md](./gcp2.md) |
 | alibaba_cloud | 273 | `mxgraph.alibaba_cloud` | Alibaba Cloud - ECS, OSS, RDS, SLB, VPC, etc. | [alibaba_cloud.md](./alibaba_cloud.md) |
 | openstack | 18 | `mxgraph.openstack` | OpenStack cloud platform icons | [openstack.md](./openstack.md) |
-| digitalocean | 74 | `mxgraph.digitalocean` | DigitalOcean - Droplets, Spaces, Kubernetes, etc. | [digitalocean.md](./digitalocean.md) |
 | salesforce | 96 | `mxgraph.salesforce` | Salesforce platform icons | [salesforce.md](./salesforce.md) |
 
 ## Networking & Infrastructure
@@ -20,7 +19,6 @@ Reference: `style="shape=mxgraph.<library>.<shape_name>"`
 |---------|--------|--------|-------------|------|
 | cisco19 | 232 | `mxgraph.cisco19` | Cisco network equipment - routers, switches, firewalls | [cisco19.md](./cisco19.md) |
 | network | 58 | `mxgraph.networks` | General network diagram symbols | [network.md](./network.md) |
-| arista | 45 | `mxgraph.arista` | Arista network switches and equipment | [arista.md](./arista.md) |
 | kubernetes | 40 | `mxgraph.kubernetes` | Kubernetes - pods, services, deployments, nodes | [kubernetes.md](./kubernetes.md) |
 | vvd | 93 | `mxgraph.vvd` | VMware Validated Design icons | [vvd.md](./vvd.md) |
 | rack | 11 | `mxgraph.rack` | Server rack and data center equipment | [rack.md](./rack.md) |
@@ -30,7 +28,6 @@ Reference: `style="shape=mxgraph.<library>.<shape_name>"`
 | Library | Shapes | Prefix | Description | File |
 |---------|--------|--------|-------------|------|
 | bpmn | 39 | `mxgraph.bpmn` | Business Process Model and Notation - events, gateways, tasks | [bpmn.md](./bpmn.md) |
-| eip | 36 | `mxgraph.eip` | Enterprise Integration Patterns - messaging, routing | [eip.md](./eip.md) |
 | lean_mapping | 13 | `mxgraph.lean_mapping` | Lean/Value Stream Mapping symbols | [lean_mapping.md](./lean_mapping.md) |
 
 ## General Diagrams
@@ -48,6 +45,7 @@ Reference: `style="shape=mxgraph.<library>.<shape_name>"`
 | Library | Shapes | Prefix | Description | File |
 |---------|--------|--------|-------------|------|
 | android | 17 | `mxgraph.android` | Android UI mockup components | [android.md](./android.md) |
+| material_design | 300 | `image=https://fonts.gstatic.com/...` | Google Material Icons (SVG images) | [material_design.md](./material_design.md) |
 
 ## Enterprise Software
 
@@ -73,6 +71,5 @@ Reference: `style="shape=mxgraph.<library>.<shape_name>"`
 | Library | Shapes | Prefix | Description | File |
 |---------|--------|--------|-------------|------|
 | webicons | 176 | `mxgraph.webicons` | Web/social media logos - GitHub, Twitter, AWS, etc. | [webicons.md](./webicons.md) |
-| un-ocha-icons | 242 | `mxgraph.un-ocha-icons` | UN OCHA humanitarian icons | [un-ocha-icons.md](./un-ocha-icons.md) |
 
-**Total: 33 libraries, 4,281 shapes**
+**Total: 30 libraries, 4,184 shapes**

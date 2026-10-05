@@ -1,26 +1,34 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useRef, useState } from "react"
 import type { DrawIoEmbedRef, EventExport } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
-    extractDiagramXML,
-    isRealDiagram,
-    validateAndFixXml,
-} from "../lib/utils"
+    BLANK_MXFILE,
+    normalizeToMxfile,
+} from "@/packages/mcp-server/src/pages.ts"
+import { validateAndFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
+import { extractDiagramXML, isRealDiagram } from "../lib/utils"
 
 interface DiagramContextType {
     chartXML: string
+    // chartXML right away, before the re-render (loadDiagram sets both)
+    chartXMLRef: React.MutableRefObject<string>
     latestSvg: string
     diagramHistory: { svg: string; xml: string }[]
     setDiagramHistory: (history: { svg: string; xml: string }[]) => void
     loadDiagram: (chart: string, skipValidation?: boolean) => string | null
-    handleExport: () => void
-    handleExportWithoutHistory: () => void
-    resolverRef: React.MutableRefObject<((value: string) => void) | null>
+    // Both return the export's tag (empty when draw.io is not there yet)
+    handleExport: () => string
+    handleExportWithoutHistory: () => string
+    // Pending exports by tag; a history or plain export's resolver gets the
+    // first page's XML
+    exportResolversRef: React.MutableRefObject<
+        Record<string, (data: string, xml?: string) => void>
+    >
     drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>
     handleDiagramExport: (data: EventExport) => void
     handleDiagramAutoSave: (data: { xml?: string }) => void
@@ -42,6 +50,12 @@ interface DiagramContextType {
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
 
+// Every export carries a tag in the request's `message` field. draw.io
+// echoes the request back in the export event, so each result reaches its
+// own caller. Tags end in a request number, so a late result never answers
+// a newer request.
+type ExportTag = "thumbnail" | "validation"
+
 export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [chartXML, setChartXML] = useState<string>("")
     const [latestSvg, setLatestSvg] = useState<string>("")
@@ -52,11 +66,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [showSaveDialog, setShowSaveDialog] = useState(false)
     const hasCalledOnLoadRef = useRef(false)
     const drawioRef = useRef<DrawIoEmbedRef | null>(null)
-    const resolverRef = useRef<((value: string) => void) | null>(null)
-    // Resolver for PNG export (used for VLM validation)
-    const pngResolverRef = useRef<((value: string) => void) | null>(null)
-    // Track if we're expecting an export for history (user-initiated)
-    const expectHistoryExportRef = useRef<boolean>(false)
+    // Pending exports, keyed by their export tag
+    const exportResolversRef = useRef<
+        Record<string, (data: string, xml?: string) => void>
+    >({})
+    // Pending history exports: the document each one was asked for
+    const historyXmlRef = useRef(new Map<string, string>())
+    const exportSeqRef = useRef(0)
     // Track latest chartXML for restoration after remount
     const chartXMLRef = useRef<string>("")
 
@@ -76,94 +92,85 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         setIsDrawioReady(false)
     }
 
-    // Keep chartXMLRef in sync with state for restoration after remount
-    useEffect(() => {
-        chartXMLRef.current = chartXML
-    }, [chartXML])
-
-    // Track if we're expecting an export for file save (stores raw export data)
-    const saveResolverRef = useRef<{
-        resolver: ((data: string, fullDiagramXML?: string) => void) | null
-        format: ExportFormat | null
-    }>({ resolver: null, format: null })
+    // Update chartXML and its ref together, so callbacks that read the ref
+    // (export handler, autosave) see the new value right away
+    const updateChartXML = (xml: string) => {
+        chartXMLRef.current = xml
+        setChartXML(xml)
+    }
 
     const handleExport = () => {
-        if (drawioRef.current) {
-            // Mark that this export should be saved to history
-            expectHistoryExportRef.current = true
-            drawioRef.current.exportDiagram({
-                format: "xmlsvg",
-            })
-        }
+        if (!drawioRef.current) return ""
+        // Save this export to history, with the document shown now:
+        // chartXML can change before the result comes back
+        const tag = `history-${++exportSeqRef.current}`
+        historyXmlRef.current.set(tag, chartXMLRef.current)
+        drawioRef.current.exportDiagram({
+            format: "xmlsvg",
+            message: tag,
+        })
+        return tag
     }
 
     const handleExportWithoutHistory = () => {
-        if (drawioRef.current) {
-            // Export without saving to history (for edit_diagram fetching current state)
-            drawioRef.current.exportDiagram({
-                format: "xmlsvg",
-            })
-        }
+        if (!drawioRef.current) return ""
+        // Export without saving to history (for edit_diagram fetching current state)
+        const tag = `fetch-${++exportSeqRef.current}`
+        drawioRef.current.exportDiagram({
+            format: "xmlsvg",
+            message: tag,
+        })
+        return tag
     }
 
-    // Get current diagram as SVG for thumbnail (used by session storage)
-    const getThumbnailSvg = async (): Promise<string | null> => {
+    // Export with a tag in `message` (draw.io echoes it back in the export
+    // event) and wait for that result. Resolves to null on timeout, which is
+    // expected occasionally.
+    // (Reads refs only, so it keeps one identity)
+    const requestTaggedExport = useCallback(
+        (tag: ExportTag, format: "xmlsvg" | "png", timeoutMs: number) =>
+            new Promise<string | null>((resolve) => {
+                const id = `${tag}-${++exportSeqRef.current}`
+                const finish = (value: string | null) => {
+                    clearTimeout(timer)
+                    delete exportResolversRef.current[id]
+                    resolve(value)
+                }
+                const timer = setTimeout(() => finish(null), timeoutMs)
+                exportResolversRef.current[id] = finish
+                drawioRef.current?.exportDiagram({ format, message: id })
+            }),
+        [],
+    )
+
+    // Get current diagram as SVG for thumbnail (used by session storage).
+    // One identity: the chat's auto-save depends on it, and each thumbnail
+    // renders this provider again (latestSvg), which would otherwise start
+    // the next save
+    const getThumbnailSvg = useCallback(async (): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
-        if (!isRealDiagram(chartXML)) return null
+        if (!isRealDiagram(chartXMLRef.current)) return null
 
-        try {
-            const svgData = await Promise.race([
-                new Promise<string>((resolve) => {
-                    resolverRef.current = resolve
-                    drawioRef.current?.exportDiagram({ format: "xmlsvg" })
-                }),
-                new Promise<string>((_, reject) =>
-                    setTimeout(() => reject(new Error("Export timeout")), 3000),
-                ),
-            ])
-
+        // xmlsvg exports return an SVG data URL
+        const svgData = await requestTaggedExport("thumbnail", "xmlsvg", 3000)
+        if (svgData?.startsWith("data:image/svg")) {
             // Update latestSvg so it's available for future saves
-            if (svgData?.includes("<svg")) {
-                setLatestSvg(svgData)
-                return svgData
-            }
-            return null
-        } catch {
-            // Timeout is expected occasionally - don't log as error
-            return null
+            setLatestSvg(svgData)
+            return svgData
         }
-    }
+        return null
+    }, [requestTaggedExport])
 
     // Capture current diagram as PNG for VLM validation
     const captureValidationPng = async (): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
-        if (!isRealDiagram(chartXML)) return null
+        if (!isRealDiagram(chartXMLRef.current)) return null
 
-        try {
-            const pngData = await Promise.race([
-                new Promise<string>((resolve) => {
-                    pngResolverRef.current = resolve
-                    drawioRef.current?.exportDiagram({ format: "png" })
-                }),
-                new Promise<string>((_, reject) =>
-                    setTimeout(
-                        () => reject(new Error("PNG export timeout")),
-                        5000,
-                    ),
-                ),
-            ])
-
-            // PNG data should be a base64 data URL
-            if (pngData?.startsWith("data:image/png")) {
-                return pngData
-            }
-            return null
-        } catch {
-            // Timeout is expected occasionally - don't log as error
-            return null
-        }
+        const pngData = await requestTaggedExport("validation", "png", 5000)
+        // PNG data should be a base64 data URL
+        return pngData?.startsWith("data:image/png") ? pngData : null
     }
 
     const loadDiagram = (
@@ -172,9 +179,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     ): string | null => {
         let xmlToLoad = chart
 
-        // Validate XML structure before loading (unless skipped for internal use)
+        // Validate XML structure before loading (unless skipped for internal
+        // use). Not strict: the XML may hold the user's own diagram, and the
+        // tool handlers check model XML strictly before it gets here.
         if (!skipValidation) {
-            const validation = validateAndFixXml(chart)
+            const validation = validateAndFixXml(chart, { strict: false })
             if (!validation.valid) {
                 console.warn(
                     "[loadDiagram] Validation error:",
@@ -193,7 +202,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
-        setChartXML(xmlToLoad)
+        updateChartXML(xmlToLoad)
 
         if (drawioRef.current) {
             drawioRef.current.load({
@@ -205,24 +214,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleDiagramExport = (data: EventExport) => {
-        // Handle PNG export for VLM validation
-        if (pngResolverRef.current && data.data?.startsWith("data:image/png")) {
-            pngResolverRef.current(data.data)
-            pngResolverRef.current = null
+        // Thumbnail, validation PNG and file save exports go only to their
+        // own caller
+        const tag = data.message?.message
+        if (/^(thumbnail|validation|save)-/.test(tag ?? "")) {
+            exportResolversRef.current[tag as string]?.(data.data, data.xml)
             return
-        }
-
-        // Handle save to file if requested (process raw data before extraction)
-        if (saveResolverRef.current.resolver) {
-            const format = saveResolverRef.current.format
-            saveResolverRef.current.resolver(data.data, data.xml)
-            saveResolverRef.current = { resolver: null, format: null }
-            // For non-xmlsvg formats, skip XML extraction as it will fail
-            // Only drawio (which uses xmlsvg internally) has the content attribute
-            // xmlsvg is saved directly as SVG file, no need for extraction
-            if (format === "png" || format === "svg" || format === "xmlsvg") {
-                return
-            }
         }
 
         // Don't write chartXML here: exports don't change the diagram, and
@@ -235,39 +232,49 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Only add to history if this was a user-initiated export
         // Limit to 20 entries to prevent memory leaks during long sessions
         const MAX_HISTORY_SIZE = 20
-        if (expectHistoryExportRef.current) {
+        const askedXml =
+            tag !== undefined ? historyXmlRef.current.get(tag) : undefined
+        if (askedXml !== undefined) {
+            historyXmlRef.current.delete(tag as string)
+            // Store the full multi-page document (extractedXML is only the
+            // first page), so restoring a version keeps every page
+            const historyXml = askedXml || extractedXML
             setDiagramHistory((prev) => {
                 const newHistory = [
                     ...prev,
                     {
                         svg: data.data,
-                        xml: extractedXML,
+                        xml: historyXml,
                     },
                 ]
                 // Keep only the last MAX_HISTORY_SIZE entries (circular buffer)
                 return newHistory.slice(-MAX_HISTORY_SIZE)
             })
-            expectHistoryExportRef.current = false
         }
 
-        if (resolverRef.current) {
-            resolverRef.current(extractedXML)
-            resolverRef.current = null
+        // The chat's own export (onFetchChart), not another one in flight
+        const resolve =
+            tag !== undefined ? exportResolversRef.current[tag] : undefined
+        if (resolve) {
+            delete exportResolversRef.current[tag as string]
+            resolve(extractedXML)
         }
     }
 
+    // react-drawio registers this callback once per iframe mount, so it must
+    // read refs: state captured in its closure would stay stale after a remount
     const handleDiagramAutoSave = (data: { xml?: string }) => {
         if (!data?.xml) return
-        // Don't overwrite a pending restore - if we have a real diagram in state
-        // but DrawIO isn't ready yet, it means we're waiting to restore
-        if (!isDrawioReady && isRealDiagram(chartXML)) {
+        // Don't overwrite a pending restore - if we have a real diagram but
+        // DrawIO hasn't loaded yet, it means we're waiting to restore
+        if (!hasCalledOnLoadRef.current && isRealDiagram(chartXMLRef.current)) {
             return
         }
-        setChartXML(data.xml)
+        updateChartXML(data.xml)
     }
 
     const clearDiagram = () => {
-        const emptyDiagram = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+        const emptyDiagram = BLANK_MXFILE
         // Skip validation for trusted internal template (loadDiagram also sets chartXML)
         loadDiagram(emptyDiagram, true)
         setLatestSvg("")
@@ -289,83 +296,88 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         const drawioFormat =
             format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
 
-        // Set up the resolver before triggering export
-        saveResolverRef.current = {
-            resolver: (exportData: string, fullDiagramXML?: string) => {
-                let fileContent: string | Blob
-                let mimeType: string
-                let extension: string
+        // Each save has its own tag, so two at once never swap results
+        const tag = `save-${++exportSeqRef.current}`
+        exportResolversRef.current[tag] = (
+            exportData: string,
+            fullDiagramXML?: string,
+        ) => {
+            delete exportResolversRef.current[tag]
+            let fileContent: string | Blob
+            let mimeType: string
+            let extension: string
 
-                if (format === "drawio") {
-                    // Prefer the complete document from the export event so all pages are saved.
-                    const xml = fullDiagramXML?.trim()
-                        ? fullDiagramXML
-                        : extractDiagramXML(exportData)
-                    let xmlContent = xml
-                    if (!xml.includes("<mxfile")) {
-                        xmlContent = `<mxfile><diagram name="Page-1" id="page-1">${xml}</diagram></mxfile>`
-                    }
-                    fileContent = xmlContent
-                    mimeType = "application/xml"
-                    extension = ".drawio"
-                } else if (format === "png") {
-                    // PNG data comes as base64 data URL
-                    fileContent = exportData
-                    mimeType = "image/png"
-                    extension = ".png"
-                } else if (format === "xmlsvg") {
-                    // Editable SVG: pass data URL directly (like PNG)
-                    fileContent = exportData
-                    mimeType = "image/svg+xml"
-                    extension = ".drawio.svg"
-                } else {
-                    // SVG format (view-only)
-                    fileContent = exportData
-                    mimeType = "image/svg+xml"
-                    extension = ".svg"
-                }
+            if (format === "drawio") {
+                // Prefer the complete document from the export event so all pages are saved.
+                const xml = fullDiagramXML?.trim()
+                    ? fullDiagramXML
+                    : extractDiagramXML(exportData)
+                fileContent =
+                    normalizeToMxfile(xml, {
+                        pageId: "page-1",
+                        pageName: "Page-1",
+                    }) ?? xml
+                mimeType = "application/xml"
+                extension = ".drawio"
+            } else if (format === "png") {
+                // PNG data comes as base64 data URL
+                fileContent = exportData
+                mimeType = "image/png"
+                extension = ".png"
+            } else if (format === "xmlsvg") {
+                // Editable SVG: pass data URL directly (like PNG)
+                fileContent = exportData
+                mimeType = "image/svg+xml"
+                extension = ".drawio.svg"
+            } else {
+                // SVG format (view-only)
+                fileContent = exportData
+                mimeType = "image/svg+xml"
+                extension = ".svg"
+            }
 
-                // Log save event to Langfuse (flags the trace)
-                logSaveToLangfuse(filename, format, sessionId)
+            // Log save event to Langfuse (flags the trace)
+            logSaveToLangfuse(filename, format, sessionId)
 
-                // Handle download
-                let url: string
-                if (
-                    typeof fileContent === "string" &&
-                    fileContent.startsWith("data:")
-                ) {
-                    // Already a data URL (PNG)
-                    url = fileContent
-                } else {
-                    const blob = new Blob([fileContent], { type: mimeType })
-                    url = URL.createObjectURL(blob)
-                }
+            // Handle download
+            let url: string
+            if (
+                typeof fileContent === "string" &&
+                fileContent.startsWith("data:")
+            ) {
+                // Already a data URL (PNG)
+                url = fileContent
+            } else {
+                const blob = new Blob([fileContent], { type: mimeType })
+                url = URL.createObjectURL(blob)
+            }
 
-                const a = document.createElement("a")
-                a.href = url
-                a.download = `${filename}${extension}`
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${filename}${extension}`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
 
-                // Show success toast after download is initiated
-                if (successMessage) {
-                    toast.success(successMessage, {
-                        position: "bottom-left",
-                        duration: 2500,
-                    })
-                }
+            // Show success toast after download is initiated
+            if (successMessage) {
+                toast.success(successMessage, {
+                    position: "bottom-left",
+                    duration: 2500,
+                })
+            }
 
-                // Delay URL revocation to ensure download completes
-                if (!url.startsWith("data:")) {
-                    setTimeout(() => URL.revokeObjectURL(url), 100)
-                }
-            },
-            format,
+            // Delay URL revocation to ensure download completes
+            if (!url.startsWith("data:")) {
+                setTimeout(() => URL.revokeObjectURL(url), 100)
+            }
         }
 
         // Export diagram - callback will be handled in handleDiagramExport
-        drawioRef.current.exportDiagram({ format: drawioFormat })
+        drawioRef.current.exportDiagram({
+            format: drawioFormat,
+            message: tag,
+        })
     }
 
     // Log save event to Langfuse (just flags the trace, doesn't send content)
@@ -389,13 +401,14 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         <DiagramContext.Provider
             value={{
                 chartXML,
+                chartXMLRef,
                 latestSvg,
                 diagramHistory,
                 setDiagramHistory,
                 loadDiagram,
                 handleExport,
                 handleExportWithoutHistory,
-                resolverRef,
+                exportResolversRef,
                 drawioRef,
                 handleDiagramExport,
                 handleDiagramAutoSave,

@@ -37,7 +37,6 @@ export default function Home() {
     )
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
-    const isMobileRef = useRef(false)
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -48,7 +47,9 @@ export default function Home() {
             const currentLocale = pathParts[0]
             if (currentLocale !== savedLocale) {
                 pathParts[0] = savedLocale
-                router.replace(`/${pathParts.join("/")}`)
+                // Keep the query (e.g. ?session=) and hash
+                const { search, hash } = window.location
+                router.replace(`/${pathParts.join("/")}${search}${hash}`)
                 return // Wait for redirect
             }
         }
@@ -106,27 +107,25 @@ export default function Home() {
         resetDrawioReady()
     }
 
-    // Check mobile - reset draw.io before crossing breakpoint
-    const isInitialRenderRef = useRef(true)
+    // Check mobile. No panel is remounted when crossing the breakpoint, so
+    // the draw.io ready state and the chat's turn stay as they are.
     useEffect(() => {
         const checkMobile = () => {
-            const newIsMobile = window.innerWidth < 768
-            if (
-                !isInitialRenderRef.current &&
-                newIsMobile !== isMobileRef.current
-            ) {
-                setIsDrawioReady(false)
-                resetDrawioReady()
-            }
-            isMobileRef.current = newIsMobile
-            isInitialRenderRef.current = false
-            setIsMobile(newIsMobile)
+            setIsMobile(window.innerWidth < 768)
         }
 
         checkMobile()
         window.addEventListener("resize", checkMobile)
         return () => window.removeEventListener("resize", checkMobile)
-    }, [resetDrawioReady])
+    }, [])
+
+    // Give the chat panel the size of this side of the breakpoint. It is
+    // open on both sides: the mobile panel cannot be collapsed, and one
+    // collapsed on desktop comes back open
+    useEffect(() => {
+        chatPanelRef.current?.resize(isMobile ? 50 : 33)
+        setIsChatVisible(true)
+    }, [isMobile])
 
     const toggleChatPanel = () => {
         const panel = chatPanelRef.current
@@ -193,7 +192,11 @@ export default function Home() {
                                             noExitBtn: true,
                                             dark:
                                                 darkMode || drawioUi === "dark",
-                                            lang: currentLang,
+                                            // draw.io names Traditional Chinese "zh-tw"
+                                            lang:
+                                                currentLang === "zh-Hant"
+                                                    ? "zh-tw"
+                                                    : currentLang,
                                             // Enable offline mode in Electron to disable external service calls
                                             ...(isElectron && {
                                                 offline: true,
@@ -217,7 +220,6 @@ export default function Home() {
 
                 {/* Chat Panel */}
                 <ResizablePanel
-                    key={isMobile ? "mobile" : "desktop"}
                     id="chat-panel"
                     ref={chatPanelRef}
                     defaultSize={isMobile ? 50 : 33}

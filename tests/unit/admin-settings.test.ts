@@ -1,7 +1,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     _resetForTests,
     applyToEnv,
@@ -98,6 +98,24 @@ describe("applyToEnv / saveSettings", () => {
         saveSettings({ TEST_ADMIN_VAR: "from-file" })
         saveSettings({ TEST_ADMIN_VAR: null })
         expect(process.env.TEST_ADMIN_VAR).toBeUndefined()
+    })
+
+    it("a second module instance can remove a key the first one overlaid", async () => {
+        // instrumentation.ts and API routes load separate copies in a build
+        process.env.TEST_ADMIN_VAR = "from-env"
+        fs.writeFileSync(
+            process.env.SETTINGS_FILE!,
+            JSON.stringify({ version: 1, values: { TEST_ADMIN_VAR: "abc" } }),
+        )
+        applyToEnv()
+        expect(process.env.TEST_ADMIN_VAR).toBe("abc")
+
+        vi.resetModules()
+        const second = await import("@/lib/admin/settings")
+        expect(second.getValueSource("TEST_ADMIN_VAR")).toBe("file")
+        second.saveSettings({ TEST_ADMIN_VAR: null })
+        expect(process.env.TEST_ADMIN_VAR).toBe("from-env")
+        expect(second.getEnvFallback("TEST_ADMIN_VAR")).toBe("from-env")
     })
 
     it("persists across cache reset (file round-trip)", () => {

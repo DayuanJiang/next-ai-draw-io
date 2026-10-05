@@ -32,6 +32,68 @@ export function rebuildAppMenu(): void {
     buildAppMenu()
 }
 
+// Number of the latest preset switch
+let lastSwitch = 0
+
+/**
+ * Apply a preset and restart the server so it takes effect.
+ * If the restart fails, go back to the previous preset and restart again,
+ * so the running server always matches the saved current preset.
+ * Throws an error describing the outcome on failure.
+ */
+export async function switchPreset(
+    id: string,
+): Promise<Record<string, string>> {
+    const previousPresetId = getCurrentPresetId()
+    const env = applyPresetToEnv(id)
+    if (!env) {
+        throw new Error("Preset not found")
+    }
+    const switchNumber = ++lastSwitch
+    rebuildAppMenu()
+
+    // In development, scripts/electron-dev.mjs restarts the Next.js dev server
+    if (!app.isPackaged) {
+        return env
+    }
+
+    try {
+        await restartNextServer()
+        return env
+    } catch (error) {
+        console.error("Failed to restart server:", error)
+        const reason = error instanceof Error ? error.message : String(error)
+
+        // A newer switch started meanwhile (also of this same preset), or
+        // the preset was deleted: its own restart follows, and undoing
+        // would lose that choice
+        if (switchNumber !== lastSwitch || getCurrentPresetId() !== id) {
+            throw new Error(
+                `The server could not be restarted.\n\nError: ${reason}`,
+            )
+        }
+
+        // Revert to previous preset on failure
+        if (!previousPresetId || !applyPresetToEnv(previousPresetId)) {
+            setCurrentPreset(null)
+        }
+        // Rebuild menu to restore previous checkmark state
+        rebuildAppMenu()
+
+        try {
+            await restartNextServer()
+        } catch (retryError) {
+            console.error("Failed to restart server again:", retryError)
+            throw new Error(
+                `The server could not be restarted.\n\nPlease restart the app.\n\nError: ${reason}`,
+            )
+        }
+        throw new Error(
+            `The server could not be restarted.\n\nThe previous configuration has been restored.\n\nError: ${reason}`,
+        )
+    }
+}
+
 /**
  * Get the menu template with translations
  */
@@ -192,32 +254,14 @@ function buildConfigMenu(
         type: "radio",
         checked: preset.id === currentPresetId,
         click: async () => {
-            const previousPresetId = getCurrentPresetId()
-            const env = applyPresetToEnv(preset.id)
-
-            if (env) {
-                try {
-                    await restartNextServer()
-                    rebuildAppMenu() // Rebuild menu to update checkmarks
-                } catch (error) {
-                    console.error("Failed to restart server:", error)
-
-                    // Revert to previous preset on failure
-                    if (previousPresetId) {
-                        applyPresetToEnv(previousPresetId)
-                    } else {
-                        setCurrentPreset(null)
-                    }
-
-                    // Rebuild menu to restore previous checkmark state
-                    rebuildAppMenu()
-
-                    // Show error dialog to notify user
-                    dialog.showErrorBox(
-                        "Configuration Error",
-                        `Failed to apply preset "${preset.name}". The server could not be restarted.\n\nThe previous configuration has been restored.\n\nError: ${error instanceof Error ? error.message : String(error)}`,
-                    )
-                }
+            try {
+                await switchPreset(preset.id)
+            } catch (error) {
+                // Show error dialog to notify user
+                dialog.showErrorBox(
+                    "Configuration Error",
+                    `Failed to apply preset "${preset.name}". ${error instanceof Error ? error.message : String(error)}`,
+                )
             }
         },
     }))

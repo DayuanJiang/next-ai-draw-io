@@ -138,6 +138,13 @@ Then ask Claude to create diagrams:
 
 The diagram appears in your browser in real-time!
 
+The MCP server includes most of the web app's drawing features:
+
+-   The same drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes and more)
+-   A screenshot tool, so the AI can check the rendered diagram and fix it
+-   Version history, multi-page diagrams, and download as `.drawio`, `.png`, `.svg`, or `.drawio.svg`
+-   Auto-save to `~/.next-ai-drawio/`, so you can continue a diagram after a restart
+
 See the [MCP Server README](./packages/mcp-server/README.md) for VS Code, Cursor, and other client configurations.
 
 ## Getting Started

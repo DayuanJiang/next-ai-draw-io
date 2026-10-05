@@ -48,13 +48,12 @@ export function proxy(request: NextRequest) {
     if (pathnameIsMissingLocale) {
         const locale = getLocale(request)
 
-        // Redirect to localized path
-        return NextResponse.redirect(
-            new URL(
-                `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`,
-                request.url,
-            ),
-        )
+        // Redirect to localized path. Cloning nextUrl keeps the basePath
+        // (NEXT_PUBLIC_BASE_PATH) and query string, which
+        // new URL("/...", request.url) would drop.
+        const url = request.nextUrl.clone()
+        url.pathname = `/${locale}${pathname}`
+        return NextResponse.redirect(url)
     }
 }
 

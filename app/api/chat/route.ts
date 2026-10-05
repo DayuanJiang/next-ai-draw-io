@@ -4,43 +4,62 @@ import {
     createUIMessageStream,
     createUIMessageStreamResponse,
     InvalidToolInputError,
-    LoadAPIKeyError,
     stepCountIs,
     streamText,
 } from "ai"
-import fs from "fs/promises"
 import { jsonrepair } from "jsonrepair"
 import path from "path"
 import { z } from "zod"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import {
+    CACHE_POINT,
+    edgeOneEndpoint,
     getAIModel,
+    getServerProvider,
     SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
+    usesServerCredentials,
+    usesServerEndpoint,
 } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
-    isMinimalDiagram,
+    dropInvalidToolCalls,
+    fixToolInputJson,
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
+import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
     recordTokenUsage,
 } from "@/lib/dynamo-quota-manager"
 import {
+    endTrace,
     getTelemetryConfig,
     setTraceInput,
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
+import { classifyLLMError, streamErrorText } from "@/lib/llm-errors"
 import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
 } from "@/lib/output-token-limit"
-import { findServerModelById } from "@/lib/server-model-config"
+import {
+    type FlattenedServerModel,
+    findServerModelById,
+} from "@/lib/server-model-config"
+import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
+import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
+import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+import {
+    getShapeLibrary,
+    SHAPE_LIBRARY_LIST,
+} from "@/packages/mcp-server/src/shape-library.ts"
+import { SWIMLANE_EXAMPLE } from "@/packages/mcp-server/src/xml-examples.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -76,24 +95,18 @@ function createCachedStreamResponse(xml: string): Response {
     return createUIMessageStreamResponse({ stream })
 }
 
+// Responses streamed from the model, whose trace streamText's callbacks end
+const modelStreamResponses = new WeakSet<Response>()
+
 // Inner handler function
+const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
+
 async function handleChatRequest(req: Request): Promise<Response> {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
     // Check for access code
-    const accessCodes =
-        process.env.ACCESS_CODE_LIST?.split(",")
-            .map((code) => code.trim())
-            .filter(Boolean) || []
-    if (accessCodes.length > 0) {
-        const accessCodeHeader = req.headers.get("x-access-code")
-        if (!accessCodeHeader || !accessCodes.includes(accessCodeHeader)) {
-            return Response.json(
-                {
-                    error: "Invalid or missing access code. Please configure it in Settings.",
-                },
-                { status: 401 },
-            )
-        }
-    }
+    const accessDenied = checkAccessCode(req)
+    if (accessDenied) return accessDenied
 
     const body = await req.json()
     const { messages, xml, previousXml, sessionId } = body
@@ -126,36 +139,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
         userId: userId,
     })
 
-    // === SERVER-SIDE QUOTA CHECK START ===
-    // Quota is opt-in: only enabled when DYNAMODB_QUOTA_TABLE env var is set
-    const hasOwnApiKey = !!(
-        req.headers.get("x-ai-provider") &&
-        (req.headers.get("x-ai-api-key") ||
-            req.headers.get("x-aws-access-key-id") ||
-            req.headers.get("x-vertex-api-key"))
-    )
-
-    // Skip quota check if: quota disabled, user has own API key, or is anonymous
-    if (isQuotaEnabled() && !hasOwnApiKey && userId !== "anonymous") {
-        const quotaCheck = await checkAndIncrementRequest(userId, {
-            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
-            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
-            tpm: Number(process.env.TPM_LIMIT) || 20000,
-        })
-        if (!quotaCheck.allowed) {
-            return Response.json(
-                {
-                    error: quotaCheck.error,
-                    type: quotaCheck.type,
-                    used: quotaCheck.used,
-                    limit: quotaCheck.limit,
-                },
-                { status: 429 },
-            )
-        }
-    }
-    // === SERVER-SIDE QUOTA CHECK END ===
-
     // === FILE VALIDATION START ===
     const fileValidation = validateFileParts(messages)
     if (!fileValidation.valid) {
@@ -165,7 +148,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === CACHE CHECK START ===
     const isFirstMessage = messages.length === 1
-    const isEmptyDiagram = !xml || xml.trim() === "" || isMinimalDiagram(xml)
+    const isEmptyDiagram = !xml || !hasCells(xml)
 
     if (isFirstMessage && isEmptyDiagram) {
         const lastMessage = messages[0]
@@ -185,24 +168,15 @@ async function handleChatRequest(req: Request): Promise<Response> {
     let baseUrl = req.headers.get("x-ai-base-url")
     const selectedModelId = req.headers.get("x-selected-model-id")
 
-    // For EdgeOne provider, construct full URL from request origin
-    // because createOpenAI needs absolute URL, not relative path
-    if (provider === "edgeone" && !baseUrl) {
-        const origin = req.headers.get("origin") || new URL(req.url).origin
-        baseUrl = `${origin}/api/edgeai`
-    }
-
-    // Get cookie header for EdgeOne authentication (eo_token, eo_time)
-    const cookieHeader = req.headers.get("cookie")
-
     // Check if this is a server model with custom env var names
     let serverModelConfig: {
         apiKeyEnv?: string | string[]
         baseUrlEnv?: string
         provider?: string
     } = {}
+    let serverModel: FlattenedServerModel | null = null
     if (selectedModelId?.startsWith("server:")) {
-        const serverModel = await findServerModelById(selectedModelId)
+        serverModel = await findServerModelById(selectedModelId)
         console.log(
             `[Server Model Lookup] ID: ${selectedModelId}, Found: ${!!serverModel}, Provider: ${serverModel?.provider}`,
         )
@@ -216,12 +190,41 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
+    // A server model's provider comes from its config: for one set up in
+    // the admin panel the header holds the provider name's slug. Without
+    // either, the server's own AI_PROVIDER.
+    const isEdgeOne =
+        (serverModelConfig.provider || provider || getServerProvider()) ===
+        "edgeone"
+
+    // EdgeOne is this deployment's own function, whatever URL the request
+    // names: another host would get the user's EdgeOne cookies, and the
+    // quota counts it. Absolute, as the SDK needs.
+    if (isEdgeOne) baseUrl = edgeOneEndpoint(req)
+
+    // Same rule as validate-model: with ALLOW_PRIVATE_URLS=false a request may
+    // not point the server at a private or internal address
+    if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
+        return Response.json(
+            { error: "Private or internal base URLs are not allowed." },
+            { status: 400 },
+        )
+    }
+
+    // Get cookie header for EdgeOne authentication (eo_token, eo_time)
+    const cookieHeader = req.headers.get("cookie")
+
     const clientOverrides = {
-        // Server model provider takes precedence over client header
-        provider: serverModelConfig.provider || provider,
+        // Server model provider takes precedence over client header; EdgeOne
+        // named only in AI_PROVIDER is named here, for its own base URL
+        provider:
+            serverModelConfig.provider ||
+            provider ||
+            (isEdgeOne ? "edgeone" : null),
         baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
-        modelId: req.headers.get("x-ai-model"),
+        // A server model runs the model it was configured with, whatever the header says
+        modelId: serverModel?.modelId || req.headers.get("x-ai-model"),
         // AWS Bedrock credentials
         awsAccessKeyId: req.headers.get("x-aws-access-key-id"),
         awsSecretAccessKey: req.headers.get("x-aws-secret-access-key"),
@@ -231,11 +234,14 @@ async function handleChatRequest(req: Request): Promise<Response> {
         ...serverModelConfig,
         // Vertex AI credentials (Express Mode)
         vertexApiKey: req.headers.get("x-vertex-api-key"),
-        // Pass cookies for EdgeOne Pages authentication
-        ...(provider === "edgeone" &&
-            cookieHeader && {
-                headers: { cookie: cookieHeader },
-            }),
+        // Pass cookies for EdgeOne Pages authentication, and the access code,
+        // which the EdgeOne function checks too
+        ...(isEdgeOne && {
+            headers: {
+                ...(cookieHeader && { cookie: cookieHeader }),
+                "x-access-code": req.headers.get("x-access-code") || "",
+            },
+        }),
     }
 
     // Read minimal style preference from header
@@ -249,17 +255,80 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const {
         model: baseModel,
         providerOptions,
-        headers,
         modelId,
         provider: resolvedProvider,
     } = getAIModel(clientOverrides)
 
-    // Retry with a smaller budget if the provider rejects the requested one
-    const model = withOutputTokenLimitFallback(baseModel)
+    // On the server's own keys, only run models the server offers: a server
+    // model picked by id (its model name is fixed above) or one in AI_MODEL
+    // on AI_PROVIDER. With their own key, users can run any model.
+    const onServerCredentials = usesServerCredentials(
+        resolvedProvider,
+        clientOverrides,
+    )
+    const envModels =
+        process.env.AI_MODEL?.split(",").map((m) => m.trim()) || []
+    const offeredInEnv =
+        envModels.includes(modelId) && resolvedProvider === getServerProvider()
+    if (onServerCredentials && !serverModel && !offeredInEnv) {
+        return Response.json(
+            {
+                error: `Model "${modelId}" is not available on this server. Add your own API key in Settings to use it.`,
+            },
+            { status: 400 },
+        )
+    }
 
-    // User setting wins over server env, so desktop users can raise it themselves
+    // === SERVER-SIDE QUOTA CHECK START ===
+    // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
+    // server's keys, or on the server's own endpoints: EdgeOne, its keyless
+    // Ollama, and anything at a private address (the server's network,
+    // which ignores a dummy key header). Bedrock and EdgeOne never use the
+    // base URL header. In the desktop app every endpoint is the user's.
+    const clientBaseUrl = normalizeBaseUrl(
+        req.headers.get("x-ai-base-url") ?? "",
+    )
+    const onServerEndpoint = await usesServerEndpoint(
+        resolvedProvider,
+        clientBaseUrl,
+        clientOverrides.apiKey,
+    )
+    const countsQuota =
+        isQuotaEnabled() &&
+        (onServerCredentials || onServerEndpoint) &&
+        userId !== "anonymous"
+    if (countsQuota) {
+        const quotaCheck = await checkAndIncrementRequest(userId, {
+            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+            tpm: Number(process.env.TPM_LIMIT) || 20000,
+        })
+        if (!quotaCheck.allowed) {
+            return Response.json(
+                {
+                    error: quotaCheck.error,
+                    type: quotaCheck.type,
+                    used: quotaCheck.used,
+                    limit: quotaCheck.limit,
+                },
+                { status: 429 },
+            )
+        }
+    }
+    // === SERVER-SIDE QUOTA CHECK END ===
+
+    // Retry once if the provider rejects the requested budget, or (newer
+    // Claude models) the sampling or thinking settings
+    const model = withOutputTokenLimitFallback(
+        withDeprecatedParamsFallback(baseModel),
+    )
+
+    // The user setting can raise the budget only on their own key (in the
+    // desktop app every key is the user's); on the server's keys or own
+    // endpoints it can only lower it
     const maxOutputTokens = resolveMaxOutputTokens(
         req.headers.get("x-max-output-tokens"),
+        onServerCredentials || onServerEndpoint,
     )
     console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
@@ -291,38 +360,45 @@ async function handleChatRequest(req: Request): Promise<Response> {
 ${userInputText}
 """`
 
-    // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = await convertToModelMessages(messages)
-
-    // DEBUG: Log incoming messages structure
-    console.log("[route.ts] Incoming messages count:", messages.length)
-    messages.forEach((msg: any, idx: number) => {
-        console.log(
-            `[route.ts] Message ${idx} role:`,
-            msg.role,
-            "parts count:",
-            msg.parts?.length,
-        )
-        if (msg.parts) {
-            msg.parts.forEach((part: any, partIdx: number) => {
-                if (
-                    part.type === "tool-invocation" ||
-                    part.type === "tool-result"
-                ) {
-                    console.log(`[route.ts]   Part ${partIdx}:`, {
-                        type: part.type,
-                        toolName: part.toolName,
-                        hasInput: !!part.input,
-                        inputType: typeof part.input,
-                        inputKeys:
-                            part.input && typeof part.input === "object"
-                                ? Object.keys(part.input)
-                                : null,
-                    })
-                }
-            })
-        }
+    // Convert UIMessages to ModelMessages and add system message. A tool
+    // call that never got its result (the user stopped while it ran) is
+    // left out: the SDK would refuse this and every later request of the
+    // chat (MissingToolResultsError)
+    const modelMessages = await convertToModelMessages(messages, {
+        ignoreIncompleteToolCalls: true,
     })
+
+    // DEBUG_LLM_PAYLOAD=true logs the incoming message structure
+    if (DEBUG_LLM_PAYLOAD) {
+        console.log("[route.ts] Incoming messages count:", messages.length)
+        messages.forEach((msg: any, idx: number) => {
+            console.log(
+                `[route.ts] Message ${idx} role:`,
+                msg.role,
+                "parts count:",
+                msg.parts?.length,
+            )
+            if (msg.parts) {
+                msg.parts.forEach((part: any, partIdx: number) => {
+                    if (
+                        part.type === "tool-invocation" ||
+                        part.type === "tool-result"
+                    ) {
+                        console.log(`[route.ts]   Part ${partIdx}:`, {
+                            type: part.type,
+                            toolName: part.toolName,
+                            hasInput: !!part.input,
+                            inputType: typeof part.input,
+                            inputKeys:
+                                part.input && typeof part.input === "object"
+                                    ? Object.keys(part.input)
+                                    : null,
+                        })
+                    }
+                })
+            }
+        })
+    }
 
     // Replace historical tool call XML with placeholders to reduce tokens
     // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
@@ -340,61 +416,43 @@ ${userInputText}
     )
 
     // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
-    // Bedrock API rejects messages where toolUse.input is not a valid JSON object
-    enhancedMessages = enhancedMessages
-        .map((msg: any) => {
-            if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
-                return msg
-            }
-            const filteredContent = msg.content.filter((part: any) => {
-                if (part.type === "tool-call") {
-                    // Check if input is a valid object (not null, undefined, or empty)
-                    if (
-                        !part.input ||
-                        typeof part.input !== "object" ||
-                        Object.keys(part.input).length === 0
-                    ) {
-                        console.warn(
-                            `[route.ts] Filtering out tool-call with invalid input:`,
-                            { toolName: part.toolName, input: part.input },
-                        )
-                        return false
-                    }
-                }
-                return true
-            })
-            return { ...msg, content: filteredContent }
-        })
-        .filter((msg: any) => msg.content && msg.content.length > 0)
+    // and their results. Bedrock API rejects messages where toolUse.input is not a valid
+    // JSON object, and every provider rejects a tool result whose call is gone.
+    enhancedMessages = dropInvalidToolCalls(enhancedMessages)
 
-    // DEBUG: Log modelMessages structure (what's being sent to AI)
-    console.log("[route.ts] Model messages count:", enhancedMessages.length)
-    enhancedMessages.forEach((msg: any, idx: number) => {
-        console.log(
-            `[route.ts] ModelMsg ${idx} role:`,
-            msg.role,
-            "content count:",
-            msg.content?.length,
-        )
-        if (msg.content) {
-            msg.content.forEach((part: any, partIdx: number) => {
-                if (part.type === "tool-call" || part.type === "tool-result") {
-                    console.log(`[route.ts]   Content ${partIdx}:`, {
-                        type: part.type,
-                        toolName: part.toolName,
-                        hasInput: !!part.input,
-                        inputType: typeof part.input,
-                        inputValue:
-                            part.input === undefined
-                                ? "undefined"
-                                : part.input === null
-                                  ? "null"
-                                  : "object",
-                    })
-                }
-            })
-        }
-    })
+    // DEBUG_LLM_PAYLOAD=true logs what is sent to the model
+    if (DEBUG_LLM_PAYLOAD) {
+        console.log("[route.ts] Model messages count:", enhancedMessages.length)
+        enhancedMessages.forEach((msg: any, idx: number) => {
+            console.log(
+                `[route.ts] ModelMsg ${idx} role:`,
+                msg.role,
+                "content count:",
+                msg.content?.length,
+            )
+            if (msg.content) {
+                msg.content.forEach((part: any, partIdx: number) => {
+                    if (
+                        part.type === "tool-call" ||
+                        part.type === "tool-result"
+                    ) {
+                        console.log(`[route.ts]   Content ${partIdx}:`, {
+                            type: part.type,
+                            toolName: part.toolName,
+                            hasInput: !!part.input,
+                            inputType: typeof part.input,
+                            inputValue:
+                                part.input === undefined
+                                    ? "undefined"
+                                    : part.input === null
+                                      ? "null"
+                                      : "object",
+                        })
+                    }
+                })
+            }
+        })
+    }
 
     // Update the last message with user input only (XML moved to separate cached system message)
     if (enhancedMessages.length >= 1) {
@@ -410,7 +468,7 @@ ${userInputText}
                 contentParts.push({
                     type: "image",
                     image: filePart.url,
-                    mimeType: filePart.mediaType,
+                    mediaType: filePart.mediaType,
                 })
             }
 
@@ -430,9 +488,7 @@ ${userInputText}
             if (enhancedMessages[i].role === "assistant") {
                 enhancedMessages[i] = {
                     ...enhancedMessages[i],
-                    providerOptions: {
-                        bedrock: { cachePoint: { type: "default" } },
-                    },
+                    providerOptions: CACHE_POINT,
                 }
                 break // Only cache the last assistant message
             }
@@ -471,7 +527,7 @@ ${previousXml}
 ${xml || ""}
 """
 
-IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. When using edit_diagram, COPY search patterns exactly from the CURRENT XML - attribute order matters!`
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.`
 
     const systemMessages = isSingleSystemProvider
         ? [
@@ -485,28 +541,26 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
               {
                   role: "system" as const,
                   content: finalSystemMessage,
-                  ...(shouldCache && {
-                      providerOptions: {
-                          bedrock: { cachePoint: { type: "default" } },
-                      },
-                  }),
+                  ...(shouldCache && { providerOptions: CACHE_POINT }),
               },
               // Cache breakpoint 2: Previous and Current diagram XML context
               {
                   role: "system" as const,
                   content: xmlContext,
-                  ...(shouldCache && {
-                      providerOptions: {
-                          bedrock: { cachePoint: { type: "default" } },
-                      },
-                  }),
+                  ...(shouldCache && { providerOptions: CACHE_POINT }),
               },
           ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
+    // Set by onAbort, which records the finished steps' tokens itself
+    let stopped = false
     const result = streamText({
         model,
+        // The system messages carry cache points, so they go in messages.
+        // A client's own system messages have string content and were
+        // dropped by the empty-content filter above.
+        allowSystemInMessages: true,
         abortSignal: req.signal,
         // Must be sent: unset means the provider's own default, and Bedrock's is
         // 4096, enough for a small diagram, so larger ones were cut off mid-attribute.
@@ -528,23 +582,11 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
                 error.name === "AI_InvalidToolInputError"
             ) {
                 try {
-                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle
-                    let inputToRepair = toolCall.input
-                    if (typeof inputToRepair === "string") {
-                        // Fix `:=` instead of `: ` (LLM sometimes generates this)
-                        inputToRepair = inputToRepair.replace(/:=/g, ": ")
-                        // Fix `= "` instead of `: "`
-                        inputToRepair = inputToRepair.replace(/=\s*"/g, ': "')
-                        // Fix inconsistent quote escaping in XML attributes within JSON strings
-                        // Pattern: attribute="value\" where opening quote is unescaped but closing is escaped
-                        // Example: y="-20\" should be y=\"-20\"
-                        inputToRepair = inputToRepair.replace(
-                            /(\w+)="([^"]*?)\\"/g,
-                            '$1=\\"$2\\"',
-                        )
-                    }
-                    // Use jsonrepair to fix truncated JSON
-                    const repairedInput = jsonrepair(inputToRepair)
+                    // Pre-process to fix common LLM JSON errors that jsonrepair can't handle,
+                    // then use jsonrepair to fix truncated JSON
+                    const repairedInput = jsonrepair(
+                        fixToolInputJson(toolCall.input),
+                    )
                     console.log(
                         `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
                     )
@@ -554,26 +596,8 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
                         `[repairToolCall] Failed to repair JSON for tool: ${toolCall.toolName}`,
                         repairError,
                     )
-                    // Return a placeholder input to avoid API errors in multi-step
-                    // The tool will fail gracefully on client side
-                    if (toolCall.toolName === "edit_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                operations: [],
-                                _error: "JSON repair failed - no operations to apply",
-                            },
-                        }
-                    }
-                    if (toolCall.toolName === "display_diagram") {
-                        return {
-                            ...toolCall,
-                            input: {
-                                xml: "",
-                                _error: "JSON repair failed - empty diagram",
-                            },
-                        }
-                    }
+                    // Keep the original error, so the model and the client see why
+                    // the input was rejected and the model can retry the call
                     return null
                 }
             }
@@ -582,7 +606,6 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         },
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
-        ...(headers && { headers }),
         // Langfuse telemetry config (returns undefined if not configured)
         ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
             experimental_telemetry: getTelemetryConfig({
@@ -596,19 +619,34 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
 
             // Record token usage for server-side quota tracking (if enabled)
             // Use totalUsage (cumulative across all steps) instead of usage (final step only)
-            // Include all 4 token types: input, output, cache read, cache write
-            if (
-                isQuotaEnabled() &&
-                !hasOwnApiKey &&
-                userId !== "anonymous" &&
-                totalUsage
-            ) {
+            // inputTokens already includes cache reads and writes in AI SDK 6
+            if (countsQuota && totalUsage && !stopped) {
                 const totalTokens =
                     (totalUsage.inputTokens || 0) +
-                    (totalUsage.outputTokens || 0) +
-                    (totalUsage.cachedInputTokens || 0) +
-                    (totalUsage.inputTokenDetails?.cacheWriteTokens || 0)
+                    (totalUsage.outputTokens || 0)
                 recordTokenUsage(userId, totalTokens)
+            }
+        },
+        // onFinish is skipped when the stream fails or is aborted, so end the trace here
+        onError: ({ error }) => {
+            console.error(error) // what AI SDK does without an onError
+            endTrace()
+        },
+        onAbort: ({ steps }) => {
+            stopped = true
+            endTrace()
+            // Stopped (or disconnected) after some steps finished: their
+            // tokens were used, or stopping every request after a costly
+            // first step would get around the token limits
+            if (countsQuota) {
+                const tokens = steps.reduce(
+                    (sum, step) =>
+                        sum +
+                        (step.usage.inputTokens || 0) +
+                        (step.usage.outputTokens || 0),
+                    0,
+                )
+                if (tokens > 0) recordTokenUsage(userId, tokens)
             }
         },
         tools: {
@@ -625,21 +663,7 @@ VALIDATION RULES (XML will be rejected if violated):
 6. Escape special chars in values: &lt; &gt; &amp; &quot;
 
 Example (generate ONLY this - no wrapper tags):
-<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
+${SWIMLANE_EXAMPLE}
 
 Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
@@ -717,14 +741,7 @@ Example: If previous output ended with '<mxCell id="x" style="rounded=1', contin
                 description: `Get draw.io shape/icon library documentation with style syntax and shape names.
 
 Available libraries:
-- Cloud: aws4, azure2, gcp2, alibaba_cloud, openstack, salesforce
-- Networking: cisco19, network, kubernetes, vvd, rack
-- Business: bpmn, lean_mapping
-- General: flowchart, basic, arrows2, infographic, sitemap
-- UI/Mockups: android, material_design
-- Enterprise: citrix, sap, mscae, atlassian
-- Engineering: fluidpower, electrical, pid, cabinets, floorplan
-- Icons: webicons
+${SHAPE_LIBRARY_LIST}
 
 Call this tool to get shape names and usage syntax for a specific library.`,
                 inputSchema: z.object({
@@ -735,45 +752,12 @@ Call this tool to get shape names and usage syntax for a specific library.`,
                         ),
                 }),
                 execute: async ({ library }) => {
-                    // Sanitize input - prevent path traversal attacks
-                    const sanitizedLibrary = library
-                        .toLowerCase()
-                        .replace(/[^a-z0-9_-]/g, "")
-
-                    if (sanitizedLibrary !== library.toLowerCase()) {
-                        return `Invalid library name "${library}". Use only letters, numbers, underscores, and hyphens.`
-                    }
-
-                    const baseDir = path.join(
-                        process.cwd(),
-                        "docs/shape-libraries",
+                    // Only known library names reach the file system
+                    const result = await getShapeLibrary(
+                        library,
+                        path.join(process.cwd(), "docs/shape-libraries"),
                     )
-                    const filePath = path.join(
-                        baseDir,
-                        `${sanitizedLibrary}.md`,
-                    )
-
-                    // Verify path stays within expected directory
-                    const resolvedPath = path.resolve(filePath)
-                    if (!resolvedPath.startsWith(path.resolve(baseDir))) {
-                        return `Invalid library path.`
-                    }
-
-                    try {
-                        const content = await fs.readFile(filePath, "utf-8")
-                        return content
-                    } catch (error) {
-                        if (
-                            (error as NodeJS.ErrnoException).code === "ENOENT"
-                        ) {
-                            return `Library "${library}" not found. Available: aws4, azure2, gcp2, alibaba_cloud, cisco19, kubernetes, network, bpmn, flowchart, basic, arrows2, vvd, salesforce, citrix, sap, mscae, atlassian, fluidpower, electrical, pid, cabinets, floorplan, webicons, infographic, sitemap, android, material_design, lean_mapping, openstack, rack`
-                        }
-                        console.error(
-                            `[get_shape_library] Error loading "${library}":`,
-                            error,
-                        )
-                        return `Error loading library "${library}". Please try again.`
-                    }
+                    return result.ok ? result.text : result.error
                 },
             },
         },
@@ -782,8 +766,12 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         }),
     })
 
-    return result.toUIMessageStreamResponse({
+    const response = result.toUIMessageStreamResponse({
         sendReasoning: true,
+        // On the server's keys the provider's text can name its account.
+        // Keyless endpoints keep theirs: the desktop app's Ollama is the
+        // user's own, and EdgeOne's text is our function's explanation.
+        onError: (error) => streamErrorText(error, onServerCredentials),
         messageMetadata: ({ part }) => {
             if (part.type === "finish") {
                 const usage = (part as any).totalUsage
@@ -796,63 +784,28 @@ Call this tool to get shape names and usage syntax for a specific library.`,
             return undefined
         },
     })
+    modelStreamResponses.add(response)
+    return response
 }
 
-// Helper to categorize errors and return appropriate response
+// Errors before the stream starts, as JSON the chat panel reads
 function handleError(error: unknown): Response {
     console.error("Error in chat route:", error)
 
     const isDev = process.env.NODE_ENV === "development"
-
-    // Check for specific AI SDK error types
-    if (APICallError.isInstance(error)) {
-        return Response.json(
-            {
-                error: error.message,
-                ...(isDev && {
-                    details: error.responseBody,
-                    stack: error.stack,
-                }),
-            },
-            { status: error.statusCode || 500 },
-        )
-    }
-
-    if (LoadAPIKeyError.isInstance(error)) {
-        return Response.json(
-            {
-                error: "Authentication failed. Please check your API key.",
-                ...(isDev && {
-                    stack: error.stack,
-                }),
-            },
-            { status: 401 },
-        )
-    }
-
-    // Fallback for other errors with safety filter
-    const message =
-        error instanceof Error ? error.message : "An unexpected error occurred"
-    const status = (error as any)?.statusCode || (error as any)?.status || 500
-
-    // Prevent leaking API keys, tokens, or other sensitive data
-    const lowerMessage = message.toLowerCase()
-    const safeMessage =
-        lowerMessage.includes("key") ||
-        lowerMessage.includes("token") ||
-        lowerMessage.includes("sig") ||
-        lowerMessage.includes("signature") ||
-        lowerMessage.includes("secret") ||
-        lowerMessage.includes("password") ||
-        lowerMessage.includes("credential")
-            ? "Authentication failed. Please check your credentials."
-            : message
+    const classified = classifyLLMError(error)
+    const status =
+        (error as { statusCode?: number })?.statusCode ||
+        (error as { status?: number })?.status ||
+        (classified.code === "invalid_api_key" ? 401 : 500)
 
     return Response.json(
         {
-            error: safeMessage,
+            ...classified,
             ...(isDev && {
-                details: message,
+                details: APICallError.isInstance(error)
+                    ? error.responseBody
+                    : undefined,
                 stack: error instanceof Error ? error.stack : undefined,
             }),
         },
@@ -862,11 +815,16 @@ function handleError(error: unknown): Response {
 
 // Wrap handler with error handling
 async function safeHandler(req: Request): Promise<Response> {
+    let response: Response
     try {
-        return await handleChatRequest(req)
+        response = await handleChatRequest(req)
     } catch (error) {
-        return handleError(error)
+        response = handleError(error)
     }
+    // Early returns, cache hits and errors never reach streamText's callbacks,
+    // so their Langfuse trace has to be ended here
+    if (!modelStreamResponses.has(response)) endTrace()
+    return response
 }
 
 // Wrap with Langfuse observe (if configured)
