@@ -10,6 +10,7 @@ import {
     existsSync,
     mkdirSync,
     readdirSync,
+    readFileSync,
     renameSync,
     statSync,
     unlinkSync,
@@ -54,6 +55,17 @@ export class Autosaver {
         return this.dir ? join(this.dir, `${sessionId}.drawio`) : null
     }
 
+    /** The session's saved diagram, or null. */
+    load(sessionId: string): string | null {
+        const path = this.pathFor(sessionId)
+        if (!path || !existsSync(path)) return null
+        try {
+            return readFileSync(path, "utf-8")
+        } catch {
+            return null
+        }
+    }
+
     schedule(sessionId: string, xml: string): void {
         if (!this.dir) return
         const previous = this.pending.get(sessionId)
@@ -93,10 +105,11 @@ export class Autosaver {
     private removeOldest(): void {
         if (!this.dir) return
         const dir = this.dir
-        // Only our own session files: DRAWIO_DATA_DIR may be a folder
-        // that also holds the user's diagrams
+        // Only our own session files (mcp-<time in base 36>-<random>, made
+        // by start_session): DRAWIO_DATA_DIR may be a folder that also holds
+        // the user's diagrams
         const files = readdirSync(dir)
-            .filter((f) => f.startsWith("mcp-") && f.endsWith(".drawio"))
+            .filter((f) => /^mcp-[0-9a-z]{8}-[0-9a-z]{1,6}\.drawio$/.test(f))
             .map((f) => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
             .sort((a, b) => b.mtime - a.mtime)
         for (const { f } of files.slice(this.maxFiles)) {

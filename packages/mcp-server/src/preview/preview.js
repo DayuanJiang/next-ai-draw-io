@@ -32,8 +32,9 @@ window.addEventListener('message', (e) => {
             setTimeout(() => { if (pendingSvgExport === msg.xml) { pushState(msg.xml, '', pendingSvgBase); pendingSvgExport = null; } }, 2000);
         } else if (msg.event === 'export' && msg.format === 'xml') {
             // Sync export requested by the server (get_diagram).
-            // draw.io returns the XML in msg.xml, with no msg.data.
-            if (pendingSyncExport && msg.xml) {
+            // draw.io returns the XML in msg.xml, with no msg.data. A late
+            // reply to an earlier request was taken at another version.
+            if (pendingSyncExport && msg.xml && msg.message?.syncExport === syncExportSeq) {
                 pendingSyncExport = false;
                 // Push with the version the export was taken at: a
                 // newer AI write may have loaded meanwhile, and this
@@ -127,9 +128,10 @@ function loadDiagram(xml, capturePreview = false) {
 // autosave that was still in flight when the projection started,
 // which a copy taken at that moment would miss. A flag is used
 // because a push finishing meanwhile may update currentVersion.
+// projectionExportActive stays set until the poll loads the document:
+// an edit on the projection before that must not be pushed.
 function restoreFromProjection() {
     if (!projectionExportActive) return;
-    projectionExportActive = false;
     forceReload = true;
     poll();
 }
@@ -163,6 +165,7 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
 
 let pendingSyncExport = false;
 let pendingSyncBase = 0; // version the pending sync export was taken at
+let syncExportSeq = 0; // number of the latest sync export
 
 async function poll() {
     if (!sessionId) return;
@@ -177,12 +180,13 @@ async function poll() {
             pushState(lastXml);
         }
         // Load new diagram from server (before export, so we export latest).
-        // While a page-targeted projection is on screen, skip the reload
-        // so it doesn't fight the projection — and leave currentVersion
-        // unadvanced so this bump is re-detected and applied once the
-        // real document is restored.
-        if ((forceReload || s.version > currentVersion) && s.xml && !projectionExportActive) {
+        // While a page-targeted projection is on screen, only the restore
+        // (forceReload) replaces it, so a new version doesn't fight the
+        // projection; currentVersion stays unadvanced until then, so the
+        // bump is applied with the real document.
+        if ((forceReload || (s.version > currentVersion && !projectionExportActive)) && s.xml) {
             forceReload = false;
+            projectionExportActive = false;
             currentVersion = s.version;
             loadDiagram(s.xml, true);
         }
@@ -194,8 +198,11 @@ async function poll() {
         if (s.syncRequested && !pendingSyncExport && isReady && !projectionExportActive) {
             pendingSyncExport = true;
             pendingSyncBase = currentVersion;
-            iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml' }), '*');
-            setTimeout(() => { pendingSyncExport = false; }, 5000);
+            // draw.io echoes the request in msg.message, so the reply can
+            // be matched to this request
+            const seq = ++syncExportSeq;
+            iframe.contentWindow.postMessage(JSON.stringify({ action: 'export', format: 'xml', syncExport: seq }), '*');
+            setTimeout(() => { if (seq === syncExportSeq) pendingSyncExport = false; }, 5000);
         }
         // Handle export request from MCP server (png/svg).
         //

@@ -54,7 +54,9 @@ export function generatePageId(): string {
 
 /** Any cell besides the root cells "0" and "1" */
 export const hasCells = (xml: string) =>
-    /<(mxCell\b[^>]*\bid=["'](?![01]["'])|UserObject\b|object\b)/.test(xml)
+    /<(mxCell\b[^>]*\bid\s*=\s*["'](?![01]["'])|UserObject\b|object\b)/.test(
+        xml,
+    )
 
 /** Cheap regex check — does the XML start with an <mxfile> root? */
 export function isMxFile(xml: string): boolean {
@@ -121,8 +123,14 @@ export function wrapCellsInModel(xml: string): string {
         content = content.slice(0, end)
     }
     content = content
-        .replace(/<mxCell[^>]*\bid=["']0["'][^>]*(?:\/>|><\/mxCell>)/g, "")
-        .replace(/<mxCell[^>]*\bid=["']1["'][^>]*(?:\/>|><\/mxCell>)/g, "")
+        .replace(
+            /<mxCell[^>]*\bid\s*=\s*["']0["'][^>]*(?:\/>|>\s*<\/mxCell>)/g,
+            "",
+        )
+        .replace(
+            /<mxCell[^>]*\bid\s*=\s*["']1["'][^>]*(?:\/>|>\s*<\/mxCell>)/g,
+            "",
+        )
         .trim()
     return `<mxGraphModel><root>${ROOT_CELLS}${content}</root></mxGraphModel>`
 }

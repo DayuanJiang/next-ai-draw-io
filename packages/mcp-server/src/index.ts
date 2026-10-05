@@ -27,13 +27,14 @@ import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
-import { checkEditGate } from "./edit-gate.ts"
+import { checkEditGate, markPageSeen } from "./edit-gate.ts"
 import { addHistory } from "./history.ts"
 import {
     type ExportFormat,
     type ExportOptions,
     getServerPort,
     getState,
+    onSessionRecreate,
     onStateChange,
     requestExport,
     requestSync,
@@ -44,7 +45,7 @@ import {
 } from "./http-server.ts"
 import { parseDrawioFileContent } from "./load-diagram.ts"
 import { log } from "./logger.ts"
-import { prepareNewDiagram } from "./new-diagram.ts"
+import { prepareNewDiagram, reservedIdError } from "./new-diagram.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
@@ -75,6 +76,7 @@ const config = {
 // Keep each session's latest diagram on disk, so it survives this process
 const autosaver = new Autosaver(defaultDataDir())
 onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
+onSessionRecreate((sessionId) => autosaver.load(sessionId))
 
 // Session state (single session for simplicity)
 let currentSession: {
@@ -643,18 +645,27 @@ server.registerTool(
                         : "edit_diagram rejected: the model has not seen the diagram yet",
                 )
                 // The error carries the current page, so the model has now
-                // seen it and can retry without a get_diagram round-trip.
-                currentSession.lastSeenXml =
-                    browserState?.xml || currentSession.xml
+                // seen it and can retry without a get_diagram round-trip,
+                // unless other pages changed too.
+                const liveXml = browserState?.xml || currentSession.xml
+                currentSession.lastSeenXml = markPageSeen(
+                    currentSession.lastSeenXml,
+                    liveXml,
+                    pageSelector,
+                )
                 const reason =
                     gate.reason === "stale"
                         ? "The diagram changed in the browser since you last saw it (e.g. manual user edits). No changes were made."
                         : "You have not seen this diagram yet, so no changes were made."
+                const next =
+                    currentSession.lastSeenXml === liveXml
+                        ? "Build your operations on this XML and retry."
+                        : "Other pages changed too: call get_diagram without a page selector, then retry."
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\nBuild your operations on this XML and retry.`,
+                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\n${next}`,
                         },
                     ],
                     isError: true,
@@ -796,16 +807,28 @@ server.registerTool(
                 }
             }
 
-            // The model is now looking at the current state. Record the raw
-            // store value — the gate's fast path is plain string equality
-            // against the store, with a structural comparison as fallback.
-            currentSession.lastSeenXml = browserState?.xml || currentSession.xml
-
             const pageSelector = pickPageSelector({
                 page_id,
                 page_name,
                 page_index,
             })
+
+            // The model is now looking at the current state. Record the raw
+            // store value — the gate's fast path is plain string equality
+            // against the store, with a structural comparison as fallback.
+            // One page shown counts for all only if the others are unchanged.
+            const liveXml = browserState?.xml || currentSession.xml
+            currentSession.lastSeenXml = hasPageSelector(pageSelector)
+                ? markPageSeen(
+                      currentSession.lastSeenXml,
+                      liveXml,
+                      pageSelector,
+                  )
+                : liveXml
+            const otherPagesNote =
+                currentSession.lastSeenXml === liveXml
+                    ? ""
+                    : "\n\nNote: other pages changed since you last saw them. Call get_diagram without a page selector before editing."
             const doc = parseMxfile(currentSession.xml)
             const pages = doc ? listPagesFromDoc(doc) : []
             const pageList = pages.length
@@ -844,7 +867,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}${staleNote}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}${staleNote}${otherPagesNote}`,
                     },
                 ],
             }
@@ -1016,13 +1039,13 @@ server.registerTool(
             }
 
             let data: string | undefined
+            // start_session may replace currentSession between the tries
+            const sessionId = currentSession.id
             for (const width of SCREENSHOT_WIDTHS) {
-                data = await exportViaBrowser(
-                    currentSession.id,
-                    "png",
-                    projectionXml,
-                    { width, pageId },
-                )
+                data = await exportViaBrowser(sessionId, "png", projectionXml, {
+                    width,
+                    pageId,
+                })
                 if (!data || data.length <= MAX_SCREENSHOT_CHARS) break
             }
             if (!data) {
@@ -1502,6 +1525,13 @@ server.registerTool(
 
             // If caller provided XML, validate it before splicing it in so we
             // never get a half-broken mxfile written to the session.
+            const reserved = xml && reservedIdError(xml)
+            if (reserved) {
+                return {
+                    content: [{ type: "text", text: `Error: ${reserved}` }],
+                    isError: true,
+                }
+            }
             let cleanXml: string | undefined = xml && wrapCellsInModel(xml)
             if (cleanXml) {
                 const { valid, error, fixed, fixes } =

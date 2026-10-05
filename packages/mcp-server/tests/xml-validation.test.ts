@@ -317,4 +317,12 @@ describe("text directly under a page", () => {
         expect(r.valid).toBe(true)
         expect(r.fixed).not.toContain("\\n")
     })
+
+    it("rejects CDATA text before the model of a page", () => {
+        const r = validateAndFixXml(
+            `<mxfile><diagram id="p" name="P"><![CDATA[not-base64!]]>${model(`<mxCell id="2" vertex="1" parent="1"/>`)}</diagram></mxfile>`,
+        )
+        expect(r.valid).toBe(false)
+        expect(r.error).toMatch(/not-base64/)
+    })
 })

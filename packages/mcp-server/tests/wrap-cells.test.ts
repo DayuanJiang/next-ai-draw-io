@@ -10,7 +10,7 @@ beforeAll(() => {
     installDomPolyfill()
 })
 
-import { prepareNewDiagram } from "../src/new-diagram.ts"
+import { prepareNewDiagram, reservedIdError } from "../src/new-diagram.ts"
 import { hasCells, wrapCellsInModel } from "../src/pages.ts"
 import { validateAndFixXml } from "../src/xml-validation.ts"
 
@@ -59,6 +59,15 @@ describe("wrapCellsInModel", () => {
         expect(wrapCellsInModel(file)).toBe(file)
     })
 
+    it("replaces root cells written over two lines", () => {
+        const wrapped = wrapCellsInModel(
+            `<mxCell id="0">\n</mxCell>\n<mxCell id="1" parent="0">\n</mxCell>\n${A}`,
+        )
+        expect(wrapped).toBe(
+            `<mxGraphModel><root>${ROOTS}${A}</root></mxGraphModel>`,
+        )
+    })
+
     it("keeps a UserObject cell at the end", () => {
         const wrapped = `<UserObject id="u" label="U"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>`
         expect(wrapCellsInModel(A + wrapped)).toContain(wrapped)
@@ -74,6 +83,35 @@ describe("hasCells", () => {
         expect(hasCells(`<mxCell id='0'/><mxCell id='1' parent='0'/>`)).toBe(
             false,
         )
+    })
+
+    it("counts cells with spaces around the =", () => {
+        expect(hasCells(`<mxCell id = "a" vertex="1" parent="1"/>`)).toBe(true)
+        expect(
+            hasCells(`<mxCell id = "0"/><mxCell id = "1" parent="0"/>`),
+        ).toBe(false)
+    })
+})
+
+describe("reservedIdError", () => {
+    it("finds a shape that uses a root cell id", () => {
+        expect(reservedIdError(A)).toBeNull()
+        expect(reservedIdError(ROOTS + A)).toBeNull()
+        expect(
+            reservedIdError(`<mxCell id = "1" vertex="1" parent="1"/>`),
+        ).toMatch(/"0" and "1"/)
+        // A linked or labelled shape has its id on the wrapper
+        expect(
+            reservedIdError(
+                `<UserObject id="1" label="Docs"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>`,
+            ),
+        ).toMatch(/"0" and "1"/)
+        // A whole model has its own root cells
+        expect(
+            reservedIdError(
+                `<mxGraphModel><root>${ROOTS}</root></mxGraphModel>`,
+            ),
+        ).toBeNull()
     })
 })
 

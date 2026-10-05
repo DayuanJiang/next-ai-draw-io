@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
     getState,
+    onSessionRecreate,
     requestExport,
     requestSync,
     setState,
@@ -242,6 +243,27 @@ describe("POST /api/state", () => {
         expect(getHistory(id)).toHaveLength(before)
         expect(await waitForSync(id, 200)).toBe(true)
     })
+
+    it("ignores a sync reply older than a user edit saved meanwhile", async () => {
+        const id = "mcp-late-sync"
+        const version = setState(id, "<mxfile>A</mxfile>", undefined, true)
+        requestSync(id)
+        // The user's edit is saved before the sync reply arrives
+        const edit = await postJson("/api/state", {
+            sessionId: id,
+            xml: "<mxfile>B</mxfile>",
+            baseVersion: version,
+        })
+        expect(edit.status).toBe(200)
+        const late = await postJson("/api/state", {
+            sessionId: id,
+            xml: "<mxfile>A</mxfile>",
+            baseVersion: version,
+            source: "sync",
+        })
+        expect(late.status).toBe(409)
+        expect(getState(id)?.xml).toBe("<mxfile>B</mxfile>")
+    })
 })
 
 describe("export requests", () => {
@@ -283,6 +305,19 @@ describe("export requests", () => {
 })
 
 describe("preview page", () => {
+    it("shows the saved diagram of a session whose state expired", async () => {
+        const saved = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="kept" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+        onSessionRecreate((id) => (id === "mcp-expired" ? saved : null))
+        try {
+            await request("/?mcp=mcp-expired")
+            expect(getState("mcp-expired")?.xml).toBe(saved)
+            await request("/?mcp=mcp-never-saved")
+            expect(getState("mcp-never-saved")?.xml).not.toContain("kept")
+        } finally {
+            onSessionRecreate(() => null)
+        }
+    })
+
     it("serves scripts that parse, with every placeholder filled", async () => {
         const res = await request("/?mcp=mcp-test-script")
         expect(res.body).not.toContain("{{")
@@ -313,5 +348,25 @@ describe("history restore", () => {
         })
         expect(res.status).toBe(200)
         expect(getState(id)?.xml).toBe("<mxfile>5</mxfile>")
+    })
+
+    it("keeps manual edits in history before restoring", async () => {
+        const id = "mcp-history-manual"
+        const doc = (cellId: string) =>
+            `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+        const version = setState(id, doc("ai"))
+        addHistory(id, doc("ai"))
+        // An edit in the browser is not a history entry by itself
+        const push = await postJson("/api/state", {
+            sessionId: id,
+            xml: doc("manual"),
+            baseVersion: version,
+        })
+        expect(push.status).toBe(200)
+
+        const [entry] = getHistory(id)
+        await postJson("/api/restore", { sessionId: id, id: entry.id })
+        expect(getState(id)?.xml).toBe(doc("ai"))
+        expect(getHistory(id).map((e) => e.xml)).toContain(doc("manual"))
     })
 })

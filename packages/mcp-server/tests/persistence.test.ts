@@ -52,17 +52,36 @@ describe("Autosaver", () => {
     it("keeps only the newest session files and never touches other files", () => {
         const dir = tempDir()
         const saver = new Autosaver(dir, 10, 2)
-        for (const [i, id] of ["mine", "mcp-old", "mcp-mid"].entries()) {
+        // Session ids look like mcp-<time in base 36>-<random>
+        const ids = [
+            "mine",
+            "mcp-notes",
+            "mcp-system-design-v2",
+            "mcp-mgd0a1b2-old123",
+            "mcp-mgd0a1b3-mid456",
+        ]
+        for (const [i, id] of ids.entries()) {
             writeFileSync(join(dir, `${id}.drawio`), DIAGRAM)
             utimesSync(join(dir, `${id}.drawio`), 1000 + i, 1000 + i)
         }
-        saver.schedule("mcp-new", DIAGRAM)
+        saver.schedule("mcp-mgd0a1b4-new789", DIAGRAM)
         saver.flush()
         expect(readdirSync(dir).sort()).toEqual([
-            "mcp-mid.drawio",
-            "mcp-new.drawio",
+            "mcp-mgd0a1b3-mid456.drawio",
+            "mcp-mgd0a1b4-new789.drawio",
+            "mcp-notes.drawio",
+            "mcp-system-design-v2.drawio",
             "mine.drawio",
         ])
+    })
+
+    it("reads a session's saved diagram back", () => {
+        const saver = new Autosaver(tempDir(), 10)
+        expect(saver.load("mcp-none")).toBeNull()
+        saver.schedule("mcp-back", DIAGRAM)
+        saver.flush()
+        expect(saver.load("mcp-back")).toBe(DIAGRAM)
+        expect(new Autosaver(null).load("mcp-back")).toBeNull()
     })
 
     it("does nothing when saving is off", () => {

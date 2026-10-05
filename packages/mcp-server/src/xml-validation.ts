@@ -413,7 +413,11 @@ function findTextBetweenTags(el: Element | null): string | null {
         if (node.nodeType === 1) {
             const text = findTextBetweenTags(node as Element)
             if (text) return text
-        } else if (node.nodeType === 3 && !compressed) {
+        } else if (
+            // Text, or a CDATA section (draw.io reads it as text too)
+            (node.nodeType === 3 || node.nodeType === 4) &&
+            !compressed
+        ) {
             const text = node.textContent?.trim()
             if (text) return text.slice(0, 40)
         }

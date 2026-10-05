@@ -40,7 +40,7 @@ import {
     updateLastHistorySvg,
 } from "./history.ts"
 import { log } from "./logger.ts"
-import { BLANK_MXFILE } from "./pages.ts"
+import { BLANK_MXFILE, hasCells } from "./pages.ts"
 
 // Configurable draw.io embed URL for private deployments
 const DRAWIO_BASE_URL =
@@ -87,10 +87,12 @@ function ensureSessionStateInitialized(sessionId: string): void {
     if (!isValidSessionId(sessionId)) return
     if (stateStore.has(sessionId)) return
 
+    // The session's saved diagram, so a blank page never replaces that file.
     // Not a change worth saving: the browser fills it on its next push
     // A blank diagram keeps the draw.io spinner (spin=1) from waiting
     // forever when no load(xml) is ever sent
-    setState(sessionId, BLANK_MXFILE, undefined, false, false)
+    const saved = savedStateLoader?.(sessionId)
+    setState(sessionId, saved || BLANK_MXFILE, undefined, false, false)
 }
 
 interface SessionState {
@@ -140,6 +142,16 @@ export function onStateChange(
     listener: (sessionId: string, xml: string) => void,
 ): void {
     stateListener = listener
+}
+
+// Reads a session's saved diagram when its state is created again (it
+// expired, or the MCP process restarted)
+let savedStateLoader: ((sessionId: string) => string | null) | null = null
+
+export function onSessionRecreate(
+    loader: (sessionId: string) => string | null,
+): void {
+    savedStateLoader = loader
 }
 
 export function setState(
@@ -461,11 +473,15 @@ function handleStateApi(
 
                 // The browser edited a version older than the latest AI write
                 // (it has not loaded that write yet). Keep the AI write; the
-                // browser loads it on its next poll.
+                // browser loads it on its next poll. A sync reply is also
+                // stale after a newer write of the browser's own (a user
+                // edit saved while the export ran).
                 const current = stateStore.get(sessionId)
                 if (
                     typeof data.baseVersion === "number" &&
-                    data.baseVersion < (current?.serverVersion ?? 0)
+                    (data.baseVersion < (current?.serverVersion ?? 0) ||
+                        (data.source === "sync" &&
+                            data.baseVersion < (current?.version ?? 0)))
                 ) {
                     let savedToHistory = false
                     if (data.source === "sync") {
@@ -566,6 +582,12 @@ function handleRestoreApi(
                 return
             }
 
+            // Edits in the browser since the last entry are not in history
+            // yet: keep them, so the restore can be undone
+            const current = stateStore.get(sessionId)
+            if (current && hasCells(current.xml)) {
+                addHistory(sessionId, current.xml, current.svg)
+            }
             const newVersion = setState(sessionId, entry.xml)
             addHistory(sessionId, entry.xml, entry.svg)
 
