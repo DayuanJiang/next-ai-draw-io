@@ -1,12 +1,17 @@
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { buildAppMenu } from "./app-menu"
-import { getCurrentPresetEnv } from "./config-manager"
+import { applyCurrentPresetToEnv } from "./config-manager"
 import { loadEnvFile } from "./env-loader"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { startNextServer, stopNextServer } from "./next-server"
 import { applyProxyToEnv } from "./proxy-manager"
 import { registerSettingsWindowHandlers } from "./settings-window"
-import { createWindow, getMainWindow } from "./window-manager"
+import {
+    createWindow,
+    getAppUrl,
+    getMainWindow,
+    isAppUrl,
+} from "./window-manager"
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -28,16 +33,14 @@ if (!gotTheLock) {
     // Apply proxy settings from saved config
     applyProxyToEnv()
 
-    // Apply saved preset environment variables (overrides .env)
-    const presetEnv = getCurrentPresetEnv()
-    for (const [key, value] of Object.entries(presetEnv)) {
-        process.env[key] = value
-    }
-
-    const isDev = process.env.NODE_ENV === "development"
-    let serverUrl: string | null = null
+    const isDev = !app.isPackaged
 
     app.whenReady().then(async () => {
+        // Apply saved preset environment variables (overrides .env).
+        // Must run after ready: on Windows and Linux safeStorage can't
+        // decrypt the API key before that.
+        applyCurrentPresetToEnv()
+
         // Register IPC handlers
         registerIpcHandlers()
         registerSettingsWindowHandlers()
@@ -46,6 +49,7 @@ if (!gotTheLock) {
         buildAppMenu()
 
         try {
+            let serverUrl: string
             if (isDev) {
                 // Development: use the dev server URL
                 serverUrl =
@@ -69,8 +73,9 @@ if (!gotTheLock) {
 
         app.on("activate", () => {
             if (BrowserWindow.getAllWindows().length === 0) {
-                if (serverUrl) {
-                    createWindow(serverUrl)
+                const appUrl = getAppUrl()
+                if (appUrl) {
+                    createWindow(appUrl)
                 }
             }
         })
@@ -87,24 +92,49 @@ if (!gotTheLock) {
         stopNextServer()
     })
 
+    // Pages allowed inside app windows: the app server and draw.io
+    const isInAppUrl = (url: string): boolean => {
+        if (isAppUrl(url)) return true
+        try {
+            const { hostname } = new URL(url)
+            return ["diagrams.net", "draw.io"].some(
+                (domain) =>
+                    hostname === domain || hostname.endsWith(`.${domain}`),
+            )
+        } catch {
+            return false
+        }
+    }
+
+    const isWebUrl = (url: string): boolean =>
+        url.startsWith("http://") || url.startsWith("https://")
+
     // Open external links in default browser
     app.on("web-contents-created", (_, contents) => {
         contents.setWindowOpenHandler(({ url }) => {
-            // Allow diagrams.net iframe
-            if (
-                url.includes("diagrams.net") ||
-                url.includes("draw.io") ||
-                url.startsWith("http://localhost") ||
-                url.startsWith("http://127.0.0.1")
-            ) {
+            if (isInAppUrl(url)) {
                 return { action: "allow" }
             }
             // Open other links in external browser
-            if (url.startsWith("http://") || url.startsWith("https://")) {
+            if (isWebUrl(url)) {
                 shell.openExternal(url)
                 return { action: "deny" }
             }
             return { action: "allow" }
+        })
+
+        // Clicking a plain link would otherwise replace the app page with
+        // an external site that keeps the preload API. Only the page
+        // itself may navigate there; draw.io stays in its frame (this event
+        // is for the main frame only)
+        contents.on("will-navigate", (event) => {
+            if (isAppUrl(event.url)) {
+                return
+            }
+            event.preventDefault()
+            if (isWebUrl(event.url)) {
+                shell.openExternal(event.url)
+            }
         })
     })
 }

@@ -1,10 +1,13 @@
 /**
  * System prompts for different AI models
  * Extended prompt is used for models with higher cache token minimums (Opus 4.5, Haiku 4.5)
- *
- * Token counting utilities are in a separate file (token-counter.ts) to avoid
- * WebAssembly issues with Next.js server-side rendering.
  */
+
+import {
+    SWIMLANE_EXAMPLE,
+    TWO_EDGES_EXAMPLE,
+    WAYPOINT_EXAMPLE,
+} from "@/packages/mcp-server/src/xml-examples.ts"
 
 // Default system prompt (~1900 tokens) - works with all models
 export const DEFAULT_SYSTEM_PROMPT = `
@@ -41,7 +44,7 @@ parameters: {
 tool name: edit_diagram
 description: Edit specific parts of the EXISTING diagram. Use this when making small targeted changes like adding/removing elements, changing labels, or adjusting properties. This is more efficient than regenerating the entire diagram.
 parameters: {
-  edits: Array<{search: string, replace: string}>
+  operations: Array<{operation: "update" | "add" | "delete", cell_id: string, new_xml?: string}>
 }
 ---Tool3---
 tool name: append_diagram
@@ -241,21 +244,7 @@ const EXTENDED_ADDITIONS = `
 
 **Example with swimlanes and edges** (generate ONLY this - no wrapper tags):
 \`\`\`xml
-<mxCell id="lane1" value="Frontend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="40" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step1" value="Step 1" style="rounded=1;" vertex="1" parent="lane1">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="lane2" value="Backend" style="swimlane;" vertex="1" parent="1">
-  <mxGeometry x="280" y="40" width="200" height="200" as="geometry"/>
-</mxCell>
-<mxCell id="step2" value="Step 2" style="rounded=1;" vertex="1" parent="lane2">
-  <mxGeometry x="20" y="60" width="160" height="40" as="geometry"/>
-</mxCell>
-<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;endArrow=classic;" edge="1" parent="1" source="step1" target="step2">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
+${SWIMLANE_EXAMPLE}
 \`\`\`
 
 ### append_diagram Details
@@ -318,12 +307,7 @@ If cell_id not found, check "Current diagram XML" for correct IDs. Use display_d
 
 ### Two edges between same nodes (CORRECT - no overlap):
 \`\`\`xml
-<mxCell id="e1" value="A to B" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;endArrow=classic;" edge="1" parent="1" source="a" target="b">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
-<mxCell id="e2" value="B to A" style="edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.7;entryX=1;entryY=0.7;endArrow=classic;" edge="1" parent="1" source="b" target="a">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
+${TWO_EDGES_EXAMPLE}
 \`\`\`
 
 ### Edge with single waypoint (simple detour):
@@ -342,14 +326,7 @@ If cell_id not found, check "Current diagram XML" for correct IDs. Use display_d
 **WRONG:** Direct diagonal line crosses over Develop
 **CORRECT:** Route around the OUTSIDE (go right first, then up)
 \`\`\`xml
-<mxCell id="hotfix_to_main" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=0;entryX=1;entryY=0.5;endArrow=classic;" edge="1" parent="1" source="hotfix" target="main">
-  <mxGeometry relative="1" as="geometry">
-    <Array as="points">
-      <mxPoint x="750" y="80"/>
-      <mxPoint x="750" y="150"/>
-    </Array>
-  </mxGeometry>
-</mxCell>
+${WAYPOINT_EXAMPLE}
 \`\`\`
 This routes the edge to the RIGHT of all shapes (x=750), then enters Main from the right side.
 

@@ -158,7 +158,7 @@ export function ModelSelector({
     }, [])
 
     return (
-        <div ref={wrapperRef} className="inline-block">
+        <div ref={wrapperRef} className="min-w-0 max-w-48">
             <ModelSelectorRoot open={open} onOpenChange={setOpen}>
                 <ModelSelectorTrigger asChild>
                     <ButtonWithTooltip
@@ -167,7 +167,7 @@ export function ModelSelector({
                         size="sm"
                         disabled={disabled}
                         className={cn(
-                            "hover:bg-accent gap-1.5 h-8 px-2 transition-[padding,background-color] duration-150 ease-in-out",
+                            "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent",
                             !showLabel && "px-1.5 justify-center",
                         )}
                         // accessibility: expose label to screen readers
@@ -176,7 +176,7 @@ export function ModelSelector({
                         <Bot className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                         {/* show/hide visible label based on measured width */}
                         {showLabel ? (
-                            <span className="text-xs truncate">
+                            <span className="min-w-0 truncate text-xs">
                                 {selectedModel
                                     ? selectedModel.modelId
                                     : dict.modelConfig.default}
@@ -264,9 +264,13 @@ export function ModelSelector({
                                                         (model) => (
                                                             <ModelSelectorItem
                                                                 key={model.id}
-                                                                value={
-                                                                    model.modelId
-                                                                }
+                                                                // Unique value so same-named models highlight
+                                                                // separately; keywords keep search by name
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
                                                                 onSelect={() =>
                                                                     handleSelect(
                                                                         model.id,
@@ -351,9 +355,11 @@ export function ModelSelector({
                                                         (model) => (
                                                             <ModelSelectorItem
                                                                 key={model.id}
-                                                                value={
-                                                                    model.modelId
-                                                                }
+                                                                value={model.id}
+                                                                keywords={[
+                                                                    model.modelId,
+                                                                    providerLabel,
+                                                                ]}
                                                                 onSelect={() =>
                                                                     handleSelect(
                                                                         model.id,

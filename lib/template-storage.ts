@@ -57,33 +57,6 @@ export function generateDefaultTitle(prompt: string): string {
 
 // Database singleton
 let dbPromise: Promise<IDBPDatabase<TemplateDB>> | null = null
-const resetDBPromise = () => {
-    dbPromise = null
-}
-
-const isClosingError = (error: unknown): boolean => {
-    return (
-        error instanceof DOMException &&
-        error.name === "InvalidStateError" &&
-        /closing/i.test(error.message)
-    )
-}
-
-const withDB = async <T>(
-    action: (db: IDBPDatabase<TemplateDB>) => Promise<T>,
-): Promise<T> => {
-    try {
-        const db = await getDB()
-        return await action(db)
-    } catch (error) {
-        if (isClosingError(error)) {
-            resetDBPromise()
-            const db = await getDB()
-            return await action(db)
-        }
-        throw error
-    }
-}
 
 async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
     if (!dbPromise) {
@@ -101,23 +74,7 @@ async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
                     }
                 }
             },
-            terminated() {
-                resetDBPromise()
-            },
         })
-        dbPromise
-            .then((db) => {
-                db.onversionchange = () => {
-                    db.close()
-                    resetDBPromise()
-                }
-                db.onclose = () => {
-                    resetDBPromise()
-                }
-            })
-            .catch(() => {
-                resetDBPromise()
-            })
     }
     return dbPromise
 }
@@ -137,10 +94,9 @@ export function isIndexedDBAvailable(): boolean {
 export async function getAllTemplates(): Promise<Template[]> {
     if (!isIndexedDBAvailable()) return []
     try {
-        return await withDB(async (db) => {
-            const templates = await db.getAll(STORE_NAME)
-            return sortTemplates(templates)
-        })
+        const db = await getDB()
+        const templates = await db.getAll(STORE_NAME)
+        return sortTemplates(templates)
     } catch (error) {
         console.error("Failed to get templates:", error)
         return []
@@ -150,9 +106,8 @@ export async function getAllTemplates(): Promise<Template[]> {
 export async function getTemplate(id: string): Promise<Template | null> {
     if (!isIndexedDBAvailable()) return null
     try {
-        return await withDB(async (db) => {
-            return (await db.get(STORE_NAME, id)) || null
-        })
+        const db = await getDB()
+        return (await db.get(STORE_NAME, id)) || null
     } catch (error) {
         console.error("Failed to get template:", error)
         return null
@@ -182,9 +137,8 @@ export async function createTemplate(
     }
 
     try {
-        await withDB(async (db) => {
-            await db.put(STORE_NAME, template)
-        })
+        const db = await getDB()
+        await db.put(STORE_NAME, template)
         return template
     } catch (error) {
         console.error("Failed to create template:", error)
@@ -198,20 +152,19 @@ export async function updateTemplate(
 ): Promise<Template | null> {
     if (!isIndexedDBAvailable()) return null
     try {
-        return await withDB(async (db) => {
-            const existing = await db.get(STORE_NAME, id)
-            if (!existing) return null
+        const db = await getDB()
+        const existing = await db.get(STORE_NAME, id)
+        if (!existing) return null
 
-            const updated: Template = {
-                ...existing,
-                ...updates,
-                id: existing.id,
-                createdAt: existing.createdAt,
-                updatedAt: Date.now(),
-            }
-            await db.put(STORE_NAME, updated)
-            return updated
-        })
+        const updated: Template = {
+            ...existing,
+            ...updates,
+            id: existing.id,
+            createdAt: existing.createdAt,
+            updatedAt: Date.now(),
+        }
+        await db.put(STORE_NAME, updated)
+        return updated
     } catch (error) {
         console.error("Failed to update template:", error)
         return null
@@ -221,9 +174,8 @@ export async function updateTemplate(
 export async function deleteTemplate(id: string): Promise<boolean> {
     if (!isIndexedDBAvailable()) return false
     try {
-        await withDB(async (db) => {
-            await db.delete(STORE_NAME, id)
-        })
+        const db = await getDB()
+        await db.delete(STORE_NAME, id)
         return true
     } catch (error) {
         console.error("Failed to delete template:", error)
@@ -237,25 +189,24 @@ export async function duplicateTemplate(
 ): Promise<Template | null> {
     if (!isIndexedDBAvailable()) return null
     try {
-        return await withDB(async (db) => {
-            const existing = await db.get(STORE_NAME, id)
-            if (!existing) return null
+        const db = await getDB()
+        const existing = await db.get(STORE_NAME, id)
+        if (!existing) return null
 
-            const now = Date.now()
-            const duplicate: Template = {
-                ...existing,
-                id: nanoid(),
-                title: `${existing.title} ${copySuffix}`,
-                createdAt: now,
-                updatedAt: now,
-                clickCount: 0,
-                runCount: 0,
-                lastUsedAt: 0,
-                pinned: false,
-            }
-            await db.put(STORE_NAME, duplicate)
-            return duplicate
-        })
+        const now = Date.now()
+        const duplicate: Template = {
+            ...existing,
+            id: nanoid(),
+            title: `${existing.title} ${copySuffix}`,
+            createdAt: now,
+            updatedAt: now,
+            clickCount: 0,
+            runCount: 0,
+            lastUsedAt: 0,
+            pinned: false,
+        }
+        await db.put(STORE_NAME, duplicate)
+        return duplicate
     } catch (error) {
         console.error("Failed to duplicate template:", error)
         return null
@@ -267,13 +218,12 @@ export async function duplicateTemplate(
 export async function incrementClickCount(id: string): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
-        await withDB(async (db) => {
-            const template = await db.get(STORE_NAME, id)
-            if (!template) return
-            template.clickCount += 1
-            template.updatedAt = Date.now()
-            await db.put(STORE_NAME, template)
-        })
+        const db = await getDB()
+        const template = await db.get(STORE_NAME, id)
+        if (!template) return
+        template.clickCount += 1
+        template.updatedAt = Date.now()
+        await db.put(STORE_NAME, template)
     } catch (error) {
         console.error("Failed to increment click count:", error)
     }
@@ -282,15 +232,14 @@ export async function incrementClickCount(id: string): Promise<void> {
 export async function incrementRunCount(id: string): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
-        await withDB(async (db) => {
-            const template = await db.get(STORE_NAME, id)
-            if (!template) return
-            const now = Date.now()
-            template.runCount += 1
-            template.lastUsedAt = now
-            template.updatedAt = now
-            await db.put(STORE_NAME, template)
-        })
+        const db = await getDB()
+        const template = await db.get(STORE_NAME, id)
+        if (!template) return
+        const now = Date.now()
+        template.runCount += 1
+        template.lastUsedAt = now
+        template.updatedAt = now
+        await db.put(STORE_NAME, template)
     } catch (error) {
         console.error("Failed to increment run count:", error)
     }
@@ -423,9 +372,8 @@ export async function importTemplates(
             pinned: typeof t.pinned === "boolean" ? t.pinned : false,
         }
         try {
-            await withDB(async (db) => {
-                await db.put(STORE_NAME, newTemplate)
-            })
+            const db = await getDB()
+            await db.put(STORE_NAME, newTemplate)
             existingKeys.add(key)
             imported++
         } catch (error) {
