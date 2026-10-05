@@ -424,3 +424,66 @@ test("new chat right after an answer saves that chat once", async ({
         expect(await countSessions(page), `run ${run}`).toBe(run)
     }
 })
+
+test("an idle chat is not saved again and again", async ({ page }) => {
+    test.setTimeout(90_000)
+    await page.route("**/api/chat", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            // The tool result comes from the page, as with a real model
+            body: `${[
+                { type: "start" },
+                { type: "text-start", id: "t" },
+                { type: "text-delta", id: "t", delta: "Drew the box." },
+                { type: "text-end", id: "t" },
+                {
+                    type: "tool-input-start",
+                    toolCallId: "c1",
+                    toolName: "display_diagram",
+                },
+                {
+                    type: "tool-input-available",
+                    toolCallId: "c1",
+                    toolName: "display_diagram",
+                    input: {
+                        // Some diagrams (this one) export a new image each time
+                        xml: '<mxCell id="2" value="Box" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="120" height="60" as="geometry"/></mxCell>',
+                    },
+                },
+                { type: "finish" },
+            ]
+                .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+                .join("")}data: [DONE]\n\n`,
+        })
+    })
+    // Every auto-save takes a thumbnail: count draw.io's thumbnail exports
+    await page.addInitScript(() => {
+        const w = window as unknown as { thumbnails: number }
+        w.thumbnails = 0
+        window.addEventListener("message", (e) => {
+            try {
+                const m = JSON.parse(e.data)
+                if (
+                    m.event === "export" &&
+                    String(m.message?.message ?? "").startsWith("thumbnail")
+                ) {
+                    w.thumbnails++
+                }
+            } catch {}
+        })
+    })
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(page, "Draw a box")
+    await waitForText(page, "Drew the box.")
+    // Let the auto-save after the answer finish
+    await page.waitForTimeout(5000)
+    const thumbnails = () =>
+        page.evaluate(
+            () => (window as unknown as { thumbnails: number }).thumbnails,
+        )
+    const settled = await thumbnails()
+    await page.waitForTimeout(5000)
+    expect(await thumbnails()).toBe(settled)
+})

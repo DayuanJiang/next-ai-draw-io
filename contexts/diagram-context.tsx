@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useRef, useState } from "react"
 import type { DrawIoEmbedRef, EventExport } from "react-drawio"
 import { toast } from "sonner"
 import type { ExportFormat } from "@/components/save-dialog"
@@ -126,25 +126,28 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // Export with a tag in `message` (draw.io echoes it back in the export
     // event) and wait for that result. Resolves to null on timeout, which is
     // expected occasionally.
-    const requestTaggedExport = (
-        tag: ExportTag,
-        format: "xmlsvg" | "png",
-        timeoutMs: number,
-    ) =>
-        new Promise<string | null>((resolve) => {
-            const id = `${tag}-${++exportSeqRef.current}`
-            const finish = (value: string | null) => {
-                clearTimeout(timer)
-                delete exportResolversRef.current[id]
-                resolve(value)
-            }
-            const timer = setTimeout(() => finish(null), timeoutMs)
-            exportResolversRef.current[id] = finish
-            drawioRef.current?.exportDiagram({ format, message: id })
-        })
+    // (Reads refs only, so it keeps one identity)
+    const requestTaggedExport = useCallback(
+        (tag: ExportTag, format: "xmlsvg" | "png", timeoutMs: number) =>
+            new Promise<string | null>((resolve) => {
+                const id = `${tag}-${++exportSeqRef.current}`
+                const finish = (value: string | null) => {
+                    clearTimeout(timer)
+                    delete exportResolversRef.current[id]
+                    resolve(value)
+                }
+                const timer = setTimeout(() => finish(null), timeoutMs)
+                exportResolversRef.current[id] = finish
+                drawioRef.current?.exportDiagram({ format, message: id })
+            }),
+        [],
+    )
 
-    // Get current diagram as SVG for thumbnail (used by session storage)
-    const getThumbnailSvg = async (): Promise<string | null> => {
+    // Get current diagram as SVG for thumbnail (used by session storage).
+    // One identity: the chat's auto-save depends on it, and each thumbnail
+    // renders this provider again (latestSvg), which would otherwise start
+    // the next save
+    const getThumbnailSvg = useCallback(async (): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
         if (!isRealDiagram(chartXMLRef.current)) return null
@@ -157,7 +160,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             return svgData
         }
         return null
-    }
+    }, [requestTaggedExport])
 
     // Capture current diagram as PNG for VLM validation
     const captureValidationPng = async (): Promise<string | null> => {
