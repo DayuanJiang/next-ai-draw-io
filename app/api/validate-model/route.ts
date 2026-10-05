@@ -1,7 +1,7 @@
 import { streamText, tool } from "ai"
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { checkAccessCode } from "@/lib/access-code"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import { checkAdminAuth } from "@/lib/admin/auth"
 import { getAIModel, usesServerCredentials } from "@/lib/ai-providers"
 import { classifyLLMError } from "@/lib/llm-errors"
@@ -35,6 +35,8 @@ const NO_TOOL_CALL_WARNING =
     "Connected, but the model answered without calling a tool. It may not support tool calls, which drawing needs."
 
 export async function POST(req: Request) {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
     // Lets the server send requests to arbitrary URLs, so require the access
     // code, or the admin password (the admin panel's Test button)
     const accessError = checkAccessCode(req)

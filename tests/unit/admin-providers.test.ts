@@ -156,6 +156,29 @@ describe("adminProvidersToConfig", () => {
         expect(config.providers[1].apiKeyEnv).toBe("ADMIN_OPENAI_API_KEY_2")
     })
 
+    it("names its own URL variable when it has its own key, even empty", () => {
+        // Otherwise chat reads the global OPENAI_BASE_URL, which may be a
+        // proxy for another key, while the Test used the official endpoint
+        const own = adminProvidersToConfig([provider()]).providers[0]
+        expect(own.baseUrlEnv).toBe("ADMIN_OPENAI_BASE_URL")
+        // Without a key or URL of its own: the global key and URL, a pair
+        const shared = adminProvidersToConfig([provider({ apiKey: undefined })])
+            .providers[0]
+        expect(shared.baseUrlEnv).toBeUndefined()
+        // An Azure key belongs to one resource: AZURE_BASE_URL stays
+        const azure = adminProvidersToConfig([provider({ provider: "azure" })])
+            .providers[0]
+        expect(azure.baseUrlEnv).toBeUndefined()
+        expect(
+            adminProvidersToConfig([
+                provider({
+                    provider: "azure",
+                    baseUrl: "https://r.openai.azure.com/openai",
+                }),
+            ]).providers[0].baseUrlEnv,
+        ).toBe("ADMIN_AZURE_BASE_URL")
+    })
+
     it("skips providers without models and carries the default flag", () => {
         const config = adminProvidersToConfig([
             provider({ id: "p1", models: [] }),

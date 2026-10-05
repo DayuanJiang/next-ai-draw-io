@@ -31,7 +31,7 @@ export type SecretField =
     | "vertexApiKey"
 
 // AWS regions offered for Bedrock (shared by both screens)
-const AWS_REGIONS: Array<[string, string]> = [
+export const AWS_REGIONS: Array<[string, string]> = [
     ["us-east-1", "N. Virginia"],
     ["us-east-2", "Ohio"],
     ["us-west-2", "Oregon"],

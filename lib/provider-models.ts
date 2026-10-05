@@ -1,5 +1,6 @@
 import { createGateway } from "ai"
 import { getModelInfo } from "@/lib/model-catalog"
+import { readLimitedBody } from "@/lib/read-limited-body"
 import {
     normalizeBaseUrl,
     PROVIDER_INFO,
@@ -56,6 +57,44 @@ export function extractAihubmixModelIds(payload: unknown): string[] {
     return [...ids]
 }
 
+/**
+ * An error this module wrote itself. Only these texts reach the caller:
+ * the base URL is the caller's and may be an internal address, so anything
+ * else (a parse error quoting the body, a network error naming a host)
+ * stays in the server log.
+ */
+export class ModelListError extends Error {
+    constructor(
+        message: string,
+        readonly statusCode?: number,
+    ) {
+        super(message)
+        this.name = "ModelListError"
+    }
+}
+
+const MAX_LIST_BYTES = 2 * 1024 * 1024
+
+/** A fetch that reads at most MAX_LIST_BYTES of each response */
+function sizeLimitedFetch(fetchFn: typeof fetch): typeof fetch {
+    return async (input, init) => {
+        const response = await fetchFn(input, init)
+        const body = await readLimitedBody(response, MAX_LIST_BYTES)
+        if (body === null) {
+            throw new ModelListError("The model list is too large.")
+        }
+        // The body is already decoded and has its own length now
+        const headers = new Headers(response.headers)
+        headers.delete("content-encoding")
+        headers.delete("content-length")
+        return new Response(body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+        })
+    }
+}
+
 /** GET a JSON list; a failed request carries its status for the error hint */
 async function getJson(
     url: string,
@@ -67,12 +106,17 @@ async function getJson(
         signal: AbortSignal.timeout(15_000),
     })
     if (!response.ok) {
-        throw Object.assign(
-            new Error(`The model list request failed (${response.status})`),
-            { statusCode: response.status },
+        throw new ModelListError(
+            `The model list request failed (${response.status})`,
+            response.status,
         )
     }
-    return response.json()
+    const text = await response.text()
+    try {
+        return JSON.parse(text)
+    } catch {
+        throw new ModelListError("The model list was not valid JSON.")
+    }
 }
 
 /**
@@ -97,8 +141,9 @@ function listFallbackUrl(provider: ProviderName, apiKey?: string): string {
 export async function listProviderModels(
     provider: ProviderName,
     { apiKey, baseUrl }: { apiKey?: string; baseUrl?: string },
-    fetchFn: typeof fetch = fetch,
+    unlimitedFetch: typeof fetch = fetch,
 ): Promise<ListedModel[]> {
+    const fetchFn = sizeLimitedFetch(unlimitedFetch)
     const base = normalizeBaseUrl(baseUrl || listFallbackUrl(provider, apiKey))
     const bearer: Record<string, string> = apiKey
         ? { Authorization: `Bearer ${apiKey}` }
@@ -183,7 +228,7 @@ export async function listProviderModels(
         }
         default: {
             if (!base) {
-                throw new Error(
+                throw new ModelListError(
                     `${PROVIDER_INFO[provider].label} needs a base URL to list its models.`,
                 )
             }

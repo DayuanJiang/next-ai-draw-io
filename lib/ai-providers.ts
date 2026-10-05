@@ -900,6 +900,18 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             // DynamoDB quota manager use with their own credentials.
             const adminAccessKeyId = process.env.ADMIN_AWS_ACCESS_KEY_ID
             const adminSecretAccessKey = process.env.ADMIN_AWS_SECRET_ACCESS_KEY
+            // The region becomes part of the endpoint's host name, so a
+            // request's region must be a region name, or it could send the
+            // server's credentials to another host
+            if (
+                overrides?.awsRegion &&
+                !/^[a-z]{2,4}(-[a-z]+)+-\d{1,2}$/.test(overrides.awsRegion)
+            ) {
+                throw Object.assign(
+                    new Error(`Invalid AWS region "${overrides.awsRegion}"`),
+                    { statusCode: 400 },
+                )
+            }
             const bedrockRegion =
                 overrides?.awsRegion ||
                 process.env.ADMIN_AWS_REGION ||
@@ -1031,8 +1043,9 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                     : `${provider.toUpperCase()}_BASE_URL`
             // A local default (SGLang's 127.0.0.1) only fills the settings
             // form; the server must not call its own machine for it. With a
-            // user's key the OpenAI SDK would read the server's
-            // OPENAI_BASE_URL, so name the official endpoint.
+            // user's key, or an admin entry's own (empty) URL variable, the
+            // OpenAI SDK would read the server's OPENAI_BASE_URL, so name
+            // the official endpoint.
             const defaultUrl = PROVIDER_INFO[provider].defaultBaseUrl
             const publicDefault = defaultUrl?.startsWith("https://")
                 ? defaultUrl
@@ -1045,7 +1058,10 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             const baseURL =
                 configuredBaseURL ||
                 (SDK_KNOWS_ENDPOINT.has(provider) &&
-                !(provider === "openai" && overrides?.apiKey)
+                !(
+                    provider === "openai" &&
+                    (overrides?.apiKey || overrides?.baseUrlEnv)
+                )
                     ? undefined
                     : publicDefault)
             // With a user's Azure key the SDK would read the server's

@@ -337,16 +337,17 @@ function handleRequest(
     }
 }
 
-// Serve only requests addressed to localhost, sent by a localhost page or by
-// a non-browser client (no Origin header). This blocks DNS rebinding and
-// scripts on other websites.
+// Serve only requests addressed to localhost, sent by the preview page
+// itself (Origin is the address it was opened at, the Host) or by a
+// non-browser client (no Origin header). This blocks DNS rebinding, other
+// websites, and pages on other localhost ports, whose plain text POSTs need
+// no CORS preflight.
 function isLocalRequest(req: http.IncomingMessage): boolean {
-    const isLocalHost = (host: string) =>
-        /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)
+    const host = req.headers.host ?? ""
     const origin = req.headers.origin
     return (
-        isLocalHost(req.headers.host ?? "") &&
-        (origin === undefined || isLocalHost(origin.replace(/^http:\/\//, "")))
+        /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) &&
+        (origin === undefined || origin === `http://${host}`)
     )
 }
 

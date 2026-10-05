@@ -190,4 +190,59 @@ describe("POST /api/provider-models", () => {
         const res = await post({ provider: "deepseek", apiKey: "k" })
         expect(await res.json()).toMatchObject({ code: "invalid_api_key" })
     })
+
+    // The base URL is the caller's, and private addresses are allowed by
+    // default (local Ollama), so the answer must not reveal what an
+    // internal address sent back
+    const text = (body: string) =>
+        vi.fn(
+            async () => new Response(body, { status: 200 }),
+        ) as unknown as typeof fetch
+
+    it("does not repeat a body that is not JSON", async () => {
+        vi.stubGlobal("fetch", text("ROLE-NAME-OF-THE-SERVER"))
+        const res = await post({
+            provider: "ollama",
+            baseUrl: "http://169.254.169.254/latest/meta-data/x?",
+        })
+        const data = await res.json()
+        expect(data.error).toBe("The model list was not valid JSON.")
+        expect(JSON.stringify(data)).not.toContain("ROLE")
+    })
+
+    it("stops reading a list over 2 MB, also through the Gateway SDK", async () => {
+        const huge = JSON.stringify({ data: [{ id: "x".repeat(3_000_000) }] })
+        for (const body of [
+            { provider: "ollama", baseUrl: "https://big.example.com" },
+            {
+                provider: "gateway",
+                apiKey: "k",
+                baseUrl: "https://big.example.com/v3/ai",
+            },
+        ]) {
+            vi.stubGlobal("fetch", text(huge))
+            const data = await (await post(body)).json()
+            expect(data.error).toBe("The model list is too large.")
+            expect(data.models).toBeUndefined()
+        }
+    })
+
+    it("keeps its own explanations and hides other error texts", async () => {
+        // Our own: no base URL for SGLang
+        const own = await (
+            await post({ provider: "sglang", apiKey: "k" })
+        ).json()
+        expect(own.error).toMatch(/needs a base URL/)
+        // Not ours: an exception text from the network layer
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => {
+                throw new Error("connect ECONNREFUSED 10.1.2.3:8080")
+            }),
+        )
+        const other = await (
+            await post({ provider: "ollama", baseUrl: "http://10.1.2.3:8080" })
+        ).json()
+        expect(other.error).toBe("The model list request failed.")
+    })
 })

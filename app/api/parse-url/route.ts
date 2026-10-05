@@ -1,7 +1,8 @@
 import { extractFromHtml } from "@extractus/article-extractor"
 import { NextResponse } from "next/server"
 import TurndownService from "turndown"
-import { checkAccessCode } from "@/lib/access-code"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
+import { readLimitedBody } from "@/lib/read-limited-body"
 import { isPrivateUrl } from "@/lib/ssrf-protection"
 
 const MAX_CONTENT_LENGTH = 150000 // Match PDF limit
@@ -34,33 +35,9 @@ function detectCharset(
     }
 }
 
-// Read the response body, giving up once it passes MAX_RESPONSE_BYTES so a
-// huge download can't exhaust server memory. Returns null when too large.
-async function readLimitedBody(
-    response: Response,
-): Promise<ArrayBuffer | null> {
-    if (Number(response.headers.get("content-length")) > MAX_RESPONSE_BYTES) {
-        return null
-    }
-    if (!response.body) return new ArrayBuffer(0)
-
-    const reader = response.body.getReader()
-    const chunks: Uint8Array[] = []
-    let total = 0
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        total += value.byteLength
-        if (total > MAX_RESPONSE_BYTES) {
-            await reader.cancel()
-            return null
-        }
-        chunks.push(value)
-    }
-    return new Blob(chunks as BlobPart[]).arrayBuffer()
-}
-
 export async function POST(req: Request) {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
     const accessError = checkAccessCode(req)
     if (accessError) return accessError
 
@@ -128,7 +105,7 @@ export async function POST(req: Request) {
                 )
             }
 
-            const buffer = await readLimitedBody(response)
+            const buffer = await readLimitedBody(response, MAX_RESPONSE_BYTES)
             if (!buffer) {
                 return NextResponse.json(
                     {

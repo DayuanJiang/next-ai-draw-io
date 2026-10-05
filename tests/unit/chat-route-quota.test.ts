@@ -151,6 +151,19 @@ describe("chat quota", () => {
     })
 })
 
+describe("request checks", () => {
+    it("refuses an AWS region that is not a region name", async () => {
+        process.env.AI_PROVIDER = "bedrock"
+        process.env.AI_MODEL = "amazon.nova-lite-v1:0"
+        const res = await send({
+            "x-aws-region": "us-east-1.attacker.example/",
+        })
+        expect(res.status).toBe(400)
+        expect(await res.text()).toMatch(/Invalid AWS region/)
+        expect(fetch).not.toHaveBeenCalled()
+    })
+})
+
 describe("server model allowlist", () => {
     it("runs AI_MODEL only on the server's AI_PROVIDER", async () => {
         // Another provider's server key must not run it

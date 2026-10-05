@@ -10,7 +10,7 @@ import {
 import { jsonrepair } from "jsonrepair"
 import path from "path"
 import { z } from "zod"
-import { checkAccessCode } from "@/lib/access-code"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import {
     CACHE_POINT,
     getAIModel,
@@ -100,6 +100,8 @@ const modelStreamResponses = new WeakSet<Response>()
 const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
 
 async function handleChatRequest(req: Request): Promise<Response> {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
     // Check for access code
     const accessDenied = checkAccessCode(req)
     if (accessDenied) return accessDenied

@@ -382,12 +382,27 @@ function renderHistory() {
     }
     historyGrid.style.display = 'grid';
     historyEmpty.style.display = 'none';
-    historyGrid.innerHTML = historyData.map((e, i) => `
-        <div class="history-item" data-id="${e.id}">
-            <div class="thumb">${e.svg ? `<img src="${e.svg}">` : '#' + e.index}</div>
-            <div class="label">#${e.index}</div>
-        </div>
-    `).join('');
+    // Built element by element: a stored image is never read as HTML, and
+    // only an SVG data URL is shown as one
+    historyGrid.replaceChildren(...historyData.map((e) => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.dataset.id = String(e.id);
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+        if (typeof e.svg === 'string' && e.svg.startsWith('data:image/svg+xml;base64,')) {
+            const img = document.createElement('img');
+            img.src = e.svg;
+            thumb.appendChild(img);
+        } else {
+            thumb.textContent = '#' + e.index;
+        }
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = '#' + e.index;
+        item.append(thumb, label);
+        return item;
+    }));
     historyGrid.querySelectorAll('.history-item').forEach(item => {
         item.onclick = () => {
             const id = parseInt(item.dataset.id);

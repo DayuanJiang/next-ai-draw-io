@@ -1,5 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { AWS_REGIONS } from "@/components/provider-credentials-fields"
 import {
     getAIModel,
     getValidationModel,
@@ -189,6 +190,58 @@ describe("Bedrock admin panel credentials", () => {
         })
     })
 
+    it("refuses a region that is not a region name", async () => {
+        // It becomes part of the endpoint's host name, with the server's
+        // credentials too
+        process.env.ADMIN_AWS_ACCESS_KEY_ID = "panel-id"
+        process.env.ADMIN_AWS_SECRET_ACCESS_KEY = "panel-secret"
+        const { createAmazonBedrock } = await import("@ai-sdk/amazon-bedrock")
+        for (const awsRegion of [
+            "us-east-1.attacker.example/",
+            "x/#",
+            "US-EAST-1",
+            "us-east-1 ",
+        ]) {
+            expect(() =>
+                getAIModel({
+                    provider: "bedrock",
+                    modelId: "amazon.nova-lite-v1:0",
+                    awsRegion,
+                }),
+            ).toThrow(/Invalid AWS region/)
+            expect(() =>
+                getAIModel({
+                    provider: "bedrock",
+                    modelId: "amazon.nova-lite-v1:0",
+                    awsAccessKeyId: "client-id",
+                    awsSecretAccessKey: "client-secret",
+                    awsRegion,
+                }),
+            ).toThrow(/Invalid AWS region/)
+        }
+        expect(createAmazonBedrock).not.toHaveBeenCalled()
+    })
+
+    it("accepts every region the settings offer, and other partitions", () => {
+        for (const awsRegion of [
+            ...AWS_REGIONS.map(([region]) => region),
+            "us-gov-west-1",
+            "cn-northwest-1",
+            "us-iso-east-1",
+            "eusc-de-east-1",
+        ]) {
+            expect(() =>
+                getAIModel({
+                    provider: "bedrock",
+                    modelId: "amazon.nova-lite-v1:0",
+                    awsAccessKeyId: "client-id",
+                    awsSecretAccessKey: "client-secret",
+                    awsRegion,
+                }),
+            ).not.toThrow()
+        }
+    })
+
     it("falls back to the default AWS credential chain", async () => {
         process.env.AWS_REGION = "us-east-1"
         const { createAmazonBedrock } = await import("@ai-sdk/amazon-bedrock")
@@ -323,6 +376,25 @@ describe("whose keys a request uses", () => {
         // Still the Responses API, like without a base URL
         const provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
         expect(provider.chat).not.toHaveBeenCalled()
+    })
+
+    it("sends an admin OpenAI key without a URL to the official endpoint", () => {
+        // Its URL variable is named but empty; the SDK would otherwise read
+        // the server's OPENAI_BASE_URL, a proxy for another key
+        process.env.OPENAI_BASE_URL = "https://operator-proxy.example.com/v1"
+        process.env.ADMIN_OPENAI_API_KEY = "panel-key"
+        getAIModel({
+            provider: "openai",
+            modelId: "gpt-5.5",
+            apiKeyEnv: "ADMIN_OPENAI_API_KEY",
+            baseUrlEnv: "ADMIN_OPENAI_BASE_URL",
+        })
+        expect(createOpenAI).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                apiKey: "panel-key",
+                baseURL: "https://api.openai.com/v1",
+            }),
+        )
     })
 
     it("uses Chat Completions for any configured base URL", () => {

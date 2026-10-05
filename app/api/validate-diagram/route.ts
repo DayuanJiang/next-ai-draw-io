@@ -4,7 +4,7 @@
  */
 
 import { Output, streamText } from "ai"
-import { checkAccessCode } from "@/lib/access-code"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import { getValidationModel } from "@/lib/ai-providers"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
 import {
@@ -37,6 +37,8 @@ function createStreamingResponse(result: ValidationResult): Response {
 }
 
 export async function POST(req: Request): Promise<Response> {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
     // Uses the server's model credentials, so require the access code
     const accessError = checkAccessCode(req)
     if (accessError) return accessError

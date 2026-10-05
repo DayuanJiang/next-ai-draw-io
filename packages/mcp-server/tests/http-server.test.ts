@@ -153,6 +153,36 @@ describe("request origin checks", () => {
             { origin: `http://localhost:${port}` },
         )
         expect(res.status).toBe(200)
+        // Opened as 127.0.0.1, or through a forwarded port: Origin and
+        // Host name the same host
+        for (const host of [`127.0.0.1:${port}`, "localhost:7000"]) {
+            const page = await postJson(
+                "/api/state",
+                { sessionId: "mcp-same-origin", xml: "<mxfile/>" },
+                { origin: `http://${host}`, host },
+            )
+            expect(page.status).toBe(200)
+        }
+    })
+
+    it("refuses writes from a page on another localhost port", async () => {
+        // A plain text POST needs no CORS preflight, so the server must
+        // refuse it itself
+        setState("mcp-other-port", "<mxfile>kept</mxfile>")
+        for (const path of ["/api/state", "/api/history-svg"]) {
+            const res = await postJson(
+                path,
+                {
+                    sessionId: "mcp-other-port",
+                    xml: "<mxfile>replaced</mxfile>",
+                    svg: "x",
+                },
+                { origin: "http://localhost:3000" },
+            )
+            expect(res.status).toBe(403)
+        }
+        expect(getState("mcp-other-port")?.xml).toBe("<mxfile>kept</mxfile>")
+        expect(getState("mcp-other-port")?.svg).toBeUndefined()
     })
 })
 

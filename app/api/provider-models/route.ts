@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
-import { checkAccessCode } from "@/lib/access-code"
+import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import { classifyLLMError } from "@/lib/llm-errors"
-import { canListModels, listProviderModels } from "@/lib/provider-models"
+import {
+    canListModels,
+    listProviderModels,
+    ModelListError,
+} from "@/lib/provider-models"
 import {
     allowPrivateUrls,
     isPrivateUrl,
@@ -24,6 +28,8 @@ const NO_KEY_NEEDED = new Set<ProviderName>([
  * so the dialog keeps its suggested models.
  */
 export async function POST(req: Request) {
+    const crossSite = rejectCrossSite(req)
+    if (crossSite) return crossSite
     // Sends requests to a URL the client chose, so require the access code
     const accessError = checkAccessCode(req)
     if (accessError) return accessError
@@ -56,7 +62,20 @@ export async function POST(req: Request) {
         return NextResponse.json({ models })
     } catch (error) {
         console.warn("[provider-models] Listing failed:", error)
-        const { code, message } = classifyLLMError(error)
-        return NextResponse.json({ code, error: message })
+        // Only our own explanations go back: the URL may be an internal
+        // address, whose answer or host names must not reach the caller.
+        // The Gateway SDK wraps them, keeping ours as the cause.
+        const cause = (error as { cause?: unknown })?.cause
+        const own =
+            error instanceof ModelListError
+                ? error
+                : cause instanceof ModelListError
+                  ? cause
+                  : null
+        const { code } = classifyLLMError(own ?? error)
+        return NextResponse.json({
+            code,
+            error: own?.message ?? "The model list request failed.",
+        })
     }
 }
