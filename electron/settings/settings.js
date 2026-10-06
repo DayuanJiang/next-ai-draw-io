@@ -213,6 +213,9 @@ async function savePreset() {
         }
     })
 
+    // closeModal() clears editingPresetId, so remember it for the toast
+    const isEdit = Boolean(editingPresetId)
+
     try {
         saveBtn.disabled = true
         saveBtn.innerHTML = '<span class="loading"></span>'
@@ -220,10 +223,7 @@ async function savePreset() {
         await window.settingsAPI.savePreset(preset)
         await loadPresets()
         closeModal()
-        showToast(
-            editingPresetId ? "Preset updated" : "Preset created",
-            "success",
-        )
+        showToast(isEdit ? "Preset updated" : "Preset created", "success")
     } catch (error) {
         console.error("Failed to save preset:", error)
         showToast("Failed to save preset", "error")
@@ -265,8 +265,6 @@ async function applyPreset(id) {
 
         const result = await window.settingsAPI.applyPreset(id)
         if (result.success) {
-            currentPresetId = id
-            renderPresets()
             showToast("Preset applied, server restarting...", "success")
         } else {
             showToast(result.error || "Failed to apply preset", "error")
@@ -274,6 +272,9 @@ async function applyPreset(id) {
     } catch (error) {
         console.error("Failed to apply preset:", error)
         showToast("Failed to apply preset", "error")
+    } finally {
+        // Reload to show the active preset and reset the Apply button
+        await loadPresets()
     }
 }
 

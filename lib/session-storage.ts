@@ -1,5 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import { toast } from "sonner"
 import type { Template } from "./template-storage"
 
 // Constants
@@ -58,36 +59,10 @@ interface ChatSessionDB extends DBSchema {
 
 // Database singleton
 let dbPromise: Promise<IDBPDatabase<ChatSessionDB>> | null = null
-const resetDBPromise = () => {
-    dbPromise = null
-}
-
-const isClosingError = (error: unknown): boolean => {
-    return (
-        error instanceof DOMException &&
-        error.name === "InvalidStateError" &&
-        /closing/i.test(error.message)
-    )
-}
-
-const withDB = async <T>(
-    action: (db: IDBPDatabase<ChatSessionDB>) => Promise<T>,
-): Promise<T> => {
-    try {
-        const db = await getDB()
-        return await action(db)
-    } catch (error) {
-        if (isClosingError(error)) {
-            resetDBPromise()
-            const db = await getDB()
-            return await action(db)
-        }
-        throw error
-    }
-}
 
 async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
     if (!dbPromise) {
+        // A failed or lost connection is not cached: the next call reopens it
         dbPromise = openDB<ChatSessionDB>(DB_NAME, DB_VERSION, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
@@ -115,23 +90,29 @@ async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
                     }
                 }
             },
-            terminated() {
-                resetDBPromise()
+            blocked() {
+                // An older tab keeps the DB open, so the upgrade has to wait
+                toast.warning(
+                    "Please close other tabs of this app to finish updating chat storage.",
+                    { id: "idb-upgrade-blocked", duration: 10000 },
+                )
             },
+            blocking(_currentVersion, _blockedVersion, event) {
+                // Another tab needs to upgrade the DB: close our connection so
+                // it is not stuck, and reopen on the next call
+                const db = event.target as IDBDatabase
+                db.close()
+                dbPromise = null
+            },
+            terminated() {
+                // The browser closed the connection (e.g. Safari after a long
+                // time in the background)
+                dbPromise = null
+            },
+        }).catch((error) => {
+            dbPromise = null
+            throw error
         })
-        dbPromise
-            .then((db) => {
-                db.onversionchange = () => {
-                    db.close()
-                    resetDBPromise()
-                }
-                db.onclose = () => {
-                    resetDBPromise()
-                }
-            })
-            .catch(() => {
-                resetDBPromise()
-            })
     }
     return dbPromise
 }
@@ -146,46 +127,31 @@ export function isIndexedDBAvailable(): boolean {
     }
 }
 
-// Check if IndexedDB is actually usable (not just present).
-// Note: Do NOT close the db here - getDB() returns a shared singleton connection
-// that other code depends on.
-export async function isIndexedDBUsable(): Promise<boolean> {
-    if (!isIndexedDBAvailable()) return false
-    try {
-        await getDB()
-        return true
-    } catch {
-        return false
-    }
-}
-
 // CRUD Operations
 export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
     if (!isIndexedDBAvailable()) return []
     try {
-        return await withDB(async (db) => {
-            const tx = db.transaction(STORE_NAME, "readonly")
-            const index = tx.store.index("by-updated")
-            const metadata: SessionMetadata[] = []
+        const db = await getDB()
+        const tx = db.transaction(STORE_NAME, "readonly")
+        const index = tx.store.index("by-updated")
+        const metadata: SessionMetadata[] = []
 
-            // Use cursor to read only metadata fields (avoids loading full messages/XML)
-            let cursor = await index.openCursor(null, "prev") // newest first
-            while (cursor) {
-                const s = cursor.value
-                metadata.push({
-                    id: s.id,
-                    title: s.title,
-                    createdAt: s.createdAt,
-                    updatedAt: s.updatedAt,
-                    messageCount: s.messages.length,
-                    hasDiagram:
-                        !!s.diagramXml && s.diagramXml.trim().length > 0,
-                    thumbnailDataUrl: s.thumbnailDataUrl,
-                })
-                cursor = await cursor.continue()
-            }
-            return metadata
-        })
+        // Use cursor to read only metadata fields (avoids loading full messages/XML)
+        let cursor = await index.openCursor(null, "prev") // newest first
+        while (cursor) {
+            const s = cursor.value
+            metadata.push({
+                id: s.id,
+                title: s.title,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt,
+                messageCount: s.messages.length,
+                hasDiagram: !!s.diagramXml && s.diagramXml.trim().length > 0,
+                thumbnailDataUrl: s.thumbnailDataUrl,
+            })
+            cursor = await cursor.continue()
+        }
+        return metadata
     } catch (error) {
         console.error("Failed to get session metadata:", error)
         return []
@@ -195,85 +161,70 @@ export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
 export async function getSession(id: string): Promise<ChatSession | null> {
     if (!isIndexedDBAvailable()) return null
     try {
-        return await withDB(async (db) => {
-            return (await db.get(STORE_NAME, id)) || null
-        })
+        const db = await getDB()
+        return (await db.get(STORE_NAME, id)) || null
     } catch (error) {
         console.error("Failed to get session:", error)
         return null
     }
 }
 
+// Returns false on failure (e.g. storage quota exceeded). Other sessions are
+// never deleted automatically; the caller tells the user instead.
 export async function saveSession(session: ChatSession): Promise<boolean> {
     if (!isIndexedDBAvailable()) return false
     try {
-        await withDB(async (db) => {
-            await db.put(STORE_NAME, session)
-        })
+        const db = await getDB()
+        await db.put(STORE_NAME, session)
+        // The desktop app opens this port (this origin's chats) next launch
+        window.electronAPI?.chatSaved?.().catch(() => {})
         return true
     } catch (error) {
-        // Handle quota exceeded
-        if (
-            error instanceof DOMException &&
-            error.name === "QuotaExceededError"
-        ) {
-            console.warn("Storage quota exceeded, deleting oldest session...")
-            await deleteOldestSession()
-            // Retry once
-            try {
-                await withDB(async (db) => {
-                    await db.put(STORE_NAME, session)
-                })
-                return true
-            } catch (retryError) {
-                console.error(
-                    "Failed to save session after cleanup:",
-                    retryError,
-                )
-                return false
-            }
-        } else {
-            console.error("Failed to save session:", error)
-            return false
-        }
+        console.error("Failed to save session:", error)
+        // Reopen the connection next time in case it was lost (Safari reports
+        // "Connection to Indexed Database server lost" without closing it)
+        dbPromise = null
+        return false
     }
 }
 
 export async function deleteSession(id: string): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
-        await withDB(async (db) => {
-            await db.delete(STORE_NAME, id)
-        })
+        const db = await getDB()
+        await db.delete(STORE_NAME, id)
     } catch (error) {
         console.error("Failed to delete session:", error)
     }
 }
 
 export async function getSessionCount(): Promise<number> {
-    if (!isIndexedDBAvailable()) return 0
+    return (await readSessionCount()) ?? 0
+}
+
+/** The number of saved chats, or null when it could not be read */
+export async function readSessionCount(): Promise<number | null> {
+    if (!isIndexedDBAvailable()) return null
     try {
-        return await withDB(async (db) => {
-            return await db.count(STORE_NAME)
-        })
+        const db = await getDB()
+        return await db.count(STORE_NAME)
     } catch (error) {
         console.error("Failed to get session count:", error)
-        return 0
+        return null
     }
 }
 
 export async function deleteOldestSession(): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
-        await withDB(async (db) => {
-            const tx = db.transaction(STORE_NAME, "readwrite")
-            const index = tx.store.index("by-updated")
-            const cursor = await index.openCursor()
-            if (cursor) {
-                await cursor.delete()
-            }
-            await tx.done
-        })
+        const db = await getDB()
+        const tx = db.transaction(STORE_NAME, "readwrite")
+        const index = tx.store.index("by-updated")
+        const cursor = await index.openCursor()
+        if (cursor) {
+            await cursor.delete()
+        }
+        await tx.done
     } catch (error) {
         console.error("Failed to delete oldest session:", error)
     }

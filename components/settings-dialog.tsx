@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import type { DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
 
@@ -63,8 +64,8 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
 interface SettingsDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    drawioUi: "min" | "sketch"
-    onToggleDrawioUi: () => void
+    drawioUi: DrawioTheme
+    onDrawioUiChange: (theme: DrawioTheme) => void
     darkMode: boolean
     onToggleDarkMode: () => void
     minimalStyle?: boolean
@@ -74,6 +75,8 @@ interface SettingsDialogProps {
     onOpenModelConfig?: () => void
     customSystemMessage?: string
     onCustomSystemMessageChange?: (value: string) => void
+    maxOutputTokens?: string
+    onMaxOutputTokensChange?: (value: string) => void
 }
 
 export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
@@ -90,7 +93,7 @@ function SettingsContent({
     open,
     onOpenChange,
     drawioUi,
-    onToggleDrawioUi,
+    onDrawioUiChange,
     darkMode,
     onToggleDarkMode,
     minimalStyle = false,
@@ -100,6 +103,8 @@ function SettingsContent({
     onOpenModelConfig,
     customSystemMessage = "",
     onCustomSystemMessageChange = () => {},
+    maxOutputTokens = "",
+    onMaxOutputTokensChange = () => {},
 }: SettingsDialogProps) {
     const dict = useDictionary()
     const router = useRouter()
@@ -134,8 +139,11 @@ function SettingsContent({
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
 
     useEffect(() => {
-        // Only fetch if not cached in localStorage
-        if (getStoredAccessCodeRequired() !== null) return
+        // Re-fetch config whenever the dialog opens to ensure we always show
+        // the access code input if the server requires it. This fixes the case
+        // where a stale localStorage cache (from before ACCESS_CODE_LIST was
+        // configured) would hide the access code input.
+        if (!open) return
 
         fetch(getApiEndpoint("/api/config"))
             .then((res) => {
@@ -151,10 +159,9 @@ function SettingsContent({
                 setAccessCodeRequired(required)
             })
             .catch(() => {
-                // Don't cache on error - allow retry on next mount
-                setAccessCodeRequired(false)
+                // Keep existing cached value on error
             })
-    }, [])
+    }, [open])
 
     // Detect current language from pathname
     useEffect(() => {
@@ -430,23 +437,40 @@ function SettingsContent({
                     {/* Draw.io Style */}
                     <SettingItem
                         label={dict.settings.drawioStyle}
-                        description={`${dict.settings.drawioStyleDescription} ${
-                            drawioUi === "min"
-                                ? dict.settings.minimal
-                                : dict.settings.sketch
-                        }`}
+                        description={dict.settings.drawioStyleDescription}
                     >
-                        <Button
-                            id="drawio-ui"
-                            variant="outline"
-                            onClick={onToggleDrawioUi}
-                            className="h-9 w-[120px] rounded-xl border-border-subtle hover:bg-interactive-hover font-normal"
+                        <Select
+                            value={drawioUi}
+                            onValueChange={(v) =>
+                                onDrawioUiChange(v as DrawioTheme)
+                            }
                         >
-                            {dict.settings.switchTo}{" "}
-                            {drawioUi === "min"
-                                ? dict.settings.sketch
-                                : dict.settings.minimal}
-                        </Button>
+                            <SelectTrigger
+                                id="drawio-ui-select"
+                                aria-label={dict.settings.drawioStyle}
+                                className="w-[120px] h-9 rounded-xl"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="kennedy">
+                                    {dict.settings.themeDefault}
+                                </SelectItem>
+                                <SelectItem value="atlas">Atlas</SelectItem>
+                                <SelectItem value="dark">
+                                    {dict.settings.themeDark}
+                                </SelectItem>
+                                <SelectItem value="min">
+                                    {dict.settings.themeMinimal}
+                                </SelectItem>
+                                <SelectItem value="sketch">
+                                    {dict.settings.themeSketch}
+                                </SelectItem>
+                                <SelectItem value="simple">
+                                    {dict.settings.themeSimple}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </SettingItem>
 
                     {/* Diagram Style */}
@@ -570,6 +594,24 @@ function SettingsContent({
                             maxLength={5000}
                         />
                     </div>
+
+                    {/* Max Output Tokens */}
+                    <SettingItem
+                        label={dict.settings.maxOutputTokens}
+                        description={dict.settings.maxOutputTokensDescription}
+                    >
+                        <Input
+                            id="max-output-tokens"
+                            type="text"
+                            inputMode="numeric"
+                            value={maxOutputTokens}
+                            onChange={(e) =>
+                                onMaxOutputTokensChange(e.target.value)
+                            }
+                            placeholder="64000"
+                            className="h-9 w-28 text-sm"
+                        />
+                    </SettingItem>
 
                     {/* Send Shortcut */}
                     <SettingItem

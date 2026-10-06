@@ -76,3 +76,6 @@ ai-models.json
 # local backups
 *.bak
 .gstack/
+
+# admin panel settings (contains secrets)
+data/

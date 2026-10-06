@@ -51,8 +51,15 @@ export function setTraceOutput(output: string) {
     if (!isLangfuseEnabled()) return
 
     updateActiveTrace({ output })
+    endTrace()
+}
 
-    // End the observe() wrapper span (AI SDK creates its own child spans with usage)
+// End the observe() wrapper span (AI SDK creates its own child spans with usage).
+// It uses endOnExit: false, so every request path has to end it, or the trace
+// is never exported: stream finish, stream error/abort, and early returns.
+export function endTrace() {
+    if (!isLangfuseEnabled()) return
+
     const activeSpan = api.trace.getActiveSpan()
     if (activeSpan) {
         activeSpan.end()

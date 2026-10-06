@@ -26,6 +26,7 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import { Shimmer } from "@/components/ai-elements/shimmer"
 import { ChatLobby } from "@/components/chat/ChatLobby"
 import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
 import { ToolCallCard } from "@/components/chat/ToolCallCard"
@@ -37,12 +38,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
-    applyDiagramOperations,
     convertToLegalXml,
     extractCompleteMxCells,
     replaceNodes,
-    validateAndFixXml,
 } from "@/lib/utils"
+import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
+import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -129,12 +130,14 @@ const getMessageTextContent = (message: UIMessage): string => {
         .join("\n")
 }
 
+// Matches the [PDF: ...], [File: ...] and [URL: ...] sections appended to the user's text
+export const APPENDED_FILE_SECTIONS_PATTERN =
+    /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
+
 // Get only the user's original text, excluding appended file content
 const getUserOriginalText = (message: UIMessage): string => {
     const fullText = getMessageTextContent(message)
-    // Strip out [PDF: ...], [File: ...], and [URL: ...] sections that were appended
-    const filePattern = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
-    return fullText.replace(filePattern, "").trim()
+    return fullText.replace(APPENDED_FILE_SECTIONS_PATTERN, "").trim()
 }
 
 interface SessionMetadata {
@@ -146,6 +149,8 @@ interface SessionMetadata {
 
 interface ChatMessageDisplayProps {
     messages: UIMessage[]
+    // Shown on an error that a model setting can fix (bad key, unknown model)
+    onOpenModelConfig?: () => void
     setInput: (input: string) => void
     setFiles: (files: File[]) => void
     processedToolCallsRef: MutableRefObject<Set<string>>
@@ -169,6 +174,7 @@ interface ChatMessageDisplayProps {
 
 export function ChatMessageDisplay({
     messages,
+    onOpenModelConfig,
     setInput,
     setFiles,
     processedToolCallsRef,
@@ -188,7 +194,24 @@ export function ChatMessageDisplay({
     currentInput = "",
 }: ChatMessageDisplayProps) {
     const dict = useDictionary()
-    const { chartXML, loadDiagram: onDisplayChart } = useDiagram()
+    // The thinking header in the page language
+    const thinkingMessage = (isStreaming: boolean, duration?: number) => {
+        if (isStreaming || duration === 0) {
+            return <Shimmer duration={1}>{dict.reasoning.thinking}</Shimmer>
+        }
+        if (duration === undefined) return <p>{dict.reasoning.thoughtBrief}</p>
+        return (
+            <p>
+                {duration === 1
+                    ? dict.reasoning.thoughtForOne
+                    : dict.reasoning.thoughtFor.replace(
+                          "{duration}",
+                          String(duration),
+                      )}
+            </p>
+        )
+    }
+    const { chartXML, chartXMLRef, loadDiagram: onDisplayChart } = useDiagram()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const scrollTopRef = useRef<HTMLDivElement>(null)
     const previousXML = useRef<string>("")
@@ -208,20 +231,6 @@ export function ChatMessageDisplay({
             scrollTopRef.current?.scrollIntoView({ behavior: "instant" })
         }
     }, [messages.length, processedToolCalls])
-    // Debounce streaming diagram updates - store pending XML and timeout
-    const pendingXmlRef = useRef<string | null>(null)
-    const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    )
-    const STREAMING_DEBOUNCE_MS = 150 // Only update diagram every 150ms during streaming
-    // Refs for edit_diagram streaming
-    const pendingEditRef = useRef<{
-        operations: DiagramOperation[]
-        toolCallId: string
-    } | null>(null)
-    const editDebounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    )
     const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
         {},
     )
@@ -343,73 +352,30 @@ export function ChatMessageDisplay({
         }
     }
 
+    // Streaming preview of display_diagram: draw the complete cells written
+    // so far. The tool handler validates and loads the final diagram.
     const handleDisplayChart = useCallback(
-        (xml: string, showToast = false) => {
-            let currentXml = xml || ""
+        (xml: string) => {
+            const completeCells = extractCompleteMxCells(xml || "")
+            if (!completeCells) return
+            const convertedXml = convertToLegalXml(completeCells)
+            if (convertedXml === previousXML.current) return
 
-            // During streaming (showToast=false), extract only complete mxCell elements
-            // This allows progressive rendering even with partial/incomplete trailing XML
-            if (!showToast) {
-                const completeCells = extractCompleteMxCells(currentXml)
-                if (!completeCells) {
-                    return
-                }
-                currentXml = completeCells
-            }
+            // Skip this update while the cells written so far don't parse
+            const testDoc = new DOMParser().parseFromString(
+                `<root>${convertedXml}</root>`,
+                "text/xml",
+            )
+            if (testDoc.querySelector("parsererror")) return
 
-            const convertedXml = convertToLegalXml(currentXml)
-            if (convertedXml !== previousXML.current) {
-                // Parse and validate XML BEFORE calling replaceNodes
-                const parser = new DOMParser()
-                // Wrap in root element for parsing multiple mxCell elements
-                const testDoc = parser.parseFromString(
-                    `<root>${convertedXml}</root>`,
-                    "text/xml",
-                )
-                const parseError = testDoc.querySelector("parsererror")
-
-                if (parseError) {
-                    // Only show toast if this is the final XML (not during streaming)
-                    if (showToast) {
-                        toast.error(dict.errors.malformedXml)
-                    }
-                    return // Skip this update
-                }
-
-                try {
-                    // If chartXML is empty, create a default mxfile structure to use with replaceNodes
-                    // This ensures the XML is properly wrapped in mxfile/diagram/mxGraphModel format
-                    const baseXML =
-                        chartXML ||
-                        `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
-                    const replacedXML = replaceNodes(baseXML, convertedXml)
-
-                    // During streaming (showToast=false), skip heavy validation for lower latency
-                    // The quick DOM parse check above catches malformed XML
-                    // Full validation runs on final output (showToast=true)
-                    if (!showToast) {
-                        previousXML.current = convertedXml
-                        onDisplayChart(replacedXML, true)
-                        return
-                    }
-
-                    // Final output: run full validation and auto-fix
-                    const validation = validateAndFixXml(replacedXML)
-                    if (validation.valid) {
-                        previousXML.current = convertedXml
-                        // Use fixed XML if available, otherwise use original
-                        const xmlToLoad = validation.fixed || replacedXML
-                        onDisplayChart(xmlToLoad, true)
-                    } else {
-                        toast.error(dict.errors.validationFailed)
-                    }
-                } catch (error) {
-                    console.error("Error processing XML:", error)
-                    // Only show toast if this is the final XML (not during streaming)
-                    if (showToast) {
-                        toast.error(dict.errors.failedToProcess)
-                    }
-                }
+            try {
+                // An empty canvas gets a default mxfile to put the cells in
+                const baseXML = chartXML || BLANK_MXFILE
+                const replacedXML = replaceNodes(baseXML, convertedXml)
+                previousXML.current = convertedXml
+                onDisplayChart(replacedXML, true)
+            } catch (error) {
+                console.error("Error processing XML:", error)
             }
         },
         [chartXML, onDisplayChart],
@@ -456,8 +422,19 @@ export function ChatMessageDisplay({
         // Previous messages are already processed and won't change
         const messagesToProcess =
             messages.length > 0 ? [messages[messages.length - 1]] : []
+        // The diagram without streamed previews, as loaded last: the tool
+        // handler's result of an earlier edit is there before the chartXML
+        // state catches up. Undoing a failed edit's preview below changes it
+        // too, and an edit streaming right after must start from the undone
+        // diagram.
+        let baseXml = chartXMLRef.current
 
         messagesToProcess.forEach((message) => {
+            // Messages restored from a saved session were applied before it was
+            // saved; the saved diagram is authoritative, so don't replay them
+            const isRestoredMessage =
+                loadedMessageIdsRef?.current.has(message.id) ?? false
+
             if (message.parts) {
                 message.parts.forEach((part) => {
                     if (part.type?.startsWith("tool-")) {
@@ -475,76 +452,87 @@ export function ChatMessageDisplay({
                             })
                         }
 
+                        if (isRestoredMessage) return
+
                         if (
-                            part.type === "tool-display_diagram" &&
-                            input?.xml
+                            part.type !== "tool-display_diagram" &&
+                            part.type !== "tool-edit_diagram"
                         ) {
-                            const xml = input.xml as string
+                            return
+                        }
 
+                        // Failed or stopped: if the original XML is still
+                        // stored, the tool handler never ran (invalid JSON,
+                        // or the user pressed stop), so undo the streamed
+                        // preview here. Invalid JSON leaves no input, so
+                        // check this first.
+                        if (state === "output-error") {
+                            const originalXml =
+                                editDiagramOriginalXmlRef.current.get(
+                                    toolCallId,
+                                )
+                            if (originalXml) {
+                                editDiagramOriginalXmlRef.current.delete(
+                                    toolCallId,
+                                )
+                                onDisplayChart(originalXml, true)
+                                baseXml = originalXml
+                            }
+                            return
+                        }
+
+                        // Input complete, or the tool handler, a stop or an
+                        // error took the call already: the tool handler loads
+                        // the checked diagram (with the original XML). The
+                        // messages update at most every 150 ms (useChat
+                        // throttle in chat-panel), so they can still show the
+                        // call streaming after that.
+                        if (
+                            state !== "input-streaming" ||
+                            processedToolCalls.current.has(toolCallId)
+                        ) {
+                            processedToolCalls.current.add(toolCallId)
+                            lastProcessedXmlRef.current.delete(toolCallId)
+                            lastProcessedXmlRef.current.delete(
+                                `${toolCallId}-opCount`,
+                            )
+                            return
+                        }
+
+                        if (part.type === "tool-display_diagram") {
+                            const xml = input?.xml as string | undefined
                             // Skip if XML hasn't changed since last processing
-                            const lastXml =
-                                lastProcessedXmlRef.current.get(toolCallId)
-                            if (lastXml === xml) {
-                                return // Skip redundant processing
-                            }
-
                             if (
-                                state === "input-streaming" ||
-                                state === "input-available"
+                                !xml ||
+                                lastProcessedXmlRef.current.get(toolCallId) ===
+                                    xml
                             ) {
-                                // Debounce streaming updates - queue the XML and process after delay
-                                pendingXmlRef.current = xml
-
-                                if (!debounceTimeoutRef.current) {
-                                    // No pending timeout - set one up
-                                    debounceTimeoutRef.current = setTimeout(
-                                        () => {
-                                            const pendingXml =
-                                                pendingXmlRef.current
-                                            debounceTimeoutRef.current = null
-                                            pendingXmlRef.current = null
-                                            if (pendingXml) {
-                                                handleDisplayChart(
-                                                    pendingXml,
-                                                    false,
-                                                )
-                                                lastProcessedXmlRef.current.set(
-                                                    toolCallId,
-                                                    pendingXml,
-                                                )
-                                            }
-                                        },
-                                        STREAMING_DEBOUNCE_MS,
-                                    )
-                                }
-                            } else if (
-                                state === "output-available" &&
-                                !processedToolCalls.current.has(toolCallId)
-                            ) {
-                                // Final output - process immediately (clear any pending debounce)
-                                if (debounceTimeoutRef.current) {
-                                    clearTimeout(debounceTimeoutRef.current)
-                                    debounceTimeoutRef.current = null
-                                    pendingXmlRef.current = null
-                                }
-                                // Show toast only if final XML is malformed
-                                handleDisplayChart(xml, true)
-                                processedToolCalls.current.add(toolCallId)
-                                // Clean up the ref entry - tool is complete, no longer needed
-                                lastProcessedXmlRef.current.delete(toolCallId)
+                                return
                             }
+                            // Keep the diagram from before the preview, to
+                            // undo it on a stop or an error
+                            if (
+                                !editDiagramOriginalXmlRef.current.has(
+                                    toolCallId,
+                                )
+                            ) {
+                                editDiagramOriginalXmlRef.current.set(
+                                    toolCallId,
+                                    baseXml || BLANK_MXFILE,
+                                )
+                            }
+                            handleDisplayChart(xml)
+                            lastProcessedXmlRef.current.set(toolCallId, xml)
+                            return
                         }
 
                         // Handle edit_diagram streaming - apply operations incrementally for preview
                         // Uses shared editDiagramOriginalXmlRef to coordinate with tool handler
-                        if (
-                            part.type === "tool-edit_diagram" &&
-                            input?.operations
-                        ) {
+                        if (part.type === "tool-edit_diagram") {
+                            if (!input?.operations) return
                             const completeOps = getCompleteOperations(
                                 input.operations as DiagramOperation[],
                             )
-
                             if (completeOps.length === 0) return
 
                             // Capture original XML when streaming starts (store in shared ref)
@@ -553,7 +541,7 @@ export function ChatMessageDisplay({
                                     toolCallId,
                                 )
                             ) {
-                                if (!chartXML) {
+                                if (!baseXml) {
                                     console.warn(
                                         "[edit_diagram streaming] No chart XML available",
                                     )
@@ -561,10 +549,9 @@ export function ChatMessageDisplay({
                                 }
                                 editDiagramOriginalXmlRef.current.set(
                                     toolCallId,
-                                    chartXML,
+                                    baseXml,
                                 )
                             }
-
                             const originalXml =
                                 editDiagramOriginalXmlRef.current.get(
                                     toolCallId,
@@ -572,95 +559,37 @@ export function ChatMessageDisplay({
                             if (!originalXml) return
 
                             // Skip if no change from last processed state
-                            const lastCount = lastProcessedXmlRef.current.get(
-                                toolCallId + "-opCount",
-                            )
-                            if (lastCount === String(completeOps.length)) return
-
+                            const countKey = `${toolCallId}-opCount`
+                            const opCount = String(completeOps.length)
                             if (
-                                state === "input-streaming" ||
-                                state === "input-available"
+                                lastProcessedXmlRef.current.get(countKey) ===
+                                opCount
                             ) {
-                                // Queue the operations for debounced processing
-                                pendingEditRef.current = {
-                                    operations: completeOps,
-                                    toolCallId,
-                                }
-
-                                if (!editDebounceTimeoutRef.current) {
-                                    editDebounceTimeoutRef.current = setTimeout(
-                                        () => {
-                                            const pending =
-                                                pendingEditRef.current
-                                            editDebounceTimeoutRef.current =
-                                                null
-                                            pendingEditRef.current = null
-
-                                            if (pending) {
-                                                const origXml =
-                                                    editDiagramOriginalXmlRef.current.get(
-                                                        pending.toolCallId,
-                                                    )
-                                                if (!origXml) return
-
-                                                try {
-                                                    const {
-                                                        result: editedXml,
-                                                    } = applyDiagramOperations(
-                                                        origXml,
-                                                        pending.operations,
-                                                    )
-                                                    handleDisplayChart(
-                                                        editedXml,
-                                                        false,
-                                                    )
-                                                    lastProcessedXmlRef.current.set(
-                                                        pending.toolCallId +
-                                                            "-opCount",
-                                                        String(
-                                                            pending.operations
-                                                                .length,
-                                                        ),
-                                                    )
-                                                } catch (e) {
-                                                    console.warn(
-                                                        `[edit_diagram streaming] Operation failed:`,
-                                                        e instanceof Error
-                                                            ? e.message
-                                                            : e,
-                                                    )
-                                                }
-                                            }
-                                        },
-                                        STREAMING_DEBOUNCE_MS,
-                                    )
-                                }
-                            } else if (
-                                state === "output-available" &&
-                                !processedToolCalls.current.has(toolCallId)
-                            ) {
-                                // Final state - cleanup streaming refs (tool handler does final application)
-                                if (editDebounceTimeoutRef.current) {
-                                    clearTimeout(editDebounceTimeoutRef.current)
-                                    editDebounceTimeoutRef.current = null
-                                }
-                                lastProcessedXmlRef.current.delete(
-                                    toolCallId + "-opCount",
+                                return
+                            }
+                            try {
+                                const { result } = applyDiagramOperations(
+                                    originalXml,
+                                    completeOps,
                                 )
-                                processedToolCalls.current.add(toolCallId)
-                                // Note: Don't delete editDiagramOriginalXmlRef here - tool handler needs it
+                                // Load the full document so other pages stay intact
+                                onDisplayChart(result, true)
+                                lastProcessedXmlRef.current.set(
+                                    countKey,
+                                    opCount,
+                                )
+                            } catch (e) {
+                                console.warn(
+                                    "[edit_diagram streaming] Operation failed:",
+                                    e instanceof Error ? e.message : e,
+                                )
                             }
                         }
                     }
                 })
             }
         })
-
-        // NOTE: Don't cleanup debounce timeouts here!
-        // The cleanup runs on every re-render (when messages changes),
-        // which would cancel the timeout before it fires.
-        // Let the timeouts complete naturally - they're harmless if component unmounts.
-    }, [messages, handleDisplayChart, chartXML])
+    }, [messages, handleDisplayChart, chartXMLRef])
 
     return (
         <ScrollArea className="h-full w-full scrollbar-thin">
@@ -845,7 +774,11 @@ export function ChatMessageDisplay({
                                                                 !isRestoredMessage
                                                             }
                                                         >
-                                                            <ReasoningTrigger />
+                                                            <ReasoningTrigger
+                                                                getThinkingMessage={
+                                                                    thinkingMessage
+                                                                }
+                                                            />
                                                             <ReasoningContent>
                                                                 {
                                                                     reasoningPart.text
@@ -951,8 +884,12 @@ export function ChatMessageDisplay({
                                                     part.type?.startsWith(
                                                         "tool-",
                                                     )
+                                                // Blank text (some models send
+                                                // a lone space) gets no bubble
                                                 const isContentPart =
-                                                    part.type === "text" ||
+                                                    (part.type === "text" &&
+                                                        part.text.trim() !==
+                                                            "") ||
                                                     part.type === "file"
 
                                                 if (isToolPart) {
@@ -1302,6 +1239,32 @@ export function ChatMessageDisplay({
                                                                     return null
                                                                 },
                                                             )}
+                                                            {message.role ===
+                                                                "system" &&
+                                                                (
+                                                                    message.metadata as
+                                                                        | {
+                                                                              openModelConfig?: boolean
+                                                                          }
+                                                                        | undefined
+                                                                )
+                                                                    ?.openModelConfig &&
+                                                                onOpenModelConfig && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={
+                                                                            onOpenModelConfig
+                                                                        }
+                                                                        className="mt-2 text-xs font-medium underline underline-offset-2 hover:opacity-80"
+                                                                    >
+                                                                        {
+                                                                            dict
+                                                                                .errors
+                                                                                .llm
+                                                                                .openModelSettings
+                                                                        }
+                                                                    </button>
+                                                                )}
                                                         </div>
                                                     )
                                                 },
