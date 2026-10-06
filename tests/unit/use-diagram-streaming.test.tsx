@@ -1,6 +1,5 @@
-import { render } from "@testing-library/react"
+import { renderHook } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import en from "@/lib/i18n/dictionaries/en.json"
 
 const page = (cells: string) =>
     `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
@@ -19,12 +18,8 @@ vi.mock("@/contexts/diagram-context", () => ({
         loadDiagram: vi.fn(() => null),
     }),
 }))
-vi.mock("@/hooks/use-dictionary", () => ({ useDictionary: () => en }))
 
-import { ChatMessageDisplay } from "@/components/chat-message-display"
-
-// jsdom has no layout
-Element.prototype.scrollIntoView = () => {}
+import { useDiagramStreaming } from "@/components/chat/use-diagram-streaming"
 
 describe("the streaming preview of a second edit", () => {
     it("starts from the first edit's result", () => {
@@ -51,15 +46,13 @@ describe("the streaming preview of a second edit", () => {
                 ],
             },
         ] as any
-        render(
-            <ChatMessageDisplay
-                messages={messages}
-                setInput={() => {}}
-                setFiles={() => {}}
-                processedToolCallsRef={{ current: new Set() }}
-                editDiagramOriginalXmlRef={editDiagramOriginalXmlRef}
-                status="streaming"
-            />,
+        renderHook(() =>
+            useDiagramStreaming({
+                messages,
+                processedToolCallsRef: { current: new Set() },
+                editDiagramOriginalXmlRef,
+                loadedMessageIdsRef: { current: new Set() },
+            }),
         )
         expect(editDiagramOriginalXmlRef.current.get("edit-2")).toBe(
             AFTER_FIRST_EDIT,

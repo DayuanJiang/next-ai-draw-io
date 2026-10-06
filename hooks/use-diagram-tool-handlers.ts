@@ -1,9 +1,10 @@
-import type { MutableRefObject } from "react"
+import type { RefObject } from "react"
 import type { DiagramOperation } from "@/components/chat/types"
 import type {
     ValidationState,
     ValidationStatus,
 } from "@/components/chat/ValidationCard"
+import type { LoadMode } from "@/contexts/diagram-context"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
@@ -14,6 +15,26 @@ const DEBUG = process.env.NODE_ENV === "development"
 
 // display_diagram replaces the document with this one page
 const NEW_PAGE = { pageId: "page-1", pageName: "Page-1" }
+
+/**
+ * A new diagram written without file variables (%name% placeholders) keeps
+ * the canvas file's, as replacing the page in draw.io does
+ */
+export function keepFileVars(xml: string, canvasXml: string): string {
+    const varsOf = (doc: Document) =>
+        doc.documentElement?.nodeName === "mxfile"
+            ? doc.documentElement.getAttribute("vars")
+            : null
+    const parser = new DOMParser()
+    const canvasVars = varsOf(parser.parseFromString(canvasXml, "text/xml"))
+    if (!canvasVars) return xml
+    const doc = parser.parseFromString(xml, "text/xml")
+    if (doc.documentElement?.nodeName !== "mxfile" || varsOf(doc) !== null) {
+        return xml
+    }
+    doc.documentElement.setAttribute("vars", canvasVars)
+    return new XMLSerializer().serializeToString(doc)
+}
 
 interface ToolCall {
     toolCallId: string
@@ -50,16 +71,23 @@ type ValidateDiagramFn = (
 ) => Promise<ValidationResult>
 
 interface UseDiagramToolHandlersParams {
-    partialXmlRef: MutableRefObject<string>
-    editDiagramOriginalXmlRef: MutableRefObject<Map<string, string>>
+    partialXmlRef: RefObject<string>
+    // Diagram before a cut off display_diagram whose half drawn preview
+    // stays while append_diagram finishes it; null when none is pending
+    continuationOriginalRef: RefObject<string | null>
+    editDiagramOriginalXmlRef: RefObject<Map<string, string>>
     // Tool calls the streaming preview must leave alone (shared with it)
-    processedToolCallsRef: MutableRefObject<Set<string>>
+    processedToolCallsRef: RefObject<Set<string>>
     // Failed VLM validations in the current user turn (reset on each user message)
-    validationRetryCountRef: MutableRefObject<number>
-    chartXMLRef: MutableRefObject<string>
-    onDisplayChart: (xml: string, skipValidation?: boolean) => string | null
-    onFetchChart: (saveToHistory?: boolean) => Promise<string>
-    onExport: () => void
+    validationRetryCountRef: RefObject<number>
+    chartXMLRef: RefObject<string>
+    onDisplayChart: (
+        xml: string,
+        skipValidation?: boolean,
+        mode?: LoadMode,
+        meta?: { toolCallId?: string },
+    ) => string | null
+    onFetchChart: () => Promise<string>
     captureValidationPng?: () => Promise<string | null>
     validateDiagram?: ValidateDiagramFn
     enableVlmValidation?: boolean
@@ -84,13 +112,13 @@ interface UseDiagramToolHandlersParams {
  */
 export function useDiagramToolHandlers({
     partialXmlRef,
+    continuationOriginalRef,
     editDiagramOriginalXmlRef,
     processedToolCallsRef,
     validationRetryCountRef,
     chartXMLRef,
     onDisplayChart,
     onFetchChart,
-    onExport,
     captureValidationPng,
     validateDiagram,
     enableVlmValidation = true,
@@ -146,6 +174,17 @@ export function useDiagramToolHandlers({
     // handler. The first is the diagram before all of them. A call that
     // draws its result replaces those previews, so the preview code must
     // neither draw them again nor undo them later. Returns that first one.
+    // The final result as one undo step. A cut off drawing it replaces goes
+    // first, so the step (and the version) starts from the diagram before
+    // it, also when a failed call in between was undone to the cut off one.
+    const commit = (xml: string, toolCallId: string) => {
+        const original = continuationOriginalRef.current
+        if (original !== null) onDisplayChart(original, true, "revert")
+        const error = onDisplayChart(xml, true, "commit", { toolCallId })
+        if (!error) continuationOriginalRef.current = null
+        return error
+    }
+
     const takeOriginals = (): string | undefined => {
         const [originalXml] = editDiagramOriginalXmlRef.current.values()
         for (const id of editDiagramOriginalXmlRef.current.keys()) {
@@ -181,6 +220,15 @@ export function useDiagramToolHandlers({
         if (isTruncated) {
             // Store the partial XML for continuation via append_diagram
             partialXmlRef.current = xml
+            // The half drawn preview stays while append_diagram finishes
+            // it; the chat engine brings this diagram back if that never
+            // happens
+            if (
+                originalXml !== undefined &&
+                continuationOriginalRef.current === null
+            ) {
+                continuationOriginalRef.current = originalXml
+            }
 
             // Tell LLM to use append_diagram to continue
             const partialEnding = partialXmlRef.current.slice(-500)
@@ -210,16 +258,22 @@ NEXT STEP: Call append_diagram with the continuation XML.
 
         // Wrap, validate and auto-fix the model's XML like the MCP server's
         // create_new_diagram, then load it
+        // One undo step (and a version) right away, before the screenshot
+        // check: a stop, another chat or a hand edit during the check then
+        // finds the diagram already in place
         const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
         const validationError = prepared.ok
-            ? onDisplayChart(prepared.xml, true)
+            ? commit(
+                  keepFileVars(prepared.xml, chartXMLRef.current),
+                  toolCall.toolCallId,
+              )
             : prepared.error
 
         if (validationError) {
             console.warn("[display_diagram] Validation error:", validationError)
             // Undo the streamed preview, as a failed edit does: the canvas
             // keeps the diagram from before this failed call
-            if (originalXml) onDisplayChart(originalXml, true)
+            if (originalXml) onDisplayChart(originalXml, true, "revert")
             // Return error to model - sendAutomaticallyWhen will trigger retry
             if (DEBUG) {
                 console.log(
@@ -430,7 +484,7 @@ ${finalXml}
         // On failure, undo the streaming preview so the canvas matches the XML
         // reported back to the model
         const restoreOriginal = () => {
-            if (originalXml) onDisplayChart(originalXml, true)
+            if (originalXml) onDisplayChart(originalXml, true, "revert")
         }
         try {
             if (originalXml) {
@@ -442,7 +496,7 @@ ${finalXml}
                     currentXml = cachedXML
                 } else {
                     // Last resort: export from iframe
-                    currentXml = await onFetchChart(false)
+                    currentXml = await onFetchChart()
                 }
             }
 
@@ -470,8 +524,7 @@ Please check the cell IDs and retry.`,
                 return
             }
 
-            onDisplayChart(outcome.xml, true)
-            onExport()
+            commit(outcome.xml, toolCall.toolCallId)
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
@@ -558,17 +611,22 @@ Start your continuation with the NEXT character after where it stopped.`,
             partialXmlRef.current = "" // Reset
 
             const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
-            // It draws now: it takes the stored originals, as display_diagram
-            const originalXml = prepared.ok ? takeOriginals() : undefined
+            // The continuation ends here, drawn or not: it takes the stored
+            // originals, so the preview code undoes none of them later
+            const originalXml = takeOriginals()
             const validationError = prepared.ok
-                ? onDisplayChart(prepared.xml, true)
+                ? commit(
+                      keepFileVars(prepared.xml, chartXMLRef.current),
+                      toolCall.toolCallId,
+                  )
                 : prepared.error
 
             if (validationError) {
-                // Loading failed: back to the diagram before the previews
-                if (prepared.ok && originalXml) {
-                    onDisplayChart(originalXml, true)
-                }
+                // Back to the diagram before the cut off drawing, or else
+                // before the previews
+                const before = continuationOriginalRef.current ?? originalXml
+                continuationOriginalRef.current = null
+                if (before) onDisplayChart(before, true, "revert")
                 addToolOutput({
                     tool: "append_diagram",
                     toolCallId: toolCall.toolCallId,

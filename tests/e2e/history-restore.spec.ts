@@ -80,7 +80,7 @@ test.describe("History and Session Restore", () => {
         ).toBeVisible({ timeout: 5000 })
         await page.waitForTimeout(1000)
         // Still the conversation and its diagram, not the empty chat's examples
-        await expect(page.getByText("Paper to Diagram")).toHaveCount(0)
+        await expect(page.getByText("Paper to diagram")).toHaveCount(0)
         await expect(
             getIframeContent(page).getByText("Test Box", { exact: true }),
         ).toBeVisible()
@@ -117,7 +117,50 @@ test.describe("History and Session Restore", () => {
         await expect(
             page.locator('text="Created your test diagram."'),
         ).toHaveCount(0, { timeout: 5000 })
-        await expect(page.getByText("Paper to Diagram")).toBeVisible()
+        await expect(page.getByText("Paper to diagram")).toBeVisible()
+    })
+
+    test("the offer to go on without saving goes away with its chat", async ({
+        page,
+    }) => {
+        let n = 0
+        await page.route("**/api/chat", async (route) => {
+            n++
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(SINGLE_BOX_XML, `Answer ${n}.`),
+            })
+        })
+        await page.goto("/", { waitUntil: "networkidle" })
+        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await sendMessage(page, "First chat")
+        await waitForText(page, "Answer 1.")
+        await page.waitForTimeout(1500)
+        await page.locator('[data-testid="new-chat-button"]').click()
+        await sendMessage(page, "Second chat")
+        await waitForText(page, "Answer 2.")
+        // Storage is full: leaving the second chat offers to go on unsaved
+        await page.evaluate(() => {
+            const put = IDBObjectStore.prototype.put
+            ;(window as any).__restorePut = () => {
+                IDBObjectStore.prototype.put = put
+            }
+            IDBObjectStore.prototype.put = () => {
+                throw new DOMException("Storage is full", "QuotaExceededError")
+            }
+        })
+        await page.locator('[data-testid="new-chat-button"]').click()
+        const offer = page.getByRole("button", {
+            name: "Continue without saving",
+        })
+        await expect(offer).toBeVisible({ timeout: 5000 })
+        // Storage works again, and the user opens the first chat
+        await page.evaluate(() => (window as any).__restorePut())
+        await page.locator('[data-testid="session-title"]').click()
+        await page.getByRole("button", { name: /First chat/ }).click()
+        await expect(page.getByText("Answer 1.")).toBeVisible()
+        await expect(offer).toHaveCount(0)
     })
 
     // A diagram drawn by hand, without chat messages: loaded into draw.io
@@ -155,6 +198,8 @@ test.describe("History and Session Restore", () => {
     }) => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        // Leave the start screen to draw on the canvas
+        await page.getByTestId("draw-yourself").click()
         await drawByHand(page, "Hand drawn")
         await expect(
             getIframeContent(page).getByText("Hand drawn", { exact: true }),
@@ -188,17 +233,21 @@ test.describe("History and Session Restore", () => {
         await waitForText(page, "Created your test diagram.")
         await page.waitForTimeout(1500)
         await page.locator('[data-testid="new-chat-button"]').click()
-        // The empty chat lists the first one; draw something by hand
-        const firstChat = page.getByRole("button", {
-            name: /Create a test diagram/,
+        // The empty chat shows the start screen; draw something by hand
+        await expect(page.getByTestId("lobby-hero")).toBeVisible({
+            timeout: 10000,
         })
-        await expect(firstChat).toBeVisible({ timeout: 10000 })
+        await page.getByTestId("draw-yourself").click()
         await drawByHand(page, "Hand drawn")
         await expect(
             getIframeContent(page).getByText("Hand drawn", { exact: true }),
         ).toBeVisible({ timeout: 10000 })
         await storageFull(page)
-        await firstChat.click()
+        // The chat list lists the first one
+        await page.getByTestId("session-title").click()
+        await page
+            .getByRole("button", { name: /Create a test diagram/ })
+            .click()
         await expect(
             page.getByText(/Could not save this chat/).first(),
         ).toBeVisible({ timeout: 5000 })
@@ -284,11 +333,9 @@ test.describe("History and Session Restore", () => {
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
         const frame = getIframeContent(page)
-        await expect(
-            frame
-                .locator(".geMenubarContainer, .geDiagramContainer, canvas")
-                .first(),
-        ).toBeVisible({ timeout: 30000 })
+        await expect(frame.locator(".geDiagramContainer").first()).toBeVisible({
+            timeout: 30000,
+        })
     })
 
     test("can restore from browser back/forward", async ({ page }) => {

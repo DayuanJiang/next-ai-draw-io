@@ -25,6 +25,7 @@ import { findCachedResponse } from "@/lib/cached-responses"
 import {
     dropInvalidToolCalls,
     fixToolInputJson,
+    formatSelectionContext,
     replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
@@ -513,6 +514,7 @@ ${userInputText}
     const isSingleSystemProvider =
         SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider) || isCustomOpenAIEndpoint
 
+    const selectionContext = formatSelectionContext(body.selectedCells)
     const xmlContext = `${
         previousXml
             ? `Previous diagram XML (before user's last message):
@@ -527,7 +529,7 @@ ${previousXml}
 ${xml || ""}
 """
 
-IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.`
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.${selectionContext ? `\n\n${selectionContext}` : ""}`
 
     const systemMessages = isSingleSystemProvider
         ? [

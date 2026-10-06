@@ -71,38 +71,35 @@ test.describe("Crossing the mobile breakpoint", () => {
     })
 
     test("keeps the chat and its streaming answer", async ({ page }) => {
-        const chat = page.locator('[data-panel-id="chat-panel"]')
         await sendMessage(page, "Tell me a story")
         await expect(page.getByText("Once upon")).toBeVisible({
             timeout: 10000,
         })
 
+        // Phones show the canvas or the chat, one at a time
         await page.setViewportSize({ width: 600, height: 900 })
+        await page.getByRole("button", { name: "Chat", exact: true }).click()
         await expect(page.getByText("Tell me a story")).toBeVisible()
-        // Half the height on mobile
-        await expect
-            .poll(async () => (await chat.boundingBox())?.height ?? 0)
-            .toBeCloseTo(450, -1)
 
         await page.setViewportSize({ width: 1280, height: 800 })
-        // A third of the width on desktop
-        await expect
-            .poll(async () => (await chat.boundingBox())?.width ?? 0)
-            .toBeCloseTo(1280 / 3, -1)
         await expect(page.getByText("Once upon a time.")).toBeVisible({
             timeout: 10000,
         })
         await expect(page.getByText("Tell me a story")).toBeVisible()
     })
 
-    test("opens a chat collapsed on desktop", async ({ page }) => {
-        await page.locator("button:has(svg.lucide-panel-right-close)").click()
+    test("reaches a chat hidden on desktop", async ({ page }) => {
+        // The start screen has no chat panel yet
+        await page.getByTestId("draw-yourself").click()
+        await page.getByRole("button", { name: "Hide chat panel" }).click()
         await expect(getChatInput(page)).toBeHidden()
 
         await page.setViewportSize({ width: 600, height: 900 })
+        await page.getByRole("button", { name: "Chat", exact: true }).click()
         await expect(getChatInput(page)).toBeVisible()
 
         await page.setViewportSize({ width: 1280, height: 800 })
+        await page.getByTestId("show-panel").click()
         await expect(getChatInput(page)).toBeVisible()
     })
 })

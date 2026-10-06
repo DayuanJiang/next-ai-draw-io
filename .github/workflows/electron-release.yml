@@ -34,15 +34,7 @@ jobs:
           node-version: 24
           cache: "npm"
 
-      - name: Download draw.io static files for offline use
-        run: |
-          rm -rf public/drawio
-          git clone --depth 1 https://github.com/jgraph/drawio.git /tmp/drawio
-          mkdir -p public/drawio
-          cp -r /tmp/drawio/src/main/webapp/* public/drawio/
-          rm -rf public/drawio/WEB-INF
-          rm -rf public/drawio/META-INF
-
+      # npm run build downloads draw.io first (prebuild)
       - name: Install dependencies
         run: npm install
 
@@ -66,16 +58,7 @@ jobs:
           node-version: 24
           cache: "npm"
 
-      - name: Download draw.io static files for offline use
-        shell: bash
-        run: |
-          rm -rf public/drawio
-          git clone --depth 1 https://github.com/jgraph/drawio.git /tmp/drawio
-          mkdir -p public/drawio
-          cp -r /tmp/drawio/src/main/webapp/* public/drawio/
-          rm -rf public/drawio/WEB-INF
-          rm -rf public/drawio/META-INF
-
+      # npm run build downloads draw.io first (prebuild)
       - name: Install dependencies
         run: npm install
 

@@ -48,7 +48,7 @@ test("the Test button checks all models at once and shows each result", async ({
     await page.goto("/", { waitUntil: "networkidle" })
     await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-    await page.locator("button:has(svg.lucide-bot)").first().click()
+    await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')
     await dialog.getByText("GLM (Zhipu)").first().click()
@@ -75,7 +75,7 @@ test("the key link and the base URL cleanup", async ({ page }) => {
     }, CONFIG)
     await page.goto("/", { waitUntil: "networkidle" })
     await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-    await page.locator("button:has(svg.lucide-bot)").first().click()
+    await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')
     await dialog.getByText("GLM (Zhipu)").first().click()

@@ -341,13 +341,9 @@ export function extractDiagramXML(xml_svg_string: string): string {
             throw new Error("SVG element does not have a 'content' attribute.")
         }
 
-        // 3. Decode HTML entities (using a minimal function)
-        function decodeHtmlEntities(str: string) {
-            const textarea = document.createElement("textarea") // Use built-in element
-            textarea.innerHTML = str
-            return textarea.value
-        }
-        const xmlContent = decodeHtmlEntities(encodedContent)
+        // 3. getAttribute already decoded the entities: decoding again
+        // would break values that hold them (a page named "R &amp; D")
+        const xmlContent = encodedContent
 
         // 4. Parse the XML content
         const xmlDoc = parser.parseFromString(xmlContent, "text/xml")

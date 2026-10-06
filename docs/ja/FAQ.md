@@ -18,9 +18,11 @@
 
 **問題**: イントラネット環境で「embed.diagrams.netのサーバーIPアドレスが見つかりません」と表示される
 
-**重要**: `NEXT_PUBLIC_*` 環境変数は**ビルド時**変数であり、JSコードにバンドルされます。**実行時の設定は無効です！**
+**重要**: アプリには draw.io のコピーが同梱され、`/drawio` から配信されるため、ブラウザは `embed.diagrams.net` にアクセスしなくなりました。それでもこのエラーが出る場合は、イメージが `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net`（以前の Dockerfile の既定値）でビルドされています。このビルド引数を外して再ビルドしてください。詳しくは[オフラインデプロイ](./offline-deployment.md)を参照してください。
 
-**解決策**: ビルド時に `args` で渡す必要があります：
+`NEXT_PUBLIC_*` 環境変数は**ビルド時**変数であり、JSコードにバンドルされます。**実行時の設定は無効です！**
+
+**別の draw.io サーバーを使い続ける場合**は、ビルド時に `args` で渡します：
 
 ```yaml
 # docker-compose.yml

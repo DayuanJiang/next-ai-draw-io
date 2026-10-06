@@ -41,7 +41,8 @@ import { TemplateEditDialog } from "./TemplateEditDialog"
 
 interface TemplatePanelProps {
     setInput: (input: string) => void
-    onSendTemplate?: (template: Template) => void
+    /** Whether it was sent */
+    onSendTemplate?: (template: Template) => Promise<boolean>
     currentInput?: string
 }
 
@@ -178,16 +179,21 @@ export function TemplatePanel({
 
     // Actually send the template
     const sendTemplate = async (template: Template) => {
-        // Increment click count only when actually sending
-        await incrementClickCount(template.id)
         if (onSendTemplate) {
-            // Increment run count and update lastUsedAt
-            await incrementRunCount(template.id)
-            // Reload to show updated stats
-            loadTemplates()
-            // Call the send callback
-            onSendTemplate(template)
+            // Sent first, while the chat is the one it was clicked in (the
+            // counts wait for storage). A run only when it was sent (not
+            // while a message is still being sent, or attachments read).
+            const sending = onSendTemplate(template)
+            // Increment click count only when actually sending
+            await incrementClickCount(template.id)
+            if (await sending) {
+                // Increment run count and update lastUsedAt
+                await incrementRunCount(template.id)
+                // Reload to show updated stats
+                loadTemplates()
+            }
         } else {
+            await incrementClickCount(template.id)
             // Fallback: just fill the input if no send callback provided
             setInput(template.prompt)
         }
@@ -333,14 +339,6 @@ export function TemplatePanel({
     if (!loading && templates.length === 0) {
         return (
             <div className="py-6 px-2 animate-fade-in">
-                <div className="text-center mb-6">
-                    <h2 className="text-lg font-semibold text-foreground mb-2">
-                        {dict.templates.title}
-                    </h2>
-                    <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                        {dict.templates.subtitle}
-                    </p>
-                </div>
                 <div className="flex flex-col items-center justify-center py-8 px-4">
                     <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                         <FileText className="w-8 h-8 text-primary/60" />

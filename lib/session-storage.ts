@@ -1,6 +1,7 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
 import { toast } from "sonner"
+import type { DiagramVersion } from "@/stores/versions-store"
 import type { Template } from "./template-storage"
 
 // Constants
@@ -20,13 +21,18 @@ export interface ChatSession {
     xmlSnapshots: [number, string][]
     diagramXml: string
     thumbnailDataUrl?: string // Small PNG preview of the diagram
-    diagramHistory?: { svg: string; xml: string }[] // Version history of diagram edits
+    // Old version list (before AI versions existed); read once, then replaced
+    diagramHistory?: { svg: string; xml: string }[]
+    // Diagram states produced by AI changes, shown as cards in the chat
+    versions?: DiagramVersion[]
 }
 
 export interface StoredMessage {
     id: string
     role: "user" | "assistant" | "system"
     parts: Array<{ type: string; [key: string]: unknown }>
+    // e.g. the shapes selected when a user message was sent
+    metadata?: unknown
 }
 
 export interface SessionMetadata {
@@ -214,13 +220,17 @@ export async function readSessionCount(): Promise<number | null> {
     }
 }
 
-export async function deleteOldestSession(): Promise<void> {
+// keepId: a chat being opened, which stays
+export async function deleteOldestSession(keepId?: string): Promise<void> {
     if (!isIndexedDBAvailable()) return
     try {
         const db = await getDB()
         const tx = db.transaction(STORE_NAME, "readwrite")
         const index = tx.store.index("by-updated")
-        const cursor = await index.openCursor()
+        let cursor = await index.openCursor()
+        while (cursor && cursor.value.id === keepId) {
+            cursor = await cursor.continue()
+        }
         if (cursor) {
             await cursor.delete()
         }
@@ -230,15 +240,28 @@ export async function deleteOldestSession(): Promise<void> {
     }
 }
 
-// Enforce max sessions limit
-export async function enforceSessionLimit(): Promise<void> {
+// Enforce max sessions limit. keep: the chat being opened, asked for right
+// before each deletion (it can be clicked while the count is read)
+export async function enforceSessionLimit(
+    keep?: () => string | undefined,
+): Promise<void> {
     const count = await getSessionCount()
     if (count > MAX_SESSIONS) {
         const toDelete = count - MAX_SESSIONS
         for (let i = 0; i < toDelete; i++) {
-            await deleteOldestSession()
+            await deleteOldestSession(keep?.())
         }
     }
+}
+
+export async function renameSession(
+    id: string,
+    title: string,
+): Promise<ChatSession | null> {
+    const session = await getSession(id)
+    if (!session) return null
+    const updated = { ...session, title, updatedAt: Date.now() }
+    return (await saveSession(updated)) ? updated : null
 }
 
 // Helper: Create a new empty session
@@ -300,6 +323,7 @@ export function sanitizeMessage(message: unknown): StoredMessage | null {
         id: msg.id as string,
         role: role as "user" | "assistant" | "system",
         parts,
+        ...(msg.metadata !== undefined && { metadata: msg.metadata }),
     }
 }
 

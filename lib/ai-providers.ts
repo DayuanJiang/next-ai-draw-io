@@ -911,7 +911,9 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
 
     switch (provider) {
         case "bedrock": {
-            // Use client-provided credentials if available, otherwise fall back to IAM/env vars
+            // Use client-provided credentials if available (a Bedrock API
+            // key, or an access key pair), otherwise fall back to IAM/env vars
+            const clientApiKey = overrides?.apiKey
             const hasClientCredentials =
                 overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey
             // Keys from the admin panel. The ADMIN_ names keep them out of the
@@ -937,33 +939,46 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 process.env.AWS_REGION ||
                 "us-west-2"
 
-            const bedrockProvider = hasClientCredentials
+            const bedrockProvider = clientApiKey
                 ? createAmazonBedrock({
                       region: bedrockRegion,
-                      accessKeyId: overrides.awsAccessKeyId as string,
-                      secretAccessKey: overrides.awsSecretAccessKey as string,
-                      ...(overrides?.awsSessionToken && {
-                          sessionToken: overrides.awsSessionToken,
-                      }),
-                      // Without an apiKey the SDK reads the server's
-                      // AWS_BEARER_TOKEN_BEDROCK, which wins over the keys
-                      apiKey: "",
+                      apiKey: clientApiKey,
+                      // The SDK falls back to signing with AWS keys when it
+                      // drops a key (one of spaces): never the server's
+                      credentialProvider: async () => {
+                          throw new Error("The Bedrock API key is empty")
+                      },
                       // Without a baseURL it reads the server's
                       // AWS_ENDPOINT_URL_BEDROCK_RUNTIME / AWS_ENDPOINT_URL
                       baseURL: bedrockRuntimeUrl(bedrockRegion),
                   })
-                : adminAccessKeyId && adminSecretAccessKey
+                : hasClientCredentials
                   ? createAmazonBedrock({
                         region: bedrockRegion,
-                        accessKeyId: adminAccessKeyId,
-                        secretAccessKey: adminSecretAccessKey,
-                        // The keys the admin panel's Test button checked
+                        accessKeyId: overrides.awsAccessKeyId as string,
+                        secretAccessKey: overrides.awsSecretAccessKey as string,
+                        ...(overrides?.awsSessionToken && {
+                            sessionToken: overrides.awsSessionToken,
+                        }),
+                        // Without an apiKey the SDK reads the server's
+                        // AWS_BEARER_TOKEN_BEDROCK, which wins over the keys
                         apiKey: "",
+                        // Without a baseURL it reads the server's
+                        // AWS_ENDPOINT_URL_BEDROCK_RUNTIME / AWS_ENDPOINT_URL
+                        baseURL: bedrockRuntimeUrl(bedrockRegion),
                     })
-                  : createAmazonBedrock({
-                        region: bedrockRegion,
-                        credentialProvider: fromNodeProviderChain(),
-                    })
+                  : adminAccessKeyId && adminSecretAccessKey
+                    ? createAmazonBedrock({
+                          region: bedrockRegion,
+                          accessKeyId: adminAccessKeyId,
+                          secretAccessKey: adminSecretAccessKey,
+                          // The keys the admin panel's Test button checked
+                          apiKey: "",
+                      })
+                    : createAmazonBedrock({
+                          region: bedrockRegion,
+                          credentialProvider: fromNodeProviderChain(),
+                      })
             model = bedrockProvider(modelId)
             // Add Anthropic beta options if using Claude models via Bedrock
             if (modelId.includes("anthropic.claude")) {
@@ -1194,7 +1209,10 @@ export function usesServerCredentials(
     const baseUrl = normalizeBaseUrl(overrides?.baseUrl ?? "")
     switch (provider) {
         case "bedrock":
-            return !(overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey)
+            return !(
+                overrides?.apiKey ||
+                (overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey)
+            )
         case "vertexai":
             return !overrides?.vertexApiKey
         case "edgeone":

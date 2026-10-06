@@ -149,8 +149,10 @@ export default function AboutCN() {
                             ：上传现有图表或图像，让AI自动复制和增强
                         </li>
                         <li>
-                            <strong>图表历史记录</strong>
-                            ：全面的版本控制，跟踪所有更改，允许您查看和恢复AI编辑前的图表版本
+                            <strong>版本与撤销</strong>
+                            ：AI
+                            的每次修改都会成为聊天里的一个版本，可以对比、恢复或撤销；在画布上按
+                            Ctrl+Z 也能撤回
                         </li>
                         <li>
                             <strong>交互式聊天界面</strong>
@@ -294,7 +296,8 @@ export default function AboutCN() {
                             ）：用于流式AI响应和多提供商支持
                         </li>
                         <li>
-                            <strong>react-drawio</strong>：用于图表表示和操作
+                            <strong>draw.io</strong>
+                            ：内置在应用里的编辑器，应用可以直接控制它
                         </li>
                     </ul>
                     <p className="text-gray-700 mt-4">

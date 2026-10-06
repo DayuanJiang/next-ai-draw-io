@@ -41,13 +41,6 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -80,7 +73,6 @@ import { cn } from "@/lib/utils"
 
 interface ModelConfigDialogProps {
     open: boolean
-    onOpenChange: (open: boolean) => void
     modelConfig: UseModelConfigReturn
 }
 
@@ -103,7 +95,7 @@ function ConfigSection({
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-medium text-muted-foreground">
                         {title}
                     </span>
                 </div>
@@ -123,9 +115,28 @@ function ConfigCard({ children }: { children: React.ReactNode }) {
     )
 }
 
+/** A Bedrock API key or an access key pair, and a region */
+function hasBedrockCredentials(p: ProviderConfig): boolean {
+    return (
+        (!!p.apiKey || (!!p.awsAccessKeyId && !!p.awsSecretAccessKey)) &&
+        !!p.awsRegion
+    )
+}
+
+/** Providers as last saved (the model config is saved on every change) */
+function savedProviders(): ProviderConfig[] {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
+        return stored
+            ? (JSON.parse(stored) as { providers: ProviderConfig[] }).providers
+            : []
+    } catch {
+        return []
+    }
+}
+
 export function ModelConfigDialog({
     open,
-    onOpenChange,
     modelConfig,
 }: ModelConfigDialogProps) {
     const dict = useDictionary()
@@ -192,10 +203,22 @@ export function ModelConfigDialog({
     // Number of the latest Test click: only that test may reset the busy
     // state when its credentials changed meanwhile
     const validationRunRef = useRef(0)
+    // Set when this view goes away (settings closed or on another tab): its
+    // config no longer follows edits, the saved one does
+    const closedRef = useRef(false)
+    useEffect(() => {
+        closedRef.current = false
+        return () => {
+            closedRef.current = true
+        }
+    }, [])
+    // The providers as they are now: once this view is gone, as saved
+    const providersNow = () =>
+        closedRef.current ? savedProviders() : configRef.current.providers
     // A model list or test result belongs to the credentials it was asked
     // with; they can change meanwhile, here or in another tab
     const credentialsOf = (providerId: string) => {
-        const p = configRef.current.providers.find((x) => x.id === providerId)
+        const p = providersNow().find((x) => x.id === providerId)
         return JSON.stringify([
             p?.provider,
             p?.apiKey,
@@ -266,7 +289,9 @@ export function ModelConfigDialog({
                 const hints = dict.errors.llm as Record<string, string>
                 setFetchModelsError(
                     [hints[data.code], data.error].filter(Boolean).join(" ") ||
-                        `Request failed (${response.status})`,
+                        formatMessage(dict.modelConfig.requestFailed, {
+                            status: response.status,
+                        }),
                 )
             }
         } catch {
@@ -355,7 +380,7 @@ export function ModelConfigDialog({
         if (!selectedProviderId || !selectedProvider) return false
         // Prevent duplicate model IDs
         if (existingModelIds.includes(modelId)) {
-            setDuplicateError(`Model "${modelId}" already exists`)
+            setDuplicateError(dict.modelConfig.modelIdExists)
             return false
         }
         setDuplicateError("")
@@ -388,13 +413,7 @@ export function ModelConfigDialog({
         const isOllama = selectedProvider.provider === "ollama"
         const isVertexAI = selectedProvider.provider === "vertexai"
         if (isBedrock) {
-            if (
-                !selectedProvider.awsAccessKeyId ||
-                !selectedProvider.awsSecretAccessKey ||
-                !selectedProvider.awsRegion
-            ) {
-                return
-            }
+            if (!hasBedrockCredentials(selectedProvider)) return
         } else if (isVertexAI) {
             // Vertex AI requires vertexApiKey for Express Mode
             if (!selectedProvider.vertexApiKey) {
@@ -406,7 +425,7 @@ export function ModelConfigDialog({
 
         // Need at least one model to validate
         if (selectedProvider.models.length === 0) {
-            setValidationError("Add at least one model to validate")
+            setValidationError(dict.modelConfig.addModelFirst)
             setValidationStatus("error")
             return
         }
@@ -485,14 +504,17 @@ export function ModelConfigDialog({
                                       .filter(Boolean)
                                       .join(" ") ||
                                   (response.ok
-                                      ? "Validation failed"
-                                      : `Request failed (${response.status})`),
+                                      ? dict.modelConfig.validationError
+                                      : formatMessage(
+                                            dict.modelConfig.requestFailed,
+                                            { status: response.status },
+                                        )),
                               validationWarning: undefined,
                           }
                 } catch {
                     update = {
                         validated: false,
-                        validationError: "Network error",
+                        validationError: dict.errors.networkError,
                         validationWarning: undefined,
                     }
                 }
@@ -511,7 +533,7 @@ export function ModelConfigDialog({
                     return
                 }
                 // So did this model's id: the result is for the old one
-                const current = configRef.current.providers
+                const current = providersNow()
                     .find((p) => p.id === selectedProviderId)
                     ?.models.find((m) => m.id === model.id)
                 if (current?.modelId !== model.modelId) {
@@ -565,7 +587,11 @@ export function ModelConfigDialog({
             }, 1500)
         } else {
             setValidationStatus("error")
-            setValidationError(`${errorCount} model(s) failed validation`)
+            setValidationError(
+                formatMessage(dict.modelConfig.validationFailedCount, {
+                    count: errorCount,
+                }),
+            )
         }
     }, [
         selectedProvider,
@@ -682,27 +708,13 @@ export function ModelConfigDialog({
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-4xl h-[80vh] max-h-[800px] overflow-hidden flex flex-col gap-0 p-0">
-                {/* Header */}
-                <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-                    <DialogTitle className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-surface-2">
-                            <Server className="h-5 w-5 text-primary" />
-                        </div>
-                        {dict.modelConfig?.title || "AI Model Configuration"}
-                    </DialogTitle>
-                    <DialogDescription className="mt-1">
-                        {dict.modelConfig?.description ||
-                            "Configure multiple AI providers and models for your workspace"}
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="flex flex-1 min-h-0 overflow-hidden border-t border-border-subtle">
+        <>
+            <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex flex-1 min-h-0 overflow-hidden">
                     {/* Provider List (Left Sidebar) */}
                     <div className="w-60 shrink-0 flex flex-col bg-surface-1/50 border-r border-border-subtle">
                         <div className="px-4 py-3">
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            <span className="text-xs font-medium text-muted-foreground">
                                 {dict.modelConfig.providers}
                             </span>
                         </div>
@@ -898,6 +910,7 @@ export function ModelConfigDialog({
                                                 awsRegion={
                                                     selectedProvider.awsRegion
                                                 }
+                                                bedrockApiKey
                                                 onChange={(field, value) =>
                                                     handleProviderUpdate(
                                                         field,
@@ -914,9 +927,9 @@ export function ModelConfigDialog({
                                                     selectedProvider.provider ===
                                                     "bedrock"
                                                         ? renderTestButton(
-                                                              !!selectedProvider.awsAccessKeyId &&
-                                                                  !!selectedProvider.awsSecretAccessKey &&
-                                                                  !!selectedProvider.awsRegion,
+                                                              hasBedrockCredentials(
+                                                                  selectedProvider,
+                                                              ),
                                                           )
                                                         : selectedProvider.provider ===
                                                             "edgeone"
@@ -1413,7 +1426,7 @@ export function ModelConfigDialog({
                                                                                 model.id,
                                                                             )
                                                                         }
-                                                                        aria-label={`Delete ${model.modelId}`}
+                                                                        aria-label={`${dict.common.delete} ${model.modelId}`}
                                                                     >
                                                                         <X className="h-4 w-4" />
                                                                     </Button>
@@ -1474,10 +1487,14 @@ export function ModelConfigDialog({
                                     <Server className="h-8 w-8 text-muted-foreground" />
                                 </div>
                                 <h3 className="font-semibold text-lg tracking-tight mb-1">
-                                    {dict.modelConfig.configureProviders}
+                                    {config.providers.length === 0
+                                        ? dict.modelConfig.noProvidersTitle
+                                        : dict.modelConfig.configureProviders}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-xs">
-                                    {dict.modelConfig.selectProviderHint}
+                                    {config.providers.length === 0
+                                        ? dict.modelConfig.noProvidersHint
+                                        : dict.modelConfig.selectProviderHint}
                                 </p>
                             </div>
                         )}
@@ -1508,7 +1525,7 @@ export function ModelConfigDialog({
                         </p>
                     </div>
                 </div>
-            </DialogContent>
+            </div>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog
@@ -1588,6 +1605,6 @@ export function ModelConfigDialog({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </Dialog>
+        </>
     )
 }

@@ -62,7 +62,7 @@ describe("exports in flight at the same time", () => {
         let tag = ""
         const got: string[] = []
         act(() => {
-            tag = result.current.handleExportWithoutHistory()
+            tag = result.current.handleExport()
             result.current.exportResolversRef.current[tag] = (xml) =>
                 got.push(xml)
         })

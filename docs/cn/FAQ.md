@@ -18,9 +18,11 @@
 
 **问题**: 内网环境提示"找不到 embed.diagrams.net 的服务器 IP 地址"
 
-**关键点**: `NEXT_PUBLIC_*` 环境变量是**构建时**变量，会被打包到 JS 代码中，**运行时设置无效**！
+**关键点**: 应用现在自带一份 draw.io，从 `/drawio` 提供，浏览器不再需要访问 `embed.diagrams.net`。如果仍然看到这个错误，说明镜像是用 `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net`（旧版 Dockerfile 的默认值）构建的，去掉这个构建参数重新构建即可。详见[离线部署](./offline-deployment.md)。
 
-**解决方案**: 必须在构建时通过 `args` 传入：
+`NEXT_PUBLIC_*` 环境变量是**构建时**变量，会被打包到 JS 代码中，**运行时设置无效**！
+
+**如果仍想使用单独的 draw.io 服务器**，在构建时通过 `args` 传入：
 
 ```yaml
 # docker-compose.yml

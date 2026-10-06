@@ -1,19 +1,27 @@
-"use client"
-
-import { ChevronRight, Github, Info, Moon, Sun, Tag } from "lucide-react"
+import {
+    Github,
+    Info,
+    KeyRound,
+    Monitor,
+    Moon,
+    Palette,
+    SlidersHorizontal,
+    Sun,
+    Terminal,
+} from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Suspense, useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { useChatEngine } from "@/components/chat/chat-engine"
+import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
     Select,
     SelectContent,
@@ -23,36 +31,18 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { BrandMark } from "@/components/workspace/brand-mark"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
-import type { DrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
-
-// Reusable setting item component for consistent layout
-function SettingItem({
-    label,
-    description,
-    children,
-}: {
-    label: string
-    description?: string
-    children: React.ReactNode
-}) {
-    return (
-        <div className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
-            <div className="space-y-0.5 pr-4">
-                <Label className="text-sm font-medium">{label}</Label>
-                {description && (
-                    <p className="text-xs text-muted-foreground max-w-[260px]">
-                        {description}
-                    </p>
-                )}
-            </div>
-            <div className="shrink-0">{children}</div>
-        </div>
-    )
-}
+import { cn } from "@/lib/utils"
+import {
+    type SendShortcut,
+    type ThemePreference,
+    useSettingsStore,
+} from "@/stores/settings-store"
+import { type SettingsTab, useUiStore } from "@/stores/ui-store"
 
 const LANGUAGE_LABELS: Record<Locale, string> = {
     en: "English",
@@ -61,90 +51,204 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
     "zh-Hant": "繁體中文",
 }
 
-interface SettingsDialogProps {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    drawioUi: DrawioTheme
-    onDrawioUiChange: (theme: DrawioTheme) => void
-    darkMode: boolean
-    onToggleDarkMode: () => void
-    minimalStyle?: boolean
-    onMinimalStyleChange?: (value: boolean) => void
-    vlmValidationEnabled?: boolean
-    onVlmValidationChange?: (value: boolean) => void
-    onOpenModelConfig?: () => void
-    customSystemMessage?: string
-    onCustomSystemMessageChange?: (value: string) => void
-    maxOutputTokens?: string
-    onMaxOutputTokensChange?: (value: string) => void
+function Row({
+    label,
+    description,
+    htmlFor,
+    children,
+    stacked = false,
+}: {
+    label: string
+    description?: string
+    htmlFor?: string
+    children: React.ReactNode
+    stacked?: boolean
+}) {
+    return (
+        <div
+            className={cn(
+                "py-4 first:pt-1",
+                stacked
+                    ? "space-y-3"
+                    : "flex items-center justify-between gap-6",
+            )}
+        >
+            <div className="min-w-0 space-y-0.5">
+                <label
+                    htmlFor={htmlFor}
+                    className="block text-[13px] font-medium text-foreground"
+                >
+                    {label}
+                </label>
+                {description && (
+                    <p className="max-w-[34em] text-xs text-muted-foreground">
+                        {description}
+                    </p>
+                )}
+            </div>
+            <div className={cn(!stacked && "shrink-0")}>{children}</div>
+        </div>
+    )
 }
 
-export const STORAGE_ACCESS_CODE_KEY = "next-ai-draw-io-access-code"
-const STORAGE_ACCESS_CODE_REQUIRED_KEY = "next-ai-draw-io-access-code-required"
-
-function getStoredAccessCodeRequired(): boolean | null {
-    if (typeof window === "undefined") return null
-    const stored = localStorage.getItem(STORAGE_ACCESS_CODE_REQUIRED_KEY)
-    if (stored === null) return null
-    return stored === "true"
+function Segmented<T extends string>({
+    value,
+    options,
+    onChange,
+    label,
+}: {
+    value: T
+    options: { value: T; label: string; icon?: React.ReactNode }[]
+    onChange: (value: T) => void
+    label: string
+}) {
+    return (
+        <div
+            role="radiogroup"
+            aria-label={label}
+            className="inline-flex rounded-lg bg-muted p-0.5"
+        >
+            {options.map((option) => (
+                // biome-ignore lint/a11y/useSemanticElements: styled segmented control
+                <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={value === option.value}
+                    onClick={() => onChange(option.value)}
+                    className={cn(
+                        "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground transition-colors [&_svg]:size-3.5",
+                        value === option.value &&
+                            "bg-card font-medium text-foreground shadow-float",
+                    )}
+                >
+                    {option.icon}
+                    {option.label}
+                </button>
+            ))}
+        </div>
+    )
 }
 
-function SettingsContent({
-    open,
-    onOpenChange,
-    drawioUi,
-    onDrawioUiChange,
-    darkMode,
-    onToggleDarkMode,
-    minimalStyle = false,
-    onMinimalStyleChange = () => {},
-    vlmValidationEnabled = false,
-    onVlmValidationChange = () => {},
-    onOpenModelConfig,
-    customSystemMessage = "",
-    onCustomSystemMessageChange = () => {},
-    maxOutputTokens = "",
-    onMaxOutputTokensChange = () => {},
-}: SettingsDialogProps) {
+function AppearanceTab() {
     const dict = useDictionary()
+    const t = dict.settings
+    const engine = useChatEngine()
     const router = useRouter()
     const pathname = usePathname() || "/"
     const search = useSearchParams()
+    const theme = useSettingsStore((s) => s.theme)
+    const setTheme = useSettingsStore((s) => s.setTheme)
+    const minimalStyle = useSettingsStore((s) => s.minimalStyle)
+    const setMinimalStyle = useSettingsStore((s) => s.setMinimalStyle)
+    const currentLang =
+        (pathname.split("/").filter(Boolean)[0] as Locale) || i18n.defaultLocale
+
+    // The page mounts anew in the other language: the chat is saved first
+    // (it may not be yet), and its session goes into the new URL
+    const changeLanguage = (lang: string) =>
+        engine.leavePage((sessionId) => {
+            localStorage.setItem(STORAGE_KEYS.locale, lang)
+            // The page reloads in the new language; close settings as before
+            useUiStore.getState().setSettingsOpen(false)
+            // Keep the desktop app's menu language in sync
+            window.electronAPI
+                ?.setUserLocale?.(lang)
+                .catch((error: unknown) => {
+                    console.error("Failed to sync locale with Electron:", error)
+                })
+            const parts = pathname.split("/")
+            if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
+                parts[1] = lang
+            } else {
+                parts.splice(1, 0, lang)
+            }
+            const params = new URLSearchParams(search?.toString())
+            if (sessionId) params.set("session", sessionId)
+            const query = params.toString() ? `?${params.toString()}` : ""
+            router.push((parts.join("/") || "/") + query)
+        })
+
+    return (
+        <div className="divide-y divide-border">
+            <Row label={t.theme} description={t.themeDescription}>
+                <Segmented<ThemePreference>
+                    label={t.theme}
+                    value={theme}
+                    onChange={setTheme}
+                    options={[
+                        { value: "light", label: t.themeLight, icon: <Sun /> },
+                        {
+                            value: "dark",
+                            label: t.themeDarkMode,
+                            icon: <Moon />,
+                        },
+                        {
+                            value: "system",
+                            label: t.themeSystem,
+                            icon: <Monitor />,
+                        },
+                    ]}
+                />
+            </Row>
+            <Row label={t.language} description={t.languageDescription}>
+                <Select
+                    value={currentLang}
+                    onValueChange={changeLanguage}
+                    // Not while an answer runs: the page mounts anew
+                    disabled={engine.isBusy}
+                >
+                    <SelectTrigger
+                        id="language-select"
+                        className="h-8 w-[132px] rounded-lg"
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {i18n.locales.map((locale) => (
+                            <SelectItem key={locale} value={locale}>
+                                {LANGUAGE_LABELS[locale]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </Row>
+            <Row label={t.diagramStyle} description={t.diagramStyleDescription}>
+                <Segmented<"styled" | "minimal">
+                    label={t.diagramStyle}
+                    value={minimalStyle ? "minimal" : "styled"}
+                    onChange={(value) => setMinimalStyle(value === "minimal")}
+                    options={[
+                        { value: "styled", label: dict.chat.styledMode },
+                        { value: "minimal", label: dict.chat.minimalStyle },
+                    ]}
+                />
+            </Row>
+        </div>
+    )
+}
+
+function AdvancedTab({ open }: { open: boolean }) {
+    const dict = useDictionary()
+    const t = dict.settings
+    const settings = useSettingsStore()
     const [accessCode, setAccessCode] = useState("")
-    const [isVerifying, setIsVerifying] = useState(false)
-    const [error, setError] = useState("")
     const [accessCodeRequired, setAccessCodeRequired] = useState(
-        () => getStoredAccessCodeRequired() ?? false,
+        () => localStorage.getItem(STORAGE_KEYS.accessCodeRequired) === "true",
     )
-    const [currentLang, setCurrentLang] = useState("en")
-    const [sendShortcut, setSendShortcut] = useState("ctrl-enter")
-
-    // Panel visibility state
-    const [showRecentChats, setShowRecentChats] = useState(true)
-    const [showMyTemplates, setShowMyTemplates] = useState(true)
-    const [showQuickExamples, setShowQuickExamples] = useState(true)
-
-    const handlePanelToggle = useCallback(
-        (key: string, value: boolean, setter: (v: boolean) => void) => {
-            setter(value)
-            localStorage.setItem(key, String(value))
-            window.dispatchEvent(new CustomEvent("panelVisibilityChange"))
-        },
-        [],
-    )
-
-    // Proxy settings state (Electron only)
+    const [isVerifying, setIsVerifying] = useState(false)
+    const [accessError, setAccessError] = useState("")
     const [httpProxy, setHttpProxy] = useState("")
     const [httpsProxy, setHttpsProxy] = useState("")
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
+    const isElectron =
+        typeof window !== "undefined" && !!window.electronAPI?.isElectron
 
     useEffect(() => {
-        // Re-fetch config whenever the dialog opens to ensure we always show
-        // the access code input if the server requires it. This fixes the case
-        // where a stale localStorage cache (from before ACCESS_CODE_LIST was
-        // configured) would hide the access code input.
         if (!open) return
-
+        setAccessCode(localStorage.getItem(STORAGE_KEYS.accessCode) || "")
+        setAccessError("")
+        // Re-check on every open: a stale cached value would hide the field
         fetch(getApiEndpoint("/api/config"))
             .then((res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -153,605 +257,337 @@ function SettingsContent({
             .then((data) => {
                 const required = data?.accessCodeRequired === true
                 localStorage.setItem(
-                    STORAGE_ACCESS_CODE_REQUIRED_KEY,
+                    STORAGE_KEYS.accessCodeRequired,
                     String(required),
                 )
                 setAccessCodeRequired(required)
             })
-            .catch(() => {
-                // Keep existing cached value on error
-            })
+            .catch(() => {})
+        window.electronAPI?.getProxy?.().then((config: any) => {
+            setHttpProxy(config.httpProxy || "")
+            setHttpsProxy(config.httpsProxy || "")
+        })
     }, [open])
 
-    // Detect current language from pathname
-    useEffect(() => {
-        const seg = pathname.split("/").filter(Boolean)
-        const first = seg[0]
-        if (first && i18n.locales.includes(first as Locale)) {
-            setCurrentLang(first)
-        } else {
-            setCurrentLang(i18n.defaultLocale)
-        }
-    }, [pathname])
-
-    useEffect(() => {
-        if (open) {
-            const storedCode =
-                localStorage.getItem(STORAGE_ACCESS_CODE_KEY) || ""
-            setAccessCode(storedCode)
-
-            const storedSendShortcut = localStorage.getItem(
-                STORAGE_KEYS.sendShortcut,
-            )
-            setSendShortcut(storedSendShortcut || "ctrl-enter")
-
-            setShowRecentChats(
-                localStorage.getItem(STORAGE_KEYS.showRecentChats) !== "false",
-            )
-            setShowMyTemplates(
-                localStorage.getItem(STORAGE_KEYS.showMyTemplates) !== "false",
-            )
-            setShowQuickExamples(
-                localStorage.getItem(STORAGE_KEYS.showQuickExamples) !==
-                    "false",
-            )
-
-            setError("")
-
-            // Load proxy settings (Electron only)
-            if (window.electronAPI?.getProxy) {
-                window.electronAPI.getProxy().then((config) => {
-                    setHttpProxy(config.httpProxy || "")
-                    setHttpsProxy(config.httpsProxy || "")
-                })
-            }
-        }
-    }, [open])
-
-    const changeLanguage = (lang: string) => {
-        // Save locale to localStorage for persistence across restarts
-        localStorage.setItem("next-ai-draw-io-locale", lang)
-
-        // Notify Electron main process to update its menu language
-        if (window.electronAPI?.setUserLocale) {
-            window.electronAPI.setUserLocale(lang).catch((error) => {
-                console.error("Failed to sync locale with Electron:", error)
-            })
-        }
-
-        const parts = pathname.split("/")
-        if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
-            parts[1] = lang
-        } else {
-            parts.splice(1, 0, lang)
-        }
-        const newPath = parts.join("/") || "/"
-        const searchStr = search?.toString() ? `?${search.toString()}` : ""
-        router.push(newPath + searchStr)
-    }
-
-    const handleSave = async () => {
-        if (!accessCodeRequired) return
-
-        setError("")
+    const saveAccessCode = async () => {
+        setAccessError("")
         setIsVerifying(true)
-
         try {
             const response = await fetch(
                 getApiEndpoint("/api/verify-access-code"),
                 {
                     method: "POST",
-                    headers: {
-                        "x-access-code": accessCode.trim(),
-                    },
+                    headers: { "x-access-code": accessCode.trim() },
                 },
             )
-
             const data = await response.json()
-
             if (!data.valid) {
-                setError(data.message || dict.errors.invalidAccessCode)
+                setAccessError(data.message || dict.errors.invalidAccessCode)
                 return
             }
-
-            localStorage.setItem(STORAGE_ACCESS_CODE_KEY, accessCode.trim())
-            onOpenChange(false)
+            localStorage.setItem(STORAGE_KEYS.accessCode, accessCode.trim())
+            toast.success(t.accessCodeSaved)
         } catch {
-            setError(dict.errors.networkError)
+            setAccessError(dict.errors.networkError)
         } finally {
             setIsVerifying(false)
         }
     }
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter") {
-            e.preventDefault()
-            handleSave()
-        }
-    }
-
-    const handleApplyProxy = async () => {
+    const applyProxy = async () => {
         if (!window.electronAPI?.setProxy) return
-
-        // Validate proxy URLs (must start with http:// or https://)
-        const validateProxyUrl = (url: string): boolean => {
-            if (!url) return true // Empty is OK
-            return url.startsWith("http://") || url.startsWith("https://")
-        }
-
-        const trimmedHttp = httpProxy.trim()
-        const trimmedHttps = httpsProxy.trim()
-
-        if (trimmedHttp && !validateProxyUrl(trimmedHttp)) {
-            toast.error("HTTP Proxy must start with http:// or https://")
+        const isValid = (url: string) =>
+            !url || url.startsWith("http://") || url.startsWith("https://")
+        const http = httpProxy.trim()
+        const https = httpsProxy.trim()
+        if (!isValid(http) || !isValid(https)) {
+            toast.error(t.proxyInvalid)
             return
         }
-        if (trimmedHttps && !validateProxyUrl(trimmedHttps)) {
-            toast.error("HTTPS Proxy must start with http:// or https://")
-            return
-        }
-
         setIsApplyingProxy(true)
         try {
             const result = await window.electronAPI.setProxy({
-                httpProxy: trimmedHttp || undefined,
-                httpsProxy: trimmedHttps || undefined,
+                httpProxy: http || undefined,
+                httpsProxy: https || undefined,
             })
-
-            if (result.success) {
-                toast.success(dict.settings.proxyApplied)
-            } else {
-                toast.error(result.error || "Failed to apply proxy settings")
-            }
+            if (result.success) toast.success(t.proxyApplied)
+            else toast.error(result.error || t.proxyFailed)
         } catch {
-            toast.error("Failed to apply proxy settings")
+            toast.error(t.proxyFailed)
         } finally {
             setIsApplyingProxy(false)
         }
     }
 
     return (
-        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
-            {/* Header */}
-            <DialogHeader className="px-6 pt-6 pb-4">
-                <DialogTitle>{dict.settings.title}</DialogTitle>
-                <DialogDescription className="mt-1">
-                    {dict.settings.description}
-                </DialogDescription>
-            </DialogHeader>
-
-            {/* Content */}
-            <div className="px-6 pb-6 overflow-y-auto flex-1 scrollbar-thin">
-                <div className="divide-y divide-border-subtle">
-                    {/* API Keys & Models */}
-                    {onOpenModelConfig && (
-                        <SettingItem
-                            label={dict.settings.apiKeysModels}
-                            description={dict.settings.apiKeysModelsDescription}
-                        >
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-9 w-9 p-0"
-                                onClick={() => {
-                                    onOpenChange(false)
-                                    onOpenModelConfig()
-                                }}
-                                aria-label={dict.settings.apiKeysModels}
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </SettingItem>
-                    )}
-
-                    {/* Access Code (conditional) */}
-                    {accessCodeRequired && (
-                        <div className="py-4 first:pt-0 space-y-3">
-                            <div className="space-y-0.5">
-                                <Label
-                                    htmlFor="access-code"
-                                    className="text-sm font-medium"
-                                >
-                                    {dict.settings.accessCode}
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                    {dict.settings.accessCodeDescription}
-                                </p>
-                            </div>
-                            <div className="flex gap-2">
-                                <Input
-                                    id="access-code"
-                                    type="password"
-                                    value={accessCode}
-                                    onChange={(e) =>
-                                        setAccessCode(e.target.value)
-                                    }
-                                    onKeyDown={handleKeyDown}
-                                    placeholder={
-                                        dict.settings.accessCodePlaceholder
-                                    }
-                                    autoComplete="off"
-                                    className="h-9"
-                                />
-                                <Button
-                                    onClick={handleSave}
-                                    disabled={isVerifying || !accessCode.trim()}
-                                    className="h-9 px-4 rounded-xl"
-                                >
-                                    {isVerifying ? "..." : dict.common.save}
-                                </Button>
-                            </div>
-                            {error && (
-                                <p className="text-xs text-destructive">
-                                    {error}
-                                </p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Language */}
-                    <SettingItem
-                        label={dict.settings.language}
-                        description={dict.settings.languageDescription}
-                    >
-                        <Select
-                            value={currentLang}
-                            onValueChange={changeLanguage}
-                        >
-                            <SelectTrigger
-                                id="language-select"
-                                className="w-[120px] h-9 rounded-xl"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {i18n.locales.map((locale) => (
-                                    <SelectItem key={locale} value={locale}>
-                                        {LANGUAGE_LABELS[locale]}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </SettingItem>
-
-                    {/* Theme */}
-                    <SettingItem
-                        label={dict.settings.theme}
-                        description={dict.settings.themeDescription}
-                    >
-                        <Button
-                            id="theme-toggle"
-                            variant="outline"
-                            size="icon"
-                            onClick={onToggleDarkMode}
-                            className="h-9 w-9 rounded-xl border-border-subtle hover:bg-interactive-hover"
-                        >
-                            {darkMode ? (
-                                <Sun className="h-4 w-4" />
-                            ) : (
-                                <Moon className="h-4 w-4" />
-                            )}
-                        </Button>
-                    </SettingItem>
-
-                    {/* Draw.io Style */}
-                    <SettingItem
-                        label={dict.settings.drawioStyle}
-                        description={dict.settings.drawioStyleDescription}
-                    >
-                        <Select
-                            value={drawioUi}
-                            onValueChange={(v) =>
-                                onDrawioUiChange(v as DrawioTheme)
-                            }
-                        >
-                            <SelectTrigger
-                                id="drawio-ui-select"
-                                aria-label={dict.settings.drawioStyle}
-                                className="w-[120px] h-9 rounded-xl"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="kennedy">
-                                    {dict.settings.themeDefault}
-                                </SelectItem>
-                                <SelectItem value="atlas">Atlas</SelectItem>
-                                <SelectItem value="dark">
-                                    {dict.settings.themeDark}
-                                </SelectItem>
-                                <SelectItem value="min">
-                                    {dict.settings.themeMinimal}
-                                </SelectItem>
-                                <SelectItem value="sketch">
-                                    {dict.settings.themeSketch}
-                                </SelectItem>
-                                <SelectItem value="simple">
-                                    {dict.settings.themeSimple}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </SettingItem>
-
-                    {/* Diagram Style */}
-                    <SettingItem
-                        label={dict.settings.diagramStyle}
-                        description={dict.settings.diagramStyleDescription}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Switch
-                                id="minimal-style"
-                                checked={minimalStyle}
-                                onCheckedChange={onMinimalStyleChange}
-                            />
-                            <span className="text-sm text-muted-foreground">
-                                {minimalStyle
-                                    ? dict.chat.minimalStyle
-                                    : dict.chat.styledMode}
-                            </span>
-                        </div>
-                    </SettingItem>
-
-                    {/* Panel Visibility */}
-                    <SettingItem
-                        label={dict.settings.panelVisibility}
-                        description={dict.settings.panelVisibilityDescription}
-                    >
-                        <div className="flex flex-col gap-2">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <Switch
-                                    id="show-recent-chats"
-                                    checked={showRecentChats}
-                                    onCheckedChange={(v) =>
-                                        handlePanelToggle(
-                                            STORAGE_KEYS.showRecentChats,
-                                            v,
-                                            setShowRecentChats,
-                                        )
-                                    }
-                                />
-                                <span className="text-xs text-muted-foreground">
-                                    {dict.settings.showRecentChats}
-                                </span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <Switch
-                                    id="show-my-templates"
-                                    checked={showMyTemplates}
-                                    onCheckedChange={(v) =>
-                                        handlePanelToggle(
-                                            STORAGE_KEYS.showMyTemplates,
-                                            v,
-                                            setShowMyTemplates,
-                                        )
-                                    }
-                                />
-                                <span className="text-xs text-muted-foreground">
-                                    {dict.settings.showMyTemplates}
-                                </span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <Switch
-                                    id="show-quick-examples"
-                                    checked={showQuickExamples}
-                                    onCheckedChange={(v) =>
-                                        handlePanelToggle(
-                                            STORAGE_KEYS.showQuickExamples,
-                                            v,
-                                            setShowQuickExamples,
-                                        )
-                                    }
-                                />
-                                <span className="text-xs text-muted-foreground">
-                                    {dict.settings.showQuickExamples}
-                                </span>
-                            </label>
-                        </div>
-                    </SettingItem>
-
-                    {/* VLM Diagram Validation */}
-                    <SettingItem
-                        label={dict.settings.diagramValidation}
-                        description={dict.settings.diagramValidationDescription}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Switch
-                                id="vlm-validation"
-                                checked={vlmValidationEnabled}
-                                onCheckedChange={onVlmValidationChange}
-                            />
-                            <span className="text-sm text-muted-foreground">
-                                {vlmValidationEnabled
-                                    ? dict.settings.enabled
-                                    : dict.settings.disabled}
-                            </span>
-                        </div>
-                    </SettingItem>
-
-                    {/* Custom System Message */}
-                    <div className="py-4 space-y-3">
-                        <div className="space-y-0.5">
-                            <Label
-                                htmlFor="custom-system-message"
-                                className="text-sm font-medium"
-                            >
-                                {dict.settings.customSystemMessage}
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                                {dict.settings.customSystemMessageDescription}
-                            </p>
-                        </div>
-                        <Textarea
-                            id="custom-system-message"
-                            value={customSystemMessage}
-                            onChange={(e) =>
-                                onCustomSystemMessageChange(e.target.value)
-                            }
-                            placeholder={
-                                dict.settings.customSystemMessagePlaceholder
-                            }
-                            className="min-h-[80px] max-h-[160px] text-sm"
-                            maxLength={5000}
-                        />
-                    </div>
-
-                    {/* Max Output Tokens */}
-                    <SettingItem
-                        label={dict.settings.maxOutputTokens}
-                        description={dict.settings.maxOutputTokensDescription}
-                    >
+        <div className="divide-y divide-border">
+            {accessCodeRequired && (
+                <Row
+                    label={t.accessCode}
+                    description={t.accessCodeDescription}
+                    htmlFor="access-code"
+                    stacked
+                >
+                    <div className="flex gap-2">
                         <Input
-                            id="max-output-tokens"
-                            type="text"
-                            inputMode="numeric"
-                            value={maxOutputTokens}
-                            onChange={(e) =>
-                                onMaxOutputTokensChange(e.target.value)
-                            }
-                            placeholder="64000"
-                            className="h-9 w-28 text-sm"
-                        />
-                    </SettingItem>
-
-                    {/* Send Shortcut */}
-                    <SettingItem
-                        label={dict.settings.sendShortcut}
-                        description={dict.settings.sendShortcutDescription}
-                    >
-                        <Select
-                            value={sendShortcut}
-                            onValueChange={(value) => {
-                                setSendShortcut(value)
-                                localStorage.setItem(
-                                    STORAGE_KEYS.sendShortcut,
-                                    value,
-                                )
-                                window.dispatchEvent(
-                                    new CustomEvent("sendShortcutChange", {
-                                        detail: value,
-                                    }),
-                                )
+                            id="access-code"
+                            type="password"
+                            value={accessCode}
+                            onChange={(e) => setAccessCode(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault()
+                                    saveAccessCode()
+                                }
                             }}
+                            placeholder={t.accessCodePlaceholder}
+                            autoComplete="off"
+                            className="h-9"
+                        />
+                        <Button
+                            onClick={saveAccessCode}
+                            disabled={isVerifying || !accessCode.trim()}
+                            className="h-9 rounded-lg px-4"
                         >
-                            <SelectTrigger
-                                id="send-shortcut-select"
-                                className="w-auto h-9 rounded-xl"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="enter">
-                                    {dict.settings.enterToSend}
-                                </SelectItem>
-                                <SelectItem value="ctrl-enter">
-                                    {dict.settings.ctrlEnterToSend}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </SettingItem>
-
-                    {/* Proxy Settings - Electron only */}
-                    {typeof window !== "undefined" &&
-                        window.electronAPI?.isElectron && (
-                            <div className="py-4 space-y-3">
-                                <div className="space-y-0.5">
-                                    <Label className="text-sm font-medium">
-                                        {dict.settings.proxy}
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        {dict.settings.proxyDescription}
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Input
-                                        id="http-proxy"
-                                        type="text"
-                                        value={httpProxy}
-                                        onChange={(e) =>
-                                            setHttpProxy(e.target.value)
-                                        }
-                                        placeholder={`${dict.settings.httpProxy}: http://proxy:8080`}
-                                        className="h-9"
-                                    />
-                                    <Input
-                                        id="https-proxy"
-                                        type="text"
-                                        value={httpsProxy}
-                                        onChange={(e) =>
-                                            setHttpsProxy(e.target.value)
-                                        }
-                                        placeholder={`${dict.settings.httpsProxy}: http://proxy:8080`}
-                                        className="h-9"
-                                    />
-                                </div>
-
-                                <Button
-                                    onClick={handleApplyProxy}
-                                    disabled={isApplyingProxy}
-                                    className="h-9 px-4 rounded-xl w-full"
-                                >
-                                    {isApplyingProxy
-                                        ? "..."
-                                        : dict.settings.applyProxy}
-                                </Button>
-                            </div>
-                        )}
-                </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-border-subtle bg-surface-1/50 rounded-b-2xl">
-                <div className="flex items-center justify-center gap-3">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Tag className="h-3 w-3" />
-                        {process.env.APP_VERSION}
-                    </span>
-                    <span className="text-muted-foreground">·</span>
-                    <a
-                        href="https://github.com/DayuanJiang/next-ai-draw-io"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                    >
-                        <Github className="h-3 w-3" />
-                        GitHub
-                    </a>
-                    {process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE ===
-                        "true" && (
-                        <>
-                            <span className="text-muted-foreground">·</span>
-                            <a
-                                href={`/${currentLang}/about${currentLang === "zh" ? "/cn" : currentLang === "ja" ? "/ja" : ""}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                            >
-                                <Info className="h-3 w-3" />
-                                {dict.nav.about}
-                            </a>
-                        </>
+                            {isVerifying ? "…" : dict.common.save}
+                        </Button>
+                    </div>
+                    {accessError && (
+                        <p className="text-xs text-destructive">
+                            {accessError}
+                        </p>
                     )}
-                </div>
-            </div>
-        </DialogContent>
+                </Row>
+            )}
+            <Row label={t.sendShortcut} description={t.sendShortcutDescription}>
+                <Select
+                    value={settings.sendShortcut}
+                    onValueChange={(value) =>
+                        settings.setSendShortcut(value as SendShortcut)
+                    }
+                >
+                    <SelectTrigger
+                        id="send-shortcut-select"
+                        className="h-8 w-auto rounded-lg"
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="enter">{t.enterToSend}</SelectItem>
+                        <SelectItem value="ctrl-enter">
+                            {t.ctrlEnterToSend}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </Row>
+            <Row
+                label={t.diagramValidation}
+                description={t.diagramValidationDescription}
+                htmlFor="vlm-validation"
+            >
+                <Switch
+                    id="vlm-validation"
+                    checked={settings.vlmValidationEnabled}
+                    onCheckedChange={settings.setVlmValidationEnabled}
+                />
+            </Row>
+            <Row
+                label={t.maxOutputTokens}
+                description={t.maxOutputTokensDescription}
+                htmlFor="max-output-tokens"
+            >
+                <Input
+                    id="max-output-tokens"
+                    type="text"
+                    inputMode="numeric"
+                    value={settings.maxOutputTokens}
+                    onChange={(e) =>
+                        settings.setMaxOutputTokens(e.target.value)
+                    }
+                    placeholder="64000"
+                    className="h-8 w-28 text-sm"
+                />
+            </Row>
+            <Row
+                label={t.customSystemMessage}
+                description={t.customSystemMessageDescription}
+                htmlFor="custom-system-message"
+                stacked
+            >
+                <Textarea
+                    id="custom-system-message"
+                    value={settings.customSystemMessage}
+                    onChange={(e) =>
+                        settings.setCustomSystemMessage(e.target.value)
+                    }
+                    placeholder={t.customSystemMessagePlaceholder}
+                    className="max-h-[180px] min-h-[96px] text-sm"
+                    maxLength={5000}
+                />
+            </Row>
+            {isElectron && (
+                <Row label={t.proxy} description={t.proxyDescription} stacked>
+                    <div className="space-y-2">
+                        <Input
+                            id="http-proxy"
+                            value={httpProxy}
+                            onChange={(e) => setHttpProxy(e.target.value)}
+                            placeholder={`${t.httpProxy}: http://proxy:8080`}
+                            className="h-9"
+                        />
+                        <Input
+                            id="https-proxy"
+                            value={httpsProxy}
+                            onChange={(e) => setHttpsProxy(e.target.value)}
+                            placeholder={`${t.httpsProxy}: http://proxy:8080`}
+                            className="h-9"
+                        />
+                        <Button
+                            onClick={applyProxy}
+                            disabled={isApplyingProxy}
+                            className="h-9 w-full rounded-lg"
+                        >
+                            {isApplyingProxy ? "…" : t.applyProxy}
+                        </Button>
+                    </div>
+                </Row>
+            )}
+        </div>
     )
 }
 
-export function SettingsDialog(props: SettingsDialogProps) {
+function AboutTab() {
+    const dict = useDictionary()
+    const pathname = usePathname() || "/"
+    const lang = pathname.split("/").filter(Boolean)[0] || i18n.defaultLocale
+    const showAbout = process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE === "true"
+    const isSelfHosted = process.env.NEXT_PUBLIC_SELFHOSTED === "true"
+    const aboutPath = `/${lang}/about${lang === "zh" ? "/cn" : lang === "ja" ? "/ja" : ""}`
+
     return (
-        <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-            <Suspense
-                fallback={
-                    <DialogContent className="sm:max-w-lg p-0">
-                        <div className="h-80 flex items-center justify-center">
-                            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+        <div className="space-y-5 pt-1">
+            <div className="flex items-center gap-3">
+                <BrandMark className="size-10 rounded-xl" />
+                <div>
+                    <div className="text-[15px] font-semibold">
+                        Next AI Draw.io
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                        {dict.settings.appVersion} {process.env.APP_VERSION}
+                    </div>
+                </div>
+            </div>
+            {/* MCP server card, hidden on self-hosted deployments */}
+            {!isSelfHosted && (
+                <a
+                    href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-xl border border-border p-3.5 transition-colors hover:border-foreground/25"
+                >
+                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <Terminal className="size-4 text-muted-foreground" />
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-[13px] font-medium">
+                            {dict.examples.mcpServer}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                            {dict.examples.mcpDescription}
+                        </span>
+                    </span>
+                </a>
+            )}
+            <div className="flex flex-wrap gap-2">
+                <a
+                    href="https://github.com/DayuanJiang/next-ai-draw-io"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+                >
+                    <Github className="size-3.5" />
+                    GitHub
+                </a>
+                {showAbout && (
+                    <a
+                        href={aboutPath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                        <Info className="size-3.5" />
+                        {dict.settings.projectWebsite}
+                    </a>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export function SettingsDialog() {
+    const dict = useDictionary()
+    const t = dict.settings
+    const engine = useChatEngine()
+    const open = useUiStore((s) => s.settingsOpen)
+    const setOpen = useUiStore((s) => s.setSettingsOpen)
+    const tab = useUiStore((s) => s.settingsTab)
+    const setTab = useUiStore((s) => s.setSettingsTab)
+
+    const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+        { id: "models", label: t.tabModels, icon: <KeyRound /> },
+        { id: "appearance", label: t.tabAppearance, icon: <Palette /> },
+        { id: "advanced", label: t.tabAdvanced, icon: <SlidersHorizontal /> },
+        { id: "about", label: t.tabAbout, icon: <Info /> },
+    ]
+    const current = tabs.find((item) => item.id === tab) ?? tabs[0]
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent className="flex h-[min(640px,88vh)] max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl lg:flex-row">
+                {/* On top below 1024 px: beside the model settings' own
+                    provider list it would leave too little width */}
+                <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface-1 p-2 lg:w-52 lg:flex-col lg:overflow-visible lg:border-r lg:border-b-0 lg:p-3">
+                    <DialogTitle className="hidden px-2 pt-1 pb-3 text-[15px] lg:block">
+                        {t.title}
+                    </DialogTitle>
+                    {tabs.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setTab(item.id)}
+                            className={cn(
+                                "flex h-8 shrink-0 items-center gap-2 rounded-lg px-2.5 text-[13px] text-muted-foreground hover:text-foreground [&_svg]:size-4",
+                                tab === item.id &&
+                                    "bg-card font-medium text-foreground shadow-float",
+                            )}
+                            data-testid={`settings-tab-${item.id}`}
+                        >
+                            {item.icon}
+                            {item.label}
+                        </button>
+                    ))}
+                </nav>
+                <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <DialogDescription className="sr-only">
+                        {t.description}
+                    </DialogDescription>
+                    {tab === "models" ? (
+                        <ModelConfigDialog
+                            open={open}
+                            modelConfig={engine.modelConfig}
+                        />
+                    ) : (
+                        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-6 scrollbar-thin">
+                            <h2 className="mb-2 text-[15px] font-semibold">
+                                {current.label}
+                            </h2>
+                            {tab === "appearance" && <AppearanceTab />}
+                            {tab === "advanced" && <AdvancedTab open={open} />}
+                            {tab === "about" && <AboutTab />}
                         </div>
-                    </DialogContent>
-                }
-            >
-                <SettingsContent {...props} />
-            </Suspense>
+                    )}
+                </section>
+            </DialogContent>
         </Dialog>
     )
 }

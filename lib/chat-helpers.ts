@@ -133,3 +133,37 @@ export function fixToolInputJson(input: string): string {
             .replace(/"(\w+)"\s*=\s*"/g, '"$1": "')
     )
 }
+
+// Shapes the user selected on the canvas; sent with the request as
+// selectedCells: [{ id, label }]
+const MAX_SELECTED_CELLS = 50
+const MAX_SELECTED_TEXT = 100
+
+function cleanSelectionText(value: unknown): string {
+    if (typeof value !== "string") return ""
+    return value
+        .replace(/[\r\n"]+/g, " ")
+        .trim()
+        .slice(0, MAX_SELECTED_TEXT)
+}
+
+/** Prompt text describing the selection, or "" when there is none */
+export function formatSelectionContext(selectedCells: unknown): string {
+    if (!Array.isArray(selectedCells)) return ""
+    const lines = selectedCells
+        .slice(0, MAX_SELECTED_CELLS)
+        .map((cell) => {
+            const id = cleanSelectionText(cell?.id)
+            if (!id) return null
+            const label = cleanSelectionText(cell?.label)
+            return label ? `- id="${id}" (${label})` : `- id="${id}"`
+        })
+        .filter((line): line is string => line !== null)
+    if (lines.length === 0) return ""
+    // Past the limit the model must know the list is cut short
+    const more = selectedCells.length - MAX_SELECTED_CELLS
+    if (more > 0) lines.push(`- and ${more} more selected shapes not listed`)
+    return `The user selected these shapes on the canvas before sending this message:
+${lines.join("\n")}
+Apply the request to the selected shapes unless it clearly asks for something else. Prefer edit_diagram with these cell ids over redrawing the whole diagram.`
+}

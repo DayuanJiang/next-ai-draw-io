@@ -1,15 +1,10 @@
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { ToolCallCard } from "@/components/chat/ToolCallCard"
+import { ToolInputDetails } from "@/components/chat/tool-activity"
 
 afterEach(cleanup)
 
-const dict = {
-    tools: { complete: "Complete" },
-    chat: { copied: "Copied", failedToCopy: "Failed", copyResponse: "Copy" },
-}
-
-describe("ToolCallCard", () => {
+describe("ToolInputDetails", () => {
     it("shows streamed operations without crashing on broken entries", () => {
         // A partly streamed or invalid edit_diagram input
         const operations = [
@@ -22,7 +17,7 @@ describe("ToolCallCard", () => {
             { operation: "update", cell_id: "3", new_xml: '<mxCell id="3"/>' },
         ]
         const { container } = render(
-            <ToolCallCard
+            <ToolInputDetails
                 part={
                     {
                         type: "tool-edit_diagram",
@@ -31,15 +26,25 @@ describe("ToolCallCard", () => {
                         input: { operations },
                     } as any
                 }
-                expandedTools={{ t1: true }}
-                setExpandedTools={() => {}}
-                onCopy={() => {}}
-                copiedToolCallId={null}
-                copyFailedToolCallId={null}
-                dict={dict}
             />,
         )
-        expect(container.textContent).toContain("cell_id: 3")
+        expect(container.textContent).toContain("update3")
         expect(container.textContent).toContain('<mxCell id="3"/>')
+    })
+
+    it("ignores an xml input that is not text", () => {
+        const { container } = render(
+            <ToolInputDetails
+                part={
+                    {
+                        type: "tool-display_diagram",
+                        toolCallId: "t2",
+                        state: "input-streaming",
+                        input: { xml: { broken: true } },
+                    } as any
+                }
+            />,
+        )
+        expect(container.textContent).toContain("broken")
     })
 })

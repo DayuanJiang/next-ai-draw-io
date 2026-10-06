@@ -138,8 +138,10 @@ export default function AboutJA() {
                             ：既存のダイアグラムや画像をアップロードし、AIが自動的に複製・強化
                         </li>
                         <li>
-                            <strong>ダイアグラム履歴</strong>
-                            ：すべての変更を追跡する包括的なバージョン管理。AI編集前のダイアグラムの以前のバージョンを表示・復元可能
+                            <strong>バージョンと取り消し</strong>
+                            ：AI
+                            の変更はそれぞれチャット内のバージョンになり、比較・復元・取り消しができます。キャンバスで
+                            Ctrl+Z を押しても元に戻せます
                         </li>
                         <li>
                             <strong>
@@ -290,8 +292,8 @@ export default function AboutJA() {
                             ）：ストリーミングAIレスポンスとマルチプロバイダーサポート
                         </li>
                         <li>
-                            <strong>react-drawio</strong>
-                            ：ダイアグラムの表現と操作
+                            <strong>draw.io</strong>
+                            ：アプリに同梱されたエディター。アプリから直接操作できます
                         </li>
                     </ul>
                     <p className="text-gray-700 mt-4">

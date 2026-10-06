@@ -199,6 +199,30 @@ describe("Bedrock admin panel credentials", () => {
         })
     })
 
+    it("uses the client's Bedrock API key before any keys", async () => {
+        process.env.ADMIN_AWS_ACCESS_KEY_ID = "panel-id"
+        process.env.ADMIN_AWS_SECRET_ACCESS_KEY = "panel-secret"
+        const { createAmazonBedrock } = await import("@ai-sdk/amazon-bedrock")
+
+        getAIModel({
+            provider: "bedrock",
+            modelId: "amazon.nova-lite-v1:0",
+            apiKey: "bedrock-api-key",
+            awsAccessKeyId: "client-id",
+            awsSecretAccessKey: "client-secret",
+            awsRegion: "ap-northeast-1",
+        })
+
+        expect(createAmazonBedrock).toHaveBeenCalledWith({
+            region: "ap-northeast-1",
+            apiKey: "bedrock-api-key",
+            // Not the server's AWS_ENDPOINT_URL_BEDROCK_RUNTIME
+            baseURL: "https://bedrock-runtime.ap-northeast-1.amazonaws.com",
+            // Nor its AWS keys, should the SDK drop the key
+            credentialProvider: expect.any(Function),
+        })
+    })
+
     it("refuses a region that is not a region name", async () => {
         // It becomes part of the endpoint's host name, with the server's
         // credentials too
@@ -271,8 +295,10 @@ describe("usesServerCredentials", () => {
     })
 
     it("looks at the credential each provider actually uses", () => {
-        // A stray x-ai-api-key does not replace the IAM role or Vertex key
-        expect(usesServerCredentials("bedrock", { apiKey: "x" })).toBe(true)
+        // A Bedrock API key is the client's own; a stray x-ai-api-key
+        // does not replace the Vertex key
+        expect(usesServerCredentials("bedrock", { apiKey: "x" })).toBe(false)
+        expect(usesServerCredentials("bedrock", {})).toBe(true)
         expect(
             usesServerCredentials("bedrock", {
                 awsAccessKeyId: "id",

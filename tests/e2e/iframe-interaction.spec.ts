@@ -18,11 +18,9 @@ test.describe("Iframe Interaction", () => {
 
         // iframe should have loaded draw.io content
         const frame = getIframeContent(page)
-        await expect(
-            frame
-                .locator(".geMenubarContainer, .geDiagramContainer, canvas")
-                .first(),
-        ).toBeVisible({ timeout: 30000 })
+        await expect(frame.locator(".geDiagramContainer").first()).toBeVisible({
+            timeout: 30000,
+        })
     })
 
     test("can interact with draw.io toolbar", async ({ page }) => {
