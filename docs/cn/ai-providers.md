@@ -46,6 +46,8 @@ AI_MODEL=gpt-4o
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+LM Studio 等本地 OpenAI 兼容服务也用同样的方式：把 base URL 设为 `http://localhost:1234/v1`（LM Studio 的默认端口），API 密钥填任意非空值即可，例如 `lm-studio`。在上面的环境变量或模型设置里配置都可以。
+
 ### AIHubMix
 
 AIHubMix 通过单个 API Key 聚合 Claude、GPT、Gemini、DeepSeek 等模型。

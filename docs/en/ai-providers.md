@@ -61,6 +61,8 @@ Optional custom endpoint (for OpenAI-compatible services):
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+LM Studio and other local OpenAI-compatible servers work the same way: set the base URL to `http://localhost:1234/v1` (LM Studio's default port) and use any non-empty API key, such as `lm-studio`. This works both in the environment variables above and in the model settings.
+
 ### AIHubMix
 
 AIHubMix provides access to Claude, GPT, Gemini, DeepSeek, and other models through a single API key.
