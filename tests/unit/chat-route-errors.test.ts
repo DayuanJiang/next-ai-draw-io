@@ -139,7 +139,8 @@ describe("provider error texts in the stream", () => {
         )
         const message = await streamedError({})
         expect(message).not.toMatch(/org-operator/)
-        expect(message).toBe("The provider returned an error.")
+        // A 403 on the server's key gets its own hint and no message
+        expect(message).toBe("")
     })
 })
 

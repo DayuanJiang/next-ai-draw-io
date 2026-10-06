@@ -24,6 +24,8 @@ export type LLMErrorCode =
     | "provider_unavailable"
     | "cannot_connect"
     | "timeout"
+    // A 403 on the server's own key, e.g. a daily spend cap blocked it
+    | "server_key_forbidden"
     | "unknown"
 
 export interface LLMError {
@@ -130,7 +132,13 @@ export function streamErrorText(error: unknown, hideDetails = false): string {
     const classified = classifyLLMError(error)
     if (hideDetails) {
         console.error("[chat] Provider error:", error)
-        classified.message = "The provider returned an error."
+        if (classified.code === "forbidden") {
+            // The hint says all the user can do; there is no message to add
+            classified.code = "server_key_forbidden"
+            classified.message = ""
+        } else {
+            classified.message = "The provider returned an error."
+        }
     }
     return JSON.stringify(classified)
 }

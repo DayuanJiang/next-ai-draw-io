@@ -427,13 +427,16 @@ export default function ChatPanel({
             let openModelConfig = false
             if (data?.type === "provider") {
                 const hints = dict.errors.llm as Record<string, string>
-                text = hints[data.code]
-                    ? `${hints[data.code]}\n\n${data.message}`
-                    : data.message
+                const hint = hints[data.code]
+                text =
+                    hint && data.message
+                        ? `${hint}\n\n${data.message}`
+                        : hint || data.message
                 openModelConfig = [
                     "invalid_api_key",
                     "forbidden",
                     "model_not_found",
+                    "server_key_forbidden",
                 ].includes(data.code)
             } else if (typeof data?.error === "string") {
                 text = data.error
