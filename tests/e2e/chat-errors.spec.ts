@@ -75,3 +75,30 @@ test("a provider rate limit is not shown as this site's quota", async ({
     // The site's own tokens-per-minute toast
     await expect(page.getByText("Rate limit reached")).toHaveCount(0)
 })
+
+test("a refused server key shows only the quota hint and a settings button", async ({
+    page,
+}) => {
+    // What the chat route streams when the server's key gets a 403, e.g.
+    // after a daily spend cap blocked it
+    const errorText = JSON.stringify({
+        type: "provider",
+        code: "server_key_forbidden",
+        message: "",
+    })
+    await chatWith(page, {
+        status: 200,
+        contentType: "text/event-stream",
+        body: `data: {"type":"start"}\n\ndata: ${JSON.stringify({ type: "error", errorText })}\n\ndata: [DONE]\n\n`,
+    })
+    await expect(
+        page.getByText("Today's free quota is used up", { exact: false }),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText("The provider returned an error")).toHaveCount(
+        0,
+    )
+    await page.getByRole("button", { name: "Open model settings" }).click()
+    await expect(
+        page.getByRole("dialog", { name: "AI Model Configuration" }),
+    ).toBeVisible()
+})

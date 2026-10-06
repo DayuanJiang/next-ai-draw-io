@@ -192,6 +192,7 @@
         "llm": {
             "invalid_api_key": "服务商拒绝了这个 API Key，请在模型设置里检查。",
             "forbidden": "服务商拒绝了这次请求。这个 Key 可能没有使用该模型或该地区的权限。",
+            "server_key_forbidden": "今天的免费额度已经用完，明天会自动恢复。您也可以在模型设置里填写自己的 API Key 继续使用。",
             "model_not_found": "服务商找不到这个模型，请在模型设置里检查模型 ID。",
             "insufficient_quota": "服务商账户的余额或额度已经用完。",
             "rate_limited": "服务商正在限制请求频率，请稍等片刻再试。",

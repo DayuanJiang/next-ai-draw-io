@@ -215,11 +215,29 @@ describe("streamErrorText", () => {
             "User: arn:aws:sts::123456789012:assumed-role/app/s is not authorized to perform: bedrock:InvokeModel",
         )
         const hidden = JSON.parse(streamErrorText(error, true))
-        expect(hidden.code).toBe("forbidden")
         expect(hidden.message).not.toMatch(/arn:aws|123456789012/)
         expect(JSON.parse(streamErrorText(error)).message).toMatch(
             /not authorized/,
         )
+        const throttled = JSON.parse(
+            streamErrorText(apiError(429, "Too many tokens"), true),
+        )
+        expect(throttled).toEqual({
+            type: "provider",
+            code: "rate_limited",
+            message: "The provider returned an error.",
+        })
+    })
+
+    it("names a 403 on the server's keys, e.g. a spend cap blocked them", () => {
+        const error = apiError(403, "explicit deny in an identity-based policy")
+        expect(JSON.parse(streamErrorText(error, true))).toEqual({
+            type: "provider",
+            code: "server_key_forbidden",
+            message: "",
+        })
+        // On the user's own key it stays a plain refusal
+        expect(JSON.parse(streamErrorText(error)).code).toBe("forbidden")
     })
 
     it("classifies a provider error", () => {

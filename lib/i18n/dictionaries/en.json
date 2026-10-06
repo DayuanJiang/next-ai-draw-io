@@ -192,6 +192,7 @@
         "llm": {
             "invalid_api_key": "The provider rejected the API key. Check it in model settings.",
             "forbidden": "The provider refused the request. The key may not have access to this model or region.",
+            "server_key_forbidden": "Today's free quota is used up. It resets tomorrow. You can also add your own API key in model settings to keep going.",
             "model_not_found": "The provider does not know this model. Check the model ID in model settings.",
             "insufficient_quota": "The provider account has no credit or quota left.",
             "rate_limited": "The provider is limiting requests. Wait a moment and try again.",
