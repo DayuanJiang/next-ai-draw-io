@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { chatRequestUrl, normalizeBaseUrl } from "@/lib/types/model-config"
+import {
+    chatRequestUrl,
+    normalizeBaseUrl,
+    ollamaApiUrl,
+} from "@/lib/types/model-config"
 
 describe("normalizeBaseUrl", () => {
     it("drops spaces, trailing slashes and a pasted endpoint path", () => {
@@ -32,11 +36,32 @@ describe("chatRequestUrl", () => {
         expect(
             chatRequestUrl("anthropic", "https://proxy.example.com/v1"),
         ).toBe("https://proxy.example.com/v1/messages")
+        expect(chatRequestUrl("ollama", "http://localhost:11434")).toBe(
+            "http://localhost:11434/api/chat",
+        )
     })
 
     it("stays out of the way for SDKs that build their own paths", () => {
         expect(chatRequestUrl("google", "https://x.example.com")).toBeNull()
         expect(chatRequestUrl("minimax", "https://x.example.com")).toBeNull()
         expect(chatRequestUrl("glm", "  ")).toBeNull()
+    })
+})
+
+describe("ollamaApiUrl", () => {
+    it("points at Ollama's /api whatever form the address takes", () => {
+        for (const url of [
+            "http://localhost:11434",
+            "http://localhost:11434/",
+            "http://localhost:11434/api",
+            "http://localhost:11434/api/",
+            "http://localhost:11434/v1",
+            "http://localhost:11434/v1/chat/completions",
+        ]) {
+            expect(ollamaApiUrl(url)).toBe("http://localhost:11434/api")
+        }
+        expect(ollamaApiUrl("https://ollama.com/api")).toBe(
+            "https://ollama.com/api",
+        )
     })
 })

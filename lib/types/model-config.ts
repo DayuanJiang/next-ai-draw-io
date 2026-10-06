@@ -622,6 +622,15 @@ export function normalizeBaseUrl(url: string): string {
         .replace(/\/(?:chat\/completions|completions|messages|responses)$/, "")
 }
 
+/**
+ * Ollama's native API root, which the SDK appends /chat to and the model
+ * list /tags. Users often enter the server address ("http://localhost:11434")
+ * or its OpenAI-compatible one (".../v1"); both get /api.
+ */
+export function ollamaApiUrl(baseUrl: string): string {
+    return `${normalizeBaseUrl(baseUrl).replace(/\/(?:api|v1)$/, "")}/api`
+}
+
 /** Where a chat request goes for a base URL, or null when the SDK decides */
 export function chatRequestUrl(
     provider: ProviderName,
@@ -630,6 +639,7 @@ export function chatRequestUrl(
     const url = normalizeBaseUrl(baseUrl)
     if (!url) return null
     if (provider === "anthropic") return `${url}/messages`
+    if (provider === "ollama") return `${ollamaApiUrl(url)}/chat`
     // These SDKs build their own paths (or, for MiniMax, pick the protocol
     // from the URL)
     const ownPaths: ProviderName[] = [
@@ -637,7 +647,6 @@ export function chatRequestUrl(
         "vertexai",
         "azure",
         "bedrock",
-        "ollama",
         "gateway",
         "minimax",
         "edgeone",

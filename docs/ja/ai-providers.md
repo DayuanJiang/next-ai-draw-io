@@ -179,7 +179,7 @@ AI_MODEL=llama3.2
 任意のカスタム URL:
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11434/api
 ```
 
 ### ModelScope

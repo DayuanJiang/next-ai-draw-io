@@ -192,7 +192,7 @@ MODELSCOPE_BASE_URL=https://your-custom-endpoint
 可选的自定义 URL：
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11434/api
 ```
 
 ### Vercel AI Gateway
