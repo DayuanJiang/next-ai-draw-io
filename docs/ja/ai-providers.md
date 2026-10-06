@@ -46,6 +46,8 @@ AI_MODEL=gpt-4o
 OPENAI_BASE_URL=https://your-custom-endpoint/v1
 ```
 
+LM Studio などのローカルな OpenAI 互換サーバーも同じ方法で使えます。ベース URL を `http://localhost:1234/v1`（LM Studio の既定ポート）に設定し、API キーには `lm-studio` など空でない任意の値を入力してください。上の環境変数でも、モデル設定画面でも設定できます。
+
 ### AIHubMix
 
 AIHubMix は、単一の API キーで Claude、GPT、Gemini、DeepSeek などのモデルへのアクセスを提供します。
