@@ -434,7 +434,7 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledWith(
             expect.objectContaining({
-                baseURL: "https://my-ollama.com",
+                baseURL: "https://my-ollama.com/api",
                 headers: { Authorization: "Bearer client-key" },
             }),
         )
@@ -448,7 +448,7 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledWith(
             expect.objectContaining({
-                baseURL: "https://cloud.ollama.com",
+                baseURL: "https://cloud.ollama.com/api",
                 headers: { Authorization: "Bearer server-key" },
             }),
         )
@@ -483,7 +483,24 @@ describe("Ollama API key security", () => {
 
         expect(createOllamaMock).toHaveBeenCalledTimes(1)
         const callArgs = createOllamaMock.mock.calls[0][0]
-        expect(callArgs.baseURL).toBe("https://my-ollama.com")
+        expect(callArgs.baseURL).toBe("https://my-ollama.com/api")
         expect(callArgs).not.toHaveProperty("headers")
+    })
+
+    it("sends chat to Ollama's /api for a server address or a /v1 URL", () => {
+        delete process.env.OLLAMA_API_KEY
+
+        for (const baseUrl of [
+            "http://localhost:11434",
+            "http://localhost:11434/",
+            "http://localhost:11434/v1",
+            "http://localhost:11434/api",
+        ]) {
+            createOllamaMock.mockClear()
+            getAIModel({ provider: "ollama", baseUrl, modelId: "llama3.2" })
+            expect(createOllamaMock.mock.calls[0][0].baseURL).toBe(
+                "http://localhost:11434/api",
+            )
+        }
     })
 })

@@ -25,6 +25,7 @@ import { getEnvFallback } from "@/lib/admin/settings"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
 import {
     normalizeBaseUrl,
+    ollamaApiUrl,
     PROVIDER_INFO,
     type ProviderName,
 } from "@/lib/types/model-config"
@@ -1025,7 +1026,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                     ? PROVIDER_INFO.ollama.defaultBaseUrl
                     : resolveBaseUrlEnv(overrides, "OLLAMA_BASE_URL"))
             model = createOllama({
-                ...(baseURL && { baseURL }),
+                ...(baseURL && { baseURL: ollamaApiUrl(baseURL) }),
                 ...(apiKey && {
                     headers: { Authorization: `Bearer ${apiKey}` },
                 }),

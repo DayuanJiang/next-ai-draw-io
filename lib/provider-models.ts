@@ -3,6 +3,7 @@ import { getModelInfo } from "@/lib/model-catalog"
 import { readLimitedBody } from "@/lib/read-limited-body"
 import {
     normalizeBaseUrl,
+    ollamaApiUrl,
     PROVIDER_INFO,
     type ProviderName,
 } from "@/lib/types/model-config"
@@ -200,8 +201,11 @@ export async function listProviderModels(
             break
         }
         case "ollama": {
-            const api = base.endsWith("/api") ? base : `${base}/api`
-            const data = await getJson(`${api}/tags`, bearer, fetchFn)
+            const data = await getJson(
+                `${ollamaApiUrl(base)}/tags`,
+                bearer,
+                fetchFn,
+            )
             models = (data.models ?? []).map((m: { name: string }) => ({
                 id: m.name,
             }))

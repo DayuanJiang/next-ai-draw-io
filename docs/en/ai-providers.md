@@ -194,7 +194,7 @@ AI_MODEL=llama3.2
 Optional custom URL:
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11434/api
 ```
 
 ### ModelScope
