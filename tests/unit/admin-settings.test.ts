@@ -1,7 +1,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     _resetForTests,
     applyToEnv,
@@ -100,6 +100,24 @@ describe("applyToEnv / saveSettings", () => {
         expect(process.env.TEST_ADMIN_VAR).toBeUndefined()
     })
 
+    it("a second module instance can remove a key the first one overlaid", async () => {
+        // instrumentation.ts and API routes load separate copies in a build
+        process.env.TEST_ADMIN_VAR = "from-env"
+        fs.writeFileSync(
+            process.env.SETTINGS_FILE!,
+            JSON.stringify({ version: 1, values: { TEST_ADMIN_VAR: "abc" } }),
+        )
+        applyToEnv()
+        expect(process.env.TEST_ADMIN_VAR).toBe("abc")
+
+        vi.resetModules()
+        const second = await import("@/lib/admin/settings")
+        expect(second.getValueSource("TEST_ADMIN_VAR")).toBe("file")
+        second.saveSettings({ TEST_ADMIN_VAR: null })
+        expect(process.env.TEST_ADMIN_VAR).toBe("from-env")
+        expect(second.getEnvFallback("TEST_ADMIN_VAR")).toBe("from-env")
+    })
+
     it("persists across cache reset (file round-trip)", () => {
         saveSettings({ TEST_ADMIN_VAR: "persisted" })
         _resetForTests()
@@ -136,9 +154,9 @@ describe("isSettingsWritable", () => {
         expect(isSettingsWritable()).toBe(true)
     })
 
-    it("returns false for an unwritable path", () => {
+    it("returns false when the settings path is a directory", () => {
         _resetForTests()
-        process.env.SETTINGS_FILE = "/nonexistent-root-dir/settings.json"
+        process.env.SETTINGS_FILE = tmpDir
         expect(isSettingsWritable()).toBe(false)
     })
 })
@@ -152,7 +170,9 @@ describe("settings file on disk", () => {
             version: 1,
             values: { TEST_ADMIN_VAR: "secret" },
         })
-        const mode = fs.statSync(filePath).mode & 0o777
-        expect(mode).toBe(0o600)
+        if (process.platform !== "win32") {
+            const mode = fs.statSync(filePath).mode & 0o777
+            expect(mode).toBe(0o600)
+        }
     })
 })

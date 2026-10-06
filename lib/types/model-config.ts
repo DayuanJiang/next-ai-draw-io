@@ -13,7 +13,6 @@ export type ProviderName =
     | "deepseek"
     | "siliconflow"
     | "sglang"
-    | "lmstudio"
     | "gateway"
     | "edgeone"
     | "doubao"
@@ -25,6 +24,7 @@ export type ProviderName =
     | "minimax"
     | "novita"
     | "mimo"
+    | "atlascloud"
 
 // Individual model configuration
 export interface ModelConfig {
@@ -32,6 +32,8 @@ export interface ModelConfig {
     modelId: string // e.g., "gpt-4o", "claude-sonnet-4-5"
     validated?: boolean // Has this model been validated
     validationError?: string // Error message if validation failed
+    validationWarning?: string // Passed, but e.g. did not call a tool
+    responseTime?: number // Milliseconds the last test took
 }
 
 // Provider configuration
@@ -95,7 +97,6 @@ export const FIXED_CRED_PROVIDERS: ProviderName[] = [
     "bedrock",
     "vertexai",
     "ollama",
-    "lmstudio",
 ]
 
 // Map provider names to models.dev logo names
@@ -110,7 +111,6 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     deepseek: "deepseek",
     siliconflow: "siliconflow",
     sglang: "openai", // SGLang is OpenAI-compatible
-    lmstudio: "openai", // LM Studio is OpenAI-compatible
     gateway: "vercel",
     edgeone: "tencent-cloud",
     vertexai: "google",
@@ -119,24 +119,48 @@ export const PROVIDER_LOGO_MAP: Record<string, string> = {
     minimax: "minimax",
     novita: "novita",
     mimo: "xiaomi",
+    atlascloud: "openai",
 }
 
-// Provider metadata
+/** How a provider lists its models (see lib/provider-models.ts) */
+export type ModelListStyle =
+    | "openai"
+    | "anthropic"
+    | "google"
+    | "ollama"
+    | "openrouter"
+    | "aihubmix"
+    | "gateway"
+
+// Provider metadata. apiKeyUrl is the page where users create a key.
+// modelList is missing where a key alone cannot list the models (Bedrock,
+// Vertex, Azure) or the list is not reliable (Doubao, MiniMax).
 export const PROVIDER_INFO: Record<
     ProviderName,
-    { label: string; defaultBaseUrl?: string }
+    {
+        label: string
+        defaultBaseUrl?: string
+        apiKeyUrl?: string
+        modelList?: ModelListStyle
+    }
 > = {
     openai: {
         label: "OpenAI",
         defaultBaseUrl: "https://api.openai.com/v1",
+        apiKeyUrl: "https://platform.openai.com/api-keys",
+        modelList: "openai",
     },
     anthropic: {
         label: "Anthropic",
         defaultBaseUrl: "https://api.anthropic.com/v1",
+        apiKeyUrl: "https://platform.claude.com/settings/keys",
+        modelList: "anthropic",
     },
     google: {
         label: "Google",
         defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        apiKeyUrl: "https://aistudio.google.com/apikey",
+        modelList: "google",
     },
     vertexai: { label: "Google Vertex AI" },
     azure: {
@@ -147,77 +171,114 @@ export const PROVIDER_INFO: Record<
     ollama: {
         label: "Ollama",
         defaultBaseUrl: "https://ollama.com/api",
+        apiKeyUrl: "https://ollama.com/settings/keys",
+        modelList: "ollama",
     },
     openrouter: {
         label: "OpenRouter",
         defaultBaseUrl: "https://openrouter.ai/api/v1",
+        apiKeyUrl: "https://openrouter.ai/keys",
+        modelList: "openrouter",
     },
     aihubmix: {
         label: "AIHubMix",
         defaultBaseUrl: "https://aihubmix.com/v1",
+        apiKeyUrl: "https://aihubmix.com/token",
+        modelList: "aihubmix",
     },
     deepseek: {
         label: "DeepSeek",
         defaultBaseUrl: "https://api.deepseek.com/v1",
+        apiKeyUrl: "https://platform.deepseek.com/api_keys",
+        modelList: "openai",
     },
     siliconflow: {
         label: "SiliconFlow",
         defaultBaseUrl: "https://api.siliconflow.cn/v1",
+        apiKeyUrl: "https://cloud.siliconflow.cn/account/ak",
+        modelList: "openai",
     },
     sglang: {
         label: "SGLang",
         defaultBaseUrl: "http://127.0.0.1:8000/v1",
-    },
-    lmstudio: {
-        label: "LM Studio",
-        defaultBaseUrl: "http://localhost:1234/v1",
+        modelList: "openai",
     },
     gateway: {
         label: "AI Gateway",
         defaultBaseUrl: "https://ai-gateway.vercel.sh/v1/ai",
+        apiKeyUrl: "https://vercel.com/ai-gateway",
+        modelList: "gateway",
     },
     edgeone: { label: "EdgeOne Pages" },
     doubao: {
         label: "Doubao (ByteDance)",
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        apiKeyUrl:
+            "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
     },
     modelscope: {
         label: "ModelScope",
         defaultBaseUrl: "https://api-inference.modelscope.cn/v1",
+        apiKeyUrl: "https://modelscope.cn/my/myaccesstoken",
+        modelList: "openai",
     },
     glm: {
         label: "GLM (Zhipu)",
         defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+        apiKeyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
+        modelList: "openai",
     },
     qwen: {
         label: "Qwen (Alibaba)",
         defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        apiKeyUrl: "https://bailian.console.aliyun.com/?tab=model#/api-key",
+        modelList: "openai",
     },
     qiniu: {
         label: "Qiniu",
         defaultBaseUrl: "https://api.qnaigc.com/v1",
+        apiKeyUrl: "https://www.qiniu.com/ai/models",
+        modelList: "openai",
     },
     kimi: {
         label: "Kimi (Moonshot)",
         defaultBaseUrl: "https://api.moonshot.cn/v1",
+        apiKeyUrl: "https://platform.moonshot.cn/console/api-keys",
+        modelList: "openai",
     },
     minimax: {
         label: "MiniMax",
         defaultBaseUrl: "https://api.minimaxi.com/anthropic",
+        apiKeyUrl:
+            "https://platform.minimaxi.com/user-center/basic-information/interface-key",
     },
     novita: {
         label: "Novita AI",
         defaultBaseUrl: "https://api.novita.ai/openai",
+        apiKeyUrl: "https://novita.ai/dashboard/key",
+        modelList: "openai",
     },
     mimo: {
         label: "MiMo (Xiaomi)",
         defaultBaseUrl: "https://api.xiaomimimo.com/v1",
+        apiKeyUrl: "https://platform.xiaomimimo.com/#/console/api-keys",
+        modelList: "openai",
+    },
+    atlascloud: {
+        label: "Atlas Cloud",
+        defaultBaseUrl: "https://api.atlascloud.ai/v1",
+        apiKeyUrl: "https://www.atlascloud.ai/console/api-keys",
+        modelList: "openai",
     },
 }
 
 // Suggested models per provider for quick add
 export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
     openai: [
+        "gpt-6.1-sol",
+        "gpt-6-sol",
+        "gpt-6-luna",
+        "gpt-6-astra",
         "gpt-5.5-pro",
         "gpt-5.5",
         "gpt-5.4-pro",
@@ -231,7 +292,13 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "gpt-4o-mini",
     ],
     anthropic: [
-        // Claude 4.8 / 4.7 / 4.6 series (latest, dateless pinned IDs)
+        // Claude 5 series (latest)
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-fable-5-1",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        // Claude 4.8 / 4.7 / 4.6 series (dateless pinned IDs)
         "claude-opus-4-8",
         "claude-sonnet-4-6",
         "claude-haiku-4-5",
@@ -280,39 +347,47 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "o3",
         "o4-mini",
     ],
+    // Newer models only answer through an inference profile id (the region
+    // prefix). Each id here was called once on 2026-10-04.
     bedrock: [
-        // Anthropic Claude
-        "anthropic.claude-opus-4-8",
-        "anthropic.claude-opus-4-7",
-        "anthropic.claude-sonnet-4-6",
-        "anthropic.claude-opus-4-6-v1",
-        "anthropic.claude-opus-4-5-20251101-v1:0",
-        "anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "anthropic.claude-haiku-4-5-20251001-v1:0",
-        "anthropic.claude-opus-4-1-20250805-v1:0",
-        "anthropic.claude-opus-4-20250514-v1:0",
-        "anthropic.claude-sonnet-4-20250514-v1:0",
-        "anthropic.claude-3-5-haiku-20241022-v1:0",
+        // Anthropic Claude ("global." works from any region)
+        "global.anthropic.claude-opus-5-5",
+        "global.anthropic.claude-sonnet-5-5",
+        "global.anthropic.claude-fable-5-1",
+        "global.anthropic.claude-opus-5",
+        "global.anthropic.claude-sonnet-5",
+        "global.anthropic.claude-opus-4-8",
+        "global.anthropic.claude-opus-4-7",
+        "global.anthropic.claude-sonnet-4-6",
+        "global.anthropic.claude-opus-4-6-v1",
+        "global.anthropic.claude-opus-4-5-20251101-v1:0",
+        "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "global.anthropic.claude-sonnet-4-20250514-v1:0",
         // Amazon Nova
-        "amazon.nova-2-lite-v1:0",
-        "amazon.nova-premier-v1:0",
+        "us.amazon.nova-2-lite-v1:0",
         "amazon.nova-pro-v1:0",
         "amazon.nova-lite-v1:0",
         "amazon.nova-micro-v1:0",
         // Meta Llama
-        "meta.llama4-maverick-17b-instruct-v1:0",
-        "meta.llama4-scout-17b-instruct-v1:0",
-        "meta.llama3-3-70b-instruct-v1:0",
+        "us.meta.llama4-maverick-17b-instruct-v1:0",
+        "us.meta.llama4-scout-17b-instruct-v1:0",
+        "us.meta.llama3-3-70b-instruct-v1:0",
         // Mistral
         "mistral.mistral-large-3-675b-instruct",
-        "mistral.pixtral-large-2502-v1:0",
+        "us.mistral.pixtral-large-2502-v1:0",
     ],
     openrouter: [
         // Anthropic
+        "anthropic/claude-opus-5.5",
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-fable-5.1",
         "anthropic/claude-opus-4.8",
         "anthropic/claude-sonnet-4.6",
         "anthropic/claude-haiku-4.5",
         // OpenAI
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-luna",
         "openai/gpt-5.5",
         "openai/gpt-5.4",
         "openai/gpt-5.4-mini",
@@ -401,6 +476,10 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "default",
     ],
     gateway: [
+        "anthropic/claude-opus-5.5",
+        "anthropic/claude-sonnet-5.5",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-luna",
         "openai/gpt-5.5",
         "anthropic/claude-opus-4.7",
         "google/gemini-3.1-pro-preview",
@@ -451,6 +530,7 @@ export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {
         "deepseek/deepseek-v4-flash",
     ],
     mimo: ["mimo-v2.5-pro", "mimo-v2.5"],
+    atlascloud: ["qwen/qwen3.5-flash", "deepseek-ai/deepseek-v4-pro"],
 }
 
 // Helper to generate UUID
@@ -528,4 +608,39 @@ export function findModelById(
     modelId: string,
 ): FlattenedModel | undefined {
     return flattenModels(config).find((m) => m.id === modelId)
+}
+
+/**
+ * A base URL the way the SDKs expect it: no spaces, no trailing slash, and
+ * no endpoint path users often paste along (".../v1/chat/completions"),
+ * which the SDK would append a second time.
+ */
+export function normalizeBaseUrl(url: string): string {
+    return url
+        .trim()
+        .replace(/\/+$/, "")
+        .replace(/\/(?:chat\/completions|completions|messages|responses)$/, "")
+}
+
+/** Where a chat request goes for a base URL, or null when the SDK decides */
+export function chatRequestUrl(
+    provider: ProviderName,
+    baseUrl: string,
+): string | null {
+    const url = normalizeBaseUrl(baseUrl)
+    if (!url) return null
+    if (provider === "anthropic") return `${url}/messages`
+    // These SDKs build their own paths (or, for MiniMax, pick the protocol
+    // from the URL)
+    const ownPaths: ProviderName[] = [
+        "google",
+        "vertexai",
+        "azure",
+        "bedrock",
+        "ollama",
+        "gateway",
+        "minimax",
+        "edgeone",
+    ]
+    return ownPaths.includes(provider) ? null : `${url}/chat/completions`
 }

@@ -38,6 +38,10 @@ jobs:
       - name: Run MCP server unit tests
         run: npm --prefix packages/mcp-server test
 
+      # Tests run from src/, so check the built npm package separately
+      - name: Build MCP server and check package contents
+        run: npm --prefix packages/mcp-server run build && npm --prefix packages/mcp-server run check-package
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest

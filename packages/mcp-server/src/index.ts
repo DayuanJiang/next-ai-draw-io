@@ -18,49 +18,42 @@
  * surface.
  */
 
-// Setup DOM polyfill for Node.js (required for XML operations)
-import { DOMParser } from "linkedom"
-;(globalThis as any).DOMParser = DOMParser
-
-// Create XMLSerializer polyfill using outerHTML
-class XMLSerializerPolyfill {
-    serializeToString(node: any): string {
-        if (node.outerHTML !== undefined) {
-            return node.outerHTML
-        }
-        if (node.documentElement) {
-            return node.documentElement.outerHTML
-        }
-        return ""
-    }
-}
-;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
-
 import { createRequire } from "node:module"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
 import { z } from "zod"
+import type { DiagramOperation } from "./diagram-operations.ts"
+import { installDomPolyfill } from "./dom.ts"
+import { DRAWING_GUIDE } from "./drawing-guide.ts"
+import { editDiagram, targetPageXml } from "./edit-diagram.ts"
+import { checkEditGate, markPageSeen } from "./edit-gate.ts"
+import { createExclusive } from "./exclusive.ts"
+import { addHistory } from "./history.ts"
 import {
-    applyDiagramOperations,
-    type DiagramOperation,
-} from "./diagram-operations.js"
-import { checkEditGate } from "./edit-gate.js"
-import { addHistory } from "./history.js"
-import {
+    type ExportFormat,
+    type ExportOptions,
+    getServerPort,
     getState,
+    keepInHistory,
+    onSessionRecreate,
+    onStateChange,
     requestExport,
     requestSync,
+    restoreSavedSession,
     setState,
     shutdown,
     startHttpServer,
     waitForSync,
-} from "./http-server.js"
-import { parseDrawioFileContent } from "./load-diagram.js"
-import { log } from "./logger.js"
+} from "./http-server.ts"
+import { parseDrawioFileContent } from "./load-diagram.ts"
+import { log } from "./logger.ts"
+import { prepareNewDiagram, reservedIdError } from "./new-diagram.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
+    findPageElement,
+    hasCells,
     hasPageSelector,
     listPagesFromDoc,
     normalizeToMxfile,
@@ -69,12 +62,38 @@ import {
     projectPage,
     renamePageInDoc,
     serializeMxfile,
-} from "./pages.js"
-import { validateAndFixXml } from "./xml-validation.js"
+    wrapCellsInModel,
+} from "./pages.ts"
+import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
+import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
+import { validateAndFixXml } from "./xml-validation.ts"
+
+// DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
+installDomPolyfill()
 
 // Server configuration
 const config = {
     port: parseInt(process.env.PORT || "6002", 10),
+}
+
+// Keep each session's latest diagram on disk, so it survives this process
+const autosaver = new Autosaver(defaultDataDir())
+onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
+onSessionRecreate((sessionId) => autosaver.load(sessionId))
+
+// A one-page view that does not count for the whole document (edit-gate.ts)
+const OTHER_PAGES_UNSEEN =
+    "You have not seen the other pages in their current state."
+
+/**
+ * The browser's state of a session. After it expired (or the process
+ * restarted) the saved file comes back first, so a tool never builds on an
+ * older copy and then overwrites the file. Call it before requestSync or
+ * requestExport, which need the state.
+ */
+function sessionState(sessionId: string) {
+    restoreSavedSession(sessionId)
+    return getState(sessionId)
 }
 
 // Session state (single session for simplicity)
@@ -98,10 +117,44 @@ let currentSession: {
 const require = createRequire(import.meta.url)
 const packageVersion: string = require("../package.json").version
 
-const server = new McpServer({
-    name: "next-ai-drawio",
-    version: packageVersion,
-})
+// Hosts truncate instructions (Claude Code at 2,048 characters) and may show
+// only the first 512, so the essentials come first. The full rules are in
+// DRAWING_GUIDE, returned by start_session.
+const INSTRUCTIONS = `next-ai-drawio creates and edits draw.io diagrams and shows them live in a browser preview, where the user can also edit them by hand.
+
+Start with start_session: it opens the preview and its result contains the drawing guide (layout, edge routing and style rules). Follow the guide when drawing; call get_drawing_guide if it is no longer in your context.
+
+Before using cloud or icon shapes (AWS, Azure, GCP, Kubernetes, Cisco, BPMN...), call get_shape_library and use the exact style names it returns. Never guess icon style names.
+
+After drawing a complex diagram, call screenshot_diagram once to see it, and fix overlapping shapes or edges that cross shapes.
+
+Tools:
+- create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
+- edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry.
+- get_diagram: read the current XML, including the user's manual edits.
+- screenshot_diagram: see the rendered diagram as an image.
+- load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
+- list_pages, add_page, rename_page, delete_page: manage pages (tabs).`
+
+const server = new McpServer(
+    {
+        name: "next-ai-drawio",
+        version: packageVersion,
+    },
+    { instructions: INSTRUCTIONS },
+)
+
+// The tools that write the diagram, and start_session, run one at a time:
+// two writes at once would both build on the same document, and the second
+// would drop the first one's change. start_session in the queue keeps a
+// session switch from landing in the middle of a write.
+const exclusive = createExclusive()
+const registerWriteTool = ((name: string, config: any, handler: any) =>
+    server.registerTool(
+        name,
+        config,
+        exclusive(handler),
+    )) as typeof server.registerTool
 
 // Shared Zod schema fragment for page-targeting parameters.
 // Every multi-page-aware tool reuses these three optional fields so the LLM
@@ -157,57 +210,75 @@ function describeSelector(s: PageSelector): string {
     return "first page"
 }
 
-// Register prompt with workflow guidance
-server.prompt(
+// The same guide as start_session, for hosts that show prompts to the user
+server.registerPrompt(
     "diagram-workflow",
-    "Guidelines for creating and editing draw.io diagrams",
+    {
+        description: "Guidelines for creating and editing draw.io diagrams",
+    },
     () => ({
         messages: [
             {
                 role: "user",
-                content: {
-                    type: "text",
-                    text: `# Draw.io Diagram Workflow Guidelines
-
-## Creating a New Diagram
-1. Call start_session to open the browser preview
-2. Use create_new_diagram with either a bare <mxGraphModel> (single page) or a full <mxfile> with one or more <diagram> children (multi-page)
-
-## Opening an Existing .drawio File
-- Use load_diagram with the file path — the server reads and decompresses the file itself; don't read it and pass the XML through create_new_diagram
-- After loading, call get_diagram once before editing (you haven't seen the file's cell IDs yet)
-
-## Working with Multiple Pages
-- Use list_pages to discover existing pages (id, name, index)
-- Use add_page to append a new page (without losing existing ones — unlike create_new_diagram which REPLACES everything)
-- Use rename_page / delete_page for management
-- edit_diagram, get_diagram, and export_diagram all accept optional page_id / page_name / page_index — when omitted they target the first page
-
-## Editing a Page (add / update / delete cells)
-1. Call edit_diagram with your operations, optionally with a page selector
-2. If you don't know the current cell IDs or structure, call get_diagram first
-3. For add/update, provide the cell_id and complete mxCell XML
-4. No need to call get_diagram before every edit: the server rejects the edit (with no side effects) if the user changed the diagram in the browser since you last saw it, and tells you to call get_diagram once and retry
-
-## Important Notes
-- create_new_diagram REPLACES the entire document, including ALL pages - only use for new diagrams. Use add_page to add a tab without losing existing content.
-- edit_diagram PRESERVES the user's manual changes (fetches browser state first)
-- Always use unique cell_ids within a page (cell ids "0" and "1" are reserved root sentinels and can repeat across pages)`,
-                },
+                content: { type: "text", text: DRAWING_GUIDE },
             },
         ],
     }),
 )
 
-// Tool: start_session
+// Tool: get_drawing_guide
 server.registerTool(
+    "get_drawing_guide",
+    {
+        title: "Get drawing guide",
+        description:
+            "Return the drawing guide: XML format, layout, edge routing, style and editing rules. " +
+            "start_session already returns it; call this only if the guide is no longer in your context.",
+        inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => ({ content: [{ type: "text", text: DRAWING_GUIDE }] }),
+)
+
+// Tool: get_shape_library
+server.registerTool(
+    "get_shape_library",
+    {
+        title: "Get shape library",
+        description:
+            "Get the style syntax and shape names of a draw.io icon library. Call this BEFORE drawing with " +
+            "cloud, network or other icon shapes, and use the exact names it returns; never guess them.\n\n" +
+            `Libraries:\n${SHAPE_LIBRARY_LIST}`,
+        inputSchema: {
+            library: z
+                .string()
+                .describe("Library name, e.g. aws4, kubernetes, flowchart"),
+        },
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ library }) => {
+        const found = await getShapeLibrary(library)
+        return found.ok
+            ? { content: [{ type: "text", text: found.text }] }
+            : {
+                  content: [{ type: "text", text: `Error: ${found.error}` }],
+                  isError: true,
+              }
+    },
+)
+
+// Tool: start_session
+registerWriteTool(
     "start_session",
     {
+        title: "Start session",
         description:
             "Start a new diagram session and open the browser for real-time preview. " +
             "Starts an embedded server and opens a browser window with draw.io. " +
-            "The browser will show diagram updates as they happen.",
+            "The browser will show diagram updates as they happen. " +
+            "The result includes the drawing guide; follow it when drawing.",
         inputSchema: {},
+        annotations: { destructiveHint: false, openWorldHint: false },
     },
     async () => {
         try {
@@ -227,13 +298,18 @@ server.registerTool(
             const browserUrl = `http://localhost:${port}?mcp=${sessionId}`
             await open(browserUrl)
 
+            const savePath = autosaver.pathFor(sessionId)
+            const saveNote = savePath
+                ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
+                : ""
+
             log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.`,
+                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}\n\n${DRAWING_GUIDE}`,
                     },
                 ],
             }
@@ -250,75 +326,29 @@ server.registerTool(
 )
 
 // Tool: create_new_diagram
-server.registerTool(
+registerWriteTool(
     "create_new_diagram",
     {
-        description: `Create a NEW diagram from XML. ONLY use this when creating a diagram from scratch.
+        title: "Create new diagram",
+        description: `Create a NEW diagram, REPLACING the whole document: every page and any unsaved user changes (the previous state stays in History). To add a tab use add_page; to change cells use edit_diagram.
 
-⚠️ DESTRUCTIVE: This tool REPLACES the entire document, INCLUDING every existing page/tab and any unsaved user changes. To add a tab without losing existing content, use add_page instead. To modify cells on an existing page, use edit_diagram.
+Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape_library first. Follow the drawing guide returned by start_session (call get_drawing_guide if it is no longer in your context).
 
-CRITICAL: You MUST provide the 'xml' argument in EVERY call. Do NOT call this tool without xml.
+Accepted xml:
+1) Only the mxCell elements of one page (recommended). The server adds <mxfile>, <mxGraphModel>, <root> and the root cells "0" and "1":
+<mxCell id="2" value="Shape" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>
+2) A bare <mxGraphModel> with <root> (one page).
+3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-When to use this tool:
-- Creating a new diagram from scratch (no existing diagram, or wanting to wipe and start over)
-- The user explicitly asks to "start over" or "create a new diagram"
-
-When to use add_page instead:
-- The user wants ANOTHER tab/page alongside what's already there (e.g. "add a CNN diagram on a new page")
-
-When to use edit_diagram instead:
-- ANY modifications to an existing page's cells (add/remove/move shapes, change labels, etc.)
-
-ACCEPTED XML SHAPES:
-
-1) Bare mxGraphModel (single-page, legacy):
-<mxGraphModel>
-  <root>
-    <mxCell id="0"/>
-    <mxCell id="1" parent="0"/>
-    <mxCell id="2" value="Shape" style="rounded=1;" vertex="1" parent="1">
-      <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-    </mxCell>
-  </root>
-</mxGraphModel>
-The server auto-wraps this in <mxfile><diagram id="..." name="Page-1">...</diagram></mxfile>.
-
-2) Full mxfile (one or more pages):
-<mxfile host="app.diagrams.net">
-  <diagram id="page-1" name="Architecture">
-    <mxGraphModel><root>...</root></mxGraphModel>
-  </diagram>
-  <diagram id="page-2" name="Sequence">
-    <mxGraphModel><root>...</root></mxGraphModel>
-  </diagram>
-</mxfile>
-Each <diagram> becomes a tab in the embedded editor. Cell ids "0" and "1" are reserved root sentinels and MUST repeat in every page's <root>.
-
-LAYOUT CONSTRAINTS (per page):
-- Keep all elements within x=0-800, y=0-600 (single page viewport)
-- Start from margins (x=40, y=40), keep elements grouped closely
-- Use unique IDs starting from "2" within each page (0 and 1 are reserved)
-- Set parent="1" for top-level shapes
-- Space shapes 150-200px apart for clear edge routing
-
-EDGE ROUTING RULES:
-- Never let multiple edges share the same path - use different exitY/entryY values
-- For bidirectional connections (A↔B), use OPPOSITE sides
-- Always specify exitX, exitY, entryX, entryY explicitly in edge style
-- Route edges AROUND obstacles using waypoints (add 20-30px clearance)
-- Use natural connection points based on flow (not corners)
-
-COMMON STYLES:
-- Shapes: rounded=1; fillColor=#hex; strokeColor=#hex
-- Edges: endArrow=classic; edgeStyle=orthogonalEdgeStyle; curved=1
-- Text: fontSize=14; fontStyle=1 (bold); align=center`,
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent="1" for top-level shapes, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600.`,
         inputSchema: {
             xml: z
                 .string()
                 .describe(
-                    "REQUIRED: Either a complete <mxGraphModel> (legacy single-page) or a full <mxfile> with one or more <diagram> children (multi-page).",
+                    "REQUIRED: the mxCell elements of one page, a bare <mxGraphModel>, or a full <mxfile> with one or more <diagram> pages.",
                 ),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ xml: inputXml }) => {
         try {
@@ -334,54 +364,33 @@ COMMON STYLES:
                 }
             }
 
-            // Validate and auto-fix XML (works for both mxfile and mxGraphModel inputs).
-            let xml = inputXml
-            const { valid, error, fixed, fixes } = validateAndFixXml(xml)
-            if (fixed) {
-                xml = fixed
-                log.info(`XML auto-fixed: ${fixes.join(", ")}`)
-            }
-            if (!valid && error) {
-                log.error(`XML validation failed: ${error}`)
+            const prepared = prepareNewDiagram(inputXml)
+            if (!prepared.ok) {
+                log.error(prepared.error)
                 return {
                     content: [
-                        {
-                            type: "text",
-                            text: `Error: XML validation failed - ${error}`,
-                        },
+                        { type: "text", text: `Error: ${prepared.error}` },
                     ],
                     isError: true,
                 }
             }
-
-            // Normalise to the canonical mxfile shape so every later tool can
-            // assume "session.xml is always an mxfile". Bare <mxGraphModel>
-            // inputs are wrapped into a single-page mxfile here.
-            const normalized = normalizeToMxfile(xml)
-            if (!normalized) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Error: XML must be either a <mxGraphModel> or an <mxfile> with one or more <diagram> children.",
-                        },
-                    ],
-                    isError: true,
-                }
+            if (prepared.fixes.length > 0) {
+                log.info(`XML auto-fixed: ${prepared.fixes.join(", ")}`)
             }
-            xml = normalized
+            // Every later tool can assume session.xml is an mxfile
+            const xml = prepared.xml
 
             log.info(`Setting diagram content, ${xml.length} chars`)
 
             // Sync from browser state first
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
             }
 
             // Save user's state before AI overwrites (with cached SVG)
             if (currentSession.xml) {
-                addHistory(
+                keepInHistory(
                     currentSession.id,
                     currentSession.xml,
                     browserState?.svg || "",
@@ -435,9 +444,10 @@ COMMON STYLES:
 )
 
 // Tool: load_diagram
-server.registerTool(
+registerWriteTool(
     "load_diagram",
     {
+        title: "Load .drawio file",
         description:
             "Load a .drawio file from disk into the current session, REPLACING the entire diagram (all pages). " +
             "The server reads the file directly — you do NOT need to read the file yourself or pass its XML through create_new_diagram. " +
@@ -447,9 +457,10 @@ server.registerTool(
             path: z
                 .string()
                 .describe(
-                    "Path to the .drawio file to load (e.g., ./diagram.drawio)",
+                    "Absolute path to the .drawio file to load (e.g. /Users/me/diagram.drawio or ~/diagram.drawio). Relative paths resolve against the MCP server's working directory, which is often not your project.",
                 ),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ path }) => {
         try {
@@ -467,10 +478,15 @@ server.registerTool(
 
             const fs = await import("node:fs/promises")
             const nodePath = await import("node:path")
-            const absolutePath = nodePath.resolve(path)
+            const absolutePath = nodePath.resolve(expandHome(path))
 
             let content: string
             try {
+                // A pipe or device could be read forever, and the other
+                // write tools wait for this one
+                if (!(await fs.stat(absolutePath)).isFile()) {
+                    throw new Error("not a regular file")
+                }
                 content = await fs.readFile(absolutePath, "utf-8")
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e)
@@ -500,12 +516,12 @@ server.registerTool(
 
             // Save the user's current state before replacing (same flow as
             // create_new_diagram).
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml = browserState.xml
             }
             if (currentSession.xml) {
-                addHistory(
+                keepInHistory(
                     currentSession.id,
                     currentSession.xml,
                     browserState?.svg || "",
@@ -552,15 +568,17 @@ server.registerTool(
 )
 
 // Tool: edit_diagram
-server.registerTool(
+registerWriteTool(
     "edit_diagram",
     {
+        title: "Edit diagram",
         description:
             "Edit a specific page in the current diagram by ID-based operations (update/add/delete cells).\n\n" +
+            "All-or-nothing: if any operation fails, nothing is applied and every failure is listed.\n\n" +
             "Freshness: the server remembers the last diagram state you have seen, and rejects this call " +
             "only if the user edited the diagram in the browser since then. You do NOT need to call " +
-            "get_diagram before every edit — if your view is stale, the call is rejected (with no side " +
-            "effects) and the error tells you to call get_diagram once and retry.\n\n" +
+            "get_diagram before every edit: a rejected call changes nothing and includes the current XML " +
+            "of the page, so you can rebuild your operations and retry.\n\n" +
             "Call get_diagram first only when you don't know the current diagram content (cell IDs, " +
             "structure) — e.g. the diagram wasn't created in this conversation, or you're unsure your " +
             "memory of it is accurate.\n\n" +
@@ -568,16 +586,13 @@ server.registerTool(
             "- page_id / page_name / page_index are optional; when all omitted, the FIRST page is targeted\n" +
             "- Use list_pages to discover what pages exist\n\n" +
             "Operations:\n" +
-            "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml.\n" +
+            "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml. One cell per operation.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
-            "- delete: Remove a cell by its id. Only cell_id is needed.\n\n" +
-            "For add/update, new_xml must be a complete mxCell element including mxGeometry.\n\n" +
+            "- delete: Remove a cell by its id. Only cell_id is needed. Its children and connected edges are deleted too, so give only a container's id.\n\n" +
+            "For add/update, new_xml must be a complete mxCell element including mxGeometry. No XML comments. " +
+            'Every " inside new_xml must be escaped as \\" in the JSON.\n\n' +
             "Example - Add a rectangle on the default (first) page:\n" +
             '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
-            "Example - Add a cell on a specific page by name:\n" +
-            '{"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" ... />"}]}\n\n' +
-            "Example - Update a cell on page index 1:\n" +
-            '{"page_index": 1, "operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" .../>"}]}\n\n' +
             "Example - Delete a cell on the default page:\n" +
             '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
@@ -590,7 +605,11 @@ server.registerTool(
                             .describe(
                                 "Operation to perform: add, update, or delete",
                             ),
-                        cell_id: z.string().describe("The id of the mxCell"),
+                        cell_id: z
+                            .string()
+                            .describe(
+                                "The id of the mxCell. Must match the id attribute in new_xml.",
+                            ),
                         new_xml: z
                             .string()
                             .optional()
@@ -601,6 +620,7 @@ server.registerTool(
                 )
                 .describe("Array of operations to apply"),
         },
+        annotations: { openWorldHint: false },
     },
     async ({ operations, page_id, page_name, page_index }) => {
         try {
@@ -620,7 +640,7 @@ server.registerTool(
             // embed/sync path can hand back a bare <mxGraphModel>, and adopting
             // it verbatim would silently strip a multi-page document down to
             // one page on the next write.
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(currentSession.id)
             if (browserState?.xml) {
                 currentSession.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
@@ -639,6 +659,12 @@ server.registerTool(
                 }
             }
 
+            const pageSelector = pickPageSelector({
+                page_id,
+                page_name,
+                page_index,
+            })
+
             // Enforce workflow: the model must have seen the current diagram
             // state. Content comparison instead of a wall-clock timeout —
             // slow reasoning between get_diagram and edit_diagram is fine as
@@ -650,92 +676,65 @@ server.registerTool(
             if (!gate.ok) {
                 log.warn(
                     gate.reason === "stale"
-                        ? "edit_diagram called with unseen browser changes - rejecting to prevent data loss"
-                        : "edit_diagram called without get_diagram - rejecting to prevent data loss",
+                        ? "edit_diagram rejected: the browser has changes the model has not seen"
+                        : "edit_diagram rejected: the model has not seen the diagram yet",
                 )
+                // The error carries the current page, so the model has now
+                // seen it and can retry without a get_diagram round-trip,
+                // unless other pages changed too.
+                const liveXml = browserState?.xml || currentSession.xml
+                currentSession.lastSeenXml = markPageSeen(
+                    currentSession.lastSeenXml,
+                    liveXml,
+                    pageSelector,
+                )
+                const reason =
+                    gate.reason === "stale"
+                        ? "The diagram changed in the browser since you last saw it (e.g. manual user edits). No changes were made."
+                        : "You have not seen this diagram yet, so no changes were made."
+                const next =
+                    currentSession.lastSeenXml === liveXml
+                        ? "Build your operations on this XML and retry."
+                        : `${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector, then retry.`
                 return {
                     content: [
                         {
                             type: "text",
-                            text:
-                                gate.reason === "stale"
-                                    ? "Error: The diagram changed in the browser since you last fetched it (e.g. manual user edits).\n\n" +
-                                      "Call get_diagram to see the latest state, then rebuild your edit operations on top of it."
-                                    : "Error: You must call get_diagram first before edit_diagram.\n\n" +
-                                      "This ensures you have the latest diagram state including any manual edits the user made in the browser. " +
-                                      "Please call get_diagram, then use that XML to construct your edit operations.",
+                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\n${next}`,
                         },
                     ],
                     isError: true,
                 }
             }
 
-            const pageSelector = pickPageSelector({
-                page_id,
-                page_name,
-                page_index,
-            })
             log.info(
                 `Editing diagram with ${operations.length} operation(s) on ${describeSelector(pageSelector)}`,
             )
 
-            // Validate and auto-fix new_xml for each operation
-            const validatedOps = operations.map((op) => {
-                if (op.new_xml) {
-                    const { valid, error, fixed, fixes } = validateAndFixXml(
-                        op.new_xml,
-                    )
-                    if (fixed) {
-                        log.info(
-                            `Operation ${op.operation} ${op.cell_id}: XML auto-fixed: ${fixes.join(", ")}`,
-                        )
-                        return { ...op, new_xml: fixed }
-                    }
-                    if (!valid && error) {
-                        log.warn(
-                            `Operation ${op.operation} ${op.cell_id}: XML validation failed: ${error}`,
-                        )
-                    }
-                }
-                return op
-            })
-
-            // Apply operations on the targeted page
-            const { result, errors } = applyDiagramOperations(
+            const outcome = editDiagram(
                 currentSession.xml,
-                validatedOps as DiagramOperation[],
+                operations as DiagramOperation[],
                 pageSelector,
             )
-
-            if (errors.length > 0) {
-                const errorMessages = errors
-                    .map((e) => `${e.type} ${e.cellId}: ${e.message}`)
-                    .join("\n")
-                log.warn(`Edit had ${errors.length} error(s): ${errorMessages}`)
-            }
-
-            // A page-level error (empty cellId — e.g. the selector matched no
-            // page, or the page had no <root>) means NOTHING was applied and
-            // `result` is the unchanged input. Surface it as a hard error
-            // instead of persisting a no-op and reporting success, so the
-            // caller doesn't build on a wrong assumption.
-            const pageError = errors.find((e) => e.cellId === "")
-            if (pageError) {
+            if (!outcome.ok) {
+                log.warn(`Edit rejected: ${outcome.errors.join("; ")}`)
+                const text = outcome.pageError
+                    ? `Error: ${outcome.errors[0]}`
+                    : `Error: No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\nFix the operations against this XML and retry.`
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error: ${pageError.message}`,
-                        },
-                    ],
+                    content: [{ type: "text", text }],
                     isError: true,
                 }
             }
+            if (outcome.fixes.length > 0) {
+                log.info(`new_xml auto-fixed: ${outcome.fixes.join("; ")}`)
+            }
+            const result = outcome.xml
 
             // Save the pre-edit state for undo (with cached SVG from browser).
-            // Done only now that we know the edit applied — a page-level error
-            // returns above without leaving a phantom history entry.
-            addHistory(
+            // Done only once the edit applied: a rejected edit returns above
+            // without leaving a phantom history entry.
+            keepInHistory(
                 currentSession.id,
                 currentSession.xml,
                 browserState?.svg || "",
@@ -755,17 +754,11 @@ server.registerTool(
 
             log.info(`Diagram edited successfully`)
 
-            const successMsg = `Diagram edited successfully!\n\nApplied ${operations.length} operation(s) on ${describeSelector(pageSelector)}.`
-            const errorMsg =
-                errors.length > 0
-                    ? `\n\nWarnings:\n${errors.map((e) => `- ${e.type} ${e.cellId}: ${e.message}`).join("\n")}`
-                    : ""
-
             return {
                 content: [
                     {
                         type: "text",
-                        text: successMsg + errorMsg,
+                        text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.`,
                     },
                 ],
             }
@@ -785,6 +778,7 @@ server.registerTool(
 server.registerTool(
     "get_diagram",
     {
+        title: "Get diagram",
         description:
             "Get the current diagram XML (fetches latest from browser, including user's manual edits). " +
             "Call this when you don't know the current diagram content (cell IDs, pages, structure) — " +
@@ -794,6 +788,7 @@ server.registerTool(
         inputSchema: {
             ...pageSelectorSchema,
         },
+        annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (input) => {
         // Defensive: when every field is optional an MCP client could in
@@ -815,25 +810,32 @@ server.registerTool(
                 }
             }
 
-            // Request browser to push fresh state and wait for it
-            const syncRequested = requestSync(currentSession.id)
+            // start_session may replace currentSession while this waits
+            const session = currentSession
+            // Request browser to push fresh state and wait for it (an
+            // expired session first gets its saved file back to sync)
+            let staleNote = ""
+            restoreSavedSession(session.id)
+            const syncRequested = requestSync(session.id)
             if (syncRequested) {
-                const synced = await waitForSync(currentSession.id)
+                const synced = await waitForSync(session.id)
                 if (!synced) {
                     log.warn("get_diagram: sync timeout - state may be stale")
+                    staleNote =
+                        "\n\nNote: the browser did not respond, so this XML may not include the user's latest manual edits (is the preview tab open?)."
                 }
             }
 
             // Fetch latest state from browser, re-normalising to mxfile so a
             // bare <mxGraphModel> pushed back by the embed/sync path doesn't
             // strip page structure (see edit_diagram for the same guard).
-            const browserState = getState(currentSession.id)
+            const browserState = sessionState(session.id)
             if (browserState?.xml) {
-                currentSession.xml =
+                session.xml =
                     normalizeToMxfile(browserState.xml) ?? browserState.xml
             }
 
-            if (!currentSession.xml) {
+            if (!session.xml) {
                 return {
                     content: [
                         {
@@ -844,17 +846,17 @@ server.registerTool(
                 }
             }
 
-            // The model is now looking at the current state. Record the raw
-            // store value — the gate's fast path is plain string equality
-            // against the store, with a structural comparison as fallback.
-            currentSession.lastSeenXml = browserState?.xml || currentSession.xml
-
             const pageSelector = pickPageSelector({
                 page_id,
                 page_name,
                 page_index,
             })
-            const doc = parseMxfile(currentSession.xml)
+
+            // The model is now looking at the current state. Record the raw
+            // store value — the gate's fast path is plain string equality
+            // against the store, with a structural comparison as fallback.
+            const liveXml = browserState?.xml || session.xml
+            const doc = parseMxfile(session.xml)
             const pages = doc ? listPagesFromDoc(doc) : []
             const pageList = pages.length
                 ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
@@ -862,18 +864,19 @@ server.registerTool(
 
             // No selector → return full mxfile
             if (!hasPageSelector(pageSelector)) {
+                session.lastSeenXml = liveXml
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Current diagram XML:\n\n${currentSession.xml}\n\n${pageList}`,
+                            text: `Current diagram XML:\n\n${session.xml}\n\n${pageList}${staleNote}`,
                         },
                     ],
                 }
             }
 
             // Selector → return a single-page projection
-            const projection = projectPage(currentSession.xml, pageSelector)
+            const projection = projectPage(session.xml, pageSelector)
             if (!projection.ok) {
                 return {
                     content: [
@@ -888,11 +891,22 @@ server.registerTool(
                     isError: true,
                 }
             }
+            // One page shown counts for all only if the others are as the
+            // model saw them last
+            session.lastSeenXml = markPageSeen(
+                session.lastSeenXml,
+                liveXml,
+                pageSelector,
+            )
+            const otherPagesNote =
+                session.lastSeenXml === liveXml
+                    ? ""
+                    : `\n\nNote: ${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector before editing.`
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}${staleNote}${otherPagesNote}`,
                     },
                 ],
             }
@@ -908,34 +922,240 @@ server.registerTool(
     },
 )
 
+// The browser bridge has one export slot per session, so export requests
+// run one at a time: a concurrent call waits for the previous one.
+let exportQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * Ask the browser to export (optionally via a page projection) and poll for
+ * the resulting image data. Resolves to undefined on timeout.
+ */
+function exportViaBrowser(
+    sessionId: string,
+    format: ExportFormat,
+    projectionXml?: string,
+    options?: ExportOptions,
+): Promise<string | undefined> {
+    const run = exportQueue.then(async () => {
+        requestExport(sessionId, format, projectionXml, options)
+
+        // A projection export does an extra load + render round-trip in the
+        // browser, so give it a longer window. Re-read the live store entry
+        // each tick: setState() (from a concurrent autosave or tool call)
+        // replaces the Map entry with a new object, so a captured reference
+        // would go stale and never observe the browser's exportData.
+        const timeoutMs = projectionXml ? 15000 : 10000
+        const start = Date.now()
+        let exportData: string | undefined
+        while (Date.now() - start < timeoutMs) {
+            exportData = getState(sessionId)?.exportData
+            if (exportData) break
+            await new Promise((r) => setTimeout(r, 200))
+        }
+        const live = getState(sessionId)
+        if (live) {
+            live.exportData = undefined
+            live.exportFormat = undefined
+            live.exportXml = undefined
+            live.exportOptions = undefined
+            live.exportId = undefined
+        }
+        return exportData
+    })
+    exportQueue = run.catch(() => {})
+    return run
+}
+
+/**
+ * True when the preview tab polled before but has gone quiet. Browsers
+ * slow down timers in background tabs (Chrome: about once a minute after
+ * 5 minutes hidden), so an export would just time out.
+ */
+function previewStalled(sessionId: string): boolean {
+    const lastPolled = getState(sessionId)?.lastPolled
+    return lastPolled !== undefined && Date.now() - lastPolled > 10_000
+}
+
+function previewStalledError(sessionId: string) {
+    return {
+        content: [
+            {
+                type: "text" as const,
+                text: `Error: The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), then retry.`,
+            },
+        ],
+        isError: true,
+    }
+}
+
+/** The <diagram id> of the page a selector targets, for draw.io's pageId. */
+function pageIdFor(xml: string, selector: PageSelector): string | undefined {
+    const doc = parseMxfile(xml)
+    return (
+        (doc && findPageElement(doc, selector)?.element.getAttribute("id")) ||
+        undefined
+    )
+}
+
+// Screenshot size: Claude Desktop caps a tool result at about 150,000
+// characters, so retry smaller above 140,000 base64 characters. (Claude
+// Code 2.1 accepted a 240,000 character image in testing.)
+const SCREENSHOT_WIDTHS = [1000, 700]
+const MAX_SCREENSHOT_CHARS = 140_000
+
+// Adapted from the web app's vision check (lib/validation-prompts.ts)
+const SCREENSHOT_CHECKLIST = `Check this rendering of the diagram for:
+1. Overlapping shapes that cover each other or their labels (critical)
+2. Edges crossing shapes that are not their source or target (critical)
+3. Text that is cut off, overlapping or too small to read (warning)
+4. Layout problems: cramped shapes, poor spacing or misalignment (warning)
+5. Rendering errors: missing, incomplete or broken elements, such as an icon that did not load (critical)
+If there are critical issues, fix them with edit_diagram and take one more screenshot. Do at most two rounds of fixes. Minor cosmetic issues are fine, and diagrams with only 1 or 2 shapes pass unless something is clearly broken.`
+
+// Tool: screenshot_diagram
+server.registerTool(
+    "screenshot_diagram",
+    {
+        title: "Screenshot diagram",
+        description:
+            "Render the diagram in the preview and return it as a PNG image, so you can see your own result. " +
+            "Call this once after drawing or heavily editing a complex diagram, then fix overlaps and edges that cross shapes. " +
+            "Without a page selector it shows the page on screen. Needs the preview tab to be open.",
+        inputSchema: { ...pageSelectorSchema },
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (input) => {
+        const { page_id, page_name, page_index } = input ?? {}
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            if (previewStalled(currentSession.id)) {
+                return previewStalledError(currentSession.id)
+            }
+            const xml =
+                sessionState(currentSession.id)?.xml || currentSession.xml
+            if (!hasCells(xml)) {
+                return {
+                    content: [{ type: "text", text: "The diagram is empty." }],
+                }
+            }
+
+            const pageSelector = pickPageSelector({
+                page_id,
+                page_name,
+                page_index,
+            })
+            let pageId: string | undefined
+            let projectionXml: string | undefined
+            if (hasPageSelector(pageSelector)) {
+                const doc = normalizeToMxfile(xml) ?? xml
+                pageId = pageIdFor(doc, pageSelector)
+                // A page without an id: load just that page and capture
+                // it, as export_diagram does
+                if (!pageId) {
+                    const projection = projectPage(doc, pageSelector)
+                    if (!projection.ok) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Error: Page ${describeSelector(pageSelector)} not found.`,
+                                },
+                            ],
+                            isError: true,
+                        }
+                    }
+                    projectionXml = projection.xml
+                }
+            }
+
+            let data: string | undefined
+            // start_session may replace currentSession between the tries
+            const sessionId = currentSession.id
+            for (const width of SCREENSHOT_WIDTHS) {
+                data = await exportViaBrowser(sessionId, "png", projectionXml, {
+                    width,
+                    pageId,
+                })
+                if (!data || data.length <= MAX_SCREENSHOT_CHARS) break
+            }
+            if (!data) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Screenshot timed out. Make sure the preview tab is open and in front.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            return {
+                content: [
+                    {
+                        type: "image",
+                        data: data.replace(/^data:image\/png;base64,/, ""),
+                        mimeType: "image/png",
+                    },
+                    {
+                        type: "text",
+                        text: `Screenshot of ${hasPageSelector(pageSelector) ? `page ${describeSelector(pageSelector)}` : "the page on screen"}.\n\n${SCREENSHOT_CHECKLIST}`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("screenshot_diagram failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
 // Tool: export_diagram
 server.registerTool(
     "export_diagram",
     {
+        title: "Export diagram",
         description:
-            "Export the current diagram to a file. Supports .drawio (XML), .png, and .svg formats. " +
+            "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io can open and edit again). " +
             "The format is auto-detected from the file extension, or can be specified explicitly.\n\n" +
             "Multi-page behaviour:\n" +
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
             "- .drawio with a page selector: writes a single-page <mxfile> containing only that page.\n" +
             "- .png / .svg with NO page selector: exports the currently active page in the browser.\n" +
-            "- .png / .svg with a page selector: temporarily loads a single-page projection of that page into the browser, captures the rendered image, then restores the full document. The user will see a brief tab-flicker (~1-2s) but the exported image is guaranteed to be the requested page.",
+            "- .png with a page selector: renders that page without changing what the user sees.\n" +
+            "- .svg / .drawio.svg with a page selector: temporarily loads that page into the browser, captures it, then restores the full document (the user sees a brief flicker).",
         inputSchema: {
             ...pageSelectorSchema,
             path: z
                 .string()
                 .describe(
-                    "File path to save the diagram (e.g., ./diagram.drawio, ./diagram.png, ./diagram.svg)",
+                    "Absolute file path to save to (e.g. /Users/me/diagram.drawio, ~/diagram.png). Relative paths resolve against the MCP server's working directory, which is often not your project.",
                 ),
             format: z
-                .enum(["drawio", "png", "svg"])
+                .enum(["drawio", "png", "svg", "drawio.svg"])
                 .optional()
                 .describe(
                     "Export format. If omitted, detected from file extension. Defaults to drawio.",
                 ),
         },
+        annotations: { openWorldHint: false },
     },
-    async ({ path, format, page_id, page_name, page_index }) => {
+    async ({ path: rawPath, format, page_id, page_name, page_index }) => {
+        const path = expandHome(rawPath)
         try {
             if (!currentSession) {
                 return {
@@ -949,13 +1169,48 @@ server.registerTool(
                 }
             }
 
-            // Fetch latest state
-            const browserState = getState(currentSession.id)
-            if (browserState?.xml) {
-                currentSession.xml = browserState.xml
+            // start_session may replace currentSession while this waits
+            const session = currentSession
+
+            // Detect format from extension if not specified
+            const lowerPath = path.toLowerCase()
+            const detectedFormat =
+                format ||
+                (lowerPath.endsWith(".drawio.svg")
+                    ? "drawio.svg"
+                    : lowerPath.endsWith(".png")
+                      ? "png"
+                      : lowerPath.endsWith(".svg")
+                        ? "svg"
+                        : "drawio")
+
+            // The .drawio file is written from the state, so get the
+            // user's latest edits into it first, as get_diagram does (the
+            // images are made by the browser from its canvas)
+            let syncNote = ""
+            if (detectedFormat === "drawio") {
+                restoreSavedSession(session.id)
+                if (!requestSync(session.id)) {
+                    syncNote =
+                        "\n\nNote: the preview was not reachable, so the file may not include the user's latest manual edits."
+                } else if (!(await waitForSync(session.id))) {
+                    log.warn(
+                        "export_diagram: sync timeout - state may be stale",
+                    )
+                    syncNote =
+                        "\n\nNote: the browser did not respond, so the file may not include the user's latest manual edits (is the preview tab open?)."
+                }
             }
 
-            if (!currentSession.xml) {
+            // Fetch latest state, re-normalised to mxfile so a page
+            // selector works on a bare <mxGraphModel> pushed by the browser
+            const browserState = sessionState(session.id)
+            if (browserState?.xml) {
+                session.xml =
+                    normalizeToMxfile(browserState.xml) ?? browserState.xml
+            }
+
+            if (!session.xml) {
                 return {
                     content: [
                         {
@@ -976,26 +1231,17 @@ server.registerTool(
             const fs = await import("node:fs/promises")
             const nodePath = await import("node:path")
 
-            // Detect format from extension if not specified
-            const ext = nodePath.extname(path).toLowerCase()
-            const detectedFormat =
-                format ||
-                (ext === ".png" ? "png" : ext === ".svg" ? "svg" : "drawio")
-
             // .drawio path - write XML directly (no browser round-trip).
             if (detectedFormat === "drawio") {
                 let filePath = path
-                if (!filePath.endsWith(".drawio")) {
+                if (!filePath.toLowerCase().endsWith(".drawio")) {
                     filePath = `${filePath}.drawio`
                 }
                 const absolutePath = nodePath.resolve(filePath)
 
-                let outXml = currentSession.xml
+                let outXml = session.xml
                 if (hasPageSelector(pageSelector)) {
-                    const projection = projectPage(
-                        currentSession.xml,
-                        pageSelector,
-                    )
+                    const projection = projectPage(session.xml, pageSelector)
                     if (!projection.ok) {
                         return {
                             content: [
@@ -1019,23 +1265,29 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${outXml.length} characters`,
+                            text: `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${outXml.length} characters${syncNote}`,
                         },
                     ],
                 }
             }
 
-            // PNG or SVG: request browser to export via iframe
+            // PNG or SVG: request browser to export via iframe. Replace a
+            // known extension that does not match the format.
             let filePath = path
-            if (ext !== `.${detectedFormat}`) {
-                if (ext === ".drawio" || ext === ".png" || ext === ".svg") {
-                    filePath = filePath.slice(0, -ext.length)
-                }
-                filePath = `${filePath}.${detectedFormat}`
+            const suffix = `.${detectedFormat}`
+            if (!lowerPath.endsWith(suffix)) {
+                const known = [".drawio.svg", ".drawio", ".png", ".svg"].find(
+                    (e) => lowerPath.endsWith(e),
+                )
+                if (known) filePath = filePath.slice(0, -known.length)
+                filePath = `${filePath}${suffix}`
             }
             const absolutePath = nodePath.resolve(filePath)
+            // draw.io's name for an SVG with the diagram embedded
+            const browserFormat =
+                detectedFormat === "drawio.svg" ? "xmlsvg" : detectedFormat
 
-            const state = getState(currentSession.id)
+            const state = sessionState(session.id)
             if (!state) {
                 return {
                     content: [
@@ -1046,6 +1298,9 @@ server.registerTool(
                     ],
                     isError: true,
                 }
+            }
+            if (previewStalled(session.id)) {
+                return previewStalledError(session.id)
             }
 
             // -----------------------------------------------------------------
@@ -1059,9 +1314,16 @@ server.registerTool(
             // browser-side. The canonical session state is never mutated here,
             // so there is no restore race and no concurrent-edit clobbering.
             // -----------------------------------------------------------------
+            // PNG: draw.io renders any page by id, without touching the
+            // page on screen. SVG export has no page option, so it still
+            // needs the projection below.
             let projectionXml: string | undefined
-            if (hasPageSelector(pageSelector)) {
-                const projection = projectPage(currentSession.xml, pageSelector)
+            let pngPageId: string | undefined
+            if (hasPageSelector(pageSelector) && detectedFormat === "png") {
+                pngPageId = pageIdFor(session.xml, pageSelector)
+            }
+            if (hasPageSelector(pageSelector) && !pngPageId) {
+                const projection = projectPage(session.xml, pageSelector)
                 if (!projection.ok) {
                     return {
                         content: [
@@ -1079,33 +1341,12 @@ server.registerTool(
                 projectionXml = projection.xml
             }
 
-            // Ask the browser to export (optionally via a page projection) and
-            // poll for the resulting image data.
-            requestExport(
-                currentSession.id,
-                detectedFormat as "png" | "svg",
+            const exportData = await exportViaBrowser(
+                session.id,
+                browserFormat,
                 projectionXml,
+                pngPageId ? { pageId: pngPageId } : undefined,
             )
-
-            // A projection export does an extra load + render round-trip in the
-            // browser, so give it a longer window. Re-read the live store entry
-            // each tick: setState() (from a concurrent autosave or tool call)
-            // replaces the Map entry with a new object, so a captured reference
-            // would go stale and never observe the browser's exportData.
-            const timeoutMs = projectionXml ? 15000 : 10000
-            const start = Date.now()
-            let exportData: string | undefined
-            while (Date.now() - start < timeoutMs) {
-                exportData = getState(currentSession.id)?.exportData
-                if (exportData) break
-                await new Promise((r) => setTimeout(r, 200))
-            }
-            const live = getState(currentSession.id)
-            if (live) {
-                live.exportData = undefined
-                live.exportFormat = undefined
-                live.exportXml = undefined
-            }
 
             if (!exportData) {
                 return {
@@ -1180,7 +1421,7 @@ async function loadMxfileForMutation(): Promise<
         }
     }
     // Pull latest from browser so we don't clobber autosaved changes.
-    const browserState = getState(currentSession.id)
+    const browserState = sessionState(currentSession.id)
     if (browserState?.xml) {
         currentSession.xml = browserState.xml
     }
@@ -1215,15 +1456,24 @@ async function loadMxfileForMutation(): Promise<
         doc,
         writeBack: (newDoc: Document) => {
             const newXml = serializeMxfile(newDoc)
+            // The store may hold user edits the model has not seen yet.
+            const sawLatest = checkEditGate(
+                sessionRef.lastSeenXml,
+                browserState?.xml ?? "",
+            ).ok
             // Save history before overwriting so the user can undo.
-            addHistory(sessionRef.id, sessionRef.xml, browserState?.svg || "")
+            keepInHistory(
+                sessionRef.id,
+                sessionRef.xml,
+                browserState?.svg || "",
+            )
             sessionRef.xml = newXml
             sessionRef.version++
             setState(sessionRef.id, newXml)
-            // The model just wrote this exact state, so mark it as seen —
-            // subsequent edit_diagram calls don't need a redundant
-            // get_diagram round-trip.
-            sessionRef.lastSeenXml = newXml
+            // The model just wrote this exact state. If it had seen the state
+            // it built on, mark the result as seen so edit_diagram needs no
+            // extra get_diagram; otherwise edit_diagram must ask for one.
+            sessionRef.lastSeenXml = sawLatest ? newXml : ""
             addHistory(sessionRef.id, newXml, "")
         },
     }
@@ -1233,9 +1483,11 @@ async function loadMxfileForMutation(): Promise<
 server.registerTool(
     "list_pages",
     {
+        title: "List pages",
         description:
             "List every page (tab) in the current diagram. Returns each page's id, name, 0-based index, and cell count. Use this to discover what pages exist before targeting one with edit_diagram, get_diagram, export_diagram, rename_page, or delete_page.",
         inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () => {
         try {
@@ -1284,15 +1536,16 @@ server.registerTool(
 )
 
 // Tool: add_page
-server.registerTool(
+registerWriteTool(
     "add_page",
     {
+        title: "Add page",
         description:
             'Append a new page (tab) to the current diagram WITHOUT touching existing pages or unsaved user changes. Use this when the user wants "another diagram alongside" — e.g. "add a CNN page" — instead of create_new_diagram which wipes everything.\n\n' +
             "Inputs:\n" +
             "- name: optional display name for the tab (defaults to Page-N where N = existing-page-count + 1)\n" +
             "- id: optional explicit page id; if omitted the server generates a short alphanumeric id\n" +
-            '- xml: optional starting <mxGraphModel> for the new page. If omitted, the page starts blank with the standard root sentinel cells ("0" and "1").\n\n' +
+            '- xml: optional starting content: the mxCell elements of the page (root cells "0" and "1" are added), or a bare <mxGraphModel>. If omitted, the page starts blank.\n\n' +
             "Returns the new page's id, name, and index so the caller can immediately target it with edit_diagram.",
         inputSchema: {
             name: z
@@ -1312,9 +1565,10 @@ server.registerTool(
                 .string()
                 .optional()
                 .describe(
-                    'Optional starting <mxGraphModel> XML for the new page. Must include <root> with id="0" and id="1" cells. If omitted the page starts blank.',
+                    "Optional starting content: the mxCell elements of the page, or a bare <mxGraphModel>. If omitted the page starts blank.",
                 ),
         },
+        annotations: { destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
         // All three fields optional — coalesce so a no-args call doesn't
@@ -1333,7 +1587,14 @@ server.registerTool(
 
             // If caller provided XML, validate it before splicing it in so we
             // never get a half-broken mxfile written to the session.
-            let cleanXml: string | undefined = xml
+            const reserved = xml && reservedIdError(xml)
+            if (reserved) {
+                return {
+                    content: [{ type: "text", text: `Error: ${reserved}` }],
+                    isError: true,
+                }
+            }
+            let cleanXml: string | undefined = xml && wrapCellsInModel(xml)
             if (cleanXml) {
                 const { valid, error, fixed, fixes } =
                     validateAndFixXml(cleanXml)
@@ -1392,9 +1653,10 @@ server.registerTool(
 )
 
 // Tool: rename_page
-server.registerTool(
+registerWriteTool(
     "rename_page",
     {
+        title: "Rename page",
         description:
             "Rename an existing page (tab). At least one of page_id / page_name / page_index is required to identify which page to rename. The new_name becomes the visible tab label in the editor.",
         inputSchema: {
@@ -1404,6 +1666,7 @@ server.registerTool(
                 .min(1)
                 .describe("The new display name for the page tab."),
         },
+        annotations: { destructiveHint: false, openWorldHint: false },
     },
     async ({ new_name, page_id, page_name, page_index }) => {
         try {
@@ -1472,14 +1735,16 @@ server.registerTool(
 )
 
 // Tool: delete_page
-server.registerTool(
+registerWriteTool(
     "delete_page",
     {
+        title: "Delete page",
         description:
             "Delete a page (tab) from the current diagram. At least one of page_id / page_name / page_index is required. Refuses to delete the last remaining page — the editor needs at least one tab.",
         inputSchema: {
             ...pageSelectorSchema,
         },
+        annotations: { openWorldHint: false },
     },
     async (input) => {
         // All three fields are optional — coalesce so a no-args call returns
@@ -1556,6 +1821,7 @@ function gracefulShutdown(reason: string) {
     if (isShuttingDown) return
     isShuttingDown = true
     log.info(`Shutting down: ${reason}`)
+    autosaver.flush()
     shutdown()
     process.exit(0)
 }

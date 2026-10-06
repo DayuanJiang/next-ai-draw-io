@@ -10,9 +10,11 @@ const nextConfig: NextConfig = {
     env: {
         APP_VERSION: packageJson.version,
     },
-    // Include instrumentation.ts in standalone build for Langfuse telemetry
+    // Include instrumentation.ts in standalone build for Langfuse telemetry,
+    // and the shape library docs get_shape_library reads at run time
     outputFileTracingIncludes: {
         "*": ["./instrumentation.ts"],
+        "/api/chat": ["./docs/shape-libraries/*.md"],
     },
 }
 

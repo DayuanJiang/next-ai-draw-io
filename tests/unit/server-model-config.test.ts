@@ -4,6 +4,7 @@ import {
     loadFlattenedServerModels,
     type ServerModelsConfig,
     ServerModelsConfigSchema,
+    slugify,
 } from "@/lib/server-model-config"
 
 const ORIGINAL_ENV = { ...process.env }
@@ -32,6 +33,22 @@ describe("ServerModelsConfigSchema", () => {
                     name: "OpenAI Server",
                     provider: "openai",
                     models: ["gpt-4o"],
+                },
+            ],
+        }
+
+        expect(() => ServerModelsConfigSchema.parse(config)).not.toThrow()
+    })
+
+    it("accepts Atlas Cloud provider names", () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                {
+                    name: "Atlas Cloud Server",
+                    provider: "atlascloud",
+                    models: ["qwen/qwen3.5-flash"],
+                    apiKeyEnv: "ATLASCLOUD_API_KEY",
+                    baseUrlEnv: "ATLASCLOUD_BASE_URL",
                 },
             ],
         }
@@ -215,5 +232,52 @@ describe("loadFlattenedServerModels", () => {
 
         expect(models.length).toBe(1)
         expect(models[0].apiKeyEnv).toEqual(["OPENAI_KEY_1", "OPENAI_KEY_2"])
+    })
+})
+
+describe("slugify", () => {
+    it("keeps ASCII names readable", () => {
+        expect(slugify("OpenAI Production")).toBe("openai-production")
+    })
+
+    it("gives distinct ASCII slugs to distinct CJK names", () => {
+        const slugs = ["主力", "备用", "DeepSeek 官方", "DeepSeek 备用"].map(
+            slugify,
+        )
+        expect(new Set(slugs).size).toBe(4)
+        for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9-]+$/)
+    })
+})
+
+describe("loadFlattenedServerModels id collisions", () => {
+    it("drops a model whose id repeats an earlier provider's", async () => {
+        const config: ServerModelsConfig = {
+            providers: [
+                { name: "OpenAI", provider: "openai", models: ["gpt-4o"] },
+                {
+                    name: "openai",
+                    provider: "openai",
+                    models: ["gpt-4o"],
+                    apiKeyEnv: "OTHER_KEY",
+                },
+                {
+                    name: "主力",
+                    provider: "deepseek",
+                    models: ["deepseek-chat"],
+                },
+                {
+                    name: "备用",
+                    provider: "deepseek",
+                    models: ["deepseek-chat"],
+                },
+            ],
+        }
+        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
+
+        const models = await loadFlattenedServerModels()
+        const ids = models.map((m) => m.id)
+        expect(new Set(ids).size).toBe(ids.length)
+        expect(ids).toHaveLength(3)
+        expect(models[0].apiKeyEnv).toBeUndefined()
     })
 })

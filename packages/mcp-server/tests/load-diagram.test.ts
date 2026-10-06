@@ -10,24 +10,17 @@
 import { deflateRawSync } from "node:zlib"
 import { DOMParser } from "linkedom"
 import { beforeAll, describe, expect, it } from "vitest"
+import { installDomPolyfill } from "../src/dom.ts"
 
 // Install the DOM polyfills exactly as index.ts does at runtime.
 beforeAll(() => {
-    ;(globalThis as any).DOMParser = DOMParser
-    class XMLSerializerPolyfill {
-        serializeToString(node: any): string {
-            if (node.outerHTML !== undefined) return node.outerHTML
-            if (node.documentElement) return node.documentElement.outerHTML
-            return ""
-        }
-    }
-    ;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
+    installDomPolyfill()
 })
 
 import {
     decompressPageContent,
     parseDrawioFileContent,
-} from "../src/load-diagram.js"
+} from "../src/load-diagram.ts"
 
 const MODEL_XML = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="box1" value="Hello" style="rounded=0;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`
 
@@ -71,6 +64,13 @@ describe("parseDrawioFileContent", () => {
             expect(r.xml).toContain("<mxfile")
             expect(r.xml).toContain('value="Hello"')
         }
+    })
+
+    it("rejects a bare mxGraphModel that is not closed", () => {
+        const r = parseDrawioFileContent(
+            MODEL_XML.replace("</root></mxGraphModel>", ""),
+        )
+        expect(r.ok).toBe(false)
     })
 
     it("decompresses a compressed mxfile into plain XML pages", () => {

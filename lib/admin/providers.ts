@@ -2,6 +2,7 @@ import { z } from "zod"
 import {
     ProviderNameSchema,
     type ServerModelsConfig,
+    slugify,
 } from "@/lib/server-model-config"
 import {
     FIXED_CRED_PROVIDERS,
@@ -182,12 +183,15 @@ export function validateAdminProviders(
             return `${PROVIDER_INFO[single].label} is already configured in AI_MODELS_CONFIG / ai-models.json and shares global credentials. Manage it via the environment configuration instead.`
         }
     }
+    // Server model ids are built from the slugified name, so names must
+    // stay distinct after slugifying ("OpenAI" and "openai" would collide)
     const names = list.map((p) => displayName(p))
-    if (new Set(names).size !== names.length) {
-        return "Provider display names must be unique."
+    const slugs = names.map(slugify)
+    if (new Set(slugs).size !== slugs.length) {
+        return "Provider display names must be unique (ignoring case and punctuation)."
     }
-    const envNames = new Set(envProviders.map((p) => p.name))
-    const clash = names.find((n) => envNames.has(n))
+    const envSlugs = new Set(envProviders.map((p) => slugify(p.name)))
+    const clash = names.find((_, i) => envSlugs.has(slugs[i]))
     if (clash) {
         return `"${clash}" is already defined in AI_MODELS_CONFIG / ai-models.json. Use a different display name.`
     }
@@ -240,10 +244,14 @@ export function deriveEnvUpdates(
         indexByProvider.set(p.provider, index + 1)
 
         if (p.provider === "bedrock") {
-            if (p.awsAccessKeyId) updates.AWS_ACCESS_KEY_ID = p.awsAccessKeyId
+            // ADMIN_ names keep the standard AWS_* vars untouched, so other
+            // AWS clients (e.g. the DynamoDB quota table) keep their own
+            // credentials instead of picking up the panel's Bedrock keys
+            if (p.awsAccessKeyId)
+                updates.ADMIN_AWS_ACCESS_KEY_ID = p.awsAccessKeyId
             if (p.awsSecretAccessKey)
-                updates.AWS_SECRET_ACCESS_KEY = p.awsSecretAccessKey
-            if (p.awsRegion) updates.AWS_REGION = p.awsRegion
+                updates.ADMIN_AWS_SECRET_ACCESS_KEY = p.awsSecretAccessKey
+            if (p.awsRegion) updates.ADMIN_AWS_REGION = p.awsRegion
         } else if (p.provider === "vertexai") {
             if (p.vertexApiKey) updates.GOOGLE_VERTEX_API_KEY = p.vertexApiKey
             if (p.baseUrl) updates.GOOGLE_VERTEX_BASE_URL = p.baseUrl
@@ -284,6 +292,10 @@ function derivedEnvKeys(list: StoredAdminProvider[]): string[] {
         const index = indexByProvider.get(p.provider) ?? 0
         indexByProvider.set(p.provider, index + 1)
         if (p.provider === "bedrock") {
+            keys.add("ADMIN_AWS_ACCESS_KEY_ID")
+            keys.add("ADMIN_AWS_SECRET_ACCESS_KEY")
+            keys.add("ADMIN_AWS_REGION")
+            // Written by older versions; listed so the next save clears them
             keys.add("AWS_ACCESS_KEY_ID")
             keys.add("AWS_SECRET_ACCESS_KEY")
             keys.add("AWS_REGION")

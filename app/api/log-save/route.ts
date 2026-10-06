@@ -4,7 +4,7 @@ import { getLangfuseClient } from "@/lib/langfuse"
 
 const saveSchema = z.object({
     filename: z.string().min(1).max(255),
-    format: z.enum(["drawio", "png", "svg"]),
+    format: z.enum(["drawio", "png", "svg", "xmlsvg"]),
     sessionId: z.string().min(1).max(200).optional(),
 })
 

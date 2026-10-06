@@ -69,7 +69,35 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY_2).toBe("sk-second")
     })
 
-    it("maps bedrock credentials to AWS env vars", () => {
+    it("writes an Ollama URL only when the entry has one", () => {
+        // Without one, the operator's own OLLAMA_BASE_URL (or local Ollama)
+        // stays, also for the AI_PROVIDER=ollama default model
+        const keyOnly = deriveEnvUpdates(
+            [provider({ provider: "ollama", apiKey: "ollama-key" })],
+            [],
+        )
+        expect(keyOnly.OLLAMA_API_KEY).toBe("ollama-key")
+        expect(keyOnly.OLLAMA_BASE_URL ?? null).toBeNull()
+        const own = deriveEnvUpdates(
+            [
+                provider({
+                    provider: "ollama",
+                    apiKey: "k",
+                    baseUrl: "https://ollama.internal/api",
+                }),
+            ],
+            [],
+        )
+        expect(own.OLLAMA_BASE_URL).toBe("https://ollama.internal/api")
+        // No key: local Ollama, nothing to write
+        const local = deriveEnvUpdates(
+            [provider({ provider: "ollama", apiKey: undefined })],
+            [],
+        )
+        expect(local.OLLAMA_BASE_URL ?? null).toBeNull()
+    })
+
+    it("maps bedrock credentials to ADMIN_AWS_* env vars", () => {
         const updates = deriveEnvUpdates(
             [
                 provider({
@@ -83,9 +111,26 @@ describe("deriveEnvUpdates", () => {
             ],
             [],
         )
-        expect(updates.AWS_ACCESS_KEY_ID).toBe("AKIA123")
-        expect(updates.AWS_SECRET_ACCESS_KEY).toBe("secret")
-        expect(updates.AWS_REGION).toBe("us-west-2")
+        expect(updates.ADMIN_AWS_ACCESS_KEY_ID).toBe("AKIA123")
+        expect(updates.ADMIN_AWS_SECRET_ACCESS_KEY).toBe("secret")
+        expect(updates.ADMIN_AWS_REGION).toBe("us-west-2")
+        // Standard AWS vars are left to the environment
+        expect(updates.AWS_ACCESS_KEY_ID).toBeUndefined()
+    })
+
+    it("clears AWS_* bedrock keys written by older versions", () => {
+        const bedrock = provider({
+            provider: "bedrock",
+            apiKey: undefined,
+            awsAccessKeyId: "AKIA123",
+            awsSecretAccessKey: "secret",
+            models: ["claude-x"],
+        })
+        const updates = deriveEnvUpdates([bedrock], [bedrock])
+        expect(updates.AWS_ACCESS_KEY_ID).toBeNull()
+        expect(updates.AWS_SECRET_ACCESS_KEY).toBeNull()
+        expect(updates.AWS_REGION).toBeNull()
+        expect(updates.ADMIN_AWS_ACCESS_KEY_ID).toBe("AKIA123")
     })
 
     it("clears keys owned by the previous list when providers are removed", () => {
@@ -313,6 +358,32 @@ describe("validateAdminProviders", () => {
             provider({ id: "p2", name: "Same" }),
         ]
         expect(validateAdminProviders(list)).toMatch(/unique/)
+    })
+
+    it("rejects names that differ only in case or punctuation", () => {
+        const list = [
+            provider({ id: "p1", name: "Open AI" }),
+            provider({ id: "p2", name: "open-ai" }),
+        ]
+        expect(validateAdminProviders(list)).toMatch(/unique/)
+    })
+
+    it("rejects a case-only clash with an env-configured name", () => {
+        expect(
+            validateAdminProviders([provider({ name: "openai" })], {
+                providers: [
+                    { name: "OpenAI", provider: "openai", models: ["gpt-x"] },
+                ],
+            }),
+        ).toMatch(/already defined/)
+    })
+
+    it("accepts distinct CJK names", () => {
+        const list = [
+            provider({ id: "p1", provider: "deepseek", name: "主力" }),
+            provider({ id: "p2", provider: "deepseek", name: "备用" }),
+        ]
+        expect(validateAdminProviders(list)).toBeNull()
     })
 
     it("rejects multiple defaults", () => {

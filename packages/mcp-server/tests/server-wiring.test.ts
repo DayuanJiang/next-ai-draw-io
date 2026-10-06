@@ -39,7 +39,13 @@ const EXPECTED_TOOLS = [
     "add_page",
     "rename_page",
     "delete_page",
+    "get_drawing_guide",
+    "get_shape_library",
+    "screenshot_diagram",
 ]
+
+// Claude Code truncates tool descriptions and server instructions here
+const MAX_DESCRIPTION = 2048
 
 let proc: ChildProcessWithoutNullStreams
 let stdoutBuf = ""
@@ -48,6 +54,7 @@ const pending = new Map<
     { resolve: (m: any) => void; reject: (e: Error) => void; timeout: any }
 >()
 let nextId = 1
+let initResp: any
 
 function send(method: string, params: unknown, isNotification = false) {
     const msg: Record<string, unknown> = { jsonrpc: "2.0", method, params }
@@ -92,7 +99,7 @@ beforeAll(async () => {
         }
     })
 
-    const initResp = await send("initialize", {
+    initResp = await send("initialize", {
         protocolVersion: "2024-11-05",
         capabilities: {},
         clientInfo: { name: "wiring-test", version: "0.0.0" },
@@ -107,7 +114,7 @@ afterAll(() => {
 })
 
 describe("MCP server wiring", () => {
-    it("registers all nine multi-page tools", async () => {
+    it("registers all tools", async () => {
         const resp = await send("tools/list", {})
         expect(resp.error, JSON.stringify(resp.error)).toBeUndefined()
         const names: string[] = (resp.result?.tools ?? []).map(
@@ -138,5 +145,46 @@ describe("MCP server wiring", () => {
         expect(props.name).toBeTruthy()
         expect(props.id).toBeTruthy()
         expect(props.xml).toBeTruthy()
+    })
+
+    it("keeps every description and the instructions within the host limit", async () => {
+        const resp = await send("tools/list", {})
+        for (const tool of resp.result.tools) {
+            expect(
+                tool.description.length,
+                `${tool.name} description length`,
+            ).toBeLessThanOrEqual(MAX_DESCRIPTION)
+        }
+        const instructions: string = initResp.result.instructions
+        expect(instructions).toContain("start_session")
+        expect(instructions.length).toBeLessThanOrEqual(MAX_DESCRIPTION)
+    })
+
+    it("serves a shape library without a session", async () => {
+        const resp = await send("tools/call", {
+            name: "get_shape_library",
+            arguments: { library: "AWS4" },
+        })
+        expect(resp.result.isError).toBeFalsy()
+        expect(resp.result.content[0].text).toContain("mxgraph.aws4")
+    })
+
+    it("reports an unknown shape library with the available names", async () => {
+        const resp = await send("tools/call", {
+            name: "get_shape_library",
+            arguments: { library: "../secrets" },
+        })
+        expect(resp.result.isError).toBe(true)
+        expect(resp.result.content[0].text).toContain("kubernetes")
+    })
+
+    it("serves the drawing guide without a session", async () => {
+        const resp = await send("tools/call", {
+            name: "get_drawing_guide",
+            arguments: {},
+        })
+        const text: string = resp.result.content[0].text
+        expect(text).toContain("Edge routing rules")
+        expect(text.length).toBeLessThanOrEqual(15000)
     })
 })
