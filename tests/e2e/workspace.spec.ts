@@ -471,7 +471,7 @@ test.describe("Workspace", () => {
                 return { dark: w.Editor.isDarkMode(), mark: w.__naiMark }
             }, mark)
         expect((await drawio(true)).dark).toBe(true)
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         const dialog = page.getByRole("dialog")
         await dialog.getByRole("radio", { name: "Light" }).click()
         await expect.poll(() => drawio()).toEqual({ dark: false, mark: 1 })
@@ -494,7 +494,7 @@ test.describe("Workspace", () => {
                 .locator(".geDiagramContainer")
                 .evaluate((el) => getComputedStyle(el).backgroundColor)
         const light = await table()
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         const dialog = page.getByRole("dialog")
         await dialog.getByRole("radio", { name: "Dark" }).click()
         // draw.io's own dark table
@@ -511,7 +511,7 @@ test.describe("Workspace", () => {
             page.locator('[data-testid="canvas-loading"]'),
         ).toHaveCount(0, { timeout: 30000 })
         await expect.poll(table).toBe("rgb(27, 29, 30)")
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         await page
             .getByRole("dialog")
             .getByRole("radio", { name: "Light" })
@@ -916,23 +916,29 @@ test.describe("Workspace", () => {
         expect(send.y + send.height).toBeLessThanOrEqual(320)
     })
 
-    test("settings put their sections on top in a narrow window", async ({
+    test("settings put their sections on top in the phone layout", async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 800, height: 800 })
-        await openApp(page)
+        // Below 768 px the app shows the phone layout, with the canvas hidden
+        await page.setViewportSize({ width: 720, height: 800 })
+        await page.goto("/", { waitUntil: "networkidle" })
         await page.locator('[data-testid="settings-button"]').first().click()
         const models = page.locator('[data-testid="settings-tab-models"]')
-        const appearance = page.locator(
-            '[data-testid="settings-tab-appearance"]',
-        )
+        const general = page.locator('[data-testid="settings-tab-general"]')
         await expect(models).toBeVisible()
         // Once fonts and the dialog's opening are done
         await expect
             .poll(async () =>
-                Math.abs((await boxOf(models)).y - (await boxOf(appearance)).y),
+                Math.abs((await boxOf(models)).y - (await boxOf(general)).y),
             )
             .toBeLessThan(2)
+        // From 768 px on they are beside the page, one under the other
+        await page.setViewportSize({ width: 900, height: 800 })
+        await expect
+            .poll(
+                async () => (await boxOf(general)).y - (await boxOf(models)).y,
+            )
+            .toBeGreaterThan(20)
     })
 
     test("New chat brings the start screen back", async ({ page }) => {
@@ -1206,7 +1212,7 @@ test.describe("Workspace", () => {
         await sendMessage(page, "Create a flowchart")
         await waitForComplete(page)
         // Right after the answer: its auto-save may not have run yet
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         await page.locator("#language-select").click()
         await page.getByRole("option", { name: "日本語", exact: true }).click()
         await expect(page).toHaveURL(/\/ja\?session=/, { timeout: 15000 })
@@ -1231,7 +1237,7 @@ test.describe("Workspace", () => {
         })
         await openApp(page)
         await sendMessage(page, "Create a flowchart")
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         await expect(page.locator("#language-select")).toBeDisabled()
     })
 
@@ -1634,7 +1640,7 @@ test.describe("Workspace", () => {
         const tabs = drawioTabs(page)
         await expect(tabs).toContainText("Sheet")
         // Right away, before the chat is saved on its own
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         await page.locator("#language-select").click()
         await page.getByRole("option", { name: "日本語", exact: true }).click()
         await expect(page).toHaveURL(/\/ja\?session=/, { timeout: 15000 })
@@ -2669,7 +2675,7 @@ test.describe("Edge cases", () => {
         await openApp(page)
         await sendMessage(page, "Create a flowchart")
         await waitForComplete(page)
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         await page.locator("#language-select").click()
         await page.getByRole("option", { name: "日本語", exact: true }).click()
         await expect(page).toHaveURL(/\/ja/, { timeout: 15000 })
@@ -4708,7 +4714,7 @@ test.describe("Edge cases", () => {
             }
         })
         await openApp(page)
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
         await page.locator("#language-select").click()
         await page.getByRole("option", { name: "日本語", exact: true }).click()
         await expect(page).toHaveURL(/\/ja/, { timeout: 15000 })

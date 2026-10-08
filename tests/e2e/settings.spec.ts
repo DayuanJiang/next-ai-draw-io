@@ -18,14 +18,14 @@ test.describe("Settings", () => {
     })
 
     test("language selection is available", async ({ page }) => {
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
 
         const dialog = page.locator('[role="dialog"]')
         await expect(dialog.locator("#language-select")).toHaveText(/English/)
     })
 
     test("max output tokens is editable and persists", async ({ page }) => {
-        await openSettingsTab(page, "advanced")
+        await openSettingsTab(page, "drawing")
 
         const input = page.locator("#max-output-tokens")
         await expect(input).toBeVisible()
@@ -45,7 +45,7 @@ test.describe("Settings", () => {
     })
 
     test("theme can be light, dark or follow the system", async ({ page }) => {
-        await openSettingsTab(page, "appearance")
+        await openSettingsTab(page, "general")
 
         const dialog = page.locator('[role="dialog"]')
         for (const name of ["Light", "Dark", "System"]) {

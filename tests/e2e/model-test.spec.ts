@@ -51,14 +51,14 @@ test("the Test button checks all models at once and shows each result", async ({
     await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')
-    await dialog.getByText("GLM (Zhipu)").first().click()
-    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await dialog.getByTestId("provider-row-p1").click()
+    await dialog.getByTestId("test-models").click()
 
     await expect(
         dialog.getByText("answered without calling a tool"),
     ).toBeVisible({ timeout: 15000 })
     await expect(dialog.getByText("Model not found")).toBeVisible()
-    await expect(dialog.locator('[title="1.2 s"]')).toBeVisible()
+    await expect(dialog.getByText("Works · 1.2 s")).toBeVisible()
     expect(started.sort()).toEqual([
         "model-broken",
         "model-no-tools",
@@ -78,7 +78,7 @@ test("the key link and the base URL cleanup", async ({ page }) => {
     await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')
-    await dialog.getByText("GLM (Zhipu)").first().click()
+    await dialog.getByTestId("provider-row-p1").click()
 
     await expect(
         dialog.getByRole("link", { name: "Get API key" }),
@@ -86,6 +86,8 @@ test("the key link and the base URL cleanup", async ({ page }) => {
         "href",
         "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
     )
+    // The base URL is under "More options"
+    await dialog.getByRole("button", { name: /^More options/ }).click()
     const baseUrl = dialog.locator("#base-url")
     await baseUrl.fill("https://proxy.example.com/v4/chat/completions/")
     await baseUrl.blur()

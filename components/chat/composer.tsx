@@ -466,10 +466,8 @@ export function Composer({
                         selectedModelId={modelConfig.selectedModelId}
                         onSelect={modelConfig.setSelectedModelId}
                         onConfigure={() => openSettings("models")}
+                        onAddProvider={() => openSettings("models", "picker")}
                         disabled={isDisabled}
-                        showUnvalidatedModels={
-                            modelConfig.showUnvalidatedModels
-                        }
                     />
                     {!isBusy && input.trim() && (
                         <kbd

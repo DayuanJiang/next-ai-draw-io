@@ -60,7 +60,9 @@ export interface MultiModelConfig {
     version: 1
     providers: ProviderConfig[]
     selectedModelId?: string // Currently selected model's UUID
-    showUnvalidatedModels?: boolean // Show models that haven't been validated
+    // Older versions saved here whether untested models were listed in the
+    // model picker; they always are now
+    showUnvalidatedModels?: boolean
 }
 
 // Flattened model for dropdown display

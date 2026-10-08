@@ -615,7 +615,16 @@ export function MessageList() {
                                             | undefined
                                     )?.openModelConfig
                                 }
-                                onOpenModelConfig={() => openSettings("models")}
+                                onOpenModelConfig={() => {
+                                    const { providerId } =
+                                        (message.metadata as
+                                            | { providerId?: string }
+                                            | undefined) ?? {}
+                                    openSettings(
+                                        "models",
+                                        providerId ? { providerId } : "list",
+                                    )
+                                }}
                                 onRetry={
                                     index === messages.length - 1 &&
                                     !engine.isBusy &&

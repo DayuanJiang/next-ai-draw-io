@@ -260,3 +260,45 @@ describe("useModelConfig across tabs", () => {
         expect(result.current.config.providers).toHaveLength(2)
     })
 })
+
+describe("useModelConfig migration", () => {
+    const OLD = {
+        provider: "next-ai-draw-io-ai-provider",
+        baseUrl: "next-ai-draw-io-ai-base-url",
+        apiKey: "next-ai-draw-io-ai-api-key",
+        model: "next-ai-draw-io-ai-model",
+    }
+
+    it("moves an old keyless Ollama setup into the new format", async () => {
+        localStorage.setItem(OLD.provider, "ollama")
+        localStorage.setItem(OLD.baseUrl, "http://localhost:11434/api")
+        localStorage.setItem(OLD.apiKey, "")
+        localStorage.setItem(OLD.model, "llama3.2")
+        const { result } = await renderLoaded()
+        const [provider] = result.current.config.providers
+        expect(provider).toMatchObject({
+            provider: "ollama",
+            apiKey: "",
+            baseUrl: "http://localhost:11434/api",
+            models: [{ modelId: "llama3.2" }],
+        })
+        expect(result.current.selectedModelId).toBe(provider.models[0].id)
+        expect(localStorage.getItem(OLD.model)).toBeNull()
+    })
+
+    it("keeps an old Ollama without a URL on the server's Ollama", async () => {
+        localStorage.setItem(OLD.provider, "ollama")
+        localStorage.setItem(OLD.apiKey, "")
+        localStorage.setItem(OLD.model, "llama3.2")
+        const { result } = await renderLoaded()
+        // No cloud address: the request takes OLLAMA_BASE_URL or this machine
+        expect(result.current.config.providers[0].baseUrl).toBe("")
+    })
+
+    it("still needs a key for other providers", async () => {
+        localStorage.setItem(OLD.provider, "openai")
+        localStorage.setItem(OLD.model, "gpt-4o")
+        const { result } = await renderLoaded()
+        expect(result.current.config.providers).toEqual([])
+    })
+})
