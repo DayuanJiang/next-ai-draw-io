@@ -35,10 +35,8 @@ test.describe("Diagram Generation", () => {
 
     test("generates and displays a diagram", async ({ page }) => {
         await sendMessage(page, "Draw a cat")
-        await expect(page.locator('text="Generate Diagram"')).toBeVisible({
-            timeout: 15000,
-        })
         await waitForComplete(page)
+        await expect(page.locator('[data-testid="version-card"]')).toBeVisible()
     })
 
     test("chat input clears after sending", async ({ page }) => {

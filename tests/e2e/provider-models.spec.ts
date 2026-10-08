@@ -23,7 +23,7 @@ async function openQwenSettings(page: Page, config: object = CONFIG) {
     }, config)
     await page.goto("/", { waitUntil: "networkidle" })
     await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-    await page.locator("button:has(svg.lucide-bot)").first().click()
+    await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')
     await dialog.getByText("Qwen (Alibaba)").first().click()
@@ -356,4 +356,214 @@ test("no spinner stays after another tab's change while elsewhere", async ({
     await page.waitForTimeout(500)
     await dialog.getByText("Qwen (Alibaba)").first().click()
     await expect(dialog.locator(".animate-spin")).toHaveCount(0)
+})
+
+const savedConfig = (page: Page) =>
+    page.evaluate(() =>
+        JSON.parse(
+            localStorage.getItem("next-ai-draw-io-model-configs") ?? "{}",
+        ),
+    )
+
+test("a test result that arrives after the settings closed is kept", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: true,
+        responseTime: 1000,
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toHaveCount(0)
+    release()
+    await expect
+        .poll(
+            async () =>
+                (await savedConfig(page)).providers[0].models[0].validated,
+        )
+        .toBe(true)
+})
+
+test("a test result for a key changed on another settings tab is dropped", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: true,
+        responseTime: 1000,
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    // The panel goes away while the test runs, then the key changes
+    await page.locator('[data-testid="settings-tab-advanced"]').click()
+    await page.locator('[data-testid="settings-tab-models"]').click()
+    await dialog.getByText("Qwen (Alibaba)").first().click()
+    await dialog.locator("input[type=password]").first().fill("new-key")
+    release()
+    await page.waitForTimeout(800)
+    const saved = await savedConfig(page)
+    expect(saved.providers[0].apiKey).toBe("new-key")
+    expect(saved.providers[0].models[0].validated).not.toBe(true)
+    expect(saved.providers[0].validated).not.toBe(true)
+})
+
+test("a test result for a model renamed on another settings tab is dropped", async ({
+    page,
+}) => {
+    const release = await holdRoute(page, "**/api/validate-model", {
+        valid: true,
+        responseTime: 1000,
+    })
+    const dialog = await openQwenSettings(page, TWO_PROVIDERS)
+    await dialog.getByRole("button", { name: "Test", exact: true }).click()
+    // The panel goes away while the test runs, then the model id changes
+    await page.locator('[data-testid="settings-tab-advanced"]').click()
+    await page.locator('[data-testid="settings-tab-models"]').click()
+    await dialog.getByText("Qwen (Alibaba)").first().click()
+    const input = dialog.locator('input[title="qwen-max"]')
+    await input.fill("qwen-plus")
+    await input.blur()
+    release()
+    await page.waitForTimeout(800)
+    const saved = await savedConfig(page)
+    expect(saved.providers[0].models[0].modelId).toBe("qwen-plus")
+    expect(saved.providers[0].models[0].validated).not.toBe(true)
+})
+
+test("a failed test speaks the page's language", async ({ page }) => {
+    await page.addInitScript((config) => {
+        localStorage.setItem("next-ai-draw-io-locale", "zh")
+        localStorage.setItem(
+            "next-ai-draw-io-model-configs",
+            JSON.stringify(config),
+        )
+    }, TWO_PROVIDERS)
+    await page.route("**/api/validate-model", (route) => route.abort())
+    await page.goto("/zh", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await page.getByTestId("settings-button").first().click()
+    const dialog = page.locator('[role="dialog"]')
+    await dialog.getByText("Qwen (Alibaba)").first().click()
+    await dialog.getByRole("button", { name: "测试", exact: true }).click()
+    await expect(dialog.getByText("1 个模型验证失败")).toBeVisible()
+    await expect(
+        dialog.getByText("网络错误。请检查您的连接。").first(),
+    ).toBeAttached()
+})
+
+test("testing a provider without models speaks the page's language", async ({
+    page,
+}) => {
+    await page.addInitScript(
+        (config) => {
+            localStorage.setItem("next-ai-draw-io-locale", "zh")
+            localStorage.setItem(
+                "next-ai-draw-io-model-configs",
+                JSON.stringify(config),
+            )
+        },
+        {
+            version: 1,
+            providers: [{ ...CONFIG.providers[0], models: [] }],
+        },
+    )
+    await page.goto("/zh", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await page.getByTestId("settings-button").first().click()
+    const dialog = page.locator('[role="dialog"]')
+    await dialog.getByText("Qwen (Alibaba)").first().click()
+    await dialog.getByRole("button", { name: "测试", exact: true }).click()
+    await expect(
+        dialog.getByText("请先添加至少一个模型以进行验证"),
+    ).toBeVisible()
+})
+
+test("adding a model id twice is refused in the page's language", async ({
+    page,
+}) => {
+    await page.addInitScript((config) => {
+        localStorage.setItem("next-ai-draw-io-locale", "zh")
+        localStorage.setItem(
+            "next-ai-draw-io-model-configs",
+            JSON.stringify(config),
+        )
+    }, CONFIG)
+    await page.goto("/zh", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await page.getByTestId("settings-button").first().click()
+    const dialog = page.locator('[role="dialog"]')
+    await dialog.getByText("Qwen (Alibaba)").first().click()
+    const input = dialog.getByPlaceholder("自定义模型 ID...")
+    await input.fill("qwen-mt-plus")
+    await input.press("Enter")
+    await expect(dialog.getByText("此模型 ID 已存在")).toBeVisible()
+})
+
+test("Bedrock can be tested and used with an API key alone", async ({
+    page,
+}) => {
+    const bodies: any[] = []
+    await page.route("**/api/validate-model", async (route) => {
+        bodies.push(route.request().postDataJSON())
+        await route.fulfill({
+            status: 200,
+            json: { valid: true, responseTime: 900 },
+        })
+    })
+    await page.addInitScript(
+        (config) => {
+            localStorage.setItem(
+                "next-ai-draw-io-model-configs",
+                JSON.stringify(config),
+            )
+        },
+        {
+            version: 1,
+            providers: [
+                {
+                    id: "b1",
+                    provider: "bedrock",
+                    awsRegion: "us-east-1",
+                    models: [{ id: "m1", modelId: "amazon.nova-lite-v1:0" }],
+                },
+            ],
+        },
+    )
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await page.getByTestId("model-selector").click()
+    await page.getByText("Configure Models...").click()
+    const dialog = page.locator('[role="dialog"]')
+    await dialog.getByText("Amazon Bedrock").first().click()
+    const test = dialog.getByRole("button", { name: "Test", exact: true })
+    await expect(test).toBeDisabled()
+    await dialog.getByLabel("Bedrock API key").fill("bedrock-api-key")
+    await expect(test).toBeEnabled()
+    await test.click()
+    await expect.poll(() => bodies.length).toBe(1)
+    expect(bodies[0]).toMatchObject({
+        provider: "bedrock",
+        apiKey: "bedrock-api-key",
+        awsRegion: "us-east-1",
+    })
+
+    // The chat sends it with the request
+    let headers: Record<string, string> = {}
+    await page.route("**/api/chat", async (route) => {
+        headers = route.request().headers()
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: 'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
+        })
+    })
+    await page.keyboard.press("Escape")
+    await page.getByTestId("model-selector").click()
+    await page.getByText("amazon.nova-lite-v1:0").first().click()
+    const input = page.getByTestId("chat-input")
+    await input.fill("Hello")
+    await input.press("ControlOrMeta+Enter")
+    await expect.poll(() => headers["x-ai-api-key"]).toBe("bedrock-api-key")
+    expect(headers["x-ai-provider"]).toBe("bedrock")
+    expect(headers["x-aws-region"]).toBe("us-east-1")
 })

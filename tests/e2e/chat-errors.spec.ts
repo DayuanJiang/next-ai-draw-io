@@ -32,9 +32,10 @@ test("a rejected key shows a hint, the provider's words and a settings button", 
     // First match: the Next.js dev overlay at the end also lists the error
     await expect(page.getByText("Authentication Fails").first()).toBeVisible()
     await page.getByRole("button", { name: "Open model settings" }).click()
-    await expect(
-        page.getByRole("dialog", { name: "AI Model Configuration" }),
-    ).toBeVisible()
+    // Settings opens on its models tab
+    const dialog = page.getByRole("dialog", { name: "Settings" })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText("Providers", { exact: true })).toBeVisible()
 })
 
 test("an error before the stream shows its text, not raw JSON", async ({
@@ -98,7 +99,8 @@ test("a refused server key shows only the quota hint and a settings button", asy
         0,
     )
     await page.getByRole("button", { name: "Open model settings" }).click()
-    await expect(
-        page.getByRole("dialog", { name: "AI Model Configuration" }),
-    ).toBeVisible()
+    // Settings opens on its models tab
+    const dialog = page.getByRole("dialog", { name: "Settings" })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText("Providers", { exact: true })).toBeVisible()
 })

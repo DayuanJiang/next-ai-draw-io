@@ -169,9 +169,14 @@ test.describe("Error Handling", () => {
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
         await sendMessage(page, "Draw something")
 
+        // The failed call's row opens to show the error
+        const failed = page
+            .locator('[data-testid="tool-row"][data-tool-state="output-error"]')
+            .first()
+        await failed.getByRole("button").first().click({ timeout: 15000 })
         await expect(
             page.getByText("Invalid input for tool display_diagram").first(),
-        ).toBeVisible({ timeout: 15000 })
+        ).toBeVisible()
         await expect(page.locator('text="Truncated"')).toHaveCount(0)
     })
 })

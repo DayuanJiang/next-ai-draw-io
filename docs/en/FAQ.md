@@ -18,9 +18,11 @@
 
 **Problem**: Intranet environment shows "Cannot find server IP address for embed.diagrams.net"
 
-**Key Point**: `NEXT_PUBLIC_*` environment variables are **build-time** variables, they get bundled into JS code. **Runtime settings don't work!**
+**Key Point**: The app now ships with its own copy of draw.io, served from `/drawio`, so the browser no longer needs `embed.diagrams.net`. If you still see this error, the image was built with `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net` (the old Dockerfile default). Rebuild without that build argument. See [Offline Deployment](./offline-deployment.md).
 
-**Solution**: Must pass via `args` at build time:
+`NEXT_PUBLIC_*` environment variables are **build-time** variables, they get bundled into JS code. **Runtime settings don't work!**
+
+**To keep a separate draw.io server instead**, pass it via `args` at build time:
 
 ```yaml
 # docker-compose.yml

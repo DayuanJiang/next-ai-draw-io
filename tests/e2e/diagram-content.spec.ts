@@ -1,5 +1,11 @@
+import zlib from "node:zlib"
 import { expect, type Page, test } from "@playwright/test"
-import { getIframe, sendMessage, waitForCompleteCount } from "./lib/fixtures"
+import {
+    getIframe,
+    openDrawioFile,
+    sendMessage,
+    waitForCompleteCount,
+} from "./lib/fixtures"
 
 /**
  * Checks what draw.io actually shows after the diagram tools, not only the
@@ -44,6 +50,15 @@ const cell = (id: string, label: string, x: number) =>
     `<mxCell id="${id}" value="${label}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="${x}" y="40" width="120" height="60" as="geometry"/></mxCell>`
 const page = (id: string, cells: string) =>
     `<diagram id="${id}" name="${id}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+
+// A screenshot check that finds a problem
+const FAILED_CHECK = {
+    valid: false,
+    issues: [
+        { type: "overlap", severity: "critical", description: "Boxes overlap" },
+    ],
+    suggestions: ["Move them apart"],
+}
 
 const sse = (events: object[]) =>
     events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")
@@ -127,7 +142,9 @@ test("display_diagram replaces the document with the fixed diagram", async ({
     await sendMessage(p, "Draw two pages")
     await waitForCompleteCount(p, 1)
     await expect(canvas.getByText("Old A")).toBeVisible({ timeout: 15000 })
-    await expect(canvas.getByText("Second", { exact: true })).toBeVisible()
+    // draw.io's own page tabs
+    const pageTabs = canvas.locator(".geTabContainer")
+    await expect(pageTabs.getByText("Second", { exact: true })).toBeVisible()
 
     await sendMessage(p, "Start over with three boxes")
     await waitForCompleteCount(p, 2)
@@ -140,7 +157,7 @@ test("display_diagram replaces the document with the fixed diagram", async ({
     }
     // The old pages are gone
     await expect(canvas.getByText("Old A")).toHaveCount(0)
-    await expect(canvas.getByText("Second", { exact: true })).toHaveCount(0)
+    await expect(pageTabs.getByText("Second", { exact: true })).toHaveCount(0)
 })
 
 test("an edit with a fixable cell is fixed, not rejected", async ({
@@ -221,9 +238,14 @@ test("edit_diagram applies all operations or none", async ({ page: p }) => {
     await expect(canvas.getByText("Alpha", { exact: true })).toHaveCount(0)
 
     await sendMessage(p, "Change again")
-    await expect(p.getByText(/No changes were made/).first()).toBeAttached({
-        timeout: 15000,
-    })
+    // The failed call's row opens to show the error
+    await p
+        .locator('[data-testid="tool-row"][data-tool-state="output-error"]')
+        .first()
+        .getByRole("button")
+        .first()
+        .click({ timeout: 15000 })
+    await expect(p.getByText(/No changes were made/).first()).toBeAttached()
     await p.waitForTimeout(1000)
     await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible()
     await expect(canvas.getByText("Broken", { exact: true })).toHaveCount(0)
@@ -609,9 +631,9 @@ test("a broken edit's preview is undone after a shape library call", async ({
     await waitForCompleteCount(p, 1)
     await sendMessage(p, "Add another box")
     // The preview shows Gamma only for a moment; afterwards it must be gone
-    await expect(p.getByText("Get Shape Library").first()).toBeVisible({
-        timeout: 15000,
-    })
+    await expect(
+        p.locator('[data-tool-name="get_shape_library"]').first(),
+    ).toBeVisible({ timeout: 15000 })
     await p.waitForTimeout(2000)
     await expect(canvas.getByText("Gamma", { exact: true })).toHaveCount(0)
     await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
@@ -640,10 +662,12 @@ test("a drawing rejected by the checks undoes its preview", async ({
     await expect(canvas.getByText("Beta", { exact: true })).toBeVisible({
         timeout: 15000,
     })
-    // The tool card shows the rejection
-    await expect(p.locator('text="Error"').first()).toBeVisible({
-        timeout: 15000,
-    })
+    // The tool row shows the rejection
+    await expect(
+        p
+            .locator('[data-testid="tool-row"][data-tool-state="output-error"]')
+            .first(),
+    ).toBeVisible({ timeout: 15000 })
     await p.waitForTimeout(1000)
     await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
     await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
@@ -734,4 +758,349 @@ test("stopping during the screenshot check lets the next message go at once", as
         .flatMap((m: any) => m.parts ?? [])
         .find((part: any) => part.type === "tool-display_diagram")
     expect(draw?.state).toBe("output-available")
+})
+
+test("the request after a failed screenshot check keeps the model and diagram", async ({
+    page: p,
+}) => {
+    // After a failed check the SDK sends the next request itself; it must
+    // carry the turn's model headers and diagram
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    const requests: { body: any; headers: Record<string, string> }[] = []
+    await p.route("**/api/chat", async (route) => {
+        requests.push({
+            body: route.request().postDataJSON(),
+            headers: route.request().headers(),
+        })
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: drawReply(`d${requests.length}`, cell("a", "Alpha", 40)),
+        })
+    })
+    let checks = 0
+    await p.route("**/api/validate-diagram", async (route) => {
+        checks++
+        await new Promise((r) => setTimeout(r, 500))
+        await route.fulfill({
+            status: 200,
+            contentType: "text/plain",
+            body: JSON.stringify(
+                checks === 1
+                    ? FAILED_CHECK
+                    : { valid: true, issues: [], suggestions: [] },
+            ),
+        })
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "Draw a box")
+    await expect.poll(() => requests.length, { timeout: 20000 }).toBe(2)
+    const [first, retry] = requests
+    expect(retry.body.sessionId).toBe(first.body.sessionId)
+    expect(typeof retry.body.xml).toBe("string")
+    for (const name of Object.keys(first.headers)) {
+        if (name.startsWith("x-")) {
+            expect(retry.headers[name], name).toBe(first.headers[name])
+        }
+    }
+})
+
+// A display_diagram cut off by the output limit: its last cell is half
+// written, so the model has to continue with append_diagram
+const CUT = toolCallEvents("d2", "display_diagram", {
+    xml: `${cell("b", "Beta", 40)}<mxCell id="c" value="Gam`,
+})
+const cutReply = [
+    sse([{ type: "start" }, CUT.start, ...CUT.deltas]),
+    1500,
+    `${sse([CUT.done, { type: "finish" }])}data: [DONE]\n\n`,
+]
+
+test("a cut off drawing stays while it is continued, and goes if that fails", async ({
+    page: p,
+}) => {
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        cutReply,
+        [
+            sse([{ type: "start" }]),
+            ...KEEP_OPEN.slice(0, 10),
+            `${sse([{ type: "error", errorText: "Upstream connection lost" }])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw a bigger one")
+    // The cut off call has its result; the continuation is running
+    await expect(
+        p.locator(
+            '[data-tool-name="display_diagram"][data-tool-state="output-error"]',
+        ),
+    ).toBeVisible({ timeout: 15000 })
+    await p.waitForTimeout(800)
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible()
+    await expect(p.getByText("Upstream connection lost").first()).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
+test("a finished continuation is one change, undone back to the diagram before", async ({
+    page: p,
+}) => {
+    const rest = toolCallEvents("a1", "append_diagram", {
+        xml: `ma" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="220" y="40" width="120" height="60" as="geometry"/></mxCell>`,
+    })
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        cutReply,
+        [
+            `${sse([{ type: "start" }, rest.start, ...rest.deltas, rest.done, { type: "finish" }])}data: [DONE]\n\n`,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw a bigger one")
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta", { exact: true })).toBeVisible()
+    await expect(p.locator('[data-testid="new-chat-button"]')).toBeEnabled({
+        timeout: 15000,
+    })
+    await p.waitForTimeout(1500)
+    await p.locator('[data-testid="version-undo"]').click()
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
+})
+
+test("a cut off drawing goes when the model stops without continuing", async ({
+    page: p,
+}) => {
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        cutReply,
+        [textReply("I could not finish it.")],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw a bigger one")
+    await expect(p.getByText("I could not finish it.")).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+    // The first drawing is on the canvas again: its card can still undo it
+    await p.waitForTimeout(1500)
+    await expect(p.locator('[data-testid="version-undo"]')).toBeVisible()
+})
+
+test("stopping a continuation leaves the diagram from before the cut off one", async ({
+    page: p,
+}) => {
+    // The model draws anew instead of continuing, and the user stops it
+    const redraw = toolCallEvents("d3", "display_diagram", {
+        xml: cell("g", "Gamma", 400),
+    })
+    const canvas = await chunkedReplies(p, [
+        [drawReply("d1", cell("a", "Alpha", 40))],
+        cutReply,
+        [
+            sse([{ type: "start" }, redraw.start, ...redraw.deltas]),
+            ...KEEP_OPEN,
+        ],
+    ])
+    await sendMessage(p, "Draw a box")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Draw a bigger one")
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await p.getByRole("button", { name: "Stop generation" }).click()
+    await p.waitForTimeout(1000)
+    await expect(canvas.getByText("Gamma", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Beta", { exact: true })).toHaveCount(0)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
+test("a drawing that failed its screenshot check can still be restored", async ({
+    page: p,
+}) => {
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    let chatRequests = 0
+    await p.route("**/api/chat", async (route) => {
+        chatRequests++
+        if (chatRequests === 1) {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: drawReply("d1", cell("a", "Alpha", 40)),
+            })
+            return
+        }
+        await route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({ error: "Model is overloaded" }),
+        })
+    })
+    await p.route("**/api/validate-diagram", (route) =>
+        route.fulfill({
+            status: 200,
+            contentType: "text/plain",
+            body: JSON.stringify(FAILED_CHECK),
+        }),
+    )
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "Draw a box")
+    await expect(p.getByText("Model is overloaded").first()).toBeVisible({
+        timeout: 20000,
+    })
+    await expect(p.locator('[data-testid="version-thumb"]')).toHaveCount(1)
+})
+
+test("retrying after an error keeps what the failed turn drew", async ({
+    page: p,
+}) => {
+    const draw = toolCallEvents("d1", "display_diagram", {
+        xml: cell("a", "Alpha", 40),
+    })
+    const canvas = await chunkedReplies(p, [
+        [
+            sse([{ type: "start" }, draw.start, ...draw.deltas, draw.done]),
+            `${sse([{ type: "error", errorText: "Model is overloaded" }])}data: [DONE]\n\n`,
+        ],
+        [textReply("Nothing to draw this time.")],
+    ])
+    await sendMessage(p, "Draw a box")
+    await expect(p.getByText("Model is overloaded").first()).toBeVisible({
+        timeout: 15000,
+    })
+    await p.locator('[data-testid="retry-button"]').click()
+    await expect(p.getByText("Nothing to draw this time.")).toBeVisible({
+        timeout: 15000,
+    })
+    // Its card went with the answer; the strip keeps the version, and the
+    // retry started from the canvas with it
+    const thumb = p.locator('[data-testid="version-thumb"]')
+    await expect(thumb).toHaveCount(1)
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+    await thumb.click()
+    await expect(
+        p.getByText("This version is what the canvas shows now."),
+    ).toBeVisible()
+})
+
+test("the request after opening a compressed file has the cells", async ({
+    page: p,
+}) => {
+    const requests: any[] = []
+    await p.route("**/api/chat", async (route) => {
+        requests.push(route.request().postDataJSON())
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: textReply("Looks fine."),
+        })
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    // draw.io's compressed page: raw deflate of the URI-encoded model
+    const model = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cell("a", "Packed", 40)}</root></mxGraphModel>`
+    const packed = zlib
+        .deflateRawSync(Buffer.from(encodeURIComponent(model)))
+        .toString("base64")
+    await openDrawioFile(
+        p,
+        "packed.drawio",
+        `<mxfile><diagram name="P" id="p">${packed}</diagram></mxfile>`,
+    )
+    await expect(
+        p.frameLocator("iframe").getByText("Packed", { exact: true }),
+    ).toBeVisible()
+    await sendMessage(p, "What is this?")
+    await expect(p.getByText("Looks fine.")).toBeVisible()
+    // Regenerate sends the snapshot taken before the message
+    await p.getByText("Looks fine.").hover()
+    await p.getByRole("button", { name: "Regenerate response" }).click()
+    await expect.poll(() => requests.length).toBe(2)
+    expect(requests[1].xml).toContain('value="Packed"')
+})
+
+test("a rejected drawing stops saying it tries again once retries end", async ({
+    page: p,
+}) => {
+    // Rejected by the checks every time: the automatic retries run out
+    let calls = 0
+    await p.route("**/api/chat", async (route) => {
+        calls++
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: drawReply(
+                `r${calls}`,
+                `<UserObject id="1" label="Bad" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell></UserObject>`,
+            ),
+        })
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "Draw a box")
+    await expect.poll(() => calls, { timeout: 20000 }).toBe(4)
+    await expect(p.locator('[data-testid="new-chat-button"]')).toBeEnabled({
+        timeout: 15000,
+    })
+    await p.waitForTimeout(500)
+    expect(calls).toBe(4)
+    await expect(p.getByText("trying again")).toHaveCount(0)
+    await expect(p.getByText("This attempt failed").first()).toBeVisible()
+})
+
+test("the version strip stays away while the first drawing is checked", async ({
+    page: p,
+}) => {
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    await p.route("**/api/chat", (route) =>
+        route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: drawReply("d1", cell("a", "Alpha", 40)),
+        }),
+    )
+    let checking = false
+    await p.route("**/api/validate-diagram", async (route) => {
+        checking = true
+        await new Promise((r) => setTimeout(r, 3000))
+        await route
+            .fulfill({
+                status: 200,
+                contentType: "text/plain",
+                body: JSON.stringify({
+                    valid: true,
+                    issues: [],
+                    suggestions: [],
+                }),
+            })
+            .catch(() => {})
+    })
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await sendMessage(p, "Draw a box")
+    await expect.poll(() => checking, { timeout: 15000 }).toBe(true)
+    // The version exists already; its card comes when the check is done
+    await p.waitForTimeout(1000)
+    await expect(p.locator('[data-testid="version-thumb"]')).toHaveCount(0)
+    await expect(p.locator('[data-testid="version-card"]')).toHaveCount(1, {
+        timeout: 10000,
+    })
+    await expect(p.locator('[data-testid="version-thumb"]')).toHaveCount(0)
 })

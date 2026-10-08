@@ -1,26 +1,19 @@
-// Centralized localStorage keys for quota tracking and settings
-// Chat data is now stored in IndexedDB via session-storage.ts
+// Centralized localStorage keys for settings.
+// Chat data is stored in IndexedDB via session-storage.ts
 
 export const STORAGE_KEYS = {
-    // Quota tracking
-    requestCount: "next-ai-draw-io-request-count",
-    requestDate: "next-ai-draw-io-request-date",
-    tokenCount: "next-ai-draw-io-token-count",
-    tokenDate: "next-ai-draw-io-token-date",
-    tpmCount: "next-ai-draw-io-tpm-count",
-    tpmMinute: "next-ai-draw-io-tpm-minute",
-
-    // Settings
+    // Access code for password-protected deployments
     accessCode: "next-ai-draw-io-access-code",
     accessCodeRequired: "next-ai-draw-io-access-code-required",
-    aiProvider: "next-ai-draw-io-ai-provider",
-    aiBaseUrl: "next-ai-draw-io-ai-base-url",
-    aiApiKey: "next-ai-draw-io-ai-api-key",
-    aiModel: "next-ai-draw-io-ai-model",
 
     // Multi-model configuration
     modelConfigs: "next-ai-draw-io-model-configs",
-    selectedModelId: "next-ai-draw-io-selected-model-id",
+
+    // Appearance
+    darkMode: "next-ai-draw-io-dark-mode",
+    locale: "next-ai-draw-io-locale",
+    minimalStyle: "next-ai-draw-io-minimal-style",
+    panelWidth: "next-ai-draw-io-panel-width",
 
     // Chat input preferences
     sendShortcut: "next-ai-draw-io-send-shortcut",
@@ -34,8 +27,6 @@ export const STORAGE_KEYS = {
     // Output token budget per turn (empty = server default)
     maxOutputTokens: "next-ai-draw-io-max-output-tokens",
 
-    // Panel visibility
-    showRecentChats: "next-ai-draw-io-show-recent-chats",
-    showMyTemplates: "next-ai-draw-io-show-my-templates",
-    showQuickExamples: "next-ai-draw-io-show-quick-examples",
+    // Langfuse session id
+    sessionId: "next-ai-draw-io-session-id",
 } as const

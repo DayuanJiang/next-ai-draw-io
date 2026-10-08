@@ -1,11 +1,29 @@
 "use client"
 
 import type React from "react"
-import { createContext, useCallback, useContext, useRef, useState } from "react"
-import type { DrawIoEmbedRef, EventExport } from "react-drawio"
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useRef,
+    useState,
+} from "react"
 import { toast } from "sonner"
+import type {
+    DrawioExportEvent,
+    DrawioFrameHandle,
+} from "@/components/canvas/drawio-frame"
 import type { ExportFormat } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
+import { withPageDefaults } from "@/lib/drawio/drawio-config"
+import {
+    canReplaceDiagram,
+    commitDiagram,
+    previewDiagram,
+    resetPreview,
+    revertPreview,
+} from "@/lib/drawio/editor-bridge"
 import {
     BLANK_MXFILE,
     normalizeToMxfile,
@@ -13,24 +31,51 @@ import {
 import { validateAndFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
 import { extractDiagramXML, isRealDiagram } from "../lib/utils"
 
+/**
+ * How a diagram reaches the canvas:
+ * - load: replace the whole document and reset undo (sessions, new chat)
+ * - preview: streaming AI output, not recorded in undo history
+ * - commit: final AI result, one undo step; reported to commit listeners
+ * - revert: drop the streaming preview and go back to the given diagram
+ *
+ * preview/commit/revert go through the draw.io editor when it is reachable
+ * (same origin); otherwise they fall back to a full load.
+ */
+export type LoadMode = "load" | "preview" | "commit" | "revert"
+
+/** The document without where its view was scrolled to (dx, dy) */
+function withoutView(xml: string): string {
+    return xml.replace(/<mxGraphModel\b[^>]*>/g, (tag) =>
+        tag.replace(/\s(?:dx|dy)="[^"]*"/g, ""),
+    )
+}
+
+export interface DiagramCommit {
+    beforeXml: string
+    afterXml: string
+    toolCallId?: string
+}
+
 interface DiagramContextType {
     chartXML: string
     // chartXML right away, before the re-render (loadDiagram sets both)
     chartXMLRef: React.MutableRefObject<string>
     latestSvg: string
-    diagramHistory: { svg: string; xml: string }[]
-    setDiagramHistory: (history: { svg: string; xml: string }[]) => void
-    loadDiagram: (chart: string, skipValidation?: boolean) => string | null
-    // Both return the export's tag (empty when draw.io is not there yet)
+    loadDiagram: (
+        chart: string,
+        skipValidation?: boolean,
+        mode?: LoadMode,
+        meta?: { toolCallId?: string },
+    ) => string | null
+    // Returns the export's tag (empty when draw.io is not there yet)
     handleExport: () => string
-    handleExportWithoutHistory: () => string
-    // Pending exports by tag; a history or plain export's resolver gets the
-    // first page's XML
+    // Pending exports by tag; a plain export's resolver gets the first
+    // page's XML
     exportResolversRef: React.MutableRefObject<
         Record<string, (data: string, xml?: string) => void>
     >
-    drawioRef: React.MutableRefObject<DrawIoEmbedRef | null>
-    handleDiagramExport: (data: EventExport) => void
+    drawioRef: React.MutableRefObject<DrawioFrameHandle | null>
+    handleDiagramExport: (data: DrawioExportEvent) => void
     handleDiagramAutoSave: (data: { xml?: string }) => void
     clearDiagram: () => void
     saveDiagramToFile: (
@@ -40,12 +85,17 @@ interface DiagramContextType {
         successMessage?: string,
     ) => void
     getThumbnailSvg: () => Promise<string | null>
+    getVersionSvg: () => Promise<string | null>
     captureValidationPng: () => Promise<string | null>
     isDrawioReady: boolean
     onDrawioLoad: () => void
     resetDrawioReady: () => void
-    showSaveDialog: boolean
-    setShowSaveDialog: (show: boolean) => void
+    /** Register the handler told about every committed AI change */
+    setCommitHandler: (
+        handler: ((commit: DiagramCommit) => void) | null,
+    ) => void
+    /** A new user turn starts: forget the streaming base */
+    startTurn: () => void
 }
 
 const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
@@ -54,41 +104,61 @@ const DiagramContext = createContext<DiagramContextType | undefined>(undefined)
 // echoes the request back in the export event, so each result reaches its
 // own caller. Tags end in a request number, so a late result never answers
 // a newer request.
-type ExportTag = "thumbnail" | "validation"
+type ExportTag = "thumbnail" | "validation" | "version"
 
 export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const [chartXML, setChartXML] = useState<string>("")
     const [latestSvg, setLatestSvg] = useState<string>("")
-    const [diagramHistory, setDiagramHistory] = useState<
-        { svg: string; xml: string }[]
-    >([])
     const [isDrawioReady, setIsDrawioReady] = useState(false)
-    const [showSaveDialog, setShowSaveDialog] = useState(false)
     const hasCalledOnLoadRef = useRef(false)
-    const drawioRef = useRef<DrawIoEmbedRef | null>(null)
+    const mountedRef = useRef(true)
+    useEffect(() => {
+        mountedRef.current = true
+        return () => {
+            mountedRef.current = false
+        }
+    }, [])
+    const drawioRef = useRef<DrawioFrameHandle | null>(null)
     // Pending exports, keyed by their export tag
     const exportResolversRef = useRef<
         Record<string, (data: string, xml?: string) => void>
     >({})
-    // Pending history exports: the document each one was asked for
-    const historyXmlRef = useRef(new Map<string, string>())
     const exportSeqRef = useRef(0)
     // Track latest chartXML for restoration after remount
     const chartXMLRef = useRef<string>("")
+    // Diagram before the current AI change started streaming
+    const turnBaseRef = useRef<string | null>(null)
+    // Full loads sent that draw.io has not reported done yet
+    const pendingLoadsRef = useRef(0)
+    const commitHandlerRef = useRef<((commit: DiagramCommit) => void) | null>(
+        null,
+    )
+
+    // Sends a full load. draw.io runs it when its message arrives, and then
+    // reports "load": until then the editor shows the diagram from before,
+    // so later changes go the same way and keep their order
+    const fullLoad = (xml: string) => {
+        if (!drawioRef.current) return
+        pendingLoadsRef.current++
+        drawioRef.current.load({ xml })
+    }
 
     const onDrawioLoad = () => {
+        pendingLoadsRef.current = Math.max(0, pendingLoadsRef.current - 1)
         // Only set ready state once to prevent infinite loops
         if (hasCalledOnLoadRef.current) return
         hasCalledOnLoadRef.current = true
         setIsDrawioReady(true)
-        // Restore diagram after remount (e.g., theme/UI change)
-        if (drawioRef.current && isRealDiagram(chartXMLRef.current)) {
-            drawioRef.current.load({ xml: chartXMLRef.current })
-        }
+        // draw.io's first load: loads sent before it went nowhere
+        pendingLoadsRef.current = 0
+        // Restore diagram after remount (e.g., theme/UI change), or a file
+        // opened while draw.io loaded (its page settings count too)
+        if (chartXMLRef.current) fullLoad(chartXMLRef.current)
     }
 
     const resetDrawioReady = () => {
         hasCalledOnLoadRef.current = false
+        pendingLoadsRef.current = 0
         setIsDrawioReady(false)
     }
 
@@ -101,20 +171,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     const handleExport = () => {
         if (!drawioRef.current) return ""
-        // Save this export to history, with the document shown now:
-        // chartXML can change before the result comes back
-        const tag = `history-${++exportSeqRef.current}`
-        historyXmlRef.current.set(tag, chartXMLRef.current)
-        drawioRef.current.exportDiagram({
-            format: "xmlsvg",
-            message: tag,
-        })
-        return tag
-    }
-
-    const handleExportWithoutHistory = () => {
-        if (!drawioRef.current) return ""
-        // Export without saving to history (for edit_diagram fetching current state)
+        // Export of the current state (for the chat and edit_diagram)
         const tag = `fetch-${++exportSeqRef.current}`
         drawioRef.current.exportDiagram({
             format: "xmlsvg",
@@ -128,7 +185,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // expected occasionally.
     // (Reads refs only, so it keeps one identity)
     const requestTaggedExport = useCallback(
-        (tag: ExportTag, format: "xmlsvg" | "png", timeoutMs: number) =>
+        (tag: ExportTag, format: "xmlsvg" | "svg" | "png", timeoutMs: number) =>
             new Promise<string | null>((resolve) => {
                 const id = `${tag}-${++exportSeqRef.current}`
                 const finish = (value: string | null) => {
@@ -162,6 +219,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         return null
     }, [requestTaggedExport])
 
+    // Plain SVG (no embedded diagram data) for version cards
+    const getVersionSvg = async (): Promise<string | null> => {
+        if (!drawioRef.current) return null
+        const svgData = await requestTaggedExport("version", "svg", 4000)
+        return svgData?.startsWith("data:image/svg") ? svgData : null
+    }
+
     // Capture current diagram as PNG for VLM validation
     const captureValidationPng = async (): Promise<string | null> => {
         if (!drawioRef.current) return null
@@ -176,7 +240,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const loadDiagram = (
         chart: string,
         skipValidation?: boolean,
+        mode: LoadMode = "load",
+        meta?: { toolCallId?: string },
     ): string | null => {
+        // The editor bridge is shared: a page that is gone (another language
+        // mounted a new one) must not change the new page's canvas
+        if (!mountedRef.current) return null
         let xmlToLoad = chart
 
         // Validate XML structure before loading (unless skipped for internal
@@ -201,23 +270,60 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             }
         }
 
+        xmlToLoad = withPageDefaults(xmlToLoad)
+
+        const previousXml = chartXMLRef.current
+        if (mode === "preview" && turnBaseRef.current === null) {
+            turnBaseRef.current = previousXml
+        }
+        const beforeXml = turnBaseRef.current ?? previousXml
+        if (mode !== "preview") turnBaseRef.current = null
+
         // Keep chartXML in sync even when diagrams are injected (e.g., display_diagram tool)
         updateChartXML(xmlToLoad)
 
-        if (drawioRef.current) {
-            drawioRef.current.load({
-                xml: xmlToLoad,
+        let applied = false
+        if (
+            mode !== "load" &&
+            pendingLoadsRef.current === 0 &&
+            canReplaceDiagram(xmlToLoad)
+        ) {
+            try {
+                if (mode === "preview") previewDiagram(xmlToLoad)
+                else if (mode === "commit") commitDiagram(xmlToLoad)
+                else revertPreview(xmlToLoad)
+                applied = true
+            } catch (error) {
+                console.warn("[loadDiagram] Editor update failed:", error)
+            }
+        }
+        if (!applied) {
+            // A full load replaces any preview, and its base is stale now
+            resetPreview()
+            fullLoad(xmlToLoad)
+        }
+
+        if (mode === "commit") {
+            commitHandlerRef.current?.({
+                beforeXml,
+                afterXml: xmlToLoad,
+                toolCallId: meta?.toolCallId,
             })
         }
 
         return null
     }
 
-    const handleDiagramExport = (data: EventExport) => {
-        // Thumbnail, validation PNG and file save exports go only to their
-        // own caller
+    const startTurn = () => {
+        turnBaseRef.current = null
+        resetPreview()
+    }
+
+    const handleDiagramExport = (data: DrawioExportEvent) => {
+        // Thumbnail, version, validation PNG and file save exports go only
+        // to their own caller
         const tag = data.message?.message
-        if (/^(thumbnail|validation|save)-/.test(tag ?? "")) {
+        if (/^(thumbnail|validation|version|save)-/.test(tag ?? "")) {
             exportResolversRef.current[tag as string]?.(data.data, data.xml)
             return
         }
@@ -229,29 +335,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         const extractedXML = extractDiagramXML(data.data)
         setLatestSvg(data.data)
 
-        // Only add to history if this was a user-initiated export
-        // Limit to 20 entries to prevent memory leaks during long sessions
-        const MAX_HISTORY_SIZE = 20
-        const askedXml =
-            tag !== undefined ? historyXmlRef.current.get(tag) : undefined
-        if (askedXml !== undefined) {
-            historyXmlRef.current.delete(tag as string)
-            // Store the full multi-page document (extractedXML is only the
-            // first page), so restoring a version keeps every page
-            const historyXml = askedXml || extractedXML
-            setDiagramHistory((prev) => {
-                const newHistory = [
-                    ...prev,
-                    {
-                        svg: data.data,
-                        xml: historyXml,
-                    },
-                ]
-                // Keep only the last MAX_HISTORY_SIZE entries (circular buffer)
-                return newHistory.slice(-MAX_HISTORY_SIZE)
-            })
-        }
-
         // The chat's own export (onFetchChart), not another one in flight
         const resolve =
             tag !== undefined ? exportResolversRef.current[tag] : undefined
@@ -261,15 +344,17 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
-    // react-drawio registers this callback once per iframe mount, so it must
+    // The frame registers this callback once per iframe mount, so it must
     // read refs: state captured in its closure would stay stale after a remount
     const handleDiagramAutoSave = (data: { xml?: string }) => {
         if (!data?.xml) return
-        // Don't overwrite a pending restore - if we have a real diagram but
+        // Don't overwrite a pending restore - if we have a diagram but
         // DrawIO hasn't loaded yet, it means we're waiting to restore
-        if (!hasCalledOnLoadRef.current && isRealDiagram(chartXMLRef.current)) {
-            return
-        }
+        if (!hasCalledOnLoadRef.current && chartXMLRef.current) return
+        // Only the view moved, or draw.io saved what it just loaded: nothing
+        // changed, and a save would put a chat that was only opened first
+        // in the list
+        if (withoutView(data.xml) === withoutView(chartXMLRef.current)) return
         updateChartXML(data.xml)
     }
 
@@ -278,7 +363,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Skip validation for trusted internal template (loadDiagram also sets chartXML)
         loadDiagram(emptyDiagram, true)
         setLatestSvg("")
-        setDiagramHistory([])
     }
 
     const saveDiagramToFile = (
@@ -361,10 +445,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
             // Show success toast after download is initiated
             if (successMessage) {
-                toast.success(successMessage, {
-                    position: "bottom-left",
-                    duration: 2500,
-                })
+                toast.success(successMessage, { duration: 2500 })
             }
 
             // Delay URL revocation to ensure download completes
@@ -397,17 +478,20 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    const setCommitHandler = (
+        handler: ((commit: DiagramCommit) => void) | null,
+    ) => {
+        commitHandlerRef.current = handler
+    }
+
     return (
         <DiagramContext.Provider
             value={{
                 chartXML,
                 chartXMLRef,
                 latestSvg,
-                diagramHistory,
-                setDiagramHistory,
                 loadDiagram,
                 handleExport,
-                handleExportWithoutHistory,
                 exportResolversRef,
                 drawioRef,
                 handleDiagramExport,
@@ -415,12 +499,13 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 clearDiagram,
                 saveDiagramToFile,
                 getThumbnailSvg,
+                getVersionSvg,
                 captureValidationPng,
                 isDrawioReady,
                 onDrawioLoad,
                 resetDrawioReady,
-                showSaveDialog,
-                setShowSaveDialog,
+                setCommitHandler,
+                startTurn,
             }}
         >
             {children}

@@ -107,7 +107,8 @@ Here are some example prompts and their generated diagrams:
 -   **Image-Based Diagram Replication**: Upload existing diagrams or images and have the AI replicate and enhance them automatically
 -   **PDF & Text File Upload**: Upload PDF documents and text files to extract content and generate diagrams from existing documents
 -   **AI Reasoning Display**: View the AI's thinking process for supported models (OpenAI o1/o3, Gemini, Claude, etc.)
--   **Diagram History**: Comprehensive version control that tracks all changes, allowing you to view and restore previous versions of your diagrams before the AI editing.
+-   **Versions and Undo**: Every AI change shows up in the chat as a version with a thumbnail. Compare it with the canvas, restore it, or undo it; Ctrl+Z on the canvas also takes back an AI change in one step. Shapes the AI just changed are highlighted.
+-   **Ask About a Selection**: Select shapes on the canvas and ask the AI to change just those.
 -   **Interactive Chat Interface**: Communicate with AI to refine your diagrams in real-time
 -   **Cloud Architecture Diagram Support**: Specialized support for generating cloud architecture diagrams (AWS, GCP, Azure)
 -   **Animated Connectors**: Create dynamic and animated connectors between diagram elements for better visualization
@@ -263,7 +264,7 @@ The application uses the following technologies:
 
 -   **Next.js**: For the frontend framework and routing
 -   **Vercel AI SDK** (`ai` + `@ai-sdk/*`): For streaming AI responses and multi-provider support
--   **react-drawio**: For diagram representation and manipulation
+-   **draw.io**: The editor runs from a copy bundled into `public/drawio` (downloaded by `npm run dev` / `npm run build`), so the app can drive it directly
 
 Diagrams are represented as XML that can be rendered in draw.io. The AI processes your commands and generates or modifies this XML accordingly.
 

@@ -1,6 +1,7 @@
 import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
+    getAttachmentInput,
     getChatInput,
     getIframe,
     sendMessage,
@@ -13,19 +14,22 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        const uploadButton = page.locator(
-            'button[aria-label="Upload file"], button:has(svg.lucide-image)',
-        )
-        await expect(uploadButton.first()).toBeVisible({ timeout: 10000 })
-        await expect(uploadButton.first()).toBeEnabled()
+        // The "Add" menu holds the upload entry
+        const addButton = page.locator('[data-testid="composer-add"]')
+        await expect(addButton).toBeVisible({ timeout: 10000 })
+        await addButton.click()
+        const [chooser] = await Promise.all([
+            page.waitForEvent("filechooser"),
+            page.getByRole("button", { name: "Upload file" }).click(),
+        ])
+        expect(chooser.isMultiple()).toBe(true)
     })
 
     test("shows file preview after selecting image", async ({ page }) => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // The chat attachment input; the template panel has its own file input
-        const fileInput = page.locator('input[type="file"][multiple]')
+        const fileInput = getAttachmentInput(page)
 
         await fileInput.setInputFiles({
             name: "test-image.png",
@@ -45,8 +49,7 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // The chat attachment input; the template panel has its own file input
-        const fileInput = page.locator('input[type="file"][multiple]')
+        const fileInput = getAttachmentInput(page)
 
         await fileInput.setInputFiles({
             name: "test-image.png",
@@ -93,8 +96,7 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // The chat attachment input; the template panel has its own file input
-        const fileInput = page.locator('input[type="file"][multiple]')
+        const fileInput = getAttachmentInput(page)
 
         await fileInput.setInputFiles({
             name: "architecture.png",
@@ -118,8 +120,7 @@ test.describe("File Upload", () => {
         await page.goto("/", { waitUntil: "networkidle" })
         await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 
-        // The chat attachment input; the template panel has its own file input
-        const fileInput = page.locator('input[type="file"][multiple]')
+        const fileInput = getAttachmentInput(page)
         const largeBuffer = Buffer.alloc(3 * 1024 * 1024, "x")
 
         await fileInput.setInputFiles({

@@ -26,6 +26,7 @@ import {
     ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
+import { ProviderLogo } from "@/components/provider-logo"
 import { useDictionary } from "@/hooks/use-dictionary"
 import {
     type FlattenedModel,
@@ -64,6 +65,26 @@ function groupModelsByProvider(
         }
     }
     return groups
+}
+
+/**
+ * The model id without the provider or region prefix that the logo already
+ * shows: "nvidia/nemotron-3-ultra" and "global.anthropic.claude-opus-5-5"
+ * become "nemotron-3-ultra" and "claude-opus-5-5". The full id is in the
+ * tooltip and the list.
+ */
+export function shortModelName(id: string): string {
+    const name = id.slice(id.lastIndexOf("/") + 1)
+    const short = name.replace(
+        /^(?:(?:global|us|eu|apac|jp|au|ca|us-gov)\.)?[a-z][a-z0-9-]*\.(?=[a-z])/i,
+        "",
+    )
+    // Ids like "deepseek.r1-v1:0" name the vendor only in the prefix: drop
+    // just the region
+    if (!short || /^[a-z]\d/i.test(short)) {
+        return name.replace(/^(?:global|us|eu|apac|jp|au|ca|us-gov)\./i, "")
+    }
+    return short
 }
 
 export function ModelSelector({
@@ -158,7 +179,7 @@ export function ModelSelector({
     }, [])
 
     return (
-        <div ref={wrapperRef} className="min-w-0 max-w-48">
+        <div ref={wrapperRef} className="min-w-0 max-w-44">
             <ModelSelectorRoot open={open} onOpenChange={setOpen}>
                 <ModelSelectorTrigger asChild>
                     <ButtonWithTooltip
@@ -167,18 +188,26 @@ export function ModelSelector({
                         size="sm"
                         disabled={disabled}
                         className={cn(
-                            "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent",
+                            "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 font-normal text-muted-foreground transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent hover:text-foreground",
                             !showLabel && "px-1.5 justify-center",
                         )}
                         // accessibility: expose label to screen readers
                         aria-label={tooltipContent}
+                        data-testid="model-selector"
                     >
-                        <Bot className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                        {selectedModel ? (
+                            <ProviderLogo
+                                provider={selectedModel.provider}
+                                className="size-3.5 flex-shrink-0 opacity-80"
+                            />
+                        ) : (
+                            <Bot className="h-4 w-4 flex-shrink-0" />
+                        )}
                         {/* show/hide visible label based on measured width */}
                         {showLabel ? (
                             <span className="min-w-0 truncate text-xs">
                                 {selectedModel
-                                    ? selectedModel.modelId
+                                    ? shortModelName(selectedModel.modelId)
                                     : dict.modelConfig.default}
                             </span>
                         ) : (

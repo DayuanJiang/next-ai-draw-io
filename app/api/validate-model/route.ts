@@ -104,11 +104,14 @@ export async function POST(req: Request) {
 
         // Validate credentials based on provider
         if (provider === "bedrock") {
-            if (!awsAccessKeyId || !awsSecretAccessKey || !awsRegion) {
+            if (
+                !(apiKey || (awsAccessKeyId && awsSecretAccessKey)) ||
+                !awsRegion
+            ) {
                 return NextResponse.json(
                     {
                         valid: false,
-                        error: "AWS credentials (Access Key ID, Secret Access Key, Region) are required",
+                        error: "AWS credentials (a Bedrock API key, or an Access Key ID and Secret Access Key, and a Region) are required",
                     },
                     { status: 400 },
                 )

@@ -23,8 +23,9 @@ COPY . .
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build-time argument for self-hosted draw.io URL
-ARG NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net
+# Build-time argument for an external draw.io URL. Leave empty to use the
+# copy bundled into public/drawio (downloaded by `npm run build`)
+ARG NEXT_PUBLIC_DRAWIO_BASE_URL=""
 ENV NEXT_PUBLIC_DRAWIO_BASE_URL=${NEXT_PUBLIC_DRAWIO_BASE_URL}
 
 # Build-time argument to show About link and Notice icon

@@ -30,7 +30,7 @@ export { expect }
 
 /** Get the chat input textarea */
 export function getChatInput(page: Page) {
-    return page.locator('textarea[aria-label="Chat input"]')
+    return page.getByTestId("chat-input")
 }
 
 /** Get the draw.io iframe */
@@ -41,6 +41,18 @@ export function getIframe(page: Page) {
 /** Get the iframe's frame locator for internal queries */
 export function getIframeContent(page: Page) {
     return page.frameLocator("iframe")
+}
+
+/** Open a .drawio file through the app's file picker */
+export async function openDrawioFile(page: Page, name: string, xml: string) {
+    await page
+        .locator('input[type="file"][accept^=".drawio"]')
+        .first()
+        .setInputFiles({
+            name,
+            mimeType: "application/xml",
+            buffer: Buffer.from(xml),
+        })
 }
 
 /** Get the settings button */
@@ -60,20 +72,33 @@ export async function sendMessage(page: Page, message: string) {
     await chatInput.press("ControlOrMeta+Enter")
 }
 
-/** Wait for diagram generation to complete */
-export async function waitForComplete(page: Page, timeout = 15000) {
-    await expect(page.locator('text="Complete"')).toBeVisible({ timeout })
+/** Tool calls that finished (version cards and tool rows) */
+export function getCompletedTools(page: Page) {
+    return page.locator('[data-tool-state="output-available"]')
 }
 
-/** Wait for N "Complete" badges */
+/** Wait for diagram generation to complete */
+export async function waitForComplete(page: Page, timeout = 15000) {
+    await expect(getCompletedTools(page).first()).toBeVisible({ timeout })
+}
+
+/** Wait for N finished tool calls */
 export async function waitForCompleteCount(
     page: Page,
     count: number,
     timeout = 15000,
 ) {
-    await expect(page.locator('text="Complete"')).toHaveCount(count, {
-        timeout,
-    })
+    await expect(getCompletedTools(page)).toHaveCount(count, { timeout })
+}
+
+/** The file input behind the message box's "Add" menu */
+export function getAttachmentInput(page: Page) {
+    return page.locator('[data-testid="attachment-input"]')
+}
+
+/** The send button (icon only; found by its accessible name) */
+export function getSendButton(page: Page, name = "Send") {
+    return page.getByRole("button", { name, exact: true })
 }
 
 /** Wait for a specific text to appear */
@@ -83,8 +108,17 @@ export async function waitForText(page: Page, text: string, timeout = 15000) {
 
 /** Open settings dialog */
 export async function openSettings(page: Page) {
-    await getSettingsButton(page).click()
+    await getSettingsButton(page).first().click()
     await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 })
+}
+
+/** Open settings on one of its pages: models, appearance, advanced, about */
+export async function openSettingsTab(
+    page: Page,
+    tab: "models" | "appearance" | "advanced" | "about",
+) {
+    await openSettings(page)
+    await page.locator(`[data-testid="settings-tab-${tab}"]`).click()
 }
 
 // ============================================

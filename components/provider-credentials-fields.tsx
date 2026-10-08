@@ -53,6 +53,9 @@ interface ProviderCredentialsFieldsProps {
     name?: string
     baseUrl?: string
     awsRegion?: string
+    // Bedrock: also offer an API key (the user dialog; the admin panel
+    // stores access keys only)
+    bedrockApiKey?: boolean
     disabled?: boolean
     // Update a plain text field
     onChange: (field: "name" | "baseUrl" | "awsRegion", value: string) => void
@@ -72,6 +75,7 @@ export function ProviderCredentialsFields({
     name,
     baseUrl,
     awsRegion,
+    bedrockApiKey,
     disabled,
     onChange,
     renderSecret,
@@ -112,6 +116,26 @@ export function ProviderCredentialsFields({
 
             {provider === "bedrock" ? (
                 <>
+                    {/* Bedrock API key: used instead of the access keys */}
+                    {bedrockApiKey && (
+                        <div className="space-y-2">
+                            <Label
+                                htmlFor="bedrock-api-key"
+                                className="text-xs font-medium flex items-center gap-1.5"
+                            >
+                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                                {dict.modelConfig.bedrockApiKey}
+                            </Label>
+                            {renderSecret({
+                                field: "apiKey",
+                                id: "bedrock-api-key",
+                            })}
+                            <p className="text-xs text-muted-foreground">
+                                {dict.modelConfig.bedrockApiKeyHint}
+                            </p>
+                        </div>
+                    )}
+
                     {/* AWS Access Key ID */}
                     <div className="space-y-2">
                         <Label

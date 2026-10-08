@@ -150,10 +150,10 @@ export default function About() {
                             replicate and enhance them automatically
                         </li>
                         <li>
-                            <strong>Diagram History</strong>: Comprehensive
-                            version control that tracks all changes, allowing
-                            you to view and restore previous versions of your
-                            diagrams before the AI editing
+                            <strong>Versions and Undo</strong>: Every AI change
+                            becomes a version in the chat that you can compare,
+                            restore or undo; Ctrl+Z on the canvas takes it back
+                            too
                         </li>
                         <li>
                             <strong>Interactive Chat Interface</strong>:
@@ -304,8 +304,8 @@ export default function About() {
                             and multi-provider support
                         </li>
                         <li>
-                            <strong>react-drawio</strong>: For diagram
-                            representation and manipulation
+                            <strong>draw.io</strong>: The editor, bundled with
+                            the app so it can be driven directly
                         </li>
                     </ul>
                     <p className="text-gray-700 mt-4">
