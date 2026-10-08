@@ -9,7 +9,7 @@ Instead of hand-editing `.env`, you can manage server settings in a web admin pa
 
 ## What you can configure
 
-1. **Models** — add providers with their API keys and model lists, using the same UI as the in-app model settings. Saved models become server-side models available to all users, merged with any `AI_MODELS_CONFIG` / `ai-models.json` from your environment at request time (the panel does not modify those env files).
+1. **Models** — add providers with their API keys and model lists; the credential fields are the same as in the in-app model settings. Saved models become server-side models available to all users, merged with any `AI_MODELS_CONFIG` / `ai-models.json` from your environment at request time (the panel does not modify those env files).
 2. **Other sections** — access codes, generation parameters, features, observability, and quota. Saved settings are written to `data/settings.json` and apply immediately — no restart needed (a few settings such as Langfuse and DynamoDB are marked "Restart Required").
 
 ## Precedence

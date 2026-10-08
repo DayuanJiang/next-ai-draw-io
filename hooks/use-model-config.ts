@@ -36,15 +36,19 @@ function migrateOldConfig(): MultiModelConfig | null {
     const oldApiKey = localStorage.getItem(OLD_KEYS.aiApiKey)
     const oldModel = localStorage.getItem(OLD_KEYS.aiModel)
 
-    // No old config to migrate
-    if (!oldProvider || !oldApiKey || !oldModel) return null
+    // No old config to migrate. A local Ollama needs no key.
+    if (!oldProvider || !oldModel) return null
+    if (!oldApiKey && oldProvider !== "ollama") return null
 
     const oldBaseUrl = localStorage.getItem(OLD_KEYS.aiBaseUrl)
 
     // Create new config from old format
     const provider = createProviderConfig(oldProvider as ProviderName)
-    provider.apiKey = oldApiKey
+    provider.apiKey = oldApiKey ?? ""
     if (oldBaseUrl) provider.baseUrl = oldBaseUrl
+    // Without one, the old version used the server's Ollama (OLLAMA_BASE_URL
+    // or this machine), not the cloud address new providers get
+    else if (oldProvider === "ollama") provider.baseUrl = ""
 
     const model = createModelConfig(oldModel)
     provider.models.push(model)
@@ -161,11 +165,9 @@ export interface UseModelConfigReturn {
     models: FlattenedModel[]
     selectedModel: FlattenedModel | undefined
     selectedModelId: string | undefined
-    showUnvalidatedModels: boolean
 
     // Actions
     setSelectedModelId: (modelId: string | undefined) => void
-    setShowUnvalidatedModels: (show: boolean) => void
     addProvider: (provider: ProviderName) => ProviderConfig
     updateProvider: (
         providerId: string,
@@ -308,13 +310,6 @@ export function useModelConfig(): UseModelConfigReturn {
         }))
     }, [])
 
-    const setShowUnvalidatedModels = useCallback((show: boolean) => {
-        setConfig((prev) => ({
-            ...prev,
-            showUnvalidatedModels: show,
-        }))
-    }, [])
-
     const addProvider = useCallback(
         (provider: ProviderName): ProviderConfig => {
             const newProvider = createProviderConfig(provider)
@@ -441,9 +436,7 @@ export function useModelConfig(): UseModelConfigReturn {
         models,
         selectedModel,
         selectedModelId: config.selectedModelId,
-        showUnvalidatedModels: config.showUnvalidatedModels ?? false,
         setSelectedModelId,
-        setShowUnvalidatedModels,
         addProvider,
         updateProvider,
         deleteProvider,
@@ -473,6 +466,8 @@ export function getSelectedAIConfig(): {
     selectedModelId: string
     // Vertex AI credentials (Express Mode)
     vertexApiKey: string
+    // The user's provider of the selected model ("" for a server model)
+    providerId: string
 } {
     const empty = {
         accessCode: "",
@@ -486,6 +481,7 @@ export function getSelectedAIConfig(): {
         awsSessionToken: "",
         selectedModelId: "",
         vertexApiKey: "",
+        providerId: "",
     }
 
     if (typeof window === "undefined") return empty
@@ -510,6 +506,7 @@ export function getSelectedAIConfig(): {
             awsSessionToken: "",
             selectedModelId: "",
             vertexApiKey: "",
+            providerId: "",
         }
     }
 
@@ -566,5 +563,9 @@ export function getSelectedAIConfig(): {
         selectedModelId: config.selectedModelId || "",
         // Vertex AI credentials (Express Mode)
         vertexApiKey: model.vertexApiKey || "",
+        providerId:
+            config.providers.find((p) =>
+                p.models.some((m) => m.id === config.selectedModelId),
+            )?.id ?? "",
     }
 }

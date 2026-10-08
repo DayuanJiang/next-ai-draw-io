@@ -1,11 +1,11 @@
 import {
     Github,
     Info,
-    KeyRound,
     Monitor,
     Moon,
-    Palette,
-    SlidersHorizontal,
+    PenTool,
+    Settings2,
+    Sparkles,
     Sun,
     Terminal,
 } from "lucide-react"
@@ -14,6 +14,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useChatEngine } from "@/components/chat/chat-engine"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
+import { SettingsHeader } from "@/components/settings/settings-header"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -130,7 +131,15 @@ function Segmented<T extends string>({
     )
 }
 
-function AppearanceTab() {
+function SectionHeading({ children }: { children: React.ReactNode }) {
+    return (
+        <h3 className="pt-6 pb-1 text-[11px] font-medium text-muted-foreground first:pt-0">
+            {children}
+        </h3>
+    )
+}
+
+function GeneralTab({ open }: { open: boolean }) {
     const dict = useDictionary()
     const t = dict.settings
     const engine = useChatEngine()
@@ -139,99 +148,10 @@ function AppearanceTab() {
     const search = useSearchParams()
     const theme = useSettingsStore((s) => s.theme)
     const setTheme = useSettingsStore((s) => s.setTheme)
-    const minimalStyle = useSettingsStore((s) => s.minimalStyle)
-    const setMinimalStyle = useSettingsStore((s) => s.setMinimalStyle)
+    const sendShortcut = useSettingsStore((s) => s.sendShortcut)
+    const setSendShortcut = useSettingsStore((s) => s.setSendShortcut)
     const currentLang =
         (pathname.split("/").filter(Boolean)[0] as Locale) || i18n.defaultLocale
-
-    // The page mounts anew in the other language: the chat is saved first
-    // (it may not be yet), and its session goes into the new URL
-    const changeLanguage = (lang: string) =>
-        engine.leavePage((sessionId) => {
-            localStorage.setItem(STORAGE_KEYS.locale, lang)
-            // The page reloads in the new language; close settings as before
-            useUiStore.getState().setSettingsOpen(false)
-            // Keep the desktop app's menu language in sync
-            window.electronAPI
-                ?.setUserLocale?.(lang)
-                .catch((error: unknown) => {
-                    console.error("Failed to sync locale with Electron:", error)
-                })
-            const parts = pathname.split("/")
-            if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
-                parts[1] = lang
-            } else {
-                parts.splice(1, 0, lang)
-            }
-            const params = new URLSearchParams(search?.toString())
-            if (sessionId) params.set("session", sessionId)
-            const query = params.toString() ? `?${params.toString()}` : ""
-            router.push((parts.join("/") || "/") + query)
-        })
-
-    return (
-        <div className="divide-y divide-border">
-            <Row label={t.theme} description={t.themeDescription}>
-                <Segmented<ThemePreference>
-                    label={t.theme}
-                    value={theme}
-                    onChange={setTheme}
-                    options={[
-                        { value: "light", label: t.themeLight, icon: <Sun /> },
-                        {
-                            value: "dark",
-                            label: t.themeDarkMode,
-                            icon: <Moon />,
-                        },
-                        {
-                            value: "system",
-                            label: t.themeSystem,
-                            icon: <Monitor />,
-                        },
-                    ]}
-                />
-            </Row>
-            <Row label={t.language} description={t.languageDescription}>
-                <Select
-                    value={currentLang}
-                    onValueChange={changeLanguage}
-                    // Not while an answer runs: the page mounts anew
-                    disabled={engine.isBusy}
-                >
-                    <SelectTrigger
-                        id="language-select"
-                        className="h-8 w-[132px] rounded-lg"
-                    >
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {i18n.locales.map((locale) => (
-                            <SelectItem key={locale} value={locale}>
-                                {LANGUAGE_LABELS[locale]}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </Row>
-            <Row label={t.diagramStyle} description={t.diagramStyleDescription}>
-                <Segmented<"styled" | "minimal">
-                    label={t.diagramStyle}
-                    value={minimalStyle ? "minimal" : "styled"}
-                    onChange={(value) => setMinimalStyle(value === "minimal")}
-                    options={[
-                        { value: "styled", label: dict.chat.styledMode },
-                        { value: "minimal", label: dict.chat.minimalStyle },
-                    ]}
-                />
-            </Row>
-        </div>
-    )
-}
-
-function AdvancedTab({ open }: { open: boolean }) {
-    const dict = useDictionary()
-    const t = dict.settings
-    const settings = useSettingsStore()
     const [accessCode, setAccessCode] = useState("")
     const [accessCodeRequired, setAccessCodeRequired] = useState(
         () => localStorage.getItem(STORAGE_KEYS.accessCodeRequired) === "true",
@@ -268,6 +188,31 @@ function AdvancedTab({ open }: { open: boolean }) {
             setHttpsProxy(config.httpsProxy || "")
         })
     }, [open])
+
+    // The page mounts anew in the other language: the chat is saved first
+    // (it may not be yet), and its session goes into the new URL
+    const changeLanguage = (lang: string) =>
+        engine.leavePage((sessionId) => {
+            localStorage.setItem(STORAGE_KEYS.locale, lang)
+            // The page reloads in the new language; close settings as before
+            useUiStore.getState().setSettingsOpen(false)
+            // Keep the desktop app's menu language in sync
+            window.electronAPI
+                ?.setUserLocale?.(lang)
+                .catch((error: unknown) => {
+                    console.error("Failed to sync locale with Electron:", error)
+                })
+            const parts = pathname.split("/")
+            if (parts.length > 1 && i18n.locales.includes(parts[1] as Locale)) {
+                parts[1] = lang
+            } else {
+                parts.splice(1, 0, lang)
+            }
+            const params = new URLSearchParams(search?.toString())
+            if (sessionId) params.set("session", sessionId)
+            const query = params.toString() ? `?${params.toString()}` : ""
+            router.push((parts.join("/") || "/") + query)
+        })
 
     const saveAccessCode = async () => {
         setAccessError("")
@@ -320,65 +265,212 @@ function AdvancedTab({ open }: { open: boolean }) {
     }
 
     return (
-        <div className="divide-y divide-border">
-            {accessCodeRequired && (
-                <Row
-                    label={t.accessCode}
-                    description={t.accessCodeDescription}
-                    htmlFor="access-code"
-                    stacked
-                >
-                    <div className="flex gap-2">
-                        <Input
-                            id="access-code"
-                            type="password"
-                            value={accessCode}
-                            onChange={(e) => setAccessCode(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault()
-                                    saveAccessCode()
-                                }
-                            }}
-                            placeholder={t.accessCodePlaceholder}
-                            autoComplete="off"
-                            className="h-9"
-                        />
-                        <Button
-                            onClick={saveAccessCode}
-                            disabled={isVerifying || !accessCode.trim()}
-                            className="h-9 rounded-lg px-4"
-                        >
-                            {isVerifying ? "…" : dict.common.save}
-                        </Button>
-                    </div>
-                    {accessError && (
-                        <p className="text-xs text-destructive">
-                            {accessError}
-                        </p>
-                    )}
+        <div>
+            <SectionHeading>{t.sectionInterface}</SectionHeading>
+            <div className="divide-y divide-border">
+                <Row label={t.theme} description={t.themeDescription}>
+                    <Segmented<ThemePreference>
+                        label={t.theme}
+                        value={theme}
+                        onChange={setTheme}
+                        options={[
+                            {
+                                value: "light",
+                                label: t.themeLight,
+                                icon: <Sun />,
+                            },
+                            {
+                                value: "dark",
+                                label: t.themeDarkMode,
+                                icon: <Moon />,
+                            },
+                            {
+                                value: "system",
+                                label: t.themeSystem,
+                                icon: <Monitor />,
+                            },
+                        ]}
+                    />
                 </Row>
-            )}
-            <Row label={t.sendShortcut} description={t.sendShortcutDescription}>
-                <Select
-                    value={settings.sendShortcut}
-                    onValueChange={(value) =>
-                        settings.setSendShortcut(value as SendShortcut)
-                    }
+                <Row
+                    label={t.language}
+                    description={t.languageDescription}
+                    htmlFor="language-select"
                 >
-                    <SelectTrigger
-                        id="send-shortcut-select"
-                        className="h-8 w-auto rounded-lg"
+                    <Select
+                        value={currentLang}
+                        onValueChange={changeLanguage}
+                        // Not while an answer runs: the page mounts anew
+                        disabled={engine.isBusy}
                     >
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="enter">{t.enterToSend}</SelectItem>
-                        <SelectItem value="ctrl-enter">
-                            {t.ctrlEnterToSend}
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
+                        <SelectTrigger
+                            id="language-select"
+                            className="h-8 w-[132px] rounded-lg"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {i18n.locales.map((locale) => (
+                                <SelectItem key={locale} value={locale}>
+                                    {LANGUAGE_LABELS[locale]}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </Row>
+                <Row
+                    label={t.sendShortcut}
+                    description={t.sendShortcutDescription}
+                    htmlFor="send-shortcut-select"
+                >
+                    <Select
+                        value={sendShortcut}
+                        onValueChange={(value) =>
+                            setSendShortcut(value as SendShortcut)
+                        }
+                    >
+                        <SelectTrigger
+                            id="send-shortcut-select"
+                            className="h-8 w-auto rounded-lg"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="enter">
+                                {t.enterToSend}
+                            </SelectItem>
+                            <SelectItem value="ctrl-enter">
+                                {t.ctrlEnterToSend}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </Row>
+            </div>
+            {(accessCodeRequired || isElectron) && (
+                <>
+                    <SectionHeading>{t.sectionAccess}</SectionHeading>
+                    <div className="divide-y divide-border">
+                        {accessCodeRequired && (
+                            <Row
+                                label={t.accessCode}
+                                description={t.accessCodeDescription}
+                                htmlFor="access-code"
+                                stacked
+                            >
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="access-code"
+                                        type="password"
+                                        value={accessCode}
+                                        onChange={(e) =>
+                                            setAccessCode(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault()
+                                                saveAccessCode()
+                                            }
+                                        }}
+                                        placeholder={t.accessCodePlaceholder}
+                                        autoComplete="off"
+                                        className="h-9"
+                                    />
+                                    <Button
+                                        onClick={saveAccessCode}
+                                        disabled={
+                                            isVerifying || !accessCode.trim()
+                                        }
+                                        className="h-9 rounded-lg px-4"
+                                    >
+                                        {isVerifying ? "…" : dict.common.save}
+                                    </Button>
+                                </div>
+                                {accessError && (
+                                    <p className="text-xs text-destructive">
+                                        {accessError}
+                                    </p>
+                                )}
+                            </Row>
+                        )}
+                        {isElectron && (
+                            <Row
+                                label={t.proxy}
+                                description={t.proxyDescription}
+                                stacked
+                            >
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="http-proxy"
+                                        value={httpProxy}
+                                        onChange={(e) =>
+                                            setHttpProxy(e.target.value)
+                                        }
+                                        placeholder={`${t.httpProxy}: http://proxy:8080`}
+                                        className="h-9"
+                                    />
+                                    <Input
+                                        id="https-proxy"
+                                        value={httpsProxy}
+                                        onChange={(e) =>
+                                            setHttpsProxy(e.target.value)
+                                        }
+                                        placeholder={`${t.httpsProxy}: http://proxy:8080`}
+                                        className="h-9"
+                                    />
+                                    <Button
+                                        variant="outline"
+                                        onClick={applyProxy}
+                                        disabled={isApplyingProxy}
+                                        className="h-9 rounded-lg px-4"
+                                    >
+                                        {isApplyingProxy ? "…" : t.applyProxy}
+                                    </Button>
+                                </div>
+                            </Row>
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
+function DrawingTab() {
+    const dict = useDictionary()
+    const t = dict.settings
+    const settings = useSettingsStore()
+
+    return (
+        <div className="divide-y divide-border">
+            <Row label={t.diagramStyle} description={t.diagramStyleDescription}>
+                <Segmented<"styled" | "minimal">
+                    label={t.diagramStyle}
+                    value={settings.minimalStyle ? "minimal" : "styled"}
+                    onChange={(value) =>
+                        settings.setMinimalStyle(value === "minimal")
+                    }
+                    options={[
+                        { value: "styled", label: dict.chat.styledMode },
+                        { value: "minimal", label: dict.chat.minimalStyle },
+                    ]}
+                />
+            </Row>
+            <Row
+                label={t.customSystemMessage}
+                description={t.customSystemMessageDescription}
+                htmlFor="custom-system-message"
+                stacked
+            >
+                <Textarea
+                    id="custom-system-message"
+                    value={settings.customSystemMessage}
+                    onChange={(e) =>
+                        settings.setCustomSystemMessage(e.target.value)
+                    }
+                    placeholder={t.customSystemMessagePlaceholder}
+                    className="max-h-[180px] min-h-[96px] text-sm"
+                    maxLength={5000}
+                />
             </Row>
             <Row
                 label={t.diagramValidation}
@@ -408,50 +500,6 @@ function AdvancedTab({ open }: { open: boolean }) {
                     className="h-8 w-28 text-sm"
                 />
             </Row>
-            <Row
-                label={t.customSystemMessage}
-                description={t.customSystemMessageDescription}
-                htmlFor="custom-system-message"
-                stacked
-            >
-                <Textarea
-                    id="custom-system-message"
-                    value={settings.customSystemMessage}
-                    onChange={(e) =>
-                        settings.setCustomSystemMessage(e.target.value)
-                    }
-                    placeholder={t.customSystemMessagePlaceholder}
-                    className="max-h-[180px] min-h-[96px] text-sm"
-                    maxLength={5000}
-                />
-            </Row>
-            {isElectron && (
-                <Row label={t.proxy} description={t.proxyDescription} stacked>
-                    <div className="space-y-2">
-                        <Input
-                            id="http-proxy"
-                            value={httpProxy}
-                            onChange={(e) => setHttpProxy(e.target.value)}
-                            placeholder={`${t.httpProxy}: http://proxy:8080`}
-                            className="h-9"
-                        />
-                        <Input
-                            id="https-proxy"
-                            value={httpsProxy}
-                            onChange={(e) => setHttpsProxy(e.target.value)}
-                            placeholder={`${t.httpsProxy}: http://proxy:8080`}
-                            className="h-9"
-                        />
-                        <Button
-                            onClick={applyProxy}
-                            disabled={isApplyingProxy}
-                            className="h-9 w-full rounded-lg"
-                        >
-                            {isApplyingProxy ? "…" : t.applyProxy}
-                        </Button>
-                    </div>
-                </Row>
-            )}
         </div>
     )
 }
@@ -465,7 +513,7 @@ function AboutTab() {
     const aboutPath = `/${lang}/about${lang === "zh" ? "/cn" : lang === "ja" ? "/ja" : ""}`
 
     return (
-        <div className="space-y-5 pt-1">
+        <div className="space-y-5">
             <div className="flex items-center gap-3">
                 <BrandMark className="size-10 rounded-xl" />
                 <div>
@@ -534,20 +582,20 @@ export function SettingsDialog() {
     const setTab = useUiStore((s) => s.setSettingsTab)
 
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-        { id: "models", label: t.tabModels, icon: <KeyRound /> },
-        { id: "appearance", label: t.tabAppearance, icon: <Palette /> },
-        { id: "advanced", label: t.tabAdvanced, icon: <SlidersHorizontal /> },
+        { id: "models", label: t.tabModels, icon: <Sparkles /> },
+        { id: "general", label: t.tabGeneral, icon: <Settings2 /> },
+        { id: "drawing", label: t.tabDrawing, icon: <PenTool /> },
         { id: "about", label: t.tabAbout, icon: <Info /> },
     ]
     const current = tabs.find((item) => item.id === tab) ?? tabs[0]
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent className="flex h-[min(640px,88vh)] max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl lg:flex-row">
-                {/* On top below 1024 px: beside the model settings' own
-                    provider list it would leave too little width */}
-                <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface-1 p-2 lg:w-52 lg:flex-col lg:overflow-visible lg:border-r lg:border-b-0 lg:p-3">
-                    <DialogTitle className="hidden px-2 pt-1 pb-3 text-[15px] lg:block">
+            <DialogContent className="flex h-[min(640px,88vh)] max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl md:flex-row">
+                {/* On top below 768 px, where beside the page it would leave
+                    too little width */}
+                <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-surface-1 p-2 md:w-48 md:flex-col md:overflow-visible md:border-r md:border-b-0 md:p-3">
+                    <DialogTitle className="hidden px-2 pt-1 pb-3 text-[15px] md:block">
                         {t.title}
                     </DialogTitle>
                     {tabs.map((item) => (
@@ -557,9 +605,12 @@ export function SettingsDialog() {
                             onClick={() => setTab(item.id)}
                             className={cn(
                                 "flex h-8 shrink-0 items-center gap-2 rounded-lg px-2.5 text-[13px] text-muted-foreground hover:text-foreground [&_svg]:size-4",
-                                tab === item.id &&
+                                current.id === item.id &&
                                     "bg-card font-medium text-foreground shadow-float",
                             )}
+                            aria-current={
+                                current.id === item.id ? "page" : undefined
+                            }
                             data-testid={`settings-tab-${item.id}`}
                         >
                             {item.icon}
@@ -571,20 +622,26 @@ export function SettingsDialog() {
                     <DialogDescription className="sr-only">
                         {t.description}
                     </DialogDescription>
-                    {tab === "models" ? (
+                    {current.id === "models" ? (
                         <ModelConfigDialog
                             open={open}
                             modelConfig={engine.modelConfig}
                         />
                     ) : (
-                        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-6 scrollbar-thin">
-                            <h2 className="mb-2 text-[15px] font-semibold">
-                                {current.label}
-                            </h2>
-                            {tab === "appearance" && <AppearanceTab />}
-                            {tab === "advanced" && <AdvancedTab open={open} />}
-                            {tab === "about" && <AboutTab />}
-                        </div>
+                        <>
+                            <SettingsHeader>
+                                <h2 className="font-semibold">
+                                    {current.label}
+                                </h2>
+                            </SettingsHeader>
+                            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 scrollbar-thin">
+                                {current.id === "general" && (
+                                    <GeneralTab open={open} />
+                                )}
+                                {current.id === "drawing" && <DrawingTab />}
+                                {current.id === "about" && <AboutTab />}
+                            </div>
+                        </>
                     )}
                 </section>
             </DialogContent>

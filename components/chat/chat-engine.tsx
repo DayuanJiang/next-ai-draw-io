@@ -413,6 +413,8 @@ export function ChatEngineProvider({
     // screen): an answer started meanwhile would land in the next chat
     const leavingRef = useRef(false)
     const [isLeaving, setIsLeaving] = useState(false)
+    // The user's provider the current turn was sent to, for its errors
+    const requestProviderIdRef = useRef<string | undefined>(undefined)
     // A message is being sent again (retry, regenerate, edit), until the
     // SDK has put it back
     const [isResending, setIsResending] = useState(false)
@@ -607,6 +609,11 @@ export function ChatEngineProvider({
 
             // Not in another chat that came on screen meanwhile
             if (getChatGeneration() !== turnChatRef.current) return
+
+            // The provider the turn was sent to (none for a server model);
+            // the model selected may have changed since, e.g. in another tab
+            const providerId = requestProviderIdRef.current
+
             // A system message, so it can be cleared with the conversation
             setMessages((currentMessages) => [
                 ...currentMessages,
@@ -614,14 +621,15 @@ export function ChatEngineProvider({
                     id: `error-${Date.now()}`,
                     role: "system" as const,
                     parts: [{ type: "text" as const, text }],
-                    // The message shows a button that opens model settings
+                    // The message shows a button that opens model settings,
+                    // on the page of the provider that refused
                     ...(openModelConfig && {
-                        metadata: { openModelConfig: true },
+                        metadata: { openModelConfig: true, providerId },
                     }),
                 },
             ])
 
-            if (isAccessCodeError) openSettings("advanced")
+            if (isAccessCodeError) openSettings("general")
         },
         // Re-render streamed messages at most every 150 ms. The streaming
         // diagram preview draws on each update, so this also limits redraws
@@ -1200,6 +1208,9 @@ export function ChatEngineProvider({
         const config = getSelectedAIConfig()
         const { customSystemMessage, minimalStyle, maxOutputTokens } =
             useSettingsStore.getState()
+        // For this turn's errors: the provider these headers name (read with
+        // them, from storage: another tab may have changed it meanwhile)
+        requestProviderIdRef.current = config.providerId || undefined
 
         const selected = selectedCells.map(({ id, label }) => ({ id, label }))
         const options = {

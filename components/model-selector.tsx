@@ -1,11 +1,11 @@
 "use client"
 
 import {
-    AlertTriangle,
     Bot,
     Check,
     ChevronDown,
     Monitor,
+    Plus,
     Server,
     Settings2,
     User,
@@ -39,8 +39,9 @@ interface ModelSelectorProps {
     selectedModelId: string | undefined
     onSelect: (modelId: string | undefined) => void
     onConfigure?: () => void
+    /** Opens the settings on the list of providers to add */
+    onAddProvider?: () => void
     disabled?: boolean
-    showUnvalidatedModels?: boolean
 }
 
 // Group models by providerLabel (handles duplicate providers)
@@ -92,27 +93,21 @@ export function ModelSelector({
     selectedModelId,
     onSelect,
     onConfigure,
+    onAddProvider,
     disabled = false,
-    showUnvalidatedModels = false,
 }: ModelSelectorProps) {
     const dict = useDictionary()
     const [open, setOpen] = useState(false)
-    // Filter models based on showUnvalidatedModels setting
-    const displayModels = useMemo(() => {
-        if (showUnvalidatedModels) {
-            return models
-        }
-        return models.filter((m) => m.validated === true)
-    }, [models, showUnvalidatedModels])
 
-    // Separate server and user models
+    // Separate server and user models. Every user model is listed; one not
+    // tested yet, or that failed its test, says so.
     const serverModels = useMemo(
-        () => displayModels.filter((m) => m.source === "server"),
-        [displayModels],
+        () => models.filter((m) => m.source === "server"),
+        [models],
     )
     const userModels = useMemo(
-        () => displayModels.filter((m) => m.source !== "server"),
-        [displayModels],
+        () => models.filter((m) => m.source !== "server"),
+        [models],
     )
 
     // Group each category separately
@@ -130,6 +125,17 @@ export function ModelSelector({
         () => models.find((m) => m.id === selectedModelId),
         [models, selectedModelId],
     )
+
+    // Leaving for the settings: closing, the picker must not give the focus
+    // back to its button, behind the settings dialog
+    const toSettingsRef = useRef(false)
+    const goToSettings = (openSettings: () => void) => {
+        toSettingsRef.current = true
+        setOpen(false)
+        openSettings()
+    }
+    const footerButton =
+        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
 
     const handleSelect = (value: string) => {
         if (value === "__server_default__") {
@@ -180,7 +186,13 @@ export function ModelSelector({
 
     return (
         <div ref={wrapperRef} className="min-w-0 max-w-44">
-            <ModelSelectorRoot open={open} onOpenChange={setOpen}>
+            <ModelSelectorRoot
+                open={open}
+                onOpenChange={(next) => {
+                    if (next) toSettingsRef.current = false
+                    setOpen(next)
+                }}
+            >
                 <ModelSelectorTrigger asChild>
                     <ButtonWithTooltip
                         tooltipContent={tooltipContent}
@@ -222,7 +234,14 @@ export function ModelSelector({
                     </ButtonWithTooltip>
                 </ModelSelectorTrigger>
 
-                <ModelSelectorContent title={dict.modelConfig.selectModel}>
+                <ModelSelectorContent
+                    title={dict.modelConfig.selectModel}
+                    onCloseAutoFocus={(e) => {
+                        if (!toSettingsRef.current) return
+                        toSettingsRef.current = false
+                        e.preventDefault()
+                    }}
+                >
                     <ModelSelectorInput
                         placeholder={dict.modelConfig.searchModels}
                     />
@@ -230,10 +249,7 @@ export function ModelSelector({
                         <div className="flex-1 min-h-0 overflow-hidden">
                             <ModelSelectorList className="overflow-y-auto scrollbar-thin">
                                 <ModelSelectorEmpty>
-                                    {displayModels.length === 0 &&
-                                    models.length > 0
-                                        ? dict.modelConfig.noVerifiedModels
-                                        : dict.modelConfig.noModelsFound}
+                                    {dict.modelConfig.noModelsFound}
                                 </ModelSelectorEmpty>
 
                                 {/* Server Default Option - only show when no server models are configured */}
@@ -422,13 +438,22 @@ export function ModelSelector({
                                                                 {model.validated !==
                                                                     true && (
                                                                     <span
-                                                                        title={
-                                                                            dict
-                                                                                .modelConfig
-                                                                                .unvalidatedModelWarning
-                                                                        }
+                                                                        className={cn(
+                                                                            "ml-auto shrink-0 pl-2 text-xs",
+                                                                            model.validated ===
+                                                                                false
+                                                                                ? "text-destructive"
+                                                                                : "text-muted-foreground",
+                                                                        )}
                                                                     >
-                                                                        <AlertTriangle className="ml-auto h-3 w-3 text-warning" />
+                                                                        {model.validated ===
+                                                                        false
+                                                                            ? dict
+                                                                                  .modelConfig
+                                                                                  .modelFailed
+                                                                            : dict
+                                                                                  .modelConfig
+                                                                                  .modelUntested}
                                                                     </span>
                                                                 )}
                                                             </ModelSelectorItem>
@@ -441,31 +466,46 @@ export function ModelSelector({
                                 )}
                             </ModelSelectorList>
                         </div>
-                        {/* Pinned footer: Configure Models... + info text (z-10 above list shadow) */}
-                        <div className="relative z-10 shrink-0 border-t bg-background">
-                            {onConfigure && (
-                                <div className="px-3 py-2">
-                                    <ModelSelectorItem
-                                        value="__configure_models__"
-                                        onSelect={() => {
-                                            onConfigure()
-                                            setOpen(false)
-                                        }}
-                                        className="flex cursor-pointer items-center gap-2 rounded-sm"
+                        {/* Pinned footer: add a provider, configure models
+                            (z-10 above list shadow). Buttons, outside the
+                            search: reachable with Tab, never filtered out */}
+                        {(onAddProvider || onConfigure) && (
+                            <div
+                                className="relative z-10 shrink-0 space-y-0.5 border-t bg-background px-3 py-2"
+                                // The search's Enter would pick the highlighted
+                                // model instead of pressing the button
+                                onKeyDown={(e) => e.stopPropagation()}
+                            >
+                                {onAddProvider && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            goToSettings(onAddProvider)
+                                        }
+                                        className={footerButton}
+                                    >
+                                        <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <span className="truncate">
+                                            {dict.modelConfig.addProviderEntry}
+                                        </span>
+                                    </button>
+                                )}
+                                {onConfigure && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            goToSettings(onConfigure)
+                                        }
+                                        className={footerButton}
                                     >
                                         <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <ModelSelectorName>
+                                        <span className="truncate">
                                             {dict.modelConfig.configureModels}
-                                        </ModelSelectorName>
-                                    </ModelSelectorItem>
-                                </div>
-                            )}
-                            <div className="px-3 pb-2 text-xs text-muted-foreground">
-                                {showUnvalidatedModels
-                                    ? dict.modelConfig.allModelsShown
-                                    : dict.modelConfig.onlyVerifiedShown}
+                                        </span>
+                                    </button>
+                                )}
                             </div>
-                        </div>
+                        )}
                     </div>
                 </ModelSelectorContent>
             </ModelSelectorRoot>

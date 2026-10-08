@@ -15,7 +15,7 @@ import { createMockSSEResponse } from "./lib/helpers"
 
 /** Pick a language in the settings, then close them */
 async function pickLanguage(page: Page, name: string) {
-    await openSettingsTab(page, "appearance")
+    await openSettingsTab(page, "general")
     await page.locator("#language-select").click()
     await page.getByRole("option", { name, exact: true }).click()
     await page.keyboard.press("Escape")

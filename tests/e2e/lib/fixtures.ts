@@ -112,10 +112,10 @@ export async function openSettings(page: Page) {
     await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 })
 }
 
-/** Open settings on one of its pages: models, appearance, advanced, about */
+/** Open settings on one of its pages: models, general, drawing, about */
 export async function openSettingsTab(
     page: Page,
-    tab: "models" | "appearance" | "advanced" | "about",
+    tab: "models" | "general" | "drawing" | "about",
 ) {
     await openSettings(page)
     await page.locator(`[data-testid="settings-tab-${tab}"]`).click()
