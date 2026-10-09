@@ -6,6 +6,8 @@
 
 [English](../../README.md) | [中文](../cn/README_CN.md) | 日本語
 
+[![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
+
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
@@ -157,8 +159,6 @@ AWS Bedrock（既定）、OpenAI、Anthropic、Google AI、Google Vertex AI、Az
 -   このプロジェクトが役に立ったら、デモサイトの運営のために[スポンサー](https://github.com/sponsors/DayuanJiang)をご検討ください
 
 <div align="center">
-
-[![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=DayuanJiang/next-ai-draw-io&type=date&legend=top-left)](https://www.star-history.com/#DayuanJiang/next-ai-draw-io&type=date&legend=top-left)
 
