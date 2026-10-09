@@ -82,9 +82,9 @@
         "accessCode": "存取碼",
         "accessCodePlaceholder": "輸入存取碼",
         "accessCodeDescription": "使用此應用程式需要存取碼。",
-        "aiProvider": "AI 提供商設定",
+        "aiProvider": "AI 服務商設定",
         "aiProviderDescription": "使用您自己的 API 金鑰來繞過使用限制。您的金鑰僅儲存在瀏覽器本機，不會儲存在伺服器上。",
-        "provider": "提供商",
+        "provider": "服務商",
         "modelId": "模型 ID",
         "apiKey": "API 金鑰",
         "apiKeyPlaceholder": "您的 API 金鑰",
@@ -118,7 +118,7 @@
         "customSystemMessage": "自訂指令",
         "customSystemMessageDescription": "新增自訂指示，將附加到 AI 的系統提示末尾。",
         "customSystemMessagePlaceholder": "例如：圖表始終使用藍色配色方案...",
-        "maxOutputTokens": "最大輸出 token 數",
+        "maxOutputTokens": "輸出 token 上限",
         "maxOutputTokensDescription": "單次回覆的額度，思考過程與圖表 XML 共用。若 AI 一直在思考卻沒有產生圖表，請將它調大。留空則使用預設值。",
         "tabModels": "模型",
         "tabAbout": "關於",
@@ -207,10 +207,10 @@
     },
     "quota": {
         "dailyLimit": "已達每日配額",
-        "tokenLimit": "已達每日令牌限制",
+        "tokenLimit": "已達每日 token 上限",
         "tpmLimit": "速率限制",
         "tpmMessage": "請求過多。請稍等片刻。",
-        "tpmMessageDetailed": "達到速率限制（{limit} 令牌/分鐘）。請等待 {seconds} 秒後再傳送請求。",
+        "tpmMessageDetailed": "達到速率限制（每分鐘 {limit} token）。請等待 {seconds} 秒後再傳送請求。",
         "messageApi": "看來您今天的體驗次數已達上限。很高興您玩得開心；為了讓大家都能公平使用，示範站對用量做了限制。",
         "messageApiSelfHosted": null,
         "messageToken": "看來您今天的 token 用量已達上限。很高興您玩得開心；為了讓大家都能公平使用，示範站對用量做了限制。",
@@ -481,146 +481,146 @@
         "removeAccessKeys": "刪除存取金鑰"
     },
     "admin": {
-        "title": "管理員設定",
-        "loginPrompt": "輸入管理員密碼（即 ADMIN_PASSWORD 環境變數）以管理伺服器設定。",
+        "title": "後台設定",
+        "loginPrompt": "輸入管理員密碼（環境變數 ADMIN_PASSWORD）",
         "password": "密碼",
         "signIn": "登入",
-        "signingIn": "正在登入…",
+        "signingIn": "登入中…",
         "loginFailed": "登入失敗",
-        "precedence": "檔案覆蓋環境變數 · 環境變數覆蓋預設值",
-        "notWritable": "此部署環境下設定檔不可寫入（無伺服器平台沒有持久化磁碟）。設定以唯讀方式顯示——請改用環境變數進行設定。",
-        "settingGroups": "設定分組",
-        "enabled": "已啟用",
-        "disabled": "已停用",
-        "enableGroup": "啟用 {group}",
-        "unsavedChanges": "有未儲存的變更",
-        "saved": "設定已儲存，變更立即生效。",
-        "saveFailed": "儲存失敗。請檢查網路連線後重試。",
-        "invalidSettings": "部分設定無效。",
-        "discard": "捨棄",
-        "saveChanges": "儲存變更",
-        "saving": "正在儲存…",
-        "sourceSaved": "已儲存",
+        "precedence": "優先順序：本頁設定 > 環境變數 > 預設值",
+        "notWritable": "這裡無法儲存設定，只能檢視；請改用環境變數",
+        "settingGroups": "設定分類",
+        "enabled": "已開啟",
+        "disabled": "已關閉",
+        "enableGroup": "開啟{group}",
+        "unsavedChanges": "有未儲存的修改",
+        "saved": "已儲存，立即生效（需重啟的項目除外）",
+        "saveFailed": "儲存失敗，請檢查網路後重試",
+        "invalidSettings": "有設定填寫有誤，請依提示修改",
+        "discard": "捨棄修改",
+        "saveChanges": "儲存修改",
+        "saving": "儲存中…",
+        "sourceSaved": "本頁設定",
         "sourceEnv": "環境變數",
-        "sourceSavedTitle": "在管理員設定檔中設定",
-        "sourceEnvTitle": "透過環境變數設定",
-        "restartRequired": "需要重新啟動",
+        "sourceSavedTitle": "來自本頁設定",
+        "sourceEnvTitle": "來自環境變數",
+        "restartRequired": "需重啟",
         "modified": "已修改",
         "notSet": "未設定",
-        "savedReplace": "已儲存（{hint}）——輸入以取代",
-        "showValue": "顯示值",
-        "hideValue": "隱藏值",
-        "removeValue": "移除值",
-        "removeValueTitle": "移除已儲存的值",
+        "savedReplace": "已儲存（{hint}），輸入新值即可取代",
+        "showValue": "顯示",
+        "hideValue": "隱藏",
+        "removeValue": "清除",
+        "removeValueTitle": "清除已儲存的值",
         "resetToDefault": "重設為預設",
         "models": "模型",
-        "modelsDescription": "面向所有使用者的伺服器端 provider 與模型——無需個人 API 金鑰。當使用者未選擇模型時，使用預設 provider 的第一個模型。",
-        "addProviderHint": "新增一個 provider，為所有使用者提供伺服器端模型。",
-        "selectProviderHint": "選擇或新增一個 provider 以設定其憑證和模型。",
-        "addProviderToOfferModels": "至少新增一個模型，才能向使用者開放此 provider。",
-        "managedViaEnv": "（透過環境變數管理）",
-        "envReadOnly": "在 AI_MODELS_CONFIG / ai-models.json 中定義——此處唯讀。請編輯環境設定以變更。",
+        "modelsDescription": "給所有使用者用的模型，無需自備金鑰",
+        "addProviderHint": "新增服務商，為所有使用者提供模型",
+        "selectProviderHint": "選擇或新增服務商，填寫金鑰和模型",
+        "addProviderToOfferModels": "至少新增一個模型，使用者才能看到這個服務商",
+        "managedViaEnv": "（環境變數）",
+        "envReadOnly": "由 AI_MODELS_CONFIG / ai-models.json 定義，這裡只能檢視，請到那裡修改",
         "defaultModel": "預設模型",
-        "noModelsConfigured": "未設定模型",
+        "noModelsConfigured": "尚無模型",
         "modelCount": "{count} 個模型",
         "modelCountPlural": "{count} 個模型",
         "default": "預設",
-        "setAsDefault": "設為預設 provider",
-        "defaultProvider": "預設 provider",
+        "setAsDefault": "設為預設服務商",
+        "defaultProvider": "預設服務商",
         "modelIdPlaceholder": "模型 ID…",
         "addModel": "新增模型",
         "suggested": "推薦",
         "test": "測試",
-        "testOk": "正常（{ms} 毫秒）",
+        "testOk": "通過（{ms} 毫秒）",
         "testFailed": "失敗",
-        "removeModel": "移除 {model}",
+        "removeModel": "刪除 {model}",
         "deleteProviderTitle": "刪除 {name}？",
-        "deleteProviderDesc": "儲存後，其憑證和模型將從伺服器上移除。",
+        "deleteProviderDesc": "儲存後，它的金鑰和模型會從伺服器刪除",
         "cancel": "取消",
         "delete": "刪除",
         "groups": {
             "generation": {
-                "title": "生成",
-                "description": "套用於所有聊天請求的輸出參數。"
+                "title": "回覆設定",
+                "description": "控制 AI 怎麼回覆，對所有對話生效"
             },
             "access": {
-                "title": "存取控制",
-                "description": "限制誰可以使用此部署。"
+                "title": "存取權限",
+                "description": "限制誰可以使用這個網站"
             },
             "features": {
-                "title": "功能",
-                "description": "選用功能和安全開關。"
+                "title": "選用功能",
+                "description": "附加功能和安全選項"
             },
             "observability": {
-                "title": "可觀測性",
-                "description": "對 LLM 呼叫進行 Langfuse 追蹤。"
+                "title": "呼叫記錄",
+                "description": "用 Langfuse 記錄模型呼叫"
             },
             "quota": {
-                "title": "配額與速率限制",
-                "description": "按 IP 的用量限制。強制執行需要 DynamoDB 表。"
+                "title": "用量限制",
+                "description": "按 IP 限制用量，需要 DynamoDB 資料表才生效"
             }
         },
         "settings": {
             "TEMPERATURE": {
                 "label": "溫度",
-                "description": "對於拒絕溫度參數的推理模型，請留空。"
+                "description": "越高越隨機；不支援溫度的推理模型請留空"
             },
             "MAX_OUTPUT_TOKENS": {
-                "label": "最大輸出 token 數"
+                "label": "輸出 token 上限"
             },
             "ACCESS_CODE_LIST": {
                 "label": "存取碼",
-                "description": "以逗號分隔的清單。使用者需輸入其中之一才能聊天。留空 = 開放存取。"
+                "description": "逗號分隔多個；輸入其中一個才能用；留空則不限"
             },
             "ENABLE_VLM_VALIDATION": {
-                "label": "VLM 圖表驗證",
-                "description": "使用視覺模型對產生的圖表進行視覺化驗證。"
+                "label": "圖表檢查",
+                "description": "畫完後讓能看圖的模型檢查截圖"
             },
             "VALIDATION_MODEL": {
-                "label": "驗證模型",
-                "description": "留空時回退到預設 AI 模型。"
+                "label": "檢查模型",
+                "description": "留空則用預設模型"
             },
             "VALIDATION_TIMEOUT": {
-                "label": "驗證逾時（毫秒）"
+                "label": "檢查逾時（毫秒）"
             },
             "ENABLE_HISTORY_XML_REPLACE": {
-                "label": "歷史 XML 壓縮",
-                "description": "用占位符取代歷史記錄中的舊圖表 XML。"
+                "label": "精簡舊圖",
+                "description": "對話歷史裡的舊圖表只留簡短標記"
             },
             "ALLOW_PRIVATE_URLS": {
-                "label": "允許私有 URL",
-                "description": "關閉以阻擋對私有 IP 和內部主機名的請求（SSRF 防護）。"
+                "label": "存取內網",
+                "description": "關閉後，自訂模型位址不能指向內網，更安全"
             },
             "LANGFUSE_PUBLIC_KEY": {
-                "label": "Langfuse Public Key"
+                "label": "Langfuse 公鑰"
             },
             "LANGFUSE_SECRET_KEY": {
-                "label": "Langfuse Secret Key"
+                "label": "Langfuse 金鑰"
             },
             "LANGFUSE_BASEURL": {
-                "label": "Langfuse Base URL"
+                "label": "Langfuse 位址"
             },
             "DAILY_REQUEST_LIMIT": {
-                "label": "每日請求上限",
-                "description": "每個 IP 每天。"
+                "label": "每日請求",
+                "description": "每個 IP 每天的請求次數上限"
             },
             "DAILY_TOKEN_LIMIT": {
-                "label": "每日 token 上限",
-                "description": "每個 IP 每天。"
+                "label": "每日 token",
+                "description": "每個 IP 每天的 token 用量上限"
             },
             "TPM_LIMIT": {
-                "label": "每分鐘 token 數"
+                "label": "每分鐘 token"
             },
             "DYNAMODB_QUOTA_TABLE": {
-                "label": "DynamoDB 表",
-                "description": "留空時配額強制執行被停用。"
+                "label": "DynamoDB 資料表名稱",
+                "description": "留空則不限制用量"
             },
             "DYNAMODB_REGION": {
                 "label": "DynamoDB 區域"
             },
             "QUOTA_TIMEZONE": {
-                "label": "配額時區",
-                "description": "每日重置邊界所用的時區。"
+                "label": "時區",
+                "description": "每日用量按這個時區的零點重置"
             }
         }
     },
