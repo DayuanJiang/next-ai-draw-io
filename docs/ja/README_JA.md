@@ -1,105 +1,98 @@
-# Next AI Draw.io
-
 <div align="center">
 
-**AI搭載のダイアグラム作成ツール - チャット、描画、可視化**
+# Next AI Draw.io
+
+**AI とチャットしながら draw.io のダイアグラムを描き、直す。**
 
 [English](../../README.md) | [中文](../cn/README_CN.md) | 日本語
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Next.js](https://img.shields.io/badge/Next.js-16.x-black)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+[**オンラインデモ**](https://next-ai-drawio.jiang.jp/) · [**デスクトップアプリ**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP サーバー**](#ai-エージェントから使うmcp)
 
 </div>
 
-AI機能とdraw.ioダイアグラムを統合したNext.jsウェブアプリケーションです。自然言語コマンドとAI支援の可視化により、ダイアグラムを作成、修正、強化できます。
+https://github.com/user-attachments/assets/66b9f12f-219f-4d62-acc0-0725e6850eec
 
-> 注：<img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) のご支援により、デモサイトに強力な glm-4.7 モデルを導入しました！
+欲しいダイアグラムを一文で伝えると、AI が本物の draw.io キャンバスに描きます。普通の draw.io ファイルと同じように手で直すことも、図形をいくつか選んで AI に変更を頼むこともできます。AI の変更はすべてバージョンとして残り、比較・復元・取り消しができます。結果は `.drawio`、`.png`、`.svg` で書き出せます。
 
-https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+Web アプリ、Windows / macOS / Linux 向けデスクトップアプリ、そして Claude Code、Cursor、VS Code などの AI エージェントから呼び出せる MCP サーバーとして使えます。
 
-## 目次
-- [Next AI Draw.io](#next-ai-drawio)
-  - [目次](#目次)
-  - [例](#例)
-  - [機能](#機能)
-  - [MCPサーバー](#mcpサーバー)
-    - [Claude Code CLI](#claude-code-cli)
-  - [はじめに](#はじめに)
-    - [オンラインで試す](#オンラインで試す)
-    - [デスクトップアプリケーション](#デスクトップアプリケーション)
-    - [Dockerで実行](#dockerで実行)
-    - [インストール](#インストール)
-  - [デプロイ](#デプロイ)
-    - [EdgeOne Pagesへのデプロイ](#edgeone-pagesへのデプロイ)
-    - [Vercelへのデプロイ](#vercelへのデプロイ)
-    - [Cloudflare Workersへのデプロイ](#cloudflare-workersへのデプロイ)
-  - [マルチプロバイダーサポート](#マルチプロバイダーサポート)
-  - [仕組み](#仕組み)
-  - [サポート＆お問い合わせ](#サポートお問い合わせ)
-  - [よくある質問](#よくある質問)
-  - [スター履歴](#スター履歴)
+## 特長
+
+**描く**
+
+-   アーキテクチャ図、フローチャート、シーケンス図などを一文から生成。AWS、Azure、GCP、Kubernetes のアイコンライブラリを内蔵
+-   コネクタに流れるアニメーションを付けられる
+-   スクリーンショットや手描きの図をアップロードすると AI が描き直す。PDF、Markdown、コードなどのテキストファイルからも内容を図にできる
+
+**直す**
+
+-   チャットで修正：変更はストリーミングでキャンバスに反映され、AI が変更した図形はハイライト表示
+-   選択して頼む：キャンバスで図形を選ぶと、AI はその図形だけを変更
+-   バージョンと取り消し：AI の変更ごとにサムネイル付きのバージョンカードが残り、キャンバスと比較・復元・取り消しができる。キャンバス上の Ctrl+Z でも AI の変更を一度で戻せる
+-   ただの draw.io ダイアグラム：ダブルクリックで名前を変え、ドラッグし、スタイルを変え、複数ページを使い、いつでも `.drawio`、`.png`、`.svg`、`.drawio.svg` に書き出せる
+
+**使う**
+
+-   24 のモデルプロバイダーに対応。自分の API キーをブラウザに入力でき、キーは端末内にだけ保存される
+-   推論するモデルは思考過程を表示
+-   ダークモード。UI は英語、簡体字中国語、繁体字中国語、日本語に対応
 
 ## 例
-
-以下はいくつかのプロンプト例と生成されたダイアグラムです：
 
 <div align="center">
 <table width="100%">
   <tr>
     <td colspan="2" valign="top" align="center">
-      <strong>アニメーションTransformerコネクタ</strong><br />
-      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
-      <img src="../../public/animated_connectors.svg" alt="アニメーションコネクタ付きTransformerアーキテクチャ" width="480" />
+      <strong>アニメーションコネクタ付き Transformer アーキテクチャ</strong><br />
+      <p><strong>Prompt:</strong> Give me a <strong>animated connector</strong> diagram of transformer's architecture.</p>
+      <img src="../../public/animated_connectors.svg" alt="アニメーションコネクタ付き Transformer アーキテクチャ" width="440" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>RAG技術ダイアグラム</strong><br />
-      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
-      <img src="../../public/rag_prod.svg" alt="RAGアーキテクチャ図" width="480" />
+      <strong>RAG アーキテクチャ</strong><br />
+      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for <strong>chat application</strong>. Use connected diagram for data ingestion</p>
+      <img src="../../public/rag_prod.svg" alt="RAG アーキテクチャ図" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>ReactとAWSによる認証</strong><br />
-      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
-      <img src="../../public/auth.svg" alt="認証アーキテクチャ図" width="480" />
+      <strong>React と AWS による認証フロー</strong><br />
+      <p><strong>Prompt:</strong> Generate authentication process using React with <strong>AWS</strong>. Use Serverless architecture.</p>
+      <img src="../../public/auth.svg" alt="認証アーキテクチャ図" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>オープンイノベーション</strong><br />
+      <strong>オープンイノベーションモデル</strong><br />
       <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
-      <img src="../../public/inno.svg" alt="オープンイノベーション図" width="480" />
+      <img src="../../public/inno.svg" alt="オープンイノベーション図" width="400" />
     </td>
     <td width="50%" valign="top">
       <strong>猫のスケッチ</strong><br />
       <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
-      <img src="../../public/cat_demo.svg" alt="猫の絵" width="240" />
+      <img src="../../public/cat_demo.svg" alt="猫の絵" width="200" />
     </td>
   </tr>
 </table>
 </div>
 
-## 機能
+## 使い方
 
--   **LLM搭載のダイアグラム作成**：大規模言語モデルを活用して、自然言語コマンドで直接draw.ioダイアグラムを作成・操作
--   **画像ベースのダイアグラム複製**：既存のダイアグラムや画像をアップロードし、AIが自動的に複製・強化
--   **PDFとテキストファイルのアップロード**：PDFドキュメントやテキストファイルをアップロードして、既存のドキュメントからコンテンツを抽出し、ダイアグラムを生成
--   **AI推論プロセス表示**：サポートされているモデル（OpenAI o1/o3、Gemini、Claudeなど）のAIの思考プロセスを表示
--   **バージョンと取り消し**：AI が図を変更するたびに、サムネイル付きのバージョンカードがチャットに表示されます。キャンバスと比較したり、復元したり、その変更を取り消したりできます。キャンバスで Ctrl+Z を押しても AI の変更を一度に元に戻せます。AI が変更した図形はキャンバス上で強調表示されます
--   **選択した図形について依頼**：キャンバスで図形を選択し、その図形だけを AI に直してもらえます
--   **インタラクティブなチャットインターフェース**：AIとリアルタイムでコミュニケーションしてダイアグラムを改善
--   **クラウドアーキテクチャダイアグラムサポート**：クラウドアーキテクチャダイアグラムの生成を専門的にサポート（AWS、GCP、Azure）
--   **アニメーションコネクタ**：より良い可視化のためにダイアグラム要素間に動的でアニメーション化されたコネクタを作成
+### オンラインデモ
 
-## MCPサーバー
+[next-ai-drawio.jiang.jp](https://next-ai-drawio.jiang.jp/) を開けばすぐ使えます。インストールは不要です。デモサイトには利用上限があります。チャットパネルの設定アイコンから自分のプロバイダーと API キーを入力すると上限なしで使えます。キーはブラウザ内にだけ保存され、サーバーには送られません。
 
-MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS CodeなどのAIエージェントでNext AI Draw.ioを使用できます。
+### デスクトップアプリ
+
+[Releases ページ](https://github.com/DayuanJiang/next-ai-draw-io/releases) から Windows、macOS、Linux 向けのインストーラーをダウンロードしてください。
+
+### AI エージェントから使う（MCP）
+
+MCP（Model Context Protocol、AI エージェントが外部ツールを呼び出すためのプロトコル）を通して、Claude Desktop、Cursor、VS Code などから直接 draw.io のダイアグラムを描けます。クライアントの MCP 設定に次を追加します。
 
 ```json
 {
@@ -112,158 +105,61 @@ MCP（Model Context Protocol）を介して、Claude Desktop、Cursor、VS Code�
 }
 ```
 
-### Claude Code CLI
+Claude Code ならコマンド一つです。
 
 ```bash
 claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
-Claudeにダイアグラムの作成を依頼：
-> 「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを作成してください」
+あとは AI に「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを描いて」と頼めば、描かれていく様子がブラウザに表示されます。MCP サーバーには Web アプリの作図機能のほとんどが入っています。
 
-ダイアグラムがリアルタイムでブラウザに表示されます！
+-   同じ作図ルールとアイコンライブラリ（AWS、Azure、GCP、Kubernetes など）
+-   スクリーンショットツール。AI が描いた結果を確認して自分で直せる
+-   バージョン履歴、複数ページのダイアグラム、`.drawio`、`.png`、`.svg`、`.drawio.svg` でのダウンロード
+-   `~/.next-ai-drawio/` への自動保存。再起動後も続きから描ける
 
-MCPサーバーには、Webアプリの主な作図機能が含まれています：
+VS Code、Cursor などの設定は [MCP サーバーの README](../../packages/mcp-server/README.md) を参照してください。
 
--   Webアプリと同じ作図ルールとシェイプライブラリ（AWS、Azure、GCP、Kubernetesなど）
--   スクリーンショットツール：AIが描画結果を確認して修正できます
--   バージョン履歴、複数ページのダイアグラム、`.drawio`・`.png`・`.svg`・`.drawio.svg`形式でのダウンロード
--   `~/.next-ai-drawio/`への自動保存：再起動後も続きから編集できます
+## 自分でホストする
 
-詳細は[MCPサーバーREADME](../../packages/mcp-server/README.md)をご覧ください（VS Code、Cursorなどのクライアント設定も含む）。
-
-## はじめに
-
-### オンラインで試す
-
-インストール不要！デモサイトで直接お試しください：
-
-[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
-
-> **自分のAPIキーを使用**：自分のAPIキーを使用することで、デモサイトの利用制限を回避できます。チャットパネルの設定アイコンをクリックして、プロバイダーとAPIキーを設定してください。キーはブラウザのローカルに保存され、サーバーには保存されません。
-
-### デスクトップアプリケーション
-
-[Releases ページ](https://github.com/DayuanJiang/next-ai-draw-io/releases)からお使いのプラットフォーム用のネイティブデスクトップアプリをダウンロードしてください：
-
-対応プラットフォーム：Windows、macOS、Linux。
-
-### Dockerで実行
-
-[Docker ガイドを参照](./docker.md)
-
-### インストール
-
-1. リポジトリをクローン：
+### ローカルで動かす
 
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
 npm install
-cp env.example .env.local
-```
-
-詳細な設定手順については[プロバイダー設定ガイド](./ai-providers.md)を参照してください。
-
-2. 開発サーバーを起動：
-
-```bash
+cp env.example .env.local   # プロバイダーと API キーを記入。下の「モデルとプロバイダー」を参照
 npm run dev
 ```
 
-3. ブラウザで[http://localhost:6002](http://localhost:6002)を開いてアプリケーションを確認。
+[http://localhost:6002](http://localhost:6002) を開きます。
 
-## デプロイ
+### ワンクリックデプロイ
 
-### EdgeOne Pagesへのデプロイ
+| プラットフォーム | 方法 |
+| --- | --- |
+| Tencent EdgeOne Pages | [![Deploy to EdgeOne Pages](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io) デプロイすると [DeepSeek モデルの毎日の無料クォータ](https://pages.edgeone.ai/document/edge-ai) も付きます |
+| Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io) `.env.local` と同じ環境変数を Vercel のダッシュボードで設定してください |
+| Cloudflare Workers | [Cloudflare デプロイガイド](./cloudflare-deploy.md) |
+| Docker | [Docker ガイド](./docker.md) |
+| オフラインまたは社内ネットワーク | [オフラインデプロイ](./offline-deployment.md) |
 
-[Tencent EdgeOne Pages](https://pages.edgeone.ai/)を使用してワンクリックでデプロイできます。
+### モデルとプロバイダー
 
-このボタンでデプロイ：
+AWS Bedrock（既定）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、Tencent EdgeOne、ByteDance Doubao、ModelScope、Zhipu GLM、Qwen、Qiniu、Kimi、MiniMax、Novita、Xiaomi MiMo、Atlas Cloud の 24 プロバイダーに対応しています。各プロバイダーの環境変数と注意点は[プロバイダー設定ガイド](./ai-providers.md)にあります。
 
-[![Deploy to EdgeOne Pages](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+**どのモデルを選ぶか**：厳密な形式の長いテキスト（draw.io の XML）を生成するタスクなので、能力の高いモデルを選んでください。小さなモデルは壊れた図を出しがちです。
 
-詳細は[Tencent EdgeOne Pagesドキュメント](https://pages.edgeone.ai/document/deployment-overview)をご覧ください。
+**複数モデルと管理パネル**：`AI_MODEL` にモデル ID をカンマ区切りで並べるか、`AI_MODELS_CONFIG` 環境変数または `ai-models.json` ファイルで複数プロバイダーのモデルを設定すると、全ユーザーが自分のキーなしで使えます。`ADMIN_PASSWORD` を設定して `/admin` を開くと、モデル、アクセスコード、機能の切り替え、オブザーバビリティ、クォータを Web 画面から管理できます。[管理パネルガイド](./admin-panel.md)を参照してください。
 
-また、Tencent EdgeOne Pagesでデプロイすると、[DeepSeekモデルの毎日の無料クォータ](https://pages.edgeone.ai/document/edge-ai)が付与されます。
+## サポート
 
-### Vercelへのデプロイ
+-   質問や提案：[GitHub Issue](https://github.com/DayuanJiang/next-ai-draw-io/issues) を立てるか、me[at]jiang.jp までメールしてください
+-   よくある問題：[FAQ](./FAQ.md)
+-   このプロジェクトが役に立ったら、デモサイトの運営のために[スポンサー](https://github.com/sponsors/DayuanJiang)をご検討ください
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
-
-Next.jsアプリをデプロイする最も簡単な方法は、Next.jsの作成者による[Vercelプラットフォーム](https://vercel.com/new)を使用することです。ローカルの`.env.local`ファイルと同様に、Vercelダッシュボードで**環境変数を設定**してください。
-
-詳細は[Next.jsデプロイメントドキュメント](https://nextjs.org/docs/app/building-your-application/deploying)をご覧ください。
-
-### Cloudflare Workersへのデプロイ
-
-[Cloudflare デプロイガイドを参照](./cloudflare-deploy.md)
-
-
-## マルチプロバイダーサポート
-
--   [ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)
--   AWS Bedrock（デフォルト）
--   OpenAI
--   Anthropic
--   Google AI
--   Google Vertex AI
--   Azure OpenAI
--   Ollama
--   OpenRouter
--   AIHubMix
--   DeepSeek
--   SiliconFlow
--   ModelScope
--   SGLang
--   Vercel AI Gateway
-
-AWS BedrockとOpenRouter以外のすべてのプロバイダーはカスタムエンドポイントをサポートしています。
-
-📖 **[詳細なプロバイダー設定ガイド](./ai-providers.md)** - 各プロバイダーの設定手順をご覧ください。
-
-### サーバーサイドマルチモデル設定
-
-管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。`AI_MODELS_CONFIG` 環境変数（JSON文字列）または `ai-models.json` ファイルで設定します。同一プロバイダー内の複数モデルだけが必要な場合は、`AI_MODEL` にカンマ区切りでモデルIDを列挙する簡易設定も使えます。
-
-**モデル要件**：このタスクは厳密なフォーマット制約（draw.io XML）を持つ長文テキスト生成を伴うため、強力なモデル機能が必要です。Claude Sonnet 4.5、GPT-5.1、Gemini 3 Pro、DeepSeek V3.2/R1を推奨します。
-
-注：`claude`シリーズはAWS、Azure、GCPなどのクラウドアーキテクチャロゴ付きのdraw.ioダイアグラムで学習されているため、クラウドアーキテクチャダイアグラムを作成したい場合は最適な選択です。
-
-### 管理パネル
-
-`ADMIN_PASSWORD` 環境変数を設定して `/admin` にアクセスすると、`.env` を手動で編集する代わりに Web パネルでサーバー設定（モデル、アクセスコード、機能、可観測性、クォータ）を管理できます。
-
-📖 **[管理パネルガイド](./admin-panel.md)** — 有効化の方法、優先順位ルール、注意事項。
-
-
-## 仕組み
-
-本アプリケーションは以下の技術を使用しています：
-
--   **Next.js**：フロントエンドフレームワークとルーティング
--   **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：ストリーミングAIレスポンスとマルチプロバイダーサポート
--   **draw.io**：エディターは `public/drawio` に同梱したコピー（`npm run dev` / `npm run build` で自動ダウンロード）で動作し、アプリから直接操作できます
-
-ダイアグラムはdraw.ioでレンダリングできるXMLとして表現されます。AIがコマンドを処理し、それに応じてこのXMLを生成または変更します。
-
-
-## サポート＆お問い合わせ
-
-**デモサイトのAPIトークン使用を支援してくださった[ByteDance Doubao](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)に特別な感謝を申し上げます！** ARKプラットフォームに登録すると、50万トークンが無料でもらえます！
-
-このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために[スポンサー](https://github.com/sponsors/DayuanJiang)をご検討ください！
-
-サポートやお問い合わせについては、GitHubリポジトリでissueを開くか、メンテナーにご連絡ください：
-
--   メール：me[at]jiang.jp
-
-## よくある質問
-
-一般的な問題と解決策については [FAQ](./FAQ.md) をご覧ください。
-
-## スター履歴
+<div align="center">
 
 [![Star History Chart](https://api.star-history.com/svg?repos=DayuanJiang/next-ai-draw-io&type=date&legend=top-left)](https://www.star-history.com/#DayuanJiang/next-ai-draw-io&type=date&legend=top-left)
 
----
+</div>

@@ -66,54 +66,6 @@ export default function AboutCN() {
                     <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
                         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
                         <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
-                            {/* Header */}
-                            <div className="mb-4">
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    由字节跳动豆包提供支持
-                                </h3>
-                            </div>
-
-                            {/* Story */}
-                            <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
-                                <p>
-                                    好消息！感谢{" "}
-                                    <a
-                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-semibold text-blue-600 hover:underline"
-                                    >
-                                        字节跳动豆包
-                                    </a>
-                                    的慷慨赞助，演示站点现已接入强大的{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        glm-4.7
-                                    </span>{" "}
-                                    模型，图表生成效果更佳！点击链接注册即可领取{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        50万免费Token
-                                    </span>
-                                    ，适用于所有模型！
-                                </p>
-                            </div>
-
-                            {/* Invite Poster */}
-                            <div className="text-center mb-5">
-                                <a
-                                    href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    <Image
-                                        src="/volcengine-invite.png"
-                                        alt="火山引擎方舟 Coding Plan"
-                                        width={300}
-                                        height={400}
-                                        className="mx-auto rounded-lg"
-                                    />
-                                </a>
-                            </div>
-
                             {/* Bring Your Own Key */}
                             <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">
@@ -309,16 +261,7 @@ export default function AboutCN() {
                         多提供商支持
                     </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
-                        <li>
-                            <a
-                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                            >
-                                字节跳动豆包
-                            </a>
-                        </li>
+                        <li>字节跳动豆包</li>
                         <li>AWS Bedrock（默认）</li>
                         <li>
                             OpenAI / OpenAI兼容API（通过{" "}
@@ -343,18 +286,6 @@ export default function AboutCN() {
                     <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
                         支持与联系
                     </h2>
-                    <p className="text-gray-700 mb-4 font-semibold">
-                        特别感谢{" "}
-                        <a
-                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                        >
-                            字节跳动豆包
-                        </a>{" "}
-                        为本站提供 API Token 支持！
-                    </p>
                     <p className="text-gray-700">
                         如果您觉得这个项目有用，请考虑{" "}
                         <a

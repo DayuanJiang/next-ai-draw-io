@@ -74,39 +74,6 @@ export default function About() {
                     <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
                         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
                         <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
-                            {/* Header */}
-                            <div className="mb-4">
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    Sponsored by ByteDance Doubao
-                                </h3>
-                            </div>
-
-                            {/* Story */}
-                            <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
-                                <p>
-                                    Great news! Thanks to the generous
-                                    sponsorship from{" "}
-                                    <a
-                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-semibold text-blue-600 hover:underline"
-                                    >
-                                        ByteDance Doubao
-                                    </a>
-                                    , the demo site now uses the powerful{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        glm-4.7
-                                    </span>{" "}
-                                    model for better diagram generation! Sign up
-                                    via the link to get{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        500K free tokens
-                                    </span>{" "}
-                                    for all models!
-                                </p>
-                            </div>
-
                             {/* Bring Your Own Key */}
                             <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">
@@ -319,16 +286,7 @@ export default function About() {
                         Multi-Provider Support
                     </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
-                        <li>
-                            <a
-                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                            >
-                                ByteDance Doubao
-                            </a>
-                        </li>
+                        <li>ByteDance Doubao</li>
                         <li>AWS Bedrock (default)</li>
                         <li>
                             OpenAI / OpenAI-compatible APIs (via{" "}
@@ -355,18 +313,6 @@ export default function About() {
                     <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
                         Support &amp; Contact
                     </h2>
-                    <p className="text-gray-700 mb-4 font-semibold">
-                        Special thanks to{" "}
-                        <a
-                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                        >
-                            ByteDance Doubao
-                        </a>{" "}
-                        for sponsoring the API token usage of the demo site!
-                    </p>
                     <p className="text-gray-700">
                         If you find this project useful, please consider{" "}
                         <a

@@ -74,37 +74,6 @@ export default function AboutJA() {
                     <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
                         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
                         <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
-                            {/* Header */}
-                            <div className="mb-4">
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    ByteDance Doubao提供
-                                </h3>
-                            </div>
-
-                            {/* Story */}
-                            <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
-                                <p>
-                                    朗報です！
-                                    <a
-                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-semibold text-blue-600 hover:underline"
-                                    >
-                                        ByteDance Doubao
-                                    </a>
-                                    様のご支援により、デモサイトでは強力な{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        glm-4.7
-                                    </span>{" "}
-                                    モデルを利用できるようになり、より高品質なダイアグラム生成が可能になりました。リンクから登録すると、すべてのモデルで使える{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        50万トークン
-                                    </span>
-                                    が無料でもらえます！
-                                </p>
-                            </div>
-
                             {/* Bring Your Own Key */}
                             <div className="text-center">
                                 <h4 className="text-base font-bold text-gray-900 mb-2">
@@ -305,16 +274,7 @@ export default function AboutJA() {
                         マルチプロバイダーサポート
                     </h2>
                     <ul className="list-disc pl-6 text-gray-700 space-y-1">
-                        <li>
-                            <a
-                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                            >
-                                ByteDance Doubao
-                            </a>
-                        </li>
+                        <li>ByteDance Doubao</li>
                         <li>AWS Bedrock（デフォルト）</li>
                         <li>
                             OpenAI / OpenAI互換API（<code>OPENAI_BASE_URL</code>
@@ -339,18 +299,6 @@ export default function AboutJA() {
                     <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
                         サポート＆お問い合わせ
                     </h2>
-                    <p className="text-gray-700 mb-4 font-semibold">
-                        デモサイトのAPIトークン使用を支援してくださった{" "}
-                        <a
-                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                        >
-                            ByteDance Doubao
-                        </a>{" "}
-                        様に、心より感謝申し上げます。
-                    </p>
                     <p className="text-gray-700">
                         このプロジェクトが役に立ったら、ライブデモサイトのホスティングを支援するために{" "}
                         <a
