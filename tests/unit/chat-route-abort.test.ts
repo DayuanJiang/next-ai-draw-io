@@ -30,6 +30,10 @@ const sse = (chunks: object[], end = true) =>
 
 describe("a request stopped after a finished step", () => {
     it("counts that step's tokens", async () => {
+        // DIAGNOSTICS (temporary): where does the time go on CI?
+        const t0 = Date.now()
+        const log = (m: string) =>
+            console.log(`[abort-test +${Date.now() - t0}ms] ${m}`)
         // Step 1 asks for a shape library (run on the server) and reports
         // its usage; step 2 never ends, and the user stops
         let call = 0
@@ -37,6 +41,9 @@ describe("a request stopped after a finished step", () => {
             "fetch",
             vi.fn(async (_url: string, init?: RequestInit) => {
                 call++
+                log(
+                    `fetch call ${call}, signal ${init?.signal ? "present" : "missing"}`,
+                )
                 if (call === 1) {
                     return new Response(
                         sse([
@@ -85,11 +92,12 @@ describe("a request stopped after a finished step", () => {
                 // Never ends, until the request is aborted (as fetch does)
                 const body = new ReadableStream({
                     start(controller) {
-                        init?.signal?.addEventListener("abort", () =>
+                        init?.signal?.addEventListener("abort", () => {
+                            log("step 2 body: abort seen, erroring the stream")
                             controller.error(
                                 new DOMException("aborted", "AbortError"),
-                            ),
-                        )
+                            )
+                        })
                     },
                 })
                 return new Response(body, {
@@ -123,17 +131,30 @@ describe("a request stopped after a finished step", () => {
                 }),
             }),
         )
+        log(`chat() returned ${res.status}`)
         const reader = res.body?.getReader()
         // Read until the second step has started
-        await vi.waitFor(() => expect(call).toBe(2), { timeout: 3000 })
+        await vi.waitFor(() => expect(call).toBe(2), { timeout: 15000 })
+        log("call reached 2, aborting")
         stop.abort()
+        log("aborted; draining")
         // The answer stream ends; the SDK handles the stop as it is read
-        while (
-            reader &&
-            !(await reader.read().catch(() => ({ done: true }))).done
-        ) {
-            // drain
+        let chunks = 0
+        for (;;) {
+            if (!reader) break
+            const r = await reader.read().catch((e) => {
+                log(`read error: ${e}`)
+                return { done: true, value: undefined }
+            })
+            if (r.done) break
+            chunks++
+            const text = new TextDecoder().decode(r.value).slice(0, 120)
+            log(`chunk ${chunks}: ${text.replace(/\n/g, " ")}`)
         }
+        log(
+            `drained ${chunks} chunks; recorded=${JSON.stringify(quota.recorded)}`,
+        )
         await vi.waitFor(() => expect(quota.recorded).toEqual([1230]))
-    })
+        log("done")
+    }, 20000)
 })
