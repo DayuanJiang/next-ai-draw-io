@@ -216,6 +216,20 @@ export function applyDiagramOperations(
                 continue
             }
 
+            // A cut-off cell (its XML still streaming in a preview) would
+            // parse in Chrome to a cell without its geometry
+            const syntaxError = getXmlSyntaxError(
+                `<wrapper>${op.new_xml}</wrapper>`,
+            )
+            if (syntaxError) {
+                errors.push({
+                    type: "update",
+                    cellId: op.cell_id,
+                    message: `new_xml is not well-formed XML: ${syntaxError}`,
+                })
+                continue
+            }
+
             // Parse the new XML
             const newDoc = parser.parseFromString(
                 `<wrapper>${op.new_xml}</wrapper>`,
@@ -264,6 +278,20 @@ export function applyDiagramOperations(
                     type: "add",
                     cellId: op.cell_id,
                     message: "new_xml is required for add operation",
+                })
+                continue
+            }
+
+            // A cut-off cell (its XML still streaming in a preview) would
+            // parse in Chrome to a cell without its geometry
+            const syntaxError = getXmlSyntaxError(
+                `<wrapper>${op.new_xml}</wrapper>`,
+            )
+            if (syntaxError) {
+                errors.push({
+                    type: "add",
+                    cellId: op.cell_id,
+                    message: `new_xml is not well-formed XML: ${syntaxError}`,
                 })
                 continue
             }
