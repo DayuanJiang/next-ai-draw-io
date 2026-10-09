@@ -118,7 +118,7 @@
         "customSystemMessage": "カスタム指示",
         "customSystemMessageDescription": "AIのシステムプロンプトに追加されるカスタム指示を入力します。",
         "customSystemMessagePlaceholder": "例：ダイアグラムには常に青色のカラースキームを使用...",
-        "maxOutputTokens": "最大出力トークン数",
+        "maxOutputTokens": "出力トークン上限",
         "maxOutputTokensDescription": "1回の応答の予算で、思考過程とダイアグラムの XML が共有します。AI が考え続けてダイアグラムが生成されない場合は大きくしてください。空欄ならデフォルト値を使います。",
         "tabModels": "モデル",
         "tabAbout": "このアプリについて",
@@ -482,114 +482,114 @@
     },
     "admin": {
         "title": "管理者設定",
-        "loginPrompt": "サーバー設定を管理するには、管理者パスワード（ADMIN_PASSWORD 環境変数）を入力してください。",
+        "loginPrompt": "管理者パスワード（環境変数 ADMIN_PASSWORD）を入力してください",
         "password": "パスワード",
         "signIn": "ログイン",
         "signingIn": "ログイン中…",
         "loginFailed": "ログインに失敗しました",
-        "precedence": "ファイルが環境変数を上書き · 環境変数がデフォルトを上書き",
-        "notWritable": "このデプロイ環境では設定ファイルに書き込めません（サーバーレス環境には永続ディスクがありません）。設定は読み取り専用で表示されます——代わりに環境変数で構成してください。",
-        "settingGroups": "設定グループ",
-        "enabled": "有効",
-        "disabled": "無効",
-        "enableGroup": "{group} を有効化",
+        "precedence": "優先順位：このページ > 環境変数 > 既定値",
+        "notWritable": "この環境では設定を保存できず、表示のみです。環境変数で設定してください",
+        "settingGroups": "設定の分類",
+        "enabled": "オン",
+        "disabled": "オフ",
+        "enableGroup": "{group} をオンにする",
         "unsavedChanges": "未保存の変更があります",
-        "saved": "設定を保存しました。変更は即座に反映されます。",
-        "saveFailed": "保存に失敗しました。接続を確認して再試行してください。",
-        "invalidSettings": "一部の設定が無効です。",
-        "discard": "破棄",
+        "saved": "保存しました。「再起動が必要」の項目以外はすぐに反映されます",
+        "saveFailed": "保存に失敗しました。接続を確認してもう一度お試しください",
+        "invalidSettings": "入力に誤りがある設定があります。項目の下の説明を確認してください",
+        "discard": "変更を破棄",
         "saveChanges": "変更を保存",
         "saving": "保存中…",
-        "sourceSaved": "保存済み",
+        "sourceSaved": "このページ",
         "sourceEnv": "環境変数",
-        "sourceSavedTitle": "管理者設定ファイルで設定",
-        "sourceEnvTitle": "環境変数で設定",
+        "sourceSavedTitle": "このページで設定した値",
+        "sourceEnvTitle": "環境変数による設定",
         "restartRequired": "再起動が必要",
         "modified": "変更済み",
         "notSet": "未設定",
-        "savedReplace": "保存済み（{hint}）——入力して置き換え",
-        "showValue": "値を表示",
-        "hideValue": "値を非表示",
-        "removeValue": "値を削除",
-        "removeValueTitle": "保存された値を削除",
+        "savedReplace": "保存済み（{hint}）。新しい値を入力すると置き換わります",
+        "showValue": "表示",
+        "hideValue": "非表示",
+        "removeValue": "クリア",
+        "removeValueTitle": "保存した値をクリア",
         "resetToDefault": "デフォルトに戻す",
         "models": "モデル",
-        "modelsDescription": "全ユーザーが利用できるサーバー側のプロバイダーとモデル——個人の API キーは不要です。ユーザーがモデルを選択しない場合、デフォルトプロバイダーの最初のモデルが使用されます。",
-        "addProviderHint": "プロバイダーを追加して、全ユーザーにサーバー側モデルを提供します。",
-        "selectProviderHint": "プロバイダーを選択または追加して、その資格情報とモデルを構成します。",
-        "addProviderToOfferModels": "ユーザーにこのプロバイダーを公開するには、モデルを少なくとも 1 つ追加してください。",
-        "managedViaEnv": "（環境変数で管理）",
-        "envReadOnly": "AI_MODELS_CONFIG / ai-models.json で定義——ここでは読み取り専用です。変更するには環境構成を編集してください。",
+        "modelsDescription": "全ユーザーが使えるモデル。個人の API キーは不要です",
+        "addProviderHint": "プロバイダーを追加して、全ユーザーにモデルを提供します",
+        "selectProviderHint": "プロバイダーを選択または追加し、キーとモデルを入力します",
+        "addProviderToOfferModels": "モデルを 1 つ以上追加すると、ユーザーにこのプロバイダーが表示されます",
+        "managedViaEnv": "（環境変数）",
+        "envReadOnly": "AI_MODELS_CONFIG / ai-models.json で定義されています。ここでは表示のみで、変更はそちらで行ってください",
         "defaultModel": "デフォルトモデル",
-        "noModelsConfigured": "モデルが構成されていません",
+        "noModelsConfigured": "モデルはまだありません",
         "modelCount": "{count} 個のモデル",
         "modelCountPlural": "{count} 個のモデル",
         "default": "デフォルト",
-        "setAsDefault": "デフォルトプロバイダーに設定",
-        "defaultProvider": "デフォルトプロバイダー",
+        "setAsDefault": "既定のプロバイダーにする",
+        "defaultProvider": "既定のプロバイダー",
         "modelIdPlaceholder": "モデル ID…",
         "addModel": "モデルを追加",
         "suggested": "おすすめ",
         "test": "テスト",
-        "testOk": "正常（{ms}ms）",
+        "testOk": "成功（{ms} ms）",
         "testFailed": "失敗",
         "removeModel": "{model} を削除",
         "deleteProviderTitle": "{name} を削除しますか？",
-        "deleteProviderDesc": "保存後、その資格情報とモデルはサーバーから削除されます。",
+        "deleteProviderDesc": "保存すると、このプロバイダーのキーとモデルがサーバーから削除されます",
         "cancel": "キャンセル",
         "delete": "削除",
         "groups": {
             "generation": {
-                "title": "生成",
-                "description": "すべてのチャットリクエストに適用される出力パラメーター。"
+                "title": "応答の設定",
+                "description": "AI の応答のしかたを決めます。すべての会話に適用されます"
             },
             "access": {
-                "title": "アクセス制御",
-                "description": "このデプロイを使用できるユーザーを制限します。"
+                "title": "アクセス権",
+                "description": "このサイトを使える人を制限します"
             },
             "features": {
-                "title": "機能",
-                "description": "オプション機能とセキュリティの切り替え。"
+                "title": "オプション機能",
+                "description": "追加機能と安全のための設定"
             },
             "observability": {
-                "title": "オブザーバビリティ",
-                "description": "LLM 呼び出しの Langfuse トレース。"
+                "title": "呼び出し記録",
+                "description": "モデルの呼び出しを Langfuse に記録します"
             },
             "quota": {
-                "title": "クォータとレート制限",
-                "description": "IP ごとの使用制限。強制には DynamoDB テーブルが必要です。"
+                "title": "使用量の制限",
+                "description": "IP ごとの制限。DynamoDB テーブルがあるときだけ有効です"
             }
         },
         "settings": {
             "TEMPERATURE": {
                 "label": "温度",
-                "description": "温度を受け付けない推論モデルの場合は未設定のままにしてください。"
+                "description": "高いほどランダムになります。温度に対応しない推論モデルでは空にしてください"
             },
             "MAX_OUTPUT_TOKENS": {
-                "label": "最大出力トークン数"
+                "label": "出力トークン上限"
             },
             "ACCESS_CODE_LIST": {
                 "label": "アクセスコード",
-                "description": "カンマ区切りのリスト。チャットにはいずれかの入力が必要です。空 = オープンアクセス。"
+                "description": "複数はカンマ区切り。いずれかを入力しないと使えません。空なら制限なし"
             },
             "ENABLE_VLM_VALIDATION": {
-                "label": "VLM 図検証",
-                "description": "ビジョンモデルで生成された図を視覚的に検証します。"
+                "label": "図のチェック",
+                "description": "描画後、画像を読めるモデルがスクリーンショットをチェックします"
             },
             "VALIDATION_MODEL": {
-                "label": "検証モデル",
-                "description": "空の場合はデフォルトの AI モデルにフォールバックします。"
+                "label": "チェック用モデル",
+                "description": "空なら既定のモデルを使います"
             },
             "VALIDATION_TIMEOUT": {
-                "label": "検証タイムアウト（ms）"
+                "label": "チェックのタイムアウト（ms）"
             },
             "ENABLE_HISTORY_XML_REPLACE": {
-                "label": "履歴 XML 圧縮",
-                "description": "履歴内の古い図 XML をプレースホルダーで置き換えます。"
+                "label": "古い図を省略",
+                "description": "会話履歴の古い図は短い印だけ残します"
             },
             "ALLOW_PRIVATE_URLS": {
-                "label": "プライベート URL を許可",
-                "description": "オフにすると、プライベート IP や内部ホスト名へのリクエストをブロックします（SSRF 保護）。"
+                "label": "内部ネットワークへのアクセス",
+                "description": "オフにすると、ユーザーが指定するモデルの URL に内部アドレスを使えなくなり、安全です"
             },
             "LANGFUSE_PUBLIC_KEY": {
                 "label": "Langfuse Public Key"
@@ -598,29 +598,29 @@
                 "label": "Langfuse Secret Key"
             },
             "LANGFUSE_BASEURL": {
-                "label": "Langfuse Base URL"
+                "label": "Langfuse の URL"
             },
             "DAILY_REQUEST_LIMIT": {
-                "label": "1 日あたりのリクエスト上限",
-                "description": "IP ごと 1 日あたり。"
+                "label": "1 日のリクエスト数",
+                "description": "IP ごとの 1 日あたりのリクエスト数の上限"
             },
             "DAILY_TOKEN_LIMIT": {
-                "label": "1 日あたりのトークン上限",
-                "description": "IP ごと 1 日あたり。"
+                "label": "1 日のトークン数",
+                "description": "IP ごとの 1 日あたりのトークン使用量の上限"
             },
             "TPM_LIMIT": {
                 "label": "1 分あたりのトークン数"
             },
             "DYNAMODB_QUOTA_TABLE": {
-                "label": "DynamoDB テーブル",
-                "description": "空の場合、クォータの強制は無効になります。"
+                "label": "DynamoDB テーブル名",
+                "description": "空なら使用量を制限しません"
             },
             "DYNAMODB_REGION": {
                 "label": "DynamoDB リージョン"
             },
             "QUOTA_TIMEZONE": {
-                "label": "クォータタイムゾーン",
-                "description": "1 日のリセット境界に使用するタイムゾーン。"
+                "label": "タイムゾーン",
+                "description": "1 日の使用量はこのタイムゾーンの 0 時にリセットされます"
             }
         }
     },
