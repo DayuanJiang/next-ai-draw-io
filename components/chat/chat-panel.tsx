@@ -1,10 +1,10 @@
 import {
     ChevronDown,
     Download,
+    FilePlus,
     MessageSquareDashed,
     PanelRightClose,
-    Settings2,
-    SquarePen,
+    Settings,
 } from "lucide-react"
 import { useRef } from "react"
 import { DevXmlSimulator } from "@/components/dev-xml-simulator"
@@ -139,14 +139,14 @@ export function ChatPanel({
                         disabled={engine.isBusy}
                         data-testid="new-chat-button"
                     >
-                        <SquarePen />
+                        <FilePlus />
                     </IconButton>
                     <IconButton
                         label={dict.nav.settings}
                         onClick={() => openSettings()}
                         data-testid="settings-button"
                     >
-                        <Settings2 />
+                        <Settings />
                     </IconButton>
                     {!mobile && (
                         <IconButton
@@ -173,7 +173,7 @@ export function ChatPanel({
                 />
             )}
 
-            <div className="shrink-0 p-2.5 pt-1">
+            <div className="shrink-0 px-4 pt-1 pb-3">
                 <Composer
                     placeholder={
                         engine.messages.length > 0 &&

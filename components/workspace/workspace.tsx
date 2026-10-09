@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageSquare, PanelRightOpen, Settings2, Shapes } from "lucide-react"
+import { MessageSquare, PanelRightOpen, Settings, Shapes } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
@@ -100,7 +100,7 @@ function StartBar({
                 onClick={() => openSettings()}
                 data-testid="settings-button"
             >
-                <Settings2 />
+                <Settings />
             </IconButton>
         </div>
     )
