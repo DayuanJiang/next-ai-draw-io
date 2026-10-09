@@ -18,14 +18,18 @@ interface Example {
     file?: { path: string; name: string; type: string }
 }
 
+/** Secondary start buttons: outlined, so they read as clickable */
+const startButtonClass =
+    "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground transition-colors hover:bg-accent [&_svg]:text-muted-foreground"
+
 async function loadExampleFile(file: NonNullable<Example["file"]>) {
     const response = await fetch(getAssetUrl(file.path))
     const blob = await response.blob()
     return new File([blob], file.name, { type: file.type })
 }
 
-/** One start-screen choice: a small picture, a title and one line */
-function ExampleCard({
+/** One start-screen example: a small picture over its title */
+function ExampleTile({
     onClick,
     title,
     description,
@@ -35,6 +39,7 @@ function ExampleCard({
 }: {
     onClick: () => void
     title: string
+    /** Shown as the tooltip: the title alone names the example */
     description: string
     picture: React.ReactNode
     /** An icon on a tinted tile instead of a diagram on paper */
@@ -45,24 +50,20 @@ function ExampleCard({
         <button
             type="button"
             onClick={onClick}
-            className="group/example flex min-w-0 items-center gap-2.5 rounded-xl border border-border bg-card p-1.5 pr-2.5 text-left transition-colors hover:border-foreground/25"
+            title={description}
+            className="group/example flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-1.5 pb-2.5 text-left transition-colors hover:border-foreground/25"
             data-testid={testId}
         >
             <span
                 className={cn(
-                    "flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg",
+                    "flex h-16 w-full items-center justify-center overflow-hidden rounded-lg",
                     plain ? "bg-muted" : "sheet-light bg-white",
                 )}
             >
                 {picture}
             </span>
-            <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-[13px] leading-snug font-medium text-foreground">
-                    {title}
-                </span>
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                    {description}
-                </span>
+            <span className="px-1 text-[13px] leading-snug font-medium text-foreground">
+                {title}
             </span>
         </button>
     )
@@ -92,6 +93,7 @@ export function LobbyHero({
             key: "paper",
             title: dict.examples.paperToDiagram,
             description: dict.examples.paperDescription,
+            image: "/paper_demo.svg",
             prompt: "Summarize this paper as a diagram",
             file: {
                 path: "/chain-of-thought.txt",
@@ -185,10 +187,12 @@ export function LobbyHero({
                 placeholder={t.placeholder}
             />
 
+            {/* Examples: one row of tiles; the ways to bring your own
+                diagram follow as a separate group */}
             <div
                 className={cn(
                     "mt-5 grid gap-2",
-                    compact ? "grid-cols-1" : "grid-cols-3",
+                    compact ? "grid-cols-1" : "grid-cols-5",
                 )}
             >
                 {examples.map((example) =>
@@ -209,7 +213,7 @@ export function LobbyHero({
                             </span>
                         </button>
                     ) : (
-                        <ExampleCard
+                        <ExampleTile
                             key={example.key}
                             onClick={() => pickExample(example)}
                             title={example.title}
@@ -221,7 +225,7 @@ export function LobbyHero({
                                     <img
                                         src={getAssetUrl(example.image)}
                                         alt=""
-                                        className="max-h-10 max-w-[56px] object-contain transition-transform duration-300 group-hover/example:scale-[1.06]"
+                                        className="max-h-14 max-w-[88%] object-contain transition-transform duration-300 group-hover/example:scale-[1.06]"
                                     />
                                 ) : (
                                     <FileText className="size-5 text-muted-foreground" />
@@ -231,48 +235,34 @@ export function LobbyHero({
                         />
                     ),
                 )}
-                {!compact && (
-                    <ExampleCard
-                        onClick={onOpenFile}
-                        title={dict.workspace.openFile}
-                        description={t.openFileHint}
-                        picture={
-                            <FileUp className="size-5 text-muted-foreground" />
-                        }
-                        plain
-                    />
-                )}
             </div>
-            <p className="mt-3 text-center text-xs text-faint">
+            <p className="mt-2.5 text-center text-xs text-faint">
                 {dict.examples.cachedNote}
             </p>
 
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] text-muted-foreground">
+            {/* Ways to start without an example, as plain buttons */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                 {engine.sessions.length > 0 && (
                     <SessionMenu align="center" onOpenFile={onOpenFile}>
-                        <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 hover:text-foreground"
-                        >
+                        <button type="button" className={startButtonClass}>
                             <History className="size-4" />
                             {t.recent}
                         </button>
                     </SessionMenu>
                 )}
-                {compact && (
-                    <button
-                        type="button"
-                        onClick={onOpenFile}
-                        className="inline-flex items-center gap-1.5 hover:text-foreground"
-                    >
-                        <FileUp className="size-4" />
-                        {dict.workspace.openFile}
-                    </button>
-                )}
+                <button
+                    type="button"
+                    onClick={onOpenFile}
+                    className={startButtonClass}
+                    data-testid="open-file"
+                >
+                    <FileUp className="size-4" />
+                    {dict.workspace.openFile}
+                </button>
                 <button
                     type="button"
                     onClick={onDrawYourself}
-                    className="inline-flex items-center gap-1.5 hover:text-foreground"
+                    className={startButtonClass}
                     data-testid="draw-yourself"
                 >
                     <Pencil className="size-4" />

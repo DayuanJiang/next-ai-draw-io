@@ -220,14 +220,14 @@ export function ModelSelector({
                             <span className="min-w-0 truncate text-xs">
                                 {selectedModel
                                     ? shortModelName(selectedModel.modelId)
-                                    : dict.modelConfig.default}
+                                    : dict.modelConfig.serverDefault}
                             </span>
                         ) : (
                             // Keep an sr-only label for screen readers when hidden
                             <span className="sr-only">
                                 {selectedModel
                                     ? selectedModel.modelId
-                                    : dict.modelConfig.default}
+                                    : dict.modelConfig.serverDefault}
                             </span>
                         )}
                         <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

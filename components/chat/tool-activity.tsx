@@ -2,7 +2,6 @@ import {
     AlertCircle,
     Check,
     ChevronDown,
-    Code2,
     Copy,
     Library,
     PenTool,
@@ -180,17 +179,23 @@ function VersionCard({
         </button>
     )
 
-    // What the AI wrote, on every card (main showed it on every tool call)
-    const codeButton = (
-        <button
-            type="button"
-            onClick={() => setShowCode((v) => !v)}
-            aria-label={showCode ? t.hideCode : t.showCode}
-            title={showCode ? t.hideCode : t.showCode}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-            <Code2 className="size-4" />
-        </button>
+    // What the AI wrote: a text link in the summary line, so the card's
+    // only button is the action (undo or restore)
+    const summaryLine = (
+        <div className="text-xs text-muted-foreground">
+            {summary}
+            {/* The link wraps as one unit with its separator */}
+            <span className="whitespace-nowrap">
+                <span aria-hidden> · </span>
+                <button
+                    type="button"
+                    onClick={() => setShowCode((v) => !v)}
+                    className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
+                >
+                    {showCode ? t.hideCode : t.showCode}
+                </button>
+            </span>
+        </div>
     )
     const codePanel = showCode && (
         <div className="relative border-t border-border bg-surface-1 px-3 py-2.5">
@@ -231,15 +236,12 @@ function VersionCard({
                         />
                     </button>
                     {badge}
-                    <div className="min-w-0 flex-1" title={summary}>
+                    <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] text-foreground">
                             {title}
                         </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                            {summary}
-                        </div>
+                        {summaryLine}
                     </div>
-                    {codeButton}
                     {restoreButton}
                 </div>
                 {codePanel}
@@ -271,17 +273,12 @@ function VersionCard({
                     {t.compare}
                 </span>
             </button>
-            <div className="flex items-center gap-2.5 px-3 py-2.5">
+            {/* Title row with the action; the summary runs under both */}
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5">
                 {badge}
-                <div className="min-w-0 flex-1" title={summary}>
-                    <div className="truncate text-[13px] font-medium text-foreground">
-                        {title}
-                    </div>
-                    <div className="line-clamp-2 text-xs text-muted-foreground">
-                        {summary}
-                    </div>
+                <div className="truncate text-[13px] font-medium text-foreground">
+                    {title}
                 </div>
-                {codeButton}
                 {canUndo ? (
                     <button
                         type="button"
@@ -300,6 +297,9 @@ function VersionCard({
                 ) : (
                     restoreButton
                 )}
+                <div className="col-span-2 col-start-2 mt-0.5">
+                    {summaryLine}
+                </div>
             </div>
             {codePanel}
         </div>
