@@ -69,6 +69,7 @@ import {
     prepareNewDiagram,
     reservedIdError,
     takeStyleDefinitions,
+    truncatedCellError,
 } from "./new-diagram.ts"
 import {
     addPageToDoc,
@@ -169,7 +170,7 @@ After drawing a complex diagram, call screenshot_diagram once to see it, and fix
 
 Tools:
 - create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
-- edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry.
+- edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry; also used to draw a large diagram in parts.
 - get_diagram: read the current XML, including the user's manual edits.
 - screenshot_diagram: see the rendered diagram as an image.
 - load_diagram, export_diagram: open or save .drawio or .drawio.svg files and export .png or .svg. Use absolute paths.
@@ -1853,6 +1854,13 @@ registerWriteTool(
             if (reserved) {
                 return {
                     content: [{ type: "text", text: `Error: ${reserved}` }],
+                    isError: true,
+                }
+            }
+            const truncated = startXml && truncatedCellError(startXml)
+            if (truncated) {
+                return {
+                    content: [{ type: "text", text: `Error: ${truncated}` }],
                     isError: true,
                 }
             }

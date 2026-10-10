@@ -2,8 +2,6 @@ import { type ClassValue, clsx } from "clsx"
 import * as pako from "pako"
 import { twMerge } from "tailwind-merge"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
-import { readStyleClasses } from "@/packages/mcp-server/src/style-classes.ts"
-import { repairQuoteBeforeSlash } from "@/packages/mcp-server/src/xml-validation.ts"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -34,55 +32,7 @@ export function isRealDiagram(xml: string | undefined | null): boolean {
 // mxCell XML Helpers
 // ============================================================================
 
-/**
- * Check if mxCell XML output is complete (not truncated).
- * Complete XML ends with a self-closing tag (/>) or closing mxCell tag.
- * Uses a robust approach that handles any LLM provider's wrapper tags
- * by finding the last valid mxCell ending and checking if suffix is just closing tags.
- * @param xml - The XML string to check (can be undefined/null)
- * @returns true if XML appears complete, false if truncated or empty
- */
-export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
-    // Named style definitions before the cells are not cells: output cut off
-    // right after them is incomplete. A compact cell whose last quote is
-    // missing is complete; prepareNewDiagram repairs it.
-    const trimmed = repairQuoteBeforeSlash(
-        readStyleClasses(xml || "").xml,
-    ).trim()
-    if (!trimmed) return false
-
-    // Find position of last complete mxCell ending (either /> or </mxCell>)
-    const lastSelfClose = trimmed.lastIndexOf("/>")
-    const lastMxCellClose = trimmed.lastIndexOf("</mxCell>")
-
-    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
-
-    // No valid ending found at all
-    if (lastValidEnd === -1) return false
-
-    // If the last mxCell has no </mxCell> after it, it must be self-closing.
-    // Otherwise the trailing "/>" belongs to a child such as <mxGeometry .../>
-    // and the output was cut off before the cell was closed.
-    const lastCellStart = trimmed.lastIndexOf("<mxCell")
-    if (
-        lastCellStart > lastMxCellClose &&
-        // (quoted values may hold a raw "<", which the auto-fix escapes)
-        !/^<mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*\/>/.test(
-            trimmed.slice(lastCellStart),
-        )
-    ) {
-        return false
-    }
-
-    // Check what comes after the last valid ending
-    // For />: add 2 chars, for </mxCell>: add 9 chars
-    const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
-    const suffix = trimmed.slice(lastValidEnd + endOffset)
-
-    // If suffix is empty or only contains closing tags (any provider's wrapper) or whitespace, it's complete
-    // This regex matches any sequence of closing XML tags like </foo>, </bar>, </｜DSML｜xyz>
-    return /^(\s*<\/[^>]+>)*\s*$/.test(suffix)
-}
+export { isMxCellXmlComplete } from "@/packages/mcp-server/src/new-diagram.ts"
 
 /**
  * Extract only complete mxCell elements from partial/streaming XML.

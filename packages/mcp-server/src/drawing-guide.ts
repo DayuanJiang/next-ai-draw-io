@@ -52,6 +52,8 @@ Containers and swimlanes: children use the container id as parent and coordinate
 
 ${indent(SWIMLANE_EXAMPLE)}
 
+Large diagrams: if the diagram will not fit one call, send the first cells with create_new_diagram and add the rest with edit_diagram add operations (one per cell, same id rules). If a call is rejected because the XML ends inside an unfinished cell, resend from that cell.
+
 ## Layout
 - Keep every element of a page within x 0 to 800 and y 0 to 600, so the whole diagram fits one view without a page break.
 - Containers (for example AWS cloud boxes) are at most 700 pixels wide and 550 pixels tall.

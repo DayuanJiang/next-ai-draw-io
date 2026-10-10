@@ -12,7 +12,7 @@ import {
 } from "./style-classes.ts"
 import { readAttributes } from "./xml-attributes.ts"
 import { getXmlSyntaxError } from "./xml-syntax.ts"
-import { validateAndFixXml } from "./xml-validation.ts"
+import { repairQuoteBeforeSlash, validateAndFixXml } from "./xml-validation.ts"
 
 export type NewDiagram =
     | { ok: true; xml: string; fixes: string[] }
@@ -51,6 +51,68 @@ export function reservedIdError(input: string): string | null {
         }
     }
     return null
+}
+
+/**
+ * Check if mxCell XML output is complete (not truncated).
+ * Complete XML ends with a self-closing tag (/>) or closing mxCell tag.
+ * Uses a robust approach that handles any LLM provider's wrapper tags
+ * by finding the last valid mxCell ending and checking if suffix is just closing tags.
+ * @param xml - The XML string to check (can be undefined/null)
+ * @returns true if XML appears complete, false if truncated or empty
+ */
+export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
+    // Named style definitions before the cells are not cells: output cut off
+    // right after them is incomplete. A compact cell whose last quote is
+    // missing is complete; prepareNewDiagram repairs it.
+    const trimmed = repairQuoteBeforeSlash(
+        readStyleClasses(xml || "").xml,
+    ).trim()
+    if (!trimmed) return false
+
+    // Find position of last complete mxCell ending (either /> or </mxCell>)
+    const lastSelfClose = trimmed.lastIndexOf("/>")
+    const lastMxCellClose = trimmed.lastIndexOf("</mxCell>")
+
+    const lastValidEnd = Math.max(lastSelfClose, lastMxCellClose)
+
+    // No valid ending found at all
+    if (lastValidEnd === -1) return false
+
+    // If the last mxCell has no </mxCell> after it, it must be self-closing.
+    // Otherwise the trailing "/>" belongs to a child such as <mxGeometry .../>
+    // and the output was cut off before the cell was closed.
+    const lastCellStart = trimmed.lastIndexOf("<mxCell")
+    if (
+        lastCellStart > lastMxCellClose &&
+        // (quoted values may hold a raw "<", which the auto-fix escapes)
+        !/^<mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*\/>/.test(
+            trimmed.slice(lastCellStart),
+        )
+    ) {
+        return false
+    }
+
+    // Check what comes after the last valid ending
+    // For />: add 2 chars, for </mxCell>: add 9 chars
+    const endOffset = lastMxCellClose > lastSelfClose ? 9 : 2
+    const suffix = trimmed.slice(lastValidEnd + endOffset)
+
+    // If suffix is empty or only contains closing tags (any provider's wrapper) or whitespace, it's complete
+    // This regex matches any sequence of closing XML tags like </foo>, </bar>, </｜DSML｜xyz>
+    return /^(\s*<\/[^>]+>)*\s*$/.test(suffix)
+}
+
+/**
+ * Output that stops inside an mxCell would be wrapped and rejected with an
+ * error about wrapper tags the model never sent. Bare cells only. Returns the
+ * error for the model, or null.
+ */
+export function truncatedCellError(input: string): string | null {
+    if (/<(mxGraphModel|mxfile)\b/.test(input)) return null
+    const stripped = input.replace(/<!--[\s\S]*?-->/g, "")
+    if (isMxCellXmlComplete(stripped)) return null
+    return `The XML ends inside an unfinished mxCell, so the output was probably cut off. Nothing was drawn. It ended with:\n${input.slice(-300)}\nResend the complete diagram, or send the first cells now and add the remaining cells with edit_diagram add operations.`
 }
 
 /**
@@ -96,6 +158,8 @@ export function prepareNewDiagram(
     if (styleError) return { ok: false, error: styleError }
     const reserved = reservedIdError(cells)
     if (reserved) return { ok: false, error: reserved }
+    const truncated = truncatedCellError(cells)
+    if (truncated) return { ok: false, error: truncated }
     let xml = wrapCellsInModel(cells)
     const { valid, error, fixed, fixes } = validateAndFixXml(xml)
     if (fixed) xml = fixed
