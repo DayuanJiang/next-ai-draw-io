@@ -32,7 +32,12 @@ import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
-import { checkEditGate, contentFingerprint, markPageSeen } from "./edit-gate.ts"
+import {
+    checkEditGate,
+    contentFingerprint,
+    describeChanges,
+    markPageSeen,
+} from "./edit-gate.ts"
 import { createExclusive } from "./exclusive.ts"
 import {
     addHistory,
@@ -898,6 +903,8 @@ registerWriteTool(
                 // seen it and can retry without a get_diagram round-trip,
                 // unless other pages changed too.
                 const liveXml = browserState?.xml || currentSession.xml
+                // What the model saw, before markPageSeen records the live state
+                const before = currentSession.lastSeenXml
                 currentSession.lastSeenXml = markPageSeen(
                     currentSession.lastSeenXml,
                     liveXml,
@@ -907,6 +914,11 @@ registerWriteTool(
                     gate.reason === "stale"
                         ? "The diagram changed in the browser since you last saw it (e.g. manual user edits). No changes were made."
                         : "You have not seen this diagram yet, so no changes were made."
+                // Per-cell summary of the user's changes, when they can be compared
+                const summary =
+                    gate.reason === "stale"
+                        ? describeChanges(before, liveXml)
+                        : ""
                 const next =
                     currentSession.lastSeenXml === liveXml
                         ? "Build your operations on this XML and retry."
@@ -915,7 +927,7 @@ registerWriteTool(
                     content: [
                         {
                             type: "text",
-                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\n${next}`,
+                            text: `Error: ${reason}\n\n${summary ? `${summary}\n\n` : ""}Current XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\n${next}`,
                         },
                     ],
                     isError: true,
@@ -1071,6 +1083,12 @@ server.registerTool(
             // store value — the gate's fast path is plain string equality
             // against the store, with a structural comparison as fallback.
             const liveXml = browserState?.xml || session.xml
+            // What the user changed since the model last looked, computed
+            // before lastSeenXml is overwritten below
+            const changes = session.lastSeenXml
+                ? describeChanges(session.lastSeenXml, liveXml)
+                : ""
+            const changesNote = changes ? `\n\nNote: ${changes}` : ""
             const doc = parseMxfile(session.xml)
             const pages = doc ? listPagesFromDoc(doc) : []
             const pageList = pages.length
@@ -1084,7 +1102,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}`,
+                            text: `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}${changesNote}`,
                         },
                     ],
                 }
@@ -1121,7 +1139,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${otherPagesNote}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${changesNote}${otherPagesNote}`,
                     },
                 ],
             }
