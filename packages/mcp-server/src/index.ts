@@ -93,10 +93,20 @@ const config = {
     port: parseInt(process.env.PORT || "6002", 10),
 }
 
-// Keep each session's latest diagram on disk, so it survives this process
-const autosaver = new Autosaver(defaultDataDir())
+// Keep each session's latest diagram and its History on disk, so they
+// survive this process
+const autosaver = new Autosaver(defaultDataDir(), undefined, undefined, (id) =>
+    getHistory(id),
+)
 onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
-onSessionRecreate((sessionId) => autosaver.load(sessionId))
+onSessionRecreate((sessionId) => {
+    const xml = autosaver.load(sessionId)
+    if (!xml) return null
+    // History comes back with the diagram (addHistory drops consecutive
+    // duplicates)
+    for (const x of autosaver.loadHistory(sessionId)) addHistory(sessionId, x)
+    return xml
+})
 
 // A one-page view that does not count for the whole document (edit-gate.ts)
 const OTHER_PAGES_UNSEEN =

@@ -9,6 +9,7 @@ import {
     readdirSync,
     readFileSync,
     rmSync,
+    statSync,
     utimesSync,
     writeFileSync,
 } from "node:fs"
@@ -84,10 +85,14 @@ describe("Autosaver", () => {
             writeFileSync(join(dir, `${id}.drawio`), DIAGRAM)
             utimesSync(join(dir, `${id}.drawio`), 1000 + i, 1000 + i)
         }
+        // A session's History file goes with its diagram
+        writeFileSync(join(dir, "mcp-mgd0a1b2-old123.history.json"), "[]")
+        writeFileSync(join(dir, "mcp-mgd0a1b3-mid456.history.json"), "[]")
         saver.schedule("mcp-mgd0a1b4-new789", DIAGRAM)
         saver.flush()
         expect(readdirSync(dir).sort()).toEqual([
             "mcp-mgd0a1b3-mid456.drawio",
+            "mcp-mgd0a1b3-mid456.history.json",
             "mcp-mgd0a1b4-new789.drawio",
             "mcp-notes.drawio",
             "mcp-system-design-v2.drawio",
@@ -188,6 +193,8 @@ describe("Autosaver", () => {
     it("does nothing when saving is off", () => {
         const saver = new Autosaver(null)
         expect(saver.pathFor("mcp-x")).toBeNull()
+        expect(saver.historyPathFor("mcp-x")).toBeNull()
+        expect(saver.loadHistory("mcp-x")).toEqual([])
         saver.schedule("mcp-x", DIAGRAM)
         saver.flush()
     })
@@ -231,6 +238,92 @@ describe("Autosaver", () => {
         expect(off.dataDir()).toBeNull()
         expect(off.list()).toEqual([])
         expect(new Autosaver(join(tempDir(), "missing")).list()).toEqual([])
+    })
+})
+
+describe("Autosaver History", () => {
+    const V1 = DIAGRAM.replace('id="a"', 'id="v1"')
+    const V2 = DIAGRAM.replace('id="a"', 'id="v2"')
+    const V3 = DIAGRAM.replace('id="a"', 'id="v3"')
+    // One session's History entries, as history.ts keeps them (the saver
+    // leaves the thumbnails out)
+    const withHistory = (dir: string, entries: { id: number; xml: string }[]) =>
+        new Autosaver(dir, 30, 50, () => entries)
+
+    it("saves the XML of the History entries next to the diagram", async () => {
+        const dir = tempDir()
+        const entries = [
+            { id: 0, xml: V1 },
+            { id: 1, xml: V2 },
+        ]
+        const saver = withHistory(dir, entries)
+        const path = saver.historyPathFor("mcp-h") as string
+        expect(path).toBe(join(dir, "mcp-h.history.json"))
+        saver.schedule("mcp-h", V2)
+        expect(existsSync(path)).toBe(false)
+        await sleep(80)
+        expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual([V1, V2])
+        expect(saver.loadHistory("mcp-h")).toEqual([V1, V2])
+        expect(readdirSync(dir).sort()).toEqual([
+            "mcp-h.drawio",
+            "mcp-h.history.json",
+        ])
+    })
+
+    it("rewrites the History file only when the entries changed", () => {
+        const dir = tempDir()
+        const entries = [{ id: 0, xml: V1 }]
+        const saver = withHistory(dir, entries)
+        saver.schedule("mcp-same", V1)
+        saver.flush()
+        const path = saver.historyPathFor("mcp-same") as string
+        utimesSync(path, 1000, 1000)
+        const old = statSync(path).mtimeMs
+
+        // draw.io's own autosave of an unchanged diagram
+        saver.schedule("mcp-same", V1)
+        saver.flush()
+        expect(statSync(path).mtimeMs).toBe(old)
+
+        entries.push({ id: 1, xml: V2 })
+        saver.schedule("mcp-same", V2)
+        saver.flush()
+        expect(statSync(path).mtimeMs).not.toBe(old)
+        expect(saver.loadHistory("mcp-same")).toEqual([V1, V2])
+
+        // The circular buffer dropped the oldest entry: same length, new id
+        entries.shift()
+        entries.push({ id: 2, xml: V3 })
+        saver.schedule("mcp-same", V3)
+        saver.flush()
+        expect(saver.loadHistory("mcp-same")).toEqual([V2, V3])
+    })
+
+    it("writes no History file while there are no entries", () => {
+        const dir = tempDir()
+        const saver = withHistory(dir, [])
+        saver.schedule("mcp-empty", DIAGRAM)
+        saver.flush()
+        expect(readdirSync(dir)).toEqual(["mcp-empty.drawio"])
+    })
+
+    it("reads [] for a missing or malformed History file", () => {
+        const dir = tempDir()
+        const saver = new Autosaver(dir, 10)
+        const path = saver.historyPathFor("mcp-bad") as string
+        expect(saver.loadHistory("mcp-bad")).toEqual([])
+        for (const content of ["{not json", '{"a":1}', "[1, 2]", '"x"']) {
+            writeFileSync(path, content)
+            expect(saver.loadHistory("mcp-bad")).toEqual([])
+        }
+    })
+
+    it("flush() writes the History on shutdown", () => {
+        const dir = tempDir()
+        const saver = withHistory(dir, [{ id: 0, xml: V1 }])
+        saver.schedule("mcp-exit", V1)
+        saver.flush()
+        expect(saver.loadHistory("mcp-exit")).toEqual([V1])
     })
 })
 

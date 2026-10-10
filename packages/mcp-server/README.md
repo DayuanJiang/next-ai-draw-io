@@ -114,7 +114,7 @@ Use the standard MCP configuration with:
 - **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails, or ask the AI to undo (`restore_version`)
 - **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io can open and edit again), from the **Download** button or through `export_diagram`
 - **Multi-page**: List, add, rename, and delete pages, and edit any page
-- **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, so it survives a restart of the MCP client
+- **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, and its last 20 versions to `<session-id>.history.json`, so the diagram, History and undo survive a restart of the MCP client
 - **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
 - **Themes and Dark Mode**: Pick a draw.io theme under **Extras > Theme**; the page follows the system dark mode
 - **Self-contained**: Embedded server, works offline (except draw.io UI which loads from `embed.diagrams.net` by default, configurable via `DRAWIO_BASE_URL`)
@@ -145,7 +145,9 @@ After every change, the diagram is saved as a normal `.drawio` file in `~/.next-
 
 To continue a diagram in a later conversation (for example after `claude --resume`, or in a new chat), the AI calls `start_session` with `session_id` set to that id: the same preview URL opens, the saved diagram is shown, and auto-save keeps writing to the same file. If the id is no longer in the conversation, `list_saved_diagrams` returns every saved diagram, newest first, with the names and cell counts of its pages, so you can ask for "the architecture diagram from yesterday" and let the AI pick it. `load_diagram` with the file path still works too, and you can open the file in draw.io yourself.
 
-The newest 50 files are kept. Set `DRAWIO_DATA_DIR` to use another folder, or to `off` to turn auto-save off.
+History comes back with the diagram: the last 20 versions are saved next to it in `<session-id>.history.json` (without thumbnails), so a preview tab that is still open after a restart shows them again under **History**.
+
+The newest 50 files are kept, each with its History file. Set `DRAWIO_DATA_DIR` to use another folder, or to `off` to turn auto-save off.
 
 ## Custom Instructions
 
