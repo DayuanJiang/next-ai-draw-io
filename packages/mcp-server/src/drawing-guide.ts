@@ -18,7 +18,7 @@ import {
 export const DRAWING_GUIDE = `# Draw.io drawing guide
 
 ## Workflow
-- create_new_diagram draws a new diagram and REPLACES the whole document. add_page adds another tab. edit_diagram changes cells of an existing page. load_diagram opens a .drawio file (the server reads the file itself). get_diagram returns the current XML, including the user's manual edits. export_diagram saves to a file.
+- create_new_diagram draws a new diagram and REPLACES the whole document. add_page adds another tab. edit_diagram changes cells of an existing page. load_diagram opens a .drawio file (the server reads the file itself, or takes the file's content as its 'xml' argument when you already have it in hand). get_diagram returns the current XML, including the user's manual edits. export_diagram saves to a file.
 - Before drawing, describe your layout plan in 2-3 sentences, so shapes do not overlap and edges do not cross shapes.
 - Send XML only through tool calls, never in chat text. Never draw a box just to send the user a message.
 - Before using any icon library (AWS, Azure, GCP, Kubernetes, Cisco, BPMN, Material Design, web icons...), call get_shape_library and use the exact style names it returns. NEVER guess icon style names. For AWS, use the AWS 2025 icons (library aws4).
