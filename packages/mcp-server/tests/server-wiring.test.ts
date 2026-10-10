@@ -198,7 +198,8 @@ describe("MCP server wiring", () => {
         expect(text).toContain("Edge routing rules")
         expect(text).toContain("do not describe the diagram")
         expect(text).toContain("clear the canvas")
-        expect(text.length).toBeLessThanOrEqual(15000)
+        // The guide's own budget plus the 5000-character cap of instructions.md
+        expect(text.length).toBeLessThanOrEqual(15000 + 5000)
     })
 
     it("appends the user's instructions.md to the drawing guide", async () => {

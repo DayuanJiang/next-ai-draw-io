@@ -13,6 +13,7 @@ import {
     guideWithCustomInstructions,
     readCustomInstructions,
 } from "../src/custom-instructions.ts"
+import { DRAWING_GUIDE } from "../src/drawing-guide.ts"
 
 const GUIDE = "# Drawing guide\n\nKeep edges orthogonal."
 const tempDir = () => mkdtempSync(join(tmpdir(), "mcp-instructions-"))
@@ -88,5 +89,11 @@ describe("customInstructionsDir", () => {
         expect(customInstructionsDir()).toBe(home)
         delete process.env.DRAWIO_DATA_DIR
         expect(customInstructionsDir()).toBe(home)
+    })
+})
+
+describe("DRAWING_GUIDE", () => {
+    it("stays within its own budget; instructions.md adds up to 5000 more", () => {
+        expect(DRAWING_GUIDE.length).toBeLessThanOrEqual(15000)
     })
 })
