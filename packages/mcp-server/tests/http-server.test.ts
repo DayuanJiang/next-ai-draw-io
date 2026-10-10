@@ -16,6 +16,7 @@ import {
     onSessionRecreate,
     requestExport,
     requestSync,
+    restoreHistoryEntry,
     setState,
     shutdown,
     startHttpServer,
@@ -663,6 +664,32 @@ describe("history restore", () => {
         await postJson("/api/restore", { sessionId: id, id: entry.id })
         expect(getState(id)?.xml).toBe(doc("ai"))
         expect(getHistory(id).map((e) => e.xml)).toContain(doc("manual"))
+    })
+
+    it("restoreHistoryEntry leaves the canvas alone for an unknown entry", () => {
+        const id = "mcp-restore-unknown"
+        setState(id, page("x"))
+        addHistory(id, page("x"))
+        expect(restoreHistoryEntry(id, 999999)).toBeNull()
+        expect(getState(id)?.xml).toBe(page("x"))
+        expect(getHistory(id)).toHaveLength(1)
+    })
+
+    it("restoreHistoryEntry restores an entry and keeps the canvas in History", () => {
+        const id = "mcp-restore-entry"
+        addHistory(id, page("old"))
+        const [entry] = getHistory(id)
+        // The canvas is a later state that is not in History yet
+        setState(id, page("ai"))
+
+        const newVersion = restoreHistoryEntry(id, entry.id)
+        expect(newVersion).toBe(getState(id)?.version)
+        expect(getState(id)?.xml).toBe(page("old"))
+        expect(getHistory(id).map((e) => e.xml)).toEqual([
+            page("old"),
+            page("ai"),
+            page("old"),
+        ])
     })
 })
 

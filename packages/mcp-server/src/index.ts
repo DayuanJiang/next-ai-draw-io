@@ -32,9 +32,14 @@ import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
-import { checkEditGate, markPageSeen } from "./edit-gate.ts"
+import { checkEditGate, contentFingerprint, markPageSeen } from "./edit-gate.ts"
 import { createExclusive } from "./exclusive.ts"
-import { addHistory } from "./history.ts"
+import {
+    addHistory,
+    getHistory,
+    type HistoryEntry,
+    otherVersions,
+} from "./history.ts"
 import {
     type ExportFormat,
     type ExportOptions,
@@ -45,6 +50,7 @@ import {
     onStateChange,
     requestExport,
     requestSync,
+    restoreHistoryEntry,
     restoreSavedSession,
     setState,
     shutdown,
@@ -60,6 +66,7 @@ import {
 } from "./new-diagram.ts"
 import {
     addPageToDoc,
+    BLANK_MXFILE,
     deletePageFromDoc,
     findPageElement,
     hasCells,
@@ -147,7 +154,8 @@ Tools:
 - screenshot_diagram: see the rendered diagram as an image.
 - load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
 - list_saved_diagrams: diagrams saved by earlier sessions; continue one with start_session session_id=<id>.
-- list_pages, add_page, rename_page, delete_page: manage pages (tabs).`
+- list_pages, add_page, rename_page, delete_page: manage pages (tabs).
+- restore_version: undo; go back to an earlier version of the diagram.`
 
 const server = new McpServer(
     {
@@ -2015,6 +2023,139 @@ registerWriteTool(
             const message =
                 error instanceof Error ? error.message : String(error)
             log.error("delete_page failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+/** One line of pages for a history entry, for restore_version's texts. */
+function describePages(xml: string): string {
+    const doc = parseMxfile(xml)
+    const pages = doc ? listPagesFromDoc(doc) : []
+    return pages.length > 0
+        ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
+        : "no pages parsed"
+}
+
+/** The versions restore_version can go to, numbered by steps_back. */
+function describeVersions(entries: HistoryEntry[]): string {
+    return entries
+        .slice(0, 20)
+        .map((entry, i) => {
+            const doc = parseMxfile(entry.xml)
+            const pages = doc ? listPagesFromDoc(doc) : []
+            const names =
+                pages.length > 0
+                    ? pages
+                          .map((p) => `"${p.name}" (${p.cellCount} cells)`)
+                          .join(", ")
+                    : "no pages parsed"
+            return `steps_back=${i + 1}: ${names}`
+        })
+        .join(" | ")
+}
+
+// Tool: restore_version
+registerWriteTool(
+    "restore_version",
+    {
+        title: "Restore version",
+        description:
+            "Undo: put an earlier version of the diagram from History back on the canvas (the current canvas is kept in History, so this can be undone too). Use it when the user asks to undo, revert or go back.",
+        inputSchema: {
+            steps_back: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe(
+                    "1 = the newest version that differs from the canvas (default), 2 = the one before it, and so on. After an undo, steps_back=1 returns to the version you just left (redo) and steps_back=2 goes further back.",
+                ),
+        },
+        annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+        const stepsBack = input?.steps_back ?? 1
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            const session = currentSession
+
+            // The canvas, with the user's manual edits, is the state store
+            const current = sessionState(session.id)?.xml || session.xml
+            const candidates = otherVersions(session.id, current)
+            if (candidates.length === 0) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No other version in History.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            if (candidates.length < stepsBack) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: Only ${candidates.length} other version(s) in History: ${describeVersions(candidates)}`,
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            const entry = candidates[stepsBack - 1]
+
+            // Manual edits since the last entry are not in History yet;
+            // restoreHistoryEntry keeps them (a blank page excepted)
+            const currentFingerprint = contentFingerprint(current)
+            const hadManual =
+                currentFingerprint !== contentFingerprint(BLANK_MXFILE) &&
+                !getHistory(session.id).some(
+                    (e) => contentFingerprint(e.xml) === currentFingerprint,
+                )
+
+            restoreHistoryEntry(session.id, entry.id)
+            session.xml = entry.xml
+            session.version++
+            // As load_diagram: the model may never have seen this XML, so
+            // the edit gate requires one get_diagram before edits
+            session.lastSeenXml = ""
+
+            log.info(
+                `Restored the version ${stepsBack} step(s) back (entry ${entry.id})`,
+            )
+
+            const manualNote = hadManual
+                ? " Your manual changes were kept in History (steps_back=1 brings them back)."
+                : ""
+            const next = describeVersions(otherVersions(session.id, entry.xml))
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Restored the version ${stepsBack} step(s) back.${manualNote}\n\n${describePages(entry.xml)}\n\nVersions you can go to now: ${next}\n\nCall get_diagram before edit_diagram.`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("restore_version failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,

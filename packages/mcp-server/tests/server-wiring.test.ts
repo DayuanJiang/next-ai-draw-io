@@ -45,6 +45,7 @@ const EXPECTED_TOOLS = [
     "get_shape_library",
     "screenshot_diagram",
     "list_saved_diagrams",
+    "restore_version",
 ]
 
 // Auto-save folder of the spawned server, holding one saved session
@@ -184,6 +185,23 @@ describe("MCP server wiring", () => {
         expect(props.name).toBeTruthy()
         expect(props.id).toBeTruthy()
         expect(props.xml).toBeTruthy()
+    })
+
+    it("advertises steps_back on restore_version", async () => {
+        const resp = await send("tools/list", {})
+        const restore = resp.result.tools.find(
+            (t: { name: string }) => t.name === "restore_version",
+        )
+        expect(restore?.inputSchema?.properties?.steps_back).toBeTruthy()
+    })
+
+    it("refuses restore_version without a session", async () => {
+        const resp = await send("tools/call", {
+            name: "restore_version",
+            arguments: {},
+        })
+        expect(resp.result.isError).toBe(true)
+        expect(resp.result.content[0].text).toContain("start_session")
     })
 
     it("keeps every description and the instructions within the host limit", async () => {

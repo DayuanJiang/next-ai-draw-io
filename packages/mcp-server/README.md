@@ -111,7 +111,7 @@ Use the standard MCP configuration with:
 - **Draw from Your Files**: ask the AI to draw from a document, image or web page; it reads the source with the host's own tools and draws. Existing .drawio files open with load_diagram
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
-- **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails
+- **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails, or ask the AI to undo (`restore_version`)
 - **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io can open and edit again), from the **Download** button or through `export_diagram`
 - **Multi-page**: List, add, rename, and delete pages, and edit any page
 - **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, so it survives a restart of the MCP client
@@ -137,6 +137,7 @@ Use the standard MCP configuration with:
 | `add_page` | Append a new page without touching existing ones |
 | `rename_page` | Rename a page |
 | `delete_page` | Delete a page (refuses to delete the last one) |
+| `restore_version` | Undo: put an earlier version from History back on the canvas; the current one is kept, so a redo is possible |
 
 ## Continue a Diagram Later
 

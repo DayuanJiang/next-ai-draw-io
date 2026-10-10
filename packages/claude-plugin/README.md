@@ -100,6 +100,7 @@ Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
 | `screenshot_diagram` | Return a PNG of a page so Claude can check the result |
 | `export_diagram` | Save diagram to a `.drawio`, `.png`, `.svg`, or `.drawio.svg` file |
 | `list_pages`, `add_page`, `rename_page`, `delete_page` | Work with multi-page diagrams |
+| `restore_version` | Undo: go back to an earlier version from History (redo is possible too) |
 
 ## How It Works
 

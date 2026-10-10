@@ -29,6 +29,7 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - For artistic requests (a cat, a logo, a scene), compose the picture from standard shapes and connectors while keeping it clear.
 - To clear the canvas to one blank page, call create_new_diagram with only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.
 - The preview page has History (it saves a snapshot before every AI change and can restore any of the last 20 versions) and Download. You can make changes freely; nothing is lost.
+- If the user asks to undo or go back, call restore_version instead of re-sending the earlier XML from memory.
 
 ## The XML you send
 Single page (create_new_diagram, add_page): send ONLY the named styles and the mxCell elements. The server adds <mxfile>, <mxGraphModel>, <root> and the root cells id="0" and id="1", expands named styles (see Styles), adds html=1 to every cell and whiteSpace=wrap to shapes, and fills in vertex, edge, parent="1" and the mxGeometry element. A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target. A cell with source or target is always an edge. Write parent only for a shape inside a container, and an mxGeometry element only for edge waypoints or for a separate label cell placed on an edge: <mxCell id="9" value="yes" style="edgeLabel;" parent="<edge id>" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>. An edge's own text simply goes in its value.

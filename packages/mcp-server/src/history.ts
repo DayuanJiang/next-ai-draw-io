@@ -3,11 +3,12 @@
  * Stores {xml, svg} entries in a circular buffer
  */
 
+import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
 
 const MAX_HISTORY = 20
 
-interface HistoryEntry {
+export interface HistoryEntry {
     id: number // Stable across shifts of the circular buffer
     xml: string
     svg: string
@@ -57,6 +58,28 @@ export function getHistoryEntry(
 
 export function clearHistory(sessionId: string): void {
     historyStore.delete(sessionId)
+}
+
+/**
+ * The versions the diagram can go back (or forward) to: every entry whose
+ * content differs from currentXml, newest first, one entry per distinct
+ * content (its newest copy). Re-serialised copies of one diagram count as
+ * the same version.
+ */
+export function otherVersions(
+    sessionId: string,
+    currentXml: string,
+): HistoryEntry[] {
+    const seen = new Set<string>([contentFingerprint(currentXml)])
+    const result: HistoryEntry[] = []
+    const history = getHistory(sessionId)
+    for (let i = history.length - 1; i >= 0; i--) {
+        const fingerprint = contentFingerprint(history[i].xml)
+        if (seen.has(fingerprint)) continue
+        seen.add(fingerprint)
+        result.push(history[i])
+    }
+    return result
 }
 
 /**
