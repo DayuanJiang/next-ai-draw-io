@@ -1001,7 +1001,7 @@ test.describe("Workspace", () => {
         await expect(canvas.getByText("Old A")).toBeVisible()
         await sendMessage(page, "Create a flowchart")
         await waitForComplete(page)
-        // Multi-page documents are loaded in full: the card is the way back
+        // The card is one way back
         await page.waitForTimeout(2000)
         await page.locator('[data-testid="version-undo"]').click()
         await expect(canvas.getByText("Old A")).toBeVisible()
@@ -1533,7 +1533,7 @@ test.describe("Workspace", () => {
         await expect.poll(savedPageId, { timeout: 10000 }).toBe("orig")
     })
 
-    test("Ctrl+Z after an AI drawing gives the page its id back", async ({
+    test("an AI drawing keeps the page's id, for links to the page", async ({
         page,
     }) => {
         await page.route("**/api/chat", drawThenEdit())
@@ -1567,7 +1567,7 @@ test.describe("Workspace", () => {
                     .querySelector("diagram")
                     ?.getAttribute("id")
             })
-        await expect.poll(savedPageId, { timeout: 10000 }).toBe("page-1")
+        await expect.poll(savedPageId, { timeout: 10000 }).toBe("orig")
         await canvas
             .locator(".geDiagramContainer")
             .click({ position: { x: 10, y: 10 } })
@@ -1576,7 +1576,62 @@ test.describe("Workspace", () => {
         await expect.poll(savedPageId, { timeout: 10000 }).toBe("orig")
         await page.keyboard.press("ControlOrMeta+Shift+z")
         await expect(canvas.getByText("Process", { exact: true })).toBeVisible()
-        await expect.poll(savedPageId, { timeout: 10000 }).toBe("page-1")
+        await expect.poll(savedPageId, { timeout: 10000 }).toBe("orig")
+    })
+
+    test("the AI reads and draws the page the user is viewing", async ({
+        page,
+    }) => {
+        const bodies: any[] = []
+        await page.route(
+            "**/api/chat",
+            drawThenEdit((body) => bodies.push(body)),
+        )
+        await openApp(page)
+        await openDrawioFile(page, "two.drawio", TWO_PAGE_FILE)
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        // The second page, through draw.io's own tabs
+        await drawioTabs(page).getByText("P1", { exact: true }).click()
+        await expect(canvas.getByText("Old B")).toBeVisible()
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        // The model got the page on screen
+        expect(bodies[0].xml).toContain("Old B")
+        expect(bodies[0].xml).not.toContain("Old A")
+        // Its drawing replaced that page, and only that page
+        await expect(canvas.getByText("Process", { exact: true })).toBeVisible()
+        await expect(canvas.getByText("Old B")).toHaveCount(0)
+        const pagesIn = (xml: string) =>
+            Object.fromEntries(
+                Array.from(
+                    xml.matchAll(
+                        /<diagram[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/diagram>/g,
+                    ),
+                    (m) => [m[1], m[2]],
+                ),
+            )
+        await expect
+            .poll(
+                async () => {
+                    const pages = pagesIn(await savedDiagram(page))
+                    return {
+                        p0: pages.p0?.includes("Old A"),
+                        p1: pages.p1?.includes("Process"),
+                        oldB: pages.p1?.includes("Old B"),
+                    }
+                },
+                { timeout: 10000 },
+            )
+            .toEqual({ p0: true, p1: true, oldB: false })
+        // One undo step takes the drawing back, as on a one-page file
+        await canvas
+            .locator(".geDiagramContainer")
+            .click({ position: { x: 10, y: 10 } })
+        await page.keyboard.press("ControlOrMeta+z")
+        await expect(canvas.getByText("Old B")).toBeVisible()
+        await drawioTabs(page).getByText("P0", { exact: true }).click()
+        await expect(canvas.getByText("Old A")).toBeVisible()
     })
 
     test("page settings the AI writes in single quotes are applied too", async ({

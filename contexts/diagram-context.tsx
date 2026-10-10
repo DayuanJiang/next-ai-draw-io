@@ -23,12 +23,14 @@ import {
     previewDiagram,
     resetPreview,
     revertPreview,
+    selectPage,
 } from "@/lib/drawio/editor-bridge"
 import {
     BLANK_MXFILE,
     normalizeToMxfile,
 } from "@/packages/mcp-server/src/pages.ts"
 import { validateAndFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
+import { useCanvasStore } from "@/stores/canvas-store"
 import { extractDiagramXML, isRealDiagram } from "../lib/utils"
 
 /**
@@ -54,6 +56,8 @@ export interface DiagramCommit {
     beforeXml: string
     afterXml: string
     toolCallId?: string
+    /** The page the change was made on; null or absent: the first page */
+    pageId?: string | null
 }
 
 interface DiagramContextType {
@@ -65,12 +69,12 @@ interface DiagramContextType {
         chart: string,
         skipValidation?: boolean,
         mode?: LoadMode,
-        meta?: { toolCallId?: string },
+        meta?: { toolCallId?: string; pageId?: string | null },
     ) => string | null
     // Returns the export's tag (empty when draw.io is not there yet)
     handleExport: () => string
-    // Pending exports by tag; a plain export's resolver gets the first
-    // page's XML
+    // Pending exports by tag; a plain export's resolver gets the XML of the
+    // page on screen
     exportResolversRef: React.MutableRefObject<
         Record<string, (data: string, xml?: string) => void>
     >
@@ -134,17 +138,28 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         null,
     )
 
+    // The page to show again once a full load is done: draw.io shows the
+    // first page of a loaded document
+    const pageAfterLoadRef = useRef<string | null>(null)
+
     // Sends a full load. draw.io runs it when its message arrives, and then
     // reports "load": until then the editor shows the diagram from before,
     // so later changes go the same way and keep their order
     const fullLoad = (xml: string) => {
         if (!drawioRef.current) return
+        const pageId = useCanvasStore.getState().currentPageId
+        pageAfterLoadRef.current =
+            pageId && xml.includes(`id="${pageId}"`) ? pageId : null
         pendingLoadsRef.current++
         drawioRef.current.load({ xml })
     }
 
     const onDrawioLoad = () => {
         pendingLoadsRef.current = Math.max(0, pendingLoadsRef.current - 1)
+        // Back to the page the user was on
+        const pageId = pageAfterLoadRef.current
+        pageAfterLoadRef.current = null
+        if (pageId) selectPage(pageId)
         // Only set ready state once to prevent infinite loops
         if (hasCalledOnLoadRef.current) return
         hasCalledOnLoadRef.current = true
@@ -241,7 +256,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         chart: string,
         skipValidation?: boolean,
         mode: LoadMode = "load",
-        meta?: { toolCallId?: string },
+        meta?: { toolCallId?: string; pageId?: string | null },
     ): string | null => {
         // The editor bridge is shared: a page that is gone (another language
         // mounted a new one) must not change the new page's canvas
@@ -308,6 +323,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 beforeXml,
                 afterXml: xmlToLoad,
                 toolCallId: meta?.toolCallId,
+                pageId: meta?.pageId,
             })
         }
 
@@ -332,7 +348,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // data.xml from xmlsvg exports has compressed <diagram> payloads that
         // would break edit_diagram/display_diagram. Autosave keeps chartXML
         // up to date with the full uncompressed multi-page document (#879).
-        const extractedXML = extractDiagramXML(data.data)
+        // The chat gets the page the user is viewing (the first one with
+        // an external draw.io, which cannot tell us)
+        const extractedXML = extractDiagramXML(
+            data.data,
+            useCanvasStore.getState().currentPageId,
+        )
         setLatestSvg(data.data)
 
         // The chat's own export (onFetchChart), not another one in flight

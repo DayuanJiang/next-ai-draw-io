@@ -131,7 +131,7 @@ const NEW_CELLS =
     cell("3", "R&D", 400) +
     `<UserObject id="4" label="Docs" link="https://example.com"><mxCell style="rounded=1;" vertex="1" parent="1"><mxGeometry x="580" y="40" width="120" height="60" as="geometry"/></mxCell></UserObject>`
 
-test("display_diagram replaces the document with the fixed diagram", async ({
+test("display_diagram redraws the page on screen and keeps the other pages", async ({
     page: p,
 }) => {
     const canvas = await mockReplies(p, [
@@ -155,9 +155,11 @@ test("display_diagram replaces the document with the fixed diagram", async ({
             timeout: 15000,
         })
     }
-    // The old pages are gone
+    // The first page was redrawn; the second page is still there
     await expect(canvas.getByText("Old A")).toHaveCount(0)
-    await expect(pageTabs.getByText("Second", { exact: true })).toHaveCount(0)
+    await expect(pageTabs.getByText("Second", { exact: true })).toBeVisible()
+    await pageTabs.getByText("Second", { exact: true }).click()
+    await expect(canvas.getByText("Old B")).toBeVisible()
 })
 
 test("an edit with a fixable cell is fixed, not rejected", async ({

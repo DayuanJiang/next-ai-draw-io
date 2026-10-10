@@ -9,7 +9,7 @@
  * With an external draw.io (cross-origin) none of this is available and the
  * app uses the postMessage protocol only.
  */
-import { sameFileVars } from "@/lib/diagram-diff"
+import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 
@@ -152,23 +152,18 @@ function withoutUndo(fn: () => void) {
     }
 }
 
-/**
- * replaceDiagramData replaces the current page with one <mxGraphModel>. Only
- * single-page documents qualify; multi-page ones fall back to a full load.
- */
-function toSinglePageModel(xml: string): string | null {
-    const doc = new DOMParser().parseFromString(xml, "text/xml")
-    if (doc.querySelector("parsererror")) return null
-    const root = doc.documentElement
-    if (root.nodeName === "mxGraphModel") return xml
-    if (root.nodeName !== "mxfile") return null
-    const diagrams = root.getElementsByTagName("diagram")
-    if (diagrams.length !== 1) return null
-    const model = diagrams[0].getElementsByTagName("mxGraphModel")[0]
+/** Id of the page on the canvas, when draw.io has pages */
+function currentPageId(): string | null {
+    const id = ui?.currentPage?.getId?.()
+    return id === undefined || id === null ? null : String(id)
+}
+
+/** A page's <mxGraphModel> as XML, inflated when the page is compressed */
+function modelXmlOf(diagram: Element): string | null {
+    const model = diagram.getElementsByTagName("mxGraphModel")[0]
     if (model) return new XMLSerializer().serializeToString(model)
-    // Compressed page
     try {
-        const text = diagrams[0].textContent?.trim()
+        const text = diagram.textContent?.trim()
         const inflated = text ? win?.Graph?.decompress?.(text) : null
         return typeof inflated === "string" &&
             inflated.includes("<mxGraphModel")
@@ -179,8 +174,62 @@ function toSinglePageModel(xml: string): string | null {
     }
 }
 
+/**
+ * replaceDiagramData replaces the current page with one <mxGraphModel>:
+ * the document's page with the canvas page's id, or its only page
+ */
+function pageModelOf(xml: string): string | null {
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    if (doc.querySelector("parsererror")) return null
+    const root = doc.documentElement
+    if (root.nodeName === "mxGraphModel") return xml
+    if (root.nodeName !== "mxfile") return null
+    const diagrams = Array.from(root.getElementsByTagName("diagram"))
+    const id = currentPageId()
+    const diagram =
+        diagrams.length === 1
+            ? diagrams[0]
+            : diagrams.find((d) => d.getAttribute("id") === id)
+    return diagram ? modelXmlOf(diagram) : null
+}
+
+/**
+ * The document without the current page, for comparing the other pages.
+ * null when the XML is not a document; "" for a single page.
+ */
+function withoutCurrentPage(xml: string | null): string | null {
+    if (!xml) return null
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    if (doc.querySelector("parsererror")) return null
+    const root = doc.documentElement
+    if (root.nodeName === "mxGraphModel") return ""
+    if (root.nodeName !== "mxfile") return null
+    const diagrams = Array.from(root.getElementsByTagName("diagram"))
+    if (diagrams.length <= 1) return ""
+    const id = currentPageId()
+    for (const diagram of diagrams) {
+        if (diagram.getAttribute("id") === id) root.removeChild(diagram)
+    }
+    return new XMLSerializer().serializeToString(root)
+}
+
+/**
+ * The document changes the current page only: its other pages are the
+ * canvas's (same names, cells and page settings; draw.io fills in settings
+ * a loaded file left out, so the text can differ)
+ */
+function otherPagesSame(xml: string): boolean {
+    const theirs = withoutCurrentPage(xml)
+    if (theirs === null) return false
+    const pageCount = Array.isArray(ui.pages) ? ui.pages.length : 1
+    if (pageCount <= 1 && theirs === "") return true
+    const ours = withoutCurrentPage(currentFileXml())
+    if (ours === null || ours === "" || theirs === "") return false
+    return isSameDocument(theirs, ours)
+}
+
 function replace(xml: string) {
-    const model = toSinglePageModel(xml)
+    const model = pageModelOf(xml)
     if (!model || typeof ui?.replaceDiagramData !== "function") {
         throw new Error("Diagram can't be replaced in place")
     }
@@ -202,7 +251,7 @@ function isEmptyModel(): boolean {
 
 /** Whether a page has shapes; layers (cells under the root) are none */
 function hasShapes(xml: string): boolean {
-    const model = toSinglePageModel(xml)
+    const model = pageModelOf(xml)
     if (model === null) return hasCells(xml)
     const cells = new DOMParser()
         .parseFromString(model, "text/xml")
@@ -256,8 +305,9 @@ export function canReplaceDiagram(xml: string): boolean {
         warnOnce("replace", "replaceDiagramData not found, using full loads")
         return false
     }
-    const pageCount = Array.isArray(ui.pages) ? ui.pages.length : 1
-    if (pageCount > 1) return false
+    // Replacing changes the current page only: a document whose other
+    // pages differ from the canvas's loads in full
+    if (!otherPagesSame(xml)) return false
     // Replacing the page keeps the file's variables: other ones, or none
     // over a file with some, load in full
     if (
@@ -268,7 +318,7 @@ export function canReplaceDiagram(xml: string): boolean {
     ) {
         return false
     }
-    const model = toSinglePageModel(xml)
+    const model = pageModelOf(xml)
     // A document with them, or replacing one with them, loads in full
     return (
         model !== null &&
@@ -285,13 +335,21 @@ export function previewDiagram(xml: string) {
     if (wasEmpty) fitDiagram()
 }
 
-/** Name and id of the page in a single-page mxfile, if it has them */
+/**
+ * Name and id the document gives the canvas page: of its page with that
+ * id, or of its only page
+ */
 function pageOf(xml: string): { name: string | null; id: string | null } {
     const doc = new DOMParser().parseFromString(xml, "text/xml")
-    const diagram =
+    const diagrams =
         doc.documentElement?.nodeName === "mxfile"
-            ? doc.getElementsByTagName("diagram")[0]
-            : undefined
+            ? Array.from(doc.getElementsByTagName("diagram"))
+            : []
+    const id = currentPageId()
+    const diagram =
+        diagrams.length === 1
+            ? diagrams[0]
+            : diagrams.find((d) => d.getAttribute("id") === id)
     return {
         name: diagram?.getAttribute("name") || null,
         id: diagram?.getAttribute("id") || null,
@@ -322,7 +380,7 @@ function changePageId(page: any, id: string) {
 export function commitDiagram(xml: string) {
     const wasEmpty =
         isEmptyModel() || (previewBase !== null && !hasShapes(previewBase))
-    const base = previewBase ? toSinglePageModel(previewBase) : null
+    const base = previewBase ? pageModelOf(previewBase) : null
     previewBase = null
     // Undo goes back to the diagram before streaming started. draw.io's
     // ReplaceDiagram change keeps the document it replaced for undo: hand it
@@ -337,7 +395,7 @@ export function commitDiagram(xml: string) {
     const page = ui?.currentPage
     model?.beginUpdate()
     try {
-        const next = toSinglePageModel(xml)
+        const next = pageModelOf(xml)
         if (direct && next) {
             const change = new ReplaceDiagram(ui, parse(next))
             model.execute(change)
@@ -366,6 +424,18 @@ export function revertPreview(targetXml: string) {
 /** Forget the preview base (new user turn) without changing the canvas */
 export function resetPreview() {
     previewBase = null
+}
+
+/** Show the page with this id; false when draw.io has no such page */
+export function selectPage(pageId: string): boolean {
+    try {
+        const page = ui?.getPageById?.(pageId)
+        if (!page || typeof ui.selectPage !== "function") return false
+        if (ui.currentPage !== page) ui.selectPage(page, true)
+        return true
+    } catch {
+        return false
+    }
 }
 
 // When the app last fitted the diagram on its own; a canvas resize right

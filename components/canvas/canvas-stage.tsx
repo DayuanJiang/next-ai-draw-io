@@ -46,11 +46,6 @@ export function CanvasStage({
     const engine = useChatEngine()
     const isDark = useSettingsStore((s) => s.isDark)
     const hasEditor = useCanvasStore((s) => s.hasEditor)
-    // The model sees the first page only, so asking about shapes elsewhere
-    // would change the wrong page
-    const onFirstPage = useCanvasStore(
-        (s) => s.pages.length === 0 || s.pages[0]?.id === s.currentPageId,
-    )
     // Canvas width when the chat panel starts sliding in or out
     const slideStartWidthRef = useRef(0)
 
@@ -168,7 +163,7 @@ export function CanvasStage({
                 <SelectionAsk
                     width={size.width}
                     height={size.height}
-                    hidden={engine.isBusy || !onFirstPage}
+                    hidden={engine.isBusy}
                 />
             )}
         </div>

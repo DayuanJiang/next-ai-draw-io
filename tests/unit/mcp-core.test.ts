@@ -263,3 +263,50 @@ describe("applyDiagramOperations with wrapped cells", () => {
         expect(errors[0]?.message).toContain("not found")
     })
 })
+
+describe("edit_diagram on one page of a multi-page file", () => {
+    // Page A has an edge "g"; on page B, "g" is a shape on layer "L"
+    const twoPages = `<mxfile><diagram id="pa" name="A"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${box("s")}${box("t")}<mxCell id="g" edge="1" parent="1" source="s" target="t"><mxGeometry relative="1" as="geometry"/></mxCell></root></mxGraphModel></diagram><diagram id="pb" name="B"><mxGraphModel><root><mxCell id="0"/><mxCell id="L" parent="0"/>${box("g", "L")}</root></mxGraphModel></diagram></mxfile>`
+    const cellOn = (xml: string, pageId: string, id: string) =>
+        new DOMParser()
+            .parseFromString(xml, "text/xml")
+            .querySelector(`diagram[id="${pageId}"] mxCell[id="${id}"]`)
+
+    it("puts a compact cell without a parent on that page's layer", () => {
+        const outcome = editDiagram(
+            twoPages,
+            [
+                {
+                    operation: "add",
+                    cell_id: "c",
+                    new_xml:
+                        '<mxCell id="c" value="c" x="10" y="10" w="80" h="40"/>',
+                },
+            ],
+            { page_id: "pb" },
+        )
+        if (!outcome.ok) throw new Error(outcome.errors.join("; "))
+        expect(cellOn(outcome.xml, "pb", "c")?.getAttribute("parent")).toBe("L")
+        expect(cellOn(outcome.xml, "pa", "c")).toBeNull()
+    })
+
+    it("reads the edges of that page only", () => {
+        // A shape inside the group "g" is no edge label on page B
+        const outcome = editDiagram(
+            twoPages,
+            [
+                {
+                    operation: "add",
+                    cell_id: "c",
+                    new_xml:
+                        '<mxCell id="c" value="c" parent="g" x="10" y="10" w="80" h="40"/>',
+                },
+            ],
+            { page_id: "pb" },
+        )
+        if (!outcome.ok) throw new Error(outcome.errors.join("; "))
+        expect(cellOn(outcome.xml, "pb", "c")?.getAttribute("style")).toContain(
+            "whiteSpace=wrap",
+        )
+    })
+})

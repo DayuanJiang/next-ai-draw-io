@@ -53,7 +53,7 @@ export function editDiagram(
     // Edges already on the page, so a label added to one is not wrapped, and
     // the layer a compact cell without a parent goes on
     const page = targetPageXml(xml, selector)
-    const edges = edgeIdsOf(xml)
+    const edges = edgeIdsOf(page)
     const layer = defaultLayerOf(page)
     for (const op of operations) {
         if (op.operation === "delete" || !op.new_xml) {
