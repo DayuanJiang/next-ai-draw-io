@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
+    drawioEmbedParams,
     getState,
     keepInHistory,
     onSessionRecreate,
@@ -463,6 +464,46 @@ describe("preview page", () => {
             .join("\n")
         expect(scripts).toContain('const sessionId = "mcp-test-script";')
         expect(() => new Function(scripts)).not.toThrow()
+    })
+})
+
+describe("draw.io embed parameters from the host config", () => {
+    it("follows the system dark mode and fixes nothing else by default", () => {
+        expect(drawioEmbedParams({})).toBe("dark=auto")
+    })
+
+    it("turns dark mode on with the dark theme", () => {
+        // draw.io ignores ui=dark for dark mode once a dark parameter is sent
+        const params = drawioEmbedParams({ DRAWIO_UI: "dark" })
+        expect(params).toContain("dark=1")
+        expect(params).toContain("ui=dark")
+        // Unless the user asked for light mode
+        expect(drawioEmbedParams({ DRAWIO_UI: "dark", DRAWIO_DARK: "0" })).toBe(
+            "dark=0&ui=dark",
+        )
+    })
+
+    it("ignores a theme or language draw.io does not know", () => {
+        expect(drawioEmbedParams({ DRAWIO_UI: "neon" })).toBe("dark=auto")
+        expect(drawioEmbedParams({ DRAWIO_LANG: "en;drop" })).toBe("dark=auto")
+        expect(drawioEmbedParams({ DRAWIO_LANG: "english" })).toBe("dark=auto")
+    })
+
+    it("uses draw.io's name for Traditional Chinese", () => {
+        for (const value of ["zh-Hant", "zh-hant"]) {
+            expect(drawioEmbedParams({ DRAWIO_LANG: value })).toBe(
+                "dark=auto&lang=zh-tw",
+            )
+        }
+        expect(drawioEmbedParams({ DRAWIO_LANG: "ja" })).toBe(
+            "dark=auto&lang=ja",
+        )
+    })
+
+    it("reads dark mode in any spelling", () => {
+        expect(drawioEmbedParams({ DRAWIO_DARK: "TRUE" })).toBe("dark=1")
+        expect(drawioEmbedParams({ DRAWIO_DARK: "light" })).toBe("dark=0")
+        expect(drawioEmbedParams({ DRAWIO_DARK: "maybe" })).toBe("dark=auto")
     })
 })
 
