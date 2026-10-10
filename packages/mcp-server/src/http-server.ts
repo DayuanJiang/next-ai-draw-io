@@ -715,16 +715,22 @@ function handleRestoreApi(
 
     readBody(req, res, (body) => {
         try {
-            const { sessionId, id, stateId } = JSON.parse(body)
+            const data = JSON.parse(body)
+            const { sessionId, id } = data
             if (!sessionId || typeof id !== "number") {
                 res.writeHead(400, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "sessionId and id required" }))
                 return
             }
             // Picked from the list of a state the server has since lost
-            // (a restart reloads History under new ids)
+            // (a restart reloads History under new ids), or before the tab
+            // knew the state. A tab of an older version sends none.
             const current = stateStore.get(sessionId)
-            if (stateId && current && stateId !== current.stateId) {
+            if (
+                current &&
+                "stateId" in data &&
+                data.stateId !== current.stateId
+            ) {
                 res.writeHead(409, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Session was recreated" }))
                 return

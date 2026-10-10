@@ -465,6 +465,34 @@ describe("MCP preview History and a recreated session", () => {
         expect(modalOpen()).toBe(false)
     })
 
+    it("restores from an old list with that list's state", async () => {
+        const t = await inStep()
+        const history = document.getElementById(
+            "history-btn",
+        ) as HTMLButtonElement
+        history.click()
+        await t.settle()
+        take(t, "/api/history").answer(historyList)
+        await t.settle()
+        await t.settle()
+        // The server restarts; the open list closes
+        const poll = t.page.poll()
+        take(t, "/api/state").answer(state("S2", 1, "<mxfile>A</mxfile>"))
+        await poll
+        expect(modalOpen()).toBe(false)
+        // Asking again fails, so the old list shows
+        history.click()
+        await t.settle()
+        take(t, "/api/history").fail()
+        await t.settle()
+        expect(modalOpen()).toBe(true)
+        ;(document.querySelector(".history-item") as HTMLElement).click()
+        ;(document.getElementById("restore-btn") as HTMLButtonElement).click()
+        await t.settle()
+        // The server refuses it: the ids are S1's
+        expect(take(t, "/api/restore").body.stateId).toBe("S1")
+    })
+
     it("names the state its History list belongs to when restoring", async () => {
         const t = await inStep()
         ;(document.getElementById("history-btn") as HTMLButtonElement).click()

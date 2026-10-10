@@ -500,6 +500,13 @@ describe("history restore", () => {
             stateId: "a-lost-state",
         })
         expect(stale.status).toBe(409)
+        // A list taken before the tab knew the state
+        const unknown = await postJson("/api/restore", {
+            sessionId: id,
+            id: entry.id,
+            stateId: null,
+        })
+        expect(unknown.status).toBe(409)
         expect(getState(id)?.xml).toBe(page("now"))
         const fresh = await postJson("/api/restore", {
             sessionId: id,

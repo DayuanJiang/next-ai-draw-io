@@ -455,7 +455,8 @@ const historyGrid = document.getElementById('history-grid');
 const historyEmpty = document.getElementById('history-empty');
 const restoreBtn = document.getElementById('restore-btn');
 const cancelBtn = document.getElementById('cancel-btn');
-let historyData = [], selectedId = null;
+// historyStateId: the server state the list belongs to, sent with a restore
+let historyData = [], historyStateId = null, selectedId = null;
 
 historyBtn.onclick = async () => {
     if (!sessionId) return;
@@ -467,6 +468,7 @@ historyBtn.onclick = async () => {
             const d = await r.json();
             if (sid !== stateId) return;
             historyData = d.entries || [];
+            historyStateId = sid;
             renderHistory();
         }
     } catch {}
@@ -524,7 +526,7 @@ restoreBtn.onclick = async () => {
         const r = await fetch('/api/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, id: selectedId, stateId })
+            body: JSON.stringify({ sessionId, id: selectedId, stateId: historyStateId })
         });
         if (r.ok) { cancelBtn.onclick(); await poll(); }
         else if (r.status === 409) { cancelBtn.onclick(); showNotice('History changed on the server. Please open it again.'); }
