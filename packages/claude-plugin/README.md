@@ -117,7 +117,7 @@ Claude Code <--stdio--> MCP Server <--http--> Browser (draw.io)
 |----------|---------|-------------|
 | `PORT` | `6002` | Port for the embedded HTTP server |
 | `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for draw.io (for self-hosted deployments) |
-| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for auto-saved diagrams; `off` turns auto-save off |
+| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for auto-saved diagrams and your `instructions.md`; `off` turns auto-save off (`instructions.md` is then read from the default folder) |
 | `DEBUG` | unset | Set to `true` to log debug messages |
 
 ## Links

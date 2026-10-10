@@ -27,11 +27,16 @@ export function customInstructionsDir(): string {
         : join(homedir(), ".next-ai-drawio")
 }
 
+/** Full path of the instructions file. */
+export function customInstructionsPath(dir = customInstructionsDir()): string {
+    return join(dir, CUSTOM_INSTRUCTIONS_FILE)
+}
+
 let warned = false
 
 /** The file's content, trimmed and capped; "" when there is none. */
 export function readCustomInstructions(dir = customInstructionsDir()): string {
-    const path = join(dir, CUSTOM_INSTRUCTIONS_FILE)
+    const path = customInstructionsPath(dir)
     try {
         return readFileSync(path, "utf-8").trim().slice(0, MAX_CHARS)
     } catch (error) {

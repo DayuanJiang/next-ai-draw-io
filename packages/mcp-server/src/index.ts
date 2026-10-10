@@ -25,8 +25,7 @@ import open from "open"
 import { z } from "zod"
 import { expandCompactCells, foldCells } from "./compact-cells.ts"
 import {
-    CUSTOM_INSTRUCTIONS_FILE,
-    customInstructionsDir,
+    customInstructionsPath,
     guideWithCustomInstructions,
 } from "./custom-instructions.ts"
 import type { DiagramOperation } from "./diagram-operations.ts"
@@ -319,7 +318,7 @@ registerWriteTool(
             const saveNote = savePath
                 ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
                 : ""
-            const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsDir()}/${CUSTOM_INSTRUCTIONS_FILE} (Markdown, up to 5000 characters, read on every call).`
+            const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsPath()} (Markdown, up to 5000 characters, read on every call).`
 
             log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
@@ -444,7 +443,8 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
             log.info(`Diagram content set successfully (${pageSummary})`)
 
             // Only the root cells: the model asked for an empty canvas
-            if (!hasCells(xml)) {
+            // (several empty pages get the page summary below)
+            if (!hasCells(xml) && pages.length <= 1) {
                 return {
                     content: [
                         {
