@@ -27,6 +27,7 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 - **Real-time Preview**: Diagrams appear and update in your browser as Claude creates them
 - **Drawing Rules and Shape Libraries**: Claude gets the web app's layout and style rules and the icon docs for AWS, Azure, GCP, Kubernetes and more
 - **Self-check**: Claude can take a screenshot of the rendered diagram and fix what looks wrong
+- **Draw from Your Files**: ask Claude to draw from a document, image or web page; it reads the source with its own tools and draws. Existing .drawio files open with load_diagram
 - **Version History**: Restore one of the last 20 versions from the **History** button, shown as thumbnails
 - **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
 - **Edit Support**: Modify existing diagrams with natural language instructions, including your own edits in the browser
@@ -69,6 +70,18 @@ Cloud Storage for a web application
 ```
 Create a sequence diagram showing OAuth 2.0 authorization code flow
 between user, client app, auth server, and resource server
+```
+
+### 6. Draw From a Document
+
+```
+Read docs/architecture.md and draw the system as a diagram
+```
+
+### 7. Recreate a Sketch
+
+```
+Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
 ```
 
 ## Available Tools

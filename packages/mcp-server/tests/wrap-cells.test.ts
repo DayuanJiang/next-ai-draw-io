@@ -164,6 +164,15 @@ describe("prepareNewDiagram", () => {
         )
         expect(out.ok).toBe(true)
     })
+
+    it("accepts the root cells alone as a blank page", () => {
+        const out = prepareNewDiagram(
+            `<mxCell id="0"/><mxCell id="1" parent="0"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(hasCells(out.xml)).toBe(false)
+    })
 })
 
 describe("labels that look like attributes", () => {

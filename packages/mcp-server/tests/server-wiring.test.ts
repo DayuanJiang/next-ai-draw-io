@@ -185,6 +185,8 @@ describe("MCP server wiring", () => {
         })
         const text: string = resp.result.content[0].text
         expect(text).toContain("Edge routing rules")
+        expect(text).toContain("do not describe the diagram")
+        expect(text).toContain("clear the canvas")
         expect(text.length).toBeLessThanOrEqual(15000)
     })
 })

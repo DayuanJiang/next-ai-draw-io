@@ -99,6 +99,8 @@ Use the standard MCP configuration with:
 1. Restart your MCP client after updating config
 2. Ask the AI to create a diagram:
    > "Create a flowchart showing user authentication with login, MFA, and session management"
+
+   > "Read docs/architecture.md and draw the system as a diagram"
 3. The diagram appears in your browser in real-time!
 
 ## Features
@@ -106,6 +108,7 @@ Use the standard MCP configuration with:
 - **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
 - **Drawing Rules**: The AI gets the same layout, edge and style rules as the web app, plus the shape library docs (AWS, Azure, GCP, Kubernetes, Cisco and more), so it uses real icon names instead of guessing
 - **Self-check**: The AI can take a screenshot of the rendered diagram and fix overlapping shapes or edges that cross shapes
+- **Draw from Your Files**: ask the AI to draw from a document, image or web page; it reads the source with the host's own tools and draws. Existing .drawio files open with load_diagram
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
 - **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails
