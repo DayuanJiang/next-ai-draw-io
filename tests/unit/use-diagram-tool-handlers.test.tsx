@@ -351,10 +351,10 @@ describe("the model's page", () => {
         await call("edit_diagram", {
             operations: [{ operation: "delete", cell_id: "missing" }],
         })
-        const { state, errorText } = addToolOutput.mock.lastCall?.[0]
-        expect(state).toBe("output-error")
-        expect(errorText).toContain('id="B"')
-        expect(errorText).not.toContain('id="A"')
+        const output = addToolOutput.mock.lastCall?.[0]
+        expect(output?.state).toBe("output-error")
+        expect(output?.errorText).toContain('id="B"')
+        expect(output?.errorText).not.toContain('id="A"')
     })
 
     it("draws on the first page when the page is not known", async () => {
