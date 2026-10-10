@@ -98,6 +98,11 @@ function createCachedStreamResponse(xml: string): Response {
 
 // Responses streamed from the model, whose trace streamText's callbacks end
 const modelStreamResponses = new WeakSet<Response>()
+// A Request's signal follows the client's disconnect only while the Request
+// object itself is alive: once it is garbage collected, the abort is lost
+// (nodejs/undici#3644) and a stopped chat would run on at the provider.
+// Each request is kept as long as its answer streams.
+const requestOfResponse = new WeakMap<Response, Request>()
 
 // Inner handler function
 const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
@@ -787,6 +792,7 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         },
     })
     modelStreamResponses.add(response)
+    requestOfResponse.set(response, req)
     return response
 }
 
