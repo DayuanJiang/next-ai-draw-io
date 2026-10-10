@@ -192,8 +192,14 @@ export class Autosaver {
         }
         try {
             const isNew = !existsSync(path)
-            // A blank page the browser shows before any drawing: nothing to keep
-            if (isNew && isBlank(entry.xml)) return
+            // A blank page the browser shows before any drawing: nothing to
+            // keep (unless the diagram was cleared before its first save)
+            if (
+                isNew &&
+                isBlank(entry.xml) &&
+                this.history(sessionId).every((e) => isBlank(e.xml))
+            )
+                return
             mkdirSync(this.dir, { recursive: true })
             // Write to a temporary file first so a crash never leaves half a file
             writeFileSync(`${path}.tmp`, entry.xml, "utf-8")
@@ -234,10 +240,12 @@ export class Autosaver {
         // by start_session): DRAWIO_DATA_DIR may be a folder that also holds
         // the user's diagrams
         const own = this.files(/^mcp-[0-9a-z]{8}-[0-9a-z]{1,6}\.drawio$/)
-        for (const { path } of own.slice(this.maxFiles)) {
+        for (const { name, path } of own.slice(this.maxFiles)) {
             unlinkSync(path)
-            // Its History goes with it (there may be none)
+            // Its History goes with it (there may be none), and is written
+            // again if the session saves once more
             rmSync(path.replace(/\.drawio$/, ".history.json"), { force: true })
+            this.historyKeys.delete(name.slice(0, -".drawio".length))
         }
     }
 }

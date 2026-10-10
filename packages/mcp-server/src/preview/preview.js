@@ -237,6 +237,8 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
 // process restarted. Decide whose diagram wins.
 function recoverState(s) {
     stateId = s.stateId;
+    // History entries got new ids with the new state: an open list is stale
+    if (historyModal.classList.contains('open')) cancelBtn.onclick();
     // The old state's pending work is gone with it
     const projectionShown = projectionExportActive;
     projectionExportActive = false;

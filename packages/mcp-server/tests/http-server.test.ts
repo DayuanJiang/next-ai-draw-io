@@ -14,6 +14,7 @@ import {
     getState,
     keepInHistory,
     onSessionRecreate,
+    onStateChange,
     requestExport,
     requestSync,
     restoreHistoryEntry,
@@ -255,6 +256,25 @@ describe("POST /api/state", () => {
         const history = getHistory(id)
         expect(history).toHaveLength(before + 1)
         expect(history.at(-1)?.xml).toBe("<mxfile>lost user edit</mxfile>")
+    })
+
+    it("asks for a save when a lost user edit is kept in history", async () => {
+        const id = "mcp-conflict-save"
+        setState(id, "<mxfile>user v1</mxfile>", undefined, true)
+        const aiVersion = setState(id, "<mxfile>AI edit</mxfile>")
+        const saves: string[] = []
+        onStateChange((sessionId, xml) => saves.push(`${sessionId} ${xml}`))
+        try {
+            await postJson("/api/state", {
+                sessionId: id,
+                xml: "<mxfile>lost user edit</mxfile>",
+                baseVersion: aiVersion - 1,
+            })
+        } finally {
+            onStateChange(() => {})
+        }
+        // The canvas stays the AI write; the save takes the new History
+        expect(saves).toEqual([`${id} <mxfile>AI edit</mxfile>`])
     })
 
     it("ends a pending sync when the sync reply is older than an AI write", async () => {

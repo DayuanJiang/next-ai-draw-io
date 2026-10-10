@@ -270,6 +270,43 @@ describe("Autosaver History", () => {
         ])
     })
 
+    it("saves a diagram cleared before its first save, with its History", () => {
+        const dir = tempDir()
+        const saver = withHistory(dir, [{ id: 0, xml: V1 }])
+        saver.schedule("mcp-cleared", BLANK)
+        saver.flush()
+        expect(
+            readFileSync(saver.pathFor("mcp-cleared") as string, "utf-8"),
+        ).toBe(BLANK)
+        expect(saver.loadHistory("mcp-cleared")).toEqual([V1])
+    })
+
+    it("still skips a blank page whose History holds only blank pages", () => {
+        const dir = tempDir()
+        const saver = withHistory(dir, [{ id: 0, xml: BLANK }])
+        saver.schedule("mcp-empty", BLANK)
+        saver.flush()
+        expect(readdirSync(dir)).toEqual([])
+    })
+
+    it("writes the History again after the cap removed it", () => {
+        const dir = tempDir()
+        const entries = [{ id: 0, xml: V1 }]
+        const saver = new Autosaver(dir, 10, 1, () => entries)
+        const old = "mcp-aaaaaaaa-old"
+        saver.schedule(old, V1)
+        saver.flush()
+        utimesSync(saver.pathFor(old) as string, 1000, 1000)
+        // A newer session pushes the old one out
+        saver.schedule("mcp-aaaaaaab-new", V1)
+        saver.flush()
+        expect(existsSync(saver.historyPathFor(old) as string)).toBe(false)
+        // The old session is still open and saves again, History unchanged
+        saver.schedule(old, V1)
+        saver.flush()
+        expect(saver.loadHistory(old)).toEqual([V1])
+    })
+
     it("rewrites the History file only when the entries changed", () => {
         const dir = tempDir()
         const entries = [{ id: 0, xml: V1 }]

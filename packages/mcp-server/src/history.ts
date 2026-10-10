@@ -5,6 +5,7 @@
 
 import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
+import { isMxGraphModel } from "./pages.ts"
 
 const MAX_HISTORY = 20
 
@@ -70,16 +71,33 @@ export function otherVersions(
     sessionId: string,
     currentXml: string,
 ): HistoryEntry[] {
-    const seen = new Set<string>([contentFingerprint(currentXml)])
-    const result: HistoryEntry[] = []
     const history = getHistory(sessionId)
+    const keyOf = versionKey(currentXml, history)
+    const seen = new Set<string>([keyOf(currentXml)])
+    const result: HistoryEntry[] = []
     for (let i = history.length - 1; i >= 0; i--) {
-        const fingerprint = contentFingerprint(history[i].xml)
-        if (seen.has(fingerprint)) continue
-        seen.add(fingerprint)
+        const key = keyOf(history[i].xml)
+        if (seen.has(key)) continue
+        seen.add(key)
         result.push(history[i])
     }
     return result
+}
+
+/** True when History holds a copy of this diagram. */
+export function isInHistory(sessionId: string, xml: string): boolean {
+    const history = getHistory(sessionId)
+    const keyOf = versionKey(xml, history)
+    const key = keyOf(xml)
+    return history.some((entry) => keyOf(entry.xml) === key)
+}
+
+// Same rule as checkEditGate: a bare <mxGraphModel> (the browser's sync
+// can send one) has no page name, so names count only when none is bare
+function versionKey(xml: string, history: HistoryEntry[]) {
+    const names =
+        !isMxGraphModel(xml) && !history.some((e) => isMxGraphModel(e.xml))
+    return (other: string) => contentFingerprint(other, names)
 }
 
 /**

@@ -8,6 +8,7 @@ import {
     addHistory,
     clearHistory,
     getHistory,
+    isInHistory,
     otherVersions,
 } from "../src/history.ts"
 
@@ -78,6 +79,20 @@ describe("otherVersions", () => {
         const [newestA] = otherVersions(id, B)
         expect(newestA.id).toBe(getHistory(id)[2].id)
         expect(otherVersions(id, B)).toHaveLength(1)
+    })
+
+    it("matches a bare model from the browser with its named page", () => {
+        const id = "history-bare"
+        const named = (xml: string) => xml.replace('name="P"', 'name="Arch"')
+        fill(id, [named(A), named(B)])
+        // The browser's sync sent page B without its <mxfile> wrapper
+        const bareB = B.replace(/^.*?(<mxGraphModel>)/, "$1").replace(
+            "</diagram></mxfile>",
+            "",
+        )
+        expect(otherVersions(id, bareB).map((e) => e.xml)).toEqual([named(A)])
+        expect(isInHistory(id, bareB)).toBe(true)
+        expect(isInHistory(id, C)).toBe(false)
     })
 
     it("returns nothing for an empty history", () => {

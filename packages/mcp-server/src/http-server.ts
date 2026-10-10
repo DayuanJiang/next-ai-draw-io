@@ -569,6 +569,8 @@ function handleStateApi(
                             data.xml !== current.xml
                         if (saved) {
                             addHistory(sessionId, data.xml, data.svg || "")
+                            // Saved with the History, as after any change
+                            stateListener?.(sessionId, current.xml)
                         }
                         res.writeHead(409, {
                             "Content-Type": "application/json",
@@ -605,6 +607,7 @@ function handleStateApi(
                         // it in history so the user can restore it.
                         addHistory(sessionId, data.xml, data.svg || "")
                         savedToHistory = true
+                        if (current) stateListener?.(sessionId, current.xml)
                     }
                     res.writeHead(409, { "Content-Type": "application/json" })
                     res.end(

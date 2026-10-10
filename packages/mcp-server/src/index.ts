@@ -38,6 +38,7 @@ import {
     addHistory,
     getHistory,
     type HistoryEntry,
+    isInHistory,
     otherVersions,
 } from "./history.ts"
 import {
@@ -100,12 +101,15 @@ const autosaver = new Autosaver(defaultDataDir(), undefined, undefined, (id) =>
 )
 onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
 onSessionRecreate((sessionId) => {
-    const xml = autosaver.load(sessionId)
-    if (!xml) return null
+    const saved = autosaver.load(sessionId)
+    if (!saved) return null
+    // A file draw.io saved (compressed pages) comes back as plain XML, as
+    // with load_diagram
+    const loaded = parseDrawioFileContent(saved)
     // History comes back with the diagram (addHistory drops consecutive
     // duplicates)
     for (const x of autosaver.loadHistory(sessionId)) addHistory(sessionId, x)
-    return xml
+    return loaded.ok ? loaded.xml : saved
 })
 
 // A one-page view that does not count for the whole document (edit-gate.ts)
@@ -308,7 +312,7 @@ registerWriteTool(
     {
         title: "Start session",
         description:
-            "Start a new diagram session and open the browser for real-time preview. " +
+            "Start a new diagram session, or continue a saved one with session_id, and open the browser for real-time preview. " +
             "Starts an embedded server and opens a browser window with draw.io. " +
             "The browser will show diagram updates as they happen. " +
             "The result includes the drawing guide; follow it when drawing.",
@@ -350,7 +354,8 @@ registerWriteTool(
             const restored = sessionState(sessionId)
             let intro = "Session started successfully!"
             if (session_id) {
-                if (restored && hasCells(restored.xml)) {
+                // blank: the browser asked first and nothing was saved
+                if (restored && !restored.blank) {
                     const doc = parseMxfile(restored.xml)
                     const pages = doc ? listPagesFromDoc(doc) : []
                     const pageSummary =
@@ -2132,14 +2137,22 @@ registerWriteTool(
 
             // Manual edits since the last entry are not in History yet;
             // restoreHistoryEntry keeps them (a blank page excepted)
-            const currentFingerprint = contentFingerprint(current)
             const hadManual =
-                currentFingerprint !== contentFingerprint(BLANK_MXFILE) &&
-                !getHistory(session.id).some(
-                    (e) => contentFingerprint(e.xml) === currentFingerprint,
-                )
+                contentFingerprint(current) !==
+                    contentFingerprint(BLANK_MXFILE) &&
+                !isInHistory(session.id, current)
 
-            restoreHistoryEntry(session.id, entry.id)
+            if (restoreHistoryEntry(session.id, entry.id) === null) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: That version is no longer in History.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
             session.xml = entry.xml
             session.version++
             // As load_diagram: the model may never have seen this XML, so
@@ -2153,7 +2166,8 @@ registerWriteTool(
             const manualNote = hadManual
                 ? " Your manual changes were kept in History (steps_back=1 brings them back)."
                 : ""
-            const next = describeVersions(otherVersions(session.id, entry.xml))
+            const next =
+                describeVersions(otherVersions(session.id, entry.xml)) || "none"
             return {
                 content: [
                     {
