@@ -107,7 +107,7 @@ Use the standard MCP configuration with:
 
 - **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
 - **Drawing Rules**: The AI gets the same layout, edge and style rules as the web app, plus the shape library docs (AWS, Azure, GCP, Kubernetes, Cisco and more), so it uses real icon names instead of guessing
-- **Self-check**: The AI can take a screenshot of the rendered diagram and fix overlapping shapes or edges that cross shapes
+- **Self-check**: The AI can take a screenshot of the rendered diagram (`screenshot: true` on `create_new_diagram` or `edit_diagram`, or `screenshot_diagram`) and fix overlapping shapes or edges that cross shapes
 - **Draw from Your Files**: ask the AI to draw from a document, image or web page; it reads the source with the host's own tools and draws. Existing .drawio files open with load_diagram
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
@@ -188,6 +188,7 @@ To give the AI your own drawing rules, write them in `~/.next-ai-drawio/instruct
 | `DRAWIO_LANG` | unset | Language of the draw.io editor. Unset, draw.io chooses: the browser language on `embed.diagrams.net`, English on a self-hosted draw.io until the user picks one under **Extras > Language**. A code such as `en`, `zh`, `zh-tw`, `ja` or `de` fixes it and hides that submenu. |
 | `DRAWIO_UI` | unset | draw.io theme. Unset, the user picks one under **Extras > Theme** and draw.io remembers it. `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple` fixes the theme and hides that menu. |
 | `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light. The page header keeps following the system. |
+| `DRAWIO_AUTO_SCREENSHOT` | unset | Set to `true` to attach a screenshot to every `create_new_diagram` and `edit_diagram` result, so the AI checks each drawing. Costs 2 to 10 s per call; the preview tab must be open and in front. A call can still pass `screenshot: false`. |
 | `DEBUG` | unset | Set to `true` to log debug messages to stderr. |
 
 ### Private Deployment (Self-hosted draw.io)

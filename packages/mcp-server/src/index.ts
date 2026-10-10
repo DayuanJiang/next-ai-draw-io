@@ -21,6 +21,7 @@
 import { createRequire } from "node:module"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import open from "open"
 import { z } from "zod"
 import { expandCompactCells, foldCells } from "./compact-cells.ts"
@@ -99,6 +100,9 @@ installDomPolyfill()
 // Server configuration
 const config = {
     port: parseInt(process.env.PORT || "6002", 10),
+    // Attach a screenshot to every create_new_diagram and edit_diagram
+    // result unless the call says otherwise
+    autoScreenshot: process.env.DRAWIO_AUTO_SCREENSHOT === "true",
 }
 
 // Keep each session's latest diagram and its History on disk, so they
@@ -166,7 +170,7 @@ Before using cloud or icon shapes (AWS, Azure, GCP, Kubernetes, Cisco, BPMN...),
 
 To draw from a file, image or web page, read it yourself first; the server only receives XML. Open existing .drawio files with load_diagram.
 
-After drawing a complex diagram, call screenshot_diagram once to see it, and fix overlapping shapes or edges that cross shapes.
+After drawing or heavily editing a complex diagram, pass screenshot: true on that create_new_diagram or edit_diagram call (or call screenshot_diagram) to see the result, and fix overlapping shapes and edges that cross shapes.
 
 Tools:
 - create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
@@ -225,6 +229,14 @@ const pageSelectorSchema = {
             "Target a page by its 0-based tab index. Used only when page_id and page_name are not set.",
         ),
 }
+
+// The optional screenshot of create_new_diagram and edit_diagram
+const screenshotSchema = z
+    .boolean()
+    .optional()
+    .describe(
+        "Also return a PNG of the result so you can check it for overlaps and edges crossing shapes. Needs the preview tab open and in front; adds 2 to 10 s. Default: the DRAWIO_AUTO_SCREENSHOT environment variable.",
+    )
 
 /**
  * Pull a clean PageSelector out of a tool's parsed input.
@@ -502,7 +514,7 @@ registerWriteTool(
         title: "Create new diagram",
         description: `Create a NEW diagram, REPLACING the whole document: every page and any unsaved user changes (the previous state stays in History). To add a tab use add_page; to change cells use edit_diagram.
 
-Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape_library first. Follow the drawing guide returned by start_session (call get_drawing_guide if it is no longer in your context).
+Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape_library first. Follow the drawing guide returned by start_session (call get_drawing_guide if it is no longer in your context). Pass screenshot: true on the last call of a complex diagram to check the result.
 
 Accepted xml:
 1) Only the mxCell elements of one page (recommended). The server adds <mxfile>, <mxGraphModel>, <root> and the root cells "0" and "1":
@@ -519,10 +531,11 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 .describe(
                     "REQUIRED: the mxCell elements of one page, a bare <mxGraphModel>, or a full <mxfile> with one or more <diagram> pages.",
                 ),
+            screenshot: screenshotSchema,
         },
         annotations: { openWorldHint: false },
     },
-    async ({ xml: inputXml }) => {
+    async ({ xml: inputXml, screenshot }) => {
         try {
             if (!currentSession) {
                 return {
@@ -608,14 +621,27 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 }
             }
 
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}`,
-                    },
-                ],
+            const content: CallToolResult["content"] = [
+                {
+                    type: "text",
+                    text: `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}`,
+                },
+            ]
+            // The page on screen is the new document's first page
+            if (screenshot ?? config.autoScreenshot) {
+                const shot = await captureScreenshot(currentSession.id, xml, {})
+                content.push(
+                    ...(shot.ok
+                        ? shot.content
+                        : [
+                              {
+                                  type: "text" as const,
+                                  text: `Screenshot skipped: ${shot.note}`,
+                              },
+                          ]),
+                )
             }
+            return { content }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
@@ -856,10 +882,11 @@ registerWriteTool(
                     }),
                 )
                 .describe("Array of operations to apply"),
+            screenshot: screenshotSchema,
         },
         annotations: { openWorldHint: false },
     },
-    async ({ operations, page_id, page_name, page_index }) => {
+    async ({ operations, page_id, page_name, page_index, screenshot }) => {
         try {
             if (!currentSession) {
                 return {
@@ -998,14 +1025,35 @@ registerWriteTool(
 
             log.info(`Diagram edited successfully`)
 
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.`,
-                    },
-                ],
+            const content: CallToolResult["content"] = [
+                {
+                    type: "text",
+                    text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.`,
+                },
+            ]
+            // Without a selector the edit went to the first page, while the
+            // page on screen may be another tab: name the page, so the PNG
+            // shows the edited one (a pageId export leaves the view alone)
+            if (screenshot ?? config.autoScreenshot) {
+                const shot = await captureScreenshot(
+                    currentSession.id,
+                    result,
+                    hasPageSelector(pageSelector)
+                        ? pageSelector
+                        : { page_index: 0 },
+                )
+                content.push(
+                    ...(shot.ok
+                        ? shot.content
+                        : [
+                              {
+                                  type: "text" as const,
+                                  text: `Screenshot skipped: ${shot.note}`,
+                              },
+                          ]),
+                )
             }
+            return { content }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)
@@ -1226,12 +1274,16 @@ function previewStalled(sessionId: string): boolean {
     return lastPolled !== undefined && Date.now() - lastPolled > 10_000
 }
 
+function previewStalledNote(sessionId: string) {
+    return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), then retry.`
+}
+
 function previewStalledError(sessionId: string) {
     return {
         content: [
             {
                 type: "text" as const,
-                text: `Error: The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), then retry.`,
+                text: `Error: ${previewStalledNote(sessionId)}`,
             },
         ],
         isError: true,
@@ -1260,7 +1312,84 @@ const SCREENSHOT_CHECKLIST = `Check this rendering of the diagram for:
 3. Text that is cut off, overlapping or too small to read (warning)
 4. Layout problems: cramped shapes, poor spacing or misalignment (warning)
 5. Rendering errors: missing, incomplete or broken elements, such as an icon that did not load (critical)
+Name the elements that have a problem, for example "the 'Login' box overlaps 'Register'".
+Give concrete fixes, for example "move 'Login' 50 px left".
 If there are critical issues, fix them with edit_diagram and take one more screenshot. Do at most two rounds of fixes. Minor cosmetic issues are fine, and diagrams with only 1 or 2 shapes pass unless something is clearly broken.`
+
+/**
+ * Have the preview tab render a page of xml as a PNG. Returns the image
+ * block and the checklist for the model, or the reason there is no image
+ * (a sentence without an "Error:" prefix: screenshot_diagram reports it as
+ * an error, the write tools as a skipped screenshot).
+ */
+async function captureScreenshot(
+    sessionId: string,
+    xml: string,
+    selector: PageSelector,
+): Promise<
+    | { ok: true; content: CallToolResult["content"] }
+    | { ok: false; note: string }
+> {
+    if (previewStalled(sessionId)) {
+        return { ok: false, note: previewStalledNote(sessionId) }
+    }
+    // The tab never polled (right after start_session, or the state was
+    // just restored from disk), so an export would only time out
+    if (getState(sessionId)?.lastPolled === undefined) {
+        return { ok: false, note: "The preview tab is not open." }
+    }
+    if (!hasCells(xml)) {
+        return { ok: false, note: "The diagram is empty." }
+    }
+
+    let pageId: string | undefined
+    let projectionXml: string | undefined
+    if (hasPageSelector(selector)) {
+        const doc = normalizeToMxfile(xml) ?? xml
+        pageId = pageIdFor(doc, selector)
+        // A page without an id: load just that page and capture it, as
+        // export_diagram does
+        if (!pageId) {
+            const projection = projectPage(doc, selector)
+            if (!projection.ok) {
+                return {
+                    ok: false,
+                    note: `Page ${describeSelector(selector)} not found.`,
+                }
+            }
+            projectionXml = projection.xml
+        }
+    }
+
+    let data: string | undefined
+    for (const width of SCREENSHOT_WIDTHS) {
+        data = await exportViaBrowser(sessionId, "png", projectionXml, {
+            width,
+            pageId,
+        })
+        if (!data || data.length <= MAX_SCREENSHOT_CHARS) break
+    }
+    if (!data) {
+        return {
+            ok: false,
+            note: "Screenshot timed out. Make sure the preview tab is open and in front.",
+        }
+    }
+    return {
+        ok: true,
+        content: [
+            {
+                type: "image",
+                data: data.replace(/^data:image\/png;base64,/, ""),
+                mimeType: "image/png",
+            },
+            {
+                type: "text",
+                text: `Screenshot of ${hasPageSelector(selector) ? `page ${describeSelector(selector)}` : "the page on screen"}.\n\n${SCREENSHOT_CHECKLIST}`,
+            },
+        ],
+    }
+}
 
 // Tool: screenshot_diagram
 server.registerTool(
@@ -1288,80 +1417,20 @@ server.registerTool(
                     isError: true,
                 }
             }
-            if (previewStalled(currentSession.id)) {
-                return previewStalledError(currentSession.id)
-            }
             const xml =
                 sessionState(currentSession.id)?.xml || currentSession.xml
-            if (!hasCells(xml)) {
+            const shot = await captureScreenshot(
+                currentSession.id,
+                xml,
+                pickPageSelector({ page_id, page_name, page_index }),
+            )
+            if (!shot.ok) {
                 return {
-                    content: [{ type: "text", text: "The diagram is empty." }],
-                }
-            }
-
-            const pageSelector = pickPageSelector({
-                page_id,
-                page_name,
-                page_index,
-            })
-            let pageId: string | undefined
-            let projectionXml: string | undefined
-            if (hasPageSelector(pageSelector)) {
-                const doc = normalizeToMxfile(xml) ?? xml
-                pageId = pageIdFor(doc, pageSelector)
-                // A page without an id: load just that page and capture
-                // it, as export_diagram does
-                if (!pageId) {
-                    const projection = projectPage(doc, pageSelector)
-                    if (!projection.ok) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Error: Page ${describeSelector(pageSelector)} not found.`,
-                                },
-                            ],
-                            isError: true,
-                        }
-                    }
-                    projectionXml = projection.xml
-                }
-            }
-
-            let data: string | undefined
-            // start_session may replace currentSession between the tries
-            const sessionId = currentSession.id
-            for (const width of SCREENSHOT_WIDTHS) {
-                data = await exportViaBrowser(sessionId, "png", projectionXml, {
-                    width,
-                    pageId,
-                })
-                if (!data || data.length <= MAX_SCREENSHOT_CHARS) break
-            }
-            if (!data) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Error: Screenshot timed out. Make sure the preview tab is open and in front.",
-                        },
-                    ],
+                    content: [{ type: "text", text: `Error: ${shot.note}` }],
                     isError: true,
                 }
             }
-            return {
-                content: [
-                    {
-                        type: "image",
-                        data: data.replace(/^data:image\/png;base64,/, ""),
-                        mimeType: "image/png",
-                    },
-                    {
-                        type: "text",
-                        text: `Screenshot of ${hasPageSelector(pageSelector) ? `page ${describeSelector(pageSelector)}` : "the page on screen"}.\n\n${SCREENSHOT_CHECKLIST}`,
-                    },
-                ],
-            }
+            return { content: shot.content }
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error)

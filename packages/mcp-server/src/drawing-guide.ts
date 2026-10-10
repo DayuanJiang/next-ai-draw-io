@@ -22,7 +22,7 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - Before drawing, describe your layout plan in 2-3 sentences, so shapes do not overlap and edges do not cross shapes.
 - Send XML only through tool calls, never in chat text. Never draw a box just to send the user a message.
 - Before using any icon library (AWS, Azure, GCP, Kubernetes, Cisco, BPMN, Material Design, web icons...), call get_shape_library and use the exact style names it returns. NEVER guess icon style names. For AWS, use the AWS 2025 icons (library aws4).
-- After drawing or heavily editing a complex diagram, call screenshot_diagram once to see the result, and fix overlapping shapes and edges that cross shapes.
+- After drawing or heavily editing a complex diagram, pass screenshot: true on that create_new_diagram or edit_diagram call (or call screenshot_diagram) to see the result, and fix overlapping shapes and edges that cross shapes.
 - Drawing from a source: to draw from a document (PDF, Markdown, code, data), an image or screenshot, or a web page, first read it yourself (the attachment the user shared, or your own file-reading or web-fetch tools), then plan the layout and draw. This server never receives attachments; it only receives the XML you send. Extract the entities and relationships the diagram needs; do not copy the text into boxes.
 - When replicating a diagram from an image, match its style and layout closely: straight or curved lines, rounded or square shapes, colors and relative positions. Call screenshot_diagram afterwards and compare with the original.
 - After a successful create_new_diagram or edit_diagram call, do not describe the diagram; the user sees it in the preview. One short sentence at most.
