@@ -629,7 +629,12 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
             ]
             // The page on screen is the new document's first page
             if (screenshot ?? config.autoScreenshot) {
-                const shot = await captureScreenshot(currentSession.id, xml, {})
+                const shot = await captureScreenshot(
+                    currentSession.id,
+                    xml,
+                    {},
+                    AFTER_WRITE_NEXT,
+                )
                 content.push(
                     ...(shot.ok
                         ? shot.content
@@ -1041,6 +1046,7 @@ registerWriteTool(
                     hasPageSelector(pageSelector)
                         ? pageSelector
                         : { page_index: 0 },
+                    AFTER_WRITE_NEXT,
                 )
                 content.push(
                     ...(shot.ok
@@ -1274,8 +1280,13 @@ function previewStalled(sessionId: string): boolean {
     return lastPolled !== undefined && Date.now() - lastPolled > 10_000
 }
 
-function previewStalledNote(sessionId: string) {
-    return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), then retry.`
+/**
+ * `next` is what the model does once the tab is in front. The default
+ * suits screenshot_diagram and export_diagram; a write tool whose edit
+ * already succeeded must not run again, so it points to screenshot_diagram.
+ */
+function previewStalledNote(sessionId: string, next = "then retry") {
+    return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), ${next}.`
 }
 
 function previewStalledError(sessionId: string) {
@@ -1298,6 +1309,10 @@ function pageIdFor(xml: string, selector: PageSelector): string | undefined {
         undefined
     )
 }
+
+// Stalled-tab advice after a successful create_new_diagram or edit_diagram:
+// "then retry" would make the model run the write again
+const AFTER_WRITE_NEXT = "then call screenshot_diagram to see the result"
 
 // Screenshot size: Claude Desktop caps a tool result at about 150,000
 // characters, so retry smaller above 140,000 base64 characters. (Claude
@@ -1326,12 +1341,14 @@ async function captureScreenshot(
     sessionId: string,
     xml: string,
     selector: PageSelector,
+    /** What to do once a stalled tab is in front (see previewStalledNote) */
+    next?: string,
 ): Promise<
     | { ok: true; content: CallToolResult["content"] }
     | { ok: false; note: string }
 > {
     if (previewStalled(sessionId)) {
-        return { ok: false, note: previewStalledNote(sessionId) }
+        return { ok: false, note: previewStalledNote(sessionId, next) }
     }
     // The tab never polled (right after start_session, or the state was
     // just restored from disk), so an export would only time out
