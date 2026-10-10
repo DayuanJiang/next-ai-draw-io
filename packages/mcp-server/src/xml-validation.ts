@@ -340,17 +340,19 @@ function checkNestedMxCells(xml: string): string | null {
     let cellMatch
     while ((cellMatch = cellTagPattern.exec(xml)) !== null) {
         const tag = cellMatch[0]
+        const nested =
+            "Invalid XML: Found nested mxCell tags. Cells should be siblings, not nested inside other mxCell elements."
+        const isLabelOrGeometry =
+            /\sas\s*=\s*["'](valueLabel|geometry)["']/.test(tag)
         if (tag.startsWith("</mxCell>")) {
             if (cellStack.length > 0) cellStack.pop()
-        } else if (!tag.endsWith("/>")) {
-            const isLabelOrGeometry =
-                /\sas\s*=\s*["'](valueLabel|geometry)["']/.test(tag)
-            if (!isLabelOrGeometry) {
-                cellStack.push(cellMatch.index)
-                if (cellStack.length > 1) {
-                    return "Invalid XML: Found nested mxCell tags. Cells should be siblings, not nested inside other mxCell elements."
-                }
-            }
+        } else if (tag.endsWith("/>")) {
+            // A self-closing cell inside an open one is nested too (or the
+            // open one lacks its </mxCell>; the auto-fix sorts that out)
+            if (cellStack.length > 0 && !isLabelOrGeometry) return nested
+        } else if (!isLabelOrGeometry) {
+            cellStack.push(cellMatch.index)
+            if (cellStack.length > 1) return nested
         }
     }
     return null
@@ -1024,16 +1026,39 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
             /<mxCell\s/.test(trimmed) &&
             !trimmed.endsWith("/>") &&
             !trimmed.endsWith("</mxCell>")
+        // A self-closing (compact) cell is the next sibling too
+        const isSelfClosingCell =
+            /<mxCell\s/.test(trimmed) && trimmed.endsWith("/>")
         const isCloseCell = trimmed === "</mxCell>"
+        // The last cell's closing tag may share its line with the wrapper's
+        const startsWithClose = !isCloseCell && trimmed.startsWith("</mxCell>")
 
-        if (isOpenCell) {
+        if (isOpenCell || isSelfClosingCell) {
             if (cellDepth > 0) {
                 const indent = line.match(/^(\s*)/)?.[1] || ""
                 newLines.push(indent + "</mxCell>")
                 trueNestedFixed++
-                pendingCloseRemoval++
+                // The open cell's own </mxCell> is removed later, when there
+                // is one before the next open cell; a cell that simply lacks
+                // its closing tag has none to remove
+                const nextOpen = lines2.findIndex(
+                    (l, j) =>
+                        j > i &&
+                        /<mxCell\s/.test(l.trim()) &&
+                        !l.trim().endsWith("/>"),
+                )
+                const nextClose = lines2.findIndex(
+                    (l, j) => j > i && l.trim().startsWith("</mxCell>"),
+                )
+                if (
+                    isOpenCell ||
+                    (nextClose !== -1 &&
+                        (nextOpen === -1 || nextClose < nextOpen))
+                ) {
+                    pendingCloseRemoval++
+                }
             }
-            cellDepth = 1
+            cellDepth = isOpenCell ? 1 : 0
             newLines.push(line)
         } else if (isCloseCell) {
             if (pendingCloseRemoval > 0) {
@@ -1042,6 +1067,9 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
                 cellDepth = Math.max(0, cellDepth - 1)
                 newLines.push(line)
             }
+        } else if (startsWithClose && pendingCloseRemoval > 0) {
+            pendingCloseRemoval--
+            newLines.push(line.replace("</mxCell>", ""))
         } else {
             newLines.push(line)
         }

@@ -338,3 +338,33 @@ describe("review round: cells the model may write", () => {
         expect(prepared.fixes.join()).toContain("without the slash")
     })
 })
+
+describe("a long-form cell missing its closing tag next to compact cells", () => {
+    it("is closed before the compact cell that follows", () => {
+        const prepared = prepareNewDiagram(
+            `<mxCell id="2" value="A" x="0" y="0" w="80" h="40"/>
+<mxCell id="4" edge="1" parent="1" source="2" target="5">
+  <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="150"/></Array></mxGeometry>
+<mxCell id="5" value="C" x="400" y="0" w="80" h="40"/>`,
+        )
+        expect(prepared.ok).toBe(true)
+        if (!prepared.ok) return
+        expect(prepared.xml).toContain('<mxPoint x="300" y="150"/>')
+        expect(prepared.xml).toContain('value="C"')
+        expect((prepared.xml.match(/<mxCell\b/g) || []).length).toBe(5)
+    })
+
+    it("still flattens a compact cell nested inside an open cell", () => {
+        const prepared = prepareNewDiagram(
+            `<mxCell id="2" value="A" vertex="1" parent="1">
+  <mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>
+  <mxCell id="3" value="B" x="100" y="0" w="80" h="40"/>
+</mxCell>`,
+        )
+        expect(prepared.ok).toBe(true)
+        if (!prepared.ok) return
+        expect(prepared.xml).toContain('value="A"')
+        expect(prepared.xml).toContain('value="B"')
+        expect((prepared.xml.match(/<mxCell\b/g) || []).length).toBe(4)
+    })
+})
