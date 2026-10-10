@@ -10,7 +10,10 @@ import {
     extractCompleteMxCells,
     replaceNodes,
 } from "@/lib/utils"
-import { expandCompactCells } from "@/packages/mcp-server/src/compact-cells.ts"
+import {
+    defaultLayerOf,
+    expandCompactCells,
+} from "@/packages/mcp-server/src/compact-cells.ts"
 import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 import {
@@ -218,6 +221,7 @@ export function useDiagramStreaming({
             lastProcessedXmlRef.current.set(opsKey, ops)
             try {
                 const edges = edgeIdsOf(originalXml)
+                const layer = defaultLayerOf(originalXml)
                 const { result } = applyDiagramOperations(
                     originalXml,
                     completeOps.map((op) =>
@@ -225,7 +229,7 @@ export function useDiagramStreaming({
                             ? {
                                   ...op,
                                   new_xml: addDefaultStyles(
-                                      expandCompactCells(op.new_xml),
+                                      expandCompactCells(op.new_xml, layer),
                                       edges,
                                   ),
                               }

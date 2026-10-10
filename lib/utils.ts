@@ -3,6 +3,7 @@ import * as pako from "pako"
 import { twMerge } from "tailwind-merge"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import { readStyleClasses } from "@/packages/mcp-server/src/style-classes.ts"
+import { repairQuoteBeforeSlash } from "@/packages/mcp-server/src/xml-validation.ts"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -43,8 +44,11 @@ export function isRealDiagram(xml: string | undefined | null): boolean {
  */
 export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
     // Named style definitions before the cells are not cells: output cut off
-    // right after them is incomplete
-    const trimmed = readStyleClasses(xml || "").xml.trim()
+    // right after them is incomplete. A compact cell whose last quote is
+    // missing is complete; prepareNewDiagram repairs it.
+    const trimmed = repairQuoteBeforeSlash(
+        readStyleClasses(xml || "").xml,
+    ).trim()
     if (!trimmed) return false
 
     // Find position of last complete mxCell ending (either /> or </mxCell>)
@@ -92,7 +96,9 @@ export function extractCompleteMxCells(xml: string | undefined | null): string {
     // Match self-closing <mxCell ... /> or <mxCell ...>...</mxCell>, in document order.
     // The lazy [^>]*? tries "/>" first, so a self-closing cell never swallows
     // the following cells up to the next </mxCell>.
-    const cellPattern = /<mxCell\b[^>]*?(?:\/>|>[\s\S]*?<\/mxCell>)/g
+    // Quoted values may hold ">", so the tag ends at the first ">" outside them
+    const cellPattern =
+        /<mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*?(?:\/>|>[\s\S]*?<\/mxCell>)/g
 
     return (xml.match(cellPattern) || []).join("\n")
 }
@@ -155,7 +161,8 @@ export function formatXML(xml: string, indent: string = "  "): string {
 export function convertToLegalXml(xmlString: string): string {
     // This regex will match either self-closing <mxCell .../> or a block element
     // <mxCell ...> ... </mxCell>. Unfinished ones are left out because they don't match.
-    const regex = /<mxCell\b[^>]*(?:\/>|>([\s\S]*?)<\/mxCell>)/g
+    const regex =
+        /<mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*?(?:\/>|>([\s\S]*?)<\/mxCell>)/g
     let match: RegExpExecArray | null
     let result = "<root>\n"
 

@@ -346,7 +346,7 @@ Accepted xml:
 2) A bare <mxGraphModel> with <root> (one page).
 3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent="1" for top-level shapes, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.`,
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent only for shapes inside a container, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.`,
         inputSchema: {
             xml: z
                 .string()
@@ -706,7 +706,7 @@ registerWriteTool(
                     content: [
                         {
                             type: "text",
-                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\n${next}`,
+                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\n${next}`,
                         },
                     ],
                     isError: true,
@@ -726,7 +726,7 @@ registerWriteTool(
                 log.warn(`Edit rejected: ${outcome.errors.join("; ")}`)
                 const text = outcome.pageError
                     ? `Error: ${outcome.errors[0]}`
-                    : `Error: No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\nFix the operations against this XML and retry.`
+                    : `Error: No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\nFix the operations against this XML and retry.`
                 return {
                     content: [{ type: "text", text }],
                     isError: true,
@@ -912,7 +912,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}${staleNote}${otherPagesNote}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${otherPagesNote}`,
                     },
                 ],
             }

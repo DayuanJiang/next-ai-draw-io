@@ -113,7 +113,7 @@ When using edit_diagram tool:
 
 ## Draw.io XML Structure Reference
 
-**IMPORTANT:** You only generate the named styles and the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically. A named style is written before the cells as <mxStyle name="n" value="...style pairs..."/>; a cell uses it by putting the name among its style tokens (see Styles). A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target. vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically, so write them only when needed: parent for a shape inside a container, an mxGeometry element for edge waypoints or a label placed on an edge.
+**IMPORTANT:** You only generate the named styles and the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically. A named style is written before the cells as <mxStyle name="n" value="...style pairs..."/>; a cell uses it by putting the name among its style tokens (see Styles). A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target (a cell with source or target is always an edge). vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically. Write parent only for a shape inside a container, and an mxGeometry element only for edge waypoints or for a separate label cell placed on an edge: <mxCell id="9" value="yes" style="edgeLabel;" parent="<edge id>" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>. An edge's own text simply goes in its value.
 
 Example - generate ONLY this:
 \`\`\`xml
@@ -135,6 +135,7 @@ Shape (vertex) example:
 Connector (edge) example:
 \`\`\`xml
 <mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;" source="2" target="4"/>
+\`\`\`
 
 ### Edge Routing Rules:
 When creating edges/connectors, you MUST follow these rules to avoid overlapping lines:
@@ -183,9 +184,6 @@ When creating edges/connectors, you MUST follow these rules to avoid overlapping
 2. "Do any two edges share the same path?" → If yes, adjust exit/entry points
 3. "Are any connection points at corners (both X and Y are 0 or 1)?" → If yes, use edge centers instead
 4. "Could I rearrange shapes to reduce edge crossings?" → If yes, revise layout
-
-
-\`\`\`
 
 `
 

@@ -334,7 +334,8 @@ function checkEntityReferences(xml: string): string | null {
 
 /** Check for nested mxCell tags using regex */
 function checkNestedMxCells(xml: string): string | null {
-    const cellTagPattern = /<\/?mxCell[^>]*>/g
+    // Quoted values may hold ">", so the tag ends at the first ">" outside them
+    const cellTagPattern = /<\/?mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*>/g
     const cellStack: number[] = []
     let cellMatch
     while ((cellMatch = cellTagPattern.exec(xml)) !== null) {
@@ -556,6 +557,19 @@ export function validateMxCellStructure(
  * @param xml - The XML string to fix
  * @returns Object with fixed XML and list of fixes applied
  */
+/**
+ * A compact cell's last attribute is a number, and the model sometimes
+ * drops its closing quote: h="112/>. Only a cell whose earlier attributes
+ * are all properly quoted is touched, so a label that happens to contain
+ * such text is left alone.
+ */
+export function repairQuoteBeforeSlash(xml: string): string {
+    return xml.replace(
+        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)(\s+(?:x|y|w|h|width|height)="-?\d+(?:\.\d+)?)\s*\/>/g,
+        '<mxCell$1$2"/>',
+    )
+}
+
 export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
@@ -657,13 +671,27 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Fixed malformed attribute quotes")
     }
 
-    // 6b. Missing closing quote on a numeric attribute right before the
-    // self-closing slash (h="112/>), which a compact cell ends with. Numbers
-    // only, so a quote that belongs to a label is never touched.
-    const quoteBeforeSlash = /=("-?\d+(?:\.\d+)?)\/>/g
-    if (quoteBeforeSlash.test(fixed)) {
-        fixed = fixed.replace(quoteBeforeSlash, '=$1"/>')
+    // 6b. Missing closing quote on the last attribute of a compact cell
+    // (h="112/>), see repairQuoteBeforeSlash
+    const quoted = repairQuoteBeforeSlash(fixed)
+    if (quoted !== fixed) {
+        fixed = quoted
         fixes.push("Added a missing closing quote before />")
+    }
+
+    // 6c. A compact cell written without the slash: <mxCell ... h="60">
+    // followed by the next cell, a definition or the end. Only cells that
+    // carry a size or a connection, so an open container stays open.
+    const slashless =
+        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)\s*>(?=\s*(?:<mxCell\b|<mxStyle\b|$))/g
+    const closed = fixed.replace(slashless, (tag, attrText: string) =>
+        /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText)
+            ? `<mxCell${attrText}/>`
+            : tag,
+    )
+    if (closed !== fixed) {
+        fixed = closed
+        fixes.push("Closed compact cells written without the slash")
     }
 
     // 7. Fix malformed closing tags

@@ -18,9 +18,10 @@
  *   </mxCell>
  *
  * The long form stays accepted, and anything beyond the plain case (edge
- * waypoints, a label on an edge, a parent other than "1") is written the
- * long way, so a cell may mix both: compact attributes with an explicit
- * parent, for example.
+ * waypoints, a label on an edge, a parent other than the layer) is written
+ * the long way, so a cell may mix both: compact attributes with an explicit
+ * parent, for example. A cell is an edge when it says so or connects a
+ * source or target, a shape when it says so, has a size or has a geometry.
  *
  * foldCells is the reverse, for the diagram shown to the model: it writes
  * the plain shapes and edges compactly and leaves everything else as it is,
@@ -33,41 +34,63 @@ import { readAttributes, type TagAttribute } from "./xml-attributes.ts"
 const CELL_BLOCK =
     /<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*(?:\/>|>([\s\S]*?)<\/mxCell>)/g
 
-// The four compact attributes and the names draw.io uses for them
-const SIZE_ATTRS: Record<string, string> = {
-    x: "x",
-    y: "y",
-    w: "width",
-    h: "height",
-    width: "width",
-    height: "height",
-}
+// The cell's own geometry, as opposed to one inside its custom data
+const OWN_GEOMETRY = /<mxGeometry\b(?:[^<>"']|"[^"]*"|'[^']*')*?\bas="geometry"/
 
-const attributeText = (attrs: TagAttribute[]) =>
-    attrs.map((a) => ` ${a.name}="${a.value}"`).join("")
+// The four compact attributes and the names draw.io uses for them
+const SIZE_ATTRS = new Map([
+    ["x", "x"],
+    ["y", "y"],
+    ["w", "width"],
+    ["h", "height"],
+    ["width", "width"],
+    ["height", "height"],
+])
+const isSize = (name: string) => SIZE_ATTRS.has(name)
 
 // Attributes a cell is written with, in draw.io's usual order
 const FIRST = ["id", "value", "style"]
 const LAST = ["vertex", "edge", "parent", "source", "target"]
 
-/** Turn compact shapes and edges into standard draw.io cells */
-export function expandCompactCells(xml: string): string {
+// A value read from a single-quoted attribute may hold a double quote
+const attr = (name: string, value: string) =>
+    ` ${name}="${value.replace(/"/g, "&quot;")}"`
+const attributeText = (attrs: TagAttribute[]) =>
+    attrs.map((a) => attr(a.name, a.value)).join("")
+
+/** The id of the page's first layer (a cell whose parent is "0"), or "1" */
+export function defaultLayerOf(xml: string): string {
+    for (const [, attrText] of xml.matchAll(CELL_BLOCK)) {
+        const attrs = new Map(
+            readAttributes(attrText).map((a) => [a.name, a.value]),
+        )
+        if (attrs.get("parent") === "0" && attrs.get("id")) {
+            return attrs.get("id") ?? "1"
+        }
+    }
+    return "1"
+}
+
+/**
+ * Turn compact shapes and edges into standard draw.io cells. A cell with no
+ * parent goes on `layer`, the page's first layer ("1" on a new page).
+ */
+export function expandCompactCells(xml: string, layer = "1"): string {
     return xml.replace(CELL_BLOCK, (block, attrText: string, body?: string) => {
         const attrs = readAttributes(attrText)
         const byName = new Map(attrs.map((a) => [a.name, a.value]))
-        const size = attrs.filter((a) => a.name in SIZE_ATTRS)
+        const size = attrs.filter((a) => isSize(a.name))
+        const inner = body ?? ""
+        const hasGeometry = OWN_GEOMETRY.test(inner)
         const isEdge =
             byName.get("edge") === "1" ||
-            (size.length === 0 &&
-                byName.get("vertex") !== "1" &&
-                byName.has("source") &&
-                byName.has("target"))
+            (byName.get("vertex") !== "1" &&
+                (byName.has("source") || byName.has("target")))
         const isVertex =
-            !isEdge && (byName.get("vertex") === "1" || size.length > 0)
+            !isEdge &&
+            (byName.get("vertex") === "1" || size.length > 0 || hasGeometry)
         // Root cells and anything else the model wrote in full are left alone
         if (!isEdge && !isVertex) return block
-        const inner = body ?? ""
-        const hasGeometry = /<mxGeometry\b/.test(inner)
         const complete =
             size.length === 0 &&
             byName.has(isEdge ? "edge" : "vertex") &&
@@ -75,26 +98,31 @@ export function expandCompactCells(xml: string): string {
             hasGeometry
         if (complete) return block
 
-        // Rebuild the attributes in the usual order: id, value, style, the
-        // rest, then the flags and the connections
+        // The compact attributes become the geometry; when the cell has its
+        // own geometry already they stay as written, in case they mean
+        // something else to whoever wrote them
+        const consumed = !hasGeometry && isVertex
         const rest = attrs.filter(
             (a) =>
                 !FIRST.includes(a.name) &&
                 !LAST.includes(a.name) &&
-                !(a.name in SIZE_ATTRS),
+                !(consumed && isSize(a.name)) &&
+                !(isEdge && isSize(a.name)),
         )
-        const ordered = [
-            ...FIRST.flatMap((n) =>
+        // Rebuilt in the usual order: id, value, style, the rest, then the
+        // flags and the connections
+        const ordered: [string, string][] = [
+            ...FIRST.flatMap((n): [string, string][] =>
                 byName.has(n) ? [[n, byName.get(n) ?? ""]] : [],
             ),
-            ...rest.map((a) => [a.name, a.value]),
+            ...rest.map((a): [string, string] => [a.name, a.value]),
             [isEdge ? "edge" : "vertex", "1"],
-            ["parent", byName.get("parent") ?? "1"],
-            ...["source", "target"].flatMap((n) =>
+            ["parent", byName.get("parent") ?? layer],
+            ...["source", "target"].flatMap((n): [string, string][] =>
                 byName.has(n) ? [[n, byName.get(n) ?? ""]] : [],
             ),
         ]
-        const written = ordered.map(([n, v]) => ` ${n}="${v}"`).join("")
+        const written = ordered.map(([n, v]) => attr(n, v)).join("")
         let geometry = ""
         if (!hasGeometry) {
             if (isEdge) {
@@ -102,7 +130,7 @@ export function expandCompactCells(xml: string): string {
             } else {
                 const get = (short: string, long: string, fallback: string) =>
                     byName.get(short) ?? byName.get(long) ?? fallback
-                geometry = `<mxGeometry x="${get("x", "x", "0")}" y="${get("y", "y", "0")}" width="${get("w", "width", "120")}" height="${get("h", "height", "60")}" as="geometry"/>`
+                geometry = `<mxGeometry${attr("x", get("x", "x", "0"))}${attr("y", get("y", "y", "0"))}${attr("width", get("w", "width", "120"))}${attr("height", get("h", "height", "60"))} as="geometry"/>`
             }
         }
         return `<mxCell${written}>${geometry}${inner}</mxCell>`
@@ -126,15 +154,17 @@ function plainGeometry(body: string): Map<string, string> | null {
  * Write plain shapes and edges compactly, for the diagram shown to the
  * model. A shape is plain when its only child is an mxGeometry with x, y,
  * width and height; an edge when its only child is the relative geometry.
- * Everything else, including wrapped cells' extra data and edge labels,
- * is left as written.
+ * Both must name their parent, since expanding fills in the layer for a
+ * missing one. Everything else, including wrapped cells' extra data and
+ * edge labels, is left as written.
  */
-export function foldCells(xml: string): string {
+export function foldCells(xml: string, layer = "1"): string {
     return xml.replace(CELL_BLOCK, (block, attrText: string, body?: string) => {
         if (body === undefined) return block
         const attrs = readAttributes(attrText)
         const byName = new Map(attrs.map((a) => [a.name, a.value]))
-        if (attrs.some((a) => a.name in SIZE_ATTRS)) return block
+        if (attrs.some((a) => isSize(a.name))) return block
+        if (!byName.has("parent")) return block
         const geometry = plainGeometry(body)
         if (!geometry) return block
         const geometryKeys = [...geometry.keys()]
@@ -144,11 +174,11 @@ export function foldCells(xml: string): string {
             (a) =>
                 a.name !== "vertex" &&
                 a.name !== "edge" &&
-                !(a.name === "parent" && a.value === "1"),
+                !(a.name === "parent" && a.value === layer),
         )
         if (byName.get("vertex") === "1" && byName.get("edge") !== "1") {
             if (geometryKeys.join() !== "height,width,x,y") return block
-            const size = ` x="${geometry.get("x")}" y="${geometry.get("y")}" w="${geometry.get("width")}" h="${geometry.get("height")}"`
+            const size = `${attr("x", geometry.get("x") ?? "")}${attr("y", geometry.get("y") ?? "")}${attr("w", geometry.get("width") ?? "")}${attr("h", geometry.get("height") ?? "")}`
             return `<mxCell${attributeText(kept)}${size}/>`
         }
         if (byName.get("edge") === "1" && byName.get("vertex") !== "1") {

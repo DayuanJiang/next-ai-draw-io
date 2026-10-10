@@ -535,7 +535,7 @@ ${foldCells(previousXml)}
 
 `
             : ""
-    }Current diagram XML (AUTHORITATIVE - the source of truth):
+    }Current diagram XML (AUTHORITATIVE - the source of truth), shown in the same compact notation you write (shapes with x, y, w, h; edges with source and target):
 """xml
 ${foldCells(xml || "")}
 """
@@ -675,7 +675,7 @@ VALIDATION RULES (XML will be rejected if violated):
 5. parent defaults to "1"; write parent="<container-id>" only for shapes inside a container
 6. Escape special chars in values: &lt; &gt; &amp; &quot;
 
-A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target. vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically, so write them only when needed: parent for a shape inside a container, an mxGeometry element for edge waypoints or a label placed on an edge.
+A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target (a cell with source or target is always an edge). vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically. Write parent only for a shape inside a container, and an mxGeometry element only for edge waypoints or for a separate label cell placed on an edge: <mxCell id="9" value="yes" style="edgeLabel;" parent="<edge id>" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>. An edge's own text simply goes in its value.
 
 Example (generate ONLY this - no wrapper tags):
 ${SWIMLANE_EXAMPLE}
@@ -746,7 +746,7 @@ CRITICAL INSTRUCTIONS:
 3. Complete the remaining mxCell elements
 4. If still truncated, call append_diagram again with the next fragment
 
-Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
+Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" x="40" y="40" w="120" h="60"/>' and complete the remaining elements.`,
                 inputSchema: z.object({
                     xml: z
                         .string()

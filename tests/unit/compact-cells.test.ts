@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { extractCompleteMxCells, isMxCellXmlComplete } from "@/lib/utils"
 import {
     expandCompactCells,
     foldCells,
@@ -59,10 +60,11 @@ describe("expandCompactCells", () => {
     })
 
     it("lets an explicit geometry win over compact attributes", () => {
+        // The stray attributes stay as written; the geometry is the one used
         const both =
-            '<mxCell id="2" x="1" y="1" w="1" h="1" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>'
+            '<mxCell id="2" x="1" y="1" w="1" h="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>'
         expect(expandCompactCells(both)).toBe(
-            shapeLong.replace(' value="Start" style="rounded=1;"', ""),
+            '<mxCell id="2" x="1" y="1" w="1" h="1" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>',
         )
     })
 
@@ -189,5 +191,150 @@ describe("a compact cell with a slip", () => {
         expect(prepared.xml).toContain(
             '<mxGeometry x="535" y="276" width="225" height="112" as="geometry"/>',
         )
+    })
+})
+
+describe("review round: cells the model may write", () => {
+    it("escapes a double quote from a single-quoted value", () => {
+        const out = expandCompactCells(
+            `<mxCell id='2' value='Say "hi"' x='1' y='2' w='3' h='4'/>`,
+        )
+        expect(out).toContain('value="Say &quot;hi&quot;"')
+        const prepared = prepareNewDiagram(
+            `<mxCell id='2' value='a" visible="0' x="1" y="2" w="3" h="4"/>`,
+        )
+        expect(prepared.ok).toBe(true)
+        if (!prepared.ok) return
+        expect(prepared.xml).toContain('value="a&quot; visible=&quot;0"')
+        expect(prepared.xml).not.toContain(' visible="0"')
+        const folded = foldCells(
+            `<mxCell id="2" value='Say "hi"' vertex="1" parent="1"><mxGeometry x="1" y="2" width="3" height="4" as="geometry"/></mxCell>`,
+        )
+        expect(folded).toBe(
+            '<mxCell id="2" value="Say &quot;hi&quot;" x="1" y="2" w="3" h="4"/>',
+        )
+    })
+
+    it("accepts labels with > in compact self-closing cells", () => {
+        const prepared = prepareNewDiagram(
+            `<mxCell id="2" value="x > 5" style="rounded=1;" x="40" y="40" w="120" h="60"/>
+<mxCell id="3" value="A -> B" style="rounded=1;" x="40" y="200" w="120" h="60"/>
+<mxCell id="5" source="2" target="3"/>`,
+        )
+        expect(prepared.ok).toBe(true)
+        expect(
+            isMxCellXmlComplete(
+                '<mxCell id="2" value="A > B" x="0" y="0" w="120" h="60"/>',
+            ),
+        ).toBe(true)
+        expect(
+            extractCompleteMxCells(
+                '<mxCell id="2" value="A > B" x="0" y="0" w="120" h="60"/>\n<mxCell id="3" value="C" x="0" y="0" w="1',
+            ),
+        ).toBe('<mxCell id="2" value="A > B" x="0" y="0" w="120" h="60"/>')
+    })
+
+    it("infers a vertex for an edge label with a geometry and an edge for a connection with a size", () => {
+        const label =
+            '<mxCell id="9" value="yes" style="edgeLabel;" parent="5" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>'
+        expect(expandCompactCells(label)).toBe(
+            '<mxCell id="9" value="yes" style="edgeLabel;" connectable="0" vertex="1" parent="5"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>',
+        )
+        expect(
+            expandCompactCells(
+                '<mxCell id="e" source="2" target="3" x="0" y="0"/>',
+            ),
+        ).toBe(
+            '<mxCell id="e" edge="1" parent="1" source="2" target="3"><mxGeometry relative="1" as="geometry"/></mxCell>',
+        )
+        // A dangling edge has only one end
+        expect(
+            expandCompactCells('<mxCell id="e" style="a;" source="2"/>'),
+        ).toBe(
+            '<mxCell id="e" style="a;" edge="1" parent="1" source="2"><mxGeometry relative="1" as="geometry"/></mxCell>',
+        )
+    })
+
+    it("does not take a geometry inside custom data for the cell's own", () => {
+        const out = expandCompactCells(
+            '<mxCell id="2" x="10" y="20" w="120" h="60"><Object as="payload"><mxGeometry as="backup"/></Object></mxCell>',
+        )
+        expect(out).toBe(
+            '<mxCell id="2" vertex="1" parent="1"><mxGeometry x="10" y="20" width="120" height="60" as="geometry"/><Object as="payload"><mxGeometry as="backup"/></Object></mxCell>',
+        )
+    })
+
+    it("keeps stray size attributes when the cell has its own geometry", () => {
+        const xml =
+            '<mxCell id="2" x="99" vertex="1" parent="1"><mxGeometry x="1" y="2" width="3" height="4" as="geometry"/></mxCell>'
+        expect(expandCompactCells(xml)).toBe(xml)
+        expect(foldCells(xml)).toBe(xml)
+    })
+
+    it("ignores prototype names and folds only cells that name their parent", () => {
+        expect(expandCompactCells('<mxCell id="2" toString="x"/>')).toBe(
+            '<mxCell id="2" toString="x"/>',
+        )
+        const noParent =
+            '<mxCell id="2" vertex="1"><mxGeometry x="1" y="2" width="3" height="4" as="geometry"/></mxCell>'
+        expect(foldCells(noParent)).toBe(noParent)
+    })
+
+    it("puts a compact cell on the page's first layer when editing", () => {
+        const file = `<mxfile><diagram id="p1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="L1" parent="0"/>${shapeLong.replace('parent="1"', 'parent="L1"')}</root></mxGraphModel></diagram></mxfile>`
+        const outcome = editDiagram(
+            file,
+            [
+                {
+                    operation: "add",
+                    cell_id: "3",
+                    new_xml:
+                        '<mxCell id="3" value="B" x="1" y="2" w="3" h="4"/>',
+                },
+            ],
+            {},
+        )
+        expect(outcome.ok).toBe(true)
+        if (!outcome.ok) return
+        expect(outcome.xml).toContain(
+            '<mxCell id="3" value="B" vertex="1" parent="L1"',
+        )
+        expect(foldCells(file, "L1")).toContain(
+            '<mxCell id="2" value="Start" style="rounded=1;" x="40" y="40" w="120" h="60"/>',
+        )
+    })
+
+    it("refuses a compact shape with a root cell id instead of dropping it", () => {
+        const prepared = prepareNewDiagram(
+            '<mxCell id="1" value="A" x="0" y="0" w="10" h="10"/>',
+        )
+        expect(prepared.ok).toBe(false)
+        if (!prepared.ok) expect(prepared.error).toContain("root cells")
+    })
+
+    it("repairs the quote slip only on a cell's last numeric attribute", () => {
+        expect(
+            isMxCellXmlComplete('<mxCell id="2" x="1" y="2" w="3" h="4/>'),
+        ).toBe(true)
+        const prepared = prepareNewDiagram(
+            '<mxCell id="2" value="5/>" x="1" y="2" w="3" h="4"/>',
+        )
+        expect(prepared.ok).toBe(true)
+        if (!prepared.ok) return
+        expect(prepared.xml).toContain('value="5/>"')
+        expect(prepared.xml).toContain(
+            '<mxGeometry x="1" y="2" width="3" height="4" as="geometry"/>',
+        )
+    })
+
+    it("closes a compact cell written without the slash", () => {
+        const prepared = prepareNewDiagram(
+            '<mxCell id="2" value="A" x="1" y="2" w="3" h="4">\n<mxCell id="3" value="B" x="1" y="2" w="3" h="4"/>',
+        )
+        expect(prepared.ok).toBe(true)
+        if (!prepared.ok) return
+        expect(prepared.xml).toContain('value="A"')
+        expect(prepared.xml).toContain('value="B"')
+        expect(prepared.fixes.join()).toContain("without the slash")
     })
 })

@@ -11,6 +11,7 @@ import {
     type StyleClasses,
 } from "./style-classes.ts"
 import { readAttributes } from "./xml-attributes.ts"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 export type NewDiagram =
@@ -36,11 +37,15 @@ export function reservedIdError(input: string): string | null {
         )
         const id = attrs.get("id")
         if (id !== "0" && id !== "1") continue
-        // A wrapper's id is its cell's; an mxCell counts as a shape or edge
+        // A wrapper's id is its cell's; an mxCell counts as a shape or edge,
+        // also when written compactly (a size, or a connection)
         if (
             tag !== "mxCell" ||
             attrs.get("vertex") === "1" ||
-            attrs.get("edge") === "1"
+            attrs.get("edge") === "1" ||
+            ["x", "y", "w", "h", "width", "height", "source", "target"].some(
+                (a) => attrs.has(a),
+            )
         ) {
             return 'Cell ids "0" and "1" are the root cells, which are added automatically. Give shapes and edges ids starting at "2".'
         }
@@ -98,6 +103,15 @@ export function prepareNewDiagram(
         return { ok: false, error: `XML validation failed - ${error}` }
     }
     xml = addDefaultStyles(applyStyleClasses(expandCompactCells(xml), classes))
+    // The rewrites copy attribute values as written; a check that they
+    // produced well-formed XML, in case one of them ever does not
+    const rewriteError = getXmlSyntaxError(xml)
+    if (rewriteError) {
+        return {
+            ok: false,
+            error: `XML validation failed after expanding the cells - ${rewriteError}`,
+        }
+    }
     const normalized = normalizeToMxfile(xml, page)
     if (!normalized) {
         return {

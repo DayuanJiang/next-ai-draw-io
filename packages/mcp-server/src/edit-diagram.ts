@@ -7,7 +7,7 @@
  * so the model never builds on a half-applied edit.
  */
 
-import { expandCompactCells } from "./compact-cells.ts"
+import { defaultLayerOf, expandCompactCells } from "./compact-cells.ts"
 import {
     applyDiagramOperations,
     type DiagramOperation,
@@ -50,8 +50,11 @@ export function editDiagram(
     const fixes: string[] = []
     const prepared: DiagramOperation[] = []
 
-    // Edges already on the page, so a label added to one is not wrapped
+    // Edges already on the page, so a label added to one is not wrapped, and
+    // the layer a compact cell without a parent goes on
+    const page = targetPageXml(xml, selector)
     const edges = edgeIdsOf(xml)
+    const layer = defaultLayerOf(page)
     for (const op of operations) {
         if (op.operation === "delete" || !op.new_xml) {
             prepared.push(op)
@@ -86,7 +89,7 @@ export function editDiagram(
         prepared.push({
             ...op,
             new_xml: addDefaultStyles(
-                expandCompactCells(check.fixed ?? op.new_xml),
+                expandCompactCells(check.fixed ?? op.new_xml, layer),
                 edges,
             ),
         })
