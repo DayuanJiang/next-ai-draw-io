@@ -117,6 +117,7 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 -   スクリーンショットツール。AI が描いた結果を確認して自分で直せる
 -   バージョン履歴、複数ページのダイアグラム、`.drawio`、`.png`、`.svg`、`.drawio.svg` でのダウンロード
 -   `~/.next-ai-drawio/` への自動保存。再起動後も続きから描ける
+-   AI に元に戻す操作を頼める。独自の作図ルールは `~/.next-ai-drawio/instructions.md` に書ける
 
 VS Code、Cursor などの設定は [MCP サーバーの README](../../packages/mcp-server/README.md) を参照してください。
 
