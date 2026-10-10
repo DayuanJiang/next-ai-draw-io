@@ -123,6 +123,7 @@ Claude Code <--stdio--> MCP Server <--http--> Browser (draw.io)
 | `DRAWIO_LANG` | unset | Language of the draw.io editor, such as `en`, `zh`, `zh-tw`, `ja` or `de`. Unset, draw.io chooses (the browser language on `embed.diagrams.net`, English on a self-hosted draw.io) and the user can change it under **Extras > Language** |
 | `DRAWIO_UI` | unset | draw.io theme: `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple`. Unset, the user picks one under **Extras > Theme** |
 | `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light |
+| `DEBUG` | unset | Set to `true` to log debug messages |
 
 ## Links
 
