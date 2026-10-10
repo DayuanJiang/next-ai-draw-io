@@ -657,6 +657,15 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Fixed malformed attribute quotes")
     }
 
+    // 6b. Missing closing quote on a numeric attribute right before the
+    // self-closing slash (h="112/>), which a compact cell ends with. Numbers
+    // only, so a quote that belongs to a label is never touched.
+    const quoteBeforeSlash = /=("-?\d+(?:\.\d+)?)\/>/g
+    if (quoteBeforeSlash.test(fixed)) {
+        fixed = fixed.replace(quoteBeforeSlash, '=$1"/>')
+        fixes.push("Added a missing closing quote before />")
+    }
+
     // 7. Fix malformed closing tags
     const malformedClosingTag = /<\/([a-zA-Z][a-zA-Z0-9]*)\s*\/>/g
     if (malformedClosingTag.test(fixed)) {

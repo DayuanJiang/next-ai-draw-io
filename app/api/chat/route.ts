@@ -55,6 +55,7 @@ import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
+import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import {
     getShapeLibrary,
@@ -523,18 +524,20 @@ ${userInputText}
         SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider) || isCustomOpenAIEndpoint
 
     const selectionContext = formatSelectionContext(body.selectedCells)
+    // The model reads the diagram in the compact notation it writes
+    // (compact-cells.ts); the canvas itself keeps the full XML
     const xmlContext = `${
         previousXml
             ? `Previous diagram XML (before user's last message):
 """xml
-${previousXml}
+${foldCells(previousXml)}
 """
 
 `
             : ""
     }Current diagram XML (AUTHORITATIVE - the source of truth):
 """xml
-${xml || ""}
+${foldCells(xml || "")}
 """
 
 IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.${selectionContext ? `\n\n${selectionContext}` : ""}`
@@ -669,8 +672,10 @@ VALIDATION RULES (XML will be rejected if violated):
 2. Do NOT include root cells (id="0" or id="1") - they are added automatically
 3. All mxCell elements must be siblings - never nested
 4. Every mxCell needs a unique id (start from "2")
-5. Every mxCell needs a valid parent attribute (use "1" for top-level)
+5. parent defaults to "1"; write parent="<container-id>" only for shapes inside a container
 6. Escape special chars in values: &lt; &gt; &amp; &quot;
+
+A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target. vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically, so write them only when needed: parent for a shape inside a container, an mxGeometry element for edge waypoints or a label placed on an edge.
 
 Example (generate ONLY this - no wrapper tags):
 ${SWIMLANE_EXAMPLE}
@@ -696,12 +701,12 @@ Operations:
 - add: Add a new cell. Provide cell_id (new unique id) and new_xml.
 - delete: Remove a cell. Cascade is automatic: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
 
-For update/add, new_xml must be a complete mxCell element including mxGeometry, with its complete style (named styles are not available in edit_diagram).
+For update/add, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target), with its complete style (named styles are not available in edit_diagram).
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
 Example - Add a rectangle:
-{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
+{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
 
 Example - Delete container (children & edges auto-deleted):
 {"operations": [{"operation": "delete", "cell_id": "2"}]}`,

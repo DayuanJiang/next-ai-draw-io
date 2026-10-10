@@ -2,6 +2,7 @@
  * A whole new diagram written by the model, for the create_new_diagram tool
  * and the web app's display_diagram tool.
  */
+import { expandCompactCells } from "./compact-cells.ts"
 import { hasCells, normalizeToMxfile, wrapCellsInModel } from "./pages.ts"
 import {
     addDefaultStyles,
@@ -51,9 +52,10 @@ export function reservedIdError(input: string): string | null {
  * The named style definitions are taken out first (style-classes.ts). Bare
  * cells then get the wrapper and root cells, since the strict parser rejects
  * several top-level elements. Then the XML is validated and auto-fixed while
- * it is still a bare model, where duplicate ids are renamed. The names are
- * expanded and the default styles added on the fixed XML, so repaired cells
- * get them too, and finally it is turned into an <mxfile>.
+ * it is still a bare model, where duplicate ids are renamed. Compact cells
+ * (compact-cells.ts) are expanded, the names expanded and the default styles
+ * added on the fixed XML, so repaired cells get them too, and finally it is
+ * turned into an <mxfile>.
  */
 /**
  * Take the named style definitions out of the model's XML (style-classes.ts).
@@ -95,7 +97,7 @@ export function prepareNewDiagram(
     if (!valid) {
         return { ok: false, error: `XML validation failed - ${error}` }
     }
-    xml = addDefaultStyles(applyStyleClasses(xml, classes))
+    xml = addDefaultStyles(applyStyleClasses(expandCompactCells(xml), classes))
     const normalized = normalizeToMxfile(xml, page)
     if (!normalized) {
         return {

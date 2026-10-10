@@ -27,21 +27,17 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - The preview page has History (it saves a snapshot before every AI change and can restore any of the last 20 versions) and Download. You can make changes freely; nothing is lost.
 
 ## The XML you send
-Single page (create_new_diagram, add_page): send ONLY the named styles and the mxCell elements. The server adds <mxfile>, <mxGraphModel>, <root> and the root cells id="0" and id="1", expands named styles (see Styles), adds html=1 to every cell and whiteSpace=wrap to shapes.
+Single page (create_new_diagram, add_page): send ONLY the named styles and the mxCell elements. The server adds <mxfile>, <mxGraphModel>, <root> and the root cells id="0" and id="1", expands named styles (see Styles), adds html=1 to every cell and whiteSpace=wrap to shapes, and fills in vertex, edge, parent="1" and the mxGeometry element. A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target. Write parent only for a shape inside a container, and an mxGeometry element only for edge waypoints or a label placed on an edge.
 
-    <mxCell id="2" value="Label" style="rounded=1;" vertex="1" parent="1">
-      <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-    </mxCell>
-    <mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="2" target="4">
-      <mxGeometry relative="1" as="geometry"/>
-    </mxCell>
+    <mxCell id="2" value="Label" style="rounded=1;" x="100" y="100" w="120" h="60"/>
+    <mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" source="2" target="4"/>
 
 Several pages at once (create_new_diagram only): send a full <mxfile> with one <diagram id="..." name="..."> per page. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
 Rules (XML that breaks them is rejected):
 1. All mxCell elements are siblings. NEVER nest an mxCell inside another mxCell.
 2. Ids are unique within a page and start from "2" ("0" and "1" are the root cells).
-3. parent="1" for top-level shapes, parent="<container id>" for shapes inside a container.
+3. parent="<container id>" for shapes inside a container; top-level cells need no parent.
 4. Edge source and target must reference existing cell ids.
 5. Escape special characters in attribute values: &lt; for <, &gt; for >, &amp; for &, &quot; for ".
 6. NEVER include XML comments (<!-- -->). draw.io strips them.
@@ -100,14 +96,14 @@ When the user asks for a minimal, plain, black-and-white or unstyled diagram, us
 - Keep at least 50px between elements, and follow all edge routing rules strictly.
 
 ## Editing with edit_diagram
-- update replaces a cell: send the complete mxCell including mxGeometry, with the same id as cell_id. Named styles are not available here: write each cell's complete style.
+- update replaces a cell: send the complete mxCell in the same compact form (x, y, w, h for a shape), with the same id as cell_id. Named styles are not available here: write each cell's complete style.
 - add inserts a new cell with a new id. One cell per operation.
 - delete removes a cell. Its children and every edge connected to it are deleted too, so give only the container's id.
 - All-or-nothing: if any operation fails, nothing is applied. A rejected call includes the current XML of the page; rebuild your operations on it and retry.
 - If the diagram is large, change it with edit_diagram instead of redrawing it.
 
-    {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
-    {"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" value=\\"Conv\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"40\\" y=\\"40\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
+    {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
+    {"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" value=\\"Conv\\" x=\\"40\\" y=\\"40\\" w=\\"120\\" h=\\"60\\"/>"}]}
     {"page_index": 1, "operations": [{"operation": "delete", "cell_id": "5"}]}
 
 Pages: list_pages shows every page's id, name and index. edit_diagram, get_diagram and export_diagram take an optional page_id, page_name or page_index; without one they use the first page.

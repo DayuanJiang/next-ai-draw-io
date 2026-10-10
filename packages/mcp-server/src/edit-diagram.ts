@@ -7,6 +7,7 @@
  * so the model never builds on a half-applied edit.
  */
 
+import { expandCompactCells } from "./compact-cells.ts"
 import {
     applyDiagramOperations,
     type DiagramOperation,
@@ -84,7 +85,10 @@ export function editDiagram(
         // added after the fixes so a repaired cell gets them too
         prepared.push({
             ...op,
-            new_xml: addDefaultStyles(check.fixed ?? op.new_xml, edges),
+            new_xml: addDefaultStyles(
+                expandCompactCells(check.fixed ?? op.new_xml),
+                edges,
+            ),
         })
     }
     if (errors.length > 0) return { ok: false, errors, pageError: false }

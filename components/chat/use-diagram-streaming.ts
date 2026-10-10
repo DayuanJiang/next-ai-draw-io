@@ -10,6 +10,7 @@ import {
     extractCompleteMxCells,
     replaceNodes,
 } from "@/lib/utils"
+import { expandCompactCells } from "@/packages/mcp-server/src/compact-cells.ts"
 import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 import {
@@ -83,7 +84,10 @@ export function useDiagramStreaming({
             const completeCells = extractCompleteMxCells(cellsXml)
             if (!completeCells) return
             const convertedXml = addDefaultStyles(
-                applyStyleClasses(convertToLegalXml(completeCells), classes),
+                applyStyleClasses(
+                    expandCompactCells(convertToLegalXml(completeCells)),
+                    classes,
+                ),
             )
             if (convertedXml === previousXML.current) return
 
@@ -220,7 +224,10 @@ export function useDiagramStreaming({
                         op.new_xml
                             ? {
                                   ...op,
-                                  new_xml: addDefaultStyles(op.new_xml, edges),
+                                  new_xml: addDefaultStyles(
+                                      expandCompactCells(op.new_xml),
+                                      edges,
+                                  ),
                               }
                             : op,
                     ),

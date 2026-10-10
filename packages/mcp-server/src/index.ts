@@ -23,6 +23,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
 import { z } from "zod"
+import { expandCompactCells, foldCells } from "./compact-cells.ts"
 import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
@@ -341,7 +342,7 @@ Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape
 
 Accepted xml:
 1) Only the mxCell elements of one page (recommended). The server adds <mxfile>, <mxGraphModel>, <root> and the root cells "0" and "1":
-<mxCell id="2" value="Shape" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="2" value="Shape" style="rounded=1;" x="40" y="40" w="120" h="60"/>
 2) A bare <mxGraphModel> with <root> (one page).
 3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
@@ -594,10 +595,10 @@ registerWriteTool(
             "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml. One cell per operation.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
             "- delete: Remove a cell by its id. Only cell_id is needed. Its children and connected edges are deleted too, so give only a container's id.\n\n" +
-            "For add/update, new_xml must be a complete mxCell element including mxGeometry. No XML comments. " +
+            "For add/update, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target). No XML comments. " +
             'Every " inside new_xml must be escaped as \\" in the JSON.\n\n' +
             "Example - Add a rectangle on the default (first) page:\n" +
-            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}\n\n' +
             "Example - Delete a cell on the default page:\n" +
             '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
@@ -874,7 +875,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: `Current diagram XML:\n\n${session.xml}\n\n${pageList}${staleNote}`,
+                            text: `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}`,
                         },
                     ],
                 }
@@ -1635,7 +1636,7 @@ registerWriteTool(
                     }
                 }
                 cleanXml = addDefaultStyles(
-                    applyStyleClasses(cleanXml, classes),
+                    applyStyleClasses(expandCompactCells(cleanXml), classes),
                 )
             }
 

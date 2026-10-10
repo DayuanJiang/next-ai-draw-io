@@ -101,25 +101,23 @@ Note that:
 
 When using edit_diagram tool:
 - Use operations: update (modify cell by id), add (new cell), delete (remove cell by id)
-- For update/add: provide cell_id and complete new_xml (full mxCell element including mxGeometry)
+- For update/add: provide cell_id and the complete new_xml in the same compact form (a shape with x, y, w, h; an edge with source and target)
 - For delete: only cell_id is needed
 - Named styles are not available in edit_diagram: write each cell's complete style
 - Find the cell_id from "Current diagram XML" in system context
-- Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
 - Example delete: {"operations": [{"operation": "delete", "cell_id": "5"}]}
-- Example add: {"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+- Example add: {"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" x=\\"400\\" y=\\"200\\" w=\\"120\\" h=\\"60\\"/>"}]}
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
 ## Draw.io XML Structure Reference
 
-**IMPORTANT:** You only generate the named styles and the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically. A named style is written before the cells as <mxStyle name="n" value="...style pairs..."/>; a cell uses it by putting the name among its style tokens (see Styles).
+**IMPORTANT:** You only generate the named styles and the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically. A named style is written before the cells as <mxStyle name="n" value="...style pairs..."/>; a cell uses it by putting the name among its style tokens (see Styles). A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target. vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically, so write them only when needed: parent for a shape inside a container, an mxGeometry element for edge waypoints or a label placed on an edge.
 
 Example - generate ONLY this:
 \`\`\`xml
-<mxCell id="2" value="Label" style="rounded=1;" vertex="1" parent="1">
-  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-</mxCell>
+<mxCell id="2" value="Label" style="rounded=1;" x="100" y="100" w="120" h="60"/>
 \`\`\`
 
 CRITICAL RULES:
@@ -127,20 +125,16 @@ CRITICAL RULES:
 2. Do NOT include root cells (id="0" or id="1") - they are added automatically
 3. ALL mxCell elements must be siblings - NEVER nest mxCell inside another mxCell
 4. Use unique sequential IDs starting from "2"
-5. Set parent="1" for top-level shapes, or parent="<container-id>" for grouped elements
+5. Write parent="<container-id>" only for shapes inside a container; top-level cells need no parent
 
 Shape (vertex) example:
 \`\`\`xml
-<mxCell id="2" value="Label" style="rounded=1;" vertex="1" parent="1">
-  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-</mxCell>
+<mxCell id="2" value="Label" style="rounded=1;" x="100" y="100" w="120" h="60"/>
 \`\`\`
 
 Connector (edge) example:
 \`\`\`xml
-<mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="2" target="4">
-  <mxGeometry relative="1" as="geometry"/>
-</mxCell>
+<mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;" source="2" target="4"/>
 
 ### Edge Routing Rules:
 When creating edges/connectors, you MUST follow these rules to avoid overlapping lines:
@@ -244,7 +238,7 @@ const EXTENDED_ADDITIONS = `
 1. Generate ONLY mxStyle definitions and mxCell elements - wrapper tags and root cells are added automatically
 2. All mxCell elements must be siblings - never nested inside other mxCell elements
 3. Every mxCell needs a unique id attribute (start from "2")
-4. Every mxCell needs a valid parent attribute (use "1" for top-level, or container-id for grouped)
+4. parent defaults to "1"; write it only for a shape inside a container (the container's id)
 5. Edge source/target attributes must reference existing cell IDs
 6. Escape special characters in values: &lt; for <, &gt; for >, &amp; for &, &quot; for "
 
@@ -263,7 +257,7 @@ ${SWIMLANE_EXAMPLE}
 3. Complete the remaining mxCell elements
 4. If still truncated, call append_diagram again with the next fragment
 
-**Example:** If previous output ended with \`<mxCell id="x" style="rounded=1\`, continue with \`;" vertex="1">...\` and complete the remaining elements.
+**Example:** If previous output ended with \`<mxCell id="x" style="rounded=1\`, continue with \`;" x="40" y="40" w="120" h="60"/>\` and complete the remaining elements.
 
 ### edit_diagram Details
 
@@ -289,12 +283,12 @@ edit_diagram uses ID-based operations to modify cells directly by their id attri
 
 Change label:
 \`\`\`json
-{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
 \`\`\`
 
 Add new shape:
 \`\`\`json
-{"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"400\\" y=\\"200\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
+{"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" x=\\"400\\" y=\\"200\\" w=\\"120\\" h=\\"60\\"/>"}]}
 \`\`\`
 
 Delete container (children & edges auto-deleted):
