@@ -33,6 +33,7 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 - **Edit Support**: Modify existing diagrams with natural language instructions, including your own edits in the browser
 - **Export**: Save diagrams as `.drawio`, `.png`, `.svg`, or `.drawio.svg` files
 - **Auto-save**: Each diagram is saved to `~/.next-ai-drawio/`, so `claude --resume` can pick it up again
+- **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
 - **Self-contained**: Embedded server, no external dependencies required
 
 ## Use Case Examples

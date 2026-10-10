@@ -24,6 +24,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
 import { z } from "zod"
 import { expandCompactCells, foldCells } from "./compact-cells.ts"
+import {
+    CUSTOM_INSTRUCTIONS_FILE,
+    customInstructionsDir,
+    guideWithCustomInstructions,
+} from "./custom-instructions.ts"
 import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
@@ -218,6 +223,10 @@ function describeSelector(s: PageSelector): string {
     return "first page"
 }
 
+// The drawing guide plus the user's own rules from instructions.md, read
+// on every call so edits apply without restarting the host
+const guideText = () => guideWithCustomInstructions(DRAWING_GUIDE)
+
 // The same guide as start_session, for hosts that show prompts to the user
 server.registerPrompt(
     "diagram-workflow",
@@ -228,7 +237,7 @@ server.registerPrompt(
         messages: [
             {
                 role: "user",
-                content: { type: "text", text: DRAWING_GUIDE },
+                content: { type: "text", text: guideText() },
             },
         ],
     }),
@@ -245,7 +254,7 @@ server.registerTool(
         inputSchema: {},
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => ({ content: [{ type: "text", text: DRAWING_GUIDE }] }),
+    async () => ({ content: [{ type: "text", text: guideText() }] }),
 )
 
 // Tool: get_shape_library
@@ -310,6 +319,7 @@ registerWriteTool(
             const saveNote = savePath
                 ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
                 : ""
+            const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsDir()}/${CUSTOM_INSTRUCTIONS_FILE} (Markdown, up to 5000 characters, read on every call).`
 
             log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
@@ -317,7 +327,7 @@ registerWriteTool(
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}\n\n${DRAWING_GUIDE}`,
+                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
                     },
                 ],
             }
