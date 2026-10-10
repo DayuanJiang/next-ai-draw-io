@@ -489,6 +489,27 @@ describe("history restore", () => {
     const page = (cellId: string) =>
         `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
 
+    it("refuses a restore picked from a state the server has since lost", async () => {
+        const id = "mcp-history-stale-state"
+        setState(id, page("now"))
+        addHistory(id, page("old"))
+        const [entry] = getHistory(id)
+        const stale = await postJson("/api/restore", {
+            sessionId: id,
+            id: entry.id,
+            stateId: "a-lost-state",
+        })
+        expect(stale.status).toBe(409)
+        expect(getState(id)?.xml).toBe(page("now"))
+        const fresh = await postJson("/api/restore", {
+            sessionId: id,
+            id: entry.id,
+            stateId: getState(id)?.stateId,
+        })
+        expect(fresh.status).toBe(200)
+        expect(getState(id)?.xml).toBe(page("old"))
+    })
+
     // A thumbnail the tab took after loading the server write at `version`
     const thumbnail = (id: string, svg: string, version: number) =>
         postJson("/api/history-svg", {

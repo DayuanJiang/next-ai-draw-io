@@ -95,6 +95,21 @@ describe("otherVersions", () => {
         expect(isInHistory(id, C)).toBe(false)
     })
 
+    it("still counts a rename when an unrelated bare model is in History", () => {
+        const id = "history-mixed"
+        const bareX = page("x")
+            .replace(/^.*?(<mxGraphModel>)/, "$1")
+            .replace("</diagram></mxfile>", "")
+        const arch = B.replace('name="P"', 'name="Arch"')
+        const overview = B.replace('name="P"', 'name="Overview"')
+        fill(id, [bareX, arch])
+        expect(otherVersions(id, overview).map((e) => e.xml)).toEqual([
+            arch,
+            bareX,
+        ])
+        expect(isInHistory(id, overview)).toBe(false)
+    })
+
     it("returns nothing for an empty history", () => {
         const id = "history-empty"
         clearHistory(id)

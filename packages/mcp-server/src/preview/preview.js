@@ -459,14 +459,18 @@ let historyData = [], selectedId = null;
 
 historyBtn.onclick = async () => {
     if (!sessionId) return;
+    // A list for a state the server recreated meanwhile has old ids
+    const sid = stateId;
     try {
         const r = await fetch('/api/history?sessionId=' + encodeURIComponent(sessionId));
         if (r.ok) {
             const d = await r.json();
+            if (sid !== stateId) return;
             historyData = d.entries || [];
             renderHistory();
         }
     } catch {}
+    if (sid !== stateId) return;
     historyModal.classList.add('open');
 };
 
@@ -520,9 +524,10 @@ restoreBtn.onclick = async () => {
         const r = await fetch('/api/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, id: selectedId })
+            body: JSON.stringify({ sessionId, id: selectedId, stateId })
         });
         if (r.ok) { cancelBtn.onclick(); await poll(); }
+        else if (r.status === 409) { cancelBtn.onclick(); showNotice('History changed on the server. Please open it again.'); }
         else { showNotice('Restore failed. Please try again.'); }
     } catch { showNotice('Restore failed. Please try again.'); }
     restoreBtn.textContent = 'Restore';

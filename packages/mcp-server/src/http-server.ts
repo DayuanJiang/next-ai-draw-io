@@ -715,10 +715,18 @@ function handleRestoreApi(
 
     readBody(req, res, (body) => {
         try {
-            const { sessionId, id } = JSON.parse(body)
+            const { sessionId, id, stateId } = JSON.parse(body)
             if (!sessionId || typeof id !== "number") {
                 res.writeHead(400, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "sessionId and id required" }))
+                return
+            }
+            // Picked from the list of a state the server has since lost
+            // (a restart reloads History under new ids)
+            const current = stateStore.get(sessionId)
+            if (stateId && current && stateId !== current.stateId) {
+                res.writeHead(409, { "Content-Type": "application/json" })
+                res.end(JSON.stringify({ error: "Session was recreated" }))
                 return
             }
 
