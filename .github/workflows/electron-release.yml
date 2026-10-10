@@ -86,6 +86,9 @@ jobs:
           artifact-configuration-slug: 'windows-exe'
           github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
           wait-for-completion: true
+          # The release-signing policy needs a manual approval in SignPath;
+          # the default 600 s wait made the job fail before anyone could approve.
+          wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: release-signed
 
       - name: Upload signed artifacts to release
