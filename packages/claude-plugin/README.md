@@ -94,7 +94,7 @@ Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
 | `get_drawing_guide` | Return the drawing rules again |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4` |
 | `create_new_diagram` | Create a new diagram from XML |
-| `load_diagram` | Load a `.drawio` file from disk |
+| `load_diagram` | Load a `.drawio` or `.drawio.svg` file from disk |
 | `edit_diagram` | Edit diagram by ID-based operations; all or nothing |
 | `get_diagram` | Get the current diagram XML |
 | `screenshot_diagram` | Return a PNG of a page so Claude can check the result |

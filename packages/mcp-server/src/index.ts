@@ -166,7 +166,7 @@ Tools:
 - edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry.
 - get_diagram: read the current XML, including the user's manual edits.
 - screenshot_diagram: see the rendered diagram as an image.
-- load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
+- load_diagram, export_diagram: open or save .drawio or .drawio.svg files and export .png or .svg. Use absolute paths.
 - list_saved_diagrams: diagrams saved by earlier sessions; continue one with start_session session_id=<id>.
 - list_pages, add_page, rename_page, delete_page: manage pages (tabs).
 - restore_version: undo; go back to an earlier version of the diagram.`
@@ -610,12 +610,13 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
 registerWriteTool(
     "load_diagram",
     {
-        title: "Load .drawio file",
+        title: "Load diagram file",
         description:
             "Load a .drawio diagram into the current session, REPLACING the entire diagram (all pages). " +
             "Provide ONE of two mutually exclusive sources: 'path' (the server reads the file from disk — you do NOT need to read the file yourself or pass its XML through create_new_diagram) " +
             "or 'xml' (the raw file content you already have — from another tool, a repository read, or an API response — so no temporary file needs to be written first). " +
-            "Both accept plain XML and draw.io's compressed save format.\n\n" +
+            "Both accept plain XML and draw.io's compressed save format. " +
+            ".drawio.svg (Editable SVG, the format export_diagram writes) is accepted too; a plain .svg or .png without embedded XML cannot be loaded.\n\n" +
             "After loading from 'path' (or from compressed 'xml'), call get_diagram before edit_diagram — you haven't seen the file's cell IDs yet. " +
             "Plain-XML 'xml' content you supplied yourself is already known and can be edited immediately.",
         inputSchema: {
@@ -623,7 +624,7 @@ registerWriteTool(
                 .string()
                 .optional()
                 .describe(
-                    "Path to the .drawio file to load (e.g. /Users/me/diagram.drawio or ~/diagram.drawio). Relative paths resolve against the MCP server's working directory, which is often not your project. Mutually exclusive with 'xml'.",
+                    "Path to the .drawio or .drawio.svg file to load (e.g. /Users/me/diagram.drawio or ~/diagram.drawio). Relative paths resolve against the MCP server's working directory, which is often not your project. Mutually exclusive with 'xml'.",
                 ),
             xml: z
                 .string()

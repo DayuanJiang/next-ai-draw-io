@@ -112,7 +112,7 @@ Use the standard MCP configuration with:
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
 - **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails, or ask the AI to undo (`restore_version`)
-- **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io can open and edit again), from the **Download** button or through `export_diagram`
+- **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io and `load_diagram` can open again), from the **Download** button or through `export_diagram`
 - **Multi-page**: List, add, rename, and delete pages, and edit any page
 - **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, and its last 20 versions to `<session-id>.history.json`, so the diagram, History and undo survive a restart of the MCP client
 - **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
@@ -128,7 +128,7 @@ Use the standard MCP configuration with:
 | `get_drawing_guide` | Return the drawing rules again, for example after a long conversation was compacted |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4`, `azure2`, or `kubernetes` |
 | `create_new_diagram` | Create a new diagram from XML; a plain list of `mxCell` elements is enough |
-| `load_diagram` | Load a `.drawio` file into the session, from a `path` on disk or from its `xml` content (handles compressed files) |
+| `load_diagram` | Load a `.drawio` or `.drawio.svg` file into the session, from a `path` on disk or from its `xml` content (handles compressed files) |
 | `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells); all or nothing |
 | `get_diagram` | Get the current diagram XML, including your edits in the browser |
 | `screenshot_diagram` | Return a PNG of a page so the AI can check the rendered diagram |
