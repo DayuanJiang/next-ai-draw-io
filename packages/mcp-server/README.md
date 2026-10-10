@@ -145,7 +145,7 @@ After every change, the diagram is saved as a normal `.drawio` file in `~/.next-
 
 To continue a diagram in a later conversation (for example after `claude --resume`, or in a new chat), the AI calls `start_session` with `session_id` set to that id: the same preview URL opens, the saved diagram is shown, and auto-save keeps writing to the same file. If the id is no longer in the conversation, `list_saved_diagrams` returns every saved diagram, newest first, with the names and cell counts of its pages, so you can ask for "the architecture diagram from yesterday" and let the AI pick it. `load_diagram` with the file path still works too, and you can open the file in draw.io yourself.
 
-History comes back with the diagram: the last 20 versions are saved next to it in `<session-id>.history.json` (without thumbnails), so a preview tab that is still open after a restart shows them again under **History**.
+History comes back with the diagram: the last 20 versions are saved next to it in `<session-id>.history.json` (without thumbnails). When the AI continues the session with `start_session` and its `session_id`, or a preview tab is still open after a restart, the **History** button shows them again and `restore_version` can undo to them.
 
 The newest 50 files are kept, each with its History file. Set `DRAWIO_DATA_DIR` to use another folder, or to `off` to turn auto-save off.
 
