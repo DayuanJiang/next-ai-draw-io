@@ -1,6 +1,6 @@
-import { decompressPageContent } from "@/packages/mcp-server/src/load-diagram.ts"
+import { modelOfPage, pageElement } from "@/lib/diagram-pages"
 
-/** What changed on the first page between two versions of a diagram */
+/** What changed on one page between two versions of a diagram */
 export interface ChangeSummary {
     shapesAdded: number
     shapesRemoved: number
@@ -32,27 +32,20 @@ interface CellInfo {
     signature: string
 }
 
-/** A page's mxGraphModel element, inflated when the page is compressed */
-function modelOfPage(diagram: Element): Element | null {
-    const model = diagram.querySelector("mxGraphModel")
-    if (model) return model
-    const inflated = decompressPageContent(diagram.textContent || "")
-    if (!inflated) return null
-    const inner = new DOMParser().parseFromString(inflated, "text/xml")
-    return inner.querySelector("mxGraphModel")
-}
-
 function parse(xml: string): Document | null {
     if (!xml?.trim()) return null
     const doc = new DOMParser().parseFromString(xml, "text/xml")
     return doc.querySelector("parsererror") ? null : doc
 }
 
-/** The first page's mxGraphModel element, whatever wrapper the XML has */
-function firstPageModel(xml: string): Element | null {
+/**
+ * A page's mxGraphModel element, whatever wrapper the XML has: the page
+ * with this id, else the first
+ */
+function pageModel(xml: string, pageId?: string | null): Element | null {
     const doc = parse(xml)
     if (!doc) return null
-    const diagram = doc.querySelector("diagram")
+    const diagram = pageElement(doc, pageId)
     if (diagram) return modelOfPage(diagram)
     return doc.querySelector("mxGraphModel") ?? doc.documentElement
 }
@@ -133,10 +126,13 @@ function cellsIn(model: Element | null) {
     })
 }
 
-/** Shapes and connectors of the first page (not the root and its layers) */
-function collectCells(xml: string): Map<string, CellInfo> {
+/** Shapes and connectors of one page (not the root and its layers) */
+function collectCells(
+    xml: string,
+    pageId?: string | null,
+): Map<string, CellInfo> {
     const cells = new Map<string, CellInfo>()
-    for (const { id, cell, node } of cellsIn(firstPageModel(xml))) {
+    for (const { id, cell, node } of cellsIn(pageModel(xml, pageId))) {
         if (id === "0" || cell.getAttribute("parent") === "0") continue
         cells.set(id, {
             isEdge: cell.getAttribute("edge") === "1",
@@ -146,9 +142,14 @@ function collectCells(xml: string): Map<string, CellInfo> {
     return cells
 }
 
-export function diffDiagrams(beforeXml: string, afterXml: string): DiagramDiff {
-    const before = collectCells(beforeXml)
-    const after = collectCells(afterXml)
+/** What changed on one page (the first when no id is given) */
+export function diffDiagrams(
+    beforeXml: string,
+    afterXml: string,
+    pageId?: string | null,
+): DiagramDiff {
+    const before = collectCells(beforeXml, pageId)
+    const after = collectCells(afterXml, pageId)
     const summary: ChangeSummary = { ...EMPTY_SUMMARY }
     const touchedIds: string[] = []
 

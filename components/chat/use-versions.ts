@@ -46,15 +46,17 @@ export function useVersions({
     // (effect cleanups run before the streaming hook commits). The handler
     // only reads refs and stable functions.
     useEffect(() => {
-        setCommitHandler(({ beforeXml, afterXml, toolCallId }) => {
+        setCommitHandler(({ beforeXml, afterXml, toolCallId, pageId }) => {
             if (restoringRef.current) return
             const { summary, touchedIds, fromScratch } = diffDiagrams(
                 beforeXml,
                 afterXml,
+                pageId,
             )
             const id = useVersionsStore.getState().addVersion({
                 xml: afterXml,
                 beforeXml,
+                ...(pageId && { pageId }),
                 turnIndex: currentTurnRef.current,
                 toolCallId,
                 summary,

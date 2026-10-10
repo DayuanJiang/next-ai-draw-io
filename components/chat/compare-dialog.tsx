@@ -56,11 +56,11 @@ export function CompareDialog() {
         () => !version || isSameDocument(version.xml, chartXML),
         [version, chartXML],
     )
-    // What the canvas has changed since this version on the first page
-    // (null: nothing there)
+    // What the canvas has changed since this version on the page it was
+    // made on (null: nothing there)
     const changes = useMemo(() => {
         if (!version || same) return null
-        const { summary } = diffDiagrams(version.xml, chartXML)
+        const { summary } = diffDiagrams(version.xml, chartXML, version.pageId)
         return Object.values(summary).some((n) => n > 0) ? summary : null
     }, [version, chartXML, same])
 

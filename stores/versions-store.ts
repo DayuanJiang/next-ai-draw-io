@@ -10,6 +10,8 @@ export interface DiagramVersion {
     number: number
     /** Full multi-page document after the change */
     xml: string
+    /** The page the change was made on; older sessions have none (the first page) */
+    pageId?: string
     /** Diagram before the change; kept only on the latest version */
     beforeXml?: string
     /** SVG data URL thumbnail; "" when none could be made */

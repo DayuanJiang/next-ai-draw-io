@@ -42,6 +42,7 @@ import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
 import { buildChatHeaders } from "@/lib/chat-request"
+import { pageModelXml, placeOnPage } from "@/lib/diagram-pages"
 import { EMPTY_DRAWIO_DOCUMENT } from "@/lib/drawio/drawio-config"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -90,15 +91,20 @@ function hasToolErrors(messages: UIMessage[]): boolean {
 }
 
 /**
- * Snapshots keep the full multi-page document, but the model only sees and
- * edits the first page, so give it the first page's mxGraphModel.
- * Older snapshots already hold a single mxGraphModel and are returned as is.
+ * Snapshots keep the full multi-page document, but the model sees and
+ * edits one page, the one the user is viewing (the first when unknown), so
+ * give it that page's mxGraphModel. Older snapshots already hold a single
+ * mxGraphModel and are returned as is.
  */
-function getFirstPageXml(xml: string): string {
+function getPageXml(xml: string, pageId: string | null): string {
     if (!xml.includes("<mxfile")) return xml
-    const doc = new DOMParser().parseFromString(xml, "text/xml")
-    const model = doc.querySelector("diagram")?.querySelector("mxGraphModel")
-    return model ? formatXML(new XMLSerializer().serializeToString(model)) : xml
+    const model = pageModelXml(xml, pageId)
+    return model ? formatXML(model) : xml
+}
+
+/** The page the user is viewing; null with an external draw.io */
+function viewedPageId(): string | null {
+    return useCanvasStore.getState().currentPageId
 }
 
 // Shapes sent with a user message (also kept in its metadata)
@@ -374,6 +380,9 @@ export function ChatEngineProvider({
 
     // XML snapshot taken before each user message (keyed by message index)
     const xmlSnapshotsRef = useRef<Map<number, string>>(new Map())
+    // The page the running turn's model reads and writes: the one the user
+    // viewed when the message was sent (null: the first page)
+    const turnPageIdRef = useRef<string | null>(null)
     // Index of the user message whose turn is running (versions belong to it)
     const currentTurnRef = useRef(0)
     // The chat (its generation) the running turn was sent in: a reply that
@@ -450,6 +459,7 @@ export function ChatEngineProvider({
         validationRetryCountRef,
         // A preview undone just before the tool call is in this one already
         chartXMLRef: liveChartXMLRef,
+        turnPageIdRef,
         onDisplayChart,
         onFetchChart,
         captureValidationPng,
@@ -748,6 +758,7 @@ export function ChatEngineProvider({
         processedToolCallsRef,
         editDiagramOriginalXmlRef,
         loadedMessageIdsRef,
+        turnPageIdRef,
     })
 
     const { restoreVersion, undoVersion } = useVersions({
@@ -762,14 +773,10 @@ export function ChatEngineProvider({
     // ---------------------------------------------------------------------
 
     const selection = useCanvasStore((s) => s.selection)
-    // The model sees and edits the first page only
-    const onFirstPage = useCanvasStore(
-        (s) => s.pages.length === 0 || s.pages[0]?.id === s.currentPageId,
-    )
     const [dismissedSelectionKey, setDismissedSelectionKey] = useState("")
     const selectionKey = selection.map((c) => c.id).join(",")
     const chatSelection =
-        !onFirstPage || selectionKey === dismissedSelectionKey ? [] : selection
+        selectionKey === dismissedSelectionKey ? [] : selection
     // Once nothing is selected, picking the same shapes again attaches them
     useEffect(() => {
         if (selection.length === 0) setDismissedSelectionKey("")
@@ -1178,8 +1185,9 @@ export function ChatEngineProvider({
             .filter((k) => k < beforeIndex)
             .sort((a, b) => b - a)
         return snapshotKeys.length > 0
-            ? getFirstPageXml(
+            ? getPageXml(
                   xmlSnapshotsRef.current.get(snapshotKeys[0]) || "",
+                  viewedPageId(),
               )
             : ""
     }
@@ -1198,6 +1206,7 @@ export function ChatEngineProvider({
         continuationOriginalRef.current = null
         stoppedRef.current = false
         currentTurnRef.current = turnIndex
+        turnPageIdRef.current = viewedPageId()
         turnChatRef.current = getChatGeneration()
         // Busy from now on, before the next render says so
         busyRef.current = true
@@ -1254,7 +1263,8 @@ export function ChatEngineProvider({
         const turnIndex = messagesRef.current.length
         const previousXml = getPreviousXml(turnIndex)
         // Snapshot the full multi-page document (kept fresh by autosave) so
-        // regenerate/edit can restore every page; the model gets page 1 only
+        // regenerate/edit can restore every page; the model gets the page
+        // the user is viewing
         xmlSnapshotsRef.current.set(turnIndex, chartXMLRef.current || chartXml)
         sendChatMessage(parts, chartXml, previousXml, turnIndex, selectedCells)
         return true
@@ -1328,11 +1338,16 @@ export function ChatEngineProvider({
                     pageName: "Page-1",
                 })
                 if (prepared.ok) {
+                    const pageId = viewedPageId()
+                    const canvasXml = chartXMLRef.current || ""
                     onDisplayChart(
-                        keepFileVars(prepared.xml, chartXMLRef.current || ""),
+                        keepFileVars(
+                            placeOnPage(prepared.xml, canvasXml, pageId),
+                            canvasXml,
+                        ),
                         true,
                         "commit",
-                        { toolCallId },
+                        { toolCallId, pageId },
                     )
                 }
                 clearComposer()
@@ -1492,7 +1507,7 @@ export function ChatEngineProvider({
         })
         sendChatMessage(
             parts,
-            getFirstPageXml(savedXml),
+            getPageXml(savedXml, viewedPageId()),
             previousXml,
             index,
             selectionOf(messages[index]),

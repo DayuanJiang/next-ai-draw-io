@@ -153,9 +153,19 @@ describe("diffDiagrams", () => {
         expect(touchedIds).toEqual(["u1"])
     })
 
-    it("only looks at the first page", () => {
+    it("looks at the first page unless told which page", () => {
         const twoPages = file(pageOf("p1", box("a")), pageOf("p2", box("z")))
         expect(diffDiagrams("", twoPages).summary.shapesAdded).toBe(1)
+        const changedP2 = file(
+            pageOf("p1", box("a")),
+            pageOf("p2", box("z") + box("y")),
+        )
+        expect(diffDiagrams(twoPages, changedP2, "p2").touchedIds).toEqual([
+            "y",
+        ])
+        expect(diffDiagrams(twoPages, changedP2, "p1").touchedIds).toEqual([])
+        // An unknown page is the first one
+        expect(diffDiagrams(twoPages, changedP2, "p9").touchedIds).toEqual([])
     })
 
     it("reads compressed pages", () => {

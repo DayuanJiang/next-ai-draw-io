@@ -227,12 +227,18 @@ export function convertToLegalXml(xmlString: string): string {
 }
 
 /**
- * Replace nodes in a Draw.io XML diagram
+ * Replace the cells of one page of a Draw.io XML document
  * @param currentXML - The original Draw.io XML string
  * @param nodes - The XML string containing new nodes to replace in the diagram
+ * @param pageId - The page whose cells are replaced; the first page when
+ * missing or not found
  * @returns The updated XML string with replaced nodes
  */
-export function replaceNodes(currentXML: string, nodes: string): string {
+export function replaceNodes(
+    currentXML: string,
+    nodes: string,
+    pageId?: string | null,
+): string {
     // Check for valid inputs
     if (!currentXML || !nodes) {
         throw new Error("Both currentXML and nodes must be provided")
@@ -251,16 +257,23 @@ export function replaceNodes(currentXML: string, nodes: string): string {
 
         const nodesDoc = parser.parseFromString(nodesString, "text/xml")
 
+        // The page to draw on, when the document has it
+        const page = pageId
+            ? Array.from(currentDoc.getElementsByTagName("diagram")).find(
+                  (diagram) => diagram.getAttribute("id") === pageId,
+              )
+            : undefined
+        const scope: ParentNode = page ?? currentDoc
         // Find the root element in the current document
-        let currentRoot = currentDoc.querySelector("mxGraphModel > root")
+        let currentRoot = scope.querySelector("mxGraphModel > root")
         if (!currentRoot) {
             // If no root element is found, create the proper structure
             const mxGraphModel =
-                currentDoc.querySelector("mxGraphModel") ||
+                scope.querySelector("mxGraphModel") ||
                 currentDoc.createElement("mxGraphModel")
 
             if (!currentDoc.contains(mxGraphModel)) {
-                currentDoc.appendChild(mxGraphModel)
+                ;(page ?? currentDoc).appendChild(mxGraphModel)
             }
 
             currentRoot = currentDoc.createElement("root")
@@ -330,10 +343,13 @@ export function replaceNodes(currentXML: string, nodes: string): string {
 
 /**
  * Decode an xmlsvg export (SVG data URL) into uncompressed diagram XML.
- * Only the first page is returned; for the full multi-page document use the
- * autosaved chartXML instead.
+ * One page is returned: the one with the given id, else the first; for the
+ * full multi-page document use the autosaved chartXML instead.
  */
-export function extractDiagramXML(xml_svg_string: string): string {
+export function extractDiagramXML(
+    xml_svg_string: string,
+    pageId?: string | null,
+): string {
     try {
         // 1. Parse the SVG string (using built-in DOMParser in a browser-like environment)
         const svgString = atob(xml_svg_string.slice(26))
@@ -357,7 +373,13 @@ export function extractDiagramXML(xml_svg_string: string): string {
 
         // 4. Parse the XML content
         const xmlDoc = parser.parseFromString(xmlContent, "text/xml")
-        const diagramElement = xmlDoc.querySelector("diagram")
+        const diagrams = Array.from(xmlDoc.getElementsByTagName("diagram"))
+        const diagramElement =
+            (pageId &&
+                diagrams.find(
+                    (diagram) => diagram.getAttribute("id") === pageId,
+                )) ||
+            diagrams[0]
 
         if (!diagramElement) {
             throw new Error("No diagram element found")

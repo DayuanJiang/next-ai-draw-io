@@ -5,6 +5,7 @@ import type { RefObject } from "react"
 import { useCallback, useEffect, useRef } from "react"
 import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import { useDiagram } from "@/contexts/diagram-context"
+import { pageSelectorFor } from "@/lib/diagram-pages"
 import {
     convertToLegalXml,
     extractCompleteMxCells,
@@ -15,6 +16,7 @@ import {
     expandCompactCells,
 } from "@/packages/mcp-server/src/compact-cells.ts"
 import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
+import { targetPageXml } from "@/packages/mcp-server/src/edit-diagram.ts"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 import {
     addDefaultStyles,
@@ -44,6 +46,8 @@ interface UseDiagramStreamingParams {
     processedToolCallsRef: RefObject<Set<string>>
     editDiagramOriginalXmlRef: RefObject<Map<string, string>>
     loadedMessageIdsRef: RefObject<Set<string>>
+    // The page the model draws on in this turn; null: the first page
+    turnPageIdRef?: RefObject<string | null>
 }
 
 /**
@@ -60,6 +64,7 @@ export function useDiagramStreaming({
     processedToolCallsRef,
     editDiagramOriginalXmlRef,
     loadedMessageIdsRef,
+    turnPageIdRef,
 }: UseDiagramStreamingParams) {
     const { chartXML, chartXMLRef, loadDiagram } = useDiagram()
     const previousXML = useRef<string>("")
@@ -102,10 +107,15 @@ export function useDiagramStreaming({
             if (testDoc.querySelector("parsererror")) return
 
             try {
-                // Replace the first page's cells so other pages stay intact.
-                // An empty canvas gets a default mxfile to put the cells in.
+                // Replace the model's page's cells so other pages stay
+                // intact. An empty canvas gets a default mxfile to put the
+                // cells in.
                 const baseXML = chartXML || BLANK_MXFILE
-                const replacedXML = replaceNodes(baseXML, convertedXml)
+                const replacedXML = replaceNodes(
+                    baseXML,
+                    convertedXml,
+                    turnPageIdRef?.current,
+                )
                 previousXML.current = convertedXml
                 loadDiagram(replacedXML, true, "preview")
             } catch (error) {
@@ -220,8 +230,15 @@ export function useDiagramStreaming({
             if (lastProcessedXmlRef.current.get(opsKey) === ops) continue
             lastProcessedXmlRef.current.set(opsKey, ops)
             try {
-                const edges = edgeIdsOf(originalXml)
-                const layer = defaultLayerOf(originalXml)
+                // The model's page: the edges on it and its first layer,
+                // as editDiagram reads them
+                const selector = pageSelectorFor(
+                    originalXml,
+                    turnPageIdRef?.current,
+                )
+                const page = targetPageXml(originalXml, selector)
+                const edges = edgeIdsOf(page)
+                const layer = defaultLayerOf(page)
                 const { result } = applyDiagramOperations(
                     originalXml,
                     completeOps.map((op) =>
@@ -235,6 +252,7 @@ export function useDiagramStreaming({
                               }
                             : op,
                     ),
+                    selector,
                 )
                 if (lastProcessedXmlRef.current.get(resultKey) === result) {
                     continue
