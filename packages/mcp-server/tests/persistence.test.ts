@@ -191,6 +191,47 @@ describe("Autosaver", () => {
         saver.schedule("mcp-x", DIAGRAM)
         saver.flush()
     })
+
+    it("lists every session file newest first, hand-named ones included", () => {
+        const dir = tempDir()
+        const saver = new Autosaver(dir, 10)
+        const names = [
+            "mcp-mgd0a1b2-old123.drawio",
+            "mine.drawio",
+            "mcp-notes.drawio",
+            "mcp-readme.txt",
+            "mcp-mgd0a1b3-new456.drawio",
+        ]
+        for (const [i, name] of names.entries()) {
+            writeFileSync(join(dir, name), DIAGRAM)
+            utimesSync(join(dir, name), 1000 + i, 1000 + i)
+        }
+        expect(saver.dataDir()).toBe(dir)
+        expect(saver.list()).toEqual([
+            {
+                sessionId: "mcp-mgd0a1b3-new456",
+                path: join(dir, "mcp-mgd0a1b3-new456.drawio"),
+                savedAt: new Date(1004 * 1000),
+            },
+            {
+                sessionId: "mcp-notes",
+                path: join(dir, "mcp-notes.drawio"),
+                savedAt: new Date(1002 * 1000),
+            },
+            {
+                sessionId: "mcp-mgd0a1b2-old123",
+                path: join(dir, "mcp-mgd0a1b2-old123.drawio"),
+                savedAt: new Date(1000 * 1000),
+            },
+        ])
+    })
+
+    it("lists nothing when saving is off or the folder does not exist", () => {
+        const off = new Autosaver(null)
+        expect(off.dataDir()).toBeNull()
+        expect(off.list()).toEqual([])
+        expect(new Autosaver(join(tempDir(), "missing")).list()).toEqual([])
+    })
 })
 
 describe("defaultDataDir", () => {

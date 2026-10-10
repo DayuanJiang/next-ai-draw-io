@@ -44,7 +44,13 @@ const EXPECTED_TOOLS = [
     "get_drawing_guide",
     "get_shape_library",
     "screenshot_diagram",
+    "list_saved_diagrams",
 ]
+
+// Auto-save folder of the spawned server, holding one saved session
+const dataDir = mkdtempSync(path.join(tmpdir(), "mcp-wiring-"))
+const SAVED_ID = "mcp-aaaaaaaa-bbb"
+const SAVED_DIAGRAM = `<mxfile><diagram id="p" name="Flow"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
 
 // Claude Code truncates tool descriptions and server instructions here
 const MAX_DESCRIPTION = 2048
@@ -52,7 +58,6 @@ const MAX_DESCRIPTION = 2048
 // The server reads <DRAWIO_DATA_DIR>/instructions.md into the guide; a
 // developer's real ~/.next-ai-drawio/instructions.md must not leak in
 const CUSTOM_RULE = "Always use blue fill #dae8fc."
-let dataDir: string
 
 let proc: ChildProcessWithoutNullStreams
 let stdoutBuf = ""
@@ -79,8 +84,8 @@ function send(method: string, params: unknown, isNotification = false) {
 }
 
 beforeAll(async () => {
-    dataDir = mkdtempSync(path.join(tmpdir(), "mcp-wiring-"))
     writeFileSync(path.join(dataDir, "instructions.md"), CUSTOM_RULE)
+    writeFileSync(path.join(dataDir, `${SAVED_ID}.drawio`), SAVED_DIAGRAM)
     proc = spawn(tsxBin, [entry], {
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, DRAWIO_DATA_DIR: dataDir },
@@ -145,6 +150,29 @@ describe("MCP server wiring", () => {
         expect(props.page_id).toBeTruthy()
         expect(props.page_name).toBeTruthy()
         expect(props.page_index).toBeTruthy()
+    })
+
+    it("advertises session_id on start_session", async () => {
+        const resp = await send("tools/list", {})
+        const start = resp.result.tools.find(
+            (t: { name: string }) => t.name === "start_session",
+        )
+        expect(start?.inputSchema?.properties?.session_id).toBeTruthy()
+        expect(start?.inputSchema?.required ?? []).not.toContain("session_id")
+    })
+
+    it("lists the saved diagrams with their pages, without a session", async () => {
+        const resp = await send("tools/call", {
+            name: "list_saved_diagrams",
+            arguments: {},
+        })
+        expect(resp.result.isError).toBeFalsy()
+        const text: string = resp.result.content[0].text
+        const line = text.split("\n").find((l) => l.startsWith(SAVED_ID))
+        expect(line, text).toBeTruthy()
+        expect(line).toContain("pages: Flow (3 cells)")
+        expect(line).toContain(path.join(dataDir, `${SAVED_ID}.drawio`))
+        expect(line).not.toContain("(current)")
     })
 
     it("advertises name/id/xml on add_page", async () => {

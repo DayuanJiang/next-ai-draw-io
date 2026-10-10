@@ -89,7 +89,8 @@ Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
 
 | Tool | Description |
 |------|-------------|
-| `start_session` | Opens browser with real-time diagram preview; the result includes the drawing rules |
+| `start_session` | Opens browser with real-time diagram preview; the result includes the drawing rules. Pass `session_id` to continue a saved diagram |
+| `list_saved_diagrams` | List the auto-saved diagrams of earlier sessions, newest first, with their pages |
 | `get_drawing_guide` | Return the drawing rules again |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4` |
 | `create_new_diagram` | Create a new diagram from XML |

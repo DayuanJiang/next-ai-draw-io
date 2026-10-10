@@ -72,6 +72,37 @@ export class Autosaver {
         return this.dir ? join(this.dir, `${sessionId}.drawio`) : null
     }
 
+    /** The folder the files are saved in, or null when saving is off. */
+    dataDir(): string | null {
+        return this.dir
+    }
+
+    /**
+     * Every file a session can resume (start_session's own files and
+     * hand-named ones such as mcp-notes.drawio), newest first. Empty when
+     * saving is off or the folder does not exist yet.
+     */
+    list(): { sessionId: string; path: string; savedAt: Date }[] {
+        return this.files(/^mcp-[a-z0-9-]{1,64}\.drawio$/).map((file) => ({
+            sessionId: file.name.slice(0, -".drawio".length),
+            path: file.path,
+            savedAt: file.mtime,
+        }))
+    }
+
+    /** The files in the folder whose name matches, newest first */
+    private files(pattern: RegExp) {
+        const dir = this.dir
+        if (!dir || !existsSync(dir)) return []
+        return readdirSync(dir)
+            .filter((name) => pattern.test(name))
+            .map((name) => {
+                const path = join(dir, name)
+                return { name, path, mtime: statSync(path).mtime }
+            })
+            .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+    }
+
     // Saved files that could not be read back: never written over, since
     // the session then shows something else than what they hold. Cleared
     // once the file is read, or is surely gone (a folder without permission
@@ -145,17 +176,12 @@ export class Autosaver {
     }
 
     private removeOldest(): void {
-        if (!this.dir) return
-        const dir = this.dir
         // Only our own session files (mcp-<time in base 36>-<random>, made
         // by start_session): DRAWIO_DATA_DIR may be a folder that also holds
         // the user's diagrams
-        const files = readdirSync(dir)
-            .filter((f) => /^mcp-[0-9a-z]{8}-[0-9a-z]{1,6}\.drawio$/.test(f))
-            .map((f) => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
-            .sort((a, b) => b.mtime - a.mtime)
-        for (const { f } of files.slice(this.maxFiles)) {
-            unlinkSync(join(dir, f))
+        const own = this.files(/^mcp-[0-9a-z]{8}-[0-9a-z]{1,6}\.drawio$/)
+        for (const { path } of own.slice(this.maxFiles)) {
+            unlinkSync(path)
         }
     }
 }

@@ -146,6 +146,7 @@ Tools:
 - get_diagram: read the current XML, including the user's manual edits.
 - screenshot_diagram: see the rendered diagram as an image.
 - load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
+- list_saved_diagrams: diagrams saved by earlier sessions; continue one with start_session session_id=<id>.
 - list_pages, add_page, rename_page, delete_page: manage pages (tabs).`
 
 const server = new McpServer(
@@ -293,16 +294,28 @@ registerWriteTool(
             "Starts an embedded server and opens a browser window with draw.io. " +
             "The browser will show diagram updates as they happen. " +
             "The result includes the drawing guide; follow it when drawing.",
-        inputSchema: {},
+        inputSchema: {
+            session_id: z
+                .string()
+                .regex(/^mcp-[a-z0-9-]{1,64}$/)
+                .optional()
+                .describe(
+                    "Id of a saved diagram (from list_saved_diagrams, or the Session ID of an earlier start_session) to continue it with the same preview URL and auto-save file. Omit to start a new diagram.",
+                ),
+        },
         annotations: { destructiveHint: false, openWorldHint: false },
     },
-    async () => {
+    async (input) => {
+        // The only field is optional, so a client may send no arguments
+        const { session_id } = input ?? {}
         try {
             // Start embedded HTTP server
             const port = await startHttpServer(config.port)
 
-            // Create session
-            const sessionId = `mcp-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`
+            // Create session, or continue a saved one under its old id
+            const sessionId =
+                session_id ??
+                `mcp-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`
             currentSession = {
                 id: sessionId,
                 xml: "",
@@ -314,9 +327,27 @@ registerWriteTool(
             const browserUrl = `http://localhost:${port}?mcp=${sessionId}`
             await open(browserUrl)
 
+            // A saved diagram comes back from its file. lastSeenXml stays
+            // empty, so edit_diagram asks for get_diagram first.
+            const restored = sessionState(sessionId)
+            let intro = "Session started successfully!"
+            if (session_id) {
+                if (restored && hasCells(restored.xml)) {
+                    const doc = parseMxfile(restored.xml)
+                    const pages = doc ? listPagesFromDoc(doc) : []
+                    const pageSummary =
+                        pages.length > 0
+                            ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
+                            : "no pages parsed"
+                    intro = `Resumed session ${sessionId}.\n\n${pageSummary}\n\nCall get_diagram before edit_diagram.`
+                } else {
+                    intro = `No saved diagram for ${sessionId}; starting blank.`
+                }
+            }
+
             const savePath = autosaver.pathFor(sessionId)
             const saveNote = savePath
-                ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
+                ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue this diagram in a later conversation, call start_session with session_id=${sessionId}. list_saved_diagrams lists older diagrams.`
                 : ""
             const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsPath()} (Markdown, up to 5000 characters, read on every call).`
 
@@ -326,7 +357,7 @@ registerWriteTool(
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
+                        text: `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
                     },
                 ],
             }
@@ -334,6 +365,83 @@ registerWriteTool(
             const message =
                 error instanceof Error ? error.message : String(error)
             log.error("start_session failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+/** "2026-10-04 09:30" in the server's local time */
+function formatLocalTime(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+// Tool: list_saved_diagrams
+server.registerTool(
+    "list_saved_diagrams",
+    {
+        title: "List saved diagrams",
+        description:
+            "List the diagrams saved by earlier sessions (auto-save files), newest first, with their pages. " +
+            "Continue one with start_session session_id=<id>; the file path also works with load_diagram.",
+        inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+        try {
+            const dir = autosaver.dataDir()
+            if (!dir) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Auto-save is off (DRAWIO_DATA_DIR=off), so there are no saved diagrams.",
+                        },
+                    ],
+                }
+            }
+            const saved = autosaver.list()
+            if (saved.length === 0) {
+                return {
+                    content: [
+                        { type: "text", text: `No saved diagrams in ${dir}.` },
+                    ],
+                }
+            }
+            const fs = await import("node:fs/promises")
+            const lines: string[] = []
+            for (const { sessionId, path, savedAt } of saved) {
+                // A file may hold compressed pages (saved by draw.io itself)
+                let pages = "unreadable"
+                try {
+                    const loaded = parseDrawioFileContent(
+                        await fs.readFile(path, "utf-8"),
+                    )
+                    const doc = loaded.ok ? parseMxfile(loaded.xml) : null
+                    if (doc) {
+                        pages = listPagesFromDoc(doc)
+                            .map((p) => `${p.name} (${p.cellCount} cells)`)
+                            .join(", ")
+                    }
+                } catch (error) {
+                    log.warn(
+                        `Could not read the saved diagram ${path}: ${error}`,
+                    )
+                }
+                const current =
+                    sessionId === currentSession?.id ? "  (current)" : ""
+                lines.push(
+                    `${sessionId}  saved ${formatLocalTime(savedAt)}  pages: ${pages}  file: ${path}${current}`,
+                )
+            }
+            return { content: [{ type: "text", text: lines.join("\n") }] }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("list_saved_diagrams failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,
