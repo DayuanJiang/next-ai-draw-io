@@ -108,6 +108,25 @@ async function boxOf(locator: Locator) {
     return box
 }
 
+/**
+ * Click the canvas where no shape is, to deselect: the corner of the
+ * container farthest from the shape. A fixed spot near the top-left corner
+ * is not safe, as a click on a shape may scroll it into that corner.
+ */
+async function clickEmptyCanvas(page: Page, shape: Locator) {
+    const container = getIframeContent(page).locator(".geDiagramContainer")
+    const box = await boxOf(container)
+    const shapeBox = await boxOf(shape)
+    const shapeX = shapeBox.x + shapeBox.width / 2
+    const shapeY = shapeBox.y + shapeBox.height / 2
+    await container.click({
+        position: {
+            x: shapeX < box.x + box.width / 2 ? box.width - 20 : 20,
+            y: shapeY < box.y + box.height / 2 ? box.height - 20 : 20,
+        },
+    })
+}
+
 /** draw.io's own Undo button: draw.io sets "disabled" with nothing to undo */
 function drawioUndo(page: Page) {
     return getIframeContent(page).locator('.geSimpleMainMenu a[title="Undo"]')
@@ -4512,9 +4531,7 @@ test.describe("Edge cases", () => {
         })
         await sendMessage(page, "Make this red")
         // Deselected while the diagram exports
-        await canvas
-            .locator(".geDiagramContainer")
-            .click({ position: { x: 10, y: 10 } })
+        await clickEmptyCanvas(page, shape)
         await expect(chip).toHaveCount(0)
         await page.evaluate(() => (window as any).__releaseExports())
         await waitForCompleteCount(page, 2)
