@@ -1,7 +1,6 @@
 appId: com.nextaidrawio.app
 productName: Next AI Draw.io
 copyright: Copyright © 2024 Next AI Draw.io
-electronVersion: 39.2.7
 
 directories:
   output: release
