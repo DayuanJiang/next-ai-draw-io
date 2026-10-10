@@ -23,6 +23,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
 import { z } from "zod"
+import { expandCompactCells, foldCells } from "./compact-cells.ts"
 import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
@@ -48,7 +49,11 @@ import {
 } from "./http-server.ts"
 import { parseDrawioFileContent } from "./load-diagram.ts"
 import { log } from "./logger.ts"
-import { prepareNewDiagram, reservedIdError } from "./new-diagram.ts"
+import {
+    prepareNewDiagram,
+    reservedIdError,
+    takeStyleDefinitions,
+} from "./new-diagram.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
@@ -66,6 +71,7 @@ import {
 } from "./pages.ts"
 import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
+import { addDefaultStyles, applyStyleClasses } from "./style-classes.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -336,11 +342,11 @@ Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape
 
 Accepted xml:
 1) Only the mxCell elements of one page (recommended). The server adds <mxfile>, <mxGraphModel>, <root> and the root cells "0" and "1":
-<mxCell id="2" value="Shape" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="2" value="Shape" style="rounded=1;" x="40" y="40" w="120" h="60"/>
 2) A bare <mxGraphModel> with <root> (one page).
 3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent="1" for top-level shapes, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600.`,
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent only for shapes inside a container, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.`,
         inputSchema: {
             xml: z
                 .string()
@@ -589,10 +595,10 @@ registerWriteTool(
             "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml. One cell per operation.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
             "- delete: Remove a cell by its id. Only cell_id is needed. Its children and connected edges are deleted too, so give only a container's id.\n\n" +
-            "For add/update, new_xml must be a complete mxCell element including mxGeometry. No XML comments. " +
+            "For add/update, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target). No XML comments. " +
             'Every " inside new_xml must be escaped as \\" in the JSON.\n\n' +
             "Example - Add a rectangle on the default (first) page:\n" +
-            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}\n\n' +
             "Example - Delete a cell on the default page:\n" +
             '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
@@ -700,7 +706,7 @@ registerWriteTool(
                     content: [
                         {
                             type: "text",
-                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\n${next}`,
+                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\n${next}`,
                         },
                     ],
                     isError: true,
@@ -720,7 +726,7 @@ registerWriteTool(
                 log.warn(`Edit rejected: ${outcome.errors.join("; ")}`)
                 const text = outcome.pageError
                     ? `Error: ${outcome.errors[0]}`
-                    : `Error: No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${targetPageXml(currentSession.xml, pageSelector)}\n\nFix the operations against this XML and retry.`
+                    : `Error: No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\nFix the operations against this XML and retry.`
                 return {
                     content: [{ type: "text", text }],
                     isError: true,
@@ -869,7 +875,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: `Current diagram XML:\n\n${session.xml}\n\n${pageList}${staleNote}`,
+                            text: `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}`,
                         },
                     ],
                 }
@@ -906,7 +912,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Page ${projection.index} ("${projection.name}"):\n\n${projection.xml}\n\n${pageList}${staleNote}${otherPagesNote}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${otherPagesNote}`,
                     },
                 ],
             }
@@ -1587,14 +1593,28 @@ registerWriteTool(
 
             // If caller provided XML, validate it before splicing it in so we
             // never get a half-broken mxfile written to the session.
-            const reserved = xml && reservedIdError(xml)
+            // Named style definitions come out first and are expanded on the
+            // validated XML, like prepareNewDiagram
+            const {
+                classes,
+                xml: startXml,
+                error: styleError,
+            } = takeStyleDefinitions(xml ?? "")
+            if (styleError) {
+                return {
+                    content: [{ type: "text", text: `Error: ${styleError}` }],
+                    isError: true,
+                }
+            }
+            const reserved = startXml && reservedIdError(startXml)
             if (reserved) {
                 return {
                     content: [{ type: "text", text: `Error: ${reserved}` }],
                     isError: true,
                 }
             }
-            let cleanXml: string | undefined = xml && wrapCellsInModel(xml)
+            let cleanXml: string | undefined =
+                startXml && wrapCellsInModel(startXml)
             if (cleanXml) {
                 const { valid, error, fixed, fixes } =
                     validateAndFixXml(cleanXml)
@@ -1615,6 +1635,9 @@ registerWriteTool(
                         isError: true,
                     }
                 }
+                cleanXml = addDefaultStyles(
+                    applyStyleClasses(expandCompactCells(cleanXml), classes),
+                )
             }
 
             let info

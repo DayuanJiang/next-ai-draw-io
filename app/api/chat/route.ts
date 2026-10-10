@@ -55,12 +55,16 @@ import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
+import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import {
     getShapeLibrary,
     SHAPE_LIBRARY_LIST,
 } from "@/packages/mcp-server/src/shape-library.ts"
-import { SWIMLANE_EXAMPLE } from "@/packages/mcp-server/src/xml-examples.ts"
+import {
+    STYLE_CLASS_EXAMPLE,
+    SWIMLANE_EXAMPLE,
+} from "@/packages/mcp-server/src/xml-examples.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -520,18 +524,20 @@ ${userInputText}
         SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider) || isCustomOpenAIEndpoint
 
     const selectionContext = formatSelectionContext(body.selectedCells)
+    // The model reads the diagram in the compact notation it writes
+    // (compact-cells.ts); the canvas itself keeps the full XML
     const xmlContext = `${
         previousXml
             ? `Previous diagram XML (before user's last message):
 """xml
-${previousXml}
+${foldCells(previousXml)}
 """
 
 `
             : ""
-    }Current diagram XML (AUTHORITATIVE - the source of truth):
+    }Current diagram XML (AUTHORITATIVE - the source of truth), shown in the same compact notation you write (shapes with x, y, w, h; edges with source and target):
 """xml
-${xml || ""}
+${foldCells(xml || "")}
 """
 
 IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.${selectionContext ? `\n\n${selectionContext}` : ""}`
@@ -659,18 +665,23 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         tools: {
             // Client-side tool that will be executed on the client
             display_diagram: {
-                description: `Display a diagram on draw.io. Pass ONLY the mxCell elements - wrapper tags and root cells are added automatically.
+                description: `Display a diagram on draw.io. Pass ONLY the mxStyle definitions and the mxCell elements - wrapper tags and root cells are added automatically.
 
 VALIDATION RULES (XML will be rejected if violated):
-1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
+1. Generate ONLY mxStyle definitions and mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
 2. Do NOT include root cells (id="0" or id="1") - they are added automatically
 3. All mxCell elements must be siblings - never nested
 4. Every mxCell needs a unique id (start from "2")
-5. Every mxCell needs a valid parent attribute (use "1" for top-level)
+5. parent defaults to "1"; write parent="<container-id>" only for shapes inside a container
 6. Escape special chars in values: &lt; &gt; &amp; &quot;
+
+A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target (a cell with source or target is always an edge). vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically. Write parent only for a shape inside a container, and an mxGeometry element only for edge waypoints or for a separate label cell placed on an edge: <mxCell id="9" value="yes" style="edgeLabel;" parent="<edge id>" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>. An edge's own text simply goes in its value.
 
 Example (generate ONLY this - no wrapper tags):
 ${SWIMLANE_EXAMPLE}
+
+Styles: define a style used by several cells ONCE with <mxStyle name="..." value="..."/> before the cells and use the name in style like a CSS class; overrides after the name win. Name only styles that two or more cells share; names must not be draw.io's own style names (text, ellipse, rhombus, swimlane, label, image, blue, green, red, gray, yellow, orange, purple, pink). A definition applies to the call it is in. html=1 and whiteSpace=wrap are added automatically, never write them. Labels are HTML: use &lt;br&gt; for a line break, never \\n; a literal < or > is written &amp;lt; or &amp;gt;.
+${STYLE_CLASS_EXAMPLE}
 
 Notes:
 - For AWS diagrams, use **AWS 2025 icons**.
@@ -690,12 +701,12 @@ Operations:
 - add: Add a new cell. Provide cell_id (new unique id) and new_xml.
 - delete: Remove a cell. Cascade is automatic: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
 
-For update/add, new_xml must be a complete mxCell element including mxGeometry.
+For update/add, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target), with its complete style (named styles are not available in edit_diagram).
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
 Example - Add a rectangle:
-{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}
+{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
 
 Example - Delete container (children & edges auto-deleted):
 {"operations": [{"operation": "delete", "cell_id": "2"}]}`,
@@ -735,7 +746,7 @@ CRITICAL INSTRUCTIONS:
 3. Complete the remaining mxCell elements
 4. If still truncated, call append_diagram again with the next fragment
 
-Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" vertex="1">...' and complete the remaining elements.`,
+Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" x="40" y="40" w="120" h="60"/>' and complete the remaining elements.`,
                 inputSchema: z.object({
                     xml: z
                         .string()

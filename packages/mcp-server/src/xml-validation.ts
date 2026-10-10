@@ -334,22 +334,25 @@ function checkEntityReferences(xml: string): string | null {
 
 /** Check for nested mxCell tags using regex */
 function checkNestedMxCells(xml: string): string | null {
-    const cellTagPattern = /<\/?mxCell[^>]*>/g
+    // Quoted values may hold ">", so the tag ends at the first ">" outside them
+    const cellTagPattern = /<\/?mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*>/g
     const cellStack: number[] = []
     let cellMatch
     while ((cellMatch = cellTagPattern.exec(xml)) !== null) {
         const tag = cellMatch[0]
+        const nested =
+            "Invalid XML: Found nested mxCell tags. Cells should be siblings, not nested inside other mxCell elements."
+        const isLabelOrGeometry =
+            /\sas\s*=\s*["'](valueLabel|geometry)["']/.test(tag)
         if (tag.startsWith("</mxCell>")) {
             if (cellStack.length > 0) cellStack.pop()
-        } else if (!tag.endsWith("/>")) {
-            const isLabelOrGeometry =
-                /\sas\s*=\s*["'](valueLabel|geometry)["']/.test(tag)
-            if (!isLabelOrGeometry) {
-                cellStack.push(cellMatch.index)
-                if (cellStack.length > 1) {
-                    return "Invalid XML: Found nested mxCell tags. Cells should be siblings, not nested inside other mxCell elements."
-                }
-            }
+        } else if (tag.endsWith("/>")) {
+            // A self-closing cell inside an open one is nested too (or the
+            // open one lacks its </mxCell>; the auto-fix sorts that out)
+            if (cellStack.length > 0 && !isLabelOrGeometry) return nested
+        } else if (!isLabelOrGeometry) {
+            cellStack.push(cellMatch.index)
+            if (cellStack.length > 1) return nested
         }
     }
     return null
@@ -556,6 +559,19 @@ export function validateMxCellStructure(
  * @param xml - The XML string to fix
  * @returns Object with fixed XML and list of fixes applied
  */
+/**
+ * A compact cell's last attribute is a number, and the model sometimes
+ * drops its closing quote: h="112/>. Only a cell whose earlier attributes
+ * are all properly quoted is touched, so a label that happens to contain
+ * such text is left alone.
+ */
+export function repairQuoteBeforeSlash(xml: string): string {
+    return xml.replace(
+        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)(\s+(?:x|y|w|h|width|height)="-?\d+(?:\.\d+)?)\s*\/>/g,
+        '<mxCell$1$2"/>',
+    )
+}
+
 export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
@@ -655,6 +671,29 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     )
     if (quotesFixed) {
         fixes.push("Fixed malformed attribute quotes")
+    }
+
+    // 6b. Missing closing quote on the last attribute of a compact cell
+    // (h="112/>), see repairQuoteBeforeSlash
+    const quoted = repairQuoteBeforeSlash(fixed)
+    if (quoted !== fixed) {
+        fixed = quoted
+        fixes.push("Added a missing closing quote before />")
+    }
+
+    // 6c. A compact cell written without the slash: <mxCell ... h="60">
+    // followed by the next cell, a definition or the end. Only cells that
+    // carry a size or a connection, so an open container stays open.
+    const slashless =
+        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)\s*>(?=\s*(?:<mxCell\b|<mxStyle\b|$))/g
+    const closed = fixed.replace(slashless, (tag, attrText: string) =>
+        /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText)
+            ? `<mxCell${attrText}/>`
+            : tag,
+    )
+    if (closed !== fixed) {
+        fixed = closed
+        fixes.push("Closed compact cells written without the slash")
     }
 
     // 7. Fix malformed closing tags
@@ -987,16 +1026,39 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
             /<mxCell\s/.test(trimmed) &&
             !trimmed.endsWith("/>") &&
             !trimmed.endsWith("</mxCell>")
+        // A self-closing (compact) cell is the next sibling too
+        const isSelfClosingCell =
+            /<mxCell\s/.test(trimmed) && trimmed.endsWith("/>")
         const isCloseCell = trimmed === "</mxCell>"
+        // The last cell's closing tag may share its line with the wrapper's
+        const startsWithClose = !isCloseCell && trimmed.startsWith("</mxCell>")
 
-        if (isOpenCell) {
+        if (isOpenCell || isSelfClosingCell) {
             if (cellDepth > 0) {
                 const indent = line.match(/^(\s*)/)?.[1] || ""
                 newLines.push(indent + "</mxCell>")
                 trueNestedFixed++
-                pendingCloseRemoval++
+                // The open cell's own </mxCell> is removed later, when there
+                // is one before the next open cell; a cell that simply lacks
+                // its closing tag has none to remove
+                const nextOpen = lines2.findIndex(
+                    (l, j) =>
+                        j > i &&
+                        /<mxCell\s/.test(l.trim()) &&
+                        !l.trim().endsWith("/>"),
+                )
+                const nextClose = lines2.findIndex(
+                    (l, j) => j > i && l.trim().startsWith("</mxCell>"),
+                )
+                if (
+                    isOpenCell ||
+                    (nextClose !== -1 &&
+                        (nextOpen === -1 || nextClose < nextOpen))
+                ) {
+                    pendingCloseRemoval++
+                }
             }
-            cellDepth = 1
+            cellDepth = isOpenCell ? 1 : 0
             newLines.push(line)
         } else if (isCloseCell) {
             if (pendingCloseRemoval > 0) {
@@ -1005,6 +1067,9 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
                 cellDepth = Math.max(0, cellDepth - 1)
                 newLines.push(line)
             }
+        } else if (startsWithClose && pendingCloseRemoval > 0) {
+            pendingCloseRemoval--
+            newLines.push(line.replace("</mxCell>", ""))
         } else {
             newLines.push(line)
         }
