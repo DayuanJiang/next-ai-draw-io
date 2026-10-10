@@ -9,6 +9,7 @@
 
 import {
     indent,
+    STYLE_CLASS_EXAMPLE,
     SWIMLANE_EXAMPLE,
     TWO_EDGES_EXAMPLE,
     WAYPOINT_EXAMPLE,
@@ -26,12 +27,12 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - The preview page has History (it saves a snapshot before every AI change and can restore any of the last 20 versions) and Download. You can make changes freely; nothing is lost.
 
 ## The XML you send
-Single page (create_new_diagram, add_page): send ONLY the mxCell elements. The server adds <mxfile>, <mxGraphModel>, <root> and the root cells id="0" and id="1".
+Single page (create_new_diagram, add_page): send ONLY the named styles and the mxCell elements. The server adds <mxfile>, <mxGraphModel>, <root> and the root cells id="0" and id="1", expands named styles (see Styles), adds html=1 to every cell and whiteSpace=wrap to shapes.
 
-    <mxCell id="2" value="Label" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+    <mxCell id="2" value="Label" style="rounded=1;" vertex="1" parent="1">
       <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
     </mxCell>
-    <mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;entryX=0;entryY=0.5;endArrow=classic;html=1;" edge="1" parent="1" source="2" target="4">
+    <mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="2" target="4">
       <mxGeometry relative="1" as="geometry"/>
     </mxCell>
 
@@ -59,7 +60,7 @@ ${indent(SWIMLANE_EXAMPLE)}
 ## Edge routing rules
 Rule 1: Never let two edges share a path. Two edges between the same nodes exit and enter at different points (exitY=0.3 for the first, exitY=0.7 for the second, not both 0.5).
 Rule 2: For bidirectional connections (A to B and B to A), use opposite sides: A exits right (exitX=1) into the left of B (entryX=0); B exits left (exitX=0) into the right of A (entryX=1).
-Rule 3: Always set exitX, exitY, entryX and entryY in the edge style, e.g. style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;endArrow=classic;".
+Rule 3: Always set exitX, exitY, entryX and entryY in the edge style, e.g. style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;".
 Rule 4: Route edges AROUND shapes in the way. Before drawing an edge, find every shape between source and target; if one is in the path, add waypoints. Route diagonal connections along the outside of the diagram, not through the middle. Keep 20-30px clearance from shapes. An edge must never cross another shape's box.
 Rule 5: Plan the layout first. Organize shapes into rows or columns following the flow, space them 150-200px apart so edges have room, and prefer one flow direction (left to right or top to bottom).
 Rule 6: Use 2-3 waypoints for L-shaped or U-shaped paths. Each change of direction needs a waypoint, and segments should be horizontal or vertical.
@@ -80,20 +81,26 @@ Waypoints go inside <Array as="points"> in the edge geometry. Example: Hotfix (r
 ${indent(WAYPOINT_EXAMPLE)}
 
 ## Styles
-- Shapes: rounded=1, fillColor=#hex, strokeColor=#hex, whiteSpace=wrap;html=1;
-- Edges: endArrow=classic, block, open or none; startArrow=none or classic; curved=1; edgeStyle=orthogonalEdgeStyle
-- Text: fontSize=14, fontStyle=1 (bold), align=center, left or right
+Define each style used by several cells ONCE, as a named style before the cells, and use the name in the cells like a CSS class. A cell's style can combine a shape token, a name and overrides; later pairs win. Name only styles that two or more cells share; a style used by one cell stays inline. Names must not be draw.io's own style names: shapes such as text, ellipse, rhombus, swimlane, label, image, and colors such as blue, green, red, gray, yellow, orange, purple, pink. A definition applies to the call it is in: each create_new_diagram or add_page call defines the names it uses. The server expands the names, so the saved file is standard draw.io XML.
+
+${indent(STYLE_CLASS_EXAMPLE)}
+
+- NEVER write html=1 or whiteSpace=wrap: the server adds html=1 to every cell and whiteSpace=wrap to shapes. Labels are HTML: use &lt;br&gt; for a line break and &lt;b&gt; for bold, never \\n; a literal < or > in a label is written &amp;lt; or &amp;gt;.
+- Do NOT repeat what draw.io already uses. For a plain shape: rounded=0, align=center, verticalAlign=middle, fontSize=12, strokeWidth=1, fillColor=#ffffff, strokeColor=#000000, fontColor=#000000. For an edge: endArrow=classic, strokeColor=#000000. Writing one of them is right only when it overrides what a name or the shape sets: an edge is rounded by default, so rounded=0 on an edge is a real setting, and a text cell is left/top aligned by default, so there align=center or verticalAlign=middle are real settings.
+- Shapes: rounded=1, fillColor=#hex, strokeColor=#hex
+- Edges: endArrow=block, open or none; startArrow=classic; curved=1; dashed=1; edgeStyle=orthogonalEdgeStyle
+- Text: fontSize=14, fontStyle=1 (bold), align=center or right
 - Animated connectors: add flowAnimation=1 to the edge style.
 
 ## Minimal style
 When the user asks for a minimal, plain, black-and-white or unstyled diagram, use these rules instead of the styles above:
 - No fillColor, strokeColor, rounded, fontSize, fontStyle or hex colors.
-- Shapes use style "whiteSpace=wrap;html=1;", edges use "html=1;endArrow=classic;".
-- Containers that hold other shapes use "whiteSpace=wrap;html=1;fillColor=none;" so they do not cover their children.
+- Shapes have no style, or only the shape (ellipse, rhombus); edges have edgeStyle=orthogonalEdgeStyle plus the exit and entry points from the routing rules, nothing else.
+- Containers that hold other shapes use "fillColor=none;" so they do not cover their children.
 - Keep at least 50px between elements, and follow all edge routing rules strictly.
 
 ## Editing with edit_diagram
-- update replaces a cell: send the complete mxCell including mxGeometry, with the same id as cell_id.
+- update replaces a cell: send the complete mxCell including mxGeometry, with the same id as cell_id. Named styles are not available here: write each cell's complete style.
 - add inserts a new cell with a new id. One cell per operation.
 - delete removes a cell. Its children and every edge connected to it are deleted too, so give only the container's id.
 - All-or-nothing: if any operation fails, nothing is applied. A rejected call includes the current XML of the page; rebuild your operations on it and retry.

@@ -2,6 +2,7 @@ import { type ClassValue, clsx } from "clsx"
 import * as pako from "pako"
 import { twMerge } from "tailwind-merge"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+import { readStyleClasses } from "@/packages/mcp-server/src/style-classes.ts"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -41,7 +42,9 @@ export function isRealDiagram(xml: string | undefined | null): boolean {
  * @returns true if XML appears complete, false if truncated or empty
  */
 export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
-    const trimmed = xml?.trim() || ""
+    // Named style definitions before the cells are not cells: output cut off
+    // right after them is incomplete
+    const trimmed = readStyleClasses(xml || "").xml.trim()
     if (!trimmed) return false
 
     // Find position of last complete mxCell ending (either /> or </mxCell>)

@@ -10,6 +10,7 @@ import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
 import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
+import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 
 const DEBUG = process.env.NODE_ENV === "development"
 
@@ -575,7 +576,10 @@ Use display_diagram to create the complete diagram, or edit_diagram to change th
         // Detect if LLM incorrectly started fresh instead of continuing
         // LLM should only output bare mxCells now, so wrapper tags indicate error
         const trimmed = xml.trim()
+        // Definitions at the start are a restart only once cells were written
         const isFreshStart =
+            (trimmed.startsWith("<mxStyle") &&
+                hasCells(partialXmlRef.current)) ||
             trimmed.startsWith("<mxGraphModel") ||
             trimmed.startsWith("<root") ||
             trimmed.startsWith("<mxfile") ||

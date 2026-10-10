@@ -2,7 +2,13 @@
  * A whole new diagram written by the model, for the create_new_diagram tool
  * and the web app's display_diagram tool.
  */
-import { normalizeToMxfile, wrapCellsInModel } from "./pages.ts"
+import { hasCells, normalizeToMxfile, wrapCellsInModel } from "./pages.ts"
+import {
+    addDefaultStyles,
+    applyStyleClasses,
+    readStyleClasses,
+    type StyleClasses,
+} from "./style-classes.ts"
 import { readAttributes } from "./xml-attributes.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
@@ -42,23 +48,54 @@ export function reservedIdError(input: string): string | null {
 }
 
 /**
- * Bare cells get the wrapper and root cells first, since the strict parser
- * rejects several top-level elements. Then the XML is validated and
- * auto-fixed while it is still a bare model, where duplicate ids are
- * renamed, and finally turned into an <mxfile>.
+ * The named style definitions are taken out first (style-classes.ts). Bare
+ * cells then get the wrapper and root cells, since the strict parser rejects
+ * several top-level elements. Then the XML is validated and auto-fixed while
+ * it is still a bare model, where duplicate ids are renamed. The names are
+ * expanded and the default styles added on the fixed XML, so repaired cells
+ * get them too, and finally it is turned into an <mxfile>.
  */
+/**
+ * Take the named style definitions out of the model's XML (style-classes.ts).
+ * Returns the error for the model when a definition never closed or when
+ * nothing but definitions was sent.
+ */
+export function takeStyleDefinitions(input: string): {
+    classes: StyleClasses
+    xml: string
+    error: string | null
+} {
+    const { classes, xml } = readStyleClasses(input)
+    let error: string | null = null
+    if (/<mxStyle\b/i.test(xml)) {
+        error =
+            'A named style definition is not closed. Write it as <mxStyle name="..." value="..."/> before the cells.'
+    } else if (classes.size > 0 && !hasCells(xml)) {
+        error =
+            "Only named style definitions were sent, no cells. Send the mxCell elements after the definitions."
+    }
+    return { classes, xml, error }
+}
+
 export function prepareNewDiagram(
     input: string,
     page: { pageId?: string; pageName?: string } = {},
 ): NewDiagram {
-    const reserved = reservedIdError(input)
+    const {
+        classes,
+        xml: cells,
+        error: styleError,
+    } = takeStyleDefinitions(input)
+    if (styleError) return { ok: false, error: styleError }
+    const reserved = reservedIdError(cells)
     if (reserved) return { ok: false, error: reserved }
-    let xml = wrapCellsInModel(input)
+    let xml = wrapCellsInModel(cells)
     const { valid, error, fixed, fixes } = validateAndFixXml(xml)
     if (fixed) xml = fixed
     if (!valid) {
         return { ok: false, error: `XML validation failed - ${error}` }
     }
+    xml = addDefaultStyles(applyStyleClasses(xml, classes))
     const normalized = normalizeToMxfile(xml, page)
     if (!normalized) {
         return {

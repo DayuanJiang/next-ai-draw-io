@@ -12,6 +12,12 @@ import {
 } from "@/lib/utils"
 import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
+import {
+    addDefaultStyles,
+    applyStyleClasses,
+    edgeIdsOf,
+    readStyleClasses,
+} from "@/packages/mcp-server/src/style-classes.ts"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -71,9 +77,14 @@ export function useDiagramStreaming({
     // so far. The tool handler validates and loads the final diagram.
     const handleDisplayChart = useCallback(
         (xml: string) => {
-            const completeCells = extractCompleteMxCells(xml || "")
+            // Named styles come before the cells, so the ones written so
+            // far are known by the time their cells stream in
+            const { classes, xml: cellsXml } = readStyleClasses(xml || "")
+            const completeCells = extractCompleteMxCells(cellsXml)
             if (!completeCells) return
-            const convertedXml = convertToLegalXml(completeCells)
+            const convertedXml = addDefaultStyles(
+                applyStyleClasses(convertToLegalXml(completeCells), classes),
+            )
             if (convertedXml === previousXML.current) return
 
             // Skip this update while the cells written so far don't parse
@@ -202,9 +213,17 @@ export function useDiagramStreaming({
             if (lastProcessedXmlRef.current.get(opsKey) === ops) continue
             lastProcessedXmlRef.current.set(opsKey, ops)
             try {
+                const edges = edgeIdsOf(originalXml)
                 const { result } = applyDiagramOperations(
                     originalXml,
-                    completeOps,
+                    completeOps.map((op) =>
+                        op.new_xml
+                            ? {
+                                  ...op,
+                                  new_xml: addDefaultStyles(op.new_xml, edges),
+                              }
+                            : op,
+                    ),
                 )
                 if (lastProcessedXmlRef.current.get(resultKey) === result) {
                     continue

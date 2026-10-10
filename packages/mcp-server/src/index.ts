@@ -48,7 +48,11 @@ import {
 } from "./http-server.ts"
 import { parseDrawioFileContent } from "./load-diagram.ts"
 import { log } from "./logger.ts"
-import { prepareNewDiagram, reservedIdError } from "./new-diagram.ts"
+import {
+    prepareNewDiagram,
+    reservedIdError,
+    takeStyleDefinitions,
+} from "./new-diagram.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
@@ -66,6 +70,7 @@ import {
 } from "./pages.ts"
 import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
+import { addDefaultStyles, applyStyleClasses } from "./style-classes.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -336,11 +341,11 @@ Before using icon shapes (AWS, Azure, GCP, Kubernetes, Cisco...), call get_shape
 
 Accepted xml:
 1) Only the mxCell elements of one page (recommended). The server adds <mxfile>, <mxGraphModel>, <root> and the root cells "0" and "1":
-<mxCell id="2" value="Shape" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="2" value="Shape" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>
 2) A bare <mxGraphModel> with <root> (one page).
 3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent="1" for top-level shapes, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600.`,
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent="1" for top-level shapes, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.`,
         inputSchema: {
             xml: z
                 .string()
@@ -592,7 +597,7 @@ registerWriteTool(
             "For add/update, new_xml must be a complete mxCell element including mxGeometry. No XML comments. " +
             'Every " inside new_xml must be escaped as \\" in the JSON.\n\n' +
             "Example - Add a rectangle on the default (first) page:\n" +
-            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=0;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
+            '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\"><mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/></mxCell>"}]}\n\n' +
             "Example - Delete a cell on the default page:\n" +
             '{"operations": [{"operation": "delete", "cell_id": "rect-1"}]}',
         inputSchema: {
@@ -1587,14 +1592,28 @@ registerWriteTool(
 
             // If caller provided XML, validate it before splicing it in so we
             // never get a half-broken mxfile written to the session.
-            const reserved = xml && reservedIdError(xml)
+            // Named style definitions come out first and are expanded on the
+            // validated XML, like prepareNewDiagram
+            const {
+                classes,
+                xml: startXml,
+                error: styleError,
+            } = takeStyleDefinitions(xml ?? "")
+            if (styleError) {
+                return {
+                    content: [{ type: "text", text: `Error: ${styleError}` }],
+                    isError: true,
+                }
+            }
+            const reserved = startXml && reservedIdError(startXml)
             if (reserved) {
                 return {
                     content: [{ type: "text", text: `Error: ${reserved}` }],
                     isError: true,
                 }
             }
-            let cleanXml: string | undefined = xml && wrapCellsInModel(xml)
+            let cleanXml: string | undefined =
+                startXml && wrapCellsInModel(startXml)
             if (cleanXml) {
                 const { valid, error, fixed, fixes } =
                     validateAndFixXml(cleanXml)
@@ -1615,6 +1634,9 @@ registerWriteTool(
                         isError: true,
                     }
                 }
+                cleanXml = addDefaultStyles(
+                    applyStyleClasses(cleanXml, classes),
+                )
             }
 
             let info

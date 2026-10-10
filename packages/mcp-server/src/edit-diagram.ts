@@ -12,6 +12,7 @@ import {
     type DiagramOperation,
 } from "./diagram-operations.ts"
 import { type PageSelector, projectPage } from "./pages.ts"
+import { addDefaultStyles, edgeIdsOf } from "./style-classes.ts"
 import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.ts"
 
 export type EditOutcome =
@@ -48,9 +49,17 @@ export function editDiagram(
     const fixes: string[] = []
     const prepared: DiagramOperation[] = []
 
+    // Edges already on the page, so a label added to one is not wrapped
+    const edges = edgeIdsOf(xml)
     for (const op of operations) {
         if (op.operation === "delete" || !op.new_xml) {
             prepared.push(op)
+            continue
+        }
+        if (/<mxStyle\b/i.test(op.new_xml)) {
+            errors.push(
+                `${op.operation} ${op.cell_id}: named styles (mxStyle) are not available in edit_diagram; write the cell's complete style`,
+            )
             continue
         }
         // Checked before validation: several cells fail the strict parser
@@ -71,7 +80,12 @@ export function editDiagram(
         if (check.fixed) {
             fixes.push(`${op.cell_id}: ${check.fixes.join(", ")}`)
         }
-        prepared.push({ ...op, new_xml: check.fixed ?? op.new_xml })
+        // The defaults the model is told not to write (style-classes.ts),
+        // added after the fixes so a repaired cell gets them too
+        prepared.push({
+            ...op,
+            new_xml: addDefaultStyles(check.fixed ?? op.new_xml, edges),
+        })
     }
     if (errors.length > 0) return { ok: false, errors, pageError: false }
 

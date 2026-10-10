@@ -4,6 +4,7 @@
  */
 
 import {
+    STYLE_CLASS_EXAMPLE,
     SWIMLANE_EXAMPLE,
     TWO_EDGES_EXAMPLE,
     WAYPOINT_EXAMPLE,
@@ -102,6 +103,7 @@ When using edit_diagram tool:
 - Use operations: update (modify cell by id), add (new cell), delete (remove cell by id)
 - For update/add: provide cell_id and complete new_xml (full mxCell element including mxGeometry)
 - For delete: only cell_id is needed
+- Named styles are not available in edit_diagram: write each cell's complete style
 - Find the cell_id from "Current diagram XML" in system context
 - Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" vertex=\\"1\\" parent=\\"1\\">\\n  <mxGeometry x=\\"100\\" y=\\"100\\" width=\\"120\\" height=\\"60\\" as=\\"geometry\\"/>\\n</mxCell>"}]}
 - Example delete: {"operations": [{"operation": "delete", "cell_id": "5"}]}
@@ -111,7 +113,7 @@ When using edit_diagram tool:
 
 ## Draw.io XML Structure Reference
 
-**IMPORTANT:** You only generate the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically.
+**IMPORTANT:** You only generate the named styles and the mxCell elements. The wrapper structure and root cells (id="0", id="1") are added automatically. A named style is written before the cells as <mxStyle name="n" value="...style pairs..."/>; a cell uses it by putting the name among its style tokens (see Styles).
 
 Example - generate ONLY this:
 \`\`\`xml
@@ -121,7 +123,7 @@ Example - generate ONLY this:
 \`\`\`
 
 CRITICAL RULES:
-1. Generate ONLY mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
+1. Generate ONLY mxStyle definitions and mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
 2. Do NOT include root cells (id="0" or id="1") - they are added automatically
 3. ALL mxCell elements must be siblings - NEVER nest mxCell inside another mxCell
 4. Use unique sequential IDs starting from "2"
@@ -129,14 +131,14 @@ CRITICAL RULES:
 
 Shape (vertex) example:
 \`\`\`xml
-<mxCell id="2" value="Label" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+<mxCell id="2" value="Label" style="rounded=1;" vertex="1" parent="1">
   <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
 </mxCell>
 \`\`\`
 
 Connector (edge) example:
 \`\`\`xml
-<mxCell id="3" style="endArrow=classic;html=1;" edge="1" parent="1" source="2" target="4">
+<mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="2" target="4">
   <mxGeometry relative="1" as="geometry"/>
 </mxCell>
 
@@ -153,7 +155,7 @@ When creating edges/connectors, you MUST follow these rules to avoid overlapping
 
 **Rule 3: Always specify exitX, exitY, entryX, entryY explicitly**
 - Every edge MUST have these 4 attributes set in the style
-- Example: style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;endArrow=classic;"
+- Example: style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.3;entryX=0;entryY=0.3;"
 
 **Rule 4: Route edges AROUND intermediate shapes (obstacle avoidance) - CRITICAL!**
 - Before creating an edge, identify ALL shapes positioned between source and target
@@ -195,10 +197,14 @@ When creating edges/connectors, you MUST follow these rules to avoid overlapping
 
 // Style instructions - only included when minimalStyle is false
 const STYLE_INSTRUCTIONS = `
-Common styles:
-- Shapes: rounded=1 (rounded corners), fillColor=#hex, strokeColor=#hex
-- Edges: endArrow=classic/block/open/none, startArrow=none/classic, curved=1, edgeStyle=orthogonalEdgeStyle
-- Text: fontSize=14, fontStyle=1 (bold), align=center/left/right
+## Styles
+Define each style used by several cells ONCE, as a named style before the cells, and use the name in the cells like a CSS class. A cell's style can combine a shape token, a name and overrides; later pairs win. Name only styles that two or more cells share; a style used by one cell stays inline. Names must not be draw.io's own style names: shapes such as text, ellipse, rhombus, swimlane, label, image, and colors such as blue, green, red, gray, yellow, orange, purple, pink. A definition applies to the call it is in: each display_diagram call defines the names it uses. The app expands the names, so the saved file is standard draw.io XML.
+\`\`\`xml
+${STYLE_CLASS_EXAMPLE}
+\`\`\`
+- NEVER write html=1 or whiteSpace=wrap: the app adds html=1 to every cell and whiteSpace=wrap to shapes. Labels are HTML: use &lt;br&gt; for a line break and &lt;b&gt; for bold, never \\n; a literal < or > in a label is written &amp;lt; or &amp;gt;.
+- Do NOT repeat what draw.io already uses. For a plain shape: rounded=0, align=center, verticalAlign=middle, fontSize=12, strokeWidth=1, fillColor=#ffffff, strokeColor=#000000, fontColor=#000000. For an edge: endArrow=classic, strokeColor=#000000. Writing one of them is right only when it overrides what a name or the shape sets: an edge is rounded by default, so rounded=0 on an edge is a real setting, and a text cell is left/top aligned by default, so there align=center or verticalAlign=middle are real settings.
+- Keys: shapes rounded=1, fillColor=#hex, strokeColor=#hex; edges endArrow=block/open/none, startArrow=classic, curved=1, dashed=1, edgeStyle=orthogonalEdgeStyle; text fontSize=14, fontStyle=1 (bold), align=center/right.
 `
 
 // Minimal style instruction - skip styling and focus on layout (prepended to prompt for emphasis)
@@ -208,13 +214,13 @@ const MINIMAL_STYLE_INSTRUCTION = `
 ### No Styling - Plain Black/White Only
 - NO fillColor, NO strokeColor, NO rounded, NO fontSize, NO fontStyle
 - NO color attributes (no hex colors like #ff69b4)
-- Style: "whiteSpace=wrap;html=1;" for shapes, "html=1;endArrow=classic;" for edges
+- Shapes: no style, or only the shape (ellipse, rhombus). Edges: edgeStyle=orthogonalEdgeStyle plus the exit/entry points from the Edge Routing Rules, nothing else. html=1 and whiteSpace=wrap are added automatically.
 - IGNORE all color/style examples below
 
 ### Container/Group Shapes - MUST be Transparent
 - For container shapes (boxes that contain other shapes): use "fillColor=none;" to make background transparent
 - This prevents containers from covering child elements
-- Example: style="whiteSpace=wrap;html=1;fillColor=none;" for container rectangles
+- Example: style="fillColor=none;" for container rectangles
 
 ### Focus on Layout Quality
 Since we skip styling, STRICTLY follow the "Edge Routing Rules" section below:
@@ -235,7 +241,7 @@ const EXTENDED_ADDITIONS = `
 ### display_diagram Details
 
 **VALIDATION RULES** (XML will be rejected if violated):
-1. Generate ONLY mxCell elements - wrapper tags and root cells are added automatically
+1. Generate ONLY mxStyle definitions and mxCell elements - wrapper tags and root cells are added automatically
 2. All mxCell elements must be siblings - never nested inside other mxCell elements
 3. Every mxCell needs a unique id attribute (start from "2")
 4. Every mxCell needs a valid parent attribute (use "1" for top-level, or container-id for grouped)
@@ -312,7 +318,7 @@ ${TWO_EDGES_EXAMPLE}
 
 ### Edge with single waypoint (simple detour):
 \`\`\`xml
-<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=classic;" edge="1" parent="1" source="a" target="b">
+<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="a" target="b">
   <mxGeometry relative="1" as="geometry">
     <Array as="points">
       <mxPoint x="300" y="150"/>
