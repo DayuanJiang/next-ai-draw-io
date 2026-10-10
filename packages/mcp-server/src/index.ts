@@ -609,22 +609,14 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
             log.info(`Diagram content set successfully (${pageSummary})`)
 
             // Only the root cells: the model asked for an empty canvas
-            // (several empty pages get the page summary below)
-            if (!hasCells(xml) && pages.length <= 1) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Canvas cleared: one blank page. The previous diagram is in History.",
-                        },
-                    ],
-                }
-            }
-
+            // (several empty pages get the page summary)
+            const cleared = !hasCells(xml) && pages.length <= 1
             const content: CallToolResult["content"] = [
                 {
                     type: "text",
-                    text: `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}`,
+                    text: cleared
+                        ? "Canvas cleared: one blank page. The previous diagram is in History."
+                        : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}`,
                 },
             ]
             // The page on screen is the new document's first page
@@ -1353,7 +1345,10 @@ async function captureScreenshot(
     // The tab never polled (right after start_session, or the state was
     // just restored from disk), so an export would only time out
     if (getState(sessionId)?.lastPolled === undefined) {
-        return { ok: false, note: "The preview tab is not open." }
+        return {
+            ok: false,
+            note: "The preview tab is not open, or has not connected yet.",
+        }
     }
     if (!hasCells(xml)) {
         return { ok: false, note: "The diagram is empty." }
