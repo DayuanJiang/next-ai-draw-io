@@ -257,6 +257,25 @@ describe("MCP server wiring", () => {
             text.endsWith(`\n\n## Custom Instructions\n${CUSTOM_RULE}`),
         ).toBe(true)
     })
+
+    it("advertises topic on get_drawing_guide", async () => {
+        const resp = await send("tools/list", {})
+        const guide = resp.result.tools.find(
+            (t: { name: string }) => t.name === "get_drawing_guide",
+        )
+        expect(guide?.inputSchema?.properties?.topic).toBeTruthy()
+    })
+
+    it("serves the table XML reference with topic=tables", async () => {
+        const resp = await send("tools/call", {
+            name: "get_drawing_guide",
+            arguments: { topic: "tables" },
+        })
+        expect(resp.result.isError).toBeFalsy()
+        const text: string = resp.result.content[0].text
+        expect(text).toContain("shape=table")
+        expect(text).not.toContain("Edge routing rules")
+    })
 })
 
 describe("load_diagram dual-source arguments", () => {

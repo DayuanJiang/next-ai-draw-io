@@ -92,6 +92,8 @@ ${indent(STYLE_CLASS_EXAMPLE)}
 - Edges: endArrow=block, open or none; startArrow=classic; curved=1; dashed=1; edgeStyle=orthogonalEdgeStyle
 - Text: fontSize=14, fontStyle=1 (bold), align=center or right
 - Animated connectors: add flowAnimation=1 to the edge style.
+- Edge options: dashed=1; strokeWidth=2; edgeStyle=elbowEdgeStyle;elbow=vertical (or horizontal); jumpStyle=arc;jumpSize=10 where edges cross.
+For tables, layers or groups, call get_drawing_guide with topic=tables, layers or groups.
 
 ## Minimal style
 When the user asks for a minimal, plain, black-and-white or unstyled diagram, use these rules instead of the styles above:

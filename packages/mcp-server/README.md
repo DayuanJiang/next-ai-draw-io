@@ -125,7 +125,7 @@ Use the standard MCP configuration with:
 |------|-------------|
 | `start_session` | Opens browser with real-time diagram preview; the result includes the drawing rules. Pass `session_id` to continue a saved diagram |
 | `list_saved_diagrams` | List the auto-saved diagrams of earlier sessions, newest first, with their pages |
-| `get_drawing_guide` | Return the drawing rules again, for example after a long conversation was compacted |
+| `get_drawing_guide` | Return the drawing rules again, for example after a long conversation was compacted, or, with `topic`, a short XML reference for tables, layers or groups |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4`, `azure2`, or `kubernetes` |
 | `create_new_diagram` | Create a new diagram from XML; a plain list of `mxCell` elements is enough |
 | `load_diagram` | Load a `.drawio` or `.drawio.svg` file into the session, from a `path` on disk or from its `xml` content (handles compressed files) |

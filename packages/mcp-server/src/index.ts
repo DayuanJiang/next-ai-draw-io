@@ -89,6 +89,7 @@ import {
 import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
 import { addDefaultStyles, applyStyleClasses } from "./style-classes.ts"
+import { XML_REFERENCE } from "./xml-reference.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -277,11 +278,26 @@ server.registerTool(
         title: "Get drawing guide",
         description:
             "Return the drawing guide: XML format, layout, edge routing, style and editing rules. " +
-            "start_session already returns it; call this only if the guide is no longer in your context.",
-        inputSchema: {},
+            "start_session already returns it; call this only if the guide is no longer in your context. " +
+            "With topic, returns a short XML reference for tables, layers or groups.",
+        inputSchema: {
+            topic: z
+                .enum(["tables", "layers", "groups"])
+                .optional()
+                .describe(
+                    "Return only the XML reference for this topic instead of the whole guide.",
+                ),
+        },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => ({ content: [{ type: "text", text: guideText() }] }),
+    async ({ topic }) => ({
+        content: [
+            {
+                type: "text",
+                text: topic ? XML_REFERENCE[topic] : guideText(),
+            },
+        ],
+    }),
 )
 
 // Tool: get_shape_library
