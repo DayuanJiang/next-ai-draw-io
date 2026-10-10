@@ -243,6 +243,16 @@ describe("describeChanges", () => {
         )
     })
 
+    it("keeps the words of an HTML label apart and decodes its spaces", () => {
+        const lines = XML_A.replace(
+            'value="Hello"',
+            'value="Line1&lt;br&gt;Line2&amp;nbsp;end &amp;amp; more"',
+        )
+        expect(describeChanges(XML_A, lines)).toContain(
+            'modified box1 ("Line1 Line2 end & more")',
+        )
+    })
+
     it("cuts long labels at 30 characters", () => {
         const long = "a".repeat(40)
         const summary = describeChanges(
@@ -291,7 +301,7 @@ describe("describeChanges", () => {
             `${BOX2}<mxCell id="box1"`,
         )
         expect(describeChanges(XML_A_PLUS_BOX2, reordered)).toBe(
-            "Since you last saw it, the user changed the diagram: cell order or page settings changed.",
+            "Since you last saw it, the user changed the diagram: the order of the cells changed.",
         )
     })
 })

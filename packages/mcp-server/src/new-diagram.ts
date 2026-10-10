@@ -110,8 +110,14 @@ export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
  */
 export function truncatedCellError(input: string): string | null {
     if (/<(mxGraphModel|mxfile)\b/.test(input)) return null
-    const stripped = input.replace(/<!--[\s\S]*?-->/g, "")
-    if (isMxCellXmlComplete(stripped)) return null
+    // Comments, and closing tags such as </mxCell/> that the auto-fix
+    // repairs, are no cut
+    const stripped = input
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<\/([a-zA-Z][a-zA-Z0-9]*)\s*\/>/g, "</$1>")
+    // No cell at all: the validator's message fits better
+    if (!/<mxCell\b/.test(stripped) || isMxCellXmlComplete(stripped))
+        return null
     return `The XML ends inside an unfinished mxCell, so the output was probably cut off. Nothing was drawn. It ended with:\n${input.slice(-300)}\nResend the complete diagram, or send the first cells now and add the remaining cells with edit_diagram add operations.`
 }
 

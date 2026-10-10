@@ -125,6 +125,22 @@ describe("prepareNewDiagram with cut-off output", () => {
         expect(prepareNewDiagram(cells).ok).toBe(true)
     })
 
+    it("leaves a closing tag the auto-fix repairs to the auto-fix", () => {
+        // </mxCell/> is a typo, not a cut
+        const typo = A.replace("</mxCell>", "</mxCell/>")
+        expect(truncatedCellError(typo)).toBeNull()
+        expect(prepareNewDiagram(typo).ok).toBe(true)
+    })
+
+    it("leaves input without any cell to the validator", () => {
+        for (const input of ["", "Here is the diagram"]) {
+            expect(truncatedCellError(input)).toBeNull()
+            const out = prepareNewDiagram(input)
+            expect(out.ok).toBe(false)
+            if (!out.ok) expect(out.error).not.toContain("cut off")
+        }
+    })
+
     it("never checks a full <mxfile>", () => {
         const cut = `<mxfile><diagram id="p1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="A" vertex="1" par`
         expect(truncatedCellError(cut)).toBeNull()

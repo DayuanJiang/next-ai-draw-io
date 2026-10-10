@@ -157,16 +157,17 @@ function pageCells(page: Element): Map<string, Element> {
 
 /** `id ("label")`: the cell's value without HTML, cut at 30 characters. */
 function describeCell(id: string, cell: Element): string {
-    // linkedom keeps &lt; &gt; &amp; encoded in attribute values
+    // getAttributeNode gives the decoded value (linkedom's getAttribute
+    // escapes it again); an HTML label then still holds tags and entities
     const label = (
-        cell.getAttribute("value") ??
-        cell.getAttribute("label") ??
-        ""
+        (cell.getAttributeNode("value") ?? cell.getAttributeNode("label"))
+            ?.value ?? ""
     )
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ")
         .replace(/&lt;/g, "<")
         .replace(/&gt;/g, ">")
-        .replace(/<[^>]*>/g, "")
-        .replace(/&nbsp;/g, " ")
+        .replace(/&quot;/g, '"')
         .replace(/&amp;/g, "&")
         .replace(/\s+/g, " ")
         .trim()
@@ -188,7 +189,7 @@ function listCells(cells: string[]): string {
  * have the same content.
  */
 export function describeChanges(lastSeenXml: string, liveXml: string): string {
-    if (!lastSeenXml) return ""
+    if (!lastSeenXml || lastSeenXml === liveXml) return ""
     const parse = (xml: string) => {
         const normalized = normalizeToMxfile(xml)
         return normalized ? parseMxfile(normalized) : null
@@ -247,7 +248,7 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
     // The fingerprint also covers the cell order (z-order) and anything in
     // <root> that is not a cell
     if (!clauses.length && !renames.length)
-        clauses.push("cell order or page settings changed")
+        clauses.push("the order of the cells changed")
     const intro = "Since you last saw it, the user changed the diagram"
     const body = clauses.length
         ? `${intro}: ${clauses.join("; ")}.`

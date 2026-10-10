@@ -16,8 +16,9 @@ export function isDrawioTheme(value: unknown): value is DrawioTheme {
     )
 }
 
-/** draw.io's name for a locale: lowercase, and "zh-tw" for Traditional Chinese */
+/** draw.io's name for a locale: lowercase, "zh-tw" for Traditional and "zh" for Simplified Chinese */
 export function toDrawioLang(locale: string): string {
     const lang = locale.toLowerCase()
-    return lang === "zh-hant" ? "zh-tw" : lang
+    if (lang === "zh-hant") return "zh-tw"
+    return lang === "zh-hans" ? "zh" : lang
 }

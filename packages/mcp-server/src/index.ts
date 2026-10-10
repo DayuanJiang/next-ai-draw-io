@@ -638,7 +638,7 @@ registerWriteTool(
             "Provide ONE of two mutually exclusive sources: 'path' (the server reads the file from disk — you do NOT need to read the file yourself or pass its XML through create_new_diagram) " +
             "or 'xml' (the raw file content you already have — from another tool, a repository read, or an API response — so no temporary file needs to be written first). " +
             "Both accept plain XML and draw.io's compressed save format. " +
-            ".drawio.svg (Editable SVG, the format export_diagram writes) is accepted too; a plain .svg or .png without embedded XML cannot be loaded.\n\n" +
+            ".drawio.svg (Editable SVG, the format export_diagram writes) is accepted too; .png files (also draw.io's editable PNG) and plain .svg files cannot be loaded.\n\n" +
             "After loading from 'path' (or from compressed 'xml'), call get_diagram before edit_diagram — you haven't seen the file's cell IDs yet. " +
             "Plain-XML 'xml' content you supplied yourself is already known and can be edited immediately.",
         inputSchema: {
@@ -1380,7 +1380,7 @@ server.registerTool(
     {
         title: "Export diagram",
         description:
-            "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io can open and edit again). " +
+            "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io and load_diagram can open again). " +
             "The format is auto-detected from the file extension, or can be specified explicitly.\n\n" +
             "Multi-page behaviour:\n" +
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +

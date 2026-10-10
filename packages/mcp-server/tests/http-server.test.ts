@@ -483,6 +483,10 @@ describe("draw.io embed parameters from the host config", () => {
         )
     })
 
+    it("reads the theme in any case", () => {
+        expect(drawioEmbedParams({ DRAWIO_UI: "Dark" })).toBe("dark=1&ui=dark")
+    })
+
     it("ignores a theme or language draw.io does not know", () => {
         expect(drawioEmbedParams({ DRAWIO_UI: "neon" })).toBe("dark=auto")
         expect(drawioEmbedParams({ DRAWIO_LANG: "en;drop" })).toBe("dark=auto")
@@ -497,6 +501,10 @@ describe("draw.io embed parameters from the host config", () => {
         }
         expect(drawioEmbedParams({ DRAWIO_LANG: "ja" })).toBe(
             "dark=auto&lang=ja",
+        )
+        // and "zh" for Simplified Chinese
+        expect(drawioEmbedParams({ DRAWIO_LANG: "zh-Hans" })).toBe(
+            "dark=auto&lang=zh",
         )
     })
 

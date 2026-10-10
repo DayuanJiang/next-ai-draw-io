@@ -824,7 +824,7 @@ export function drawioEmbedParams(
     env: NodeJS.ProcessEnv = process.env,
 ): string {
     const params = new URLSearchParams()
-    const ui = env.DRAWIO_UI ?? ""
+    const ui = (env.DRAWIO_UI ?? "").toLowerCase()
     const dark = (env.DRAWIO_DARK ?? "").toLowerCase()
     const lang = toDrawioLang(env.DRAWIO_LANG ?? "")
     if (["1", "true", "dark"].includes(dark)) {
