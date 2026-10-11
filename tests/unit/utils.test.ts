@@ -5,7 +5,6 @@ import {
     extractCompleteMxCells,
     extractDiagramXML,
     isRealDiagram,
-    replaceNodes,
 } from "@/lib/utils"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 
@@ -70,39 +69,6 @@ describe("extractCompleteMxCells", () => {
 const pageBox = (id: string) => `<mxCell id="${id}" vertex="1" parent="1"/>`
 const pageModel = (cells: string) =>
     `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`
-const pageOf = (id: string, cells: string) =>
-    `<diagram id="${id}" name="${id}">${pageModel(cells)}</diagram>`
-/** Ids of the shapes on a page (not the root cells) */
-const shapesOn = (xml: string, pageId: string) =>
-    Array.from(
-        new DOMParser()
-            .parseFromString(xml, "text/xml")
-            .querySelectorAll(`diagram[id="${pageId}"] mxCell`),
-    )
-        .map((cell) => cell.getAttribute("id"))
-        .filter((id) => id !== "0" && id !== "1")
-
-describe("replaceNodes", () => {
-    const two = `<mxfile>${pageOf("a", pageBox("A"))}${pageOf("b", pageBox("B"))}</mxfile>`
-
-    it("replaces the first page's cells by default", () => {
-        const out = replaceNodes(two, pageBox("N"))
-        expect(shapesOn(out, "a")).toEqual(["N"])
-        expect(shapesOn(out, "b")).toEqual(["B"])
-    })
-
-    it("replaces the given page's cells and keeps the others", () => {
-        const out = replaceNodes(two, pageBox("N"), "b")
-        expect(shapesOn(out, "a")).toEqual(["A"])
-        expect(shapesOn(out, "b")).toEqual(["N"])
-    })
-
-    it("uses the first page when the given page is not there", () => {
-        const out = replaceNodes(two, pageBox("N"), "zzz")
-        expect(shapesOn(out, "a")).toEqual(["N"])
-        expect(shapesOn(out, "b")).toEqual(["B"])
-    })
-})
 
 describe("extractDiagramXML", () => {
     const packed = (model: string) =>

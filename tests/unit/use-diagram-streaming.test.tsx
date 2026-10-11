@@ -103,6 +103,35 @@ describe("the streaming preview of display_diagram", () => {
         expect(loaded).not.toContain("mxStyle")
         expect(loaded).not.toContain('id="b"')
     })
+
+    it("fixes an unescaped & and HTML in a label, as the final diagram does", () => {
+        mocks.loadDiagram.mockClear()
+        const xml = `<mxCell id="a" value="R & D <b>team</b>" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`
+        renderHook(() =>
+            useDiagramStreaming({
+                messages: [
+                    {
+                        id: "m1",
+                        role: "assistant",
+                        parts: [
+                            {
+                                type: "tool-display_diagram",
+                                toolCallId: "draw-2",
+                                state: "input-streaming",
+                                input: { xml },
+                            },
+                        ],
+                    },
+                ] as any,
+                processedToolCallsRef: { current: new Set() },
+                editDiagramOriginalXmlRef: { current: new Map() },
+                loadedMessageIdsRef: { current: new Set() },
+            }),
+        )
+        expect(mocks.loadDiagram).toHaveBeenCalledTimes(1)
+        const loaded = mocks.loadDiagram.mock.calls[0][0]
+        expect(loaded).toContain('value="R &amp; D &lt;b&gt;team&lt;/b&gt;"')
+    })
 })
 
 describe("the streaming preview of edit_diagram", () => {

@@ -25,5 +25,3 @@ export function useDictionary() {
     }
     return dict
 }
-
-export default useDictionary
