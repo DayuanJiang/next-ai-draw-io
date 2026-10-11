@@ -186,8 +186,13 @@ const MATH_DOC = doc(
 
 // Dialogs and toggles, by draw.io action name (Actions.js); each is closed
 // again right after it opened. Insert > Template and Insert > Advanced >
-// PlantUML, which load files when used, are driven below. Left out on
-// purpose, to keep the package small: Mermaid (it loads its own code).
+// PlantUML, which load files when used, are driven below. Mermaid needs no
+// extra files: its converter is in js/extensions.min.js, which the editor
+// loads at startup. Left out on purpose, to keep the package small: the org
+// chart layout (it loads js/orgchart.min.js). Not covered either: images
+// from other websites in some templates (Org Chart avatars, Arista icons)
+// and the /drawio/proxy requests draw.io makes for them when exporting;
+// the copy has no proxy, a known limitation (see the README).
 const ACTIONS = [
     "editData",
     "editDiagram",

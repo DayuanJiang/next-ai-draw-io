@@ -217,7 +217,9 @@ docker run -d -p 8080:8080 jgraph/drawio
 
 Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL). The preview page loads nothing else from the internet, so with a local draw.io it works offline. One exception: shapes from the Material Design library show icons from `fonts.gstatic.com`.
 
-Without `DRAWIO_BASE_URL` the preview uses the trimmed draw.io copy bundled with this package. It has the editor, the shape libraries, the templates and PlantUML; features that load more code when used (Mermaid, for example) are not included. Set `DRAWIO_BASE_URL` to a full draw.io if you need them.
+Without `DRAWIO_BASE_URL` the preview uses the trimmed draw.io copy bundled with this package. It has the editor, the shape libraries, the templates, PlantUML and Mermaid; features that load more code when used (the org chart layout, for example) are not included. Set `DRAWIO_BASE_URL` to a full draw.io if you need them.
+
+Like the web app's bundled copy, it has no image proxy (`/drawio/proxy`): images from other websites, including the avatars in the Org Chart and Mind Map templates and the Arista icons in the network templates, show on the canvas only when online and are left out of PNG and SVG exports and version thumbnails. Insert such images from a file instead, or set `DRAWIO_BASE_URL` to a full draw.io (the `jgraph/drawio` Docker image includes the proxy). See [Offline deployment](https://github.com/DayuanJiang/next-ai-draw-io/blob/main/docs/en/offline-deployment.md).
 
 ## Troubleshooting
 
