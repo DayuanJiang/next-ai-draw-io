@@ -113,7 +113,7 @@ Use the standard MCP configuration with:
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
 - **Version History**: The last 20 versions appear as cards next to the canvas, with a thumbnail and what changed. Restore one, undo and redo the latest, or compare a version with the canvas; or ask the AI to undo (`restore_version`)
-- **Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io and `load_diagram` can open again) through `export_diagram`, or export an image from draw.io's **File > Export as** menu in the preview
+- **Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io and `load_diagram` can open again) through `export_diagram`, or from the download button in the preview's header
 - **Multi-page**: List, add, rename, and delete pages, and edit any page
 - **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, and its last 20 versions to `<session-id>.history.json`, so the diagram, History and undo survive a restart of the MCP client
 - **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
@@ -231,7 +231,7 @@ Like the web app's bundled copy, it has no image proxy (`/drawio/proxy`): images
 
 ### Classic preview page
 
-`DRAWIO_PREVIEW_UI=classic` opens the preview page of the previous releases: draw.io with a **History** dialog and a **Download** button, without the outline of the AI's changes, Ctrl+Z for them, the version cards and `get_selection`. It stays for one more release and is then removed.
+`DRAWIO_PREVIEW_UI=classic` opens the preview page of the previous releases: draw.io with a **History** dialog and a **Download** button, without the outline of the AI's changes, Ctrl+Z for them, the version cards, Compare and `get_selection`. It stays for one more release and is then removed.
 
 ## Troubleshooting
 

@@ -1,10 +1,12 @@
-import { History, Moon, Sun } from "lucide-react"
+import { Download, History, Moon, Sun } from "lucide-react"
 import { useMemo, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
 import { CompareDialog } from "@/components/canvas/compare-dialog"
 import { VersionStrip } from "@/components/canvas/version-strip"
 import { VersionsProvider } from "@/components/canvas/versions-context"
+import { SaveDialog } from "@/components/save-dialog"
 import { AppToaster } from "@/components/workspace/app-toaster"
+import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { DrawioSource } from "@/lib/drawio/drawio-config"
 import { cn } from "@/lib/utils"
@@ -21,20 +23,24 @@ const iconButton =
 /**
  * The MCP preview: the web app's canvas without the chat. A slim bar names
  * the session and the sync state; the versions strip, the version cards
- * (from the server's History) and Compare come from the shared canvas
- * components.
+ * (from the server's History), Compare and the export dialog come from the
+ * shared canvas components.
  */
 export function CanvasShell({ config }: { config: ShellConfig }) {
     const dict = useDictionary()
     const isDark = useSettingsStore((s) => s.isDark)
+    const { saveDiagramToFile } = useDiagram()
     const { status, sync } = useMcpSync(config)
     const versions = useNodeVersions(sync)
     const [panelOpen, setPanelOpen] = useState(true)
+    const [saveOpen, setSaveOpen] = useState(false)
     const drawioSource = useMemo<DrawioSource>(
         () => ({
             editorUrl: config.drawioBaseUrl,
             ui: config.drawioUi || undefined,
             lang: config.drawioLang || undefined,
+            // As the classic preview page: the user's own shape libraries
+            libraries: true,
         }),
         [config],
     )
@@ -91,10 +97,20 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     )}
                     <button
                         type="button"
+                        onClick={() => setSaveOpen(true)}
+                        aria-label={dict.workspace.export}
+                        title={dict.workspace.export}
+                        className={cn(iconButton, !hasVersions && "ml-auto")}
+                        data-testid="download"
+                    >
+                        <Download />
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => setDark(!isDark)}
                         aria-label={dict.shell.toggleTheme}
                         title={dict.shell.toggleTheme}
-                        className={cn(iconButton, !hasVersions && "ml-auto")}
+                        className={iconButton}
                         data-testid="theme-toggle"
                     >
                         {isDark ? <Sun /> : <Moon />}
@@ -117,6 +133,19 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     )}
                 </div>
                 <CompareDialog />
+                <SaveDialog
+                    open={saveOpen}
+                    onOpenChange={setSaveOpen}
+                    onSave={(filename, format) =>
+                        saveDiagramToFile(
+                            filename,
+                            format,
+                            undefined,
+                            dict.save.savedSuccessfully,
+                        )
+                    }
+                    defaultFilename={`diagram-${new Date().toLocaleDateString("sv-SE")}`}
+                />
                 <AppToaster />
             </div>
         </VersionsProvider>

@@ -256,6 +256,23 @@ describe("MCP sync after the server recreated its session", () => {
         })
     })
 
+    it("takes the picture of the recovered diagram, whose History entry came back without one", async () => {
+        const t = await inStep()
+        // The process restarted and read the file back: the text the tab
+        // last saw, so the canvas stays; History is saved without pictures
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S2", 1, "<mxfile>A</mxfile>"))
+        await poll
+        expect(t.loads).toHaveLength(1)
+        expect(t.posts()).toHaveLength(0)
+        t.nextExport().answer({ data: "<svg>A</svg>" })
+        await t.settle()
+        expect(t.next("POST", "/api/history-svg").body).toMatchObject({
+            stateId: "S2",
+            version: 1,
+        })
+    })
+
     it("shows the server's diagram and keeps the tab's in History", async () => {
         const t = await inStep()
         const poll = t.sync.poll()
@@ -526,6 +543,30 @@ describe("MCP sync thumbnails", () => {
         const push = t.next("POST")
         expect(push.body.xml).toBe("<mxfile>B edited</mxfile>")
         expect(atob(push.body.svg.split(",")[1])).toBe("<svg>edit</svg>")
+    })
+
+    it("takes the image once the user comes back to the write (an edit came before it)", async () => {
+        const { t, request } = await loadedB()
+        t.sync.onAutoSave("<mxfile>B edited</mxfile>")
+        request.answer({ data: "<svg>thumbnail</svg>" })
+        await t.settle()
+        expect(thumbnailPosts(t)).toHaveLength(0)
+        t.nextExport().answer({ data: "<svg>edit</svg>" })
+        await t.settle()
+        t.next("POST").answer({
+            status: 200,
+            body: { success: true, version: 4 },
+        })
+        await t.settle()
+        // Ctrl+Z: the canvas shows the write again
+        t.sync.onAutoSave("<mxfile>B</mxfile>")
+        t.nextExport().answer({ data: "<svg>B</svg>" })
+        await t.settle()
+        expect(thumbnailPosts(t).map((c) => c.body.version)).toEqual([3])
+        // The undo is pushed as any edit
+        t.nextExport().answer({ data: "<svg>B</svg>" })
+        await t.settle()
+        expect(t.next("POST", "/api/state").body.xml).toBe("<mxfile>B</mxfile>")
     })
 
     it("takes the image of a write loaded before draw.io was ready, once it is", async () => {

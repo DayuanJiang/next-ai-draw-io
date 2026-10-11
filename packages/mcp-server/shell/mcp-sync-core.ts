@@ -300,6 +300,9 @@ export function createMcpSync(options: SyncOptions): McpSync {
         version: number
         xml: string
     } | null = null
+    // Its picture was not taken because the user had changed the canvas by
+    // then: taken when the canvas shows the write again (an undo)
+    let thumbMissed = false
     let pendingMcpExport: ExportFormat | null = null
     let mcpExportSeq = 0
     let mcpExportId: string | null = null
@@ -409,6 +412,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
             decision.mode === "commit" && !sameDiagram(before, xml)
         // currentVersion is the write's version
         thumbExport = { stateId, version: currentVersion, xml }
+        thumbMissed = false
         setTimeout(captureThumbnail, 500)
     }
 
@@ -420,8 +424,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
         if (!t || !isReady) return
         canvas.export({ format: "svg" }, 5000).then((result) => {
             if (!result?.data || thumbExport !== t) return
-            if (!sameDiagram(latestXml, t.xml)) return
+            if (!sameDiagram(latestXml, t.xml)) {
+                thumbMissed = true
+                return
+            }
             thumbExport = null
+            thumbMissed = false
             postJson("/history-svg", {
                 sessionId,
                 svg: svgDataUrl(result.data),
@@ -552,6 +560,13 @@ export function createMcpSync(options: SyncOptions): McpSync {
             }
             if (mine && !sameDiagram(mine, s.xml)) {
                 pushState(mine, "", s.version)
+            } else if (s.xml && !s.blank && mine) {
+                // The canvas still shows the diagram the server recovered:
+                // its History entry came back without a picture (the file
+                // keeps none), take one now
+                thumbExport = { stateId, version: currentVersion, xml: s.xml }
+                thumbMissed = false
+                captureThumbnail()
             }
         } else if (s.xml) {
             // The server has a diagram this tab never showed (an AI write it
@@ -828,6 +843,16 @@ export function createMcpSync(options: SyncOptions): McpSync {
             latestXml = xml
             const commitCopy = awaitingCommitCopy
             awaitingCommitCopy = false
+            // The canvas is back at a write whose picture was not taken (an
+            // edit came first): take it now
+            if (
+                thumbMissed &&
+                thumbExport &&
+                sameDiagram(xml, thumbExport.xml)
+            ) {
+                thumbMissed = false
+                captureThumbnail()
+            }
             if (xml === lastXml || (commitCopy && sameDiagram(xml, lastXml))) {
                 return
             }

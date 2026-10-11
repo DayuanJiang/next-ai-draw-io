@@ -77,6 +77,20 @@ describe("shell draw.io URL", () => {
         expect(fixed.searchParams.get("ui")).toBe("kennedy")
         expect(fixed.searchParams.get("themes")).toBeNull()
     })
+
+    it("offers draw.io's custom libraries when asked, as the classic page did", () => {
+        const withLibraries = new URL(
+            getDrawioSrc(
+                { editorUrl: "/drawio/index.html", libraries: true },
+                false,
+            ),
+        )
+        expect(withLibraries.searchParams.get("libraries")).toBe("1")
+        const without = new URL(
+            getDrawioSrc({ editorUrl: "/drawio/index.html" }, false),
+        )
+        expect(without.searchParams.get("libraries")).toBe("0")
+    })
 })
 
 describe("shell language", () => {

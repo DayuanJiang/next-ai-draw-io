@@ -21,6 +21,9 @@ export interface DrawioSource {
     lang?: string
     /** No calls to external services (the desktop app) */
     offline?: boolean
+    /** draw.io's custom libraries (File > New Library, Open Library from,
+     * and the buttons under the shapes); the web app leaves them out */
+    libraries?: boolean
 }
 
 /**
@@ -53,7 +56,7 @@ export function getDrawioSrc(source: DrawioSource, dark: boolean): string {
     else params.themes = "1"
     Object.assign(params, {
         spin: "0",
-        libraries: "0",
+        libraries: source.libraries ? "1" : "0",
         noSaveBtn: "1",
         noExitBtn: "1",
         saveAndExit: "0",

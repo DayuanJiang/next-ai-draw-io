@@ -317,6 +317,50 @@ test("get_selection reports the cells selected in the editor", async ({
     expect(text).toContain('id="2" shape "Pick me" at x=40 y=40 w=120 h=60')
     expect(text).toContain('id="4" edge "link" from "2" to "3"')
     expect(text).not.toContain('id="3"')
+
+    // A shape in a container is reported with it, also after the user
+    // entered the container (Ctrl+Shift+End), where it is the default parent
+    await toolText("create_new_diagram", {
+        xml: `<mxCell id="box" value="Box" style="swimlane;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="300" height="200" as="geometry"/></mxCell>\n<mxCell id="kid" value="Kid" style="rounded=1;" vertex="1" parent="box"><mxGeometry x="20" y="30" width="120" height="60" as="geometry"/></mxCell>`,
+    })
+    await expect(frame.getByText("Kid")).toBeVisible({ timeout: 10_000 })
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.enterGroup(graph.model.getCell("box"))
+            graph.setSelectionCell(graph.model.getCell("kid"))
+        })
+    })
+    const inside = await toolText("get_selection")
+    expect(inside).toContain(
+        'id="kid" shape "Kid" at x=20 y=30 w=120 h=60 inside "box"',
+    )
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => ui.editor.graph.exitGroup())
+    })
+})
+
+test("the download button saves the diagram as a file", async ({ page }) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Keep me", 40) })
+    await expect(frame.getByText("Keep me")).toBeVisible({ timeout: 10_000 })
+    await page.getByTestId("download").click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    // .drawio is the default format
+    const download = page.waitForEvent("download")
+    await dialog.getByRole("button", { name: "Export" }).click()
+    const file = await download
+    expect(file.suggestedFilename()).toMatch(
+        /^diagram-\d{4}-\d{2}-\d{2}\.drawio$/,
+    )
+    // draw.io's own export of the document (compressed pages, as the web
+    // app saves them; load_diagram opens them)
+    const saved = readFileSync(await file.path(), "utf8")
+    expect(saved).toMatch(/^<mxfile\b/)
+    expect(saved).toContain('name="Page-1"')
 })
 
 // --- Version cards from the server's History (shell/node-versions-source.ts) ---
