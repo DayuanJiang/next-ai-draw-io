@@ -7,6 +7,8 @@ import { installDomPolyfill } from "../src/dom.ts"
 import {
     addHistory,
     clearHistory,
+    currentEntryId,
+    firstCopyIds,
     getHistory,
     isInHistory,
     otherVersions,
@@ -114,5 +116,82 @@ describe("otherVersions", () => {
         const id = "history-empty"
         clearHistory(id)
         expect(otherVersions(id, A)).toEqual([])
+    })
+})
+
+describe("entries", () => {
+    it("record who made them, when, and their page count", () => {
+        const id = "history-fields"
+        clearHistory(id)
+        const before = Date.now()
+        addHistory(id, A)
+        addHistory(id, B, "<svg/>", "user")
+        addHistory(
+            id,
+            `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/></root></mxGraphModel></diagram><diagram id="q" name="Q"><mxGraphModel><root><mxCell id="0"/></root></mxGraphModel></diagram></mxfile>`,
+            "",
+            "restore",
+        )
+        const [first, second, third] = getHistory(id)
+        expect(first.source).toBeUndefined()
+        expect(first.time).toBeGreaterThanOrEqual(before)
+        expect(first.pages).toBe(1)
+        expect(second.source).toBe("user")
+        expect(second.svg).toBe("<svg/>")
+        expect(third.source).toBe("restore")
+        expect(third.pages).toBe(2)
+        // A bare model is one page; text that is no diagram has none
+        addHistory(id, "<mxGraphModel><root/></mxGraphModel>")
+        addHistory(id, "not a diagram")
+        expect(
+            getHistory(id)
+                .slice(-2)
+                .map((e) => e.pages),
+        ).toEqual([1, 0])
+    })
+})
+
+// The shell's version cards: which entry the canvas shows, and which
+// entries are copies of an earlier one (a restore adds one)
+describe("currentEntryId and firstCopyIds", () => {
+    it("name the newest entry with the canvas's content, by the rule of otherVersions", () => {
+        const id = "history-current"
+        fill(id, [A, B, C, A])
+        const [a, b, c, aCopy] = getHistory(id)
+        expect(currentEntryId(id, A)).toBe(aCopy.id)
+        expect(currentEntryId(id, B_COPY)).toBe(b.id)
+        expect(currentEntryId(id, page("manual"))).toBeNull()
+        // A restore's copy belongs with its first entry; the others are
+        // their own
+        expect([...firstCopyIds(id).entries()]).toEqual([
+            [a.id, a.id],
+            [b.id, b.id],
+            [c.id, c.id],
+            [aCopy.id, a.id],
+        ])
+    })
+
+    it("agree with otherVersions on a page setting that only the canvas shows", () => {
+        // The same cells with another background: one version to the MCP
+        // core (the model's edits stay valid when the user changes a page
+        // setting), so the canvas still shows that entry and restore_version
+        // offers no other copy of it
+        const id = "history-background"
+        const withBackground = A.replace(
+            "<mxGraphModel>",
+            '<mxGraphModel background="#ffcc00" shadow="1">',
+        )
+        fill(id, [A, B])
+        const [a] = getHistory(id)
+        expect(currentEntryId(id, withBackground)).toBe(a.id)
+        expect(otherVersions(id, withBackground).map((e) => e.xml)).toEqual([B])
+        expect(isInHistory(id, withBackground)).toBe(true)
+    })
+
+    it("return nothing for an empty history", () => {
+        const id = "history-current-empty"
+        clearHistory(id)
+        expect(currentEntryId(id, A)).toBeNull()
+        expect(firstCopyIds(id).size).toBe(0)
     })
 })

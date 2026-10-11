@@ -1097,6 +1097,123 @@ describe("history restore", () => {
         // The missing image is filled in
         expect(getHistory(id)[0].svg).toBe("SVG")
     })
+})
+
+// What the shell's version cards read (the classic page uses index, id
+// and svg of the same list)
+describe("GET /api/history for the version cards", () => {
+    const page = (cellId: string) =>
+        `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+
+    it("lists each entry's document, maker and first copy, with the state and the entry on the canvas", async () => {
+        const id = "mcp-history-cards"
+        addHistory(id, page("a"))
+        addHistory(id, page("b"), "SVG-B", "user")
+        setState(id, page("b"))
+        const res = await request(`/api/history?sessionId=${id}`)
+        expect(res.status).toBe(200)
+        const d = JSON.parse(res.body)
+        const [a, b] = getHistory(id)
+        expect(d.count).toBe(2)
+        expect(d.stateId).toBe(getState(id)?.stateId)
+        expect(d.currentId).toBe(b.id)
+        expect(d.entries[0]).toEqual({
+            index: 0,
+            id: a.id,
+            svg: "",
+            xml: page("a"),
+            source: null,
+            time: a.time,
+            pages: 1,
+            firstId: a.id,
+        })
+        expect(d.entries[1]).toMatchObject({
+            id: b.id,
+            svg: "SVG-B",
+            source: "user",
+            firstId: b.id,
+        })
+    })
+
+    it("names the entry a restored copy stands for, and marks the copy as a restore", async () => {
+        const id = "mcp-history-cards-restore"
+        addHistory(id, page("a"))
+        addHistory(id, page("b"))
+        setState(id, page("b"))
+        const [a, b] = getHistory(id)
+        const restore = await postJson("/api/restore", {
+            sessionId: id,
+            id: a.id,
+            stateId: getState(id)?.stateId,
+        })
+        expect(restore.status).toBe(200)
+        const d = JSON.parse(
+            (await request(`/api/history?sessionId=${id}`)).body,
+        )
+        // History: a, b, a' (the copy); the canvas shows a's content
+        expect(d.entries.map((e: { firstId: number }) => e.firstId)).toEqual([
+            a.id,
+            b.id,
+            a.id,
+        ])
+        expect(d.entries[2].source).toBe("restore")
+        expect(d.currentId).toBe(d.entries[2].id)
+    })
+
+    it("marks the user's edit that a write replaces, and one that lost the race", async () => {
+        const id = "mcp-history-cards-user"
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        // The user edits in the browser; the AI writes over it
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: page("user"),
+            baseVersion: version,
+            stateId: getState(id)?.stateId,
+        })
+        keepInHistory(id, page("user"))
+        const ai2 = setState(id, page("ai2"))
+        addHistory(id, page("ai2"))
+        // A tab that had not loaded the write yet pushes another edit
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: page("late"),
+            baseVersion: ai2 - 1,
+            stateId: getState(id)?.stateId,
+        })
+        const d = JSON.parse(
+            (await request(`/api/history?sessionId=${id}`)).body,
+        )
+        expect(
+            d.entries.map((e: { xml: string; source: string | null }) => [
+                e.xml === page("user")
+                    ? "user"
+                    : e.xml === page("late")
+                      ? "late"
+                      : "ai",
+                e.source,
+            ]),
+        ).toEqual([
+            ["ai", null],
+            ["user", "user"],
+            ["ai", null],
+            ["late", "user"],
+        ])
+        // The canvas shows the write, not an edit
+        expect(d.currentId).toBe(getHistory(id)[2].id)
+    })
+
+    it("reports no state and no current entry for a session it does not know", async () => {
+        const d = JSON.parse(
+            (await request("/api/history?sessionId=mcp-never-seen")).body,
+        )
+        expect(d).toEqual({
+            entries: [],
+            count: 0,
+            stateId: null,
+            currentId: null,
+        })
+    })
 
     // draw.io's own copy of a diagram, as a sync reply or an edit brings it
     const drawioCopy = (xml: string, attrs = 'pageWidth="850"') =>

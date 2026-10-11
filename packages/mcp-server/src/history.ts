@@ -5,20 +5,44 @@
 
 import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
-import { isMxGraphModel } from "./pages.ts"
+import { isMxGraphModel, normalizeToMxfile, parseMxfile } from "./pages.ts"
 
 const MAX_HISTORY = 20
+
+/**
+ * Who made an entry's diagram: an edit in the browser ("user"), a tab's
+ * copy kept when the server recovered the session ("recover"), a restored
+ * copy of an older entry ("restore"). The AI's writes and entries loaded
+ * from the saved file carry none.
+ */
+export type HistorySource = "user" | "recover" | "restore"
 
 export interface HistoryEntry {
     id: number // Stable across shifts of the circular buffer
     xml: string
     svg: string
+    source?: HistorySource
+    /** When it was added, in ms since the epoch */
+    time: number
+    /** Pages in the document (0 when it has none) */
+    pages: number
 }
 
 let nextEntryId = 0
 const historyStore = new Map<string, HistoryEntry[]>()
 
-export function addHistory(sessionId: string, xml: string, svg = ""): number {
+function countPages(xml: string): number {
+    const normalized = normalizeToMxfile(xml)
+    const doc = normalized ? parseMxfile(normalized) : null
+    return doc ? doc.querySelectorAll("diagram").length : 0
+}
+
+export function addHistory(
+    sessionId: string,
+    xml: string,
+    svg = "",
+    source?: HistorySource,
+): number {
     let history = historyStore.get(sessionId)
     if (!history) {
         history = []
@@ -34,7 +58,14 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
         return history.length - 1
     }
 
-    history.push({ id: nextEntryId++, xml, svg })
+    history.push({
+        id: nextEntryId++,
+        xml,
+        svg,
+        ...(source && { source }),
+        time: Date.now(),
+        pages: countPages(xml),
+    })
 
     // Circular buffer
     if (history.length > MAX_HISTORY) {
@@ -75,7 +106,7 @@ export function otherVersions(
     const result: HistoryEntry[] = []
     const history = getHistory(sessionId)
     for (let i = history.length - 1; i >= 0; i--) {
-        const version = versionOf(history[i].xml)
+        const version = entryVersion(history[i])
         if (kept.some((seen) => sameVersion(seen, version))) continue
         kept.push(version)
         result.push(history[i])
@@ -87,12 +118,49 @@ export function otherVersions(
 export function isInHistory(sessionId: string, xml: string): boolean {
     const version = versionOf(xml)
     return getHistory(sessionId).some((entry) =>
-        sameVersion(version, versionOf(entry.xml)),
+        sameVersion(version, entryVersion(entry)),
     )
 }
 
+/**
+ * The entry the canvas shows: the newest one with the content of xml (the
+ * rule of otherVersions), or null when the canvas is in none of them
+ */
+export function currentEntryId(sessionId: string, xml: string): number | null {
+    const version = versionOf(xml)
+    const history = getHistory(sessionId)
+    for (let i = history.length - 1; i >= 0; i--) {
+        if (sameVersion(version, entryVersion(history[i]))) {
+            return history[i].id
+        }
+    }
+    return null
+}
+
+/**
+ * For every entry, the id of the oldest entry with the same content (its
+ * own when no earlier one has it). A restore adds a copy of an older entry;
+ * the shell shows one version per content, where its first copy is.
+ */
+export function firstCopyIds(sessionId: string): Map<number, number> {
+    const history = getHistory(sessionId)
+    const versions = history.map(entryVersion)
+    const result = new Map<number, number>()
+    history.forEach((entry, i) => {
+        const first = versions.findIndex((v) => sameVersion(v, versions[i]))
+        result.set(entry.id, history[first].id)
+    })
+    return result
+}
+
+interface Version {
+    bare: boolean
+    named: string
+    cells: string
+}
+
 /** A diagram's fingerprints, with and without its page names */
-function versionOf(xml: string) {
+function versionOf(xml: string): Version {
     return {
         bare: isMxGraphModel(xml),
         named: contentFingerprint(xml),
@@ -100,12 +168,20 @@ function versionOf(xml: string) {
     }
 }
 
+// An entry's XML never changes: its fingerprints are computed once
+const entryVersions = new WeakMap<HistoryEntry, Version>()
+function entryVersion(entry: HistoryEntry): Version {
+    let version = entryVersions.get(entry)
+    if (!version) {
+        version = versionOf(entry.xml)
+        entryVersions.set(entry, version)
+    }
+    return version
+}
+
 // Same rule as checkEditGate: a bare <mxGraphModel> (the browser's sync
 // can send one) has no page name, so names count only when both have them
-function sameVersion(
-    a: ReturnType<typeof versionOf>,
-    b: ReturnType<typeof versionOf>,
-): boolean {
+function sameVersion(a: Version, b: Version): boolean {
     return a.bare || b.bare ? a.cells === b.cells : a.named === b.named
 }
 

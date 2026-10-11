@@ -50,6 +50,8 @@ import { contentFingerprint } from "./edit-gate.ts"
 import {
     addHistory,
     clearHistory,
+    currentEntryId,
+    firstCopyIds,
     getHistory,
     getHistoryEntry,
     updateLastHistorySvg,
@@ -335,7 +337,7 @@ export function keepInHistory(sessionId: string, xml: string, svg = ""): void {
     if (state && !state.userEdited && last && last.xml === state.serverXml) {
         return
     }
-    addHistory(sessionId, xml, svg)
+    addHistory(sessionId, xml, svg, state?.userEdited ? "user" : undefined)
 }
 
 /**
@@ -741,7 +743,12 @@ function handleStateApi(
                             !!data.xml &&
                             data.xml !== current.xml
                         if (saved) {
-                            addHistory(sessionId, data.xml, data.svg || "")
+                            addHistory(
+                                sessionId,
+                                data.xml,
+                                data.svg || "",
+                                "recover",
+                            )
                             // Saved with the History, as after any change
                             stateListener?.(sessionId, current.xml)
                         }
@@ -778,7 +785,7 @@ function handleStateApi(
                     } else if (typeof data.xml === "string" && data.xml) {
                         // A user edit lost the race with an AI write. Keep
                         // it in history so the user can restore it.
-                        addHistory(sessionId, data.xml, data.svg || "")
+                        addHistory(sessionId, data.xml, data.svg || "", "user")
                         savedToHistory = true
                         if (current) stateListener?.(sessionId, current.xml)
                     }
@@ -832,7 +839,12 @@ function handleHistoryApi(
         return
     }
 
+    // The classic page reads index, id and svg; the shell's version cards
+    // the rest: the document, who made it, which earlier entry it is a copy
+    // of, the state the ids belong to, and the entry the canvas shows
     const history = getHistory(sessionId)
+    const firstIds = firstCopyIds(sessionId)
+    const state = stateStore.get(sessionId)
     res.writeHead(200, { "Content-Type": "application/json" })
     res.end(
         JSON.stringify({
@@ -840,8 +852,15 @@ function handleHistoryApi(
                 index: i,
                 id: entry.id,
                 svg: entry.svg,
+                xml: entry.xml,
+                source: entry.source ?? null,
+                time: entry.time,
+                pages: entry.pages,
+                firstId: firstIds.get(entry.id),
             })),
             count: history.length,
+            stateId: state?.stateId ?? null,
+            currentId: state ? currentEntryId(sessionId, state.xml) : null,
         }),
     )
 }
@@ -870,7 +889,7 @@ export function restoreHistoryEntry(
         keepInHistory(sessionId, current.xml, current.svg)
     }
     const newVersion = setState(sessionId, entry.xml)
-    addHistory(sessionId, entry.xml, entry.svg)
+    addHistory(sessionId, entry.xml, entry.svg, "restore")
 
     log.info(`Restored session ${sessionId} to history entry ${entryId}`)
     return newVersion
