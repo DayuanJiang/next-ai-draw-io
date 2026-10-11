@@ -3,7 +3,8 @@
  * diagram survives the MCP process (hosts start a new one when a
  * conversation is resumed). Like the web app's IndexedDB sessions
  * (lib/session-storage.ts): saved 1 second after the last change, at most
- * 50 kept. History is not saved.
+ * 50 kept. The session's History (the XML of its last 20 versions, without
+ * the thumbnails) is saved next to it as <session-id>.history.json.
  */
 
 import {
@@ -12,6 +13,7 @@ import {
     readdirSync,
     readFileSync,
     renameSync,
+    rmSync,
     statSync,
     unlinkSync,
     writeFileSync,
@@ -65,11 +67,69 @@ export class Autosaver {
         private dir: string | null,
         private delayMs = DELAY_MS,
         private maxFiles = MAX_FILES,
+        // The session's History entries, saved next to its diagram
+        private history: (
+            sessionId: string,
+        ) => { id: number; xml: string }[] = () => [],
     ) {}
 
     /** Path of a session's file, or null when saving is off. */
     pathFor(sessionId: string): string | null {
         return this.dir ? join(this.dir, `${sessionId}.drawio`) : null
+    }
+
+    /** Path of a session's History file, or null when saving is off. */
+    historyPathFor(sessionId: string): string | null {
+        return this.dir ? join(this.dir, `${sessionId}.history.json`) : null
+    }
+
+    /** The XML of the session's saved History entries, oldest first. */
+    loadHistory(sessionId: string): string[] {
+        const path = this.historyPathFor(sessionId)
+        if (!path) return []
+        try {
+            const entries: unknown = JSON.parse(readFileSync(path, "utf-8"))
+            return Array.isArray(entries) &&
+                entries.every((e) => typeof e === "string")
+                ? entries
+                : []
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+                log.warn(`Could not read the saved History ${path}: ${error}`)
+            }
+            return []
+        }
+    }
+
+    /** The folder the files are saved in, or null when saving is off. */
+    dataDir(): string | null {
+        return this.dir
+    }
+
+    /**
+     * Every file a session can resume (start_session's own files and
+     * hand-named ones such as mcp-notes.drawio), newest first. Empty when
+     * saving is off or the folder does not exist yet.
+     */
+    list(): { sessionId: string; path: string; savedAt: Date }[] {
+        return this.files(/^mcp-[a-z0-9-]{1,64}\.drawio$/).map((file) => ({
+            sessionId: file.name.slice(0, -".drawio".length),
+            path: file.path,
+            savedAt: file.mtime,
+        }))
+    }
+
+    /** The files in the folder whose name matches, newest first */
+    private files(pattern: RegExp) {
+        const dir = this.dir
+        if (!dir || !existsSync(dir)) return []
+        return readdirSync(dir)
+            .filter((name) => pattern.test(name))
+            .map((name) => {
+                const path = join(dir, name)
+                return { name, path, mtime: statSync(path).mtime }
+            })
+            .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
     }
 
     // Saved files that could not be read back: never written over, since
@@ -132,30 +192,60 @@ export class Autosaver {
         }
         try {
             const isNew = !existsSync(path)
-            // A blank page the browser shows before any drawing: nothing to keep
-            if (isNew && isBlank(entry.xml)) return
+            // A blank page the browser shows before any drawing: nothing to
+            // keep (unless the diagram was cleared before its first save)
+            if (
+                isNew &&
+                isBlank(entry.xml) &&
+                this.history(sessionId).every((e) => isBlank(e.xml))
+            )
+                return
             mkdirSync(this.dir, { recursive: true })
             // Write to a temporary file first so a crash never leaves half a file
             writeFileSync(`${path}.tmp`, entry.xml, "utf-8")
             renameSync(`${path}.tmp`, path)
+            this.writeHistory(sessionId)
             if (isNew) this.removeOldest()
         } catch (error) {
             log.warn(`Auto-save failed for ${path}: ${error}`)
         }
     }
 
+    // What each session's History file holds (entry count and last id):
+    // draw.io autosaves often, and the file is only rewritten when the
+    // entries changed
+    private historyKeys = new Map<string, string>()
+
+    // Saved with the diagram, after the same delay, so the History entry
+    // that follows every tool write is included. The thumbnails are left
+    // out (large); the History grid shows the entry's number instead.
+    private writeHistory(sessionId: string): void {
+        const path = this.historyPathFor(sessionId)
+        const entries = this.history(sessionId)
+        if (!path || entries.length === 0) return
+        const key = `${entries.length}:${entries[entries.length - 1].id}`
+        if (this.historyKeys.get(sessionId) === key) return
+        try {
+            const json = JSON.stringify(entries.map((e) => e.xml))
+            writeFileSync(`${path}.tmp`, json, "utf-8")
+            renameSync(`${path}.tmp`, path)
+            this.historyKeys.set(sessionId, key)
+        } catch (error) {
+            log.warn(`Saving the History failed for ${path}: ${error}`)
+        }
+    }
+
     private removeOldest(): void {
-        if (!this.dir) return
-        const dir = this.dir
         // Only our own session files (mcp-<time in base 36>-<random>, made
         // by start_session): DRAWIO_DATA_DIR may be a folder that also holds
         // the user's diagrams
-        const files = readdirSync(dir)
-            .filter((f) => /^mcp-[0-9a-z]{8}-[0-9a-z]{1,6}\.drawio$/.test(f))
-            .map((f) => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
-            .sort((a, b) => b.mtime - a.mtime)
-        for (const { f } of files.slice(this.maxFiles)) {
-            unlinkSync(join(dir, f))
+        const own = this.files(/^mcp-[0-9a-z]{8}-[0-9a-z]{1,6}\.drawio$/)
+        for (const { name, path } of own.slice(this.maxFiles)) {
+            unlinkSync(path)
+            // Its History goes with it (there may be none), and is written
+            // again if the session saves once more
+            rmSync(path.replace(/\.drawio$/, ".history.json"), { force: true })
+            this.historyKeys.delete(name.slice(0, -".drawio".length))
         }
     }
 }

@@ -3,11 +3,13 @@
  * Stores {xml, svg} entries in a circular buffer
  */
 
+import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
+import { isMxGraphModel } from "./pages.ts"
 
 const MAX_HISTORY = 20
 
-interface HistoryEntry {
+export interface HistoryEntry {
     id: number // Stable across shifts of the circular buffer
     xml: string
     svg: string
@@ -57,6 +59,54 @@ export function getHistoryEntry(
 
 export function clearHistory(sessionId: string): void {
     historyStore.delete(sessionId)
+}
+
+/**
+ * The versions the diagram can go back (or forward) to: every entry whose
+ * content differs from currentXml, newest first, one entry per distinct
+ * content (its newest copy). Re-serialised copies of one diagram count as
+ * the same version.
+ */
+export function otherVersions(
+    sessionId: string,
+    currentXml: string,
+): HistoryEntry[] {
+    const kept = [versionOf(currentXml)]
+    const result: HistoryEntry[] = []
+    const history = getHistory(sessionId)
+    for (let i = history.length - 1; i >= 0; i--) {
+        const version = versionOf(history[i].xml)
+        if (kept.some((seen) => sameVersion(seen, version))) continue
+        kept.push(version)
+        result.push(history[i])
+    }
+    return result
+}
+
+/** True when History holds a copy of this diagram. */
+export function isInHistory(sessionId: string, xml: string): boolean {
+    const version = versionOf(xml)
+    return getHistory(sessionId).some((entry) =>
+        sameVersion(version, versionOf(entry.xml)),
+    )
+}
+
+/** A diagram's fingerprints, with and without its page names */
+function versionOf(xml: string) {
+    return {
+        bare: isMxGraphModel(xml),
+        named: contentFingerprint(xml),
+        cells: contentFingerprint(xml, false),
+    }
+}
+
+// Same rule as checkEditGate: a bare <mxGraphModel> (the browser's sync
+// can send one) has no page name, so names count only when both have them
+function sameVersion(
+    a: ReturnType<typeof versionOf>,
+    b: ReturnType<typeof versionOf>,
+): boolean {
+    return a.bare || b.bare ? a.cells === b.cells : a.named === b.named
 }
 
 /**

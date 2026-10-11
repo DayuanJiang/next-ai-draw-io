@@ -569,6 +569,8 @@ function handleStateApi(
                             data.xml !== current.xml
                         if (saved) {
                             addHistory(sessionId, data.xml, data.svg || "")
+                            // Saved with the History, as after any change
+                            stateListener?.(sessionId, current.xml)
                         }
                         res.writeHead(409, {
                             "Content-Type": "application/json",
@@ -605,6 +607,7 @@ function handleStateApi(
                         // it in history so the user can restore it.
                         addHistory(sessionId, data.xml, data.svg || "")
                         savedToHistory = true
+                        if (current) stateListener?.(sessionId, current.xml)
                     }
                     res.writeHead(409, { "Content-Type": "application/json" })
                     res.end(
@@ -670,6 +673,36 @@ function handleHistoryApi(
     )
 }
 
+/**
+ * Put a History entry back on the canvas (the preview page's Restore button
+ * and the restore_version tool). Returns the new version, or null when the
+ * entry is unknown.
+ */
+export function restoreHistoryEntry(
+    sessionId: string,
+    entryId: number,
+): number | null {
+    const entry = getHistoryEntry(sessionId, entryId)
+    if (!entry) return null
+
+    // Edits in the browser since the last entry are not in history
+    // yet: keep them, so the restore can be undone
+    // (any state besides a blank page; a cleared document with its
+    // own pages counts)
+    const current = stateStore.get(sessionId)
+    if (
+        current &&
+        contentFingerprint(current.xml) !== contentFingerprint(BLANK_MXFILE)
+    ) {
+        keepInHistory(sessionId, current.xml, current.svg)
+    }
+    const newVersion = setState(sessionId, entry.xml)
+    addHistory(sessionId, entry.xml, entry.svg)
+
+    log.info(`Restored session ${sessionId} to history entry ${entryId}`)
+    return newVersion
+}
+
 function handleRestoreApi(
     req: http.IncomingMessage,
     res: http.ServerResponse,
@@ -682,36 +715,33 @@ function handleRestoreApi(
 
     readBody(req, res, (body) => {
         try {
-            const { sessionId, id } = JSON.parse(body)
+            const data = JSON.parse(body)
+            const { sessionId, id } = data
             if (!sessionId || typeof id !== "number") {
                 res.writeHead(400, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "sessionId and id required" }))
                 return
             }
+            // Picked from the list of a state the server has since lost
+            // (a restart reloads History under new ids), or before the tab
+            // knew the state. A tab of an older version sends none.
+            const current = stateStore.get(sessionId)
+            if (
+                current &&
+                "stateId" in data &&
+                data.stateId !== current.stateId
+            ) {
+                res.writeHead(409, { "Content-Type": "application/json" })
+                res.end(JSON.stringify({ error: "Session was recreated" }))
+                return
+            }
 
-            const entry = getHistoryEntry(sessionId, id)
-            if (!entry) {
+            const newVersion = restoreHistoryEntry(sessionId, id)
+            if (newVersion === null) {
                 res.writeHead(404, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Entry not found" }))
                 return
             }
-
-            // Edits in the browser since the last entry are not in history
-            // yet: keep them, so the restore can be undone
-            // (any state besides a blank page; a cleared document with its
-            // own pages counts)
-            const current = stateStore.get(sessionId)
-            if (
-                current &&
-                contentFingerprint(current.xml) !==
-                    contentFingerprint(BLANK_MXFILE)
-            ) {
-                keepInHistory(sessionId, current.xml, current.svg)
-            }
-            const newVersion = setState(sessionId, entry.xml)
-            addHistory(sessionId, entry.xml, entry.svg)
-
-            log.info(`Restored session ${sessionId} to history entry ${id}`)
 
             res.writeHead(200, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ success: true, newVersion }))

@@ -32,9 +32,15 @@ import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
-import { checkEditGate, markPageSeen } from "./edit-gate.ts"
+import { checkEditGate, contentFingerprint, markPageSeen } from "./edit-gate.ts"
 import { createExclusive } from "./exclusive.ts"
-import { addHistory } from "./history.ts"
+import {
+    addHistory,
+    getHistory,
+    type HistoryEntry,
+    isInHistory,
+    otherVersions,
+} from "./history.ts"
 import {
     type ExportFormat,
     type ExportOptions,
@@ -45,6 +51,7 @@ import {
     onStateChange,
     requestExport,
     requestSync,
+    restoreHistoryEntry,
     restoreSavedSession,
     setState,
     shutdown,
@@ -60,6 +67,7 @@ import {
 } from "./new-diagram.ts"
 import {
     addPageToDoc,
+    BLANK_MXFILE,
     deletePageFromDoc,
     findPageElement,
     hasCells,
@@ -86,10 +94,23 @@ const config = {
     port: parseInt(process.env.PORT || "6002", 10),
 }
 
-// Keep each session's latest diagram on disk, so it survives this process
-const autosaver = new Autosaver(defaultDataDir())
+// Keep each session's latest diagram and its History on disk, so they
+// survive this process
+const autosaver = new Autosaver(defaultDataDir(), undefined, undefined, (id) =>
+    getHistory(id),
+)
 onStateChange((sessionId, xml) => autosaver.schedule(sessionId, xml))
-onSessionRecreate((sessionId) => autosaver.load(sessionId))
+onSessionRecreate((sessionId) => {
+    const saved = autosaver.load(sessionId)
+    if (!saved) return null
+    // A file draw.io saved (compressed pages) comes back as plain XML, as
+    // with load_diagram
+    const loaded = parseDrawioFileContent(saved)
+    // History comes back with the diagram (addHistory drops consecutive
+    // duplicates)
+    for (const x of autosaver.loadHistory(sessionId)) addHistory(sessionId, x)
+    return loaded.ok ? loaded.xml : saved
+})
 
 // A one-page view that does not count for the whole document (edit-gate.ts)
 const OTHER_PAGES_UNSEEN =
@@ -146,7 +167,9 @@ Tools:
 - get_diagram: read the current XML, including the user's manual edits.
 - screenshot_diagram: see the rendered diagram as an image.
 - load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
-- list_pages, add_page, rename_page, delete_page: manage pages (tabs).`
+- list_saved_diagrams: diagrams saved by earlier sessions; continue one with start_session session_id=<id>.
+- list_pages, add_page, rename_page, delete_page: manage pages (tabs).
+- restore_version: undo; go back to an earlier version of the diagram.`
 
 const server = new McpServer(
     {
@@ -289,20 +312,32 @@ registerWriteTool(
     {
         title: "Start session",
         description:
-            "Start a new diagram session and open the browser for real-time preview. " +
+            "Start a new diagram session, or continue a saved one with session_id, and open the browser for real-time preview. " +
             "Starts an embedded server and opens a browser window with draw.io. " +
             "The browser will show diagram updates as they happen. " +
             "The result includes the drawing guide; follow it when drawing.",
-        inputSchema: {},
+        inputSchema: {
+            session_id: z
+                .string()
+                .regex(/^mcp-[a-z0-9-]{1,64}$/)
+                .optional()
+                .describe(
+                    "Id of a saved diagram (from list_saved_diagrams, or the Session ID of an earlier start_session) to continue it with the same preview URL and auto-save file. Omit to start a new diagram.",
+                ),
+        },
         annotations: { destructiveHint: false, openWorldHint: false },
     },
-    async () => {
+    async (input) => {
+        // The only field is optional, so a client may send no arguments
+        const { session_id } = input ?? {}
         try {
             // Start embedded HTTP server
             const port = await startHttpServer(config.port)
 
-            // Create session
-            const sessionId = `mcp-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`
+            // Create session, or continue a saved one under its old id
+            const sessionId =
+                session_id ??
+                `mcp-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`
             currentSession = {
                 id: sessionId,
                 xml: "",
@@ -314,9 +349,28 @@ registerWriteTool(
             const browserUrl = `http://localhost:${port}?mcp=${sessionId}`
             await open(browserUrl)
 
+            // A saved diagram comes back from its file. lastSeenXml stays
+            // empty, so edit_diagram asks for get_diagram first.
+            const restored = sessionState(sessionId)
+            let intro = "Session started successfully!"
+            if (session_id) {
+                // blank: the browser asked first and nothing was saved
+                if (restored && !restored.blank) {
+                    const doc = parseMxfile(restored.xml)
+                    const pages = doc ? listPagesFromDoc(doc) : []
+                    const pageSummary =
+                        pages.length > 0
+                            ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
+                            : "no pages parsed"
+                    intro = `Resumed session ${sessionId}.\n\n${pageSummary}\n\nCall get_diagram before edit_diagram.`
+                } else {
+                    intro = `No saved diagram for ${sessionId}; starting blank.`
+                }
+            }
+
             const savePath = autosaver.pathFor(sessionId)
             const saveNote = savePath
-                ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
+                ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue this diagram in a later conversation, call start_session with session_id=${sessionId}. list_saved_diagrams lists older diagrams.`
                 : ""
             const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsPath()} (Markdown, up to 5000 characters, read on every call).`
 
@@ -326,7 +380,7 @@ registerWriteTool(
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
+                        text: `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
                     },
                 ],
             }
@@ -334,6 +388,83 @@ registerWriteTool(
             const message =
                 error instanceof Error ? error.message : String(error)
             log.error("start_session failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+/** "2026-10-04 09:30" in the server's local time */
+function formatLocalTime(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+// Tool: list_saved_diagrams
+server.registerTool(
+    "list_saved_diagrams",
+    {
+        title: "List saved diagrams",
+        description:
+            "List the diagrams saved by earlier sessions (auto-save files), newest first, with their pages. " +
+            "Continue one with start_session session_id=<id>; the file path also works with load_diagram.",
+        inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+        try {
+            const dir = autosaver.dataDir()
+            if (!dir) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Auto-save is off (DRAWIO_DATA_DIR=off), so there are no saved diagrams.",
+                        },
+                    ],
+                }
+            }
+            const saved = autosaver.list()
+            if (saved.length === 0) {
+                return {
+                    content: [
+                        { type: "text", text: `No saved diagrams in ${dir}.` },
+                    ],
+                }
+            }
+            const fs = await import("node:fs/promises")
+            const lines: string[] = []
+            for (const { sessionId, path, savedAt } of saved) {
+                // A file may hold compressed pages (saved by draw.io itself)
+                let pages = "unreadable"
+                try {
+                    const loaded = parseDrawioFileContent(
+                        await fs.readFile(path, "utf-8"),
+                    )
+                    const doc = loaded.ok ? parseMxfile(loaded.xml) : null
+                    if (doc) {
+                        pages = listPagesFromDoc(doc)
+                            .map((p) => `${p.name} (${p.cellCount} cells)`)
+                            .join(", ")
+                    }
+                } catch (error) {
+                    log.warn(
+                        `Could not read the saved diagram ${path}: ${error}`,
+                    )
+                }
+                const current =
+                    sessionId === currentSession?.id ? "  (current)" : ""
+                lines.push(
+                    `${sessionId}  saved ${formatLocalTime(savedAt)}  pages: ${pages}  file: ${path}${current}`,
+                )
+            }
+            return { content: [{ type: "text", text: lines.join("\n") }] }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("list_saved_diagrams failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,
@@ -1907,6 +2038,148 @@ registerWriteTool(
             const message =
                 error instanceof Error ? error.message : String(error)
             log.error("delete_page failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
+/** One line of pages for a history entry, for restore_version's texts. */
+function describePages(xml: string): string {
+    const doc = parseMxfile(xml)
+    const pages = doc ? listPagesFromDoc(doc) : []
+    return pages.length > 0
+        ? `Pages (${pages.length}): ${pages.map((p) => `[${p.index}] id=${p.id} name="${p.name}" cells=${p.cellCount}`).join(" | ")}`
+        : "no pages parsed"
+}
+
+/** The versions restore_version can go to, numbered by steps_back. */
+function describeVersions(entries: HistoryEntry[]): string {
+    return entries
+        .slice(0, 20)
+        .map((entry, i) => {
+            const doc = parseMxfile(entry.xml)
+            const pages = doc ? listPagesFromDoc(doc) : []
+            const names =
+                pages.length > 0
+                    ? pages
+                          .map((p) => `"${p.name}" (${p.cellCount} cells)`)
+                          .join(", ")
+                    : "no pages parsed"
+            return `steps_back=${i + 1}: ${names}`
+        })
+        .join(" | ")
+}
+
+// Tool: restore_version
+registerWriteTool(
+    "restore_version",
+    {
+        title: "Restore version",
+        description:
+            "Undo: put an earlier version of the diagram from History back on the canvas (the current canvas is kept in History, so this can be undone too). Use it when the user asks to undo, revert or go back.",
+        inputSchema: {
+            steps_back: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe(
+                    "1 = the newest version that differs from the canvas (default), 2 = the one before it, and so on. After an undo, steps_back=1 returns to the version you just left (redo) and steps_back=2 goes further back.",
+                ),
+        },
+        annotations: { destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+        const stepsBack = input?.steps_back ?? 1
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            const session = currentSession
+
+            // The canvas, with the user's manual edits, is the state store
+            const current = sessionState(session.id)?.xml || session.xml
+            const candidates = otherVersions(session.id, current)
+            if (candidates.length === 0) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No other version in History.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            if (candidates.length < stepsBack) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error: Only ${candidates.length} other version(s) in History: ${describeVersions(candidates)}`,
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            const entry = candidates[stepsBack - 1]
+
+            // Manual edits since the last entry are not in History yet;
+            // restoreHistoryEntry keeps them (a blank page excepted)
+            const hadManual =
+                contentFingerprint(current) !==
+                    contentFingerprint(BLANK_MXFILE) &&
+                !isInHistory(session.id, current)
+
+            if (restoreHistoryEntry(session.id, entry.id) === null) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: That version is no longer in History.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            session.xml = entry.xml
+            session.version++
+            // As load_diagram: the model may never have seen this XML, so
+            // the edit gate requires one get_diagram before edits
+            session.lastSeenXml = ""
+
+            log.info(
+                `Restored the version ${stepsBack} step(s) back (entry ${entry.id})`,
+            )
+
+            const manualNote = hadManual
+                ? " Your manual changes were kept in History (steps_back=1 brings them back)."
+                : ""
+            const next =
+                describeVersions(otherVersions(session.id, entry.xml)) || "none"
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Restored the version ${stepsBack} step(s) back.${manualNote}\n\n${describePages(entry.xml)}\n\nVersions you can go to now: ${next}\n\nCall get_diagram before edit_diagram.`,
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("restore_version failed:", message)
             return {
                 content: [{ type: "text", text: `Error: ${message}` }],
                 isError: true,

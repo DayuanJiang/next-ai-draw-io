@@ -434,3 +434,80 @@ describe("MCP preview with a diagram over the size limit", () => {
         )
     })
 })
+
+describe("MCP preview History and a recreated session", () => {
+    /** The pending request to a URL that starts with prefix */
+    const take = (t: Awaited<ReturnType<typeof inStep>>, prefix: string) => {
+        const call = t.calls.find((c) => c.url.startsWith(prefix))
+        if (!call) throw new Error(`no pending request to ${prefix}`)
+        t.calls.splice(t.calls.indexOf(call), 1)
+        return call
+    }
+    const historyList = {
+        status: 200,
+        body: { entries: [{ id: 5, index: 0, svg: "" }], count: 1 },
+    }
+    const modalOpen = () =>
+        document.getElementById("history-modal")?.classList.contains("open")
+
+    it("drops a History list asked for before the session was recreated", async () => {
+        const t = await inStep()
+        ;(document.getElementById("history-btn") as HTMLButtonElement).click()
+        await t.settle()
+        const list = take(t, "/api/history")
+        // The server restarts before the list arrives: its ids are old
+        const poll = t.page.poll()
+        take(t, "/api/state").answer(state("S2", 1, "<mxfile>A</mxfile>"))
+        await poll
+        list.answer(historyList)
+        await t.settle()
+        await t.settle()
+        expect(modalOpen()).toBe(false)
+    })
+
+    it("restores from an old list with that list's state", async () => {
+        const t = await inStep()
+        const history = document.getElementById(
+            "history-btn",
+        ) as HTMLButtonElement
+        history.click()
+        await t.settle()
+        take(t, "/api/history").answer(historyList)
+        await t.settle()
+        await t.settle()
+        // The server restarts; the open list closes
+        const poll = t.page.poll()
+        take(t, "/api/state").answer(state("S2", 1, "<mxfile>A</mxfile>"))
+        await poll
+        expect(modalOpen()).toBe(false)
+        // Asking again fails, so the old list shows
+        history.click()
+        await t.settle()
+        take(t, "/api/history").fail()
+        await t.settle()
+        expect(modalOpen()).toBe(true)
+        ;(document.querySelector(".history-item") as HTMLElement).click()
+        ;(document.getElementById("restore-btn") as HTMLButtonElement).click()
+        await t.settle()
+        // The server refuses it: the ids are S1's
+        expect(take(t, "/api/restore").body.stateId).toBe("S1")
+    })
+
+    it("names the state its History list belongs to when restoring", async () => {
+        const t = await inStep()
+        ;(document.getElementById("history-btn") as HTMLButtonElement).click()
+        await t.settle()
+        take(t, "/api/history").answer(historyList)
+        await t.settle()
+        await t.settle()
+        expect(modalOpen()).toBe(true)
+        ;(document.querySelector(".history-item") as HTMLElement).click()
+        ;(document.getElementById("restore-btn") as HTMLButtonElement).click()
+        await t.settle()
+        expect(take(t, "/api/restore").body).toMatchObject({
+            sessionId: "mcp-test",
+            id: 5,
+            stateId: "S1",
+        })
+    })
+})

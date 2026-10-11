@@ -14,8 +14,10 @@ import {
     getState,
     keepInHistory,
     onSessionRecreate,
+    onStateChange,
     requestExport,
     requestSync,
+    restoreHistoryEntry,
     setState,
     shutdown,
     startHttpServer,
@@ -256,6 +258,25 @@ describe("POST /api/state", () => {
         expect(history.at(-1)?.xml).toBe("<mxfile>lost user edit</mxfile>")
     })
 
+    it("asks for a save when a lost user edit is kept in history", async () => {
+        const id = "mcp-conflict-save"
+        setState(id, "<mxfile>user v1</mxfile>", undefined, true)
+        const aiVersion = setState(id, "<mxfile>AI edit</mxfile>")
+        const saves: string[] = []
+        onStateChange((sessionId, xml) => saves.push(`${sessionId} ${xml}`))
+        try {
+            await postJson("/api/state", {
+                sessionId: id,
+                xml: "<mxfile>lost user edit</mxfile>",
+                baseVersion: aiVersion - 1,
+            })
+        } finally {
+            onStateChange(() => {})
+        }
+        // The canvas stays the AI write; the save takes the new History
+        expect(saves).toEqual([`${id} <mxfile>AI edit</mxfile>`])
+    })
+
     it("ends a pending sync when the sync reply is older than an AI write", async () => {
         const id = "mcp-stale-sync"
         setState(id, "<mxfile>before</mxfile>", undefined, true)
@@ -468,6 +489,34 @@ describe("history restore", () => {
     const page = (cellId: string) =>
         `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
 
+    it("refuses a restore picked from a state the server has since lost", async () => {
+        const id = "mcp-history-stale-state"
+        setState(id, page("now"))
+        addHistory(id, page("old"))
+        const [entry] = getHistory(id)
+        const stale = await postJson("/api/restore", {
+            sessionId: id,
+            id: entry.id,
+            stateId: "a-lost-state",
+        })
+        expect(stale.status).toBe(409)
+        // A list taken before the tab knew the state
+        const unknown = await postJson("/api/restore", {
+            sessionId: id,
+            id: entry.id,
+            stateId: null,
+        })
+        expect(unknown.status).toBe(409)
+        expect(getState(id)?.xml).toBe(page("now"))
+        const fresh = await postJson("/api/restore", {
+            sessionId: id,
+            id: entry.id,
+            stateId: getState(id)?.stateId,
+        })
+        expect(fresh.status).toBe(200)
+        expect(getState(id)?.xml).toBe(page("old"))
+    })
+
     // A thumbnail the tab took after loading the server write at `version`
     const thumbnail = (id: string, svg: string, version: number) =>
         postJson("/api/history-svg", {
@@ -663,6 +712,32 @@ describe("history restore", () => {
         await postJson("/api/restore", { sessionId: id, id: entry.id })
         expect(getState(id)?.xml).toBe(doc("ai"))
         expect(getHistory(id).map((e) => e.xml)).toContain(doc("manual"))
+    })
+
+    it("restoreHistoryEntry leaves the canvas alone for an unknown entry", () => {
+        const id = "mcp-restore-unknown"
+        setState(id, page("x"))
+        addHistory(id, page("x"))
+        expect(restoreHistoryEntry(id, 999999)).toBeNull()
+        expect(getState(id)?.xml).toBe(page("x"))
+        expect(getHistory(id)).toHaveLength(1)
+    })
+
+    it("restoreHistoryEntry restores an entry and keeps the canvas in History", () => {
+        const id = "mcp-restore-entry"
+        addHistory(id, page("old"))
+        const [entry] = getHistory(id)
+        // The canvas is a later state that is not in History yet
+        setState(id, page("ai"))
+
+        const newVersion = restoreHistoryEntry(id, entry.id)
+        expect(newVersion).toBe(getState(id)?.version)
+        expect(getState(id)?.xml).toBe(page("old"))
+        expect(getHistory(id).map((e) => e.xml)).toEqual([
+            page("old"),
+            page("ai"),
+            page("old"),
+        ])
     })
 })
 

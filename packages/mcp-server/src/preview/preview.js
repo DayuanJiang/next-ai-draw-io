@@ -237,6 +237,8 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
 // process restarted. Decide whose diagram wins.
 function recoverState(s) {
     stateId = s.stateId;
+    // History entries got new ids with the new state: an open list is stale
+    if (historyModal.classList.contains('open')) cancelBtn.onclick();
     // The old state's pending work is gone with it
     const projectionShown = projectionExportActive;
     projectionExportActive = false;
@@ -453,18 +455,24 @@ const historyGrid = document.getElementById('history-grid');
 const historyEmpty = document.getElementById('history-empty');
 const restoreBtn = document.getElementById('restore-btn');
 const cancelBtn = document.getElementById('cancel-btn');
-let historyData = [], selectedId = null;
+// historyStateId: the server state the list belongs to, sent with a restore
+let historyData = [], historyStateId = null, selectedId = null;
 
 historyBtn.onclick = async () => {
     if (!sessionId) return;
+    // A list for a state the server recreated meanwhile has old ids
+    const sid = stateId;
     try {
         const r = await fetch('/api/history?sessionId=' + encodeURIComponent(sessionId));
         if (r.ok) {
             const d = await r.json();
+            if (sid !== stateId) return;
             historyData = d.entries || [];
+            historyStateId = sid;
             renderHistory();
         }
     } catch {}
+    if (sid !== stateId) return;
     historyModal.classList.add('open');
 };
 
@@ -518,9 +526,10 @@ restoreBtn.onclick = async () => {
         const r = await fetch('/api/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, id: selectedId })
+            body: JSON.stringify({ sessionId, id: selectedId, stateId: historyStateId })
         });
         if (r.ok) { cancelBtn.onclick(); await poll(); }
+        else if (r.status === 409) { cancelBtn.onclick(); showNotice('History changed on the server. Please open it again.'); }
         else { showNotice('Restore failed. Please try again.'); }
     } catch { showNotice('Restore failed. Please try again.'); }
     restoreBtn.textContent = 'Restore';
