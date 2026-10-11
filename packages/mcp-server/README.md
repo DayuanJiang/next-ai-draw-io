@@ -123,7 +123,7 @@ Use the standard MCP configuration with:
 | `get_drawing_guide` | Return the drawing rules again, for example after a long conversation was compacted |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4`, `azure2`, or `kubernetes` |
 | `create_new_diagram` | Create a new diagram from XML; a plain list of `mxCell` elements is enough |
-| `load_diagram` | Load a `.drawio` file from disk into the session (handles compressed files) |
+| `load_diagram` | Load a `.drawio` file into the session, from a `path` on disk or from its `xml` content (handles compressed files) |
 | `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells); all or nothing |
 | `get_diagram` | Get the current diagram XML, including your edits in the browser |
 | `screenshot_diagram` | Return a PNG of a page so the AI can check the rendered diagram |
