@@ -120,34 +120,17 @@ describe("otherVersions", () => {
 })
 
 describe("entries", () => {
-    it("record who made them, when, and their page count", () => {
+    it("record who made them", () => {
         const id = "history-fields"
         clearHistory(id)
-        const before = Date.now()
         addHistory(id, A)
         addHistory(id, B, "<svg/>", "user")
-        addHistory(
-            id,
-            `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/></root></mxGraphModel></diagram><diagram id="q" name="Q"><mxGraphModel><root><mxCell id="0"/></root></mxGraphModel></diagram></mxfile>`,
-            "",
-            "restore",
-        )
+        addHistory(id, C, "", "restore")
         const [first, second, third] = getHistory(id)
         expect(first.source).toBeUndefined()
-        expect(first.time).toBeGreaterThanOrEqual(before)
-        expect(first.pages).toBe(1)
         expect(second.source).toBe("user")
         expect(second.svg).toBe("<svg/>")
         expect(third.source).toBe("restore")
-        expect(third.pages).toBe(2)
-        // A bare model is one page; text that is no diagram has none
-        addHistory(id, "<mxGraphModel><root/></mxGraphModel>")
-        addHistory(id, "not a diagram")
-        expect(
-            getHistory(id)
-                .slice(-2)
-                .map((e) => e.pages),
-        ).toEqual([1, 0])
     })
 })
 
@@ -169,6 +152,31 @@ describe("currentEntryId and firstCopyIds", () => {
             [c.id, c.id],
             [aCopy.id, a.id],
         ])
+    })
+
+    it("group a bare model with the first named page it matches, never a later one", () => {
+        // A bare model (the browser's sync can send one) has no page name:
+        // it is the same as "Arch" and as "Overview", which differ from each
+        // other. Each entry names a first copy with its own content, so a
+        // card never shows one document and restores another
+        const id = "history-bare-groups"
+        const named = (name: string) => A.replace('name="P"', `name="${name}"`)
+        const bare = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" vertex="1" parent="1"/></root></mxGraphModel>`
+        fill(id, [named("Arch"), bare, named("Overview")])
+        const [arch, model, overview] = getHistory(id)
+        const firsts = firstCopyIds(id)
+        expect([...firsts.entries()]).toEqual([
+            [arch.id, arch.id],
+            [model.id, arch.id],
+            [overview.id, overview.id],
+        ])
+        // The entry named as first has the content of every entry in its
+        // group (otherVersions of that content never lists it)
+        for (const entry of getHistory(id)) {
+            expect(otherVersions(id, entry.xml).map((e) => e.id)).not.toContain(
+                firsts.get(entry.id),
+            )
+        }
     })
 
     it("agree with otherVersions on a page setting that only the canvas shows", () => {

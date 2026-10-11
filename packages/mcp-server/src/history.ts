@@ -5,7 +5,7 @@
 
 import { contentFingerprint } from "./edit-gate.ts"
 import { log } from "./logger.ts"
-import { isMxGraphModel, normalizeToMxfile, parseMxfile } from "./pages.ts"
+import { isMxGraphModel } from "./pages.ts"
 
 const MAX_HISTORY = 20
 
@@ -22,20 +22,10 @@ export interface HistoryEntry {
     xml: string
     svg: string
     source?: HistorySource
-    /** When it was added, in ms since the epoch */
-    time: number
-    /** Pages in the document (0 when it has none) */
-    pages: number
 }
 
 let nextEntryId = 0
 const historyStore = new Map<string, HistoryEntry[]>()
-
-function countPages(xml: string): number {
-    const normalized = normalizeToMxfile(xml)
-    const doc = normalized ? parseMxfile(normalized) : null
-    return doc ? doc.querySelectorAll("diagram").length : 0
-}
 
 export function addHistory(
     sessionId: string,
@@ -63,8 +53,6 @@ export function addHistory(
         xml,
         svg,
         ...(source && { source }),
-        time: Date.now(),
-        pages: countPages(xml),
     })
 
     // Circular buffer
@@ -140,16 +128,24 @@ export function currentEntryId(sessionId: string, xml: string): number | null {
 /**
  * For every entry, the id of the oldest entry with the same content (its
  * own when no earlier one has it). A restore adds a copy of an older entry;
- * the shell shows one version per content, where its first copy is.
+ * the shell shows one version per content, where its first copy is, and
+ * restores the newest copy (as restore_version picks it). An entry is
+ * compared with the first of each group, never with later copies: a bare
+ * model matches any page name, so "same" is not transitive, and every
+ * entry must name a first copy that has its content.
  */
 export function firstCopyIds(sessionId: string): Map<number, number> {
-    const history = getHistory(sessionId)
-    const versions = history.map(entryVersion)
     const result = new Map<number, number>()
-    history.forEach((entry, i) => {
-        const first = versions.findIndex((v) => sameVersion(v, versions[i]))
-        result.set(entry.id, history[first].id)
-    })
+    const firsts: { version: Version; id: number }[] = []
+    for (const entry of getHistory(sessionId)) {
+        const version = entryVersion(entry)
+        let first = firsts.find((f) => sameVersion(f.version, version))
+        if (!first) {
+            first = { version, id: entry.id }
+            firsts.push(first)
+        }
+        result.set(entry.id, first.id)
+    }
     return result
 }
 

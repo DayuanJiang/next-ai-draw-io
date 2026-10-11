@@ -18,15 +18,19 @@ import type { HistoryEntryInfo, HistoryList, McpSync } from "./mcp-sync-core"
  * adds a copy of an older entry; copies fold into their first entry).
  */
 export interface NodeVersion extends VersionItem {
-    /** The History entry to restore (the first copy's) */
+    /** The History entry to restore: the newest copy, as restore_version
+     * picks it (a later copy may carry page settings the first lacks) */
     entryId: number
+    /** The version this one replaced, when it has a card (undo goes there) */
+    beforeId: string | null
     /** Who made it: "user", "recover", "restore"; null for the AI */
     source: string | null
 }
 
 // The blank page a tab shows before any drawing: the server keeps it in
-// History when the first write replaces it, but it is no version to show
-// or go back to (the server's restore leaves it out by the same rule)
+// History when the first write replaces it, but it is no version to show.
+// A blank page after a drawing is the canvas cleared, a version of its own
+// (restore_version offers both; the shell hides only the first)
 const BLANK_FINGERPRINT = contentFingerprint(BLANK_MXFILE)
 const isBlankPage = (xml: string) =>
     !hasCells(xml) && contentFingerprint(xml) === BLANK_FINGERPRINT
@@ -49,7 +53,9 @@ function changedPage(beforeXml: string, afterXml: string): string | undefined {
     return undefined
 }
 
+/** What a version changed, kept from its first appearance (see buildVersions) */
 interface Change {
+    beforeXml: string
     pageId?: string
     summary: ChangeSummary
     fromScratch: boolean
@@ -57,39 +63,71 @@ interface Change {
 
 /**
  * The version cards for a History list: entries folded by content, in the
- * order of their first copy, numbered as they first appeared in this tab
- * (numbers is kept between calls), each with what changed since the one
- * before. The thumbnail is the first copy's that has one; the newest
- * version on the canvas waits for its picture (the sync sends it), older
- * ones without any show none. The blank page is no version.
+ * order of their first copy, numbered as they first appeared in this tab,
+ * each with what changed since the state it replaced (the entry right
+ * before its first copy; after a restore that is another than the card
+ * before). numbers and changes are kept between calls, keyed by content:
+ * a version keeps its number and change when its first copy drops out of
+ * the server's buffer and a later copy stands in. The thumbnail is the
+ * first copy's that has one; the newest version on the canvas waits for
+ * its picture (the sync sends it), older ones without any show none.
  */
 export function buildVersions(
     list: HistoryList,
-    numbers: Map<number, number>,
-    changes: Map<number, Change>,
+    numbers: Map<string, number>,
+    changes: Map<string, Change>,
 ): { versions: NodeVersion[]; onCanvasId: string | null } {
+    // The server folds entries by content (firstId). A blank page after a
+    // drawing is a clear of the canvas, a version of its own, which the
+    // server folds into the blank page the tab started with: blanks are
+    // grouped here, a restore's copy of a clear with the newest clear
     const groups = new Map<number, HistoryEntryInfo[]>()
-    for (const entry of list.entries) {
-        const copies = groups.get(entry.firstId)
-        if (copies) copies.push(entry)
-        else groups.set(entry.firstId, [entry])
-    }
-    const current = list.entries.find((e) => e.id === list.currentId)
-    const onCanvasId = current ? String(current.firstId) : null
-    const versions: NodeVersion[] = []
-    let previous: HistoryEntryInfo | null = null
-    for (const [firstId, copies] of groups) {
-        const first = copies[0]
-        if (isBlankPage(first.xml)) {
-            previous = first
-            continue
+    const keys = new Map<number, number>() // entry id -> its group
+    const befores = new Map<number, HistoryEntryInfo>() // group -> entry before it
+    const hidden = new Set<number>() // the blank page(s) before any drawing
+    let drawn = false
+    let lastClear: number | null = null
+    list.entries.forEach((entry, i) => {
+        let key = entry.firstId
+        if (!isBlankPage(entry.xml)) {
+            drawn = true
+        } else if (drawn) {
+            key =
+                entry.source === "restore" && lastClear !== null
+                    ? lastClear
+                    : entry.id
+            lastClear = key
+        } else {
+            hidden.add(key)
         }
-        let number = numbers.get(firstId)
+        keys.set(entry.id, key)
+        const copies = groups.get(key)
+        if (copies) copies.push(entry)
+        else {
+            groups.set(key, [entry])
+            if (i > 0) befores.set(key, list.entries[i - 1])
+        }
+    })
+    const onCanvasId =
+        list.currentId !== null && keys.has(list.currentId)
+            ? String(keys.get(list.currentId))
+            : null
+    const versions: NodeVersion[] = []
+    for (const [key, copies] of groups) {
+        if (hidden.has(key)) continue
+        const first = copies[0]
+        const newest = copies[copies.length - 1]
+        const previous = befores.get(key) ?? null
+        // Clears have one content: each is its own version
+        const contentKey = isBlankPage(first.xml)
+            ? `clear:${key}`
+            : contentFingerprint(first.xml)
+        let number = numbers.get(contentKey)
         if (number === undefined) {
             number = Math.max(0, ...numbers.values()) + 1
-            numbers.set(firstId, number)
+            numbers.set(contentKey, number)
         }
-        let change = changes.get(firstId)
+        let change = changes.get(contentKey)
         if (!change) {
             const beforeXml = previous?.xml ?? ""
             const pageId = changedPage(beforeXml, first.xml)
@@ -98,23 +136,27 @@ export function buildVersions(
                 first.xml,
                 pageId,
             )
-            change = { pageId, summary, fromScratch }
-            changes.set(firstId, change)
+            change = { beforeXml, pageId, summary, fromScratch }
+            changes.set(contentKey, change)
         }
         const svg = copies.find((c) => c.svg)?.svg
+        const beforeKey = previous ? keys.get(previous.id) : undefined
         versions.push({
-            id: String(firstId),
-            entryId: firstId,
+            id: String(key),
+            entryId: newest.id,
+            beforeId:
+                beforeKey !== undefined && !hidden.has(beforeKey)
+                    ? String(beforeKey)
+                    : null,
             number,
-            xml: first.xml,
-            beforeXml: previous?.xml ?? "",
+            xml: newest.xml,
+            beforeXml: change.beforeXml,
             ...(change.pageId && { pageId: change.pageId }),
             summary: change.summary,
             fromScratch: change.fromScratch,
             svg: svg || "",
             source: first.source,
         })
-        previous = first
     }
     // The newest version on the canvas waits for its picture
     const latest = versions.at(-1)
@@ -132,17 +174,20 @@ export interface NodeVersionsSource extends Omit<VersionsSource, "versions"> {
 /**
  * The canvas components' versions, from the MCP server's History: read
  * again whenever the sync reports a change on the server, restored through
- * it. Undo and redo of the newest version restore the one before it, or it
- * again; the server keeps the state they leave as an entry of its own, so
- * hand edits are never lost.
+ * it. Undo and redo of the newest version restore the one it replaced, or
+ * it again; the server keeps the state they leave as an entry of its own,
+ * so hand edits are never lost.
  */
 export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
     const dict = useDictionary()
     const [list, setList] = useState<HistoryList | null>(null)
     const [busy, setBusy] = useState(false)
-    // Stable across refreshes: an entry's number and change never move
-    const numbersRef = useRef(new Map<number, number>())
-    const changesRef = useRef(new Map<number, Change>())
+    // Stable across refreshes: a version's number and change never move
+    const numbersRef = useRef(new Map<string, number>())
+    const changesRef = useRef(new Map<string, Change>())
+    // The server state the cards are of: another one (the session expired,
+    // the process restarted) is a History of its own, numbered anew
+    const cacheStateIdRef = useRef<string | null>(null)
     // Reads overlap when changes come fast; only the latest one counts
     const readSeqRef = useRef(0)
 
@@ -150,7 +195,13 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
         if (!sync) return
         const seq = ++readSeqRef.current
         const next = await sync.fetchHistory()
-        if (next && seq === readSeqRef.current) setList(next)
+        if (!next || seq !== readSeqRef.current) return
+        if (next.stateId !== cacheStateIdRef.current) {
+            numbersRef.current.clear()
+            changesRef.current.clear()
+            cacheStateIdRef.current = next.stateId
+        }
+        setList(next)
     }, [sync])
 
     useEffect(() => {
@@ -197,7 +248,10 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
     }
 
     const latest = versions.at(-1)
-    const previous = versions.at(-2)
+    // The version the newest one replaced (restore_version's steps_back=1)
+    const previous = latest?.beforeId
+        ? versions.find((v) => v.id === latest.beforeId)
+        : undefined
     const canUndo = !!latest && !!previous && onCanvasId === latest.id
     // The newest change is undone when the canvas is at the version before
     const undoneId =

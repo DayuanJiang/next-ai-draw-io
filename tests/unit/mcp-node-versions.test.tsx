@@ -43,8 +43,6 @@ function entry(
         svg: "",
         xml,
         source: null,
-        time: 1000 + id,
-        pages: 1,
         firstId: id,
         ...extra,
     }
@@ -123,7 +121,7 @@ describe("buildVersions", () => {
     })
 
     it("keeps the numbers once given, and gives new versions the next", () => {
-        const numbers = new Map<number, number>()
+        const numbers = new Map<string, number>()
         const changes = new Map()
         buildVersions(list([entry(0, A), entry(1, AB)], 1), numbers, changes)
         // The oldest entry dropped out of the server's buffer
@@ -133,6 +131,138 @@ describe("buildVersions", () => {
             changes,
         )
         expect(versions.map((v) => v.number)).toEqual([2, 3])
+    })
+
+    it("counts a write from the state it replaced, not from the card before, after a restore", () => {
+        // History: A, AB, ABC, A again (restored), AD: the AI drew D on A
+        const AD = doc(cell("a", "A") + cell("d", "D"))
+        const { versions } = buildVersions(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, AB),
+                    entry(2, ABC),
+                    entry(3, A, { firstId: 0, source: "restore" }),
+                    entry(4, AD),
+                ],
+                4,
+            ),
+            new Map(),
+            new Map(),
+        )
+        expect(versions.map((v) => v.id)).toEqual(["0", "1", "2", "4"])
+        const latest = versions[3]
+        expect(latest.beforeXml).toBe(A)
+        expect(latest.summary.shapesAdded).toBe(1)
+        expect(latest.summary.shapesRemoved).toBe(0)
+        expect(latest.beforeId).toBe("0")
+        // The first drawing replaced nothing a card shows
+        expect(versions[0].beforeId).toBeNull()
+        expect(versions[1].beforeId).toBe("0")
+    })
+
+    it("restores the newest copy of a version: a later copy may carry the user's page settings", () => {
+        // The user set a background on A (kept as a "user" entry, the same
+        // content to the server), then the AI added B
+        const yellow = A.replace(
+            "<mxGraphModel>",
+            '<mxGraphModel background="#ffcc00">',
+        )
+        const { versions } = buildVersions(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, yellow, { firstId: 0, source: "user" }),
+                    entry(2, AB),
+                ],
+                2,
+            ),
+            new Map(),
+            new Map(),
+        )
+        expect(versions).toHaveLength(2)
+        expect(versions[0].id).toBe("0")
+        expect(versions[0].entryId).toBe(1)
+        expect(versions[0].xml).toBe(yellow)
+        expect(versions[0].source).toBeNull()
+    })
+
+    it("shows a clear of the canvas as a version, hiding only the blank page before any drawing", () => {
+        const blank = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+        // The server folds the cleared page into the first blank (same
+        // content); then AB is restored
+        const entries = [
+            entry(0, blank),
+            entry(1, A),
+            entry(2, AB),
+            entry(3, blank, { firstId: 0 }),
+            entry(4, AB, { firstId: 2, source: "restore" }),
+        ]
+        const cleared = buildVersions(
+            list(entries.slice(0, 4), 3),
+            new Map(),
+            new Map(),
+        )
+        expect(cleared.versions.map((v) => v.id)).toEqual(["1", "2", "3"])
+        expect(cleared.onCanvasId).toBe("3")
+        expect(cleared.versions[2].beforeId).toBe("2")
+        expect(cleared.versions[2].summary.shapesRemoved).toBe(2)
+        const back = buildVersions(list(entries, 4), new Map(), new Map())
+        expect(back.versions.map((v) => v.id)).toEqual(["1", "2", "3"])
+        expect(back.onCanvasId).toBe("2")
+        // A second clear is a version of its own; a restore of a clear is
+        // a copy of the newest one
+        const twice = buildVersions(
+            list(
+                [
+                    ...entries,
+                    entry(5, blank, { firstId: 0 }),
+                    entry(6, blank, { firstId: 0, source: "restore" }),
+                ],
+                6,
+            ),
+            new Map(),
+            new Map(),
+        )
+        expect(twice.versions.map((v) => [v.id, v.number])).toEqual([
+            ["1", 1],
+            ["2", 2],
+            ["3", 3],
+            ["5", 4],
+        ])
+        expect(twice.onCanvasId).toBe("5")
+    })
+
+    it("keeps a version's number and change when its first copy drops out of the server's buffer", () => {
+        const numbers = new Map<string, number>()
+        const changes = new Map()
+        const docs = Array.from({ length: 20 }, (_, i) =>
+            doc(
+                Array.from({ length: i + 1 }, (_, j) =>
+                    cell(`c${j}`, `C${j}`),
+                ).join(""),
+            ),
+        )
+        const full = docs.map((xml, i) => entry(i, xml))
+        buildVersions(list(full, 19), numbers, changes)
+        // v1 restored: its copy is added and the original, the oldest
+        // entry, drops out; the copy is now the first with that content
+        const after = [
+            ...full.slice(1),
+            entry(20, docs[0], { firstId: 20, source: "restore" }),
+        ]
+        const { versions, onCanvasId } = buildVersions(
+            list(after, 20),
+            numbers,
+            changes,
+        )
+        const v1 = versions.find((v) => v.id === "20")
+        expect(v1?.number).toBe(1)
+        expect(v1?.fromScratch).toBe(true)
+        expect(v1?.summary.shapesAdded).toBe(1)
+        expect(v1?.beforeXml).toBe("")
+        expect(versions.map((v) => v.number)).not.toContain(21)
+        expect(onCanvasId).toBe("20")
     })
 
     it("lets the newest version on the canvas wait for its picture, older ones show none", () => {
@@ -227,6 +357,76 @@ describe("useNodeVersions", () => {
         expect(result.current.onCanvasId).toBe("1")
         expect(result.current.canUndo).toBe(true)
         expect(result.current.canRedo).toBe(false)
+    })
+
+    it("numbers the History of another server state anew", async () => {
+        // The process restarted: entry ids start over and name other content
+        const server = fakeSync(list([entry(0, A), entry(1, AB)], 1))
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.versions.map((v) => v.number)).toEqual([1, 2])
+        const AB2 = doc(cell("a", "A") + cell("b", "B"), "p2")
+        const ABC2 = doc(cell("a", "A") + cell("b", "B") + cell("c", "C"), "p2")
+        await act(async () =>
+            server.serve({
+                entries: [entry(0, AB2), entry(1, ABC2)],
+                stateId: "S2",
+                currentId: 1,
+            }),
+        )
+        expect(result.current.versions.map((v) => v.number)).toEqual([1, 2])
+        const [first, second] = result.current.versions
+        expect(first.fromScratch).toBe(true)
+        expect(first.summary.shapesAdded).toBe(2)
+        expect(second.pageId).toBe("p2")
+    })
+
+    it("undoes to the version the newest one replaced, after a restore in between", async () => {
+        // History: A, AB, ABC, A again (restored), AD; undo from AD goes to
+        // A (its newest copy), as restore_version does, not to ABC
+        const AD = doc(cell("a", "A") + cell("d", "D"))
+        const server = fakeSync(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, AB),
+                    entry(2, ABC),
+                    entry(3, A, { firstId: 0, source: "restore" }),
+                    entry(4, AD),
+                ],
+                4,
+            ),
+        )
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.canUndo).toBe(true)
+        await act(async () => {
+            result.current.undo()
+        })
+        expect(server.restores).toEqual([{ id: 3, stateId: "S1" }])
+        // Back at A: AD is the undone one
+        await act(async () =>
+            server.serve(
+                list(
+                    [
+                        entry(0, A),
+                        entry(1, AB),
+                        entry(2, ABC),
+                        entry(3, A, { firstId: 0, source: "restore" }),
+                        entry(4, AD),
+                        entry(5, A, { firstId: 0, source: "restore" }),
+                    ],
+                    5,
+                ),
+            ),
+        )
+        expect(result.current.onCanvasId).toBe("0")
+        expect(result.current.undoneId).toBe("4")
+        expect(result.current.canRedo).toBe(true)
     })
 
     it("has no versions without a sync", () => {

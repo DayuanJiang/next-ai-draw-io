@@ -1197,8 +1197,6 @@ describe("GET /api/history for the version cards", () => {
             svg: "",
             xml: page("a"),
             source: null,
-            time: a.time,
-            pages: 1,
             firstId: a.id,
         })
         expect(d.entries[1]).toMatchObject({
@@ -1207,6 +1205,49 @@ describe("GET /api/history for the version cards", () => {
             source: "user",
             firstId: b.id,
         })
+    })
+
+    it("gives the state a History key, which a hand edit changes once and a further one not at all", async () => {
+        // The shell reads History (every entry's XML and picture) again
+        // only when the key changes
+        const id = "mcp-history-key"
+        setState(id, page("a"))
+        addHistory(id, page("a"))
+        const [a] = getHistory(id)
+        const first = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(first.historyKey).toBe(`1:${a.id}:${a.id}`)
+        // A hand edit: the canvas is at no entry now, History is the same
+        const push = await postJson("/api/state", {
+            sessionId: id,
+            xml: page("b"),
+            baseVersion: first.version,
+            stateId: first.stateId,
+        })
+        expect(push.status).toBe(200)
+        expect(JSON.parse(push.body).historyKey).toBe(`1:${a.id}:null`)
+        const again = await postJson("/api/state", {
+            sessionId: id,
+            xml: page("c"),
+            baseVersion: first.version + 1,
+            stateId: first.stateId,
+        })
+        expect(JSON.parse(again.body).historyKey).toBe(`1:${a.id}:null`)
+        const polled = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(polled.historyKey).toBe(`1:${a.id}:null`)
+        // A write keeps the edit in History: the key names the new entry
+        keepInHistory(id, page("c"))
+        setState(id, page("d"))
+        addHistory(id, page("d"))
+        const [, c, d] = getHistory(id)
+        expect(c.xml).toBe(page("c"))
+        const after = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(after.historyKey).toBe(`3:${d.id}:${d.id}`)
     })
 
     it("names the entry a restored copy stands for, and marks the copy as a restore", async () => {

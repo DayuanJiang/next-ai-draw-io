@@ -1079,6 +1079,18 @@ describe("MCP sync History", () => {
         expect(t.notices).toEqual(["restoreFailed"])
     })
 
+    it("drops a History list of a state the poll has not seen yet", async () => {
+        // Another process answers on the port; its History has other ids.
+        // Its state is seen at the next poll, which tells the cards again
+        const t = await inStep()
+        const history = t.sync.fetchHistory()
+        t.next("GET", "/api/history").answer({
+            ...historyList,
+            body: { ...historyList.body, stateId: "S2" },
+        })
+        expect(await history).toBeNull()
+    })
+
     it("passes on the entry the server says is on the canvas", async () => {
         const t = await inStep()
         const history = t.sync.fetchHistory()
@@ -1092,18 +1104,24 @@ describe("MCP sync History", () => {
 
 // The version cards read History again when the server changed
 describe("MCP sync server change listener", () => {
-    it("tells once per server version: the first poll, a write, the tab's own edit", async () => {
+    it("tells once per History key: the first poll, a write, the tab's first edit, not its next", async () => {
+        // The server's key names History (count, newest id) and the entry
+        // on the canvas; the version cards read History only when it changes
         const t = open()
         let changes = 0
         const stop = t.sync.onServerChange(() => changes++)
         t.sync.setReady(true)
         let poll = t.sync.poll()
-        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        t.next("GET").answer(
+            state("S1", 2, "<mxfile>A</mxfile>", { historyKey: "1:0:0" }),
+        )
         await poll
         expect(changes).toBe(1)
-        // The same version again: nothing new
+        // The same key again: nothing new
         poll = t.sync.poll()
-        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        t.next("GET").answer(
+            state("S1", 2, "<mxfile>A</mxfile>", { historyKey: "1:0:0" }),
+        )
         await poll
         expect(changes).toBe(1)
         // The thumbnail of the write is stored: its entry has a picture now
@@ -1115,27 +1133,80 @@ describe("MCP sync server change listener", () => {
         expect(changes).toBe(2)
         // An AI write
         poll = t.sync.poll()
-        t.next("GET").answer(state("S1", 3, "<mxfile>B</mxfile>"))
+        t.next("GET").answer(
+            state("S1", 3, "<mxfile>B</mxfile>", { historyKey: "2:1:1" }),
+        )
         await poll
         expect(changes).toBe(3)
         // The user's edit is saved: the canvas is at no version now
         await edit(t, "<mxfile>C</mxfile>")
         t.next("POST", "/api/state").answer({
             status: 200,
-            body: { success: true, version: 4 },
+            body: { success: true, version: 4, historyKey: "2:1:null" },
         })
         await t.settle()
         expect(changes).toBe(4)
-        // The next poll sees the version the push already told about
+        // The next poll sees the key the push already told about
         poll = t.sync.poll()
-        t.next("GET").answer(state("S1", 4, "<mxfile>C</mxfile>"))
+        t.next("GET").answer(
+            state("S1", 4, "<mxfile>C</mxfile>", { historyKey: "2:1:null" }),
+        )
         await poll
+        expect(changes).toBe(4)
+        // A further edit changes History not at all: no download of it
+        await edit(t, "<mxfile>C2</mxfile>")
+        t.next("POST", "/api/state").answer({
+            status: 200,
+            body: { success: true, version: 5, historyKey: "2:1:null" },
+        })
+        await t.settle()
         expect(changes).toBe(4)
         stop()
         poll = t.sync.poll()
-        t.next("GET").answer(state("S1", 5, "<mxfile>D</mxfile>"))
+        t.next("GET").answer(
+            state("S1", 6, "<mxfile>D</mxfile>", { historyKey: "3:2:2" }),
+        )
         await poll
         expect(changes).toBe(4)
+    })
+
+    it("tells once per server version when the server sends no key", async () => {
+        const t = open()
+        let changes = 0
+        t.sync.onServerChange(() => changes++)
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await poll
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await poll
+        expect(changes).toBe(1)
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>B</mxfile>"))
+        await poll
+        expect(changes).toBe(2)
+    })
+
+    it("tells again at the next poll when a History read failed", async () => {
+        // The cards would otherwise keep the old list until the next write
+        const t = await inStep()
+        let changes = 0
+        t.sync.onServerChange(() => changes++)
+        const history = t.sync.fetchHistory()
+        t.next("GET", "/api/history").answer({ status: 500, body: {} })
+        expect(await history).toBeNull()
+        const poll = t.sync.poll()
+        t.next("GET", "/api/state").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await poll
+        expect(changes).toBe(1)
+        // Also when the request itself fails
+        const again = t.sync.fetchHistory()
+        t.next("GET", "/api/history").fail()
+        expect(await again).toBeNull()
+        const next = t.sync.poll()
+        t.next("GET", "/api/state").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await next
+        expect(changes).toBe(2)
     })
 
     it("tells when a rejected edit was kept in History, and when the state was recreated", async () => {

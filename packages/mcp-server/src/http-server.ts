@@ -445,6 +445,21 @@ export async function waitForSelection(
     return answer ?? null
 }
 
+/**
+ * What the version cards depend on: History's entries (their count and the
+ * newest id) and the entry the canvas shows. The shell reads History again
+ * only when this changes, so a hand edit (a new version, the same History)
+ * costs no download of every entry
+ */
+function historyKeyOf(sessionId: string, state?: SessionState): string {
+    const history = getHistory(sessionId)
+    const current =
+        state && history.length > 0
+            ? currentEntryId(sessionId, state.xml)
+            : null
+    return `${history.length}:${history.at(-1)?.id ?? -1}:${current}`
+}
+
 /** POST /api/state with a selection: the tab's answer to requestSelection */
 function handleSelectionResult(
     sessionId: string,
@@ -742,6 +757,7 @@ function handleStateApi(
                 exportOptions: state?.exportOptions || null,
                 exportId: state?.exportId ?? null,
                 selectionId: state?.selectionId ?? null,
+                historyKey: historyKeyOf(sessionId, state),
             }),
         )
     } else if (req.method === "POST") {
@@ -884,7 +900,13 @@ function handleStateApi(
                 const saved = stateStore.get(sessionId)
                 if (saved && data.source !== "sync") saved.userEdited = true
                 res.writeHead(200, { "Content-Type": "application/json" })
-                res.end(JSON.stringify({ success: true, version }))
+                res.end(
+                    JSON.stringify({
+                        success: true,
+                        version,
+                        historyKey: historyKeyOf(sessionId, saved),
+                    }),
+                )
             } catch {
                 res.writeHead(400, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Invalid JSON" }))
@@ -929,8 +951,6 @@ function handleHistoryApi(
                 svg: entry.svg,
                 xml: entry.xml,
                 source: entry.source ?? null,
-                time: entry.time,
-                pages: entry.pages,
                 firstId: firstIds.get(entry.id),
             })),
             count: history.length,

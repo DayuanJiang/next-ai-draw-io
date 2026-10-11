@@ -38,6 +38,9 @@ export interface ServerState {
     exportId: string | null
     /** A get_selection request waiting for this tab's answer */
     selectionId?: string | null
+    /** Changes when History or the entry on the canvas does (the version
+     * cards read History again then); older servers send none */
+    historyKey?: string
 }
 
 /** An entry of GET /api/history */
@@ -48,8 +51,6 @@ export interface HistoryEntryInfo {
     xml: string
     /** Who made it: "user", "recover", "restore"; null for the AI's writes */
     source: string | null
-    time: number
-    pages: number
     /** The oldest entry with the same content (itself when it is the first) */
     firstId: number
 }
@@ -323,18 +324,20 @@ export function createMcpSync(options: SyncOptions): McpSync {
         onStatus?.(next)
     }
 
-    // Listeners of onServerChange, told once per server version seen (any
-    // source: a write, the tab's own push) and whenever History changed
-    // without one (a rejected edit kept, a thumbnail stored)
+    // Listeners of onServerChange, told once per History key seen (the
+    // server sends it with every state and push answer; a write, a restore
+    // and the first hand edit change it, further hand edits do not) and
+    // whenever History changed without one (a rejected edit kept, a
+    // thumbnail stored)
     const changeListeners = new Set<() => void>()
-    let notedVersion = 0
+    let notedKey: string | null = null
     let notedStateId: string | null = null
     const emitChange = () => {
         for (const listener of changeListeners) listener()
     }
-    const noteServerVersion = (version: number, sid: string | null) => {
-        if (version === notedVersion && sid === notedStateId) return
-        notedVersion = version
+    const noteHistory = (key: string, sid: string | null) => {
+        if (key === notedKey && sid === notedStateId) return
+        notedKey = key
         notedStateId = sid
         emitChange()
     }
@@ -477,7 +480,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 if (sid !== stateId || d.version < currentVersion) return
                 currentVersion = d.version
                 lastXml = xml
-                noteServerVersion(currentVersion, stateId)
+                noteHistory(d.historyKey ?? String(d.version), stateId)
                 // The canvas changed while this edit was on its way, to
                 // something no pending autosave will send (an undo back to
                 // the previous version): send it now. A sync reply is
@@ -709,7 +712,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 justLoaded = true
             }
             // Also the tab's own push, and a version a projection holds back
-            noteServerVersion(s.version, stateId)
+            noteHistory(s.historyKey ?? String(s.version), stateId)
             // A sync request (get_diagram): after the load above, so draw.io
             // exports what it just loaded; never while a one-page projection
             // is on screen, which would be sent as the whole document
@@ -825,13 +828,24 @@ export function createMcpSync(options: SyncOptions): McpSync {
         async fetchHistory() {
             // A list for a state the server recreated meanwhile has old ids
             const sid = stateId
+            // A failed read is told again at the next poll: no other event
+            // comes for the same History
+            const failed = () => {
+                notedKey = null
+                return null
+            }
             try {
                 const r = await api(
                     `/history?sessionId=${encodeURIComponent(sessionId)}`,
                 )
-                if (!r.ok) return null
+                if (!r.ok) return failed()
                 const d = await r.json()
                 if (sid !== stateId) return null
+                // A list from a state the poll has not seen yet (another
+                // process answers): its poll tells the cards to read again
+                if (typeof d.stateId === "string" && d.stateId !== sid) {
+                    return null
+                }
                 return {
                     entries: d.entries ?? [],
                     stateId: sid,
@@ -839,7 +853,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                         typeof d.currentId === "number" ? d.currentId : null,
                 }
             } catch {
-                return null
+                return failed()
             }
         },
         async restoreEntry(id, listStateId) {
