@@ -104,15 +104,18 @@ jobs:
         env:
           CI: true
 
-      # The shell bundles the web app's canvas, so a change under these paths
+      # The shell bundles the web app's canvas and the root's dependencies,
+      # so a change under these paths (the ones publish-mcp.yml triggers on)
       # reaches users with the next MCP release, and publish-mcp.yml only
       # publishes a new version number
       - name: Remind to bump the MCP version when bundled code changed
         if: github.event_name == 'pull_request'
         run: |
-          changed=$(git diff --name-only HEAD^1 HEAD -- components contexts hooks lib stores app/globals.css packages/mcp-server/src packages/mcp-server/shell)
-          if [ -n "$changed" ] && git diff --quiet HEAD^1 HEAD -- packages/mcp-server/package.json; then
-            echo "::warning::Code bundled into the MCP server changed without a version bump in packages/mcp-server/package.json. Bump it if the change should be published."
+          changed=$(git diff --name-only HEAD^1 HEAD -- components contexts hooks lib stores app/globals.css package-lock.json scripts packages/mcp-server)
+          base_version=$(git show HEAD^1:packages/mcp-server/package.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          head_version=$(node -p "require('./packages/mcp-server/package.json').version")
+          if [ -n "$changed" ] && [ "$base_version" = "$head_version" ]; then
+            echo "::warning::Code bundled into the MCP server changed without a version bump in packages/mcp-server/package.json (still ${head_version}). Bump it if the change should be published."
           fi
 
       - name: Upload test results
