@@ -52,7 +52,6 @@ export interface ProviderConfig {
     vertexApiKey?: string // Express Mode API key
 
     models: ModelConfig[]
-    validated?: boolean // Has API key been validated
 }
 
 // The complete multi-model configuration
@@ -60,9 +59,6 @@ export interface MultiModelConfig {
     version: 1
     providers: ProviderConfig[]
     selectedModelId?: string // Currently selected model's UUID
-    // Older versions saved here whether untested models were listed in the
-    // model picker; they always are now
-    showUnvalidatedModels?: boolean
 }
 
 // Flattened model for dropdown display
@@ -86,10 +82,6 @@ export interface FlattenedModel {
     source?: "user" | "server"
     // Whether this model is the server default (matches AI_MODEL env var)
     isDefault?: boolean
-    // Custom env var name(s) for server models
-    // Can be a single string or array of strings for load balancing
-    apiKeyEnv?: string | string[]
-    baseUrlEnv?: string
 }
 
 // Providers whose server credentials live in fixed env vars
@@ -557,7 +549,6 @@ export function createProviderConfig(provider: ProviderName): ProviderConfig {
         apiKey: "",
         baseUrl: PROVIDER_INFO[provider].defaultBaseUrl,
         models: [],
-        validated: false,
     }
 }
 

@@ -11,6 +11,7 @@ import {
     Trash2,
     Upload,
 } from "lucide-react"
+import { useParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
     AlertDialog,
@@ -23,63 +24,33 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { formatRelativeTime } from "@/lib/relative-time"
 import {
     deleteTemplate,
     duplicateTemplate,
     exportTemplates,
     getAllTemplates,
     importTemplates,
-    incrementClickCount,
     incrementRunCount,
     searchTemplates,
     type Template,
     updateTemplate,
     validateImportData,
 } from "@/lib/template-storage"
-import { TemplateCreateDialog } from "./TemplateCreateDialog"
-import { TemplateEditDialog } from "./TemplateEditDialog"
+import { TemplateFormDialog } from "./TemplateFormDialog"
 
 interface TemplatePanelProps {
-    setInput: (input: string) => void
     /** Whether it was sent */
-    onSendTemplate?: (template: Template) => Promise<boolean>
+    onSendTemplate: (template: Template) => Promise<boolean>
     currentInput?: string
 }
 
-function formatLastUsed(timestamp: number, neverUsedText: string): string {
-    if (!timestamp) return neverUsedText
-    const now = Date.now()
-    const diffMs = now - timestamp
-    const diffMins = Math.floor(diffMs / (1000 * 60))
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    try {
-        const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
-        if (diffMins < 1) return rtf.format(0, "minute")
-        if (diffMins < 60) return rtf.format(-diffMins, "minute")
-        if (diffHours < 24) return rtf.format(-diffHours, "hour")
-        if (diffDays < 7) return rtf.format(-diffDays, "day")
-    } catch {
-        // Fallback if Intl.RelativeTimeFormat is not available
-        if (diffMins < 1) return "<1m ago"
-        if (diffMins < 60) return `${diffMins}m ago`
-        if (diffHours < 24) return `${diffHours}h ago`
-        if (diffDays < 7) return `${diffDays}d ago`
-    }
-
-    return new Date(timestamp).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-    })
-}
-
 export function TemplatePanel({
-    setInput,
     onSendTemplate,
     currentInput = "",
 }: TemplatePanelProps) {
     const dict = useDictionary()
+    const params = useParams<{ lang: string }>()
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -111,10 +82,6 @@ export function TemplatePanel({
 
     useEffect(() => {
         loadTemplates()
-        // Reload when a template is saved elsewhere, e.g. from the chat input
-        window.addEventListener("templatesChanged", loadTemplates)
-        return () =>
-            window.removeEventListener("templatesChanged", loadTemplates)
     }, [loadTemplates])
 
     const handleCreateSuccess = () => {
@@ -133,7 +100,7 @@ export function TemplatePanel({
     const handleDuplicate = async (template: Template) => {
         const duplicated = await duplicateTemplate(
             template.id,
-            dict.templates.copySuffix || "(copy)",
+            dict.templates.copySuffix,
         )
         if (duplicated) {
             loadTemplates()
@@ -179,23 +146,13 @@ export function TemplatePanel({
 
     // Actually send the template
     const sendTemplate = async (template: Template) => {
-        if (onSendTemplate) {
-            // Sent first, while the chat is the one it was clicked in (the
-            // counts wait for storage). A run only when it was sent (not
-            // while a message is still being sent, or attachments read).
-            const sending = onSendTemplate(template)
-            // Increment click count only when actually sending
-            await incrementClickCount(template.id)
-            if (await sending) {
-                // Increment run count and update lastUsedAt
-                await incrementRunCount(template.id)
-                // Reload to show updated stats
-                loadTemplates()
-            }
-        } else {
-            await incrementClickCount(template.id)
-            // Fallback: just fill the input if no send callback provided
-            setInput(template.prompt)
+        // A run only when it was sent (not while a message is still being
+        // sent, or attachments read)
+        if (await onSendTemplate(template)) {
+            // Increment run count and update lastUsedAt
+            await incrementRunCount(template.id)
+            // Reload to show updated stats
+            loadTemplates()
         }
         setConfirmSendDialogOpen(false)
         setTemplateToSend(null)
@@ -218,7 +175,7 @@ export function TemplatePanel({
         if (templates.length === 0) {
             setImportMessage({
                 type: "error",
-                text: dict.templates.exportEmpty || "No templates to export",
+                text: dict.templates.exportEmpty,
             })
             return
         }
@@ -260,8 +217,7 @@ export function TemplatePanel({
         if (!file) {
             setImportMessage({
                 type: "error",
-                text:
-                    dict.templates.importNoFile || "Please select a JSON file",
+                text: dict.templates.importNoFile,
             })
             return
         }
@@ -370,7 +326,7 @@ export function TemplatePanel({
                         <div className="mt-3">{importMessageBox}</div>
                     )}
 
-                    <TemplateCreateDialog
+                    <TemplateFormDialog
                         open={createDialogOpen}
                         onOpenChange={setCreateDialogOpen}
                         onSuccess={handleCreateSuccess}
@@ -500,7 +456,7 @@ export function TemplatePanel({
                                     <div className="relative shrink-0">
                                         <div className="text-[11px] text-muted-foreground whitespace-nowrap group-hover:invisible">
                                             {template.runCount > 0
-                                                ? `${dict.templates.usedCount.replace("{count}", String(template.runCount))} · ${formatLastUsed(template.lastUsedAt, dict.templates.neverUsed)}`
+                                                ? `${dict.templates.usedCount.replace("{count}", String(template.runCount))} · ${template.lastUsedAt ? formatRelativeTime(template.lastUsedAt, params.lang, dict.sessionHistory.justNow) : dict.templates.neverUsed}`
                                                 : dict.templates.neverUsed}
                                         </div>
                                         <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -517,10 +473,8 @@ export function TemplatePanel({
                                                 }`}
                                                 title={
                                                     template.pinned
-                                                        ? dict.templates
-                                                              .unpin || "Unpin"
-                                                        : dict.templates.pin ||
-                                                          "Pin"
+                                                        ? dict.templates.unpin
+                                                        : dict.templates.pin
                                                 }
                                             >
                                                 <Bookmark
@@ -545,10 +499,7 @@ export function TemplatePanel({
                                                     handleDuplicate(template)
                                                 }}
                                                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                                                title={
-                                                    dict.templates.duplicate ||
-                                                    "Duplicate"
-                                                }
+                                                title={dict.templates.duplicate}
                                             >
                                                 <Copy className="w-4 h-4" />
                                             </button>
@@ -570,13 +521,13 @@ export function TemplatePanel({
                 </div>
             </div>
 
-            <TemplateCreateDialog
+            <TemplateFormDialog
                 open={createDialogOpen}
                 onOpenChange={setCreateDialogOpen}
                 onSuccess={handleCreateSuccess}
             />
 
-            <TemplateEditDialog
+            <TemplateFormDialog
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}
                 template={templateToEdit}
@@ -591,12 +542,10 @@ export function TemplatePanel({
                 <AlertDialogContent className="max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {dict.templates.deleteTitle ||
-                                "Delete this template?"}
+                            {dict.templates.deleteTitle}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {dict.templates.deleteDescription ||
-                                "This will permanently delete this template. This action cannot be undone."}
+                            {dict.templates.deleteDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -621,12 +570,10 @@ export function TemplatePanel({
                 <AlertDialogContent className="max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {dict.templates.confirmSendTitle ||
-                                "Replace current input?"}
+                            {dict.templates.confirmSendTitle}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {dict.templates.confirmSendDescription ||
-                                "You have unsent content in the input. Sending this template will replace it."}
+                            {dict.templates.confirmSendDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -634,8 +581,7 @@ export function TemplatePanel({
                             {dict.common.cancel}
                         </AlertDialogCancel>
                         <AlertDialogAction onClick={handleConfirmSend}>
-                            {dict.templates.confirmSendButton ||
-                                "Send Template"}
+                            {dict.templates.confirmSendButton}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

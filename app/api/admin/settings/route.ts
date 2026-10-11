@@ -53,10 +53,6 @@ function validateValue(def: SettingDef, value: string): string | null {
             return value === "true" || value === "false"
                 ? null
                 : 'Must be "true" or "false"'
-        case "enum":
-            return def.options?.includes(value)
-                ? null
-                : `Must be one of: ${def.options?.join(", ")}`
         default:
             return null
     }

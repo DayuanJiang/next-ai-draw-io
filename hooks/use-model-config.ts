@@ -18,56 +18,6 @@ import {
     type ProviderName,
 } from "@/lib/types/model-config"
 
-// Old storage keys for migration
-const OLD_KEYS = {
-    aiProvider: "next-ai-draw-io-ai-provider",
-    aiBaseUrl: "next-ai-draw-io-ai-base-url",
-    aiApiKey: "next-ai-draw-io-ai-api-key",
-    aiModel: "next-ai-draw-io-ai-model",
-}
-
-/**
- * Migrate from old single-provider format to new multi-model format
- */
-function migrateOldConfig(): MultiModelConfig | null {
-    if (typeof window === "undefined") return null
-
-    const oldProvider = localStorage.getItem(OLD_KEYS.aiProvider)
-    const oldApiKey = localStorage.getItem(OLD_KEYS.aiApiKey)
-    const oldModel = localStorage.getItem(OLD_KEYS.aiModel)
-
-    // No old config to migrate. A local Ollama needs no key.
-    if (!oldProvider || !oldModel) return null
-    if (!oldApiKey && oldProvider !== "ollama") return null
-
-    const oldBaseUrl = localStorage.getItem(OLD_KEYS.aiBaseUrl)
-
-    // Create new config from old format
-    const provider = createProviderConfig(oldProvider as ProviderName)
-    provider.apiKey = oldApiKey ?? ""
-    if (oldBaseUrl) provider.baseUrl = oldBaseUrl
-    // Without one, the old version used the server's Ollama (OLLAMA_BASE_URL
-    // or this machine), not the cloud address new providers get
-    else if (oldProvider === "ollama") provider.baseUrl = ""
-
-    const model = createModelConfig(oldModel)
-    provider.models.push(model)
-
-    const config: MultiModelConfig = {
-        version: 1,
-        providers: [provider],
-        selectedModelId: model.id,
-    }
-
-    // Clear old keys after migration
-    localStorage.removeItem(OLD_KEYS.aiProvider)
-    localStorage.removeItem(OLD_KEYS.aiBaseUrl)
-    localStorage.removeItem(OLD_KEYS.aiApiKey)
-    localStorage.removeItem(OLD_KEYS.aiModel)
-
-    return config
-}
-
 const isKnownProvider = (p: { provider: string }) =>
     Object.hasOwn(PROVIDER_INFO, p.provider)
 
@@ -96,7 +46,6 @@ function parseStoredConfig(stored: string): MultiModelConfig {
 function loadConfig(): MultiModelConfig {
     if (typeof window === "undefined") return createEmptyConfig()
 
-    // First, check if new format exists
     const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
     if (stored) {
         try {
@@ -104,17 +53,6 @@ function loadConfig(): MultiModelConfig {
         } catch {
             console.error("Failed to parse model config")
         }
-    }
-
-    // Try migration from old format
-    const migrated = migrateOldConfig()
-    if (migrated) {
-        // Save migrated config
-        localStorage.setItem(
-            STORAGE_KEYS.modelConfigs,
-            JSON.stringify(migrated),
-        )
-        return migrated
     }
 
     return createEmptyConfig()
@@ -163,7 +101,6 @@ export interface UseModelConfigReturn {
 
     // Getters
     models: FlattenedModel[]
-    selectedModel: FlattenedModel | undefined
     selectedModelId: string | undefined
 
     // Actions
@@ -181,7 +118,6 @@ export interface UseModelConfigReturn {
         updates: Partial<ModelConfig>,
     ) => void
     deleteModel: (providerId: string, modelConfigId: string) => void
-    resetConfig: () => void
 }
 
 export function useModelConfig(): UseModelConfigReturn {
@@ -281,7 +217,7 @@ export function useModelConfig(): UseModelConfigReturn {
             id: m.id,
             modelId: m.modelId,
             provider: m.provider,
-            providerLabel: `Server · ${m.providerLabel}`,
+            providerLabel: m.providerLabel,
             apiKey: "",
             baseUrl: undefined,
             awsAccessKeyId: undefined,
@@ -291,16 +227,10 @@ export function useModelConfig(): UseModelConfigReturn {
             validated: true,
             source: "server" as const,
             isDefault: m.isDefault,
-            apiKeyEnv: m.apiKeyEnv,
-            baseUrlEnv: m.baseUrlEnv,
         })),
         // User models from local configuration
         ...userModels,
     ]
-
-    const selectedModel = config.selectedModelId
-        ? models.find((m) => m.id === config.selectedModelId)
-        : undefined
 
     // Actions
     const setSelectedModelId = useCallback((modelId: string | undefined) => {
@@ -426,15 +356,10 @@ export function useModelConfig(): UseModelConfigReturn {
         [serverModels],
     )
 
-    const resetConfig = useCallback(() => {
-        setConfig(createEmptyConfig())
-    }, [])
-
     return {
         config,
         isLoaded: isLoaded && serverLoaded,
         models,
-        selectedModel,
         selectedModelId: config.selectedModelId,
         setSelectedModelId,
         addProvider,
@@ -443,7 +368,6 @@ export function useModelConfig(): UseModelConfigReturn {
         addModel,
         updateModel,
         deleteModel,
-        resetConfig,
     }
 }
 
@@ -491,24 +415,7 @@ export function getSelectedAIConfig(): {
 
     // Load multi-model config
     const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
-    if (!stored) {
-        // Fallback to old format for backward compatibility
-        return {
-            accessCode,
-            aiProvider: localStorage.getItem(OLD_KEYS.aiProvider) || "",
-            aiBaseUrl: localStorage.getItem(OLD_KEYS.aiBaseUrl) || "",
-            aiApiKey: localStorage.getItem(OLD_KEYS.aiApiKey) || "",
-            aiModel: localStorage.getItem(OLD_KEYS.aiModel) || "",
-            // Old format didn't support AWS
-            awsAccessKeyId: "",
-            awsSecretAccessKey: "",
-            awsRegion: "",
-            awsSessionToken: "",
-            selectedModelId: "",
-            vertexApiKey: "",
-            providerId: "",
-        }
-    }
+    if (!stored) return { ...empty, accessCode }
 
     let config: MultiModelConfig
     try {

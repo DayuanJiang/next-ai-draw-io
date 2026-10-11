@@ -399,7 +399,6 @@ test("a test result for a key changed on another settings tab is dropped", async
     const saved = await savedConfig(page)
     expect(saved.providers[0].apiKey).toBe("new-key")
     expect(saved.providers[0].models[0].validated).not.toBe(true)
-    expect(saved.providers[0].validated).not.toBe(true)
 })
 
 test("a test result for a model renamed on another settings tab is dropped", async ({

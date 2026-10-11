@@ -1,7 +1,7 @@
 "use client"
 
-import { Bookmark, Edit2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Bookmark, Edit2, Plus } from "lucide-react"
+import { useEffect, useId, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -16,22 +16,32 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { type Template, updateTemplate } from "@/lib/template-storage"
+import {
+    createTemplate,
+    type Template,
+    updateTemplate,
+} from "@/lib/template-storage"
 
-interface TemplateEditDialogProps {
+interface TemplateFormDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    template: Template | null
     onSuccess: () => void
+    /** The template to edit; without one the dialog creates a new template */
+    template?: Template | null
+    initialPrompt?: string
 }
 
-export function TemplateEditDialog({
+// One form for creating and editing a template
+export function TemplateFormDialog({
     open,
     onOpenChange,
-    template,
     onSuccess,
-}: TemplateEditDialogProps) {
+    template,
+    initialPrompt = "",
+}: TemplateFormDialogProps) {
     const dict = useDictionary()
+    const id = useId()
+    const isEdit = !!template
     const [title, setTitle] = useState("")
     const [description, setDescription] = useState("")
     const [prompt, setPrompt] = useState("")
@@ -39,31 +49,21 @@ export function TemplateEditDialog({
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
-    // Populate form each time the dialog opens, dropping any cancelled edits
+    // Fill the form each time the dialog opens, dropping cancelled edits
     useEffect(() => {
-        if (open && template) {
-            setTitle(template.title || "")
-            setDescription(template.description || "")
-            setPrompt(template.prompt || "")
-            setPinned(template.pinned || false)
-            setError(null)
-        }
-    }, [open, template])
-
-    const handleOpenChange = (newOpen: boolean) => {
-        if (!newOpen) {
-            setError(null)
-        }
-        onOpenChange(newOpen)
-    }
+        if (!open) return
+        setTitle(template?.title || "")
+        setDescription(template?.description || "")
+        setPrompt(template ? template.prompt || "" : initialPrompt)
+        setPinned(template?.pinned || false)
+        setError(null)
+    }, [open, template, initialPrompt])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         // React submit events bubble through the portal; keep them away from
-        // any form this dialog may be rendered in
+        // the chat form this dialog may be rendered in
         e.stopPropagation()
-
-        if (!template) return
 
         const trimmedPrompt = prompt.trim()
         if (!trimmedPrompt) {
@@ -74,40 +74,59 @@ export function TemplateEditDialog({
         setIsSubmitting(true)
         setError(null)
 
+        const failed = isEdit
+            ? dict.templates.updateFailed
+            : dict.templates.createFailed
         try {
-            const updates: Partial<Omit<Template, "id" | "createdAt">> = {
+            const fields = {
                 prompt: trimmedPrompt,
-                title: title.trim() || template.title,
                 description: description.trim() || undefined,
                 pinned,
             }
-
-            const updated = await updateTemplate(template.id, updates)
-            if (updated) {
+            // An emptied title keeps the old one when editing; a new template
+            // gets a default title from its prompt
+            const result = template
+                ? await updateTemplate(template.id, {
+                      ...fields,
+                      title: title.trim() || template.title,
+                  })
+                : await createTemplate({
+                      ...fields,
+                      title: title.trim() || undefined,
+                  })
+            if (result) {
                 onSuccess()
                 onOpenChange(false)
             } else {
-                setError(dict.templates.updateFailed)
+                setError(failed)
             }
         } catch (err) {
-            console.error("Failed to update template:", err)
-            setError(dict.templates.updateFailed)
+            console.error("Failed to save template:", err)
+            setError(failed)
         } finally {
             setIsSubmitting(false)
         }
     }
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px] overflow-hidden">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Edit2 className="w-5 h-5" />
-                            {dict.templates.editTitle}
+                            {isEdit ? (
+                                <Edit2 className="w-5 h-5" />
+                            ) : (
+                                <Plus className="w-5 h-5" />
+                            )}
+                            {isEdit
+                                ? dict.templates.editTitle
+                                : dict.templates.createTitle}
                         </DialogTitle>
                         <DialogDescription>
-                            {dict.templates.editDescription}
+                            {isEdit
+                                ? dict.templates.editDescription
+                                : dict.templates.createDescription}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -115,14 +134,14 @@ export function TemplateEditDialog({
                         {/* Prompt field - required */}
                         <div className="space-y-2">
                             <Label
-                                htmlFor="edit-prompt"
+                                htmlFor={`${id}-prompt`}
                                 className="text-foreground"
                             >
                                 {dict.templates.promptLabel}
                                 <span className="text-destructive ml-1">*</span>
                             </Label>
                             <Textarea
-                                id="edit-prompt"
+                                id={`${id}-prompt`}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 placeholder={dict.templates.promptPlaceholder}
@@ -134,13 +153,13 @@ export function TemplateEditDialog({
                         {/* Title field - optional */}
                         <div className="space-y-2">
                             <Label
-                                htmlFor="edit-title"
+                                htmlFor={`${id}-title`}
                                 className="text-foreground"
                             >
                                 {dict.templates.titleLabel}
                             </Label>
                             <Input
-                                id="edit-title"
+                                id={`${id}-title`}
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 placeholder={dict.templates.titlePlaceholder}
@@ -153,13 +172,13 @@ export function TemplateEditDialog({
                         {/* Description field - optional */}
                         <div className="space-y-2">
                             <Label
-                                htmlFor="edit-description"
+                                htmlFor={`${id}-description`}
                                 className="text-foreground"
                             >
                                 {dict.templates.descriptionLabel}
                             </Label>
                             <Textarea
-                                id="edit-description"
+                                id={`${id}-description`}
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder={
@@ -173,7 +192,7 @@ export function TemplateEditDialog({
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
                                 <Label
-                                    htmlFor="edit-pinned"
+                                    htmlFor={`${id}-pinned`}
                                     className="flex items-center gap-2 text-foreground"
                                 >
                                     <Bookmark className="w-4 h-4" />
@@ -184,7 +203,7 @@ export function TemplateEditDialog({
                                 </p>
                             </div>
                             <Switch
-                                id="edit-pinned"
+                                id={`${id}-pinned`}
                                 checked={pinned}
                                 onCheckedChange={setPinned}
                             />
@@ -208,7 +227,9 @@ export function TemplateEditDialog({
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting
                                 ? dict.common.loading
-                                : dict.common.save}
+                                : isEdit
+                                  ? dict.common.save
+                                  : dict.templates.createButton}
                         </Button>
                     </DialogFooter>
                 </form>

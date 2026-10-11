@@ -10,28 +10,38 @@ import {
     Settings2,
     User,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
 import {
-    ModelSelectorContent,
-    ModelSelectorEmpty,
-    ModelSelectorGroup,
-    ModelSelectorInput,
-    ModelSelectorItem,
-    ModelSelectorList,
-    ModelSelectorLogo,
-    ModelSelectorName,
-    ModelSelector as ModelSelectorRoot,
-    ModelSelectorSectionHeader,
-    ModelSelectorSeparator,
-    ModelSelectorTrigger,
-} from "@/components/ai-elements/model-selector"
-import { ButtonWithTooltip } from "@/components/button-with-tooltip"
+    type ComponentProps,
+    type ReactNode,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react"
 import { ProviderLogo } from "@/components/provider-logo"
-import { useDictionary } from "@/hooks/use-dictionary"
+import { Button } from "@/components/ui/button"
 import {
-    type FlattenedModel,
-    PROVIDER_LOGO_MAP,
-} from "@/lib/types/model-config"
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
+} from "@/components/ui/command"
+import {
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useDictionary } from "@/hooks/use-dictionary"
+import type { FlattenedModel, ProviderName } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
 interface ModelSelectorProps {
@@ -44,25 +54,22 @@ interface ModelSelectorProps {
     disabled?: boolean
 }
 
+type ProviderGroup = { provider: ProviderName; models: FlattenedModel[] }
+
 // Group models by providerLabel (handles duplicate providers)
 function groupModelsByProvider(
     models: FlattenedModel[],
-): Map<string, { provider: string; models: FlattenedModel[] }> {
-    const groups = new Map<
-        string,
-        { provider: string; models: FlattenedModel[] }
-    >()
+): Map<string, ProviderGroup> {
+    const groups = new Map<string, ProviderGroup>()
     for (const model of models) {
-        // For server models, strip "Server · " prefix for cleaner grouping
-        const key =
-            model.source === "server"
-                ? model.providerLabel.replace(/^Server · /, "")
-                : model.providerLabel
-        const existing = groups.get(key)
+        const existing = groups.get(model.providerLabel)
         if (existing) {
             existing.models.push(model)
         } else {
-            groups.set(key, { provider: model.provider, models: [model] })
+            groups.set(model.providerLabel, {
+                provider: model.provider,
+                models: [model],
+            })
         }
     }
     return groups
@@ -86,6 +93,72 @@ export function shortModelName(id: string): string {
         return name.replace(/^(?:global|us|eu|apac|jp|au|ca|us-gov)\./i, "")
     }
     return short
+}
+
+// The command list with a shadow at the bottom while more items are below
+function ModelList({
+    className,
+    ...props
+}: ComponentProps<typeof CommandList>) {
+    const listRef = useRef<HTMLDivElement>(null)
+    const [showShadow, setShowShadow] = useState(false)
+
+    useEffect(() => {
+        const listElement = listRef.current
+        if (!listElement) return
+
+        const checkScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = listElement
+            // A small threshold handles fractional pixel rendering
+            setShowShadow(
+                scrollHeight > Math.ceil(scrollTop + clientHeight) + 1,
+            )
+        }
+
+        checkScroll()
+        listElement.addEventListener("scroll", checkScroll)
+        window.addEventListener("resize", checkScroll)
+        // Content changes, e.g. the search filtering items
+        const observer = new MutationObserver(checkScroll)
+        observer.observe(listElement, { childList: true, subtree: true })
+
+        return () => {
+            listElement.removeEventListener("scroll", checkScroll)
+            window.removeEventListener("resize", checkScroll)
+            observer.disconnect()
+        }
+    }, [])
+
+    return (
+        <div className="relative">
+            <CommandList
+                ref={listRef}
+                className={cn(
+                    // Hide scrollbar on all platforms
+                    "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+                    className,
+                )}
+                {...props}
+            />
+            <div
+                className={cn(
+                    "pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-muted/80 via-muted/40 to-transparent transition-opacity duration-200",
+                    showShadow ? "opacity-100" : "opacity-0",
+                )}
+            />
+        </div>
+    )
+}
+
+function SectionHeader({ icon, label }: { icon: ReactNode; label: string }) {
+    return (
+        <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/40 rounded-sm mx-1 mt-1">
+            <span className="[&>svg]:size-3.5" aria-hidden="true">
+                {icon}
+            </span>
+            <span>{label}</span>
+        </div>
+    )
 }
 
 export function ModelSelector({
@@ -146,6 +219,52 @@ export function ModelSelector({
         setOpen(false)
     }
 
+    // One group per provider; `trailing` is the small label at the end of a
+    // row ("Default" for server models, the test state for user models)
+    const renderGroups = (
+        groups: Map<string, ProviderGroup>,
+        keyPrefix: "server" | "user",
+        trailing: (model: FlattenedModel) => ReactNode,
+    ) =>
+        Array.from(groups.entries()).map(
+            ([providerLabel, { provider, models: providerModels }]) => (
+                <CommandGroup
+                    key={`${keyPrefix}-${providerLabel}`}
+                    heading={providerLabel}
+                    className="[&>[cmdk-group-heading]]:pl-4"
+                >
+                    {providerModels.map((model) => (
+                        <CommandItem
+                            key={model.id}
+                            // Unique value so same-named models highlight
+                            // separately; keywords keep search by name
+                            value={model.id}
+                            keywords={[model.modelId, providerLabel]}
+                            onSelect={() => handleSelect(model.id)}
+                            className="cursor-pointer"
+                        >
+                            <Check
+                                className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedModelId === model.id
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                )}
+                            />
+                            <ProviderLogo
+                                provider={provider}
+                                className="mr-2"
+                            />
+                            <span className="flex-1 truncate text-left">
+                                {model.modelId}
+                            </span>
+                            {trailing(model)}
+                        </CommandItem>
+                    ))}
+                </CommandGroup>
+            ),
+        )
+
     const tooltipContent = selectedModel
         ? `${selectedModel.modelId} ${dict.modelConfig.clickToChange}`
         : `${dict.modelConfig.usingServerDefault} ${dict.modelConfig.clickToChange}`
@@ -186,329 +305,244 @@ export function ModelSelector({
 
     return (
         <div ref={wrapperRef} className="min-w-0 max-w-44">
-            <ModelSelectorRoot
+            <Dialog
                 open={open}
                 onOpenChange={(next) => {
                     if (next) toSettingsRef.current = false
                     setOpen(next)
                 }}
             >
-                <ModelSelectorTrigger asChild>
-                    <ButtonWithTooltip
-                        tooltipContent={tooltipContent}
-                        variant="ghost"
-                        size="sm"
-                        disabled={disabled}
-                        className={cn(
-                            "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 font-normal text-muted-foreground transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent hover:text-foreground",
-                            !showLabel && "px-1.5 justify-center",
-                        )}
-                        // accessibility: expose label to screen readers
-                        aria-label={tooltipContent}
-                        data-testid="model-selector"
-                    >
-                        {selectedModel ? (
-                            <ProviderLogo
-                                provider={selectedModel.provider}
-                                className="size-3.5 flex-shrink-0 opacity-80"
-                            />
-                        ) : (
-                            <Bot className="h-4 w-4 flex-shrink-0" />
-                        )}
-                        {/* show/hide visible label based on measured width */}
-                        {showLabel ? (
-                            <span className="min-w-0 truncate text-xs">
-                                {selectedModel
-                                    ? shortModelName(selectedModel.modelId)
-                                    : dict.modelConfig.serverDefault}
-                            </span>
-                        ) : (
-                            // Keep an sr-only label for screen readers when hidden
-                            <span className="sr-only">
-                                {selectedModel
-                                    ? selectedModel.modelId
-                                    : dict.modelConfig.serverDefault}
-                            </span>
-                        )}
-                        <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                    </ButtonWithTooltip>
-                </ModelSelectorTrigger>
+                {/* The dialog trigger must wrap the button itself: Radix
+                    Tooltip's root renders no element to pass its props to */}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DialogTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={disabled}
+                                className={cn(
+                                    "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 font-normal text-muted-foreground transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent hover:text-foreground",
+                                    !showLabel && "px-1.5 justify-center",
+                                )}
+                                // accessibility: expose label to screen readers
+                                aria-label={tooltipContent}
+                                data-testid="model-selector"
+                            >
+                                {selectedModel ? (
+                                    <ProviderLogo
+                                        provider={selectedModel.provider}
+                                        className="size-3.5 flex-shrink-0 opacity-80"
+                                    />
+                                ) : (
+                                    <Bot className="h-4 w-4 flex-shrink-0" />
+                                )}
+                                {/* show/hide visible label based on measured width */}
+                                {showLabel ? (
+                                    <span className="min-w-0 truncate text-xs">
+                                        {selectedModel
+                                            ? shortModelName(
+                                                  selectedModel.modelId,
+                                              )
+                                            : dict.modelConfig.serverDefault}
+                                    </span>
+                                ) : (
+                                    // Keep an sr-only label for screen readers when hidden
+                                    <span className="sr-only">
+                                        {selectedModel
+                                            ? selectedModel.modelId
+                                            : dict.modelConfig.serverDefault}
+                                    </span>
+                                )}
+                                <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                            </Button>
+                        </DialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-wrap">
+                        {tooltipContent}
+                    </TooltipContent>
+                </Tooltip>
 
-                <ModelSelectorContent
-                    title={dict.modelConfig.selectModel}
+                <DialogContent
+                    className="p-0"
                     onCloseAutoFocus={(e) => {
                         if (!toSettingsRef.current) return
                         toSettingsRef.current = false
                         e.preventDefault()
                     }}
                 >
-                    <ModelSelectorInput
-                        placeholder={dict.modelConfig.searchModels}
-                    />
-                    <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
-                        <div className="flex-1 min-h-0 overflow-hidden">
-                            <ModelSelectorList className="overflow-y-auto scrollbar-thin">
-                                <ModelSelectorEmpty>
-                                    {dict.modelConfig.noModelsFound}
-                                </ModelSelectorEmpty>
+                    <DialogTitle className="sr-only">
+                        {dict.modelConfig.selectModel}
+                    </DialogTitle>
+                    <Command className="**:data-[slot=command-input-wrapper]:h-auto">
+                        <CommandInput
+                            className="h-auto py-3.5"
+                            placeholder={dict.modelConfig.searchModels}
+                        />
+                        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+                            <div className="flex-1 min-h-0 overflow-hidden">
+                                <ModelList className="overflow-y-auto scrollbar-thin">
+                                    <CommandEmpty>
+                                        {dict.modelConfig.noModelsFound}
+                                    </CommandEmpty>
 
-                                {/* Server Default Option - only show when no server models are configured */}
-                                {serverModels.length === 0 && (
-                                    <ModelSelectorGroup
-                                        heading={dict.modelConfig.default}
-                                    >
-                                        <ModelSelectorItem
-                                            value="__server_default__"
-                                            onSelect={handleSelect}
-                                            className={cn(
-                                                "cursor-pointer",
-                                                !selectedModelId && "bg-accent",
-                                            )}
+                                    {/* Server Default Option - only show when no server models are configured */}
+                                    {serverModels.length === 0 && (
+                                        <CommandGroup
+                                            heading={dict.modelConfig.default}
                                         >
-                                            <Check
+                                            <CommandItem
+                                                value="__server_default__"
+                                                onSelect={handleSelect}
                                                 className={cn(
-                                                    "mr-2 h-4 w-4",
-                                                    !selectedModelId
-                                                        ? "opacity-100"
-                                                        : "opacity-0",
+                                                    "cursor-pointer",
+                                                    !selectedModelId &&
+                                                        "bg-accent",
                                                 )}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        !selectedModelId
+                                                            ? "opacity-100"
+                                                            : "opacity-0",
+                                                    )}
+                                                />
+                                                <Server className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                <span className="flex-1 truncate text-left">
+                                                    {
+                                                        dict.modelConfig
+                                                            .serverDefault
+                                                    }
+                                                </span>
+                                            </CommandItem>
+                                        </CommandGroup>
+                                    )}
+
+                                    {/* Server Models Section */}
+                                    {serverModels.length > 0 && (
+                                        <>
+                                            <SectionHeader
+                                                icon={<Monitor />}
+                                                label={
+                                                    dict.modelConfig
+                                                        .serverModels
+                                                }
                                             />
-                                            <Server className="mr-2 h-4 w-4 text-muted-foreground" />
-                                            <ModelSelectorName>
-                                                {dict.modelConfig.serverDefault}
-                                            </ModelSelectorName>
-                                        </ModelSelectorItem>
-                                    </ModelSelectorGroup>
-                                )}
+                                            {renderGroups(
+                                                groupedServerModels,
+                                                "server",
+                                                (model) =>
+                                                    model.isDefault && (
+                                                        <span
+                                                            title={
+                                                                dict.modelConfig
+                                                                    .serverDefaultModel
+                                                            }
+                                                            className="ml-auto text-xs text-muted-foreground"
+                                                        >
+                                                            {
+                                                                dict.modelConfig
+                                                                    .default
+                                                            }
+                                                        </span>
+                                                    ),
+                                            )}
+                                        </>
+                                    )}
 
-                                {/* Server Models Section */}
-                                {serverModels.length > 0 && (
-                                    <>
-                                        <ModelSelectorSectionHeader
-                                            icon={<Monitor />}
-                                            label={
-                                                dict.modelConfig.serverModels
-                                            }
-                                        />
-                                        {Array.from(
-                                            groupedServerModels.entries(),
-                                        ).map(
-                                            ([
-                                                providerLabel,
-                                                {
-                                                    provider,
-                                                    models: providerModels,
-                                                },
-                                            ]) => (
-                                                <ModelSelectorGroup
-                                                    key={`server-${providerLabel}`}
-                                                    heading={providerLabel}
-                                                    className="[&>[cmdk-group-heading]]:pl-4"
-                                                >
-                                                    {providerModels.map(
-                                                        (model) => (
-                                                            <ModelSelectorItem
-                                                                key={model.id}
-                                                                // Unique value so same-named models highlight
-                                                                // separately; keywords keep search by name
-                                                                value={model.id}
-                                                                keywords={[
-                                                                    model.modelId,
-                                                                    providerLabel,
-                                                                ]}
-                                                                onSelect={() =>
-                                                                    handleSelect(
-                                                                        model.id,
-                                                                    )
-                                                                }
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={cn(
-                                                                        "mr-2 h-4 w-4",
-                                                                        selectedModelId ===
-                                                                            model.id
-                                                                            ? "opacity-100"
-                                                                            : "opacity-0",
-                                                                    )}
-                                                                />
-                                                                <ModelSelectorLogo
-                                                                    provider={
-                                                                        PROVIDER_LOGO_MAP[
-                                                                            provider
-                                                                        ] ||
-                                                                        provider
-                                                                    }
-                                                                    className="mr-2"
-                                                                />
-                                                                <ModelSelectorName>
-                                                                    {
-                                                                        model.modelId
-                                                                    }
-                                                                </ModelSelectorName>
-                                                                {model.isDefault && (
-                                                                    <span
-                                                                        title={
-                                                                            dict
-                                                                                .modelConfig
-                                                                                .serverDefaultModel
-                                                                        }
-                                                                        className="ml-auto text-xs text-muted-foreground"
-                                                                    >
-                                                                        {
-                                                                            dict
-                                                                                .modelConfig
-                                                                                .default
-                                                                        }
-                                                                    </span>
-                                                                )}
-                                                            </ModelSelectorItem>
-                                                        ),
-                                                    )}
-                                                </ModelSelectorGroup>
-                                            ),
-                                        )}
-                                    </>
-                                )}
-
-                                {/* User Models Section */}
-                                {userModels.length > 0 && (
-                                    <>
-                                        {serverModels.length > 0 && (
-                                            <ModelSelectorSeparator />
-                                        )}
-                                        <ModelSelectorSectionHeader
-                                            icon={<User />}
-                                            label={dict.modelConfig.userModels}
-                                        />
-                                        {Array.from(
-                                            groupedUserModels.entries(),
-                                        ).map(
-                                            ([
-                                                providerLabel,
-                                                {
-                                                    provider,
-                                                    models: providerModels,
-                                                },
-                                            ]) => (
-                                                <ModelSelectorGroup
-                                                    key={`user-${providerLabel}`}
-                                                    heading={providerLabel}
-                                                    className="[&>[cmdk-group-heading]]:pl-4"
-                                                >
-                                                    {providerModels.map(
-                                                        (model) => (
-                                                            <ModelSelectorItem
-                                                                key={model.id}
-                                                                value={model.id}
-                                                                keywords={[
-                                                                    model.modelId,
-                                                                    providerLabel,
-                                                                ]}
-                                                                onSelect={() =>
-                                                                    handleSelect(
-                                                                        model.id,
-                                                                    )
-                                                                }
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={cn(
-                                                                        "mr-2 h-4 w-4",
-                                                                        selectedModelId ===
-                                                                            model.id
-                                                                            ? "opacity-100"
-                                                                            : "opacity-0",
-                                                                    )}
-                                                                />
-                                                                <ModelSelectorLogo
-                                                                    provider={
-                                                                        PROVIDER_LOGO_MAP[
-                                                                            provider
-                                                                        ] ||
-                                                                        provider
-                                                                    }
-                                                                    className="mr-2"
-                                                                />
-                                                                <ModelSelectorName>
-                                                                    {
-                                                                        model.modelId
-                                                                    }
-                                                                </ModelSelectorName>
-                                                                {model.validated !==
-                                                                    true && (
-                                                                    <span
-                                                                        className={cn(
-                                                                            "ml-auto shrink-0 pl-2 text-xs",
-                                                                            model.validated ===
-                                                                                false
-                                                                                ? "text-destructive"
-                                                                                : "text-muted-foreground",
-                                                                        )}
-                                                                    >
-                                                                        {model.validated ===
-                                                                        false
-                                                                            ? dict
-                                                                                  .modelConfig
-                                                                                  .modelFailed
-                                                                            : dict
-                                                                                  .modelConfig
-                                                                                  .modelUntested}
-                                                                    </span>
-                                                                )}
-                                                            </ModelSelectorItem>
-                                                        ),
-                                                    )}
-                                                </ModelSelectorGroup>
-                                            ),
-                                        )}
-                                    </>
-                                )}
-                            </ModelSelectorList>
-                        </div>
-                        {/* Pinned footer: add a provider, configure models
-                            (z-10 above list shadow). Buttons, outside the
-                            search: reachable with Tab, never filtered out */}
-                        {(onAddProvider || onConfigure) && (
-                            <div
-                                className="relative z-10 shrink-0 space-y-0.5 border-t bg-background px-3 py-2"
-                                // The search's Enter would pick the highlighted
-                                // model instead of pressing the button
-                                onKeyDown={(e) => e.stopPropagation()}
-                            >
-                                {onAddProvider && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            goToSettings(onAddProvider)
-                                        }
-                                        className={footerButton}
-                                    >
-                                        <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <span className="truncate">
-                                            {dict.modelConfig.addProviderEntry}
-                                        </span>
-                                    </button>
-                                )}
-                                {onConfigure && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            goToSettings(onConfigure)
-                                        }
-                                        className={footerButton}
-                                    >
-                                        <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <span className="truncate">
-                                            {dict.modelConfig.configureModels}
-                                        </span>
-                                    </button>
-                                )}
+                                    {/* User Models Section */}
+                                    {userModels.length > 0 && (
+                                        <>
+                                            {serverModels.length > 0 && (
+                                                <CommandSeparator />
+                                            )}
+                                            <SectionHeader
+                                                icon={<User />}
+                                                label={
+                                                    dict.modelConfig.userModels
+                                                }
+                                            />
+                                            {renderGroups(
+                                                groupedUserModels,
+                                                "user",
+                                                (model) =>
+                                                    model.validated !==
+                                                        true && (
+                                                        <span
+                                                            className={cn(
+                                                                "ml-auto shrink-0 pl-2 text-xs",
+                                                                model.validated ===
+                                                                    false
+                                                                    ? "text-destructive"
+                                                                    : "text-muted-foreground",
+                                                            )}
+                                                        >
+                                                            {model.validated ===
+                                                            false
+                                                                ? dict
+                                                                      .modelConfig
+                                                                      .modelFailed
+                                                                : dict
+                                                                      .modelConfig
+                                                                      .modelUntested}
+                                                        </span>
+                                                    ),
+                                            )}
+                                        </>
+                                    )}
+                                </ModelList>
                             </div>
-                        )}
-                    </div>
-                </ModelSelectorContent>
-            </ModelSelectorRoot>
+                            {/* Pinned footer: add a provider, configure models
+                                (z-10 above list shadow). Buttons, outside the
+                                search: reachable with Tab, never filtered out */}
+                            {(onAddProvider || onConfigure) && (
+                                <div
+                                    className="relative z-10 shrink-0 space-y-0.5 border-t bg-background px-3 py-2"
+                                    // The search's Enter would pick the highlighted
+                                    // model instead of pressing the button
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                >
+                                    {onAddProvider && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                goToSettings(onAddProvider)
+                                            }
+                                            className={footerButton}
+                                        >
+                                            <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            <span className="truncate">
+                                                {
+                                                    dict.modelConfig
+                                                        .addProviderEntry
+                                                }
+                                            </span>
+                                        </button>
+                                    )}
+                                    {onConfigure && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                goToSettings(onConfigure)
+                                            }
+                                            className={footerButton}
+                                        >
+                                            <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            <span className="truncate">
+                                                {
+                                                    dict.modelConfig
+                                                        .configureModels
+                                                }
+                                            </span>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </Command>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

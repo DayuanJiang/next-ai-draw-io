@@ -56,7 +56,7 @@ const StoredAdminProviderSchema = AdminProviderSchema.extend({
     vertexApiKey: z.string().optional(),
 })
 
-type AdminProviderInput = z.infer<typeof AdminProviderSchema>
+export type AdminProviderInput = z.infer<typeof AdminProviderSchema>
 
 // Stored form: secrets are plain strings
 export interface StoredAdminProvider {

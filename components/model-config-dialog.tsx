@@ -43,7 +43,6 @@ import {
     CommandList,
 } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
     Popover,
     PopoverContent,
@@ -164,7 +163,6 @@ export function ModelConfigDialog({
         )
     const [customModelInput, setCustomModelInput] = useState("")
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-    const [deleteConfirmText, setDeleteConfirmText] = useState("")
     // Models whose test is running (they are all tested at once)
     const [validatingModelIds, setValidatingModelIds] = useState<Set<string>>(
         () => new Set(),
@@ -441,7 +439,6 @@ export function ModelConfigDialog({
             setFetchModelsError("")
             updates = {
                 ...updates,
-                validated: false,
                 models: selectedProvider.models.map((m) => ({
                     ...m,
                     validated: undefined,
@@ -659,10 +656,6 @@ export function ModelConfigDialog({
             return
         }
 
-        // A model whose id changed was not tested
-        if (allValid && !idChanged) {
-            updateProvider(selectedProviderId, { validated: true })
-        }
         markRejected(selectedProviderId, askedWith, rejected)
         // The status line is about the provider shown now
         if (selectedProviderIdRef.current !== selectedProviderId) return
@@ -1004,7 +997,6 @@ export function ModelConfigDialog({
                                     name={provider.name}
                                     baseUrl={provider.baseUrl}
                                     awsRegion={provider.awsRegion}
-                                    bedrockApiKey
                                     settingsLayout
                                     bedrockFilled={{
                                         apiKey: !!provider.apiKey,
@@ -1389,10 +1381,7 @@ export function ModelConfigDialog({
             {/* Delete Confirmation Dialog */}
             <AlertDialog
                 open={deleteConfirmOpen}
-                onOpenChange={(open) => {
-                    setDeleteConfirmOpen(open)
-                    if (!open) setDeleteConfirmText("")
-                }}
+                onOpenChange={setDeleteConfirmOpen}
             >
                 <AlertDialogContent className="border-destructive/30">
                     <AlertDialogHeader>
@@ -1410,39 +1399,11 @@ export function ModelConfigDialog({
                             })}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    {selectedProvider &&
-                        selectedProvider.models.length >= 3 && (
-                            <div className="mt-2 space-y-2">
-                                <Label
-                                    htmlFor="delete-confirm"
-                                    className="text-sm text-muted-foreground"
-                                >
-                                    {formatMessage(t.typeToConfirm, {
-                                        name: providerName(selectedProvider),
-                                    })}
-                                </Label>
-                                <Input
-                                    id="delete-confirm"
-                                    value={deleteConfirmText}
-                                    onChange={(e) =>
-                                        setDeleteConfirmText(e.target.value)
-                                    }
-                                    placeholder={t.typeProviderName}
-                                    className="h-9"
-                                />
-                            </div>
-                        )}
                     <AlertDialogFooter>
                         <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteProvider}
-                            disabled={
-                                selectedProvider &&
-                                selectedProvider.models.length >= 3 &&
-                                deleteConfirmText !==
-                                    providerName(selectedProvider)
-                            }
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             {t.delete}
                         </AlertDialogAction>
