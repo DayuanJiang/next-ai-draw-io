@@ -15,7 +15,7 @@
  */
 
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -369,9 +369,22 @@ describe("MCP server wiring with a session, without a preview tab", () => {
             name: "get_selection",
             arguments: {},
         })
-        expect(resp.result.isError).toBe(true)
-        expect(resp.result.content[0].text).toBe(
-            "Error: The preview tab is not open, or has not connected yet.",
+        // Without the built shell (tests run before the build on CI and on
+        // a fresh clone) start_session opens the classic page, which cannot
+        // answer a selection request; the tool says so instead of waiting
+        const shellBuilt = existsSync(
+            path.join(__dirname, "../dist/shell/index.html"),
         )
+        if (shellBuilt) {
+            expect(resp.result.isError).toBe(true)
+            expect(resp.result.content[0].text).toBe(
+                "Error: The preview tab is not open, or has not connected yet.",
+            )
+        } else {
+            expect(resp.result.isError).toBeFalsy()
+            expect(resp.result.content[0].text).toContain(
+                "classic preview page cannot read the selection",
+            )
+        }
     })
 })
