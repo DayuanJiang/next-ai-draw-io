@@ -610,7 +610,6 @@ export function readSelectionDetails(): SelectionAnswer | null {
     const g = graph()
     if (!g) return null
     const page = ui?.currentPage
-    const defaultParent = g.getDefaultParent?.()
     const cells = (g.getSelectionCells() as any[])
         .filter((cell) => cell?.id)
         .map((cell) => {
@@ -635,8 +634,11 @@ export function readSelectionDetails(): SelectionAnswer | null {
                     }
                 }
             }
+            // The container the cell is in; a layer is none (and the
+            // default parent is the group the user entered, if any, so it
+            // cannot tell the two apart)
             const parent = g.model.getParent(cell)
-            if (parent?.id && parent !== defaultParent) {
+            if (parent?.id && !g.model.isLayer(parent)) {
                 info.parent = String(parent.id)
             }
             return info

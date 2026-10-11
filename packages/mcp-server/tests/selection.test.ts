@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
     describeSelection,
+    MAX_LISTED_CELLS,
     parseSelectionAnswer,
     type SelectionAnswer,
 } from "../src/selection.ts"
@@ -50,6 +51,29 @@ describe("get_selection text", () => {
         expect(text).toContain('- id="5" edge "yes" from "3" to "4"')
         expect(text).toContain('- id="9" edge (no label) (not connected)')
         expect(text).toContain('edit_diagram (page_id="p1")')
+    })
+
+    it("counts a large selection instead of listing every cell", () => {
+        const cells = (n: number) =>
+            Array.from({ length: n }, (_, i) => ({
+                id: `c${i + 1}`,
+                label: `Cell ${i + 1}`,
+                edge: false,
+                geometry: { x: i, y: 0, width: 10, height: 10 },
+            }))
+        const text = describeSelection(
+            { ...page, cells: cells(MAX_LISTED_CELLS + 5) },
+            null,
+        )
+        expect(text).toContain(`${MAX_LISTED_CELLS + 5} cells selected`)
+        expect(text).toContain(`id="c${MAX_LISTED_CELLS}"`)
+        expect(text).not.toContain(`id="c${MAX_LISTED_CELLS + 1}"`)
+        expect(text).toContain("and 5 more cells not listed here")
+        const exact = describeSelection(
+            { ...page, cells: cells(MAX_LISTED_CELLS) },
+            null,
+        )
+        expect(exact).not.toContain("more cells")
     })
 
     it("says clearly when nothing is selected", () => {

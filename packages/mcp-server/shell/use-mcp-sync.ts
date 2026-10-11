@@ -56,6 +56,7 @@ export function useMcpSync(config: ShellConfig): {
                     diagramRef.current.requestExport(request, timeoutMs),
                 currentXml: () => diagramRef.current.chartXMLRef.current,
                 currentPageId: () => useCanvasStore.getState().currentPageId,
+                loadPending: () => diagramRef.current.hasPendingLoad(),
                 // The bridge reads the editor directly; without it (an
                 // external draw.io) the selection cannot be read
                 readSelection: () =>
@@ -69,6 +70,7 @@ export function useMcpSync(config: ShellConfig): {
             onNotice: (notice) =>
                 toast(dictRef.current.shell[notice], { duration: 8000 }),
             onStatus: setStatus,
+            isHidden: () => document.visibilityState === "hidden",
         })
         syncRef.current = sync
         setSync(sync)

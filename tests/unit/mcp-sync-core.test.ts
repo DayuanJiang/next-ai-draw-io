@@ -31,7 +31,9 @@ interface PendingExport {
 
 const realSetTimeout = globalThis.setTimeout
 
-function open(options: { currentPageId?: string | null } = {}) {
+function open(
+    options: { currentPageId?: string | null; isHidden?: () => boolean } = {},
+) {
     const calls: Call[] = []
     const fetchStub = vi.fn(
         (url: string, init?: RequestInit) =>
@@ -63,10 +65,12 @@ function open(options: { currentPageId?: string | null } = {}) {
     const canvas: {
         xml: string
         pageId: string | null
+        loadPending: boolean
         selection: SelectionAnswer
     } = {
         xml: "",
         pageId: options.currentPageId ?? null,
+        loadPending: false,
         selection: { pageId: "p1", pageName: "Page-1", cells: [] },
     }
     const sync = createMcpSync({
@@ -95,11 +99,13 @@ function open(options: { currentPageId?: string | null } = {}) {
                 }),
             currentXml: () => canvas.xml,
             currentPageId: () => canvas.pageId,
+            loadPending: () => canvas.loadPending,
             readSelection: () => canvas.selection,
         },
         onNotice: (notice) => notices.push(notice),
         onStatus: (status) => statuses.push(status),
         onStateRecreated: () => recreated++,
+        isHidden: options.isHidden,
     })
     const settle = () => new Promise((r) => realSetTimeout(r, 0))
     const next = (method: string, prefix = "/api/") => {
@@ -155,7 +161,9 @@ const state = (
 })
 
 /** A tab in step with state S1 at version 2, showing diagram A, draw.io ready */
-async function inStep(options: { currentPageId?: string | null } = {}) {
+async function inStep(
+    options: { currentPageId?: string | null; isHidden?: () => boolean } = {},
+) {
     const t = open(options)
     t.sync.setReady(true)
     const poll = t.sync.poll()
@@ -953,6 +961,77 @@ describe("MCP sync selection requests (get_selection)", () => {
         t.next("GET").answer(selectionState())
         await poll
         expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-1",
+            selection: picked,
+        })
+    })
+
+    it("answers again at the next poll when the answer was not delivered", async () => {
+        const t = await inStep()
+        t.canvas.selection = picked
+        let poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        t.next("POST").fail()
+        await t.settle()
+        // The server still shows the request: answered again
+        poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        const retry = t.next("POST")
+        expect(retry.body.selectionId).toBe("sel-1")
+        retry.answer({ status: 500, body: {} })
+        await t.settle()
+        poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        t.next("POST").answer({ status: 200, body: { success: true } })
+        await t.settle()
+        // Delivered: not again
+        poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.posts()).toHaveLength(0)
+    })
+
+    it("waits for a full load to reach the editor before reading the selection", async () => {
+        // The poll that brings the request may also bring a new document,
+        // loaded in full: until draw.io reports it, the editor shows the old
+        // one, whose cells and pages the answer would name
+        const t = await inStep()
+        t.canvas.selection = picked
+        t.canvas.loadPending = true
+        let poll = t.sync.poll()
+        t.next("GET").answer(
+            state("S1", 3, "<mxfile>B</mxfile>", { selectionId: "sel-1" }),
+        )
+        await poll
+        expect(t.loads.at(-1)?.xml).toBe("<mxfile>B</mxfile>")
+        expect(t.posts()).toHaveLength(0)
+        t.canvas.loadPending = false
+        poll = t.sync.poll()
+        t.next("GET").answer(
+            state("S1", 3, "<mxfile>B</mxfile>", { selectionId: "sel-1" }),
+        )
+        await poll
+        expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-1",
+            selection: picked,
+        })
+    })
+
+    it("lets a tab in front answer first when this one is hidden", async () => {
+        // The same session open twice: the hidden tab's selection is not
+        // the user's; it answers a poll later, in case it is the only tab
+        const t = await inStep({ isHidden: () => true })
+        t.canvas.selection = picked
+        const poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.posts()).toHaveLength(0)
+        await vi.advanceTimersByTimeAsync(2500)
+        expect(t.next("POST").body).toEqual({
+            sessionId: "mcp-test",
             selectionId: "sel-1",
             selection: picked,
         })

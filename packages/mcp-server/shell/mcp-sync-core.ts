@@ -97,6 +97,9 @@ export interface SyncCanvas {
     currentXml(): string
     /** The page on screen; null when unknown (external draw.io) */
     currentPageId(): string | null
+    /** A full load was sent and draw.io has not reported it yet: the
+     * editor still shows the previous document */
+    loadPending(): boolean
     /** The cells selected in the editor, for get_selection; `unavailable`
      * when the page cannot reach the editor (external draw.io) */
     readSelection(): SelectionAnswer
@@ -122,6 +125,8 @@ export interface SyncOptions {
     canvas: SyncCanvas
     onNotice: (notice: SyncNotice) => void
     onStatus?: (status: SyncStatus) => void
+    /** The tab is hidden; another tab of this session may be in front */
+    isHidden?: () => boolean
     /** The server made a new state for the session: History entries got
      * new ids, so a list on screen is stale */
     onStateRecreated?: () => void
@@ -736,20 +741,42 @@ export function createMcpSync(options: SyncOptions): McpSync {
             }
             // A selection request (get_selection): the editor's selection
             // on the page the user is viewing, once draw.io is up (the
-            // bridge attaches to it at its first load), and not while a
-            // projection replaces that page
+            // bridge attaches to it at its first load), not while a
+            // projection replaces that page, and not while a full load (the
+            // one above, or one still on its way) has yet to reach the
+            // editor: it still shows the previous document
             if (
                 s.selectionId &&
                 s.selectionId !== answeredSelectionId &&
                 isReady &&
-                !projectionExportActive
+                !projectionExportActive &&
+                !canvas.loadPending()
             ) {
-                answeredSelectionId = s.selectionId
-                postJson("/state", {
-                    sessionId,
-                    selectionId: s.selectionId,
-                    selection: canvas.readSelection(),
-                }).catch(() => {})
+                const id = s.selectionId
+                answeredSelectionId = id
+                const answer = () =>
+                    postJson("/state", {
+                        sessionId,
+                        selectionId: id,
+                        selection: canvas.readSelection(),
+                    })
+                        .then((r) => {
+                            if (!r.ok) throw new Error(String(r.status))
+                        })
+                        .catch(() => {
+                            // Not delivered: the next poll answers it again
+                            if (answeredSelectionId === id) {
+                                answeredSelectionId = null
+                            }
+                        })
+                // A hidden tab lets a tab in front (the same session open
+                // twice) answer first; the server takes the first answer
+                // and ignores the later one
+                if (options.isHidden?.()) {
+                    setTimeout(answer, POLL_INTERVAL_MS + 500)
+                } else {
+                    answer()
+                }
             }
         } catch {
             setStatus("offline")

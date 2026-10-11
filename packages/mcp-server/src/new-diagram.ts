@@ -3,7 +3,14 @@
  * and the web app's display_diagram tool.
  */
 import { expandCompactCells } from "./compact-cells.ts"
-import { hasCells, normalizeToMxfile, wrapCellsInModel } from "./pages.ts"
+import {
+    generatePageId,
+    hasCells,
+    normalizeToMxfile,
+    parseMxfile,
+    serializeMxfile,
+    wrapCellsInModel,
+} from "./pages.ts"
 import {
     addDefaultStyles,
     applyStyleClasses,
@@ -182,12 +189,26 @@ export function prepareNewDiagram(
             error: `XML validation failed after expanding the cells - ${rewriteError}`,
         }
     }
-    const normalized = normalizeToMxfile(xml, page)
+    let normalized = normalizeToMxfile(xml, page)
     if (!normalized) {
         return {
             ok: false,
             error: "XML must be the mxCell elements of one page, a <mxGraphModel>, or an <mxfile> with one or more <diagram> children.",
         }
+    }
+    // A <diagram> the model sent without an id gets one here. draw.io would
+    // otherwise make its own, which the server never sees, and get_selection
+    // would then name a page edit_diagram cannot find
+    const doc = parseMxfile(normalized)
+    if (doc) {
+        let added = false
+        doc.querySelectorAll("diagram").forEach((d) => {
+            if (!d.getAttribute("id")) {
+                d.setAttribute("id", generatePageId())
+                added = true
+            }
+        })
+        if (added) normalized = serializeMxfile(doc)
     }
     return { ok: true, xml: normalized, fixes }
 }

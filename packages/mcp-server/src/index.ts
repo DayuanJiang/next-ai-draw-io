@@ -48,6 +48,7 @@ import {
     otherVersions,
 } from "./history.ts"
 import {
+    activePreviewUi,
     DRAWIO_BASE_URL,
     type ExportFormat,
     type ExportOptions,
@@ -57,17 +58,15 @@ import {
     keepInHistory,
     onSessionRecreate,
     onStateChange,
-    PREVIEW_UI,
     previewUrl,
+    readSelection,
     requestExport,
-    requestSelection,
     requestSync,
     restoreHistoryEntry,
     restoreSavedSession,
     setState,
     shutdown,
     startHttpServer,
-    waitForSelection,
     waitForSync,
 } from "./http-server.ts"
 import { parseDrawioFileContent } from "./load-diagram.ts"
@@ -1262,13 +1261,14 @@ server.registerTool(
             }
             const sessionId = currentSession.id
             // The classic preview page never answers: it has no access to
-            // the editor (the shell reads it through the same-origin frame)
-            if (PREVIEW_UI !== "shell") {
+            // the editor (the shell reads it through the same-origin frame).
+            // It is also what opens while the shell is not built
+            if (activePreviewUi() !== "shell") {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: "The classic preview page (DRAWIO_PREVIEW_UI=classic) cannot read the selection. Ask the user which shapes they mean, or call get_diagram.",
+                            text: "The classic preview page cannot read the selection (DRAWIO_PREVIEW_UI=classic, or the canvas shell is not built: run npm run build in packages/mcp-server). Ask the user which shapes they mean, or call get_diagram.",
                         },
                     ],
                 }
@@ -1287,8 +1287,7 @@ server.registerTool(
                     isError: true,
                 }
             }
-            requestSelection(sessionId)
-            const answer = await waitForSelection(sessionId)
+            const answer = await readSelection(sessionId)
             if (!answer) {
                 return {
                     content: [

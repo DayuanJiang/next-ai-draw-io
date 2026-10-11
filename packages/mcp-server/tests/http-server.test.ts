@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
+    activePreviewUi,
     drawioEmbedParams,
     getApiToken,
     getState,
@@ -29,6 +30,7 @@ import {
     onStateChange,
     previewUiFromEnv,
     previewUrl,
+    readSelection,
     requestExport,
     requestSelection,
     requestSync,
@@ -488,6 +490,72 @@ describe("selection requests (get_selection)", () => {
         expect(getState(id)?.selectionId).toBeUndefined()
         expect(requestSelection("mcp-unknown-session")).toBe(false)
     })
+
+    it("takes no answer while no request is pending", async () => {
+        const id = "mcp-selection-unasked"
+        setState(id, "<mxfile>x</mxfile>")
+        // Both undefined would compare equal
+        await postJson("/api/state", { sessionId: id, selection: picked })
+        expect(getState(id)?.selection).toBeUndefined()
+        requestSelection(id)
+        const { selectionId } = getState(id) ?? {}
+        await postJson("/api/state", { sessionId: id, selection: picked })
+        expect(getState(id)?.selection).toBeUndefined()
+        expect(getState(id)?.selectionId).toBe(selectionId)
+        await waitForSelection(id, 50)
+    })
+
+    it("keeps the first answer when two tabs answer the same request", async () => {
+        const id = "mcp-selection-two-tabs"
+        setState(id, "<mxfile>x</mxfile>")
+        requestSelection(id)
+        const { selectionId } = getState(id) ?? {}
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId,
+            selection: picked,
+        })
+        const other = { ...picked, cells: [] }
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId,
+            selection: other,
+        })
+        expect(await waitForSelection(id, 1000)).toEqual(picked)
+    })
+
+    it("lets overlapping get_selection calls take turns, each getting its own answer", async () => {
+        const id = "mcp-selection-overlap"
+        setState(id, "<mxfile>x</mxfile>")
+        const poll = async () =>
+            JSON.parse((await request(`/api/state?sessionId=${id}`)).body)
+        const first = readSelection(id, 3000)
+        const second = readSelection(id, 3000)
+        // The tab sees one request and answers it
+        let shown = await poll()
+        expect(shown.selectionId).toMatch(/^[0-9a-f-]{36}$/)
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: shown.selectionId,
+            selection: picked,
+        })
+        expect(await first).toEqual(picked)
+        // Then the second call's request, another id, answered in turn
+        await new Promise((r) => setTimeout(r, 150))
+        const next = await poll()
+        expect(next.selectionId).toMatch(/^[0-9a-f-]{36}$/)
+        expect(next.selectionId).not.toBe(shown.selectionId)
+        const other = { ...picked, cells: [] }
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: next.selectionId,
+            selection: other,
+        })
+        expect(await second).toEqual(other)
+        shown = await poll()
+        expect(shown.selectionId).toBeNull()
+        expect(await readSelection("mcp-unknown-session", 100)).toBeNull()
+    })
 })
 
 describe("a session state recreated after it was lost", () => {
@@ -944,12 +1012,16 @@ describe("canvas shell page", () => {
         expect(previewUrl(6002, "mcp-x", "classic")).toBe(
             "http://localhost:6002?mcp=mcp-x",
         )
-        // Not built: the classic page, which works, rather than a 404
+        // Not built: the classic page, which works, rather than a 404; the
+        // tools that need the shell (get_selection) see the classic page too
+        expect(activePreviewUi("shell")).toBe("shell")
+        expect(activePreviewUi("classic")).toBe("classic")
         setShellDir(null)
         try {
             expect(previewUrl(6002, "mcp-x", "shell")).toBe(
                 "http://localhost:6002?mcp=mcp-x",
             )
+            expect(activePreviewUi("shell")).toBe("classic")
         } finally {
             setShellDir(shellDir)
         }

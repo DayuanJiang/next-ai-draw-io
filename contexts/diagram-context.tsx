@@ -115,6 +115,9 @@ interface DiagramContextType {
      * another page): not recorded as the diagram, its autosaves ignored,
      * until the next loadDiagram puts the real document back */
     showTransient: (xml: string) => void
+    /** A full load was sent and draw.io has not reported it yet: the
+     * editor still shows the previous document */
+    hasPendingLoad: () => boolean
     isDrawioReady: boolean
     onDrawioLoad: () => void
     resetDrawioReady: () => void
@@ -597,6 +600,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 captureValidationPng,
                 requestExport,
                 showTransient,
+                hasPendingLoad: () => pendingLoadsRef.current > 0,
                 isDrawioReady,
                 onDrawioLoad,
                 resetDrawioReady,

@@ -69,10 +69,14 @@ export function parseSelectionAnswer(value: unknown): SelectionAnswer | null {
     return { pageId: text(given.pageId), pageName: text(given.pageName), cells }
 }
 
+/** describeSelection lists at most this many cells; the rest are counted */
+export const MAX_LISTED_CELLS = 100
+
 /**
  * The get_selection result text. `externalDrawio` names the draw.io origin
  * when the preview loads it from another origin, where the page cannot
- * read the editor.
+ * read the editor. A selection of a whole large diagram is counted, not
+ * listed in full: the model needs the ids of a few hundred cells at most.
  */
 export function describeSelection(
     answer: SelectionAnswer,
@@ -89,7 +93,8 @@ export function describeSelection(
     if (answer.cells.length === 0) {
         return `Nothing is selected on ${page}. Ask the user to select the shapes they mean in the preview, or call get_diagram.`
     }
-    const lines = answer.cells.map((cell) => {
+    const listed = answer.cells.slice(0, MAX_LISTED_CELLS)
+    const lines = listed.map((cell) => {
         const label = cell.label ? `"${cell.label}"` : "(no label)"
         if (cell.edge) {
             const ends =
@@ -105,6 +110,12 @@ export function describeSelection(
         const parent = cell.parent ? ` inside "${cell.parent}"` : ""
         return `- id="${cell.id}" shape ${label}${where}${parent}`
     })
+    const more = answer.cells.length - listed.length
+    if (more > 0) {
+        lines.push(
+            `- and ${more} more cells not listed here; call get_diagram for the rest`,
+        )
+    }
     const count =
         answer.cells.length === 1 ? "1 cell" : `${answer.cells.length} cells`
     const target = answer.pageId ? ` (page_id="${answer.pageId}")` : ""

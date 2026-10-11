@@ -126,14 +126,21 @@ export function previewUiFromEnv(
 
 export const PREVIEW_UI: PreviewUi = previewUiFromEnv()
 
+/**
+ * The page start_session actually opens: the classic page stands in while
+ * the shell is not built (a run from the sources), as embed.diagrams.net
+ * does for a missing dist/drawio
+ */
+export function activePreviewUi(ui: PreviewUi = PREVIEW_UI): PreviewUi {
+    return ui === "shell" && shellDir === null ? "classic" : ui
+}
+
 export function previewUrl(
     port: number,
     sessionId: string,
     ui: PreviewUi = PREVIEW_UI,
 ): string {
-    // The classic page stands in while the shell is not built (a run from
-    // the sources), as embed.diagrams.net does for a missing dist/drawio
-    const path = ui === "shell" && shellDir !== null ? "/shell/" : ""
+    const path = activePreviewUi(ui) === "shell" ? "/shell/" : ""
     return `http://localhost:${port}${path}?mcp=${sessionId}`
 }
 
@@ -445,6 +452,24 @@ export async function waitForSelection(
     return answer ?? null
 }
 
+// One selection slot per session, as the export slot: overlapping
+// get_selection calls take turns instead of replacing each other's request
+let selectionQueue: Promise<unknown> = Promise.resolve()
+
+/** requestSelection + waitForSelection, one call at a time; null when the
+ * session is unknown or the tab does not answer in time */
+export function readSelection(
+    sessionId: string,
+    timeoutMs = 10000,
+): Promise<SelectionAnswer | null> {
+    const run = selectionQueue.then(() => {
+        if (!requestSelection(sessionId)) return null
+        return waitForSelection(sessionId, timeoutMs)
+    })
+    selectionQueue = run.catch(() => {})
+    return run
+}
+
 /**
  * What the version cards depend on: History's entries (their count and the
  * newest id) and the entry the canvas shows. The shell reads History again
@@ -466,7 +491,8 @@ function handleSelectionResult(
     data: { selectionId?: unknown; selection?: unknown },
 ): void {
     const state = stateStore.get(sessionId)
-    if (!state || data.selectionId !== state.selectionId) {
+    // Only the pending request's answer (none pending: none is taken)
+    if (!state?.selectionId || data.selectionId !== state.selectionId) {
         log.debug(`Ignored a late selection answer for session=${sessionId}`)
         return
     }
@@ -515,7 +541,7 @@ export function startHttpServer(port = 6002): Promise<number> {
                     "No bundled draw.io (dist/drawio missing); the preview loads it from embed.diagrams.net",
                 )
             }
-            if (PREVIEW_UI === "shell" && shellDir === null) {
+            if (PREVIEW_UI === "shell" && activePreviewUi() === "classic") {
                 log.warn(
                     "The canvas shell is not built (dist/shell missing); start_session opens the classic page",
                 )
