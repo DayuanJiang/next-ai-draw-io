@@ -328,17 +328,17 @@ async function poll() {
         // Plain export: capture whatever tab is currently displayed.
         //
         // Page-targeted export: the server sends a single-page <mxfile>
-        // projection in s.exportXml. We load it into the iframe, let
+        // projection in s.export.xml. We load it into the iframe, let
         // draw.io render it, export, then reload the user's real
         // document — all browser-side. The canonical session state is
         // never mutated, so there is no server-side restore race and no
         // dependence on poll timing. autosave is suppressed while the
         // projection is showing (see projectionExportActive guard).
-        if (s.exportFormat && !pendingMcpExport && isReady) {
-            pendingMcpExport = s.exportFormat;
+        if (s.export && !pendingMcpExport && isReady) {
+            pendingMcpExport = s.export.format;
             const seq = ++mcpExportSeq;
-            mcpExportId = s.exportId;
-            const extra = s.exportOptions || {};
+            mcpExportId = s.export.id;
+            const extra = s.export.options || {};
             const fireExport = () => {
                 // mcpExport carries this export's number and is echoed
                 // back in msg.message (see the handler). PNG: width
@@ -349,10 +349,10 @@ async function poll() {
                     : { action: 'export', format: pendingMcpExport, mcpExport: seq };
                 iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
             };
-            if (s.exportXml) {
+            if (s.export.xml) {
                 projectionExportActive = true;
                 // Load the projection without touching lastXml/server state.
-                iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: s.exportXml, autosave: 0 }), '*');
+                iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: s.export.xml, autosave: 0 }), '*');
                 // Let draw.io render the loaded page before exporting
                 // (same proven settle delay as the AI-preview path).
                 setTimeout(fireExport, 600);

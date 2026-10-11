@@ -15,13 +15,8 @@ import {
 } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
+import { afterEach, describe, expect, it } from "vitest"
 import { Autosaver, defaultDataDir } from "../src/persistence.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
 
 const DIAGRAM = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
 const BLANK = `<mxfile><diagram id="page-1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`

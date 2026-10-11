@@ -8,7 +8,6 @@
 
 import http from "node:http"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
     drawioEmbedParams,
@@ -28,8 +27,6 @@ import {
 let port = 0
 
 beforeAll(async () => {
-    // XML parsing, as the server installs it at startup
-    installDomPolyfill()
     port = await startHttpServer(40000 + Math.floor(Math.random() * 10000))
 })
 
@@ -330,15 +327,15 @@ describe("export requests", () => {
         const poll = JSON.parse(
             (await request(`/api/state?sessionId=${id}`)).body,
         )
-        expect(poll.exportFormat).toBe("png")
-        expect(poll.exportOptions).toEqual({ width: 1000, pageId: "p2" })
+        expect(poll.export.format).toBe("png")
+        expect(poll.export.options).toEqual({ width: 1000, pageId: "p2" })
 
         await postJson("/api/state", {
             sessionId: id,
             exportData: "data:image/png;base64,AAAA",
-            exportId: poll.exportId,
+            exportId: poll.export.id,
         })
-        expect(getState(id)?.exportOptions).toBeUndefined()
+        expect(getState(id)?.pendingExport).toBeUndefined()
     })
 
     it("ignores a late result of an export that already timed out", async () => {
@@ -353,10 +350,10 @@ describe("export requests", () => {
         await postJson("/api/state", {
             sessionId: id,
             exportData: "data:image/png;base64,LATE",
-            exportId: first.exportId,
+            exportId: first.export.id,
         })
         expect(getState(id)?.exportData).toBeUndefined()
-        expect(getState(id)?.exportFormat).toBe("svg")
+        expect(getState(id)?.pendingExport?.format).toBe("svg")
     })
 })
 
@@ -388,7 +385,7 @@ describe("a session state recreated after it was lost", () => {
                     stateId,
                 })
                 expect(res.status).toBe(409)
-                expect(JSON.parse(res.body).stateChanged).toBe(true)
+                expect(JSON.parse(res.body).error).toBe("Session was recreated")
                 // The saved file was recovered first and is kept
                 expect(getState("mcp-sid-restart")?.xml).toBe(SAVED)
             }

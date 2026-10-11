@@ -30,6 +30,24 @@ export const STYLE_CLASS_EXAMPLE = `<mxStyle name="step" value="fillColor=#dae8f
 <mxCell id="5" style="down;" source="2" target="3"/>
 <mxCell id="6" style="down;" source="3" target="4"/>`
 
+/**
+ * The style rules shared by the drawing guide and the web app's system
+ * prompt. They differ only in the tool whose call defines named styles
+ * ("create_new_diagram or add_page", "display_diagram") and in who expands
+ * them ("the server", "the app").
+ */
+export function styleRules(tool: string, actor: string) {
+    const actorSentence = actor.charAt(0).toUpperCase() + actor.slice(1)
+    return {
+        /** Named styles, defined once and used like CSS classes */
+        namedStyles: `Define each style used by several cells ONCE, as a named style before the cells, and use the name in the cells like a CSS class. A cell's style can combine a shape token, a name and overrides; later pairs win. Name only styles that two or more cells share; a style used by one cell stays inline. Names must not be draw.io's own style names: shapes such as text, ellipse, rhombus, swimlane, label, image, and colors such as blue, green, red, gray, yellow, orange, purple, pink. A definition applies to the call it is in: each ${tool} call defines the names it uses. ${actorSentence} expands the names, so the saved file is standard draw.io XML.`,
+        /** html=1 and whiteSpace=wrap are added automatically */
+        noHtml: `NEVER write html=1 or whiteSpace=wrap: ${actor} adds html=1 to every cell and whiteSpace=wrap to shapes. Labels are HTML: use &lt;br&gt; for a line break and &lt;b&gt; for bold, never \\n; a literal < or > in a label is written &amp;lt; or &amp;gt;.`,
+        /** draw.io's own defaults are not written */
+        noDefaults: `Do NOT repeat what draw.io already uses. For a plain shape: rounded=0, align=center, verticalAlign=middle, fontSize=12, strokeWidth=1, fillColor=#ffffff, strokeColor=#000000, fontColor=#000000. For an edge: endArrow=classic, strokeColor=#000000. Writing one of them is right only when it overrides what a name or the shape sets: an edge is rounded by default, so rounded=0 on an edge is a real setting, and a text cell is left/top aligned by default, so there align=center or verticalAlign=middle are real settings.`,
+    }
+}
+
 /** Indent every line, for an indented code block in Markdown */
 export const indent = (text: string, prefix = "    ") =>
     text

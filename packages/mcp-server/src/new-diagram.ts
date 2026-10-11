@@ -122,20 +122,11 @@ export function truncatedCellError(input: string): string | null {
 }
 
 /**
- * The named style definitions are taken out first (style-classes.ts). Bare
- * cells then get the wrapper and root cells, since the strict parser rejects
- * several top-level elements. Then the XML is validated and auto-fixed while
- * it is still a bare model, where duplicate ids are renamed. Compact cells
- * (compact-cells.ts) are expanded, the names expanded and the default styles
- * added on the fixed XML, so repaired cells get them too, and finally it is
- * turned into an <mxfile>.
- */
-/**
  * Take the named style definitions out of the model's XML (style-classes.ts).
  * Returns the error for the model when a definition never closed or when
  * nothing but definitions was sent.
  */
-export function takeStyleDefinitions(input: string): {
+function takeStyleDefinitions(input: string): {
     classes: StyleClasses
     xml: string
     error: string | null
@@ -152,10 +143,17 @@ export function takeStyleDefinitions(input: string): {
     return { classes, xml, error }
 }
 
-export function prepareNewDiagram(
-    input: string,
-    page: { pageId?: string; pageName?: string } = {},
-): NewDiagram {
+/**
+ * The model of one page from the XML the model wrote (also the starting
+ * content of add_page). The named style definitions are taken out first
+ * (style-classes.ts). Bare cells then get the wrapper and root cells, since
+ * the strict parser rejects several top-level elements. Then the XML is
+ * validated and auto-fixed while it is still a bare model, where duplicate
+ * ids are renamed. Compact cells (compact-cells.ts) are expanded, the names
+ * expanded and the default styles added on the fixed XML, so repaired cells
+ * get them too.
+ */
+export function prepareNewModel(input: string): NewDiagram {
     const {
         classes,
         xml: cells,
@@ -182,12 +180,22 @@ export function prepareNewDiagram(
             error: `XML validation failed after expanding the cells - ${rewriteError}`,
         }
     }
-    const normalized = normalizeToMxfile(xml, page)
+    return { ok: true, xml, fixes }
+}
+
+/** prepareNewModel, and the model turned into an <mxfile> */
+export function prepareNewDiagram(
+    input: string,
+    page: { pageId?: string; pageName?: string } = {},
+): NewDiagram {
+    const model = prepareNewModel(input)
+    if (!model.ok) return model
+    const normalized = normalizeToMxfile(model.xml, page)
     if (!normalized) {
         return {
             ok: false,
             error: "XML must be the mxCell elements of one page, a <mxGraphModel>, or an <mxfile> with one or more <diagram> children.",
         }
     }
-    return { ok: true, xml: normalized, fixes }
+    return { ok: true, xml: normalized, fixes: model.fixes }
 }

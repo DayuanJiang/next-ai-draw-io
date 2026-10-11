@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-export const SHAPE_LIBRARY_GROUPS: Record<string, string[]> = {
+const SHAPE_LIBRARY_GROUPS: Record<string, string[]> = {
     Cloud: [
         "aws4",
         "azure2",

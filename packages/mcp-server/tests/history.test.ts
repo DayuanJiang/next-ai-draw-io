@@ -2,8 +2,7 @@
  * Tests for the diagram history: the versions restore_version can go to.
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
+import { describe, expect, it } from "vitest"
 import {
     addHistory,
     clearHistory,
@@ -11,11 +10,6 @@ import {
     isInHistory,
     otherVersions,
 } from "../src/history.ts"
-
-beforeAll(() => {
-    // XML parsing for the content fingerprints
-    installDomPolyfill()
-})
 
 const page = (cellId: string) =>
     `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`

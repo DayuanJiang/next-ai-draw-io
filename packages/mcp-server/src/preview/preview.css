@@ -19,7 +19,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
     display: flex; align-items: center; justify-content: center;
     overflow: hidden;
 }
-#header .logo img { width: 20px; height: 20px; filter: brightness(0) invert(1); }
 #header .title {
     font-size: 15px; font-weight: 600; color: #1a1a2e;
     letter-spacing: -0.3px;

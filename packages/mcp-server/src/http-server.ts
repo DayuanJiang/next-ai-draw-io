@@ -146,11 +146,16 @@ interface SessionState {
     lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
-    exportFormat?: ExportFormat // Set by MCP tool to request browser export
-    exportXml?: string // Single-page projection to load before a page-targeted export
-    exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
-    exportId?: number // Number of the pending export, echoed with its result
+    pendingExport?: PendingExport // Set by MCP tool to request browser export
     exportData?: string // Base64/SVG data returned by browser after export
+}
+
+/** An export the browser is asked to make, sent to the preview page as is */
+interface PendingExport {
+    id: number // Number of the export, echoed with its result
+    format: ExportFormat
+    xml?: string // Single-page projection to load before a page-targeted export
+    options?: ExportOptions // Extra draw.io export parameters (PNG only)
 }
 
 /** draw.io export formats; xmlsvg is an SVG with the diagram embedded */
@@ -165,7 +170,7 @@ export interface ExportOptions {
     pageId?: string
 }
 
-export const stateStore = new Map<string, SessionState>()
+const stateStore = new Map<string, SessionState>()
 
 let server: http.Server | null = null
 let serverPort = 6002
@@ -220,10 +225,7 @@ export function setState(
             svg ||
             (existing && existing.xml === xml ? existing.svg : undefined),
         syncRequested: undefined, // Clear sync request when browser pushes state
-        exportFormat: existing?.exportFormat, // Preserve pending export request
-        exportXml: existing?.exportXml, // Preserve pending projection
-        exportOptions: existing?.exportOptions,
-        exportId: existing?.exportId,
+        pendingExport: existing?.pendingExport, // Preserve pending export request
         exportData: existing?.exportData, // Preserve export result
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
@@ -266,12 +268,14 @@ export function requestExport(
     const state = stateStore.get(sessionId)
     if (!state) return false
     state.exportData = undefined
-    state.exportXml = projectionXml
-    state.exportOptions = options
-    state.exportFormat = format
-    // The browser sends this back with the result, so a late result of an
+    // The browser sends the id back with the result, so a late result of an
     // export that timed out is not taken for this one
-    state.exportId = ++lastExportId
+    state.pendingExport = {
+        id: ++lastExportId,
+        format,
+        xml: projectionXml,
+        options,
+    }
     return true
 }
 
@@ -340,7 +344,7 @@ export function startHttpServer(port = 6002): Promise<number> {
     })
 }
 
-export function stopHttpServer(): void {
+function stopHttpServer(): void {
     if (server) {
         server.close()
         server = null
@@ -421,19 +425,6 @@ function routeRequest(
         return
     }
 
-    const requestOrigin = req.headers.origin
-    if (requestOrigin === `http://localhost:${serverPort}`) {
-        res.setHeader("Access-Control-Allow-Origin", requestOrigin)
-        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type")
-    }
-
-    if (req.method === "OPTIONS") {
-        res.writeHead(204)
-        res.end()
-        return
-    }
-
     if (url.pathname === "/" || url.pathname === "/index.html") {
         const sessionId = url.searchParams.get("mcp") || ""
         if (sessionId && !isValidSessionId(sessionId)) {
@@ -497,10 +488,7 @@ function handleStateApi(
                 stateId: state?.stateId ?? null,
                 blank: !!state?.blank,
                 syncRequested: !!state?.syncRequested,
-                exportFormat: state?.exportFormat || null,
-                exportXml: state?.exportXml || null,
-                exportOptions: state?.exportOptions || null,
-                exportId: state?.exportId ?? null,
+                export: state?.pendingExport ?? null,
             }),
         )
     } else if (req.method === "POST") {
@@ -519,12 +507,9 @@ function handleStateApi(
                 // Browser is returning export data (png/svg)
                 if (data.exportData !== undefined) {
                     const state = stateStore.get(sessionId)
-                    if (state && data.exportId === state.exportId) {
+                    if (state && data.exportId === state.pendingExport?.id) {
                         state.exportData = data.exportData
-                        state.exportFormat = undefined
-                        state.exportXml = undefined
-                        state.exportOptions = undefined
-                        state.exportId = undefined
+                        state.pendingExport = undefined
                         log.debug(
                             `Export data received for session=${sessionId}`,
                         )
@@ -554,11 +539,7 @@ function handleStateApi(
                             "Content-Type": "application/json",
                         })
                         res.end(
-                            JSON.stringify({
-                                error: "Session was recreated",
-                                stateChanged: true,
-                                version: current.version,
-                            }),
+                            JSON.stringify({ error: "Session was recreated" }),
                         )
                         return
                     }
@@ -579,7 +560,6 @@ function handleStateApi(
                         res.end(
                             JSON.stringify({
                                 error: "Diagram changed on the server",
-                                version: current.version,
                                 savedToHistory: saved,
                             }),
                         )
@@ -614,7 +594,6 @@ function handleStateApi(
                     res.end(
                         JSON.stringify({
                             error: "Diagram changed on the server",
-                            version: current?.version,
                             savedToHistory,
                         }),
                     )
@@ -669,7 +648,6 @@ function handleHistoryApi(
                 id: entry.id,
                 svg: entry.svg,
             })),
-            count: history.length,
         }),
     )
 }
@@ -737,15 +715,14 @@ function handleRestoreApi(
                 return
             }
 
-            const newVersion = restoreHistoryEntry(sessionId, id)
-            if (newVersion === null) {
+            if (restoreHistoryEntry(sessionId, id) === null) {
                 res.writeHead(404, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Entry not found" }))
                 return
             }
 
             res.writeHead(200, { "Content-Type": "application/json" })
-            res.end(JSON.stringify({ success: true, newVersion }))
+            res.end(JSON.stringify({ success: true }))
         } catch {
             res.writeHead(400, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ error: "Invalid JSON" }))

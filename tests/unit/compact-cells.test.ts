@@ -299,8 +299,9 @@ describe("review round: cells the model may write", () => {
         expect(outcome.xml).toContain(
             '<mxCell id="3" value="B" vertex="1" parent="L1"',
         )
-        expect(foldCells(file, "L1")).toContain(
-            '<mxCell id="2" value="Start" style="rounded=1;" x="40" y="40" w="120" h="60"/>',
+        // Folding keeps a parent other than the default layer "1"
+        expect(foldCells(file)).toContain(
+            '<mxCell id="2" value="Start" style="rounded=1;" parent="L1" x="40" y="40" w="120" h="60"/>',
         )
     })
 

@@ -18,7 +18,7 @@ export interface HistoryEntry {
 let nextEntryId = 0
 const historyStore = new Map<string, HistoryEntry[]>()
 
-export function addHistory(sessionId: string, xml: string, svg = ""): number {
+export function addHistory(sessionId: string, xml: string, svg = ""): void {
     let history = historyStore.get(sessionId)
     if (!history) {
         history = []
@@ -31,7 +31,7 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
     const last = history[history.length - 1]
     if (last && last.xml === xml) {
         if (svg && !last.svg) last.svg = svg
-        return history.length - 1
+        return
     }
 
     history.push({ id: nextEntryId++, xml, svg })
@@ -42,7 +42,6 @@ export function addHistory(sessionId: string, xml: string, svg = ""): number {
     }
 
     log.debug(`History: session=${sessionId}, entries=${history.length}`)
-    return history.length - 1
 }
 
 export function getHistory(sessionId: string): HistoryEntry[] {

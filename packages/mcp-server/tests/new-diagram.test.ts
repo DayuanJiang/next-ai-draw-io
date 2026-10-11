@@ -4,13 +4,7 @@
  * never sent.
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
-
+import { describe, expect, it } from "vitest"
 import {
     isMxCellXmlComplete,
     prepareNewDiagram,

@@ -25,7 +25,7 @@ const escapeChars = (text: string, chars: RegExp) =>
  * Serialize a linkedom node as XML. Attribute values escape tabs and line
  * breaks too, so multi-line labels (value="a&#xa;b") survive a round trip.
  */
-export function serializeXml(node: Node): string {
+function serializeXml(node: Node): string {
     switch (node.nodeType) {
         case 9: {
             // Document
