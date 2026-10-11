@@ -150,3 +150,66 @@ describe("prepareNewDiagram with cut-off output", () => {
         expect(out.error).not.toContain("cut off")
     })
 })
+
+describe("truncation check with named styles and compact cells", () => {
+    const BLUE =
+        '<mxStyle name="blue" value="fillColor=#dae8fc;strokeColor=#6c8ebf;"/>\n'
+    const A =
+        '<mxCell id="2" value="A" style="blue;" x="0" y="0" w="80" h="40"/>\n'
+
+    it("accepts complete compact cells after the definitions and expands them", () => {
+        const out = prepareNewDiagram(
+            `${BLUE}${A}<mxCell id="3" value="B" style="blue;" x="120" y="0" w="80" h="40"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain("fillColor=#dae8fc")
+        expect(out.xml).toContain("<mxGeometry")
+        expect(out.xml).not.toContain("<mxStyle")
+    })
+
+    it("reports a cut inside a compact cell that follows the definitions", () => {
+        const cut = `${BLUE}${A}<mxCell id="3" value="B" style="blue;" x="120" y="0" w="8`
+        const out = prepareNewDiagram(cut)
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.error).toContain("cut off")
+        expect(out.error).toContain(
+            '<mxCell id="3" value="B" style="blue;" x="120" y="0" w="8',
+        )
+        expect(out.error).toContain("edit_diagram add")
+    })
+
+    it("reports output that stops right after the definitions and the first cells", () => {
+        const cut = `${BLUE}${A}<mxCell id="3" value="B" style="blue;"`
+        expect(isMxCellXmlComplete(cut)).toBe(false)
+        expect(truncatedCellError(cut)).toContain("cut off")
+    })
+
+    it("does not treat a compact cell's quote slip as a cut", () => {
+        const slip = `${A}<mxCell id="3" value="B" x="120" y="0" w="80" h="40/>`
+        expect(isMxCellXmlComplete(slip)).toBe(true)
+        expect(truncatedCellError(slip)).toBeNull()
+        const out = prepareNewDiagram(slip)
+        expect(out.ok).toBe(true)
+        if (out.ok) expect(out.xml).toContain('height="40"')
+    })
+
+    it("leaves definitions without any cell to the style check", () => {
+        expect(truncatedCellError(BLUE)).toBeNull()
+        const out = prepareNewDiagram(BLUE)
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.error).not.toContain("cut off")
+        expect(out.error).toContain("no cells")
+    })
+
+    it("leaves an unclosed definition to the style check", () => {
+        const cut = `${BLUE}<mxStyle name="flow" value="edgeSt`
+        const out = prepareNewDiagram(cut)
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.error).not.toContain("cut off")
+        expect(out.error).toContain("not closed")
+    })
+})
