@@ -1,6 +1,25 @@
 const iframe = document.getElementById('drawio');
-// Every API request carries the token the server wrote into this page
-const api = (url, init = {}) => fetch(url, { ...init, headers: { ...(init.headers || {}), 'X-Drawio-Token': API_TOKEN } });
+// Every API request carries the token the server wrote into this page. A 403
+// means another MCP process (with its own token) now answers on this port:
+// read its token from a fresh copy of this page and retry once, so the next
+// poll can recover the session instead of being refused forever.
+let tokenRefresh = null;
+function refreshToken() {
+    if (!tokenRefresh) {
+        tokenRefresh = fetch(location.href, { cache: 'no-store' })
+            .then((r) => r.text())
+            .then((html) => { const m = html.match(/API_TOKEN = "([0-9a-f]+)"/); if (m) API_TOKEN = m[1]; })
+            .catch(() => {})
+            .finally(() => { tokenRefresh = null; });
+    }
+    return tokenRefresh;
+}
+async function api(url, init = {}) {
+    const send = () => fetch(url, { ...init, headers: { ...(init.headers || {}), 'X-Drawio-Token': API_TOKEN } });
+    let r = await send();
+    if (r.status === 403) { await refreshToken(); r = await send(); }
+    return r;
+}
 let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
 // The server state this tab is in step with (see stateId in http-server.ts);
 // null until the first poll

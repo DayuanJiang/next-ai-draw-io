@@ -487,7 +487,7 @@ describe("preview page", () => {
             .map((m) => m[1])
             .join("\n")
         expect(scripts).toContain('const sessionId = "mcp-test-script";')
-        expect(scripts).toContain(`const API_TOKEN = "${getApiToken()}";`)
+        expect(scripts).toContain(`let API_TOKEN = "${getApiToken()}";`)
         expect(() => new Function(scripts)).not.toThrow()
     })
 
@@ -515,12 +515,14 @@ describe("preview page", () => {
         }
     })
 
-    it("sends the security headers with the page", async () => {
+    it("sends the security headers with the page, which is never cached", async () => {
         const res = await request("/?mcp=mcp-test-headers")
         expect(res.headers["content-security-policy"]).toBe(
             "frame-ancestors 'self'",
         )
         expect(res.headers["x-content-type-options"]).toBe("nosniff")
+        // It holds the process's token
+        expect(res.headers["cache-control"]).toBe("no-store")
     })
 })
 
@@ -566,9 +568,49 @@ describe("bundled draw.io files", () => {
         expect(res.headers["content-type"]).toBe(
             "text/javascript; charset=utf-8",
         )
-        expect(res.headers["cache-control"]).toBe("public, max-age=86400")
+        // Revalidated on every use: the file names stay the same across
+        // draw.io versions, so a package upgrade must reach the browser
+        expect(res.headers["cache-control"]).toBe("no-cache")
+        expect(res.headers.etag).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/)
         expect(res.headers["x-content-type-options"]).toBe("nosniff")
         expect(res.headers["content-security-policy"]).toBeUndefined()
+    })
+
+    it("answers 304 to a matching If-None-Match, and HEAD without a body", async () => {
+        const first = await request("/drawio/js/app.min.js")
+        const again = await request("/drawio/js/app.min.js", {
+            headers: { "if-none-match": first.headers.etag as string },
+        })
+        expect(again.status).toBe(304)
+        expect(again.body).toBe("")
+        expect(again.headers.etag).toBe(first.headers.etag)
+        const changed = await request("/drawio/js/app.min.js", {
+            headers: { "if-none-match": '"0-0"' },
+        })
+        expect(changed.status).toBe(200)
+        const head = await request("/drawio/js/app.min.js", {
+            method: "HEAD",
+        })
+        expect(head.status).toBe(200)
+        expect(head.body).toBe("")
+        expect(head.headers["content-length"]).toBe("6")
+    })
+
+    it("keeps running when a file cannot be read", async () => {
+        // Readable for stat, not for open (root reads anything: skipped)
+        if (process.getuid?.() === 0) return
+        const file = join(drawioDir, "js/locked.js")
+        writeFileSync(file, "// locked", { mode: 0o000 })
+        try {
+            // The connection is dropped (the headers may be out already)
+            const res = await request("/drawio/js/locked.js").catch(() => null)
+            expect(res?.body ?? "").toBe("")
+        } finally {
+            rmSync(file, { force: true })
+        }
+        const next = await request("/drawio/js/app.min.js")
+        expect(next.status).toBe(200)
+        expect(next.body).toBe("// app")
     })
 
     it("frames the editor page only from this origin", async () => {

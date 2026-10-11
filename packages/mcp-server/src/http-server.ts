@@ -7,6 +7,7 @@ import { randomBytes, randomUUID } from "node:crypto"
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs"
 import http from "node:http"
 import { dirname, extname, join, posix, resolve, sep } from "node:path"
+import { pipeline } from "node:stream"
 import { fileURLToPath } from "node:url"
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024 // 10 MiB
@@ -512,8 +513,10 @@ function routeRequest(
 
         ensureSessionStateInitialized(sessionId)
 
+        // The page holds this process's token: never served from a cache
         res.writeHead(200, {
             "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
             ...HTML_SECURITY_HEADERS,
         })
         res.end(getHtmlPage(sessionId))
@@ -885,7 +888,7 @@ function serveDrawioFile(
     res: http.ServerResponse,
     rawPath: string,
 ): void {
-    if (req.method !== "GET") {
+    if (req.method !== "GET" && req.method !== "HEAD") {
         res.writeHead(405)
         res.end("Method Not Allowed")
         return
@@ -914,24 +917,45 @@ function serveDrawioFile(
         return
     }
     let size: number
+    let etag: string
     try {
         const stat = statSync(file)
         if (!stat.isFile()) throw new Error("not a file")
         size = stat.size
+        etag = `"${size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`
     } catch {
         res.writeHead(404)
         res.end("Not Found")
         return
     }
+    // The file names do not change between draw.io versions, so the browser
+    // may keep a copy but asks before using it (a 304 from localhost is
+    // cheap); after a package upgrade the next preview gets the new files
+    const cacheHeaders = {
+        ETag: etag,
+        "Cache-Control": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if (req.headers["if-none-match"] === etag) {
+        res.writeHead(304, cacheHeaders)
+        res.end()
+        return
+    }
     const ext = extname(file).toLowerCase()
     res.writeHead(200, {
+        ...cacheHeaders,
         "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
         "Content-Length": size,
-        "Cache-Control": "public, max-age=86400",
-        "X-Content-Type-Options": "nosniff",
         ...(ext === ".html" ? HTML_SECURITY_HEADERS : {}),
     })
-    createReadStream(file).pipe(res)
+    if (req.method === "HEAD") {
+        res.end()
+        return
+    }
+    // pipeline closes both ends when either fails or goes away (a tab closed
+    // mid-download), so no file handle leaks and no error goes unhandled; a
+    // client that left early is routine, not worth a log line
+    pipeline(createReadStream(file), res, () => {})
 }
 
 /** Where the iframe loads the editor from (without its query) */
