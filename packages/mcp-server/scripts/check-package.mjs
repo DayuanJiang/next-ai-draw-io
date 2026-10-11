@@ -13,9 +13,9 @@ const REQUIRED = [
     "dist/drawio/js/app.min.js",
     "dist/drawio/LICENSE",
 ]
-// The bundled draw.io is most of the package; a jump means the file list
-// grew more than intended
-const MAX_TARBALL_BYTES = 40 * 1024 * 1024
+// The bundled draw.io is most of the package (15.1 MB packed with draw.io
+// v32.0.2); a jump means the file list grew more than intended
+const MAX_TARBALL_BYTES = 20 * 1024 * 1024
 
 const output = JSON.parse(
     execSync("npm pack --dry-run --json", { encoding: "utf8" }),

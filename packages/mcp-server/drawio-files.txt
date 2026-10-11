@@ -3,15 +3,19 @@
 # a path segment, `**` across segments.
 #
 # Always included: the language files, the image icon libraries (loaded one
-# icon at a time, as diagrams use them), the stylesheets, and the licenses of
-# the icon sets.
+# icon at a time, as diagrams use them), the stylesheets, the licenses of the
+# icon sets, the templates of Insert > Template (the guard only sees the
+# previews it scrolled to) and the PlantUML parser of Insert > Advanced.
+images/osa_drive-harddisk.png
 img/LICENSE
 img/lib/**
+js/plantuml/drawio-plantuml.min.js
 mxgraph/css/**
 resources/dia*.txt
 shapes/LICENSE
 stencils/LICENSE
 styles/**
+templates/**
 
 # Requested by the editor; rewritten by scripts/check-drawio-files.mjs --update
 images/droptarget.png

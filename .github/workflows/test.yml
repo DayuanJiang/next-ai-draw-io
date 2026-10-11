@@ -81,6 +81,13 @@ jobs:
       - name: Build app
         run: npm run build
 
+      # The MCP package ships a trimmed draw.io; this drives the full copy
+      # (public/drawio, downloaded by the build) in Chromium and fails when
+      # the editor requests a file its list does not have. Once is enough.
+      - name: Check the MCP draw.io file list
+        if: matrix.shard == 1
+        run: npm --prefix packages/mcp-server run check-drawio
+
       - name: Run E2E tests
         run: npm run test:e2e -- --shard=${{ matrix.shard }}/6
         env:

@@ -23,6 +23,7 @@ import {
 import http from "node:http"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { readDrawioVersion } from "../../../scripts/drawio-zip.mjs"
 import {
     formatFileList,
     parseFileList,
@@ -41,6 +42,18 @@ const drawioDir = path.resolve(
 if (!existsSync(path.join(drawioDir, "index.html"))) {
     console.error(
         `No draw.io copy at ${drawioDir}. Run "npm run dev" once at the repository root (it downloads one into public/drawio), or pass --drawio <dir>.`,
+    )
+    process.exit(2)
+}
+// The list is for the pinned release; the fetch scripts stamp the copy
+const { version } = readDrawioVersion()
+const stampFile = path.join(drawioDir, ".version")
+const stamp = existsSync(stampFile)
+    ? readFileSync(stampFile, "utf8").trim()
+    : null
+if (stamp !== version) {
+    console.error(
+        `${drawioDir} is draw.io ${stamp ?? "(no .version stamp)"}; the package pins ${version}. Delete it and run "npm run dev" at the repository root again, or pass --drawio <dir>.`,
     )
     process.exit(2)
 }
@@ -172,9 +185,9 @@ const MATH_DOC = doc(
 )
 
 // Dialogs and toggles, by draw.io action name (Actions.js); each is closed
-// again right after it opened. Left out on purpose, to keep the package
-// small: Insert > Template (5.6 MB of templates and previews) and the
-// Insert > Advanced tools that load code when used (Mermaid, PlantUML).
+// again right after it opened. Insert > Template and Insert > Advanced >
+// PlantUML, which load files when used, are driven below. Left out on
+// purpose, to keep the package small: Mermaid (it loads its own code).
 const ACTIONS = [
     "editData",
     "editDiagram",
@@ -408,16 +421,48 @@ async function drive(browser, ui, full) {
     report("page tabs")
 
     if (full) {
-        for (const format of ["png", "svg", "xmlsvg", "xml"]) {
+        // Insert > Advanced > PlantUML: the parser is loaded on first use
+        await frame.evaluate(() => window.__ui.actions.get("plantUml").funct())
+        await frame
+            .locator(".geDialog textarea")
+            .first()
+            .fill("@startuml\nA -> B\n@enduml")
+        await frame
+            .locator('.geDialog button:text-is("Insert")')
+            .first()
+            .click()
+        await wait(page, 3000)
+        report("plantUml insert")
+        await closeAll()
+
+        // Insert > Template: the index and the previews on screen
+        await frame.evaluate(() =>
+            window.__ui.actions.get("insertTemplate").funct(),
+        )
+        await wait(page, 2000)
+        report("template dialog")
+        await closeAll()
+
+        const formats = ["png", "svg", "xmlsvg", "xml"]
+        for (const [i, format] of formats.entries()) {
             await page.evaluate(
                 (f) => window.send({ action: "export", format: f, scale: 2 }),
                 format,
             )
-            await wait(page, 1500)
+            await page
+                .waitForFunction((n) => window.exports >= n, i + 1, {
+                    timeout: 10000,
+                })
+                .catch(() => {})
             report(`export ${format}`)
         }
         const exports = await page.evaluate(() => window.exports)
-        if (exports < 4) console.log(`  only ${exports} of 4 exports answered`)
+        if (exports < formats.length) {
+            console.error(
+                `  only ${exports} of ${formats.length} exports answered`,
+            )
+            process.exitCode = 1
+        }
     }
     await page.close()
 }
@@ -430,10 +475,12 @@ try {
     server.close()
 }
 
+// A full copy has every file the editor asks for; 404s mean this is not one
 if (notFound.size > 0) {
-    console.log(
-        `\nNot in the full copy either (ignored): ${[...notFound].join(", ")}`,
+    console.error(
+        `\nThe editor requested ${notFound.size} files that ${drawioDir} does not have (not a full draw.io copy?):\n  ${[...notFound].join("\n  ")}`,
     )
+    process.exit(1)
 }
 
 // Compare with the list
