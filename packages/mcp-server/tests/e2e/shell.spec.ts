@@ -243,6 +243,83 @@ test("exporting another page shows it for a moment, then the user's page comes b
     expect(xml).toContain('name="Second"')
 })
 
+test("a screenshot of another page leaves the page on screen alone", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Front page", 40) })
+    await expect(frame.getByText("Front page")).toBeVisible({ timeout: 10_000 })
+    await toolText("add_page", {
+        name: "Backside",
+        xml: `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="b1" value="OnBack" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`,
+    })
+    const tabs = frame.locator(".geTabContainer")
+    await expect(tabs.getByText("Backside", { exact: true })).toBeVisible({
+        timeout: 10_000,
+    })
+    const activeTab = tabs.locator(".geActivePage")
+    await expect(activeTab).toHaveText("Page-1")
+    // The page on screen, as the editor reports it to the server
+    const before = await toolText("get_selection")
+    expect(before).toContain('page "Page-1"')
+
+    // PNG: draw.io renders the other page by its id, off screen; the shell
+    // never shows it as a projection, so the page on screen does not change
+    const png = async (args: Record<string, unknown>) => {
+        const result = await client.callTool({
+            name: "screenshot_diagram",
+            arguments: args,
+        })
+        const image = (
+            result.content as {
+                type: string
+                data?: string
+                mimeType?: string
+            }[]
+        ).find((c) => c.type === "image")
+        expect(result.isError ?? false).toBe(false)
+        expect(image?.mimeType).toBe("image/png")
+        expect(image?.data?.length ?? 0).toBeGreaterThan(1000)
+        return image?.data ?? ""
+    }
+    const back = await png({ page_name: "Backside" })
+    await expect(activeTab).toHaveText("Page-1")
+    await expect(frame.getByText("Front page")).toBeVisible()
+    expect(await toolText("get_selection")).toContain('page "Page-1"')
+    // Another picture than the page on screen
+    expect(await png({})).not.toBe(back)
+})
+
+test("get_selection reports the cells selected in the editor", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Pick me", 40)}\n${box("3", "Leave me", 240)}\n<mxCell id="4" value="link" source="2" target="3"/>`,
+    })
+    await expect(frame.getByText("Pick me")).toBeVisible({ timeout: 10_000 })
+    const nothing = await toolText("get_selection")
+    expect(nothing).toContain("Nothing is selected")
+    expect(nothing).toContain('page "Page-1"')
+
+    // Select a shape and the edge in the editor, as a click would
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.setSelectionCells([
+                graph.model.getCell("2"),
+                graph.model.getCell("4"),
+            ])
+        })
+    })
+    const text = await toolText("get_selection")
+    expect(text).toContain('2 cells selected on page "Page-1"')
+    expect(text).toContain('id="2" shape "Pick me" at x=40 y=40 w=120 h=60')
+    expect(text).toContain('id="4" edge "link" from "2" to "3"')
+    expect(text).not.toContain('id="3"')
+})
+
 // --- Version cards from the server's History (shell/node-versions-source.ts) ---
 
 test("the version cards follow the server's History; undo, redo and restore go through it", async ({

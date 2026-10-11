@@ -9,8 +9,9 @@
  * package before testing). Running from source via tsx means it executes as
  * part of the normal `vitest run`.
  *
- * We deliberately do NOT call start_session — it would open a real browser
- * window via open(). The browser bridge is covered by the Playwright e2e suite.
+ * start_session is called only at the end, with BROWSER=none so no browser
+ * window opens, for the tools that need a session but no preview tab. The
+ * browser bridge is covered by the Playwright e2e suite.
  */
 
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
@@ -44,6 +45,7 @@ const EXPECTED_TOOLS = [
     "get_drawing_guide",
     "get_shape_library",
     "screenshot_diagram",
+    "get_selection",
     "list_saved_diagrams",
     "restore_version",
 ]
@@ -89,7 +91,15 @@ beforeAll(async () => {
     writeFileSync(path.join(dataDir, `${SAVED_ID}.drawio`), SAVED_DIAGRAM)
     proc = spawn(tsxBin, [entry], {
         stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env, DRAWIO_DATA_DIR: dataDir },
+        env: {
+            ...process.env,
+            DRAWIO_DATA_DIR: dataDir,
+            // For the session tests at the end: no browser window, the
+            // canvas shell as the preview, a port away from other servers
+            BROWSER: "none",
+            DRAWIO_PREVIEW_UI: "shell",
+            PORT: String(6500 + Math.floor(Math.random() * 400)),
+        },
     }) as ChildProcessWithoutNullStreams
 
     proc.stdout.on("data", (chunk: Buffer) => {
@@ -215,6 +225,15 @@ describe("MCP server wiring", () => {
         expect(resp.result.content[0].text).toContain("start_session")
     })
 
+    it("refuses get_selection without a session", async () => {
+        const resp = await send("tools/call", {
+            name: "get_selection",
+            arguments: {},
+        })
+        expect(resp.result.isError).toBe(true)
+        expect(resp.result.content[0].text).toContain("start_session")
+    })
+
     it("keeps every description and the instructions within the host limit", async () => {
         const resp = await send("tools/list", {})
         for (const tool of resp.result.tools) {
@@ -334,5 +353,25 @@ describe("load_diagram dual-source arguments", () => {
         })
         expect(resp.result?.isError).toBe(true)
         expect(resp.result?.content?.[0]?.text).toContain("No active session")
+    })
+})
+
+// After the tests above: start_session makes a session current
+describe("MCP server wiring with a session, without a preview tab", () => {
+    it("get_selection says the preview tab is not connected", async () => {
+        const started = await send("tools/call", {
+            name: "start_session",
+            arguments: {},
+        })
+        expect(started.result.isError).toBeFalsy()
+        expect(started.result.content[0].text).toContain("Browser URL:")
+        const resp = await send("tools/call", {
+            name: "get_selection",
+            arguments: {},
+        })
+        expect(resp.result.isError).toBe(true)
+        expect(resp.result.content[0].text).toBe(
+            "Error: The preview tab is not open, or has not connected yet.",
+        )
     })
 })

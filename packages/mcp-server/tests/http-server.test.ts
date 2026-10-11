@@ -29,6 +29,7 @@ import {
     onStateChange,
     previewUrl,
     requestExport,
+    requestSelection,
     requestSync,
     restoreHistoryEntry,
     setDrawioDir,
@@ -37,6 +38,7 @@ import {
     shellConfig,
     shutdown,
     startHttpServer,
+    waitForSelection,
     waitForSync,
 } from "../src/http-server.ts"
 
@@ -421,6 +423,69 @@ describe("export requests", () => {
         })
         expect(getState(id)?.exportData).toBeUndefined()
         expect(getState(id)?.exportFormat).toBe("svg")
+    })
+})
+
+describe("selection requests (get_selection)", () => {
+    const picked = {
+        pageId: "p1",
+        pageName: "Page-1",
+        cells: [{ id: "3", label: "Login", edge: false }],
+    }
+
+    it("shows the request to the page and takes its answer once", async () => {
+        const id = "mcp-selection"
+        setState(id, "<mxfile>x</mxfile>")
+        expect(requestSelection(id)).toBe(true)
+        const poll = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(poll.selectionId).toMatch(/^[0-9a-f-]{36}$/)
+        // The request survives a write meanwhile
+        setState(id, "<mxfile>y</mxfile>")
+        const waiting = waitForSelection(id, 3000)
+        const answer = await postJson("/api/state", {
+            sessionId: id,
+            selectionId: poll.selectionId,
+            selection: picked,
+        })
+        expect(answer.status).toBe(200)
+        expect(await waiting).toEqual(picked)
+        // Taken: the next poll shows no request
+        const after = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(after.selectionId).toBeNull()
+        expect(getState(id)?.xml).toBe("<mxfile>y</mxfile>")
+    })
+
+    it("ignores an answer to another request, and gives up in time", async () => {
+        const id = "mcp-selection-late"
+        setState(id, "<mxfile>x</mxfile>")
+        requestSelection(id)
+        const first = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        requestSelection(id)
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: first.selectionId,
+            selection: picked,
+        })
+        expect(getState(id)?.selection).toBeUndefined()
+        expect(getState(id)?.selectionId).not.toBe(first.selectionId)
+        // A malformed answer is not taken either
+        const second = getState(id)?.selectionId
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: second,
+            selection: { cells: "3" },
+        })
+        expect(getState(id)?.selection).toBeUndefined()
+        expect(await waitForSelection(id, 250)).toBeNull()
+        // The request is withdrawn with the timeout
+        expect(getState(id)?.selectionId).toBeUndefined()
+        expect(requestSelection("mcp-unknown-session")).toBe(false)
     })
 })
 

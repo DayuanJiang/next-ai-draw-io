@@ -8,6 +8,7 @@ import {
     type SyncStatus,
     tokenFromPage,
 } from "@/packages/mcp-server/shell/mcp-sync-core"
+import type { SelectionAnswer } from "@/packages/mcp-server/src/selection"
 
 // The shell's side of the MCP server protocol, driven step by step with a
 // stubbed server (fetch) and canvas, as tests/unit/mcp-preview-recovery.test.ts
@@ -59,7 +60,15 @@ function open(options: { currentPageId?: string | null } = {}) {
     const notices: SyncNotice[] = []
     const statuses: SyncStatus[] = []
     let recreated = 0
-    const canvas = { xml: "", pageId: options.currentPageId ?? null }
+    const canvas: {
+        xml: string
+        pageId: string | null
+        selection: SelectionAnswer
+    } = {
+        xml: "",
+        pageId: options.currentPageId ?? null,
+        selection: { pageId: "p1", pageName: "Page-1", cells: [] },
+    }
     const sync = createMcpSync({
         sessionId: "mcp-test",
         apiBase: "/api",
@@ -86,6 +95,7 @@ function open(options: { currentPageId?: string | null } = {}) {
                 }),
             currentXml: () => canvas.xml,
             currentPageId: () => canvas.pageId,
+            readSelection: () => canvas.selection,
         },
         onNotice: (notice) => notices.push(notice),
         onStatus: (status) => statuses.push(status),
@@ -860,6 +870,130 @@ describe("MCP sync export requests", () => {
         expect(t.exports.map((e) => e.request.format)).toEqual(["svg"])
         await vi.advanceTimersByTimeAsync(1)
         expect(t.exports.map((e) => e.request.format)).toEqual(["svg", "png"])
+    })
+})
+
+describe("MCP sync selection requests (get_selection)", () => {
+    const selectionState = (extra: Record<string, unknown> = {}) =>
+        state("S1", 2, "<mxfile>A</mxfile>", { selectionId: "sel-1", ...extra })
+    const picked: SelectionAnswer = {
+        pageId: "p1",
+        pageName: "Page-1",
+        cells: [
+            {
+                id: "3",
+                label: "Login",
+                edge: false,
+                geometry: { x: 100, y: 100, width: 120, height: 60 },
+            },
+            { id: "5", label: "", edge: true, source: "3", target: "4" },
+        ],
+    }
+
+    it("answers a request once, with what the editor has selected", async () => {
+        const t = await inStep()
+        t.canvas.selection = picked
+        const poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        const answer = t.next("POST")
+        expect(answer.body).toEqual({
+            sessionId: "mcp-test",
+            selectionId: "sel-1",
+            selection: picked,
+        })
+        answer.answer({ status: 200, body: { success: true } })
+        // The server still shows the request on the next poll: not again
+        const again = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await again
+        expect(t.posts()).toHaveLength(0)
+        // A new request is answered
+        t.canvas.selection = { pageId: "p1", pageName: "Page-1", cells: [] }
+        const later = t.sync.poll()
+        t.next("GET").answer(selectionState({ selectionId: "sel-2" }))
+        await later
+        expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-2",
+            selection: { cells: [] },
+        })
+    })
+
+    it("says when the page cannot reach the editor", async () => {
+        const t = await inStep()
+        t.canvas.selection = {
+            pageId: null,
+            pageName: null,
+            cells: [],
+            unavailable: true,
+        }
+        const poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.next("POST").body.selection).toEqual({
+            pageId: null,
+            pageName: null,
+            cells: [],
+            unavailable: true,
+        })
+    })
+
+    it("waits until draw.io is up, where the editor is reached", async () => {
+        const t = open()
+        t.canvas.selection = picked
+        let poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.posts()).toHaveLength(0)
+        t.sync.setReady(true)
+        // The thumbnail of the write loaded before draw.io was ready
+        t.nextExport().answer(null)
+        await t.settle()
+        poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-1",
+            selection: picked,
+        })
+    })
+
+    it("never answers while a projection is on screen", async () => {
+        const t = await inStep()
+        t.canvas.selection = picked
+        // A projection shows another page: its selection is not the user's
+        let poll = t.sync.poll()
+        t.next("GET").answer(
+            selectionState({
+                exportFormat: "svg",
+                exportId: "e1",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+            }),
+        )
+        await poll
+        expect(t.sync.read().projectionActive).toBe(true)
+        expect(t.posts()).toHaveLength(0)
+        // The export answers and the document comes back
+        await vi.advanceTimersByTimeAsync(600)
+        t.nextExport().answer({ data: "<svg>page 2</svg>" })
+        await t.settle()
+        t.next("POST").answer({ status: 200, body: { success: true } })
+        await t.settle()
+        await t.settle()
+        t.next("GET").answer(selectionState())
+        await t.settle()
+        await t.settle()
+        expect(t.posts()).toHaveLength(0)
+        t.sync.onDrawioLoad()
+        expect(t.sync.read().projectionActive).toBe(false)
+        // The request is still pending: answered now
+        poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-1",
+            selection: picked,
+        })
     })
 })
 
