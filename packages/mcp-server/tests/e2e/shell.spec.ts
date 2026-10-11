@@ -243,6 +243,144 @@ test("exporting another page shows it for a moment, then the user's page comes b
     expect(xml).toContain('name="Second"')
 })
 
+// --- Version cards from the server's History (shell/node-versions-source.ts) ---
+
+test("the version cards follow the server's History; undo, redo and restore go through it", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    const cards = page.getByTestId("version-card")
+    const latestCard = cards.last()
+    const getDiagram = () => toolText("get_diagram")
+
+    // Three writes, three cards; the newest can be undone
+    await toolText("create_new_diagram", { xml: box("a", "Card A", 40) })
+    await expect(frame.getByText("Card A")).toBeVisible({ timeout: 10_000 })
+    await expect(cards).toHaveCount(1, { timeout: 10_000 })
+    await expect(cards.first()).toContainText("Drew the diagram")
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "b",
+                new_xml: box("b", "Card B", 240),
+            },
+        ],
+    })
+    await expect(frame.getByText("Card B")).toBeVisible({ timeout: 10_000 })
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "c",
+                new_xml: box("c", "Card C", 440),
+            },
+        ],
+    })
+    await expect(frame.getByText("Card C")).toBeVisible({ timeout: 10_000 })
+    await expect(cards).toHaveCount(3, { timeout: 10_000 })
+    await expect(latestCard).toContainText("Changed the diagram")
+    await expect(latestCard.getByTestId("version-undo")).toHaveText(
+        /Undo change/,
+    )
+    await expect(page.getByTestId("version-thumb")).toHaveCount(3)
+
+    // Undo: the server restores the version before; the card says so
+    await latestCard.getByTestId("version-undo").click()
+    await expect(frame.getByText("Card C")).toHaveCount(0, { timeout: 10_000 })
+    await expect(frame.getByText("Card B")).toBeVisible()
+    await expect(latestCard).toContainText("Change undone")
+    await expect(latestCard.getByTestId("version-undo")).toHaveText(
+        /Redo change/,
+    )
+    // A restore adds a History entry, not a card
+    await expect(cards).toHaveCount(3)
+    await expect
+        .poll(async () => (await getDiagram()).includes('id="c"'), {
+            timeout: 10_000,
+        })
+        .toBe(false)
+
+    // Redo: the newest version is back on the canvas and the server
+    await latestCard.getByTestId("version-undo").click()
+    await expect(frame.getByText("Card C")).toBeVisible({ timeout: 10_000 })
+    await expect(latestCard).toContainText("Changed the diagram")
+    await expect(latestCard.getByTestId("version-undo")).toHaveText(
+        /Undo change/,
+    )
+    await expect
+        .poll(async () => (await getDiagram()).includes('id="c"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+
+    // A hand edit: no version is on the canvas, so the newest card offers
+    // a restore, not an undo
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.getModel().beginUpdate()
+            try {
+                graph.insertVertex(
+                    graph.getDefaultParent(),
+                    "manual-card",
+                    "By hand",
+                    40,
+                    200,
+                    120,
+                    60,
+                    "rounded=1;",
+                )
+            } finally {
+                graph.getModel().endUpdate()
+            }
+        })
+    })
+    await expect
+        .poll(async () => (await getDiagram()).includes('id="manual-card"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await expect(latestCard.getByTestId("version-restore")).toBeVisible()
+    await expect(cards).toHaveCount(3)
+
+    // Restoring the first version keeps the hand edit as a version of its
+    // own, and get_diagram agrees with the canvas
+    await cards.first().getByTestId("version-restore").click()
+    await expect(frame.getByText("Card B")).toHaveCount(0, { timeout: 10_000 })
+    await expect(frame.getByText("By hand")).toHaveCount(0)
+    await expect(frame.getByText("Card A")).toBeVisible()
+    await expect(cards).toHaveCount(4, { timeout: 10_000 })
+    await expect(cards.nth(3)).toContainText("Changed by hand")
+    // The first version is on the canvas: its restore button rests
+    await expect(cards.first().getByTestId("version-restore")).toBeDisabled()
+    await expect
+        .poll(getDiagram, { timeout: 10_000 })
+        .toContain('value="Card A"')
+    const xml = await getDiagram()
+    expect(xml).not.toContain('id="b"')
+    expect(xml).not.toContain('id="manual-card"')
+    // The MCP tool sees the same versions: the hand edit is one step back
+    expect(await toolText("restore_version", { steps_back: 1 })).toContain(
+        "Restored the version 1 step(s) back",
+    )
+    await expect(frame.getByText("By hand")).toBeVisible({ timeout: 10_000 })
+    await expect(cards).toHaveCount(4)
+})
+
 test("the theme toggle switches the page and draw.io, and is remembered", async ({
     page,
 }) => {
