@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Next AI Draw.io</title>
+  <!-- Desktop app icon, source of resources/icon.png (1024x1024).
+       The tile is 824px wide on the 1024 canvas, following the macOS icon grid. -->
+  <g transform="translate(100 100) scale(0.8046875)">
+    <rect x="4" y="4" width="1016" height="1016" rx="228" fill="#ffffff" stroke="#dfe3e8" stroke-width="8"/>
+    <g transform="translate(512 512) scale(0.66) translate(-512 -438)" fill="#14181d">
+      <rect x="140" y="62" width="744" height="244" rx="56"/>
+      <rect x="478" y="300" width="68" height="224"/>
+      <rect x="142" y="378" width="740" height="68" rx="14"/>
+      <rect x="142" y="378" width="68" height="146" rx="14"/>
+      <rect x="814" y="378" width="68" height="146" rx="14"/>
+      <rect x="62" y="518" width="228" height="296" rx="40"/>
+      <rect x="398" y="518" width="228" height="296" rx="40"/>
+      <rect x="734" y="518" width="228" height="296" rx="40"/>
+    </g>
+  </g>
+</svg>
