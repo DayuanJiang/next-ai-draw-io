@@ -48,10 +48,12 @@ import {
     otherVersions,
 } from "./history.ts"
 import {
+    DRAWIO_BASE_URL,
     type ExportFormat,
     type ExportOptions,
     getServerPort,
     getState,
+    isSameOriginDrawio,
     keepInHistory,
     onSessionRecreate,
     onStateChange,
@@ -407,6 +409,12 @@ registerWriteTool(
                 ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue this diagram in a later conversation, call start_session with session_id=${sessionId}. list_saved_diagrams lists older diagrams.`
                 : ""
             const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsPath()} (Markdown, up to 5000 characters, read on every call).`
+            // The bundled draw.io is served from the preview's own origin;
+            // an external one (DRAWIO_BASE_URL, or a build without the
+            // copy) cannot be reached by the page's scripts
+            const originNote = isSameOriginDrawio()
+                ? ""
+                : `\n\nThe preview loads draw.io from ${DRAWIO_BASE_URL} (another origin): same-origin editor features are off.`
 
             log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
@@ -414,7 +422,7 @@ registerWriteTool(
                 content: [
                     {
                         type: "text",
-                        text: `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
+                        text: `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${originNote}${saveNote}${rulesNote}\n\n${guideText()}`,
                     },
                 ],
             }

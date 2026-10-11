@@ -14,6 +14,7 @@ const html = readFileSync(join(dir, "index.html"), "utf8")
     .replace("{{DRAWIO_URL}}", "about:blank")
     .replace("{{SESSION_JSON}}", '"mcp-test"')
     .replace("{{ORIGIN_JSON}}", JSON.stringify(DRAWIO))
+    .replace("{{TOKEN_JSON}}", JSON.stringify("test-token"))
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) =>
     m[1].replace("{{SCRIPT}}", ""),
 )

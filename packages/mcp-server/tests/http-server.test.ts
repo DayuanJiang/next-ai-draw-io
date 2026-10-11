@@ -6,19 +6,25 @@
  * node:http so tests can set raw paths and Host/Origin headers.
  */
 
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import http from "node:http"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
     drawioEmbedParams,
+    getApiToken,
     getState,
+    isSameOriginDrawio,
     keepInHistory,
     onSessionRecreate,
     onStateChange,
     requestExport,
     requestSync,
     restoreHistoryEntry,
+    setDrawioDir,
     setState,
     shutdown,
     startHttpServer,
@@ -26,15 +32,26 @@ import {
 } from "../src/http-server.ts"
 
 let port = 0
+// A stand-in for the bundled draw.io copy (dist/drawio), with a server-side
+// part of the war that must never be served
+let drawioDir = ""
 
 beforeAll(async () => {
     // XML parsing, as the server installs it at startup
     installDomPolyfill()
+    drawioDir = mkdtempSync(join(tmpdir(), "drawio-static-"))
+    mkdirSync(join(drawioDir, "js"))
+    mkdirSync(join(drawioDir, "WEB-INF"))
+    writeFileSync(join(drawioDir, "index.html"), "<html>draw.io</html>")
+    writeFileSync(join(drawioDir, "js/app.min.js"), "// app")
+    writeFileSync(join(drawioDir, "WEB-INF/web.xml"), "<web-app/>")
+    setDrawioDir(drawioDir)
     port = await startHttpServer(40000 + Math.floor(Math.random() * 10000))
 })
 
 afterAll(() => {
     shutdown()
+    rmSync(drawioDir, { recursive: true, force: true })
 })
 
 interface Response {
@@ -43,7 +60,10 @@ interface Response {
     body: string
 }
 
-/** Send a request; `body` may be split into several writes. */
+/**
+ * Send a request as the preview page does (same Host, the API token);
+ * `body` may be split into several writes.
+ */
 function request(
     path: string,
     opts: {
@@ -59,7 +79,11 @@ function request(
                 port,
                 path,
                 method: opts.method ?? "GET",
-                headers: { host: `localhost:${port}`, ...opts.headers },
+                headers: {
+                    host: `localhost:${port}`,
+                    "x-drawio-token": getApiToken(),
+                    ...opts.headers,
+                },
             },
             (res) => {
                 const chunks: Buffer[] = []
@@ -463,7 +487,127 @@ describe("preview page", () => {
             .map((m) => m[1])
             .join("\n")
         expect(scripts).toContain('const sessionId = "mcp-test-script";')
+        expect(scripts).toContain(`const API_TOKEN = "${getApiToken()}";`)
         expect(() => new Function(scripts)).not.toThrow()
+    })
+
+    it("embeds the bundled draw.io from its own origin, else the external one", async () => {
+        expect(isSameOriginDrawio()).toBe(true)
+        const res = await request("/?mcp=mcp-test-origin")
+        expect(res.body).toContain('src="/drawio/index.html?embed=1&')
+        // The page takes its own origin for draw.io's messages
+        expect(res.body).toContain(
+            'const DRAWIO_ORIGIN = "" || location.origin;',
+        )
+
+        setDrawioDir(null)
+        try {
+            expect(isSameOriginDrawio()).toBe(false)
+            const external = await request("/?mcp=mcp-test-origin")
+            expect(external.body).toContain(
+                'src="https://embed.diagrams.net/?embed=1&',
+            )
+            expect(external.body).toContain(
+                'const DRAWIO_ORIGIN = "https://embed.diagrams.net" || location.origin;',
+            )
+        } finally {
+            setDrawioDir(drawioDir)
+        }
+    })
+
+    it("sends the security headers with the page", async () => {
+        const res = await request("/?mcp=mcp-test-headers")
+        expect(res.headers["content-security-policy"]).toBe(
+            "frame-ancestors 'self'",
+        )
+        expect(res.headers["x-content-type-options"]).toBe("nosniff")
+    })
+})
+
+describe("API token", () => {
+    it("refuses an API request without the token, or with another one", async () => {
+        setState("mcp-token", "<mxfile>kept</mxfile>")
+        for (const headers of [
+            { "x-drawio-token": "" },
+            { "x-drawio-token": "0123456789abcdef0123456789abcdef" },
+        ]) {
+            const get = await request("/api/state?sessionId=mcp-token", {
+                headers,
+            })
+            expect(get.status).toBe(403)
+            const post = await postJson(
+                "/api/state",
+                { sessionId: "mcp-token", xml: "<mxfile>replaced</mxfile>" },
+                headers,
+            )
+            expect(post.status).toBe(403)
+            const history = await request("/api/history?sessionId=mcp-token", {
+                headers,
+            })
+            expect(history.status).toBe(403)
+        }
+        expect(getState("mcp-token")?.xml).toBe("<mxfile>kept</mxfile>")
+    })
+
+    it("is not needed for the page and the draw.io files", async () => {
+        const headers = { "x-drawio-token": "" }
+        expect((await request("/?mcp=mcp-token", { headers })).status).toBe(200)
+        expect((await request("/drawio/index.html", { headers })).status).toBe(
+            200,
+        )
+    })
+})
+
+describe("bundled draw.io files", () => {
+    it("serves a file with its MIME type, cache and nosniff headers", async () => {
+        const res = await request("/drawio/js/app.min.js")
+        expect(res.status).toBe(200)
+        expect(res.body).toBe("// app")
+        expect(res.headers["content-type"]).toBe(
+            "text/javascript; charset=utf-8",
+        )
+        expect(res.headers["cache-control"]).toBe("public, max-age=86400")
+        expect(res.headers["x-content-type-options"]).toBe("nosniff")
+        expect(res.headers["content-security-policy"]).toBeUndefined()
+    })
+
+    it("frames the editor page only from this origin", async () => {
+        const res = await request("/drawio/index.html")
+        expect(res.status).toBe(200)
+        expect(res.headers["content-type"]).toBe("text/html; charset=utf-8")
+        expect(res.headers["content-security-policy"]).toBe(
+            "frame-ancestors 'self'",
+        )
+    })
+
+    it("never serves the war's server-side parts or files outside the copy", async () => {
+        for (const path of [
+            "/drawio/WEB-INF/web.xml",
+            "/drawio/web-inf/web.xml",
+            "/drawio/js/../WEB-INF/web.xml",
+            "/drawio/META-INF/MANIFEST.MF",
+            "/drawio/../package.json",
+            "/drawio/%2e%2e/package.json",
+            "/drawio/js/%2e%2e/%2e%2e/package.json",
+            "/drawio/js/..%5c..%5cpackage.json",
+            "/drawio/",
+            "/drawio/js",
+            "/drawio/missing.js",
+        ]) {
+            const res = await request(path)
+            expect([403, 404], path).toContain(res.status)
+            expect(res.body).not.toContain("web-app")
+            expect(res.body).not.toContain('"name"')
+        }
+    })
+
+    it("answers 404 when no copy is bundled", async () => {
+        setDrawioDir(null)
+        try {
+            expect((await request("/drawio/index.html")).status).toBe(404)
+        } finally {
+            setDrawioDir(drawioDir)
+        }
     })
 })
 
@@ -806,6 +950,7 @@ describe("bodies over the size limit", () => {
                         method: "POST",
                         headers: {
                             host: `localhost:${port}`,
+                            "x-drawio-token": getApiToken(),
                             "content-type": "application/json",
                         },
                     },

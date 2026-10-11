@@ -3,10 +3,10 @@
  * Serves draw.io embed with state sync and history UI
  */
 
-import { randomUUID } from "node:crypto"
-import { readFileSync } from "node:fs"
+import { randomBytes, randomUUID } from "node:crypto"
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs"
 import http from "node:http"
-import { dirname, join } from "node:path"
+import { dirname, extname, join, posix, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024 // 10 MiB
@@ -56,9 +56,43 @@ import {
 import { log } from "./logger.ts"
 import { BLANK_MXFILE } from "./pages.ts"
 
-// Configurable draw.io embed URL for private deployments
-const DRAWIO_BASE_URL =
+// Configurable draw.io embed URL for private deployments. Set, it replaces
+// the bundled copy (see drawioDir below).
+export const DRAWIO_BASE_URL =
     process.env.DRAWIO_BASE_URL || "https://embed.diagrams.net"
+const EXTERNAL_DRAWIO = !!process.env.DRAWIO_BASE_URL
+
+// Every /api request must carry this token in the X-Drawio-Token header.
+// The page reads it from its HTML. Another website cannot add a custom
+// header without a CORS preflight, which this server never grants, so its
+// requests stop here whatever Host and Origin they manage to send.
+const API_TOKEN = randomBytes(16).toString("hex")
+
+export function getApiToken(): string {
+    return API_TOKEN
+}
+
+// The trimmed draw.io copy that scripts/fetch-drawio.mjs puts in dist/drawio,
+// next to the compiled server; run from src with tsx, it is one level up
+const HERE = dirname(fileURLToPath(import.meta.url))
+let drawioDir: string | null =
+    [join(HERE, "drawio"), join(HERE, "../dist/drawio")].find((dir) =>
+        existsSync(join(dir, "index.html")),
+    ) ?? null
+
+/** For tests: serve draw.io from this directory (null: no bundled copy) */
+export function setDrawioDir(dir: string | null): void {
+    drawioDir = dir
+}
+
+/**
+ * Whether the preview embeds draw.io from its own origin (the bundled copy),
+ * which lets the page call the editor directly. False with DRAWIO_BASE_URL,
+ * or when the bundled copy is missing.
+ */
+export function isSameOriginDrawio(): boolean {
+    return !EXTERNAL_DRAWIO && drawioDir !== null
+}
 
 // Extract origin (scheme + host + port) from URL for postMessage security check
 function getOrigin(url: string): string {
@@ -335,6 +369,11 @@ export function startHttpServer(port = 6002): Promise<number> {
         server.listen(port, "127.0.0.1", () => {
             serverPort = port
             log.info(`HTTP server running on http://localhost:${port}`)
+            if (!EXTERNAL_DRAWIO && drawioDir === null) {
+                log.warn(
+                    "No bundled draw.io (dist/drawio missing); the preview loads it from embed.diagrams.net",
+                )
+            }
             resolve(port)
         })
     })
@@ -425,12 +464,29 @@ function routeRequest(
     if (requestOrigin === `http://localhost:${serverPort}`) {
         res.setHeader("Access-Control-Allow-Origin", requestOrigin)
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+        res.setHeader(
+            "Access-Control-Allow-Headers",
+            "Content-Type, X-Drawio-Token",
+        )
     }
 
     if (req.method === "OPTIONS") {
         res.writeHead(204)
         res.end()
+        return
+    }
+
+    if (url.pathname.startsWith("/drawio/")) {
+        serveDrawioFile(req, res, url.pathname.slice("/drawio/".length))
+        return
+    }
+
+    if (
+        url.pathname.startsWith("/api/") &&
+        req.headers["x-drawio-token"] !== API_TOKEN
+    ) {
+        res.writeHead(403)
+        res.end("Forbidden")
         return
     }
 
@@ -456,7 +512,10 @@ function routeRequest(
 
         ensureSessionStateInitialized(sessionId)
 
-        res.writeHead(200, { "Content-Type": "text/html" })
+        res.writeHead(200, {
+            "Content-Type": "text/html; charset=utf-8",
+            ...HTML_SECURITY_HEADERS,
+        })
         res.end(getHtmlPage(sessionId))
     } else if (url.pathname === "/api/state") {
         handleStateApi(req, res, url)
@@ -795,8 +854,95 @@ function handleHistorySvgApi(
     })
 }
 
+// Pages may be framed only by this origin, and nothing is content-sniffed
+const HTML_SECURITY_HEADERS = {
+    "Content-Security-Policy": "frame-ancestors 'self'",
+    "X-Content-Type-Options": "nosniff",
+}
+
+const MIME_TYPES: Record<string, string> = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".txt": "text/plain; charset=utf-8",
+    ".xml": "text/xml; charset=utf-8",
+    ".json": "application/json",
+    ".ico": "image/x-icon",
+    ".wasm": "application/wasm",
+}
+
+/** GET /drawio/<path>: a file of the bundled draw.io copy */
+function serveDrawioFile(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    rawPath: string,
+): void {
+    if (req.method !== "GET") {
+        res.writeHead(405)
+        res.end("Method Not Allowed")
+        return
+    }
+    let rel: string
+    try {
+        rel = decodeURIComponent(rawPath)
+    } catch {
+        res.writeHead(400)
+        res.end("Bad Request")
+        return
+    }
+    // One normalized path inside the directory; the war's server-side parts
+    // are never served, whatever was extracted
+    const normalized = posix.normalize(rel)
+    const file = drawioDir ? resolve(drawioDir, normalized) : null
+    if (
+        !drawioDir ||
+        !file ||
+        /[\\\0]/.test(rel) ||
+        /(^|\/)(WEB-INF|META-INF)(\/|$)/i.test(normalized) ||
+        !file.startsWith(drawioDir + sep)
+    ) {
+        res.writeHead(404)
+        res.end("Not Found")
+        return
+    }
+    let size: number
+    try {
+        const stat = statSync(file)
+        if (!stat.isFile()) throw new Error("not a file")
+        size = stat.size
+    } catch {
+        res.writeHead(404)
+        res.end("Not Found")
+        return
+    }
+    const ext = extname(file).toLowerCase()
+    res.writeHead(200, {
+        "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
+        "Content-Length": size,
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+        ...(ext === ".html" ? HTML_SECURITY_HEADERS : {}),
+    })
+    createReadStream(file).pipe(res)
+}
+
+/** Where the iframe loads the editor from (without its query) */
+function drawioEditorUrl(): string {
+    return isSameOriginDrawio()
+        ? "/drawio/index.html"
+        : `${normalizeUrl(DRAWIO_BASE_URL)}/`
+}
+
 // The preview page lives in src/preview (the build copies it to dist/preview)
-const PREVIEW_DIR = join(dirname(fileURLToPath(import.meta.url)), "preview")
+const PREVIEW_DIR = join(HERE, "preview")
 let previewTemplate: string | null = null
 
 function loadPreviewTemplate(): string {
@@ -842,15 +988,21 @@ export function drawioEmbedParams(
 }
 
 function getHtmlPage(sessionId: string): string {
-    return loadPreviewTemplate()
-        .replace("{{SESSION_BADGE}}", () =>
-            sessionId
-                ? `<span class="session">${sessionId.slice(-8)}</span>`
-                : "",
-        )
-        .replaceAll("{{DISABLED}}", sessionId ? "" : "disabled")
-        .replace("{{DRAWIO_URL}}", () => normalizeUrl(DRAWIO_BASE_URL))
-        .replace("{{DRAWIO_PARAMS}}", () => drawioEmbedParams())
-        .replace("{{SESSION_JSON}}", () => scriptJson(sessionId))
-        .replace("{{ORIGIN_JSON}}", () => scriptJson(DRAWIO_ORIGIN))
+    return (
+        loadPreviewTemplate()
+            .replace("{{SESSION_BADGE}}", () =>
+                sessionId
+                    ? `<span class="session">${sessionId.slice(-8)}</span>`
+                    : "",
+            )
+            .replaceAll("{{DISABLED}}", sessionId ? "" : "disabled")
+            .replace("{{DRAWIO_URL}}", () => drawioEditorUrl())
+            .replace("{{DRAWIO_PARAMS}}", () => drawioEmbedParams())
+            .replace("{{SESSION_JSON}}", () => scriptJson(sessionId))
+            // Same origin: the page fills in its own origin
+            .replace("{{ORIGIN_JSON}}", () =>
+                scriptJson(isSameOriginDrawio() ? "" : DRAWIO_ORIGIN),
+            )
+            .replace("{{TOKEN_JSON}}", () => scriptJson(API_TOKEN))
+    )
 }
