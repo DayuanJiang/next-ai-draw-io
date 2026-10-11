@@ -87,7 +87,7 @@ console.log("Copying static files...")
 const targetStaticDir = join(targetDir, ".next", "static")
 copyDereferenced(staticDir, targetStaticDir)
 
-// Copy public folder (required for favicon-white.svg and other assets)
+// Copy public folder (required for favicons and other assets)
 console.log("Copying public folder...")
 const publicDir = join(rootDir, "public")
 const targetPublicDir = join(targetDir, "public")
