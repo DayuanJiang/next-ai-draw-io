@@ -1,42 +1,35 @@
-import { Moon, Sun } from "lucide-react"
-import { useMemo } from "react"
+import { History, Moon, Sun } from "lucide-react"
+import { useMemo, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
 import { CompareDialog } from "@/components/canvas/compare-dialog"
 import { VersionStrip } from "@/components/canvas/version-strip"
-import {
-    VersionsProvider,
-    type VersionsSource,
-} from "@/components/canvas/versions-context"
+import { VersionsProvider } from "@/components/canvas/versions-context"
 import { AppToaster } from "@/components/workspace/app-toaster"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { DrawioSource } from "@/lib/drawio/drawio-config"
+import { cn } from "@/lib/utils"
 import { useSettingsStore } from "@/stores/settings-store"
+import { useNodeVersions } from "./node-versions-source"
 import type { ShellConfig } from "./runtime-config"
 import { setDark } from "./theme"
 import { useMcpSync } from "./use-mcp-sync"
+import { VersionsPanel } from "./versions-panel"
 
-// No versions until the shell reads the server's History (a later step)
-const NO_VERSIONS: VersionsSource = {
-    versions: [],
-    onCanvasId: null,
-    undoneId: null,
-    isBusy: false,
-    canUndo: false,
-    canRedo: false,
-    restore: () => {},
-    undo: () => {},
-    redo: () => {},
-}
+const iconButton =
+    "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:size-4"
 
 /**
  * The MCP preview: the web app's canvas without the chat. A slim bar names
- * the session and the sync state; the versions strip and Compare come from
- * the shared canvas components.
+ * the session and the sync state; the versions strip, the version cards
+ * (from the server's History) and Compare come from the shared canvas
+ * components.
  */
 export function CanvasShell({ config }: { config: ShellConfig }) {
     const dict = useDictionary()
     const isDark = useSettingsStore((s) => s.isDark)
-    const status = useMcpSync(config)
+    const { status, sync } = useMcpSync(config)
+    const versions = useNodeVersions(sync)
+    const [panelOpen, setPanelOpen] = useState(true)
     const drawioSource = useMemo<DrawioSource>(
         () => ({
             editorUrl: config.drawioBaseUrl,
@@ -45,9 +38,11 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
         }),
         [config],
     )
+    const hasVersions = versions.versions.length > 0
+    const showPanel = panelOpen && hasVersions
 
     return (
-        <VersionsProvider value={NO_VERSIONS}>
+        <VersionsProvider value={versions}>
             <div className="flex h-dvh flex-col bg-background text-foreground">
                 <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border bg-surface-0 px-3.5">
                     <span className="text-[13px] font-semibold tracking-[-0.01em]">
@@ -69,23 +64,57 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     >
                         {dict.shell[status]}
                     </span>
+                    {hasVersions && (
+                        <button
+                            type="button"
+                            onClick={() => setPanelOpen((open) => !open)}
+                            aria-label={
+                                panelOpen
+                                    ? dict.shell.hideVersions
+                                    : dict.shell.showVersions
+                            }
+                            title={
+                                panelOpen
+                                    ? dict.shell.hideVersions
+                                    : dict.shell.showVersions
+                            }
+                            aria-pressed={panelOpen}
+                            className={cn(
+                                iconButton,
+                                "ml-auto",
+                                panelOpen && "bg-accent text-foreground",
+                            )}
+                            data-testid="versions-toggle"
+                        >
+                            <History />
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => setDark(!isDark)}
                         aria-label={dict.shell.toggleTheme}
                         title={dict.shell.toggleTheme}
-                        className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:size-4"
+                        className={cn(iconButton, !hasVersions && "ml-auto")}
                         data-testid="theme-toggle"
                     >
                         {isDark ? <Sun /> : <Moon />}
                     </button>
                 </header>
-                <VersionStrip minVersions={1} />
-                <div className="relative flex-1">
-                    <CanvasStage
-                        className="inset-0"
-                        drawioSource={drawioSource}
-                    />
+                <div className="flex min-h-0 flex-1">
+                    <div className="flex min-w-0 flex-1 flex-col">
+                        {/* With the cards open, one version alone adds
+                            nothing to its card */}
+                        <VersionStrip minVersions={showPanel ? 2 : 1} />
+                        <div className="relative flex-1">
+                            <CanvasStage
+                                className="inset-0"
+                                drawioSource={drawioSource}
+                            />
+                        </div>
+                    </div>
+                    {showPanel && (
+                        <VersionsPanel versions={versions.versions} />
+                    )}
                 </div>
                 <CompareDialog />
                 <AppToaster />

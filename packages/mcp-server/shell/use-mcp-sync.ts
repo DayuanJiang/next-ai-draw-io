@@ -13,12 +13,17 @@ import type { ShellConfig } from "./runtime-config"
  * protocol): mounted once inside DiagramProvider. Server writes go on the
  * canvas through loadDiagram, as one undo step when they can; the user's
  * edits are pushed; the server's export and sync requests are answered.
- * Returns the connection state for the status bar.
+ * Returns the connection state for the status bar, and the sync itself for
+ * the version cards (History and restores go through it).
  */
-export function useMcpSync(config: ShellConfig): SyncStatus {
+export function useMcpSync(config: ShellConfig): {
+    status: SyncStatus
+    sync: McpSync | null
+} {
     const dict = useDictionary()
     const diagram = useDiagram()
     const [status, setStatus] = useState<SyncStatus>("waiting")
+    const [sync, setSync] = useState<McpSync | null>(null)
     const syncRef = useRef<McpSync | null>(null)
     // The provider's functions are new on every render; the sync (created
     // once) reads the latest through refs
@@ -54,6 +59,7 @@ export function useMcpSync(config: ShellConfig): SyncStatus {
             onStatus: setStatus,
         })
         syncRef.current = sync
+        setSync(sync)
         sync.setReady(diagramRef.current.isDrawioReady)
         sync.start()
 
@@ -86,6 +92,7 @@ export function useMcpSync(config: ShellConfig): SyncStatus {
             window.removeEventListener("message", onMessage)
             sync.stop()
             syncRef.current = null
+            setSync(null)
         }
     }, [config])
 
@@ -107,5 +114,5 @@ export function useMcpSync(config: ShellConfig): SyncStatus {
         return () => diagram.setCommitHandler(null)
     }, [])
 
-    return status
+    return { status, sync }
 }

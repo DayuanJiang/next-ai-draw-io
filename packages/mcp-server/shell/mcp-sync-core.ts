@@ -42,6 +42,21 @@ export interface HistoryEntryInfo {
     id: number
     index: number
     svg: string
+    xml: string
+    /** Who made it: "user", "recover", "restore"; null for the AI's writes */
+    source: string | null
+    time: number
+    pages: number
+    /** The oldest entry with the same content (itself when it is the first) */
+    firstId: number
+}
+
+/** GET /api/history as the server answers it, for the state the list is of */
+export interface HistoryList {
+    entries: HistoryEntryInfo[]
+    stateId: string | null
+    /** The entry whose content the canvas shows (the server's rule), or null */
+    currentId: number | null
 }
 
 /**
@@ -121,18 +136,18 @@ export interface McpSync {
     /** draw.io reported a load done */
     onDrawioLoad(): void
     /** The server's History, with the state its ids belong to; null when
-     * it could not be read, or the state changed meanwhile. For the versions
-     * strip (plan step 5), with restoreEntry below; until then only the
-     * unit tests call them */
-    fetchHistory(): Promise<{
-        entries: HistoryEntryInfo[]
-        stateId: string | null
-    } | null>
+     * it could not be read, or the state changed meanwhile (the version
+     * cards, shell/node-versions-source.ts) */
+    fetchHistory(): Promise<HistoryList | null>
     /** Put a History entry back, naming the state its list belongs to */
     restoreEntry(
         id: number,
         listStateId: string | null,
     ): Promise<"ok" | "stale" | "failed">
+    /** Called when the server's diagram or History changed (a write
+     * loaded, an edit saved, a thumbnail sent, the state recreated): the
+     * version cards read History again. Returns the unsubscribe */
+    onServerChange(listener: () => void): () => void
     /** For tests and the status bar */
     read(): {
         stateId: string | null
@@ -299,6 +314,22 @@ export function createMcpSync(options: SyncOptions): McpSync {
         onStatus?.(next)
     }
 
+    // Listeners of onServerChange, told once per server version seen (any
+    // source: a write, the tab's own push) and whenever History changed
+    // without one (a rejected edit kept, a thumbnail stored)
+    const changeListeners = new Set<() => void>()
+    let notedVersion = 0
+    let notedStateId: string | null = null
+    const emitChange = () => {
+        for (const listener of changeListeners) listener()
+    }
+    const noteServerVersion = (version: number, sid: string | null) => {
+        if (version === notedVersion && sid === notedStateId) return
+        notedVersion = version
+        notedStateId = sid
+        emitChange()
+    }
+
     // A 403 means another MCP process (with its own token) now answers on
     // this port: read its token and retry once, so the next poll can recover
     // the session instead of being refused forever
@@ -379,7 +410,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 svg: svgDataUrl(result.data),
                 stateId: t.stateId,
                 version: t.version,
-            }).catch(() => {})
+            })
+                // The write's History entry has its picture now
+                .then(emitChange)
+                .catch(() => {})
         })
     }
 
@@ -434,6 +468,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 if (sid !== stateId || d.version < currentVersion) return
                 currentVersion = d.version
                 lastXml = xml
+                noteServerVersion(currentVersion, stateId)
                 // The canvas changed while this edit was on its way, to
                 // something no pending autosave will send (an undo back to
                 // the previous version): send it now. A sync reply is
@@ -460,6 +495,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
                     onNotice(
                         source === "recover" ? "restoredFromFile" : "aiChanged",
                     )
+                    // History grew without a new version
+                    emitChange()
                 }
                 poll()
             }
@@ -662,6 +699,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 }
                 justLoaded = true
             }
+            // Also the tab's own push, and a version a projection holds back
+            noteServerVersion(s.version, stateId)
             // A sync request (get_diagram): after the load above, so draw.io
             // exports what it just loaded; never while a one-page projection
             // is on screen, which would be sent as the whole document
@@ -770,7 +809,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 if (!r.ok) return null
                 const d = await r.json()
                 if (sid !== stateId) return null
-                return { entries: d.entries ?? [], stateId: sid }
+                return {
+                    entries: d.entries ?? [],
+                    stateId: sid,
+                    currentId:
+                        typeof d.currentId === "number" ? d.currentId : null,
+                }
             } catch {
                 return null
             }
@@ -795,6 +839,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
             }
             onNotice("restoreFailed")
             return "failed"
+        },
+        onServerChange(listener) {
+            changeListeners.add(listener)
+            return () => {
+                changeListeners.delete(listener)
+            }
         },
         read() {
             return {

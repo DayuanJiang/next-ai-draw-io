@@ -866,7 +866,12 @@ describe("MCP sync export requests", () => {
 describe("MCP sync History", () => {
     const historyList = {
         status: 200,
-        body: { entries: [{ id: 5, index: 0, svg: "" }], count: 1 },
+        body: {
+            entries: [{ id: 5, index: 0, svg: "" }],
+            count: 1,
+            stateId: "S1",
+            currentId: null,
+        },
     }
 
     it("drops a History list asked for before the session was recreated", async () => {
@@ -889,6 +894,7 @@ describe("MCP sync History", () => {
         expect(list).toEqual({
             entries: [{ id: 5, index: 0, svg: "" }],
             stateId: "S1",
+            currentId: null,
         })
         const restore = t.sync.restoreEntry(5, list?.stateId ?? null)
         await t.settle()
@@ -937,6 +943,87 @@ describe("MCP sync History", () => {
         t.next("POST", "/api/restore").fail()
         expect(await restore).toBe("failed")
         expect(t.notices).toEqual(["restoreFailed"])
+    })
+
+    it("passes on the entry the server says is on the canvas", async () => {
+        const t = await inStep()
+        const history = t.sync.fetchHistory()
+        t.next("GET", "/api/history").answer({
+            status: 200,
+            body: { entries: [{ id: 7 }], count: 1, currentId: 7 },
+        })
+        expect((await history)?.currentId).toBe(7)
+    })
+})
+
+// The version cards read History again when the server changed
+describe("MCP sync server change listener", () => {
+    it("tells once per server version: the first poll, a write, the tab's own edit", async () => {
+        const t = open()
+        let changes = 0
+        const stop = t.sync.onServerChange(() => changes++)
+        t.sync.setReady(true)
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await poll
+        expect(changes).toBe(1)
+        // The same version again: nothing new
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await poll
+        expect(changes).toBe(1)
+        // The thumbnail of the write is stored: its entry has a picture now
+        await vi.advanceTimersByTimeAsync(500)
+        t.nextExport().answer({ data: "<svg>A</svg>" })
+        await t.settle()
+        t.next("POST", "/api/history-svg").answer({ status: 200, body: {} })
+        await t.settle()
+        expect(changes).toBe(2)
+        // An AI write
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>B</mxfile>"))
+        await poll
+        expect(changes).toBe(3)
+        // The user's edit is saved: the canvas is at no version now
+        await edit(t, "<mxfile>C</mxfile>")
+        t.next("POST", "/api/state").answer({
+            status: 200,
+            body: { success: true, version: 4 },
+        })
+        await t.settle()
+        expect(changes).toBe(4)
+        // The next poll sees the version the push already told about
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 4, "<mxfile>C</mxfile>"))
+        await poll
+        expect(changes).toBe(4)
+        stop()
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 5, "<mxfile>D</mxfile>"))
+        await poll
+        expect(changes).toBe(4)
+    })
+
+    it("tells when a rejected edit was kept in History, and when the state was recreated", async () => {
+        const t = await inStep()
+        let changes = 0
+        t.sync.onServerChange(() => changes++)
+        await edit(t, "<mxfile>B</mxfile>")
+        t.next("POST", "/api/state").answer({
+            status: 409,
+            body: { error: "changed", version: 3, savedToHistory: true },
+        })
+        await t.settle()
+        expect(changes).toBe(1)
+        // The 409 handler polls and loads the newer write
+        t.next("GET").answer(state("S1", 3, "<mxfile>AI</mxfile>"))
+        await t.settle()
+        expect(changes).toBe(2)
+        // The server restarted: History has new ids
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S2", 1, "<mxfile>AI</mxfile>"))
+        await poll
+        expect(changes).toBe(3)
     })
 })
 

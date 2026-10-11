@@ -106,13 +106,16 @@ describe("shell language", () => {
             expect(Object.keys(dict.shell).sort(), locale).toEqual([
                 "aiChanged",
                 "connected",
+                "hideVersions",
                 "historyChanged",
                 "offline",
                 "restoreFailed",
                 "restoredFromFile",
+                "showVersions",
                 "toggleTheme",
                 "tooLarge",
                 "unreachable",
+                "userEdit",
                 "waiting",
             ])
             expect(dict.shell.waiting, locale).toBeTruthy()

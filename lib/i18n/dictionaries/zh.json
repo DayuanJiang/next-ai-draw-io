@@ -710,6 +710,9 @@
         "restoredFromFile": "图表已从保存的文件恢复。这个标签页之前显示的内容已放入历史记录。",
         "aiChanged": "您编辑时 AI 修改了图表。您的最后一次修改已保存到历史记录。",
         "historyChanged": "服务器上的历史记录已变化，请重新打开。",
-        "restoreFailed": "恢复失败，请重试。"
+        "restoreFailed": "恢复失败，请重试。",
+        "userEdit": "手动修改",
+        "showVersions": "显示版本",
+        "hideVersions": "隐藏版本"
     }
 }

@@ -710,6 +710,9 @@
         "restoredFromFile": "The diagram was restored from its saved file. What this tab showed before is in History.",
         "aiChanged": "The AI changed the diagram while you were editing. Your last change was saved in History.",
         "historyChanged": "History changed on the server. Please open it again.",
-        "restoreFailed": "Restore failed. Please try again."
+        "restoreFailed": "Restore failed. Please try again.",
+        "userEdit": "Changed by hand",
+        "showVersions": "Show the versions",
+        "hideVersions": "Hide the versions"
     }
 }
