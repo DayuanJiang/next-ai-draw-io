@@ -6,7 +6,13 @@
  * node:http so tests can set raw paths and Host/Origin headers.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+    mkdirSync,
+    mkdtempSync,
+    rmSync,
+    utimesSync,
+    writeFileSync,
+} from "node:fs"
 import http from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -43,6 +49,7 @@ beforeAll(async () => {
     mkdirSync(join(drawioDir, "js"))
     mkdirSync(join(drawioDir, "WEB-INF"))
     writeFileSync(join(drawioDir, "index.html"), "<html>draw.io</html>")
+    writeFileSync(join(drawioDir, ".version"), "v1\n")
     writeFileSync(join(drawioDir, "js/app.min.js"), "// app")
     writeFileSync(join(drawioDir, "WEB-INF/web.xml"), "<web-app/>")
     setDrawioDir(drawioDir)
@@ -382,6 +389,25 @@ describe("export requests", () => {
         expect(getState(id)?.exportData).toBeUndefined()
         expect(getState(id)?.exportFormat).toBe("svg")
     })
+
+    it("names exports at random, so a result meant for another process is not taken", async () => {
+        const id = "mcp-export-random-id"
+        setState(id, "<mxfile>x</mxfile>")
+        requestExport(id, "svg")
+        const poll = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(poll.exportId).toMatch(/^[0-9a-f-]{36}$/)
+        // The page retries a result refused with 403 against the process
+        // that took over the port; a per-process counter would restart at 1
+        await postJson("/api/state", {
+            sessionId: id,
+            exportData: "<svg>OLD</svg>",
+            exportId: 1,
+        })
+        expect(getState(id)?.exportData).toBeUndefined()
+        expect(getState(id)?.exportFormat).toBe("svg")
+    })
 })
 
 describe("a session state recreated after it was lost", () => {
@@ -571,9 +597,35 @@ describe("bundled draw.io files", () => {
         // Revalidated on every use: the file names stay the same across
         // draw.io versions, so a package upgrade must reach the browser
         expect(res.headers["cache-control"]).toBe("no-cache")
-        expect(res.headers.etag).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/)
+        expect(res.headers.etag).toMatch(/^"v1-[0-9a-f]+-[0-9a-f]+"$/)
         expect(res.headers["x-content-type-options"]).toBe("nosniff")
         expect(res.headers["content-security-policy"]).toBeUndefined()
+    })
+
+    it("changes the ETag with the draw.io version, whatever the file dates say", async () => {
+        // An install that keeps the archive's dates gives the upgraded file
+        // the same date and, here, the same size as before
+        const file = join(drawioDir, "js/same-size.js")
+        const date = new Date("2020-01-01T00:00:00Z")
+        writeFileSync(file, "// v1")
+        utimesSync(file, date, date)
+        const first = await request("/drawio/js/same-size.js")
+        writeFileSync(file, "// v2")
+        utimesSync(file, date, date)
+        writeFileSync(join(drawioDir, ".version"), "v2\n")
+        setDrawioDir(drawioDir)
+        try {
+            const again = await request("/drawio/js/same-size.js", {
+                headers: { "if-none-match": first.headers.etag as string },
+            })
+            expect(again.status).toBe(200)
+            expect(again.body).toBe("// v2")
+            expect(again.headers.etag).not.toBe(first.headers.etag)
+        } finally {
+            writeFileSync(join(drawioDir, ".version"), "v1\n")
+            setDrawioDir(drawioDir)
+            rmSync(file, { force: true })
+        }
     })
 
     it("answers 304 to a matching If-None-Match, and HEAD without a body", async () => {

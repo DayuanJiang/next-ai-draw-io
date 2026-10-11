@@ -80,10 +80,27 @@ let drawioDir: string | null =
     [join(HERE, "drawio"), join(HERE, "../dist/drawio")].find((dir) =>
         existsSync(join(dir, "index.html")),
     ) ?? null
+let drawioVersion = readDrawioVersion(drawioDir)
 
 /** For tests: serve draw.io from this directory (null: no bundled copy) */
 export function setDrawioDir(dir: string | null): void {
     drawioDir = dir
+    drawioVersion = readDrawioVersion(dir)
+}
+
+/**
+ * The draw.io version the fetch script stamps into the copy. It is part of
+ * every file's ETag: an install that keeps the archive's dates (npm does
+ * not) would otherwise hand out the old ETag for a changed file of the
+ * same size after an upgrade.
+ */
+function readDrawioVersion(dir: string | null): string {
+    if (!dir) return ""
+    try {
+        return readFileSync(join(dir, ".version"), "utf8").trim()
+    } catch {
+        return ""
+    }
 }
 
 /**
@@ -184,7 +201,7 @@ interface SessionState {
     exportFormat?: ExportFormat // Set by MCP tool to request browser export
     exportXml?: string // Single-page projection to load before a page-targeted export
     exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
-    exportId?: number // Number of the pending export, echoed with its result
+    exportId?: string // Random id of the pending export, echoed with its result
     exportData?: string // Base64/SVG data returned by browser after export
 }
 
@@ -305,12 +322,12 @@ export function requestExport(
     state.exportOptions = options
     state.exportFormat = format
     // The browser sends this back with the result, so a late result of an
-    // export that timed out is not taken for this one
-    state.exportId = ++lastExportId
+    // export that timed out is not taken for this one. Random rather than
+    // counted: a counter restarts with the process, and the page retries a
+    // result refused with 403 against the process that took over the port
+    state.exportId = randomUUID()
     return true
 }
-
-let lastExportId = 0
 
 export function requestSync(sessionId: string): boolean {
     const state = stateStore.get(sessionId)
@@ -922,7 +939,7 @@ function serveDrawioFile(
         const stat = statSync(file)
         if (!stat.isFile()) throw new Error("not a file")
         size = stat.size
-        etag = `"${size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`
+        etag = `"${drawioVersion}-${size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`
     } catch {
         res.writeHead(404)
         res.end("Not Found")
