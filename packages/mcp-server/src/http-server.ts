@@ -110,15 +110,21 @@ const PACKAGE_VERSION: string = JSON.parse(
 ).version
 
 /**
- * The preview page start_session opens: the classic page (src/preview), or
- * the canvas shell with DRAWIO_PREVIEW_UI=shell. The shell becomes the
- * default once it does everything the classic page does.
+ * The preview page start_session opens: the canvas shell (shell/, the web
+ * app's canvas), or with DRAWIO_PREVIEW_UI=classic the classic page
+ * (src/preview), kept for one more release.
  */
 export type PreviewUi = "classic" | "shell"
-export const PREVIEW_UI: PreviewUi =
-    (process.env.DRAWIO_PREVIEW_UI ?? "").toLowerCase() === "shell"
-        ? "shell"
-        : "classic"
+
+export function previewUiFromEnv(
+    env: NodeJS.ProcessEnv = process.env,
+): PreviewUi {
+    return (env.DRAWIO_PREVIEW_UI ?? "").toLowerCase() === "classic"
+        ? "classic"
+        : "shell"
+}
+
+export const PREVIEW_UI: PreviewUi = previewUiFromEnv()
 
 export function previewUrl(
     port: number,

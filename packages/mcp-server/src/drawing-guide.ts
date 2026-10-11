@@ -29,7 +29,7 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - After a successful create_new_diagram or edit_diagram call, do not describe the diagram; the user sees it in the preview. One short sentence at most.
 - For artistic requests (a cat, a logo, a scene), compose the picture from standard shapes and connectors while keeping it clear.
 - To clear the canvas to one blank page, call create_new_diagram with only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.
-- The preview page has History (it saves a snapshot before every AI change and can restore any of the last 20 versions) and Download. You can make changes freely; nothing is lost.
+- The preview keeps the last 20 versions (a snapshot before every AI change) and can restore any of them. You can make changes freely; nothing is lost.
 - If the user asks to undo or go back, call restore_version instead of re-sending the earlier XML from memory.
 
 ## The XML you send

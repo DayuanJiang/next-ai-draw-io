@@ -95,9 +95,9 @@ beforeAll(async () => {
             ...process.env,
             DRAWIO_DATA_DIR: dataDir,
             // For the session tests at the end: no browser window, the
-            // canvas shell as the preview, a port away from other servers
+            // default preview (the canvas shell), a port away from other
+            // servers
             BROWSER: "none",
-            DRAWIO_PREVIEW_UI: "shell",
             PORT: String(6500 + Math.floor(Math.random() * 400)),
         },
     }) as ChildProcessWithoutNullStreams

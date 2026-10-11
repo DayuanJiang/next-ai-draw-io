@@ -1,8 +1,8 @@
 /**
- * The canvas shell as start_session opens it with DRAWIO_PREVIEW_UI=shell:
- * the built server (dist/index.js, or the copy MCP_SERVER_ENTRY names: CI
- * installs the packed tarball in an empty directory) runs over stdio as an
- * MCP client would start it, and headless Chromium opens the URL it returns.
+ * The canvas shell as start_session opens it by default: the built server
+ * (dist/index.js, or the copy MCP_SERVER_ENTRY names: CI installs the packed
+ * tarball in an empty directory) runs over stdio as an MCP client would
+ * start it, and headless Chromium opens the URL it returns.
  */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -26,7 +26,6 @@ test.beforeAll(async () => {
         env: {
             ...process.env,
             DRAWIO_DATA_DIR: dataDir,
-            DRAWIO_PREVIEW_UI: "shell",
             // Away from the web app's dev server and other test runs
             PORT: String(6100 + Math.floor(Math.random() * 400)),
             BROWSER: "none",

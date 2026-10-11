@@ -1268,7 +1268,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: "The classic preview page cannot read the selection; start the server with DRAWIO_PREVIEW_UI=shell. Ask the user which shapes they mean, or call get_diagram.",
+                            text: "The classic preview page (DRAWIO_PREVIEW_UI=classic) cannot read the selection. Ask the user which shapes they mean, or call get_diagram.",
                         },
                     ],
                 }

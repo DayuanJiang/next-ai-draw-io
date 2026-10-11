@@ -27,6 +27,7 @@ import {
     keepInHistory,
     onSessionRecreate,
     onStateChange,
+    previewUiFromEnv,
     previewUrl,
     requestExport,
     requestSelection,
@@ -928,7 +929,15 @@ describe("canvas shell page", () => {
         }
     })
 
-    it("is what start_session opens with DRAWIO_PREVIEW_UI=shell", () => {
+    it("is what start_session opens, unless DRAWIO_PREVIEW_UI=classic", () => {
+        expect(previewUiFromEnv({})).toBe("shell")
+        expect(previewUiFromEnv({ DRAWIO_PREVIEW_UI: "shell" })).toBe("shell")
+        expect(previewUiFromEnv({ DRAWIO_PREVIEW_UI: "classic" })).toBe(
+            "classic",
+        )
+        expect(previewUiFromEnv({ DRAWIO_PREVIEW_UI: "Classic" })).toBe(
+            "classic",
+        )
         expect(previewUrl(6002, "mcp-x", "shell")).toBe(
             "http://localhost:6002/shell/?mcp=mcp-x",
         )
