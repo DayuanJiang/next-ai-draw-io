@@ -3,8 +3,9 @@
  * diagram survives the MCP process (hosts start a new one when a
  * conversation is resumed). Like the web app's IndexedDB sessions
  * (lib/session-storage.ts): saved 1 second after the last change, at most
- * 50 kept. The session's History (the XML of its last 20 versions, without
- * the thumbnails) is saved next to it as <session-id>.history.json.
+ * 50 kept. The session's History (the XML of its last 20 versions and who
+ * made each, without the thumbnails) is saved next to it as
+ * <session-id>.history.json.
  */
 
 import {
@@ -21,6 +22,7 @@ import {
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { contentFingerprint } from "./edit-gate.ts"
+import type { HistorySource } from "./history.ts"
 import { log } from "./logger.ts"
 import { BLANK_MXFILE, hasCells } from "./pages.ts"
 
@@ -32,6 +34,16 @@ const isBlank = (xml: string) =>
 
 const DELAY_MS = 1000
 const MAX_FILES = 50
+
+/** A History entry as the file keeps it */
+export interface SavedHistoryEntry {
+    xml: string
+    source?: HistorySource
+}
+
+const SOURCES: readonly string[] = ["user", "recover", "restore"]
+const isSource = (v: unknown): v is HistorySource =>
+    typeof v === "string" && SOURCES.includes(v)
 
 /** Expand a leading ~ to the home directory (shells do this, MCP hosts don't). */
 export function expandHome(p: string): string {
@@ -70,7 +82,7 @@ export class Autosaver {
         // The session's History entries, saved next to its diagram
         private history: (
             sessionId: string,
-        ) => { id: number; xml: string }[] = () => [],
+        ) => { id: number; xml: string; source?: HistorySource }[] = () => [],
     ) {}
 
     /** Path of a session's file, or null when saving is off. */
@@ -83,16 +95,28 @@ export class Autosaver {
         return this.dir ? join(this.dir, `${sessionId}.history.json`) : null
     }
 
-    /** The XML of the session's saved History entries, oldest first. */
-    loadHistory(sessionId: string): string[] {
+    /** The session's saved History entries, oldest first. */
+    loadHistory(sessionId: string): SavedHistoryEntry[] {
         const path = this.historyPathFor(sessionId)
         if (!path) return []
         try {
             const entries: unknown = JSON.parse(readFileSync(path, "utf-8"))
-            return Array.isArray(entries) &&
-                entries.every((e) => typeof e === "string")
-                ? entries
-                : []
+            if (!Array.isArray(entries)) return []
+            const result: SavedHistoryEntry[] = []
+            for (const e of entries) {
+                // Files of earlier versions hold the XML strings alone
+                if (typeof e === "string") {
+                    result.push({ xml: e })
+                } else if (e && typeof e.xml === "string") {
+                    result.push({
+                        xml: e.xml,
+                        ...(isSource(e.source) && { source: e.source }),
+                    })
+                } else {
+                    return []
+                }
+            }
+            return result
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
                 log.warn(`Could not read the saved History ${path}: ${error}`)
@@ -218,7 +242,9 @@ export class Autosaver {
 
     // Saved with the diagram, after the same delay, so the History entry
     // that follows every tool write is included. The thumbnails are left
-    // out (large); the History grid shows the entry's number instead.
+    // out (large); the History grid shows the entry's number instead. Who
+    // made an entry goes with it: the shell's cards tell a clear of the
+    // canvas from a restore of one by it.
     private writeHistory(sessionId: string): void {
         const path = this.historyPathFor(sessionId)
         const entries = this.history(sessionId)
@@ -226,7 +252,11 @@ export class Autosaver {
         const key = `${entries.length}:${entries[entries.length - 1].id}`
         if (this.historyKeys.get(sessionId) === key) return
         try {
-            const json = JSON.stringify(entries.map((e) => e.xml))
+            const saved: SavedHistoryEntry[] = entries.map((e) => ({
+                xml: e.xml,
+                ...(e.source && { source: e.source }),
+            }))
+            const json = JSON.stringify(saved)
             writeFileSync(`${path}.tmp`, json, "utf-8")
             renameSync(`${path}.tmp`, path)
             this.historyKeys.set(sessionId, key)

@@ -125,7 +125,9 @@ onSessionRecreate((sessionId) => {
     const loaded = parseDrawioFileContent(saved)
     // History comes back with the diagram (addHistory drops consecutive
     // duplicates)
-    for (const x of autosaver.loadHistory(sessionId)) addHistory(sessionId, x)
+    for (const e of autosaver.loadHistory(sessionId)) {
+        addHistory(sessionId, e.xml, "", e.source)
+    }
     return loaded.ok ? loaded.xml : saved
 })
 
