@@ -348,12 +348,17 @@ export function createMcpSync(options: SyncOptions): McpSync {
     const loadFromServer = (xml: string, how: "decide" | "full") => {
         lastXml = xml
         latestXml = xml
+        const before = canvas.currentXml()
         const decision: LoadDecision =
             how === "decide"
-                ? decideLoad(canvas.currentXml(), xml, canvas.currentPageId())
+                ? decideLoad(before, xml, canvas.currentPageId())
                 : { mode: "load" }
         canvas.load(xml, decision)
-        awaitingCommitCopy = decision.mode === "commit"
+        // draw.io autosaves its copy only when the write changed its
+        // document: after one that left the canvas as it was, the next
+        // autosave is the user's
+        awaitingCommitCopy =
+            decision.mode === "commit" && !sameDiagram(before, xml)
         // currentVersion is the write's version
         thumbExport = { stateId, version: currentVersion, xml }
         setTimeout(captureThumbnail, 500)
@@ -595,9 +600,11 @@ export function createMcpSync(options: SyncOptions): McpSync {
         // The whole export, result delivery included, ends in time: a result
         // POST that never answers must not keep the projection on screen
         // past the server's deadline (15 s). Only for this export: a later
-        // one may be running by then.
+        // one may be running by then. The export is over: its result POST
+        // answering after this must not restore the document a second time.
         setTimeout(() => {
             if (pendingMcpExport && seq === mcpExportSeq) {
+                mcpExportSeq++
                 pendingMcpExport = null
                 restoreFromProjection()
             }

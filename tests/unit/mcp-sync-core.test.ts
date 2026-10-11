@@ -753,6 +753,24 @@ describe("MCP sync export requests", () => {
         expect(t.sync.read().projectionActive).toBe(false)
     })
 
+    it("does not restore the document twice when the result POST answers after the 15 s", async () => {
+        const { t, result } = await projectionExported()
+        await vi.advanceTimersByTimeAsync(15000)
+        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await t.settle()
+        await t.settle()
+        expect(t.loads).toHaveLength(2)
+        // The POST answers before draw.io reports the restore load: no
+        // second restore poll, no second load
+        result.answer({ status: 200, body: { success: true } })
+        await t.settle()
+        await t.settle()
+        expect(t.calls.filter((c) => c.method === "GET")).toHaveLength(0)
+        expect(t.loads).toHaveLength(2)
+        t.sync.onDrawioLoad()
+        expect(t.sync.read().projectionActive).toBe(false)
+    })
+
     it("drops an export and reloads the document when draw.io starts over", async () => {
         const t = await inStep()
         const poll = t.sync.poll()
@@ -1239,6 +1257,46 @@ describe("MCP sync with server writes taken in place", () => {
             xml: sized(827, 1169),
             source: "edit",
             baseVersion: 3,
+        })
+    })
+
+    it("a change of the paper size after a write that changed nothing is pushed", async () => {
+        const t = await inStep({ currentPageId: "p1" })
+        t.canvas.xml = canvasXml
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, written))
+        await poll
+        const drawioCopy = file(
+            drawioPage("p1", "One", cell("a", "A") + cell("c", "C", 300)) +
+                drawioPage("p2", "Two", cell("b", "B")),
+        )
+        t.sync.onAutoSave(drawioCopy)
+        t.canvas.xml = drawioCopy
+        await t.settle()
+        expect(t.posts()).toHaveLength(0)
+        // The same document written again (the file loaded once more): the
+        // server has a new version, draw.io sees no change and sends no copy
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 4, written))
+        await poll
+        expect(t.loads.at(-1)?.decision.mode).toBe("commit")
+        // The user picks A4: an edit, not the copy of the write
+        const a4 = file(
+            page(
+                "p1",
+                "One",
+                cell("a", "A") + cell("c", "C", 300),
+                ' dx="1000" dy="600" grid="1" pageWidth="827" pageHeight="1169"',
+            ) + drawioPage("p2", "Two", cell("b", "B")),
+        )
+        t.sync.onAutoSave(a4)
+        expect(t.exports.map((e) => e.request.format)).toEqual(["svg"])
+        t.nextExport().answer({ data: "<svg/>" })
+        await t.settle()
+        expect(t.next("POST").body).toMatchObject({
+            xml: a4,
+            source: "edit",
+            baseVersion: 4,
         })
     })
 })
