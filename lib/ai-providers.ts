@@ -984,8 +984,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             // Like other providers, a user's key never goes to the server's
             // base URL: without a URL of their own it goes to Ollama Cloud.
             // The server's key goes to OLLAMA_BASE_URL (or a server model's
-            // own variable), else to the SDK's local default: the desktop
-            // app's "Ollama (Local)" preset puts its key field there too.
+            // own variable), else to the SDK's local default.
             const baseURL =
                 overrides?.baseUrl ||
                 (overrides?.apiKey
@@ -1154,7 +1153,7 @@ export function usesServerCredentials(
     provider: ProviderName,
     overrides?: ClientOverrides,
 ): boolean {
-    // The desktop app's local server holds the user's own preset keys
+    // The desktop app's local server only has the user's own keys (its .env)
     if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
     // Cleaned like getAIModel does: "/" means no base URL
     const baseUrl = normalizeBaseUrl(overrides?.baseUrl ?? "")

@@ -1,6 +1,6 @@
 /**
  * Types and utilities for VLM-based diagram validation.
- * The actual validation is performed via useValidateDiagram hook using AI SDK's useObject.
+ * The validation itself runs in the useValidateDiagram hook (a JSON request to /api/validate-diagram).
  */
 
 // Re-export types from the schema file (single source of truth)
