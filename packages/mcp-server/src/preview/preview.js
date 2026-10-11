@@ -300,11 +300,13 @@ async function poll() {
         // The tab's own push still on its way is not loaded back: the
         // canvas may have moved on since (an undo), and its answer follows
         const ownPush = pushesInFlight.includes(s.xml);
+        let justLoaded = false; // this poll put a new version on the canvas
         if ((forceReload || (s.version > currentVersion && !projectionExportActive && !ownPush)) && s.xml) {
             forceReload = false;
             projectionExportActive = false;
             currentVersion = s.version;
             loadDiagram(s.xml, true);
+            justLoaded = true;
         }
         // Handle sync request - server needs fresh state. After the load
         // above, so draw.io exports what it just loaded; never while a
@@ -353,6 +355,10 @@ async function poll() {
                 iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: s.exportXml, autosave: 0 }), '*');
                 // Let draw.io render the loaded page before exporting
                 // (same proven settle delay as the AI-preview path).
+                setTimeout(fireExport, 600);
+            } else if (justLoaded) {
+                // A write with a screenshot: give the new diagram's external
+                // icon images a moment to load before the PNG is taken
                 setTimeout(fireExport, 600);
             } else {
                 fireExport();

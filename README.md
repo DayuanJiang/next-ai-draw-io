@@ -117,6 +117,7 @@ Then ask the AI for "a flowchart of user authentication with login, MFA and sess
 -   A screenshot tool, so the AI can look at the rendered diagram and fix it
 -   Version history, multi-page diagrams, and download as `.drawio`, `.png`, `.svg` or `.drawio.svg`
 -   Auto-save to `~/.next-ai-drawio/`, so a diagram survives a restart
+-   Ask the AI to undo, and keep your own drawing rules in `~/.next-ai-drawio/instructions.md`
 
 See the [MCP server README](./packages/mcp-server/README.md) for VS Code, Cursor and other client configurations.
 

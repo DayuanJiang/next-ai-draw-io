@@ -176,6 +176,17 @@ describe("MCP server wiring", () => {
         expect(line).not.toContain("(current)")
     })
 
+    it("advertises screenshot on create_new_diagram and edit_diagram", async () => {
+        const resp = await send("tools/list", {})
+        for (const name of ["create_new_diagram", "edit_diagram"]) {
+            const tool = resp.result.tools.find(
+                (t: { name: string }) => t.name === name,
+            )
+            const props = tool?.inputSchema?.properties ?? {}
+            expect(props.screenshot?.type, `${name} screenshot`).toBe("boolean")
+        }
+    })
+
     it("advertises name/id/xml on add_page", async () => {
         const resp = await send("tools/list", {})
         const addPage = resp.result.tools.find(

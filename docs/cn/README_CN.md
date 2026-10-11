@@ -117,6 +117,7 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 -   截图工具，AI 可以看一眼画好的图并自行修正
 -   版本历史、多页图表，下载为 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`
 -   自动保存到 `~/.next-ai-drawio/`，重启后接着画
+-   可以让 AI 撤销修改，也可以在 `~/.next-ai-drawio/instructions.md` 里写下自己的画图规则
 
 VS Code、Cursor 等客户端的配置见 [MCP 服务器 README](../../packages/mcp-server/README.md)。
 
