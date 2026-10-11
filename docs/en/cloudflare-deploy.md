@@ -68,47 +68,15 @@ Fill in the same values there.
 
 ## Step 3 — Choose your deployment type
 
-### Option A: Deploy WITHOUT R2 (Simple, Free)
+### Option A: Deploy WITHOUT R2 (Default, Free)
 
-If you don't need ISR caching, you can deploy without R2:
-
-**1. Use simple `open-next.config.ts`:**
-
-```ts
-import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
-
-export default defineCloudflareConfig({})
-```
-
-**2. Use simple `wrangler.jsonc` (without r2_buckets):**
-
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "next-ai-draw-io-worker",
-  "compatibility_date": "2025-12-08",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "next-ai-draw-io-worker"
-    }
-  ]
-}
-```
-
-Skip to **Step 4**.
+This is how the repository is configured: `open-next.config.ts` is `defineCloudflareConfig({})` and `wrangler.jsonc` has no `r2_buckets`. Nothing to change here. Skip to **Step 4**.
 
 ---
 
-### Option B: Deploy WITH R2 (Full ISR Support)
+### Option B: Deploy WITH R2 (Optional, ISR caching)
 
-R2 enables **Incremental Static Regeneration (ISR)** caching. Requires a payment method on your Cloudflare account.
+R2 gives OpenNext a place to store **Incremental Static Regeneration (ISR)** pages. This app currently has no ISR pages, so you only need this step if you add some. Requires a payment method on your Cloudflare account.
 
 **1. Create an R2 bucket** in the Cloudflare Dashboard:
 
@@ -127,7 +95,7 @@ export default defineCloudflareConfig({
 })
 ```
 
-**3. Configure `wrangler.jsonc` (with R2):**
+**3. Add `r2_buckets` to `wrangler.jsonc`:**
 
 ```jsonc
 {
@@ -156,6 +124,8 @@ export default defineCloudflareConfig({
 ```
 
 > **Important:** The `bucket_name` must exactly match the name you created in the Cloudflare dashboard.
+
+> **Note:** Time-based revalidation (`revalidate` on a page or fetch) also needs a `queue` in `open-next.config.ts`. See the OpenNext Cloudflare caching docs.
 
 ---
 
@@ -264,4 +234,4 @@ npm run preview
 | API Routes | Yes | Yes |
 | Setup Complexity | Simple | Moderate |
 
-Choose **without R2** for testing or simple apps. Choose **with R2** for production apps that need ISR caching.
+The repository defaults to **without R2**. Choose **with R2** only if you add pages that need ISR caching.

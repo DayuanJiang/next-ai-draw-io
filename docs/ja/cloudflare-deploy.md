@@ -68,47 +68,15 @@ cp env.example .env.local
 
 ## ステップ 3 — デプロイタイプの選択
 
-### オプション A: R2 なしでのデプロイ（シンプル、無料）
+### オプション A: R2 なしでのデプロイ（デフォルト、無料）
 
-ISR キャッシュが不要な場合は、R2 なしでデプロイできます：
-
-**1. シンプルな `open-next.config.ts` を使用:**
-
-```ts
-import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
-
-export default defineCloudflareConfig({})
-```
-
-**2. シンプルな `wrangler.jsonc` を使用（r2_buckets なし）:**
-
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "next-ai-draw-io-worker",
-  "compatibility_date": "2025-12-08",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "next-ai-draw-io-worker"
-    }
-  ]
-}
-```
-
-**ステップ 4** へ進んでください。
+リポジトリはこの構成のままです。`open-next.config.ts` は `defineCloudflareConfig({})` で、`wrangler.jsonc` に `r2_buckets` はありません。ファイルを変更する必要はないので、**ステップ 4** へ進んでください。
 
 ---
 
-### オプション B: R2 ありでのデプロイ（完全な ISR サポート）
+### オプション B: R2 ありでのデプロイ（オプション、ISR キャッシュ用）
 
-R2 を使用すると **Incremental Static Regeneration (ISR)** キャッシュが有効になります。これには Cloudflare アカウントに支払い方法の登録が必要です。
+R2 は OpenNext が **Incremental Static Regeneration (ISR)** ページを保存する場所になります。このアプリには現在 ISR ページがないため、自分で ISR ページを追加した場合にだけ必要です。Cloudflare アカウントに支払い方法の登録が必要です。
 
 **1. R2 バケットの作成**（Cloudflare ダッシュボードにて）:
 
@@ -127,7 +95,7 @@ export default defineCloudflareConfig({
 })
 ```
 
-**3. `wrangler.jsonc` の設定（R2 あり）:**
+**3. `wrangler.jsonc` に `r2_buckets` を追加:**
 
 ```jsonc
 {
@@ -156,6 +124,8 @@ export default defineCloudflareConfig({
 ```
 
 > **重要:** `bucket_name` は Cloudflare ダッシュボードで作成した名前と完全に一致させる必要があります。
+
+> **注意:** 時間ベースの再検証（ページや fetch の `revalidate`）には、`open-next.config.ts` で `queue` の設定も必要です。OpenNext の Cloudflare キャッシュドキュメントを参照してください。
 
 ---
 
@@ -264,4 +234,4 @@ npm run preview
 | API ルート | あり | あり |
 | 設定の複雑さ | シンプル | 普通 |
 
-テストやシンプルなアプリには **R2 なし** を選んでください。ISR キャッシュが必要な本番アプリには **R2 あり** を選んでください。
+リポジトリのデフォルトは **R2 なし** です。ISR キャッシュが必要なページを追加した場合にだけ **R2 あり** を選んでください。
