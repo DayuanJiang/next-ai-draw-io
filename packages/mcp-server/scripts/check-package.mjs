@@ -12,18 +12,22 @@ const REQUIRED = [
     "dist/drawio/index.html",
     "dist/drawio/js/app.min.js",
     "dist/drawio/LICENSE",
+    // The draw.io version stamp (part of every file's ETag); a dotfile, so
+    // make sure npm keeps it
+    "dist/drawio/.version",
     "dist/shell/index.html",
     "dist/shell/shell.js",
     "dist/shell/shell.css",
 ]
-// The canvas shell (708 KB and 50 KB when it was added); a jump means a
+// The canvas shell (750 KB and 50 KB at version 0.4.0); a jump means a
 // dependency of the shared components grew the bundle
 const MAX_FILE_BYTES = {
     "dist/shell/shell.js": 1.5 * 1024 * 1024,
     "dist/shell/shell.css": 300 * 1024,
 }
-// The bundled draw.io is most of the package (15.1 MB packed with draw.io
-// v32.0.2); a jump means the file list grew more than intended
+// The bundled draw.io is most of the package (15.3 MB packed with draw.io
+// v32.0.2 at version 0.4.0); a jump means the file list grew more than
+// intended
 const MAX_TARBALL_BYTES = 20 * 1024 * 1024
 
 const output = JSON.parse(
