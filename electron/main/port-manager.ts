@@ -9,8 +9,6 @@ import { app } from "electron"
  * (localStorage is origin-specific, so changing ports loses all saved data)
  */
 const PORT_CONFIG = {
-    // Development mode uses fixed port for hot reload compatibility
-    development: 6002,
     // Legacy production port — tried first to preserve localStorage for existing users
     legacyProduction: 61337,
     // New production port below the ephemeral range (49152-65535)
@@ -108,9 +106,8 @@ export function isPortAvailable(port: number): Promise<boolean> {
 
 /**
  * Find an available port
- * - In development: uses fixed port (6002)
- * - In production: uses the legacy port (61337), then 13370, to preserve
- *   localStorage; 13370 first when only it has saved chats
+ * - Uses the legacy port (61337), then 13370, to preserve localStorage;
+ *   13370 first when only it has saved chats
  * - Falls back to sequential ports if preferred port is unavailable
  * - Last resort: lets the OS assign a port (port 0)
  *
@@ -118,10 +115,7 @@ export function isPortAvailable(port: number): Promise<boolean> {
  * @returns Promise<number> The available port
  */
 export async function findAvailablePort(reuseExisting = true): Promise<number> {
-    const isDev = !app.isPackaged
-    const preferredPort = isDev
-        ? PORT_CONFIG.development
-        : PORT_CONFIG.production
+    const preferredPort = PORT_CONFIG.production
 
     // Try to reuse cached port if requested and available
     if (reuseExisting && allocatedPort !== null) {
@@ -135,19 +129,18 @@ export async function findAvailablePort(reuseExisting = true): Promise<number> {
         allocatedPort = null
     }
 
-    // In production, first the port where a chat was last saved. Without
-    // one, the legacy port first to preserve existing users' data, unless
-    // only the new port has data: their app started on 13370 while Windows
-    // reserved 61337, and 61337 being free now would hide it
-    const chatPort = isDev ? null : readChatPort()
-    const candidates = isDev
-        ? [preferredPort]
-        : chatPort !== null
-          ? [chatPort, ...HOME_PORTS.filter((p) => p !== chatPort)]
-          : hasStoredData(PORT_CONFIG.production) &&
-              !hasStoredData(PORT_CONFIG.legacyProduction)
-            ? [PORT_CONFIG.production, PORT_CONFIG.legacyProduction]
-            : [PORT_CONFIG.legacyProduction, PORT_CONFIG.production]
+    // First the port where a chat was last saved. Without one, the legacy
+    // port first to preserve existing users' data, unless only the new port
+    // has data: their app started on 13370 while Windows reserved 61337,
+    // and 61337 being free now would hide it
+    const chatPort = readChatPort()
+    const candidates =
+        chatPort !== null
+            ? [chatPort, ...HOME_PORTS.filter((p) => p !== chatPort)]
+            : hasStoredData(PORT_CONFIG.production) &&
+                !hasStoredData(PORT_CONFIG.legacyProduction)
+              ? [PORT_CONFIG.production, PORT_CONFIG.legacyProduction]
+              : [PORT_CONFIG.legacyProduction, PORT_CONFIG.production]
     for (const port of candidates) {
         if (await isPortAvailable(port)) {
             allocatedPort = port

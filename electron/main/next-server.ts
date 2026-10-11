@@ -12,25 +12,13 @@ import { setAppUrl } from "./window-manager"
 let serverProcess: UtilityProcess | null = null
 
 // Start and restart run one at a time, so overlapping calls (e.g. two quick
-// preset switches) can't leave two servers running
+// proxy changes) can't leave two servers running
 let serverQueue: Promise<unknown> = Promise.resolve()
 
 function runExclusive<T>(task: () => Promise<T>): Promise<T> {
     const result = serverQueue.then(task)
     serverQueue = result.catch(() => {})
     return result
-}
-
-/**
- * Get the path to the standalone server resources
- * In packaged app: resources/standalone
- * In development: .next/standalone
- */
-function getResourcePath(): string {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, "standalone")
-    }
-    return path.join(app.getAppPath(), ".next", "standalone")
 }
 
 /**
@@ -61,7 +49,8 @@ export function startNextServer(): Promise<string> {
 }
 
 async function startServer(): Promise<string> {
-    const resourcePath = getResourcePath()
+    // The standalone server shipped in the packaged app's resources
+    const resourcePath = path.join(process.resourcesPath, "standalone")
     const serverPath = path.join(resourcePath, "server.js")
 
     console.log(`Starting Next.js server from: ${resourcePath}`)
@@ -75,7 +64,7 @@ async function startServer(): Promise<string> {
         )
     }
 
-    // Find an available port (random in production, fixed in development)
+    // Find an available port (the fixed ports 61337 / 13370, then fallbacks)
     const port = await findAvailablePort()
     console.log(`Using port: ${port}`)
 
@@ -86,7 +75,7 @@ async function startServer(): Promise<string> {
         HOSTNAME: "127.0.0.1",
         // Enable Node.js built-in proxy support for fetch (Node.js 24+)
         NODE_USE_ENV_PROXY: "1",
-        // The preset keys are the user's own, not a server's
+        // The local server's env keys are the user's own, not a shared server's
         NEXT_AI_DRAWIO_DESKTOP: "1",
     }
 
@@ -97,10 +86,7 @@ async function startServer(): Promise<string> {
 
     // Set cache directory to a writable location (user's app data folder)
     // This is necessary because the packaged app might be on a read-only volume
-    if (app.isPackaged) {
-        const cacheDir = path.join(app.getPath("userData"), "cache")
-        env.NEXT_CACHE_DIR = cacheDir
-    }
+    env.NEXT_CACHE_DIR = path.join(app.getPath("userData"), "cache")
 
     // Copy existing environment variables
     for (const [key, value] of Object.entries(process.env)) {

@@ -1,97 +1,14 @@
-import {
-    app,
-    BrowserWindow,
-    dialog,
-    Menu,
-    type MenuItemConstructorOptions,
-    shell,
-} from "electron"
-import {
-    applyPresetToEnv,
-    getAllPresets,
-    getCurrentPresetId,
-    setCurrentPreset,
-} from "./config-manager"
+import { app, Menu, type MenuItemConstructorOptions, shell } from "electron"
 import { getMenuTranslations, getPreferredLocale } from "./menu-i18n"
-import { restartNextServer } from "./next-server"
-import { showSettingsWindow } from "./settings-window"
 
 /**
  * Build and set the application menu with i18n support
+ * (call again when the language changes)
  */
 export function buildAppMenu(): void {
     const template = getMenuTemplate()
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
-}
-
-/**
- * Rebuild the menu (call this when presets change or language changes)
- */
-export function rebuildAppMenu(): void {
-    buildAppMenu()
-}
-
-// Number of the latest preset switch
-let lastSwitch = 0
-
-/**
- * Apply a preset and restart the server so it takes effect.
- * If the restart fails, go back to the previous preset and restart again,
- * so the running server always matches the saved current preset.
- * Throws an error describing the outcome on failure.
- */
-export async function switchPreset(
-    id: string,
-): Promise<Record<string, string>> {
-    const previousPresetId = getCurrentPresetId()
-    const env = applyPresetToEnv(id)
-    if (!env) {
-        throw new Error("Preset not found")
-    }
-    const switchNumber = ++lastSwitch
-    rebuildAppMenu()
-
-    // In development, scripts/electron-dev.mjs restarts the Next.js dev server
-    if (!app.isPackaged) {
-        return env
-    }
-
-    try {
-        await restartNextServer()
-        return env
-    } catch (error) {
-        console.error("Failed to restart server:", error)
-        const reason = error instanceof Error ? error.message : String(error)
-
-        // A newer switch started meanwhile (also of this same preset), or
-        // the preset was deleted: its own restart follows, and undoing
-        // would lose that choice
-        if (switchNumber !== lastSwitch || getCurrentPresetId() !== id) {
-            throw new Error(
-                `The server could not be restarted.\n\nError: ${reason}`,
-            )
-        }
-
-        // Revert to previous preset on failure
-        if (!previousPresetId || !applyPresetToEnv(previousPresetId)) {
-            setCurrentPreset(null)
-        }
-        // Rebuild menu to restore previous checkmark state
-        rebuildAppMenu()
-
-        try {
-            await restartNextServer()
-        } catch (retryError) {
-            console.error("Failed to restart server again:", retryError)
-            throw new Error(
-                `The server could not be restarted.\n\nPlease restart the app.\n\nError: ${reason}`,
-            )
-        }
-        throw new Error(
-            `The server could not be restarted.\n\nThe previous configuration has been restored.\n\nError: ${reason}`,
-        )
-    }
 }
 
 /**
@@ -113,15 +30,6 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
             submenu: [
                 { role: "about" }, // System-translated
                 { type: "separator" },
-                {
-                    label: t.settings,
-                    accelerator: "CmdOrCtrl+,",
-                    click: () => {
-                        const win = BrowserWindow.getFocusedWindow()
-                        showSettingsWindow(win || undefined)
-                    },
-                },
-                { type: "separator" },
                 { role: "services" }, // System-translated
                 { type: "separator" },
                 { role: "hide" }, // System-translated
@@ -137,19 +45,6 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     template.push({
         label: t.file,
         submenu: [
-            ...(isMac
-                ? []
-                : [
-                      {
-                          label: t.settings,
-                          accelerator: "CmdOrCtrl+,",
-                          click: () => {
-                              const win = BrowserWindow.getFocusedWindow()
-                              showSettingsWindow(win || undefined)
-                          },
-                      },
-                      { type: "separator" } as MenuItemConstructorOptions,
-                  ]),
             isMac ? { role: "close" } : { role: "quit" }, // System-translated
         ],
     })
@@ -196,9 +91,6 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
         ],
     })
 
-    // Configuration menu with presets
-    template.push(buildConfigMenu(t))
-
     // Window menu
     template.push({
         label: t.window,
@@ -238,55 +130,4 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     })
 
     return template
-}
-
-/**
- * Build the Configuration menu with presets
- */
-function buildConfigMenu(
-    t: ReturnType<typeof getMenuTranslations>,
-): MenuItemConstructorOptions {
-    const presets = getAllPresets()
-    const currentPresetId = getCurrentPresetId()
-
-    const presetItems: MenuItemConstructorOptions[] = presets.map((preset) => ({
-        label: preset.name,
-        type: "radio",
-        checked: preset.id === currentPresetId,
-        click: async () => {
-            try {
-                await switchPreset(preset.id)
-            } catch (error) {
-                // Show error dialog to notify user
-                dialog.showErrorBox(
-                    "Configuration Error",
-                    `Failed to apply preset "${preset.name}". ${error instanceof Error ? error.message : String(error)}`,
-                )
-            }
-        },
-    }))
-
-    return {
-        label: t.configuration,
-        submenu: [
-            ...(presetItems.length > 0
-                ? [
-                      { label: t.switchPreset, enabled: false },
-                      { type: "separator" } as MenuItemConstructorOptions,
-                      ...presetItems,
-                      { type: "separator" } as MenuItemConstructorOptions,
-                  ]
-                : []),
-            {
-                label:
-                    presetItems.length > 0
-                        ? t.managePresets
-                        : t.addConfigurationPreset,
-                click: () => {
-                    const win = BrowserWindow.getFocusedWindow()
-                    showSettingsWindow(win || undefined)
-                },
-            },
-        ],
-    }
 }

@@ -1,11 +1,9 @@
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { buildAppMenu } from "./app-menu"
-import { applyCurrentPresetToEnv } from "./config-manager"
 import { loadEnvFile } from "./env-loader"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { startNextServer, stopNextServer } from "./next-server"
 import { applyProxyToEnv } from "./proxy-manager"
-import { registerSettingsWindowHandlers } from "./settings-window"
 import {
     createWindow,
     getAppUrl,
@@ -36,14 +34,8 @@ if (!gotTheLock) {
     const isDev = !app.isPackaged
 
     app.whenReady().then(async () => {
-        // Apply saved preset environment variables (overrides .env).
-        // Must run after ready: on Windows and Linux safeStorage can't
-        // decrypt the API key before that.
-        applyCurrentPresetToEnv()
-
         // Register IPC handlers
         registerIpcHandlers()
-        registerSettingsWindowHandlers()
 
         // Build application menu
         buildAppMenu()
