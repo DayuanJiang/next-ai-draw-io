@@ -84,7 +84,15 @@ describe("shell language", () => {
         for (const locale of i18n.locales) {
             const dict = getShellDictionary(locale)
             expect(Object.keys(dict.shell).sort(), locale).toEqual([
+                "aiChanged",
+                "connected",
+                "historyChanged",
+                "offline",
+                "restoreFailed",
+                "restoredFromFile",
                 "toggleTheme",
+                "tooLarge",
+                "unreachable",
                 "waiting",
             ])
             expect(dict.shell.waiting, locale).toBeTruthy()

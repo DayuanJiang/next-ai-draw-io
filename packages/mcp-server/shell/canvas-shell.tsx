@@ -7,11 +7,13 @@ import {
     VersionsProvider,
     type VersionsSource,
 } from "@/components/canvas/versions-context"
+import { AppToaster } from "@/components/workspace/app-toaster"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { DrawioSource } from "@/lib/drawio/drawio-config"
 import { useSettingsStore } from "@/stores/settings-store"
 import type { ShellConfig } from "./runtime-config"
 import { setDark } from "./theme"
+import { useMcpSync } from "./use-mcp-sync"
 
 // No versions until the shell reads the server's History (a later step)
 const NO_VERSIONS: VersionsSource = {
@@ -34,6 +36,7 @@ const NO_VERSIONS: VersionsSource = {
 export function CanvasShell({ config }: { config: ShellConfig }) {
     const dict = useDictionary()
     const isDark = useSettingsStore((s) => s.isDark)
+    const status = useMcpSync(config)
     const drawioSource = useMemo<DrawioSource>(
         () => ({
             editorUrl: config.drawioBaseUrl,
@@ -62,8 +65,9 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     <span
                         className="truncate text-xs text-muted-foreground"
                         data-testid="shell-status"
+                        data-status={status}
                     >
-                        {dict.shell.waiting}
+                        {dict.shell[status]}
                     </span>
                     <button
                         type="button"
@@ -84,6 +88,7 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     />
                 </div>
                 <CompareDialog />
+                <AppToaster />
             </div>
         </VersionsProvider>
     )

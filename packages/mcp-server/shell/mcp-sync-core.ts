@@ -1,0 +1,744 @@
+/**
+ * The shell's side of the MCP server's state protocol (src/http-server.ts),
+ * ported from the classic preview page (src/preview/preview.js) without the
+ * page: the server is reached through fetch, the canvas through the
+ * SyncCanvas functions the hook (use-mcp-sync.ts) passes in. No React here,
+ * so the state machine can be driven step by step in tests.
+ *
+ * The protocol in short: the tab polls GET /api/state every 2 s and loads a
+ * newer version; a user edit is pushed with the version and state it is
+ * based on, and the server refuses (409) a push based on a version the AI
+ * has since written over, or on a state it has lost (it expired, the
+ * process restarted); the next poll then decides whose diagram wins
+ * (recoverState). get_diagram asks for a sync (the canvas as draw.io has
+ * it) and screenshots and file exports for an image, both through the poll.
+ */
+import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
+import { contentFingerprint } from "@/packages/mcp-server/src/edit-gate.ts"
+import {
+    normalizeToMxfile,
+    parseMxfile,
+    serializeMxfile,
+} from "@/packages/mcp-server/src/pages.ts"
+
+export type ExportFormat = "png" | "svg" | "xmlsvg"
+
+/** GET /api/state as the server answers it */
+export interface ServerState {
+    xml: string | null
+    version: number
+    stateId: string | null
+    blank: boolean
+    syncRequested: boolean
+    exportFormat: ExportFormat | null
+    exportXml: string | null
+    exportOptions: { width?: number; pageId?: string } | null
+    exportId: string | null
+}
+
+/** An entry of GET /api/history */
+export interface HistoryEntryInfo {
+    id: number
+    index: number
+    svg: string
+}
+
+/**
+ * How a server write goes on the canvas: as one undo step on the page the
+ * user is viewing (the editor highlights it and Ctrl+Z takes it back), or
+ * as a full load of the document (see decideLoad)
+ */
+export type LoadDecision =
+    | { mode: "commit"; pageId: string | null }
+    | { mode: "load" }
+
+export interface ExportRequest {
+    format: string
+    [key: string]: unknown
+}
+
+export interface ExportResult {
+    data?: string
+    xml?: string
+}
+
+/** The canvas as the sync drives it (the hook maps it onto DiagramProvider) */
+export interface SyncCanvas {
+    load(xml: string, decision: LoadDecision): void
+    /** Show a one-page projection for an export only: not recorded, its
+     * autosaves ignored until the next load */
+    showTransient(xml: string): void
+    /** draw.io's export; null when it does not answer in time */
+    export(
+        request: ExportRequest,
+        timeoutMs: number,
+    ): Promise<ExportResult | null>
+    /** The document on the canvas now ("" before the first load) */
+    currentXml(): string
+    /** The page on screen; null when unknown (external draw.io) */
+    currentPageId(): string | null
+}
+
+export type SyncStatus = "waiting" | "connected" | "offline"
+
+/** Texts shown to the user (the shell takes them from its dictionary) */
+export type SyncNotice =
+    | "tooLarge"
+    | "unreachable"
+    | "restoredFromFile"
+    | "aiChanged"
+    | "historyChanged"
+    | "restoreFailed"
+
+export interface SyncOptions {
+    sessionId: string
+    /** Prefix of the server's API paths ("/api") */
+    apiBase: string
+    /** Every request carries it in the X-Drawio-Token header */
+    token: string
+    canvas: SyncCanvas
+    onNotice: (notice: SyncNotice) => void
+    onStatus?: (status: SyncStatus) => void
+    /** The server made a new state for the session: History entries got
+     * new ids, so a list on screen is stale */
+    onStateRecreated?: () => void
+    /** The token of the process now answering on this port, read from a
+     * fresh copy of this page; default: tokenFromPage of location.href */
+    refreshToken?: () => Promise<string | null>
+    fetch?: typeof fetch
+}
+
+export interface McpSync {
+    /** Poll now and every 2 s */
+    start(): void
+    stop(): void
+    poll(): Promise<void>
+    /** draw.io is ready for exports (DiagramProvider's isDrawioReady) */
+    setReady(ready: boolean): void
+    /** draw.io sent an autosave: the canvas changed to this document */
+    onAutoSave(xml: string): void
+    /** draw.io reported a load done */
+    onDrawioLoad(): void
+    /** The server's History, with the state its ids belong to; null when
+     * it could not be read, or the state changed meanwhile */
+    fetchHistory(): Promise<{
+        entries: HistoryEntryInfo[]
+        stateId: string | null
+    } | null>
+    /** Put a History entry back, naming the state its list belongs to */
+    restoreEntry(
+        id: number,
+        listStateId: string | null,
+    ): Promise<"ok" | "stale" | "failed">
+    /** For tests and the status bar */
+    read(): {
+        stateId: string | null
+        currentVersion: number
+        lastXml: string | null
+        latestXml: string | null
+        projectionActive: boolean
+        status: SyncStatus
+    }
+}
+
+export const POLL_INTERVAL_MS = 2000
+
+/** The API token the server wrote into a shell page (window.__MCP_CONFIG__) */
+export function tokenFromPage(html: string): string | null {
+    const match = html.match(/window\.__MCP_CONFIG__ = (\{.*?\});/)
+    if (!match) return null
+    try {
+        const token = JSON.parse(match[1]).token
+        return typeof token === "string" && token ? token : null
+    } catch {
+        return null
+    }
+}
+
+/**
+ * The same diagram, as text or as documents (draw.io re-serializes what it
+ * loads: another attribute order, filled-in defaults). Only documents with
+ * a page or a model are compared as documents: two without any would
+ * otherwise count as the same.
+ */
+function sameDiagram(a: string | null, b: string | null): boolean {
+    if (a === b) return true
+    if (a === null || b === null) return false
+    const hasModel = (xml: string) => /<(mxGraphModel|diagram)[\s>]/.test(xml)
+    return hasModel(a) && hasModel(b) && isSameDocument(a, b)
+}
+
+/** SVG as a data URL, as the server stores thumbnails */
+function svgDataUrl(svg: string): string {
+    if (svg.startsWith("data:")) return svg
+    return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
+}
+
+// Page settings draw.io applies on a full load only (the editor bridge's
+// hasLoadOnlySettings): replacing the page in place would keep the old ones
+function hasLoadOnlySettings(page: Element): boolean {
+    const model = page.querySelector("mxGraphModel")
+    return (
+        !!model &&
+        (model.hasAttribute("backgroundImage") ||
+            model.hasAttribute("extFonts") ||
+            model.getAttribute("math") === "1" ||
+            model.getAttribute("shadow") === "1")
+    )
+}
+
+/**
+ * Whether a server write can go on the canvas as one undo step: it has the
+ * same pages as the canvas, changes only the one the user is viewing (the
+ * one with currentPageId, else the first), keeps the file variables and
+ * needs no load-only page setting. Pages are compared with the MCP core's
+ * contentFingerprint (names and cells). The editor bridge checks the same
+ * against the live editor and falls back to a full load on its own.
+ */
+export function decideLoad(
+    currentXml: string,
+    nextXml: string,
+    currentPageId: string | null,
+): LoadDecision {
+    const parse = (xml: string) => {
+        const normalized = normalizeToMxfile(xml)
+        return normalized ? parseMxfile(normalized) : null
+    }
+    const full: LoadDecision = { mode: "load" }
+    const current = parse(currentXml)
+    const next = parse(nextXml)
+    if (!current || !next) return full
+    if (
+        !sameFileVars(
+            current.documentElement.getAttribute("vars"),
+            next.documentElement.getAttribute("vars"),
+        )
+    ) {
+        return full
+    }
+    const pagesNow = Array.from(current.querySelectorAll("diagram"))
+    const pagesNext = Array.from(next.querySelectorAll("diagram"))
+    if (pagesNow.length === 0 || pagesNow.length !== pagesNext.length) {
+        return full
+    }
+    const index = Math.max(
+        0,
+        pagesNow.findIndex((page) => page.getAttribute("id") === currentPageId),
+    )
+    const target = pagesNext[index]
+    // The page is found by its id when the document has several
+    if (
+        pagesNow.length > 1 &&
+        target.getAttribute("id") !== pagesNow[index].getAttribute("id")
+    ) {
+        return full
+    }
+    if (hasLoadOnlySettings(target)) return full
+    // The other pages, as the MCP core compares them (edit-gate.ts)
+    const others = (doc: Document, pages: Element[]) => {
+        pages[index].remove()
+        return contentFingerprint(serializeMxfile(doc))
+    }
+    if (others(current, pagesNow) !== others(next, pagesNext)) return full
+    return { mode: "commit", pageId: target.getAttribute("id") }
+}
+
+export function createMcpSync(options: SyncOptions): McpSync {
+    const { sessionId, apiBase, canvas, onNotice, onStatus } = options
+    const fetchFn = options.fetch ?? ((...args) => globalThis.fetch(...args))
+    let token = options.token
+
+    let currentVersion = 0
+    let isReady = false
+    // What the server has (the text it sent or we pushed) and the newest
+    // diagram on the canvas, saved to the server or not
+    let lastXml: string | null = null
+    let latestXml: string | null = null
+    // The server state this tab is in step with; null until the first poll
+    let stateId: string | null = null
+    let pushFailing = false
+    const pushesInFlight: string[] = []
+    // After a recovery replaced the canvas, until draw.io reports the load:
+    // an autosave still on its way belongs to the canvas being replaced
+    let awaitingLoad = false
+    let awaitingLoadTimer: ReturnType<typeof setTimeout> | null = null
+    let pollSeq = 0
+    let lastHandledPoll = 0 // polls overlap; older answers are dropped
+    // The edit whose SVG export is pending, and what it was based on
+    let pendingSvgExport: string | null = null
+    // The latest thumbnail export of a loaded server write: the state and
+    // version it showed, and the XML loaded
+    let thumbExport: {
+        stateId: string | null
+        version: number
+        xml: string
+    } | null = null
+    let pendingMcpExport: ExportFormat | null = null
+    let mcpExportSeq = 0
+    let mcpExportId: string | null = null
+    // A one-page projection is on screen for a page-targeted export
+    let projectionExportActive = false
+    // Load the server state on the next poll even at the same version
+    let forceReload = false
+    let pendingSyncExport = false
+    let syncExportSeq = 0
+    let status: SyncStatus = "waiting"
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    const setStatus = (next: SyncStatus) => {
+        if (status === next) return
+        status = next
+        onStatus?.(next)
+    }
+
+    // A 403 means another MCP process (with its own token) now answers on
+    // this port: read its token and retry once, so the next poll can recover
+    // the session instead of being refused forever
+    let tokenRefresh: Promise<void> | null = null
+    const refreshToken = () => {
+        if (!tokenRefresh) {
+            const read =
+                options.refreshToken ??
+                (() =>
+                    fetchFn(location.href, { cache: "no-store" })
+                        .then((r) => r.text())
+                        .then(tokenFromPage))
+            tokenRefresh = read()
+                .then((next) => {
+                    if (next) token = next
+                })
+                .catch(() => {})
+                .finally(() => {
+                    tokenRefresh = null
+                })
+        }
+        return tokenRefresh
+    }
+
+    const api = async (path: string, init: RequestInit = {}) => {
+        const send = () =>
+            fetchFn(`${apiBase}${path}`, {
+                ...init,
+                headers: { ...(init.headers ?? {}), "X-Drawio-Token": token },
+            })
+        let r = await send()
+        if (r.status === 403) {
+            await refreshToken()
+            r = await send()
+        }
+        return r
+    }
+
+    const postJson = (path: string, body: unknown) =>
+        api(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        })
+
+    /** Put a server write on the canvas and take its thumbnail */
+    const loadFromServer = (xml: string, how: "decide" | "full") => {
+        lastXml = xml
+        latestXml = xml
+        const decision: LoadDecision =
+            how === "decide"
+                ? decideLoad(canvas.currentXml(), xml, canvas.currentPageId())
+                : { mode: "load" }
+        canvas.load(xml, decision)
+        // currentVersion is the write's version
+        thumbExport = { stateId, version: currentVersion, xml }
+        setTimeout(captureThumbnail, 500)
+        return decision
+    }
+
+    // The image of the server write on the canvas, for its History entry:
+    // only for the latest load, once draw.io is ready, and only if the
+    // canvas still shows it when the export answers
+    const captureThumbnail = () => {
+        const t = thumbExport
+        if (!t || !isReady) return
+        canvas.export({ format: "svg" }, 5000).then((result) => {
+            if (!result?.data || thumbExport !== t) return
+            if (!sameDiagram(latestXml, t.xml)) return
+            thumbExport = null
+            postJson("/history-svg", {
+                sessionId,
+                svg: svgDataUrl(result.data),
+                stateId: t.stateId,
+                version: t.version,
+            }).catch(() => {})
+        })
+    }
+
+    // Until draw.io reports the load (its messages come in order), an
+    // autosave is from the canvas being replaced; in case no report comes,
+    // not for long
+    const expectLoad = () => {
+        awaitingLoad = true
+        if (awaitingLoadTimer) clearTimeout(awaitingLoadTimer)
+        awaitingLoadTimer = setTimeout(() => {
+            awaitingLoad = false
+        }, 5000)
+    }
+
+    // Restore the user's real document after a page-targeted projection
+    // export by reloading the server state (it also has any autosave that
+    // was still in flight when the projection started). projectionExportActive
+    // stays set until the poll loads the document: an edit on the
+    // projection before that must not be pushed.
+    const restoreFromProjection = () => {
+        if (!projectionExportActive) return
+        forceReload = true
+        poll()
+    }
+
+    // source is "sync" for replies to a server sync request, "recover" for
+    // the tab's copy after the server recovered the session, else "edit".
+    // sid is the server state the push is based on.
+    async function pushState(
+        xml: string,
+        svg = "",
+        baseVersion = currentVersion,
+        source: "edit" | "sync" | "recover" = "edit",
+        sid = stateId,
+    ): Promise<void> {
+        if (!sessionId) return
+        pushesInFlight.push(xml)
+        try {
+            const r = await postJson("/state", {
+                sessionId,
+                xml,
+                svg,
+                baseVersion,
+                source,
+                stateId: sid,
+            })
+            pushFailing = false
+            if (r.ok) {
+                const d = await r.json()
+                // An answer about a state this tab has left since, or one
+                // that comes after a newer version was loaded or saved
+                if (sid !== stateId || d.version < currentVersion) return
+                currentVersion = d.version
+                lastXml = xml
+                // The canvas changed while this edit was on its way, to
+                // something no pending autosave will send (an undo back to
+                // the previous version): send it now. A sync reply is
+                // draw.io's export of the canvas, in another format than its
+                // autosave.
+                if (
+                    latestXml &&
+                    latestXml !== xml &&
+                    pendingSvgExport !== latestXml &&
+                    source === "edit"
+                ) {
+                    pushState(latestXml)
+                }
+            } else if (r.status === 413) {
+                // Over the server's size limit: the image is most of it, so
+                // try once without it
+                if (svg) pushState(xml, "", baseVersion, source, sid)
+                else onNotice("tooLarge")
+            } else if (r.status === 409) {
+                // The AI wrote a newer version, or the server lost the state
+                // this push was based on; the next poll sorts it out
+                const d = await r.json().catch(() => ({}))
+                if (d.savedToHistory) {
+                    onNotice(
+                        source === "recover" ? "restoredFromFile" : "aiChanged",
+                    )
+                }
+                poll()
+            }
+        } catch (error) {
+            console.error("Push failed:", error)
+            setStatus("offline")
+            if (!pushFailing) {
+                pushFailing = true
+                onNotice("unreachable")
+            }
+        } finally {
+            pushesInFlight.splice(pushesInFlight.indexOf(xml), 1)
+        }
+    }
+
+    // The server made a new state for this session: it expired, or the MCP
+    // process restarted. Decide whose diagram wins.
+    const recoverState = (s: ServerState) => {
+        stateId = s.stateId
+        options.onStateRecreated?.()
+        // The old state's pending work is gone with it
+        const projectionShown = projectionExportActive
+        projectionExportActive = false
+        forceReload = false
+        pendingMcpExport = null
+        pendingSyncExport = false
+        const mine = latestXml
+        currentVersion = s.version
+        if (s.blank || s.xml === lastXml) {
+            // The server knows nothing, or exactly what this tab last saved:
+            // the canvas can only be newer, so it wins (edits made while the
+            // server was down are saved now)
+            if (projectionShown && mine) {
+                canvas.load(mine, { mode: "load" })
+                expectLoad()
+            }
+            if (mine && !sameDiagram(mine, s.xml)) {
+                pushState(mine, "", s.version)
+            }
+        } else if (s.xml) {
+            // The server has a diagram this tab never showed (an AI write it
+            // missed, a saved file): show that, and keep this tab's copy in
+            // History unless it is the same
+            const decision = loadFromServer(s.xml, "decide")
+            // A commit replaces the page in place: draw.io reports no load
+            if (decision.mode === "load") expectLoad()
+            if (mine && !sameDiagram(mine, s.xml)) {
+                pushState(mine, "", s.version, "recover")
+            }
+        }
+    }
+
+    const startSyncExport = () => {
+        pendingSyncExport = true
+        // The version and state the export is taken at: a newer AI write may
+        // load meanwhile, and this older XML must not overwrite it
+        const base = currentVersion
+        const sid = stateId
+        const seq = ++syncExportSeq
+        canvas.export({ format: "xml" }, 5000).then((result) => {
+            // A late reply to an earlier request was taken at another version
+            if (seq !== syncExportSeq) return
+            pendingSyncExport = false
+            if (result?.xml) pushState(result.xml, "", base, "sync", sid)
+        })
+    }
+
+    // Handle an export request from the MCP server (png/svg).
+    //
+    // Plain export: capture whatever page is on screen (PNG: pageId picks a
+    // page, width caps the size).
+    //
+    // Page-targeted export: the server sends a single-page <mxfile>
+    // projection in exportXml. It goes on the canvas as a transient
+    // document, draw.io renders it, exports, then the real document is
+    // loaded back from the server. The session state is never changed.
+    const startMcpExport = (s: ServerState, justLoaded: boolean) => {
+        const format = s.exportFormat as ExportFormat
+        pendingMcpExport = format
+        const seq = ++mcpExportSeq
+        mcpExportId = s.exportId
+        const extra = s.exportOptions ?? {}
+        const fire = () => {
+            const request: ExportRequest =
+                format === "png"
+                    ? {
+                          format: "png",
+                          scale: 2,
+                          currentPage: !extra.pageId,
+                          ...extra,
+                      }
+                    : { format }
+            canvas.export(request, 10000).then((result) => {
+                // A later export is running by now, or this one ended
+                if (seq !== mcpExportSeq || pendingMcpExport === null) return
+                const d = result?.data ?? ""
+                const isPng = format === "png" && d.startsWith("data:image/png")
+                const isSvg =
+                    format !== "png" &&
+                    (d.startsWith("data:image/svg") || d.startsWith("<svg"))
+                const done = () => {
+                    if (seq !== mcpExportSeq) return
+                    pendingMcpExport = null
+                    // Page-targeted export: restore the user's real document
+                    restoreFromProjection()
+                }
+                if (!isPng && !isSvg) {
+                    done()
+                    return
+                }
+                // Keep pendingMcpExport set until the server has the result:
+                // a poll answered before that still sees the request and
+                // would start the same export again
+                postJson("/state", {
+                    sessionId,
+                    exportData: d,
+                    exportId: mcpExportId,
+                })
+                    .catch(() => {})
+                    .finally(done)
+            })
+        }
+        if (s.exportXml) {
+            projectionExportActive = true
+            canvas.showTransient(s.exportXml)
+            // Let draw.io render the loaded page before exporting
+            setTimeout(fire, 600)
+        } else if (justLoaded) {
+            // A write with a screenshot: give the new diagram's external
+            // icon images a moment to load before the PNG is taken
+            setTimeout(fire, 600)
+        } else {
+            fire()
+        }
+    }
+
+    async function poll(): Promise<void> {
+        if (!sessionId) return
+        const seq = ++pollSeq
+        try {
+            const r = await api(
+                `/state?sessionId=${encodeURIComponent(sessionId)}`,
+            )
+            if (!r.ok) return
+            const s: ServerState = await r.json()
+            // An older answer than one already handled (the interval, the
+            // 409 handler and the projection restore each poll): it could
+            // name a state that is gone
+            if (seq < lastHandledPoll) return
+            lastHandledPoll = seq
+            setStatus("connected")
+            if (stateId === null) stateId = s.stateId
+            else if (s.stateId && s.stateId !== stateId) recoverState(s)
+            // Load a new version (before an export, so it pictures the
+            // latest). While a projection is on screen, only the restore
+            // (forceReload) replaces it, so a new version doesn't fight the
+            // projection; currentVersion stays unadvanced until then. The
+            // tab's own push still on its way is not loaded back: the canvas
+            // may have moved on since (an undo), and its answer follows.
+            const ownPush = s.xml !== null && pushesInFlight.includes(s.xml)
+            let justLoaded = false
+            if (
+                (forceReload ||
+                    (s.version > currentVersion &&
+                        !projectionExportActive &&
+                        !ownPush)) &&
+                s.xml
+            ) {
+                // The restore after a projection is a full load of the
+                // document the user had
+                const how = forceReload ? "full" : "decide"
+                forceReload = false
+                projectionExportActive = false
+                currentVersion = s.version
+                loadFromServer(s.xml, how)
+                justLoaded = true
+            }
+            // A sync request (get_diagram): after the load above, so draw.io
+            // exports what it just loaded; never while a one-page projection
+            // is on screen, which would be sent as the whole document
+            if (
+                s.syncRequested &&
+                !pendingSyncExport &&
+                isReady &&
+                !projectionExportActive
+            ) {
+                startSyncExport()
+            }
+            if (s.exportFormat && !pendingMcpExport && isReady) {
+                startMcpExport(s, justLoaded)
+            }
+            // Extension point (plan step 6, the get_selection tool): a
+            // selection request in the state would be answered here, like
+            // the sync request above, with the ids the editor bridge reads
+        } catch {
+            setStatus("offline")
+        }
+    }
+
+    return {
+        start() {
+            if (!sessionId || interval) return
+            poll()
+            interval = setInterval(poll, POLL_INTERVAL_MS)
+        },
+        stop() {
+            if (interval) clearInterval(interval)
+            interval = null
+        },
+        poll,
+        setReady(ready) {
+            isReady = ready
+            // A write loaded before draw.io was ready gets its thumbnail now
+            if (ready && thumbExport) captureThumbnail()
+        },
+        onAutoSave(xml) {
+            // Ignore autosave while a single-page projection is on screen
+            // for a page-targeted export; otherwise the projection would be
+            // pushed as the session's document
+            if (projectionExportActive) return
+            // An edit of the canvas that recovery is replacing: kept in
+            // History, never over the recovered diagram
+            if (awaitingLoad) {
+                pushState(xml, "", currentVersion, "recover")
+                return
+            }
+            // Also an edit undone back to what the server has, or draw.io's
+            // own copy of a write it took in place (a commit)
+            latestXml = xml
+            if (sameDiagram(xml, lastXml)) return
+            // Request an SVG export, then push the edit with it; remember
+            // the version and state it is based on. Without an answer in
+            // time, push it without the image.
+            pendingSvgExport = xml
+            const base = currentVersion
+            const sid = stateId
+            canvas.export({ format: "svg" }, 2000).then((result) => {
+                // A later edit took over the slot, or this one was sent
+                if (pendingSvgExport !== xml) return
+                pendingSvgExport = null
+                const svg = result?.data ? svgDataUrl(result.data) : ""
+                pushState(xml, svg, base, "edit", sid)
+            })
+        },
+        onDrawioLoad() {
+            awaitingLoad = false
+        },
+        async fetchHistory() {
+            // A list for a state the server recreated meanwhile has old ids
+            const sid = stateId
+            try {
+                const r = await api(
+                    `/history?sessionId=${encodeURIComponent(sessionId)}`,
+                )
+                if (!r.ok) return null
+                const d = await r.json()
+                if (sid !== stateId) return null
+                return { entries: d.entries ?? [], stateId: sid }
+            } catch {
+                return null
+            }
+        },
+        async restoreEntry(id, listStateId) {
+            try {
+                const r = await postJson("/restore", {
+                    sessionId,
+                    id,
+                    stateId: listStateId,
+                })
+                if (r.ok) {
+                    await poll()
+                    return "ok"
+                }
+                if (r.status === 409) {
+                    onNotice("historyChanged")
+                    return "stale"
+                }
+            } catch {
+                // reported below
+            }
+            onNotice("restoreFailed")
+            return "failed"
+        },
+        read() {
+            return {
+                stateId,
+                currentVersion,
+                lastXml,
+                latestXml,
+                projectionActive: projectionExportActive,
+                status,
+            }
+        },
+    }
+}
