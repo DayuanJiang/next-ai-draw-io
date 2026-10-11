@@ -468,7 +468,6 @@ test("the version cards follow the server's History; undo, redo and restore go t
     await expect(latestCard.getByTestId("version-undo")).toHaveText(
         /Undo change/,
     )
-    await expect(page.getByTestId("version-thumb")).toHaveCount(3)
 
     // Undo: the server restores the version before; the card says so
     await latestCard.getByTestId("version-undo").click()

@@ -2,7 +2,6 @@ import { Download, History, Moon, Sun } from "lucide-react"
 import { useMemo, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
 import { CompareDialog } from "@/components/canvas/compare-dialog"
-import { VersionStrip } from "@/components/canvas/version-strip"
 import { VersionsProvider } from "@/components/canvas/versions-context"
 import { type ExportFormat, SaveDialog } from "@/components/save-dialog"
 import { AppToaster } from "@/components/workspace/app-toaster"
@@ -22,9 +21,10 @@ const iconButton =
 
 /**
  * The MCP preview: the web app's canvas without the chat. A slim bar names
- * the session and the sync state; the versions strip, the version cards
- * (from the server's History), Compare and the export dialog come from the
- * shared canvas components.
+ * the session and the sync state; the version cards (from the server's
+ * History), Compare and the export dialog come from the shared canvas
+ * components. The cards sit in a side panel, so the web app's versions strip
+ * above the canvas is left out: it would show the same list twice.
  */
 export function CanvasShell({ config }: { config: ShellConfig }) {
     const dict = useDictionary()
@@ -135,16 +135,11 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     </button>
                 </header>
                 <div className="flex min-h-0 flex-1">
-                    <div className="flex min-w-0 flex-1 flex-col">
-                        {/* With the cards open, one version alone adds
-                            nothing to its card */}
-                        <VersionStrip minVersions={showPanel ? 2 : 1} />
-                        <div className="relative flex-1">
-                            <CanvasStage
-                                className="inset-0"
-                                drawioSource={drawioSource}
-                            />
-                        </div>
+                    <div className="relative min-w-0 flex-1">
+                        <CanvasStage
+                            className="inset-0"
+                            drawioSource={drawioSource}
+                        />
                     </div>
                     {showPanel && (
                         <VersionsPanel versions={versions.versions} />
