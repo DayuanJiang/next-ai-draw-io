@@ -19,6 +19,8 @@ on:
       - "stores/**"
       - "app/globals.css"
       - "package-lock.json"
+      # The package's build scripts import the root's scripts/drawio-zip.mjs
+      - "scripts/**"
   workflow_dispatch:
 
 permissions:
