@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { simulateReadableStream } from "ai"
 import { MockLanguageModelV3 } from "ai/test"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { POST as validateDiagram } from "@/app/api/validate-diagram/route"
@@ -16,36 +15,19 @@ const RESULT = {
     suggestions: ["Move box B to the right"],
 }
 
-// A vision model that answers with the JSON in a few text chunks
+// A vision model that answers with the result as JSON text
 vi.mock("@/lib/ai-providers", () => ({
     getValidationModel: () =>
         new MockLanguageModelV3({
-            doStream: (async () => {
-                const json = JSON.stringify(RESULT)
-                return {
-                    stream: simulateReadableStream({
-                        chunks: [
-                            { type: "text-start", id: "t" },
-                            ...[json.slice(0, 20), json.slice(20)].map(
-                                (delta) => ({
-                                    type: "text-delta",
-                                    id: "t",
-                                    delta,
-                                }),
-                            ),
-                            { type: "text-end", id: "t" },
-                            {
-                                type: "finish",
-                                finishReason: { unified: "stop", raw: "stop" },
-                                usage: {
-                                    inputTokens: { total: 1 },
-                                    outputTokens: { total: 1 },
-                                },
-                            },
-                        ],
-                    }),
-                }
-            }) as any,
+            doGenerate: (async () => ({
+                content: [{ type: "text", text: JSON.stringify(RESULT) }],
+                finishReason: { unified: "stop", raw: "stop" },
+                usage: {
+                    inputTokens: { total: 1 },
+                    outputTokens: { total: 1 },
+                },
+                warnings: [],
+            })) as any,
         }),
 }))
 
@@ -110,24 +92,25 @@ describe("the quota", () => {
         // get its check, and the check does not count as a chat
         quota.enabled = true
         const res = await validateDiagram(post())
-        expect(JSON.parse(await res.text())).toEqual(RESULT)
+        expect(await res.json()).toEqual(RESULT)
         expect(quota.checks).toHaveLength(1)
         expect(quota.checks[0].increment).toBe(0)
         expect(quota.checks[0].limits.requests).toBe(0)
-        await vi.waitFor(() => expect(quota.recorded).toEqual([2]))
+        expect(quota.recorded).toEqual([2])
     })
 })
 
 describe("POST /api/validate-diagram", () => {
-    it("streams the model's result as JSON text for useObject", async () => {
+    it("answers the model's result as JSON", async () => {
         const res = await validateDiagram(post())
-        expect(JSON.parse(await res.text())).toEqual(RESULT)
+        expect(res.headers.get("content-type")).toContain("application/json")
+        expect(await res.json()).toEqual(RESULT)
     })
 
     it("answers valid when the check is turned off", async () => {
         process.env.ENABLE_VLM_VALIDATION = "false"
         const res = await validateDiagram(post())
-        expect(JSON.parse(await res.text())).toEqual({
+        expect(await res.json()).toEqual({
             valid: true,
             issues: [],
             suggestions: [],

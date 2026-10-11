@@ -1,9 +1,9 @@
 /**
  * API endpoint for VLM-based diagram validation.
- * Accepts a PNG image and streams validation results using useObject-compatible format.
+ * Accepts a PNG image and answers with the validation result as JSON.
  */
 
-import { Output, streamText } from "ai"
+import { generateText, Output } from "ai"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import { getValidationModel } from "@/lib/ai-providers"
 import {
@@ -35,13 +35,6 @@ const DEFAULT_VALID_RESULT: ValidationResult = {
     suggestions: [],
 }
 
-/** A fixed result in the text format useObject reads */
-function createStreamingResponse(result: ValidationResult): Response {
-    return new Response(JSON.stringify(result), {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-    })
-}
-
 export async function POST(req: Request): Promise<Response> {
     const crossSite = rejectCrossSite(req)
     if (crossSite) return crossSite
@@ -53,7 +46,7 @@ export async function POST(req: Request): Promise<Response> {
         // Check if VLM validation is enabled (default: true)
         const enableValidation = process.env.ENABLE_VLM_VALIDATION !== "false"
         if (!enableValidation) {
-            return createStreamingResponse(DEFAULT_VALID_RESULT)
+            return Response.json(DEFAULT_VALID_RESULT)
         }
 
         const body: ValidateDiagramRequest = await req.json()
@@ -123,7 +116,7 @@ export async function POST(req: Request): Promise<Response> {
                 error,
             )
             // Return valid if no vision model is configured
-            return createStreamingResponse(DEFAULT_VALID_RESULT)
+            return Response.json(DEFAULT_VALID_RESULT)
         }
 
         // Parse timeout with validation (minimum 1000ms, default 10000ms)
@@ -133,8 +126,7 @@ export async function POST(req: Request): Promise<Response> {
                 parseInt(process.env.VALIDATION_TIMEOUT || "10000", 10),
             ) || 10000
 
-        // Stream the VLM response for useObject consumption
-        const result = streamText({
+        const { output, totalUsage } = await generateText({
             model,
             output: Output.object({ schema: ValidationResultSchema }),
             system: VALIDATION_SYSTEM_PROMPT,
@@ -155,23 +147,19 @@ export async function POST(req: Request): Promise<Response> {
             ],
             maxOutputTokens: 1024,
             abortSignal: AbortSignal.timeout(timeout),
-            onFinish: ({ output, totalUsage }) => {
-                if (countsQuota && totalUsage) {
-                    recordTokenUsage(
-                        userId,
-                        (totalUsage.inputTokens || 0) +
-                            (totalUsage.outputTokens || 0),
-                    )
-                }
-                if (sessionId && output) {
-                    console.log(
-                        `[validate-diagram] Session ${sessionId}: valid=${output.valid}, issues=${output.issues?.length ?? 0}`,
-                    )
-                }
-            },
         })
-
-        return result.toTextStreamResponse()
+        if (countsQuota) {
+            await recordTokenUsage(
+                userId,
+                (totalUsage.inputTokens || 0) + (totalUsage.outputTokens || 0),
+            )
+        }
+        if (sessionId) {
+            console.log(
+                `[validate-diagram] Session ${sessionId}: valid=${output.valid}, issues=${output.issues?.length ?? 0}`,
+            )
+        }
+        return Response.json(output)
     } catch (error) {
         // Log with session context if available
         const errorMessage =
@@ -179,6 +167,6 @@ export async function POST(req: Request): Promise<Response> {
         console.error("[validate-diagram] Error:", errorMessage)
 
         // On error, return valid to not block the user
-        return createStreamingResponse(DEFAULT_VALID_RESULT)
+        return Response.json(DEFAULT_VALID_RESULT)
     }
 }

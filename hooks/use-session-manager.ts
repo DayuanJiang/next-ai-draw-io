@@ -12,7 +12,6 @@ import {
     getAllSessionMetadata,
     getSession,
     isIndexedDBAvailable,
-    migrateFromLocalStorage,
     readSessionCount,
     renameSession as renameSessionInDB,
     type SessionMetadata,
@@ -20,10 +19,7 @@ import {
     saveSession,
 } from "@/lib/session-storage"
 import { STORAGE_KEYS } from "@/lib/storage"
-import {
-    type DiagramVersion,
-    versionsFromLegacyHistory,
-} from "@/stores/versions-store"
+import type { DiagramVersion } from "@/stores/versions-store"
 
 export interface SessionData {
     messages: StoredMessage[]
@@ -33,13 +29,6 @@ export interface SessionData {
     versions?: DiagramVersion[]
     /** Title for a session created by this save (default: first message) */
     title?: string
-}
-
-/** Versions of a stored session, converting the old history format */
-export function getSessionVersions(
-    session: Pick<ChatSession, "versions" | "diagramHistory">,
-): DiagramVersion[] {
-    return session.versions ?? versionsFromLegacyHistory(session.diagramHistory)
 }
 
 // Taken right before a save's data is read: the chat on screen then, and
@@ -192,9 +181,6 @@ export function useSessionManager(
             setIsAvailable(true)
 
             try {
-                // Run migration first (one-time conversion from localStorage)
-                await migrateFromLocalStorage()
-
                 // Load sessions list
                 const metadata = await getAllSessionMetadata()
                 setSessions(metadata)
@@ -334,7 +320,7 @@ export function useSessionManager(
                 xmlSnapshots: session.xmlSnapshots,
                 diagramXml: session.diagramXml,
                 thumbnailDataUrl: session.thumbnailDataUrl,
-                versions: getSessionVersions(session),
+                versions: session.versions ?? [],
             }
         },
         [currentSessionId, changeChat],
@@ -417,9 +403,7 @@ export function useSessionManager(
                     thumbnailDataUrl:
                         data.thumbnailDataUrl ??
                         currentSession.thumbnailDataUrl,
-                    versions:
-                        data.versions ?? getSessionVersions(currentSession),
-                    diagramHistory: undefined,
+                    versions: data.versions ?? currentSession.versions ?? [],
                     updatedAt: Date.now(),
                     // Update title if it's still default and we have messages
                     title:

@@ -219,14 +219,7 @@ test("an access code error opens the general tab with the code field", async ({
     page,
 }) => {
     await page.route("**/api/config", (route) =>
-        route.fulfill({
-            json: {
-                accessCodeRequired: true,
-                dailyRequestLimit: 0,
-                dailyTokenLimit: 0,
-                tpmLimit: 0,
-            },
-        }),
+        route.fulfill({ json: { accessCodeRequired: true } }),
     )
     await page.route("**/api/chat", (route) =>
         route.fulfill({

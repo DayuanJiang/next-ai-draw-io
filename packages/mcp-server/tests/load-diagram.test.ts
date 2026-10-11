@@ -190,10 +190,44 @@ const SVG_PROLOG = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 `
 
+describe("parseDrawioFileContent with a prolog before the root", () => {
+    it("accepts a declaration, a comment and a DOCTYPE before <mxfile>", () => {
+        const prolog = `<?xml version="1.0" encoding="UTF-8"?>\n<!-- Architecture, v2 -->\n<!DOCTYPE mxfile>\n`
+        expect(parseDrawioFileContent(prolog + PLAIN_MXFILE)).toEqual({
+            ok: true,
+            xml: PLAIN_MXFILE,
+            hadCompressedPages: false,
+        })
+    })
+
+    it("accepts a comment before a bare <mxGraphModel>", () => {
+        const r = parseDrawioFileContent(`<!-- exported -->\n${MODEL_XML}`)
+        expect(r.ok).toBe(true)
+        if (r.ok) expect(r.xml).toContain('value="Hello"')
+    })
+
+    it("treats a file with nothing after its prolog as empty", () => {
+        expect(parseDrawioFileContent(`<?xml version="1.0"?>\n`)).toEqual({
+            ok: false,
+            error: "File is empty.",
+        })
+    })
+})
+
 describe("extractSvgEmbeddedXml", () => {
     it("returns undefined for non-SVG text", () => {
         expect(extractSvgEmbeddedXml(PLAIN_MXFILE)).toBeUndefined()
         expect(extractSvgEmbeddedXml("hello")).toBeUndefined()
+    })
+
+    it("accepts a root element with a namespace prefix", () => {
+        const svg = `<svg:svg xmlns:svg="http://www.w3.org/2000/svg" content="${escapeAttr(PLAIN_MXFILE)}"></svg:svg>`
+        expect(extractSvgEmbeddedXml(svg)).toBe(PLAIN_MXFILE)
+        expect(parseDrawioFileContent(svg)).toEqual({
+            ok: true,
+            xml: PLAIN_MXFILE,
+            hadCompressedPages: false,
+        })
     })
 
     it("returns an empty string for an SVG without content", () => {

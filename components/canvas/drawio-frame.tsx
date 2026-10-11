@@ -30,10 +30,11 @@ export interface DrawioFrameHandle {
 
 interface DrawioFrameProps {
     src: string
-    /** CSS sent with the configure message (works cross-origin too) */
-    configCss: string
-    /** CSS injected once the editor is reachable directly (same origin) */
-    editorCss: string
+    /**
+     * Theme CSS: sent with the configure message (works cross-origin too)
+     * and, same origin, injected as a <style> so it updates without a reload
+     */
+    css: string
     /** draw.io's dark mode, switched in place when the editor is reachable */
     dark: boolean
     onLoad?: () => void
@@ -52,25 +53,14 @@ const STYLE_ID = "next-ai-drawio-theme"
  */
 export const DrawioFrame = forwardRef<DrawioFrameHandle, DrawioFrameProps>(
     function DrawioFrame(
-        {
-            src,
-            configCss,
-            editorCss,
-            dark,
-            onLoad,
-            onAutoSave,
-            onExport,
-            onEditorAccess,
-        },
+        { src, css, dark, onLoad, onAutoSave, onExport, onEditorAccess },
         ref,
     ) {
         const iframeRef = useRef<HTMLIFrameElement>(null)
         const editorUiRef = useRef<any>(null)
         const attachedRef = useRef(false)
-        const configCssRef = useRef(configCss)
-        configCssRef.current = configCss
-        const editorCssRef = useRef(editorCss)
-        editorCssRef.current = editorCss
+        const cssRef = useRef(css)
+        cssRef.current = css
         const darkRef = useRef(dark)
         darkRef.current = dark
         // Handlers change on every render; the message listener reads refs
@@ -111,7 +101,7 @@ export const DrawioFrame = forwardRef<DrawioFrameHandle, DrawioFrameProps>(
                     style.id = STYLE_ID
                     doc.head.appendChild(style)
                 }
-                style.textContent = editorCssRef.current
+                style.textContent = cssRef.current
             } catch {
                 // Cross-origin: the configure message already applied it
             }
@@ -119,7 +109,7 @@ export const DrawioFrame = forwardRef<DrawioFrameHandle, DrawioFrameProps>(
 
         useEffect(() => {
             applyThemeCss()
-        }, [editorCss])
+        }, [css])
 
         // Same-origin only: draw.io's own dark mode, without a reload
         const applyDarkMode = () => {
@@ -209,7 +199,7 @@ export const DrawioFrame = forwardRef<DrawioFrameHandle, DrawioFrameProps>(
                         send("configure", {
                             config: {
                                 ...DRAWIO_CONFIG,
-                                css: configCssRef.current,
+                                css: cssRef.current,
                             },
                         })
                         break

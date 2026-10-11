@@ -7,11 +7,7 @@ import jaDict from "@/lib/i18n/dictionaries/ja.json"
 import zhDict from "@/lib/i18n/dictionaries/zh.json"
 import zhHantDict from "@/lib/i18n/dictionaries/zh-Hant.json"
 import { describeChanges, describeTotals } from "@/lib/version-text"
-import {
-    MAX_VERSIONS,
-    useVersionsStore,
-    versionsFromLegacyHistory,
-} from "@/stores/versions-store"
+import { MAX_VERSIONS, useVersionsStore } from "@/stores/versions-store"
 
 describe("withPageDefaults", () => {
     it("adds page and grid when the model has none", () => {
@@ -157,20 +153,12 @@ describe("versions store", () => {
         expect(versions.at(-1)?.number).toBe(MAX_VERSIONS + 5)
     })
 
-    it("numbers on from the last version kept, and numbers saved ones", () => {
+    it("numbers on from the last version kept", () => {
         add(0)
         add(2)
         add(4)
         useVersionsStore.getState().removeFromTurn(4)
         add(4)
-        expect(
-            useVersionsStore.getState().versions.map((v) => v.number),
-        ).toEqual([1, 2, 3])
-        const { versions } = useVersionsStore.getState()
-        // Saved before versions had numbers
-        useVersionsStore
-            .getState()
-            .setVersions(versions.map(({ number, ...v }) => v as any))
         expect(
             useVersionsStore.getState().versions.map((v) => v.number),
         ).toEqual([1, 2, 3])
@@ -198,14 +186,5 @@ describe("versions store", () => {
         state = useVersionsStore.getState()
         expect(state.undoneVersionId).toBeNull()
         expect(state.versions[0].undone).toBeUndefined()
-    })
-
-    it("converts the old history list", () => {
-        const versions = versionsFromLegacyHistory([
-            { svg: "data:image/svg+xml;base64,AA", xml: "<a/>" },
-        ])
-        expect(versions).toHaveLength(1)
-        expect(versions[0]).toMatchObject({ xml: "<a/>", turnIndex: -1 })
-        expect(versionsFromLegacyHistory(undefined)).toEqual([])
     })
 })

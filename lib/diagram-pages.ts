@@ -12,10 +12,18 @@ import {
     type PageSelector,
 } from "@/packages/mcp-server/src/pages.ts"
 
-function parse(xml: string): Document | null {
+/** The parsed XML, or null when it is empty or does not parse */
+export function parseXml(xml: string): Document | null {
     if (!xml?.trim()) return null
     const doc = new DOMParser().parseFromString(xml, "text/xml")
     return doc.querySelector("parsererror") ? null : doc
+}
+
+/** The file variables (%name% placeholders) an <mxfile> sets, else null */
+export function fileVars(doc: Document): string | null {
+    return doc.documentElement.nodeName === "mxfile"
+        ? doc.documentElement.getAttribute("vars")
+        : null
 }
 
 /** The <diagram> the AI works on: the one with this id, else the first */
@@ -40,7 +48,7 @@ export function modelOfPage(diagram: Element): Element | null {
     if (model) return model
     const inflated = decompressPageContent(diagram.textContent || "")
     if (!inflated) return null
-    return parse(inflated)?.querySelector("mxGraphModel") ?? null
+    return parseXml(inflated)?.querySelector("mxGraphModel") ?? null
 }
 
 /**
@@ -52,7 +60,7 @@ export function pageSelectorFor(
     pageId: string | null | undefined,
 ): PageSelector {
     if (!pageId) return {}
-    const doc = parse(xml)
+    const doc = parseXml(xml)
     const found = doc
         ? Array.from(doc.getElementsByTagName("diagram")).some(
               (diagram) => diagram.getAttribute("id") === pageId,
@@ -69,7 +77,7 @@ export function pageModelXml(
     xml: string,
     pageId: string | null | undefined,
 ): string | null {
-    const doc = parse(xml)
+    const doc = parseXml(xml)
     if (!doc) return null
     const root = doc.documentElement
     if (root.nodeName === "mxGraphModel") return xml
@@ -90,15 +98,15 @@ export function replacePageModel(
     pageId: string | null | undefined,
     modelXml: string,
 ): string {
-    const model = parse(modelXml)
+    const model = parseXml(modelXml)
     if (model?.documentElement.nodeName !== "mxGraphModel") {
         throw new Error("replacePageModel needs an <mxGraphModel>")
     }
-    let doc = parse(fileXml)
-    if (doc?.documentElement.nodeName !== "mxfile") doc = parse(BLANK_MXFILE)
+    let doc = parseXml(fileXml)
+    if (doc?.documentElement.nodeName !== "mxfile") doc = parseXml(BLANK_MXFILE)
     let diagram = pageElement(doc as Document, pageId)
     if (!diagram) {
-        doc = parse(BLANK_MXFILE)
+        doc = parseXml(BLANK_MXFILE)
         diagram = pageElement(doc as Document, null)
     }
     const target = diagram as Element
@@ -112,27 +120,37 @@ export function replacePageModel(
 /**
  * Where a drawn diagram goes. One page's worth (bare cells wrapped by
  * prepareNewDiagram, or a one-page file) replaces the AI's page of the
- * canvas file; file variables the drawn file sets replace the canvas
- * file's. A file with several pages replaces the whole document: the model
- * wrote the pages on purpose.
+ * canvas file. A file with several pages replaces the whole document: the
+ * model wrote the pages on purpose. Either way, file variables the drawn
+ * file sets replace the canvas file's, and a drawn file without any keeps
+ * the canvas file's (as replacing the page in draw.io does).
  */
 export function placeOnPage(
     drawnXml: string,
     canvasXml: string,
     pageId: string | null | undefined,
 ): string {
-    const doc = parse(drawnXml)
+    const doc = parseXml(drawnXml)
     const drawnFile =
         doc?.documentElement.nodeName === "mxfile" ? doc.documentElement : null
-    if (drawnFile && drawnFile.getElementsByTagName("diagram").length > 1) {
-        return drawnXml
+    const severalPages =
+        (drawnFile?.getElementsByTagName("diagram").length ?? 0) > 1
+    const model = severalPages ? null : pageModelXml(drawnXml, null)
+    if (!model) {
+        // The drawn document as it is, with the canvas file's variables
+        // when it sets none itself
+        const canvas = parseXml(canvasXml)
+        const canvasVars = canvas ? fileVars(canvas) : null
+        if (!doc || !drawnFile || fileVars(doc) !== null || !canvasVars) {
+            return drawnXml
+        }
+        drawnFile.setAttribute("vars", canvasVars)
+        return new XMLSerializer().serializeToString(doc)
     }
-    const model = pageModelXml(drawnXml, null)
-    if (!model) return drawnXml
     const placed = replacePageModel(canvasXml, pageId, model)
     const vars = drawnFile?.getAttribute("vars")
     if (vars === null || vars === undefined) return placed
-    const result = parse(placed) as Document
+    const result = parseXml(placed) as Document
     result.documentElement.setAttribute("vars", vars)
     return new XMLSerializer().serializeToString(result)
 }

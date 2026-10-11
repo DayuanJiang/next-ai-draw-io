@@ -2987,9 +2987,25 @@ test.describe("Edge cases", () => {
         ).toBeVisible()
     })
 
-    test("compare closes when another chat with the same old version ids comes on screen", async ({
+    test("compare closes when another chat with the same version ids comes on screen", async ({
         page,
     }) => {
+        // Both chats' versions share their ids
+        const version = (id: string, number: number) => ({
+            id,
+            number,
+            xml: `<mxGraphModel><root/></mxGraphModel>`,
+            svg: "",
+            turnIndex: 0,
+            summary: {
+                shapesAdded: 0,
+                shapesRemoved: 0,
+                shapesChanged: 0,
+                edgesAdded: 0,
+                edgesRemoved: 0,
+                edgesChanged: 0,
+            },
+        })
         const legacy = (id: string, label: string) => ({
             id,
             title: `Chat ${id}`,
@@ -3004,10 +3020,7 @@ test.describe("Edge cases", () => {
             ],
             xmlSnapshots: [],
             diagramXml: `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("a", label, 40)}</root></mxGraphModel></diagram></mxfile>`,
-            diagramHistory: [
-                { svg: "", xml: `<mxGraphModel><root/></mxGraphModel>` },
-                { svg: "", xml: `<mxGraphModel><root/></mxGraphModel>` },
-            ],
+            versions: [version("v-1", 1), version("v-2", 2)],
         })
         await openApp(page)
         await page.evaluate(

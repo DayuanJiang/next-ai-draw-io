@@ -1,10 +1,9 @@
 "use client"
 
 /**
- * Hook for VLM-based diagram validation using AI SDK's useObject.
+ * Hook for VLM-based diagram validation: one request, one JSON result.
  */
 
-import { experimental_useObject as useObject } from "@ai-sdk/react"
 import { useCallback, useRef } from "react"
 import { getSelectedAIConfig } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -13,8 +12,6 @@ import {
     ValidationResultSchema,
 } from "@/lib/validation-schema"
 
-export type { ValidationResult }
-
 // Default valid result for fallback cases
 const DEFAULT_VALID_RESULT: ValidationResult = {
     valid: true,
@@ -22,111 +19,42 @@ const DEFAULT_VALID_RESULT: ValidationResult = {
     suggestions: [],
 }
 
-interface UseValidateDiagramOptions {
-    onSuccess?: (result: ValidationResult) => void
-    onError?: (error: Error) => void
-}
-
-// Track pending validation promises for imperative API
-type PendingValidation = {
-    resolve: (result: ValidationResult) => void
-    reject: (error: Error) => void
-}
-
-export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
-    const { onSuccess, onError } = options
-    const pendingValidationRef = useRef<PendingValidation | null>(null)
-
-    const { object, submit, isLoading, error, stop } = useObject({
-        api: getApiEndpoint("/api/validate-diagram"),
-        schema: ValidationResultSchema,
-        // Resolved per request so a changed access code is picked up
-        headers: () => ({ "x-access-code": getSelectedAIConfig().accessCode }),
-        onFinish: ({
-            object,
-            error: finishError,
-        }: {
-            object: ValidationResult | undefined
-            error: Error | undefined
-        }) => {
-            if (finishError) {
-                console.error(
-                    "[useValidateDiagram] Validation error:",
-                    finishError,
-                )
-                onError?.(finishError)
-                pendingValidationRef.current?.reject(finishError)
-                pendingValidationRef.current = null
-                return
-            }
-
-            if (object) {
-                const result = object as ValidationResult
-                onSuccess?.(result)
-                pendingValidationRef.current?.resolve(result)
-                pendingValidationRef.current = null
-            }
-        },
-        onError: (err: Error) => {
-            console.error("[useValidateDiagram] Stream error:", err)
-            onError?.(err)
-            pendingValidationRef.current?.reject(err)
-            pendingValidationRef.current = null
-        },
-    })
+export function useValidateDiagram() {
+    // The running check's controller; a new check or cancel() aborts it
+    const controllerRef = useRef<AbortController | null>(null)
 
     /**
-     * Validate a diagram image.
-     * Returns a promise that resolves with the validation result.
-     */
-    const validate = useCallback(
-        async (
-            imageData: string,
-            sessionId?: string,
-        ): Promise<ValidationResult> => {
-            // Reject any pending validation to prevent promise leaks
-            if (pendingValidationRef.current) {
-                pendingValidationRef.current.reject(
-                    new Error("Validation superseded by new request"),
-                )
-                pendingValidationRef.current = null
-            }
-
-            return new Promise((resolve, reject) => {
-                // Store the promise handlers
-                pendingValidationRef.current = { resolve, reject }
-
-                // Submit the validation request
-                submit({ imageData, sessionId })
-            })
-        },
-        [submit],
-    )
-
-    /**
-     * End a running check (the user pressed Stop): its promise rejects with
-     * an AbortError, so the tool handler can finish at once.
-     */
-    const cancel = useCallback(() => {
-        const pending = pendingValidationRef.current
-        if (!pending) return
-        pendingValidationRef.current = null
-        stop()
-        pending.reject(new DOMException("Validation cancelled", "AbortError"))
-    }, [stop])
-
-    /**
-     * Validate with fallback - returns default valid result on error.
-     * Use this to avoid blocking the user on validation failures.
-     * A cancelled check is passed on as its AbortError.
+     * Validate a diagram image, with fallback: a failed check gives the
+     * default valid result so it never blocks the user. A cancelled check
+     * is passed on as its AbortError.
      */
     const validateWithFallback = useCallback(
         async (
             imageData: string,
             sessionId?: string,
         ): Promise<ValidationResult> => {
+            controllerRef.current?.abort()
+            const controller = new AbortController()
+            controllerRef.current = controller
             try {
-                return await validate(imageData, sessionId)
+                const res = await fetch(
+                    getApiEndpoint("/api/validate-diagram"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            // Read per request so a changed access code is
+                            // picked up
+                            "x-access-code": getSelectedAIConfig().accessCode,
+                        },
+                        body: JSON.stringify({ imageData, sessionId }),
+                        signal: controller.signal,
+                    },
+                )
+                if (!res.ok) {
+                    throw new Error(`Validation request failed: ${res.status}`)
+                }
+                return ValidationResultSchema.parse(await res.json())
             } catch (error) {
                 if ((error as Error)?.name === "AbortError") throw error
                 console.warn(
@@ -134,21 +62,23 @@ export function useValidateDiagram(options: UseValidateDiagramOptions = {}) {
                     error,
                 )
                 return DEFAULT_VALID_RESULT
+            } finally {
+                if (controllerRef.current === controller) {
+                    controllerRef.current = null
+                }
             }
         },
-        [validate],
+        [],
     )
 
-    return {
-        // Validation functions
-        validate,
-        validateWithFallback,
-        stop,
-        cancel,
+    /**
+     * End a running check (the user pressed Stop): its promise rejects with
+     * an AbortError, so the tool handler can finish at once.
+     */
+    const cancel = useCallback(() => {
+        controllerRef.current?.abort()
+        controllerRef.current = null
+    }, [])
 
-        // State
-        isValidating: isLoading,
-        partialResult: object as ValidationResult | undefined,
-        error,
-    }
+    return { validateWithFallback, cancel }
 }

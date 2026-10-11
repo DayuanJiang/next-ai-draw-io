@@ -14,15 +14,9 @@ interface CanvasRect {
     height: number
 }
 
-interface CanvasPage {
-    id: string
-    name: string
-}
-
 interface CanvasState {
     /** The page can call the draw.io editor directly (same-origin iframe) */
     hasEditor: boolean
-    pages: CanvasPage[]
     currentPageId: string | null
     selection: SelectedCell[]
     selectionRect: CanvasRect | null
@@ -35,7 +29,6 @@ interface CanvasState {
 
 export const useCanvasStore = create<CanvasState>((set) => ({
     hasEditor: false,
-    pages: [],
     currentPageId: null,
     selection: [],
     selectionRect: null,
