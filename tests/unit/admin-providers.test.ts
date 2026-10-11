@@ -48,8 +48,6 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY).toBe("sk-test")
         expect(updates.OPENAI_API_KEY).toBeUndefined()
         expect(JSON.parse(updates.ADMIN_PROVIDERS as string)).toHaveLength(1)
-        // AI_MODELS_CONFIG is no longer written (merged at read time)
-        expect(updates.AI_MODELS_CONFIG).toBeNull()
     })
 
     it("suffixes env vars for a second instance of the same provider", () => {
@@ -137,7 +135,6 @@ describe("deriveEnvUpdates", () => {
         const prev = [provider()]
         const updates = deriveEnvUpdates([], prev)
         expect(updates.ADMIN_OPENAI_API_KEY).toBeNull()
-        expect(updates.AI_MODELS_CONFIG).toBeNull()
         expect(updates.ADMIN_PROVIDERS).toBeNull()
     })
 

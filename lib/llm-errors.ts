@@ -11,7 +11,7 @@ import {
  * What went wrong with a model call, for a hint the user can act on. The
  * provider's own message always goes along, because a guess can be wrong.
  */
-export type LLMErrorCode =
+type LLMErrorCode =
     | "invalid_api_key"
     | "forbidden"
     | "model_not_found"
@@ -28,7 +28,7 @@ export type LLMErrorCode =
     | "server_key_forbidden"
     | "unknown"
 
-export interface LLMError {
+interface LLMError {
     type: "provider"
     code: LLMErrorCode
     message: string

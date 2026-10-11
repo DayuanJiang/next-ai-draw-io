@@ -4,7 +4,7 @@
  */
 
 // Re-export types from the schema file (single source of truth)
-export type { ValidationIssue, ValidationResult } from "./validation-schema"
+export type { ValidationResult } from "./validation-schema"
 
 import type { ValidationResult } from "./validation-schema"
 

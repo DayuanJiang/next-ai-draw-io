@@ -392,7 +392,7 @@ AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
 | `provider` | 是 | 提供商类型（`openai`, `anthropic`, `google`, `bedrock` 等） |
 | `models` | 是 | 模型 ID 列表 |
 | `default` | 否 | 设为 `true` 表示默认选中该提供商的第一个模型 |
-| `apiKeyEnv` | 否 | 自定义 API Key 环境变量名（默认使用提供商标准变量如 `OPENAI_API_KEY`） |
+| `apiKeyEnv` | 否 | 自定义 API Key 环境变量名（默认使用提供商标准变量如 `OPENAI_API_KEY`）。也可以写成环境变量名数组，每次请求从有值的变量中随机选一个，把负载分摊到多个 Key 上 |
 | `baseUrlEnv` | 否 | 自定义 Base URL 环境变量名 |
 
 ### 说明

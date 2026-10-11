@@ -257,17 +257,37 @@ describe("testing EdgeOne", () => {
 })
 
 describe("the admin Test of the server's own base URL", () => {
-    const test = (headers: Record<string, string>) =>
+    // An admin panel entry without a URL of its own
+    const adminTest = () =>
+        testModel(
+            new Request("http://localhost/api/admin/test-model", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-admin-password": "admin-pw",
+                },
+                body: JSON.stringify({
+                    provider: {
+                        id: "p1",
+                        provider: "openai",
+                        apiKey: "panel-key",
+                        models: ["gpt-5.5"],
+                    },
+                    modelId: "gpt-5.5",
+                }),
+            }),
+        )
+    // A user naming the same address in the Settings dialog
+    const userTest = () =>
         validateModel(
             new Request("http://localhost/api/validate-model", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", ...headers },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     provider: "openai",
                     apiKey: "panel-key",
                     modelId: "gpt-5.5",
                     baseUrl: "http://10.0.0.5:8000/v1",
-                    serverBaseUrl: true,
                 }),
             }),
         )
@@ -280,12 +300,10 @@ describe("the admin Test of the server's own base URL", () => {
         privateUrls.all = true
         try {
             streamReply({ role: "assistant", content: "OK" })
-            const admin = await (
-                await test({ "x-admin-password": "admin-pw" })
-            ).json()
+            const admin = await (await adminTest()).json()
             expect(admin.valid).toBe(true)
-            // Anyone else claiming it is still refused
-            const other = await test({})
+            // A user typing the same address is still refused
+            const other = await userTest()
             expect(other.status).toBe(400)
         } finally {
             privateUrls.all = false

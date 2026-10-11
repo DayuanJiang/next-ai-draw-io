@@ -14,7 +14,7 @@ type WrappedModel = ReturnType<typeof wrapLanguageModel>
 export const DEFAULT_MAX_OUTPUT_TOKENS = 64000
 
 /** Ceiling for the user-supplied override, to catch typos like an extra zero. */
-export const MAX_OUTPUT_TOKENS_LIMIT = 200000
+const MAX_OUTPUT_TOKENS_LIMIT = 200000
 
 /**
  * Below this a diagram cannot come out whole, so a retry would just produce
@@ -81,7 +81,7 @@ export function rejectionText(error: unknown): string | null {
  * "lower than N") would reinterpret unrelated failures, and retrying on a bogus
  * number turns a readable error into an empty diagram.
  */
-function readCeiling(text: string): number | null {
+export function readCeiling(text: string): number | null {
     // Combined input+output ceiling: subtract the input the provider counted,
     // plus a small margin because its estimate is approximate.
     const context = text.match(/maximum context length (?:is|of) (\d+)/i)
@@ -102,13 +102,6 @@ function readCeiling(text: string): number | null {
         text.match(/Range of max_tokens should be \[1,\s*(\d+)\]/i)
 
     return output ? Number(output[1]) : null
-}
-
-/** The usable output ceiling named in a rejection, or null. */
-export function parseOutputTokenLimit(error: unknown): number | null {
-    const text = rejectionText(error)
-    const ceiling = text ? readCeiling(text) : null
-    return ceiling === null ? null : usableLimit(ceiling)
 }
 
 /**

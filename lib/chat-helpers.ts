@@ -58,35 +58,6 @@ function isValidToolInput(input: unknown): boolean {
     return !!input && typeof input === "object" && Object.keys(input).length > 0
 }
 
-// Helper function to replace historical tool call XML with placeholders
-// This reduces token usage and forces LLM to rely on the current diagram XML (source of truth)
-// Tool calls with invalid inputs are left for dropInvalidToolCalls to remove
-export function replaceHistoricalToolInputs(messages: any[]): any[] {
-    return messages.map((msg) => {
-        if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
-            return msg
-        }
-        const replacedContent = msg.content.map((part: any) => {
-            if (
-                part.type === "tool-call" &&
-                isValidToolInput(part.input) &&
-                (part.toolName === "display_diagram" ||
-                    part.toolName === "edit_diagram")
-            ) {
-                return {
-                    ...part,
-                    input: {
-                        placeholder:
-                            "[XML content replaced - see current diagram XML in system context]",
-                    },
-                }
-            }
-            return part
-        })
-        return { ...msg, content: replacedContent }
-    })
-}
-
 // Remove tool-calls with invalid inputs (from failed repair or interrupted streaming),
 // together with their tool-results: providers reject a result whose call is missing.
 // Messages left empty are removed too (Bedrock rejects empty content arrays).

@@ -1,4 +1,3 @@
-import { POST as validateModel } from "@/app/api/validate-model/route"
 import { checkAdminAuth } from "@/lib/admin/auth"
 import {
     AdminProviderSchema,
@@ -6,6 +5,7 @@ import {
     mergeSecrets,
 } from "@/lib/admin/providers"
 import { globalBaseUrl } from "@/lib/ai-providers"
+import { testModelConnection } from "@/lib/test-model-connection"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -48,37 +48,24 @@ export async function POST(req: Request) {
         sameEndpoint && stored ? [stored] : [],
     )
 
+    // Without a URL of its own, chat sends the entry's key to the server's
+    // <P>_BASE_URL: test that endpoint, not another one. It is the server's
+    // own, which chat uses without the checks for a URL a user typed.
+    // The admin's own request supplies the EdgeOne endpoint, cookies and
+    // access code, as a chat request would.
     const serverUrl = globalBaseUrl(resolved.provider)
-    return validateModel(
-        new Request(new URL("/api/validate-model", req.url), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                // Checked again there, in place of an access code
-                "x-admin-password": req.headers.get("x-admin-password") || "",
-                // The EdgeOne function checks the access code and Pages
-                // cookies, and its URL is built from the page's origin
-                "x-access-code": req.headers.get("x-access-code") || "",
-                cookie: req.headers.get("cookie") || "",
-                ...(req.headers.get("origin") && {
-                    origin: req.headers.get("origin") as string,
-                }),
-            },
-            body: JSON.stringify({
-                provider: resolved.provider,
-                apiKey: resolved.apiKey,
-                // Without a URL of its own, chat sends the entry's key to
-                // the server's <P>_BASE_URL: test that endpoint, not
-                // another one. It is the server's own, which chat uses
-                // without the checks for a URL a user typed.
-                baseUrl: resolved.baseUrl || serverUrl,
-                ...(!resolved.baseUrl && serverUrl && { serverBaseUrl: true }),
-                modelId: body.modelId,
-                awsAccessKeyId: resolved.awsAccessKeyId,
-                awsSecretAccessKey: resolved.awsSecretAccessKey,
-                awsRegion: resolved.awsRegion,
-                vertexApiKey: resolved.vertexApiKey,
-            }),
-        }),
+    return testModelConnection(
+        req,
+        {
+            provider: resolved.provider,
+            apiKey: resolved.apiKey,
+            baseUrl: resolved.baseUrl || serverUrl,
+            modelId: body.modelId,
+            awsAccessKeyId: resolved.awsAccessKeyId,
+            awsSecretAccessKey: resolved.awsSecretAccessKey,
+            awsRegion: resolved.awsRegion,
+            vertexApiKey: resolved.vertexApiKey,
+        },
+        !resolved.baseUrl && !!serverUrl,
     )
 }

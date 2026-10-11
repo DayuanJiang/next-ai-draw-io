@@ -30,9 +30,7 @@ import {
     type ProviderName,
 } from "@/lib/types/model-config"
 
-export type { ProviderName }
-
-export const AIHUBMIX_APP_CODE = "MSBS9675"
+const AIHUBMIX_APP_CODE = "MSBS9675"
 
 interface ModelConfig {
     model: any
@@ -56,7 +54,7 @@ export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
  * Normalize MiniMax base URL for AI SDK compatibility.
  * MiniMax supports Anthropic-compatible and OpenAI-compatible endpoints.
  */
-export function normalizeMiniMaxBaseURL(rawUrl: string): {
+function normalizeMiniMaxBaseURL(rawUrl: string): {
     baseURL: string
     isAnthropicCompatible: boolean
 } {
@@ -129,21 +127,19 @@ const BEDROCK_ANTHROPIC_BETA = {
  * @param userApiKey - User-provided API key (if any)
  * @param userBaseUrl - User-provided base URL (if any)
  * @param serverBaseUrl - Server's base URL from environment variable
- * @param defaultBaseUrl - Provider's official/default base URL (optional)
  * @returns The resolved base URL to use
  */
 export function resolveBaseURL(
     userApiKey: string | null | undefined,
     userBaseUrl: string | null | undefined,
     serverBaseUrl: string | undefined,
-    defaultBaseUrl?: string,
 ): string | undefined {
     if (userApiKey) {
-        // User provides their own API key - only use user's baseUrl or default
-        return userBaseUrl || defaultBaseUrl || undefined
+        // User provides their own API key - only use user's baseUrl
+        return userBaseUrl || undefined
     }
     // No user API key - fall back to server config
-    return userBaseUrl || serverBaseUrl || defaultBaseUrl || undefined
+    return userBaseUrl || serverBaseUrl || undefined
 }
 
 /**
@@ -245,6 +241,39 @@ function googleSamplingSettings(): { topK?: number; topP?: number } {
 }
 
 /**
+ * Gemini 2.5/3 models think by default, but need includeThoughts: true to
+ * return the reasoning. The budget applies to Gemini 2.5, the level to
+ * Gemini 3. Shared by Google AI and Vertex AI, which read different variables.
+ */
+function geminiThinkingOptions(
+    modelId: string | undefined,
+    budgetEnvName: string,
+    levelEnvName: string,
+): { thinkingConfig: Record<string, any> } | undefined {
+    if (!modelId || !/gemini-?[23]/.test(modelId)) return undefined
+
+    const thinkingConfig: Record<string, any> = { includeThoughts: true }
+    const budget = parseIntSafe(
+        process.env[budgetEnvName],
+        budgetEnvName,
+        1024,
+        100000,
+    )
+    const level = process.env[levelEnvName] as
+        | "minimal"
+        | "low"
+        | "medium"
+        | "high"
+        | undefined
+    if (budget && (modelId.includes("2.5") || modelId.includes("2-5"))) {
+        thinkingConfig.thinkingBudget = budget
+    } else if (level && /gemini-?3/.test(modelId)) {
+        thinkingConfig.thinkingLevel = level
+    }
+    return { thinkingConfig }
+}
+
+/**
  * Build provider-specific options from environment variables
  * Supports various AI SDK providers with their unique configuration options
  *
@@ -271,41 +300,27 @@ function buildProviderOptions(
 
     switch (provider) {
         case "openai": {
-            const reasoningEffort = process.env.OPENAI_REASONING_EFFORT
-            const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY
-
+            const reasoningEffort = process.env.OPENAI_REASONING_EFFORT as
+                | "minimal"
+                | "low"
+                | "medium"
+                | "high"
+                | undefined
             // Reasoning models (the o-series, gpt-5 and later) need
-            // reasoningSummary to return thoughts
-            if (modelId && /^(o\d|gpt-([5-9]|[1-9]\d))/.test(modelId)) {
-                options.openai = {
-                    // Auto-enable reasoning summary for reasoning models
-                    // Use 'auto' as default since not all models support 'detailed'
-                    reasoningSummary:
-                        (reasoningSummary as "auto" | "detailed") || "auto",
-                }
+            // reasoningSummary to return thoughts; 'auto' as the default
+            // since not all models support 'detailed'
+            const isReasoning =
+                !!modelId && /^(o\d|gpt-([5-9]|[1-9]\d))/.test(modelId)
+            const reasoningSummary =
+                (process.env.OPENAI_REASONING_SUMMARY as
+                    | "auto"
+                    | "detailed"
+                    | undefined) || (isReasoning ? "auto" : undefined)
 
-                // Optionally configure reasoning effort
-                if (reasoningEffort) {
-                    options.openai.reasoningEffort = reasoningEffort as
-                        | "minimal"
-                        | "low"
-                        | "medium"
-                        | "high"
-                }
-            } else if (reasoningEffort || reasoningSummary) {
-                // Non-reasoning models: only apply if explicitly configured
-                options.openai = {}
-                if (reasoningEffort) {
-                    options.openai.reasoningEffort = reasoningEffort as
-                        | "minimal"
-                        | "low"
-                        | "medium"
-                        | "high"
-                }
-                if (reasoningSummary) {
-                    options.openai.reasoningSummary = reasoningSummary as
-                        | "auto"
-                        | "detailed"
+            if (reasoningSummary || reasoningEffort) {
+                options.openai = {
+                    ...(reasoningSummary && { reasoningSummary }),
+                    ...(reasoningEffort && { reasoningEffort }),
                 }
             }
             break
@@ -333,85 +348,21 @@ function buildProviderOptions(
         }
 
         case "google": {
-            const thinkingBudgetVal = parseIntSafe(
-                process.env.GOOGLE_THINKING_BUDGET,
+            const google = geminiThinkingOptions(
+                modelId,
                 "GOOGLE_THINKING_BUDGET",
-                1024,
-                100000,
+                "GOOGLE_THINKING_LEVEL",
             )
-            const thinkingLevel = process.env.GOOGLE_THINKING_LEVEL
-
-            // Google Gemini 2.5/3 models think by default, but need includeThoughts: true
-            // to return the reasoning in the response
-            if (
-                modelId &&
-                (modelId.includes("gemini-2") ||
-                    modelId.includes("gemini-3") ||
-                    modelId.includes("gemini2") ||
-                    modelId.includes("gemini3"))
-            ) {
-                const thinkingConfig: Record<string, any> = {
-                    includeThoughts: true,
-                }
-
-                // Optionally configure thinking budget or level
-                if (
-                    thinkingBudgetVal &&
-                    (modelId.includes("2.5") || modelId.includes("2-5"))
-                ) {
-                    thinkingConfig.thinkingBudget = thinkingBudgetVal
-                } else if (
-                    thinkingLevel &&
-                    (modelId.includes("gemini-3") ||
-                        modelId.includes("gemini3"))
-                ) {
-                    thinkingConfig.thinkingLevel = thinkingLevel as
-                        | "low"
-                        | "high"
-                }
-
-                options.google = { thinkingConfig }
-            }
+            if (google) options.google = google
             break
         }
         case "vertexai": {
-            const thinkingBudget = parseIntSafe(
-                process.env.GOOGLE_VERTEX_THINKING_BUDGET,
+            const google = geminiThinkingOptions(
+                modelId,
                 "GOOGLE_VERTEX_THINKING_BUDGET",
-                1024,
-                100000,
+                "GOOGLE_VERTEX_THINKING_LEVEL",
             )
-            const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
-
-            if (
-                modelId &&
-                (modelId.includes("gemini-2") ||
-                    modelId.includes("gemini-3") ||
-                    modelId.includes("gemini2") ||
-                    modelId.includes("gemini3"))
-            ) {
-                const thinkingConfig: Record<string, any> = {
-                    includeThoughts: true,
-                }
-
-                const isGemini3 =
-                    modelId?.includes("gemini-3") ||
-                    modelId?.includes("gemini3")
-                const isGemini25 =
-                    modelId?.includes("2.5") || modelId?.includes("2-5")
-
-                if (isGemini3 && thinkingLevel) {
-                    // Vertex AI provider in AI SDK supports more granular levels (minimal/low/medium/high)
-                    thinkingConfig.thinkingLevel = thinkingLevel as
-                        | "minimal"
-                        | "low"
-                        | "medium"
-                        | "high"
-                } else if (isGemini25 && thinkingBudget) {
-                    thinkingConfig.thinkingBudget = thinkingBudget
-                }
-                options.google = { thinkingConfig }
-            }
+            if (google) options.google = google
             break
         }
         case "azure": {
@@ -498,7 +449,7 @@ function buildProviderOptions(
 }
 
 // Map of provider to required environment variable
-export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
+const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
     bedrock: null, // AWS SDK auto-uses IAM role on AWS, or env vars locally
     openai: "OPENAI_API_KEY",
     anthropic: "ANTHROPIC_API_KEY",
