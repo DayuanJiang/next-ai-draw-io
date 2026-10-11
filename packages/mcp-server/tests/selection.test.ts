@@ -53,7 +53,7 @@ describe("get_selection text", () => {
         expect(text).toContain('edit_diagram (page_id="p1")')
     })
 
-    it("counts a large selection instead of listing every cell", () => {
+    it("details the first cells of a large selection and lists the rest by id", () => {
         const cells = (n: number) =>
             Array.from({ length: n }, (_, i) => ({
                 id: `c${i + 1}`,
@@ -67,8 +67,13 @@ describe("get_selection text", () => {
         )
         expect(text).toContain(`${MAX_LISTED_CELLS + 5} cells selected`)
         expect(text).toContain(`id="c${MAX_LISTED_CELLS}"`)
+        // No detail past the cap, but every id: the model acts on all of
+        // them, and get_diagram cannot tell which cells were selected
         expect(text).not.toContain(`id="c${MAX_LISTED_CELLS + 1}"`)
-        expect(text).toContain("and 5 more cells not listed here")
+        expect(text).not.toContain(`shape "Cell ${MAX_LISTED_CELLS + 1}"`)
+        expect(text).toContain(
+            `- and 5 more cells, listed by id only: "c${MAX_LISTED_CELLS + 1}", "c${MAX_LISTED_CELLS + 2}", "c${MAX_LISTED_CELLS + 3}", "c${MAX_LISTED_CELLS + 4}", "c${MAX_LISTED_CELLS + 5}"`,
+        )
         const exact = describeSelection(
             { ...page, cells: cells(MAX_LISTED_CELLS) },
             null,
