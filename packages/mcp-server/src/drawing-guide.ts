@@ -23,7 +23,11 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - Send XML only through tool calls, never in chat text. Never draw a box just to send the user a message.
 - Before using any icon library (AWS, Azure, GCP, Kubernetes, Cisco, BPMN, Material Design, web icons...), call get_shape_library and use the exact style names it returns. NEVER guess icon style names. For AWS, use the AWS 2025 icons (library aws4).
 - After drawing or heavily editing a complex diagram, call screenshot_diagram once to see the result, and fix overlapping shapes and edges that cross shapes.
-- When replicating a diagram from an image, match its style and layout closely: straight or curved lines, rounded or square shapes.
+- Drawing from a source: to draw from a document (PDF, Markdown, code, data), an image or screenshot, or a web page, first read it yourself (the attachment the user shared, or your own file-reading or web-fetch tools), then plan the layout and draw. This server never receives attachments; it only receives the XML you send. Extract the entities and relationships the diagram needs; do not copy the text into boxes.
+- When replicating a diagram from an image, match its style and layout closely: straight or curved lines, rounded or square shapes, colors and relative positions. Call screenshot_diagram afterwards and compare with the original.
+- After a successful create_new_diagram or edit_diagram call, do not describe the diagram; the user sees it in the preview. One short sentence at most.
+- For artistic requests (a cat, a logo, a scene), compose the picture from standard shapes and connectors while keeping it clear.
+- To clear the canvas to one blank page, call create_new_diagram with only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.
 - The preview page has History (it saves a snapshot before every AI change and can restore any of the last 20 versions) and Download. You can make changes freely; nothing is lost.
 
 ## The XML you send
@@ -100,7 +104,7 @@ When the user asks for a minimal, plain, black-and-white or unstyled diagram, us
 - add inserts a new cell with a new id. One cell per operation.
 - delete removes a cell. Its children and every edge connected to it are deleted too, so give only the container's id.
 - All-or-nothing: if any operation fails, nothing is applied. A rejected call includes the current XML of the page; rebuild your operations on it and retry.
-- If the diagram is large, change it with edit_diagram instead of redrawing it.
+- Use create_new_diagram for a new diagram, a major restructuring or an empty canvas. Use edit_diagram for small changes: adding or removing a few elements, labels, colors or positions. Never redraw a large diagram for a small change.
 
     {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
     {"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" value=\\"Conv\\" x=\\"40\\" y=\\"40\\" w=\\"120\\" h=\\"60\\"/>"}]}

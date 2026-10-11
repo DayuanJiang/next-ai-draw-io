@@ -27,11 +27,13 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 - **Real-time Preview**: Diagrams appear and update in your browser as Claude creates them
 - **Drawing Rules and Shape Libraries**: Claude gets the web app's layout and style rules and the icon docs for AWS, Azure, GCP, Kubernetes and more
 - **Self-check**: Claude can take a screenshot of the rendered diagram and fix what looks wrong
+- **Draw from Your Files**: ask Claude to draw from a document, image or web page; it reads the source with its own tools and draws. Existing .drawio files open with load_diagram
 - **Version History**: Restore one of the last 20 versions from the **History** button, shown as thumbnails
 - **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
 - **Edit Support**: Modify existing diagrams with natural language instructions, including your own edits in the browser
 - **Export**: Save diagrams as `.drawio`, `.png`, `.svg`, or `.drawio.svg` files
 - **Auto-save**: Each diagram is saved to `~/.next-ai-drawio/`, so `claude --resume` can pick it up again
+- **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
 - **Self-contained**: Embedded server, no external dependencies required
 
 ## Use Case Examples
@@ -71,6 +73,18 @@ Create a sequence diagram showing OAuth 2.0 authorization code flow
 between user, client app, auth server, and resource server
 ```
 
+### 6. Draw From a Document
+
+```
+Read docs/architecture.md and draw the system as a diagram
+```
+
+### 7. Recreate a Sketch
+
+```
+Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
+```
+
 ## Available Tools
 
 | Tool | Description |
@@ -103,7 +117,7 @@ Claude Code <--stdio--> MCP Server <--http--> Browser (draw.io)
 |----------|---------|-------------|
 | `PORT` | `6002` | Port for the embedded HTTP server |
 | `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for draw.io (for self-hosted deployments) |
-| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for auto-saved diagrams; `off` turns auto-save off |
+| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for auto-saved diagrams and your `instructions.md`; `off` turns auto-save off (`instructions.md` is then read from the default folder) |
 | `DEBUG` | unset | Set to `true` to log debug messages |
 
 ## Links

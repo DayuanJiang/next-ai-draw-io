@@ -24,6 +24,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import open from "open"
 import { z } from "zod"
 import { expandCompactCells, foldCells } from "./compact-cells.ts"
+import {
+    customInstructionsPath,
+    guideWithCustomInstructions,
+} from "./custom-instructions.ts"
 import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
@@ -132,6 +136,8 @@ Start with start_session: it opens the preview and its result contains the drawi
 
 Before using cloud or icon shapes (AWS, Azure, GCP, Kubernetes, Cisco, BPMN...), call get_shape_library and use the exact style names it returns. Never guess icon style names.
 
+To draw from a file, image or web page, read it yourself first; the server only receives XML. Open existing .drawio files with load_diagram.
+
 After drawing a complex diagram, call screenshot_diagram once to see it, and fix overlapping shapes or edges that cross shapes.
 
 Tools:
@@ -216,6 +222,10 @@ function describeSelector(s: PageSelector): string {
     return "first page"
 }
 
+// The drawing guide plus the user's own rules from instructions.md, read
+// on every call so edits apply without restarting the host
+const guideText = () => guideWithCustomInstructions(DRAWING_GUIDE)
+
 // The same guide as start_session, for hosts that show prompts to the user
 server.registerPrompt(
     "diagram-workflow",
@@ -226,7 +236,7 @@ server.registerPrompt(
         messages: [
             {
                 role: "user",
-                content: { type: "text", text: DRAWING_GUIDE },
+                content: { type: "text", text: guideText() },
             },
         ],
     }),
@@ -243,7 +253,7 @@ server.registerTool(
         inputSchema: {},
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => ({ content: [{ type: "text", text: DRAWING_GUIDE }] }),
+    async () => ({ content: [{ type: "text", text: guideText() }] }),
 )
 
 // Tool: get_shape_library
@@ -308,6 +318,7 @@ registerWriteTool(
             const saveNote = savePath
                 ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue it in a later conversation, call start_session, then load_diagram with this path.`
                 : ""
+            const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsPath()} (Markdown, up to 5000 characters, read on every call).`
 
             log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
@@ -315,7 +326,7 @@ registerWriteTool(
                 content: [
                     {
                         type: "text",
-                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}\n\n${DRAWING_GUIDE}`,
+                        text: `Session started successfully!\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${saveNote}${rulesNote}\n\n${guideText()}`,
                     },
                 ],
             }
@@ -346,7 +357,9 @@ Accepted xml:
 2) A bare <mxGraphModel> with <root> (one page).
 3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent only for shapes inside a container, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.`,
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent only for shapes inside a container, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.
+
+To clear the canvas to one blank page, send only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.`,
         inputSchema: {
             xml: z
                 .string()
@@ -428,6 +441,19 @@ Rules: cells are siblings (never nested), ids are unique per page and start from
                       : "no pages parsed"
 
             log.info(`Diagram content set successfully (${pageSummary})`)
+
+            // Only the root cells: the model asked for an empty canvas
+            // (several empty pages get the page summary below)
+            if (!hasCells(xml) && pages.length <= 1) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Canvas cleared: one blank page. The previous diagram is in History.",
+                        },
+                    ],
+                }
+            }
 
             return {
                 content: [

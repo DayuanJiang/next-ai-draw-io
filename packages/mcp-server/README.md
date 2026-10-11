@@ -99,6 +99,8 @@ Use the standard MCP configuration with:
 1. Restart your MCP client after updating config
 2. Ask the AI to create a diagram:
    > "Create a flowchart showing user authentication with login, MFA, and session management"
+
+   > "Read docs/architecture.md and draw the system as a diagram"
 3. The diagram appears in your browser in real-time!
 
 ## Features
@@ -106,12 +108,14 @@ Use the standard MCP configuration with:
 - **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
 - **Drawing Rules**: The AI gets the same layout, edge and style rules as the web app, plus the shape library docs (AWS, Azure, GCP, Kubernetes, Cisco and more), so it uses real icon names instead of guessing
 - **Self-check**: The AI can take a screenshot of the rendered diagram and fix overlapping shapes or edges that cross shapes
+- **Draw from Your Files**: ask the AI to draw from a document, image or web page; it reads the source with the host's own tools and draws. Existing .drawio files open with load_diagram
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
 - **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails
 - **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io can open and edit again), from the **Download** button or through `export_diagram`
 - **Multi-page**: List, add, rename, and delete pages, and edit any page
 - **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, so it survives a restart of the MCP client
+- **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
 - **Themes and Dark Mode**: Pick a draw.io theme under **Extras > Theme**; the page follows the system dark mode
 - **Self-contained**: Embedded server, works offline (except draw.io UI which loads from `embed.diagrams.net` by default, configurable via `DRAWIO_BASE_URL`)
 
@@ -138,6 +142,12 @@ Use the standard MCP configuration with:
 After every change, the diagram is saved as a normal `.drawio` file in `~/.next-ai-drawio/`, and `start_session` tells the AI the file path. When you resume a conversation after restarting your MCP client (for example `claude --resume`), the AI calls `start_session` and then `load_diagram` with that path. You can also open the file in draw.io yourself.
 
 The newest 50 files are kept. Set `DRAWIO_DATA_DIR` to use another folder, or to `off` to turn auto-save off.
+
+## Custom Instructions
+
+To give the AI your own drawing rules, write them in `~/.next-ai-drawio/instructions.md` as Markdown, for example "Always draw in minimal style" or "Label every edge". The file is appended to the drawing guide under a `## Custom Instructions` heading each time the guide is returned (`start_session`, `get_drawing_guide` and the `diagram-workflow` prompt), so edits apply without restarting your MCP client. Only the first 5000 characters are used.
+
+`DRAWIO_DATA_DIR` changes the folder the file is read from; with `DRAWIO_DATA_DIR=off` the default folder is still used, since the file is only read. The text reaches the model as it is, so keep it to drawing rules you trust.
 
 ## How It Works
 
@@ -168,7 +178,7 @@ The newest 50 files are kept. Set `DRAWIO_DATA_DIR` to use another folder, or to
 |----------|---------|-------------|
 | `PORT` | `6002` | Port for the embedded HTTP server |
 | `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for the draw.io embed. Set this to use a self-hosted draw.io instance for private deployments. |
-| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for the auto-saved `.drawio` files. Set to `off` to turn auto-save off. |
+| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for the auto-saved `.drawio` files and your `instructions.md`. Set to `off` to turn auto-save off (`instructions.md` is then read from the default folder). |
 | `DEBUG` | unset | Set to `true` to log debug messages to stderr. |
 
 ### Private Deployment (Self-hosted draw.io)

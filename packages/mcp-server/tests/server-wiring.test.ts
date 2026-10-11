@@ -14,6 +14,8 @@
  */
 
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -47,6 +49,11 @@ const EXPECTED_TOOLS = [
 // Claude Code truncates tool descriptions and server instructions here
 const MAX_DESCRIPTION = 2048
 
+// The server reads <DRAWIO_DATA_DIR>/instructions.md into the guide; a
+// developer's real ~/.next-ai-drawio/instructions.md must not leak in
+const CUSTOM_RULE = "Always use blue fill #dae8fc."
+let dataDir: string
+
 let proc: ChildProcessWithoutNullStreams
 let stdoutBuf = ""
 const pending = new Map<
@@ -72,8 +79,11 @@ function send(method: string, params: unknown, isNotification = false) {
 }
 
 beforeAll(async () => {
+    dataDir = mkdtempSync(path.join(tmpdir(), "mcp-wiring-"))
+    writeFileSync(path.join(dataDir, "instructions.md"), CUSTOM_RULE)
     proc = spawn(tsxBin, [entry], {
         stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, DRAWIO_DATA_DIR: dataDir },
     }) as ChildProcessWithoutNullStreams
 
     proc.stdout.on("data", (chunk: Buffer) => {
@@ -111,6 +121,7 @@ beforeAll(async () => {
 
 afterAll(() => {
     proc?.kill("SIGTERM")
+    rmSync(dataDir, { recursive: true, force: true })
 })
 
 describe("MCP server wiring", () => {
@@ -185,7 +196,20 @@ describe("MCP server wiring", () => {
         })
         const text: string = resp.result.content[0].text
         expect(text).toContain("Edge routing rules")
+        expect(text).toContain("do not describe the diagram")
+        expect(text).toContain("clear the canvas")
         expect(text.length).toBeLessThanOrEqual(15000)
+    })
+
+    it("appends the user's instructions.md to the drawing guide", async () => {
+        const resp = await send("tools/call", {
+            name: "get_drawing_guide",
+            arguments: {},
+        })
+        const text: string = resp.result.content[0].text
+        expect(
+            text.endsWith(`\n\n## Custom Instructions\n${CUSTOM_RULE}`),
+        ).toBe(true)
     })
 })
 
