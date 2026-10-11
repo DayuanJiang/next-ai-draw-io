@@ -14,7 +14,7 @@ draw.io 用の別コンテナは不要です。
 
 ビルドは [draw.io のリリース](https://github.com/jgraph/drawio/releases) から `draw.war`（約 50 MB）をダウンロードします。ビルド環境から GitHub にアクセスできない場合は、次のどちらかを行ってください。
 
-- 別のマシンで `scripts/fetch-drawio.mjs` に書かれたバージョンの `draw.war` をダウンロードし、`public/drawio` に展開します（`WEB-INF` と `META-INF` は削除）。さらにバージョン（例：`v32.0.2`）を `public/drawio/.version` に書き込みます。ビルドはこのコピーを使います。
+- 別のマシンで `packages/mcp-server/src/drawio-version.json` に書かれたバージョンの `draw.war` をダウンロードし、`public/drawio` に展開します（`WEB-INF` と `META-INF` は削除）。さらにバージョン（例：`v32.0.2`）を `public/drawio/.version` に書き込みます。ビルドはこのコピーを使います。
 - インターネットに接続できるマシンでイメージをビルドし、オフライン環境に転送します。
 
 ## ほかのサイトの画像

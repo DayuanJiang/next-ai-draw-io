@@ -217,6 +217,8 @@ docker run -d -p 8080:8080 jgraph/drawio
 
 Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL). The preview page loads nothing else from the internet, so with a local draw.io it works offline. One exception: shapes from the Material Design library show icons from `fonts.gstatic.com`.
 
+Without `DRAWIO_BASE_URL` the preview uses the trimmed draw.io copy bundled with this package. It has the editor, the shape libraries, the templates and PlantUML; features that load more code when used (Mermaid, for example) are not included. Set `DRAWIO_BASE_URL` to a full draw.io if you need them.
+
 ## Troubleshooting
 
 ### Port already in use
@@ -247,6 +249,10 @@ Check that the browser URL has the `?mcp=` query parameter. The MCP session ID c
 ### Screenshot or PNG/SVG export times out
 
 PNG and SVG files are rendered by draw.io in the preview tab. Browsers slow down tabs that stay in the background, so the tab may not answer in time. Bring the preview tab to the front and try again.
+
+### Preview is blank inside VS Code Simple Browser
+
+The preview page refuses to be embedded in other pages (it sends `Content-Security-Policy: frame-ancestors 'self'`), so in-editor browsers such as VS Code Simple Browser, Cursor's built-in browser or a port forward's "Preview in Editor" show a blank page. Open the Browser URL from the `start_session` result in a regular browser (Chrome, Edge, Firefox, Safari) instead.
 
 ## License
 

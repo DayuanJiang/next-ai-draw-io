@@ -14,7 +14,7 @@ No separate draw.io container is needed.
 
 The build downloads `draw.war` (about 50 MB) from the [draw.io releases](https://github.com/jgraph/drawio/releases). If the build machine cannot reach GitHub:
 
-- On another machine, download `draw.war` for the version in `scripts/fetch-drawio.mjs`, unzip it into `public/drawio` (delete `WEB-INF` and `META-INF`), and write the version, for example `v32.0.2`, into `public/drawio/.version`. The build then uses this copy.
+- On another machine, download `draw.war` for the version in `packages/mcp-server/src/drawio-version.json`, unzip it into `public/drawio` (delete `WEB-INF` and `META-INF`), and write the version, for example `v32.0.2`, into `public/drawio/.version`. The build then uses this copy.
 - Or build the image on a machine with internet access and transfer it to the offline network.
 
 ## Images From Other Websites
