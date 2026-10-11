@@ -6,41 +6,66 @@ import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 const EXTERNAL_DRAWIO_URL = process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || ""
 
 /**
- * URL of the draw.io editor iframe. By default this is the copy bundled in
- * public/drawio, served from our own origin.
+ * Where the editor comes from and how it starts. The web app fills it from
+ * its build settings (webDrawioSource); the MCP's canvas shell from the
+ * config its server writes into the page.
  */
-export function getDrawioSrc({
-    lang,
-    isElectron,
-    dark,
-}: {
-    lang: Locale
-    isElectron: boolean
-    dark: boolean
-}): string {
-    // index.html: Next.js does not serve directory indexes
-    const base =
-        EXTERNAL_DRAWIO_URL ||
-        `${window.location.origin}${getAssetUrl("/drawio/index.html")}`
-    const url = new URL(base)
+export interface DrawioSource {
+    /** The editor page: the bundled copy's index.html on this origin, or an
+     * external draw.io (cross-origin, limited features) */
+    editorUrl: string
+    /** draw.io theme (its ui parameter); none: draw.io's default and the
+     * user's own pick */
+    ui?: string
+    /** Language in draw.io's naming ("zh-tw"); none: draw.io's own pick */
+    lang?: string
+    /** No calls to external services (the desktop app) */
+    offline?: boolean
+    /** draw.io's custom libraries (File > New Library, Open Library from,
+     * and the buttons under the shapes); the web app leaves them out */
+    libraries?: boolean
+}
+
+/**
+ * The web app's editor: the copy in public/drawio, served from our own
+ * origin (index.html, as Next.js serves no directory indexes), or
+ * NEXT_PUBLIC_DRAWIO_BASE_URL; the simple theme in the page's language.
+ */
+export function webDrawioSource(lang: Locale): DrawioSource {
+    const isElectron = !!(window as { electronAPI?: unknown }).electronAPI
+    return {
+        editorUrl: EXTERNAL_DRAWIO_URL || getAssetUrl("/drawio/index.html"),
+        ui: "simple",
+        // draw.io names Traditional Chinese "zh-tw"
+        lang: lang === "zh-Hant" ? "zh-tw" : lang,
+        offline: isElectron && !EXTERNAL_DRAWIO_URL,
+    }
+}
+
+/** URL of the draw.io editor iframe */
+export function getDrawioSrc(source: DrawioSource, dark: boolean): string {
+    const url = new URL(source.editorUrl, window.location.href)
     const params: Record<string, string> = {
         embed: "1",
         proto: "json",
         configure: "1",
-        ui: "simple",
+    }
+    // Without a fixed theme, embedded draw.io shows Extras > Theme only
+    // with themes=1 (its isThemeMenuVisible)
+    if (source.ui) params.ui = source.ui
+    else params.themes = "1"
+    Object.assign(params, {
         spin: "0",
-        libraries: "0",
+        libraries: source.libraries ? "1" : "0",
         noSaveBtn: "1",
         noExitBtn: "1",
         saveAndExit: "0",
         // draw.io's own dark mode (switched in place later when the editor
         // can be driven directly)
         dark: dark ? "1" : "0",
-        // draw.io names Traditional Chinese "zh-tw"
-        lang: lang === "zh-Hant" ? "zh-tw" : lang,
-    }
-    // No calls to external services from the desktop app
-    if (isElectron && !EXTERNAL_DRAWIO_URL) params.offline = "1"
+    })
+    if (source.lang) params.lang = source.lang
+    if (source.offline) params.offline = "1"
     for (const [key, value] of Object.entries(params)) {
         url.searchParams.set(key, value)
     }

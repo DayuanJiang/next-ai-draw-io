@@ -60,6 +60,20 @@ export interface DiagramCommit {
     pageId?: string | null
 }
 
+/** An export as draw.io's export action takes it: the format, and for PNG
+ * its scale, width cap and the page to render (pageId) */
+export interface ExportRequest {
+    format: string
+    [key: string]: unknown
+}
+
+/** What draw.io answered: the image (a data URL, or SVG text) in data; for
+ * format "xml" the document in xml instead */
+export interface ExportResult {
+    data?: string
+    xml?: string
+}
+
 interface DiagramContextType {
     chartXML: string
     // chartXML right away, before the re-render (loadDiagram sets both)
@@ -91,6 +105,19 @@ interface DiagramContextType {
     getThumbnailSvg: () => Promise<string | null>
     getVersionSvg: () => Promise<string | null>
     captureValidationPng: () => Promise<string | null>
+    /** One export with its own result; null when draw.io does not answer
+     * in time (the MCP shell answers the server's export requests with it) */
+    requestExport: (
+        request: ExportRequest,
+        timeoutMs?: number,
+    ) => Promise<ExportResult | null>
+    /** Show a document for an export only (the MCP's one-page projection of
+     * another page): not recorded as the diagram, its autosaves ignored,
+     * until the next loadDiagram puts the real document back */
+    showTransient: (xml: string) => void
+    /** A full load was sent and draw.io has not reported it yet: the
+     * editor still shows the previous document */
+    hasPendingLoad: () => boolean
     isDrawioReady: boolean
     onDrawioLoad: () => void
     resetDrawioReady: () => void
@@ -141,13 +168,19 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // The page to show again once a full load is done: draw.io shows the
     // first page of a loaded document
     const pageAfterLoadRef = useRef<string | null>(null)
+    // A transient document (showTransient) is on the canvas, and the page
+    // the user was on before it
+    const transientRef = useRef(false)
+    const pageBeforeTransientRef = useRef<string | null>(null)
 
     // Sends a full load. draw.io runs it when its message arrives, and then
     // reports "load": until then the editor shows the diagram from before,
     // so later changes go the same way and keep their order
-    const fullLoad = (xml: string) => {
+    const fullLoad = (
+        xml: string,
+        pageId: string | null = useCanvasStore.getState().currentPageId,
+    ) => {
         if (!drawioRef.current) return
-        const pageId = useCanvasStore.getState().currentPageId
         pageAfterLoadRef.current =
             pageId && xml.includes(`id="${pageId}"`) ? pageId : null
         pendingLoadsRef.current++
@@ -252,6 +285,38 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         return pngData?.startsWith("data:image/png") ? pngData : null
     }
 
+    // Like requestTaggedExport, with the request's other parameters (a PNG's
+    // page and width) and both parts of the answer
+    const requestExport = useCallback(
+        (request: ExportRequest, timeoutMs = 10000) =>
+            new Promise<ExportResult | null>((resolve) => {
+                if (!drawioRef.current) {
+                    resolve(null)
+                    return
+                }
+                const id = `export-${++exportSeqRef.current}`
+                const finish = (value: ExportResult | null) => {
+                    clearTimeout(timer)
+                    delete exportResolversRef.current[id]
+                    resolve(value)
+                }
+                const timer = setTimeout(() => finish(null), timeoutMs)
+                exportResolversRef.current[id] = (data, xml) =>
+                    finish({ data, xml })
+                drawioRef.current.exportDiagram({ ...request, message: id })
+            }),
+        [],
+    )
+
+    const showTransient = (xml: string) => {
+        if (!transientRef.current) {
+            pageBeforeTransientRef.current =
+                useCanvasStore.getState().currentPageId
+        }
+        transientRef.current = true
+        fullLoad(xml)
+    }
+
     const loadDiagram = (
         chart: string,
         skipValidation?: boolean,
@@ -261,6 +326,12 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // The editor bridge is shared: a page that is gone (another language
         // mounted a new one) must not change the new page's canvas
         if (!mountedRef.current) return null
+        // A real document ends a transient one; the user goes back to the
+        // page they were on before it
+        const pageBeforeTransient = transientRef.current
+            ? pageBeforeTransientRef.current
+            : undefined
+        transientRef.current = false
         let xmlToLoad = chart
 
         // Validate XML structure before loading (unless skipped for internal
@@ -315,7 +386,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         if (!applied) {
             // A full load replaces any preview, and its base is stale now
             resetPreview()
-            fullLoad(xmlToLoad)
+            fullLoad(xmlToLoad, pageBeforeTransient)
         }
 
         if (mode === "commit") {
@@ -336,10 +407,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleDiagramExport = (data: DrawioExportEvent) => {
-        // Thumbnail, version, validation PNG and file save exports go only
-        // to their own caller
+        // Thumbnail, version, validation PNG, file save and requestExport
+        // exports go only to their own caller
         const tag = data.message?.message
-        if (/^(thumbnail|validation|version|save)-/.test(tag ?? "")) {
+        if (/^(thumbnail|validation|version|save|export)-/.test(tag ?? "")) {
             exportResolversRef.current[tag as string]?.(data.data, data.xml)
             return
         }
@@ -369,6 +440,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // read refs: state captured in its closure would stay stale after a remount
     const handleDiagramAutoSave = (data: { xml?: string }) => {
         if (!data?.xml) return
+        // An edit of a transient document is not the diagram's; nor is one
+        // of the canvas a full load still on its way replaces (draw.io
+        // reports each load, in order, so no autosave of the new document
+        // comes before that)
+        if (transientRef.current || pendingLoadsRef.current > 0) return
         // Don't overwrite a pending restore - if we have a diagram but
         // DrawIO hasn't loaded yet, it means we're waiting to restore
         if (!hasCalledOnLoadRef.current && chartXMLRef.current) return
@@ -522,6 +598,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 getThumbnailSvg,
                 getVersionSvg,
                 captureValidationPng,
+                requestExport,
+                showTransient,
+                hasPendingLoad: () => pendingLoadsRef.current > 0,
                 isDrawioReady,
                 onDrawioLoad,
                 resetDrawioReady,

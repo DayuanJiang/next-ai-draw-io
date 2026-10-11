@@ -1,4 +1,25 @@
 const iframe = document.getElementById('drawio');
+// Every API request carries the token the server wrote into this page. A 403
+// means another MCP process (with its own token) now answers on this port:
+// read its token from a fresh copy of this page and retry once, so the next
+// poll can recover the session instead of being refused forever.
+let tokenRefresh = null;
+function refreshToken() {
+    if (!tokenRefresh) {
+        tokenRefresh = fetch(location.href, { cache: 'no-store' })
+            .then((r) => r.text())
+            .then((html) => { const m = html.match(/API_TOKEN = "([0-9a-f]+)"/); if (m) API_TOKEN = m[1]; })
+            .catch(() => {})
+            .finally(() => { tokenRefresh = null; });
+    }
+    return tokenRefresh;
+}
+async function api(url, init = {}) {
+    const send = () => fetch(url, { ...init, headers: { ...(init.headers || {}), 'X-Drawio-Token': API_TOKEN } });
+    let r = await send();
+    if (r.status === 403) { await refreshToken(); r = await send(); }
+    return r;
+}
 let currentVersion = 0, isReady = false, pendingXml = null, lastXml = null;
 // The server state this tab is in step with (see stateId in http-server.ts);
 // null until the first poll
@@ -82,7 +103,7 @@ window.addEventListener('message', (e) => {
                     // result: a poll answered before that still sees the
                     // request and would start the same export again.
                     const seq = msg.message.mcpExport;
-                    fetch('/api/state', {
+                    api('/api/state', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ sessionId, exportData: d, exportId: mcpExportId })
@@ -126,7 +147,7 @@ window.addEventListener('message', (e) => {
                 const t = thumbExport;
                 if (!t || msg.message.thumbExport !== t.n || latestXml !== t.xml) return;
                 thumbExport = null;
-                fetch('/api/history-svg', {
+                api('/api/history-svg', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId, svg, stateId: t.stateId, version: t.version })
@@ -184,7 +205,7 @@ async function pushState(xml, svg = '', baseVersion = currentVersion, source = '
     if (!sessionId) return;
     pushesInFlight.push(xml);
     try {
-        const r = await fetch('/api/state', {
+        const r = await api('/api/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId, xml, svg, baseVersion, source, stateId: sid })
@@ -282,7 +303,7 @@ async function poll() {
     if (!sessionId) return;
     const seq = ++pollSeq;
     try {
-        const r = await fetch('/api/state?sessionId=' + encodeURIComponent(sessionId));
+        const r = await api('/api/state?sessionId=' + encodeURIComponent(sessionId));
         if (!r.ok) return;
         const s = await r.json();
         // An older answer than one already handled (the interval, the 409
@@ -469,7 +490,7 @@ historyBtn.onclick = async () => {
     // A list for a state the server recreated meanwhile has old ids
     const sid = stateId;
     try {
-        const r = await fetch('/api/history?sessionId=' + encodeURIComponent(sessionId));
+        const r = await api('/api/history?sessionId=' + encodeURIComponent(sessionId));
         if (r.ok) {
             const d = await r.json();
             if (sid !== stateId) return;
@@ -529,7 +550,7 @@ restoreBtn.onclick = async () => {
     restoreBtn.disabled = true;
     restoreBtn.textContent = 'Restoring...';
     try {
-        const r = await fetch('/api/restore', {
+        const r = await api('/api/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sessionId, id: selectedId, stateId: historyStateId })

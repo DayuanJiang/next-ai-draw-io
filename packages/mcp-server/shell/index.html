@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Next AI Draw.io</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/shell/shell.css">
+    <script>window.__MCP_CONFIG__ = {{CONFIG_JSON}};</script>
+    <script>
+        // Dark class before the first paint (no white flash). The same rule
+        // as shell/theme.ts: the choice stored under "mcp:dark-mode", else
+        // the server's DRAWIO_DARK, else the system
+        try {
+            const config = window.__MCP_CONFIG__ || {}
+            const stored = localStorage.getItem("mcp:dark-mode")
+            const dark =
+                stored === "true" ||
+                (stored === null &&
+                    (config.drawioDark === "dark" ||
+                        (config.drawioDark !== "light" &&
+                            matchMedia("(prefers-color-scheme: dark)").matches)))
+            if (dark) document.documentElement.classList.add("dark")
+        } catch {}
+    </script>
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+    <script type="module" src="/shell/shell.js"></script>
+</body>
+</html>

@@ -699,5 +699,20 @@
         "recent": "最近的圖紙",
         "drawYourself": "從空白畫布開始",
         "openFileHint": "接著編輯已有的圖"
+    },
+    "shell": {
+        "waiting": "正在等待 MCP 伺服器…",
+        "toggleTheme": "切換淺色或深色",
+        "connected": "已連接 MCP 伺服器",
+        "offline": "無法連接 MCP 伺服器",
+        "tooLarge": "這張圖太大，無法儲存到 MCP 伺服器（超過 10 MB）。",
+        "unreachable": "無法連接 MCP 伺服器。您的修改暫時只保存在這個分頁裡。",
+        "restoredFromFile": "圖表已從儲存的檔案還原。這個分頁之前顯示的內容已放入歷史記錄。",
+        "aiChanged": "您編輯時 AI 修改了圖表。您的最後一次修改已儲存到歷史記錄。",
+        "historyChanged": "伺服器上的歷史記錄已變化，請重新開啟。",
+        "restoreFailed": "還原失敗，請再試一次。",
+        "userEdit": "手動修改",
+        "showVersions": "顯示版本",
+        "hideVersions": "隱藏版本"
     }
 }

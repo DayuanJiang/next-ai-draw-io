@@ -699,5 +699,20 @@
         "recent": "最近的图纸",
         "drawYourself": "从空白画布开始",
         "openFileHint": "接着编辑已有的图"
+    },
+    "shell": {
+        "waiting": "正在等待 MCP 服务器…",
+        "toggleTheme": "切换浅色或深色",
+        "connected": "已连接 MCP 服务器",
+        "offline": "无法连接 MCP 服务器",
+        "tooLarge": "这张图太大，无法保存到 MCP 服务器（超过 10 MB）。",
+        "unreachable": "无法连接 MCP 服务器。您的修改暂时只保存在这个标签页里。",
+        "restoredFromFile": "图表已从保存的文件恢复。这个标签页之前显示的内容已放入历史记录。",
+        "aiChanged": "您编辑时 AI 修改了图表。您的最后一次修改已保存到历史记录。",
+        "historyChanged": "服务器上的历史记录已变化，请重新打开。",
+        "restoreFailed": "恢复失败，请重试。",
+        "userEdit": "手动修改",
+        "showVersions": "显示版本",
+        "hideVersions": "隐藏版本"
     }
 }

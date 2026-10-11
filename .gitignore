@@ -16,6 +16,8 @@ packages/*/dist
 /coverage
 /playwright-report/
 /test-results/
+packages/*/playwright-report/
+packages/*/test-results/
 
 # next.js
 /.next/

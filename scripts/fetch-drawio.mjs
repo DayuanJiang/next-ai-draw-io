@@ -13,11 +13,10 @@
  * The release asset (draw.war) is a zip file; it is unpacked with node:zlib
  * so no extra dependency is needed.
  */
-import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import zlib from "node:zlib"
 import nextEnv from "@next/env"
+import { readDrawioVersion, readZipEntries, sha256 } from "./drawio-zip.mjs"
 
 // npm runs this before Next reads the .env files, so read them here: an
 // external draw.io set in .env.local must skip the download too
@@ -26,14 +25,15 @@ nextEnv.loadEnvConfig(
     process.env.npm_lifecycle_event === "predev",
 )
 
-// Pinned because the UI relies on draw.io internals; bump both deliberately
-const DRAWIO_VERSION = "v32.0.2"
-// SHA-256 of that release's draw.war, as GitHub lists it
-const DRAWIO_SHA256 =
-    "3cb8abec8e9bfc7504760c9cdc9194ecf7e8de178aa2a1d668801c32ecf1a1a7"
+// The pinned release and the SHA-256 of its draw.war, as GitHub lists it
+// (packages/mcp-server/src/drawio-version.json, shared with the MCP server)
+const {
+    version: DRAWIO_VERSION,
+    sha256: DRAWIO_SHA256,
+    downloadUrl: DOWNLOAD_URL,
+} = readDrawioVersion()
 const DEST = path.join(process.cwd(), "public", "drawio")
 const STAMP = path.join(DEST, ".version")
-const DOWNLOAD_URL = `https://github.com/jgraph/drawio/releases/download/${DRAWIO_VERSION}/draw.war`
 
 function log(message) {
     console.log(`[fetch-drawio] ${message}`)
@@ -44,47 +44,6 @@ function readStamp() {
         return fs.readFileSync(STAMP, "utf8").trim()
     } catch {
         return null
-    }
-}
-
-// Minimal zip reader: finds the central directory and inflates each entry
-function* readZipEntries(buf) {
-    const EOCD_SIG = 0x06054b50
-    let eocd = -1
-    for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
-        if (buf.readUInt32LE(i) === EOCD_SIG) {
-            eocd = i
-            break
-        }
-    }
-    if (eocd < 0) throw new Error("Not a zip file (end record not found)")
-
-    const count = buf.readUInt16LE(eocd + 10)
-    let offset = buf.readUInt32LE(eocd + 16)
-
-    for (let n = 0; n < count; n++) {
-        if (buf.readUInt32LE(offset) !== 0x02014b50) {
-            throw new Error("Corrupt zip central directory")
-        }
-        const method = buf.readUInt16LE(offset + 10)
-        const compressedSize = buf.readUInt32LE(offset + 20)
-        const nameLength = buf.readUInt16LE(offset + 28)
-        const extraLength = buf.readUInt16LE(offset + 30)
-        const commentLength = buf.readUInt16LE(offset + 32)
-        const localOffset = buf.readUInt32LE(offset + 42)
-        const name = buf.toString("utf8", offset + 46, offset + 46 + nameLength)
-        offset += 46 + nameLength + extraLength + commentLength
-
-        const localNameLength = buf.readUInt16LE(localOffset + 26)
-        const localExtraLength = buf.readUInt16LE(localOffset + 28)
-        const start = localOffset + 30 + localNameLength + localExtraLength
-        const raw = buf.subarray(start, start + compressedSize)
-
-        if (name.endsWith("/")) continue
-        if (method !== 0 && method !== 8) {
-            throw new Error(`Unsupported zip compression ${method} (${name})`)
-        }
-        yield { name, data: method === 8 ? zlib.inflateRawSync(raw) : raw }
     }
 }
 
@@ -102,7 +61,7 @@ async function main() {
         if (!res.ok) throw new Error(`HTTP ${res.status} for ${DOWNLOAD_URL}`)
         buf = Buffer.from(await res.arrayBuffer())
         // The copy runs on the app's own origin: it must be the real release
-        const actual = crypto.createHash("sha256").update(buf).digest("hex")
+        const actual = sha256(buf)
         if (actual !== DRAWIO_SHA256) {
             throw new Error(`draw.war checksum mismatch (got ${actual})`)
         }

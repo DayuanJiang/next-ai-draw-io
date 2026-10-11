@@ -19,6 +19,7 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 
 ## Workflow
 - create_new_diagram draws a new diagram and REPLACES the whole document. add_page adds another tab. edit_diagram changes cells of an existing page. load_diagram opens a .drawio file (the server reads the file itself, or takes the file's content as its 'xml' argument when you already have it in hand). get_diagram returns the current XML, including the user's manual edits. export_diagram saves to a file.
+- When the user refers to what they selected in the preview ("this box", "these arrows"), call get_selection: it returns the selected cells' ids, labels and page, ready for edit_diagram.
 - Before drawing, describe your layout plan in 2-3 sentences, so shapes do not overlap and edges do not cross shapes.
 - Send XML only through tool calls, never in chat text. Never draw a box just to send the user a message.
 - Before using any icon library (AWS, Azure, GCP, Kubernetes, Cisco, BPMN, Material Design, web icons...), call get_shape_library and use the exact style names it returns. NEVER guess icon style names. For AWS, use the AWS 2025 icons (library aws4).
@@ -28,7 +29,7 @@ export const DRAWING_GUIDE = `# Draw.io drawing guide
 - After a successful create_new_diagram or edit_diagram call, do not describe the diagram; the user sees it in the preview. One short sentence at most.
 - For artistic requests (a cat, a logo, a scene), compose the picture from standard shapes and connectors while keeping it clear.
 - To clear the canvas to one blank page, call create_new_diagram with only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.
-- The preview page has History (it saves a snapshot before every AI change and can restore any of the last 20 versions) and Download. You can make changes freely; nothing is lost.
+- The preview keeps the last 20 versions (a snapshot before every AI change) and can restore any of them. You can make changes freely; nothing is lost.
 - If the user asks to undo or go back, call restore_version instead of re-sending the earlier XML from memory.
 
 ## The XML you send

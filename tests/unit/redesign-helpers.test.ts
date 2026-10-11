@@ -6,7 +6,7 @@ import enDict from "@/lib/i18n/dictionaries/en.json"
 import jaDict from "@/lib/i18n/dictionaries/ja.json"
 import zhDict from "@/lib/i18n/dictionaries/zh.json"
 import zhHantDict from "@/lib/i18n/dictionaries/zh-Hant.json"
-import { describeChanges, describeTotals } from "@/lib/version-text"
+import { describeChangeSummary, describeTotals } from "@/lib/version-text"
 import {
     MAX_VERSIONS,
     useVersionsStore,
@@ -39,7 +39,7 @@ describe("withPageDefaults", () => {
     })
 })
 
-describe("describeChanges", () => {
+describe("describeChangeSummary", () => {
     const en = {
         shapesAddedOne: "added 1 shape",
         shapesAddedOther: "added {count} shapes",
@@ -51,7 +51,7 @@ describe("describeChanges", () => {
 
     it("uses singular and plural forms and sentence case", () => {
         expect(
-            describeChanges(
+            describeChangeSummary(
                 { ...EMPTY_SUMMARY, shapesAdded: 2, edgesChanged: 1 },
                 en,
             ),
@@ -59,7 +59,7 @@ describe("describeChanges", () => {
     })
 
     it("says so when nothing changed", () => {
-        expect(describeChanges({ ...EMPTY_SUMMARY }, en)).toBe(
+        expect(describeChangeSummary({ ...EMPTY_SUMMARY }, en)).toBe(
             "No visible changes",
         )
     })
@@ -71,7 +71,7 @@ describe("describeChanges", () => {
             listSeparator: "，",
         }
         expect(
-            describeChanges(
+            describeChangeSummary(
                 { ...EMPTY_SUMMARY, shapesAdded: 3, edgesChanged: 1 },
                 zh,
             ),

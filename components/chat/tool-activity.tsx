@@ -5,19 +5,14 @@ import {
     Copy,
     Library,
     PenTool,
-    Redo2,
-    RotateCcw,
-    Undo2,
 } from "lucide-react"
 import { useState } from "react"
 import { Shimmer } from "@/components/ai-elements/shimmer"
+import { VersionCard as VersionCardView } from "@/components/canvas/version-card"
 import { CodeBlock } from "@/components/code-block"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { useCopy } from "@/lib/clipboard"
-import { formatMessage } from "@/lib/i18n/utils"
 import { cn, isMxCellXmlComplete } from "@/lib/utils"
-import { describeChanges, describeTotals } from "@/lib/version-text"
-import { useUiStore } from "@/stores/ui-store"
 import { type DiagramVersion, useVersionsStore } from "@/stores/versions-store"
 import { useChatEngine } from "./chat-engine"
 import type { DiagramOperation, ToolPartLike } from "./types"
@@ -83,45 +78,9 @@ function toolText(part: ToolPartLike): string {
     return JSON.stringify(input, null, 2)
 }
 
-/** Picture of a version (SVG data URL), or what stands in for it */
-export function VersionThumb({
-    svg,
-    dimmed,
-    className,
-}: {
-    /** undefined or null: still being made; "": none could be made */
-    svg: string | null | undefined
-    dimmed?: boolean
-    className?: string
-}) {
-    const t = useDictionary().versions
-    if (svg) {
-        return (
-            // biome-ignore lint/performance/noImgElement: data URL thumbnail
-            <img
-                src={svg}
-                alt=""
-                className={cn(
-                    "object-contain transition-opacity",
-                    dimmed && "opacity-40",
-                    className,
-                )}
-            />
-        )
-    }
-    if (svg === "") {
-        return <span className="text-xs text-faint">{t.noPreview}</span>
-    }
-    return (
-        <Shimmer as="span" className="text-xs">
-            {t.rendering}
-        </Shimmer>
-    )
-}
-
 /**
- * Card for one diagram version produced by a tool call. The latest shows
- * its picture; older ones fold into one row (the picture opens Compare).
+ * Card for one diagram version produced by a tool call: the shared card
+ * with a link to what the AI wrote (shown in a panel under the card)
  */
 function VersionCard({
     part,
@@ -134,175 +93,49 @@ function VersionCard({
 }) {
     const dict = useDictionary()
     const t = dict.versions
-    const engine = useChatEngine()
-    const undoneVersionId = useVersionsStore((s) => s.undoneVersionId)
-    const onCanvasVersionId = useVersionsStore((s) => s.onCanvasVersionId)
-    const openCompare = useUiStore((s) => s.openCompare)
     const [showCode, setShowCode] = useState(false)
     const { copied, copy } = useCopy()
-
-    const isUndone = undoneVersionId === version.id
-    const isOnCanvas = onCanvasVersionId === version.id
     const isEdit = part.type === "tool-edit_diagram"
-    // Undo/redo belongs to the newest change while it is (or was) on the
-    // canvas; after an older version was restored, this one is restored too
-    const canUndo =
-        isLatest && version.beforeXml !== undefined && (isOnCanvas || isUndone)
-    const title = isUndone ? t.undone : isEdit ? t.edited : t.created
-    const summary = version.fromScratch
-        ? describeTotals(version.summary, t)
-        : describeChanges(version.summary, t)
-    const badge = (
-        <span
-            className={cn(
-                "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
-                isOnCanvas
-                    ? "bg-marker-soft text-marker-ink"
-                    : "bg-muted text-muted-foreground",
-            )}
-        >
-            v{version.number}
-        </span>
-    )
-    const actionClass =
-        "inline-flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-    const restoreButton = (
-        <button
-            type="button"
-            disabled={engine.isBusy || isOnCanvas}
-            onClick={() => engine.restoreVersion(version.id)}
-            className={actionClass}
-            data-testid="version-restore"
-        >
-            <RotateCcw className="size-3.5" />
-            {formatMessage(t.restoreVersion, { n: version.number })}
-        </button>
-    )
-
-    // What the AI wrote: a text link in the summary line, so the card's
-    // only button is the action (undo or restore)
-    const summaryLine = (
-        <div className="text-xs text-muted-foreground">
-            {summary}
-            {/* The link wraps as one unit with its separator */}
-            <span className="whitespace-nowrap">
-                <span aria-hidden> · </span>
-                <button
-                    type="button"
-                    onClick={() => setShowCode((v) => !v)}
-                    className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
-                >
-                    {showCode ? t.hideCode : t.showCode}
-                </button>
-            </span>
-        </div>
-    )
-    const codePanel = showCode && (
-        <div className="relative border-t border-border bg-surface-1 px-3 py-2.5">
-            <button
-                type="button"
-                onClick={() => copy(toolText(part))}
-                className="absolute top-2 right-2 z-10 inline-flex size-7 items-center justify-center rounded-lg bg-card text-muted-foreground shadow-float hover:text-foreground"
-                aria-label={dict.chat.copyResponse}
-            >
-                {copied ? (
-                    <Check className="size-3.5" />
-                ) : (
-                    <Copy className="size-3.5" />
-                )}
-            </button>
-            <ToolInputDetails part={part} />
-        </div>
-    )
-
-    if (!isLatest) {
-        return (
-            <div
-                className="overflow-hidden rounded-xl border border-border bg-card"
-                data-testid="version-card"
-                data-tool-state={part.state}
-            >
-                <div className="flex items-center gap-2.5 p-1.5 pr-2">
-                    <button
-                        type="button"
-                        onClick={() => openCompare(version.id)}
-                        className="sheet-light flex h-9 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white hover:border-foreground/30"
-                        aria-label={t.compare}
-                        title={t.compare}
-                    >
-                        <VersionThumb
-                            svg={version.svg}
-                            className="max-h-8 max-w-[52px]"
-                        />
-                    </button>
-                    {badge}
-                    <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] text-foreground">
-                            {title}
-                        </div>
-                        {summaryLine}
-                    </div>
-                    {restoreButton}
-                </div>
-                {codePanel}
-            </div>
-        )
-    }
 
     return (
-        <div
-            className={cn(
-                "overflow-hidden rounded-xl border border-border bg-card",
-                isOnCanvas && "border-foreground/15",
-            )}
-            data-testid="version-card"
+        <VersionCardView
+            version={version}
+            isLatest={isLatest}
+            label={isEdit ? t.edited : t.created}
             data-tool-state={part.state}
-        >
-            <button
-                type="button"
-                onClick={() => openCompare(version.id)}
-                className="group/thumb sheet-light relative flex h-24 w-full items-center justify-center border-b border-border bg-white"
-                aria-label={t.compare}
-            >
-                <VersionThumb
-                    svg={version.svg}
-                    dimmed={isUndone}
-                    className="max-h-20 max-w-[88%]"
-                />
-                <span className="absolute right-2 bottom-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] text-white opacity-0 transition-opacity group-hover/thumb:opacity-100">
-                    {t.compare}
-                </span>
-            </button>
-            {/* Title row with the action; the summary runs under both */}
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5">
-                {badge}
-                <div className="truncate text-[13px] font-medium text-foreground">
-                    {title}
-                </div>
-                {canUndo ? (
+            // A text link, so the card's only button is the action (undo
+            // or restore); it wraps as one unit with its separator
+            afterSummary={
+                <span className="whitespace-nowrap">
+                    <span aria-hidden> · </span>
                     <button
                         type="button"
-                        disabled={engine.isBusy}
-                        onClick={() => engine.undoVersion(version.id)}
-                        className={actionClass}
-                        data-testid="version-undo"
+                        onClick={() => setShowCode((v) => !v)}
+                        className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
                     >
-                        {isUndone ? (
-                            <Redo2 className="size-3.5" />
-                        ) : (
-                            <Undo2 className="size-3.5" />
-                        )}
-                        {isUndone ? t.redo : t.undo}
+                        {showCode ? t.hideCode : t.showCode}
                     </button>
-                ) : (
-                    restoreButton
-                )}
-                <div className="col-span-2 col-start-2 mt-0.5">
-                    {summaryLine}
+                </span>
+            }
+        >
+            {showCode && (
+                <div className="relative border-t border-border bg-surface-1 px-3 py-2.5">
+                    <button
+                        type="button"
+                        onClick={() => copy(toolText(part))}
+                        className="absolute top-2 right-2 z-10 inline-flex size-7 items-center justify-center rounded-lg bg-card text-muted-foreground shadow-float hover:text-foreground"
+                        aria-label={dict.chat.copyResponse}
+                    >
+                        {copied ? (
+                            <Check className="size-3.5" />
+                        ) : (
+                            <Copy className="size-3.5" />
+                        )}
+                    </button>
+                    <ToolInputDetails part={part} />
                 </div>
-            </div>
-            {codePanel}
-        </div>
+            )}
+        </VersionCardView>
     )
 }
 

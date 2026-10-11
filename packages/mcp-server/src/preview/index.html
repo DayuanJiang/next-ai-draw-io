@@ -40,7 +40,7 @@
                 </button>
             </div>
         </div>
-        <iframe id="drawio" src="{{DRAWIO_URL}}/?embed=1&proto=json&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0&themes=1&{{DRAWIO_PARAMS}}" title="draw.io editor"></iframe>
+        <iframe id="drawio" src="{{DRAWIO_URL}}?embed=1&proto=json&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0&themes=1&{{DRAWIO_PARAMS}}" title="draw.io editor"></iframe>
     </div>
     <div id="notice" role="status"></div>
     <div id="history-modal">
@@ -85,7 +85,9 @@
     </div>
     <script>
         const sessionId = {{SESSION_JSON}};
-        const DRAWIO_ORIGIN = {{ORIGIN_JSON}};
+        // Empty when draw.io is served from this origin
+        const DRAWIO_ORIGIN = {{ORIGIN_JSON}} || location.origin;
+        let API_TOKEN = {{TOKEN_JSON}};
     </script>
     <script>
 {{SCRIPT}}

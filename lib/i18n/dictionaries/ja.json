@@ -699,5 +699,20 @@
         "recent": "最近の図",
         "drawYourself": "白紙のキャンバスから始める",
         "openFileHint": "手元の図の続きを編集"
+    },
+    "shell": {
+        "waiting": "MCP サーバーを待っています…",
+        "toggleTheme": "ライトとダークを切り替え",
+        "connected": "MCP サーバーに接続しました",
+        "offline": "MCP サーバーに接続できません",
+        "tooLarge": "この図は大きすぎて MCP サーバーに保存できません（10 MB 超）。",
+        "unreachable": "MCP サーバーに接続できません。変更は今のところこのタブにだけあります。",
+        "restoredFromFile": "図は保存済みファイルから復元されました。このタブに表示されていた内容は履歴にあります。",
+        "aiChanged": "編集中に AI が図を変更しました。最後の変更は履歴に保存されました。",
+        "historyChanged": "サーバー上の履歴が変わりました。もう一度開いてください。",
+        "restoreFailed": "復元に失敗しました。もう一度お試しください。",
+        "userEdit": "手で変更しました",
+        "showVersions": "バージョンを表示",
+        "hideVersions": "バージョンを隠す"
     }
 }

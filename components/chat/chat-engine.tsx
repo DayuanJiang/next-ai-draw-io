@@ -726,6 +726,11 @@ export function ChatEngineProvider({
     // isBusy of the latest render, for code that runs after an await
     const busyRef = useRef(isBusy)
     busyRef.current = isBusy
+    // Canvas components (version cards, the compare dialog, "ask AI") read
+    // the busy flag from the canvas store
+    useEffect(() => {
+        useCanvasStore.getState().set({ isBusy })
+    }, [isBusy])
     // The page goes (another language mounts a new one): the answer stops,
     // so it cannot reach the next page's canvas
     const stopRef = useRef(stop)

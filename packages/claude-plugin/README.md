@@ -24,17 +24,18 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 
 ## Features
 
-- **Real-time Preview**: Diagrams appear and update in your browser as Claude creates them
+- **Real-time Preview**: Diagrams appear and update in your browser as Claude creates them. The preview is the web app's canvas: a change Claude makes to the page on screen is outlined, and one Ctrl+Z takes it back
+- **Selection**: Select shapes in the preview and say "move these"; Claude reads what you selected with `get_selection`
 - **Drawing Rules and Shape Libraries**: Claude gets the web app's layout and style rules and the icon docs for AWS, Azure, GCP, Kubernetes and more
 - **Self-check**: Claude can take a screenshot of the rendered diagram and fix what looks wrong
 - **Draw from Your Files**: ask Claude to draw from a document, image or web page; it reads the source with its own tools and draws. Existing .drawio files open with load_diagram
-- **Version History**: Restore one of the last 20 versions from the **History** button, shown as thumbnails
+- **Version History**: The last 20 versions appear as cards next to the canvas, with thumbnails; restore one, undo the latest, or compare a version with the canvas
 - **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
 - **Edit Support**: Modify existing diagrams with natural language instructions, including your own edits in the browser
 - **Export**: Save diagrams as `.drawio`, `.png`, `.svg`, or `.drawio.svg` files
 - **Auto-save**: Each diagram is saved to `~/.next-ai-drawio/`, so `claude --resume` can pick it up again
 - **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
-- **Self-contained**: Embedded server, no external dependencies required
+- **Self-contained**: Embedded server and the draw.io editor in one package; the preview works offline after install
 
 ## Use Case Examples
 
@@ -97,6 +98,7 @@ Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
 | `load_diagram` | Load a `.drawio` or `.drawio.svg` file from disk |
 | `edit_diagram` | Edit diagram by ID-based operations; all or nothing |
 | `get_diagram` | Get the current diagram XML |
+| `get_selection` | Return the shapes and edges you selected in the preview, so Claude can act on "these" |
 | `screenshot_diagram` | Return a PNG of a page so Claude can check the result |
 | `export_diagram` | Save diagram to a `.drawio`, `.png`, `.svg`, or `.drawio.svg` file |
 | `list_pages`, `add_page`, `rename_page`, `delete_page` | Work with multi-page diagrams |
@@ -118,11 +120,12 @@ Claude Code <--stdio--> MCP Server <--http--> Browser (draw.io)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `6002` | Port for the embedded HTTP server |
-| `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for draw.io (for self-hosted deployments) |
+| `DRAWIO_BASE_URL` | unset (the bundled draw.io) | An external draw.io, such as a self-hosted instance. With it Claude's changes are not outlined on the canvas, Ctrl+Z does not take them back and `get_selection` cannot read the selection |
 | `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for auto-saved diagrams and your `instructions.md`; `off` turns auto-save off (`instructions.md` is then read from the default folder) |
 | `DRAWIO_LANG` | unset | Language of the draw.io editor, such as `en`, `zh`, `zh-tw`, `ja` or `de`. Unset, draw.io chooses (the browser language on `embed.diagrams.net`, English on a self-hosted draw.io) and the user can change it under **Extras > Language** |
 | `DRAWIO_UI` | unset | draw.io theme: `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple`. Unset, the user picks one under **Extras > Theme** |
-| `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light |
+| `DRAWIO_DARK` | `auto` | Dark mode of the preview and the editor until the user switches it with the button at the top right: `auto` follows the system, `1` starts dark, `0` starts light |
+| `DRAWIO_PREVIEW_UI` | `shell` | The preview page; `classic` opens the previous preview page for one more release |
 | `DRAWIO_AUTO_SCREENSHOT` | unset | Set to `true` to attach a screenshot to every `create_new_diagram` and `edit_diagram` result (costs 2 to 10 s per call) |
 | `DEBUG` | unset | Set to `true` to log debug messages |
 

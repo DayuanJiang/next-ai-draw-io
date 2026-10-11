@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import { VersionThumb } from "@/components/canvas/version-card"
+import { useVersionsContext } from "@/components/canvas/versions-context"
 import {
     Dialog,
     DialogContent,
@@ -11,11 +13,8 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import { formatMessage } from "@/lib/i18n/utils"
-import { describeChanges } from "@/lib/version-text"
+import { describeChangeSummary } from "@/lib/version-text"
 import { useUiStore } from "@/stores/ui-store"
-import { useVersionsStore } from "@/stores/versions-store"
-import { useChatEngine } from "./chat-engine"
-import { VersionThumb } from "./tool-activity"
 
 function Sheet({
     label,
@@ -40,12 +39,11 @@ function Sheet({
 export function CompareDialog() {
     const dict = useDictionary()
     const t = dict.versions
-    const engine = useChatEngine()
+    const { versions, isBusy, restore } = useVersionsContext()
     const { getVersionSvg, chartXML } = useDiagram()
     const versionId = useUiStore((s) => s.compareVersionId)
     const openCompare = useUiStore((s) => s.openCompare)
     const closeCompare = useUiStore((s) => s.closeCompare)
-    const versions = useVersionsStore((s) => s.versions)
     const [currentSvg, setCurrentSvg] = useState<string | null>(null)
 
     const index = versions.findIndex((v) => v.id === versionId)
@@ -82,7 +80,7 @@ export function CompareDialog() {
         return () => {
             cancelled = true
         }
-    }, [versionId, engine.isBusy])
+    }, [versionId, isBusy])
 
     return (
         <Dialog
@@ -98,7 +96,7 @@ export function CompareDialog() {
                             : same
                               ? t.isOnCanvas
                               : changes
-                                ? `${formatMessage(t.compareSince, { n: version.number })} ${describeChanges(changes, t)}`
+                                ? `${formatMessage(t.compareSince, { n: version.number })} ${describeChangeSummary(changes, t)}`
                                 : formatMessage(t.differsElsewhere, {
                                       n: version.number,
                                   })}
@@ -139,10 +137,10 @@ export function CompareDialog() {
                     </span>
                     <button
                         type="button"
-                        disabled={!version || same || engine.isBusy}
+                        disabled={!version || same || isBusy}
                         onClick={() => {
                             if (!version) return
-                            engine.restoreVersion(version.id)
+                            restore(version.id)
                             closeCompare()
                         }}
                         className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"

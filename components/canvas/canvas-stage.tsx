@@ -1,11 +1,14 @@
-import { useParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { DrawioFrame } from "@/components/canvas/drawio-frame"
-import { SelectionAsk } from "@/components/canvas/selection-ask"
-import { useChatEngine } from "@/components/chat/chat-engine"
+import { useLocale } from "@/components/canvas/locale-context"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { DRAWIO_CSS, getDrawioSrc } from "@/lib/drawio/drawio-config"
+import {
+    DRAWIO_CSS,
+    type DrawioSource,
+    getDrawioSrc,
+    webDrawioSource,
+} from "@/lib/drawio/drawio-config"
 import { keepCenter, refitIfRecent } from "@/lib/drawio/editor-bridge"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
@@ -13,28 +16,42 @@ import { cn } from "@/lib/utils"
 import { useCanvasStore } from "@/stores/canvas-store"
 import { useSettingsStore } from "@/stores/settings-store"
 
+/** Size of the canvas area, for overlays that stay inside it */
+export interface CanvasSize {
+    width: number
+    height: number
+}
+
 /**
  * The draw.io canvas, with draw.io's own toolbar, menus and page tabs, and
- * the "ask AI" button laid over it (only when the page can drive draw.io
- * directly, not with an external cross-origin draw.io).
+ * an overlay laid over it (the web app's "ask AI" button; only when the
+ * page can drive draw.io directly, not with an external cross-origin
+ * draw.io).
  */
 export function CanvasStage({
     className,
     style,
     hideOverlays = false,
+    overlay,
+    drawioSource,
+    waitForSavedLocale = false,
 }: {
     className?: string
     style?: React.CSSProperties
-    /** Hide the "ask AI" button (e.g. while the start screen covers the canvas) */
+    /** Hide the overlay (e.g. while the start screen covers the canvas) */
     hideOverlays?: boolean
+    /** Rendered over the canvas once draw.io is ready */
+    overlay?: (size: CanvasSize) => React.ReactNode
+    /** Where the editor comes from; none: the web app's own copy (the MCP
+     * shell passes what its server configured) */
+    drawioSource?: DrawioSource
+    /** Web app: the page is about to switch to the language picked last
+     * time (useSavedLocale in the workspace); do not load draw.io in the
+     * URL's language meanwhile */
+    waitForSavedLocale?: boolean
 }) {
     const dict = useDictionary()
-    const params = useParams<{ lang: string }>()
-    const lang = (
-        i18n.locales.includes(params.lang as Locale)
-            ? params.lang
-            : i18n.defaultLocale
-    ) as Locale
+    const lang = useLocale()
     const {
         drawioRef,
         handleDiagramAutoSave,
@@ -43,7 +60,6 @@ export function CanvasStage({
         resetDrawioReady,
         isDrawioReady,
     } = useDiagram()
-    const engine = useChatEngine()
     const isDark = useSettingsStore((s) => s.isDark)
     const hasEditor = useCanvasStore((s) => s.hasEditor)
     // Canvas width when the chat panel starts sliding in or out
@@ -53,20 +69,24 @@ export function CanvasStage({
     // null until draw.io tells us whether we can drive it directly
     const [editorAccess, setEditorAccess] = useState<boolean | null>(null)
     const stageRef = useRef<HTMLDivElement>(null)
-    const [size, setSize] = useState({ width: 0, height: 0 })
+    const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 })
 
     useEffect(() => {
-        // The page is about to switch to the language picked last time
-        // (useSavedLocale): load draw.io once, in that language
-        const saved = localStorage.getItem(STORAGE_KEYS.locale)
-        if (saved && saved !== lang && i18n.locales.includes(saved as Locale)) {
-            return
+        // Load draw.io once, in the language the page will have
+        if (waitForSavedLocale) {
+            const saved = localStorage.getItem(STORAGE_KEYS.locale)
+            if (
+                saved &&
+                saved !== lang &&
+                i18n.locales.includes(saved as Locale)
+            ) {
+                return
+            }
         }
-        const isElectron = !!(window as { electronAPI?: unknown }).electronAPI
         // The theme class is set before the page renders; the settings store
         // may not have read it yet
         const dark = document.documentElement.classList.contains("dark")
-        setSrc(getDrawioSrc({ lang, isElectron, dark }))
+        setSrc(getDrawioSrc(drawioSource ?? webDrawioSource(lang), dark))
     }, [lang])
 
     // A new iframe starts over: draw.io reports load and access again
@@ -82,8 +102,7 @@ export function CanvasStage({
         if (editorAccess !== false || !src) return
         const startedDark = new URL(src).searchParams.get("dark") === "1"
         if (startedDark === isDark) return
-        const isElectron = !!(window as { electronAPI?: unknown }).electronAPI
-        setSrc(getDrawioSrc({ lang, isElectron, dark: isDark }))
+        setSrc(getDrawioSrc(drawioSource ?? webDrawioSource(lang), isDark))
     }, [isDark, editorAccess, lang, src])
 
     useEffect(() => {
@@ -159,13 +178,7 @@ export function CanvasStage({
                 </div>
             )}
 
-            {showOverlays && (
-                <SelectionAsk
-                    width={size.width}
-                    height={size.height}
-                    hidden={engine.isBusy}
-                />
-            )}
+            {showOverlays && overlay?.(size)}
         </div>
     )
 }

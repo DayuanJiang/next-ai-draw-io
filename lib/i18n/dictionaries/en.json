@@ -699,5 +699,20 @@
         "recent": "Recent diagrams",
         "drawYourself": "Start with a blank canvas",
         "openFileHint": "Keep working on a diagram you have"
+    },
+    "shell": {
+        "waiting": "Waiting for the MCP server…",
+        "toggleTheme": "Switch between light and dark",
+        "connected": "Connected to the MCP server",
+        "offline": "Can't reach the MCP server",
+        "tooLarge": "This diagram is too large to save to the MCP server (over 10 MB).",
+        "unreachable": "Can't reach the MCP server. Your changes are only in this tab for now.",
+        "restoredFromFile": "The diagram was restored from its saved file. What this tab showed before is in History.",
+        "aiChanged": "The AI changed the diagram while you were editing. Your last change was saved in History.",
+        "historyChanged": "History changed on the server. Please open it again.",
+        "restoreFailed": "Restore failed. Please try again.",
+        "userEdit": "Changed by hand",
+        "showVersions": "Show the versions",
+        "hideVersions": "Hide the versions"
     }
 }

@@ -17,7 +17,7 @@ const PARTS: [keyof ChangeSummary, string][] = [
  * singular (...One) and plural (...Other) form; languages without plurals
  * use the same text for both.
  */
-export function describeChanges(
+export function describeChangeSummary(
     summary: ChangeSummary,
     t: VersionDict,
 ): string {

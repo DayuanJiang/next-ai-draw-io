@@ -14,6 +14,7 @@ const html = readFileSync(join(dir, "index.html"), "utf8")
     .replace("{{DRAWIO_URL}}", "about:blank")
     .replace("{{SESSION_JSON}}", '"mcp-test"')
     .replace("{{ORIGIN_JSON}}", JSON.stringify(DRAWIO))
+    .replace("{{TOKEN_JSON}}", JSON.stringify("test-token"))
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) =>
     m[1].replace("{{SCRIPT}}", ""),
 )
@@ -21,10 +22,12 @@ const preview = readFileSync(join(dir, "preview.js"), "utf8")
 
 const pageListeners: Array<[string, EventListener]> = []
 
-type Answer = { status: number; body: unknown }
+// A string body is sent as it is (the page's HTML); anything else as JSON
+type Answer = { status: number; body?: unknown }
 interface Call {
     url: string
     method: string
+    headers: Record<string, string>
     body: any
     answer: (a: Answer) => void
     fail: () => void
@@ -47,10 +50,19 @@ function openPage() {
                     calls.push({
                         url,
                         method: init?.method ?? "GET",
+                        headers: (init?.headers ?? {}) as Record<
+                            string,
+                            string
+                        >,
                         body: init?.body ? JSON.parse(String(init.body)) : null,
                         answer: ({ status, body }) =>
                             resolve(
-                                new Response(JSON.stringify(body), { status }),
+                                new Response(
+                                    typeof body === "string"
+                                        ? body
+                                        : JSON.stringify(body),
+                                    { status },
+                                ),
                             ),
                         fail: () => reject(new TypeError("Failed to fetch")),
                     })
@@ -145,6 +157,50 @@ describe("MCP preview after the server recreated its session", () => {
         t.next("GET").answer(state("S2", 1, "<mxfile>A</mxfile>"))
         await poll
         const push = t.next("POST")
+        expect(push.body).toMatchObject({
+            xml: "<mxfile>B</mxfile>",
+            stateId: "S2",
+            baseVersion: 1,
+        })
+    })
+
+    it("fetches the new process's token after a 403 and then recovers", async () => {
+        const t = await inStep()
+        // The user edits; the push reaches a new process, which has its own
+        // token, and is refused, as is the next poll
+        t.fromDrawio({ event: "autosave", xml: "<mxfile>B</mxfile>" })
+        t.fromDrawio({ event: "export", data: "<svg/>" })
+        await t.settle()
+        const refused = t.next("POST")
+        expect(refused.headers["X-Drawio-Token"]).toBe("test-token")
+        refused.answer({ status: 403 })
+        await t.settle()
+        // The page reads its own HTML again for the token
+        const reload = t.next("GET")
+        expect(reload.url).toBe(location.href)
+        expect(reload.headers["X-Drawio-Token"]).toBeUndefined()
+        reload.answer({
+            status: 200,
+            body: '<script>let API_TOKEN = "0123abcd";</script>',
+        })
+        await t.settle()
+        // The push is retried with the new token; the new process refuses
+        // it for its state id, and the poll that follows recovers
+        const retried = t.next("POST")
+        expect(retried.headers["X-Drawio-Token"]).toBe("0123abcd")
+        retried.answer({
+            status: 409,
+            body: { error: "Session was recreated" },
+        })
+        await t.settle()
+        const poll = t.next("GET")
+        expect(poll.headers["X-Drawio-Token"]).toBe("0123abcd")
+        poll.answer(state("S2", 1, "<mxfile>A</mxfile>"))
+        await t.settle()
+        await t.settle()
+        expect(t.page.read().stateId).toBe("S2")
+        const push = t.next("POST")
+        expect(push.headers["X-Drawio-Token"]).toBe("0123abcd")
         expect(push.body).toMatchObject({
             xml: "<mxfile>B</mxfile>",
             stateId: "S2",

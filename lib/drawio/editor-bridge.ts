@@ -11,6 +11,7 @@
  */
 import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+import type { SelectionAnswer } from "@/packages/mcp-server/src/selection.ts"
 import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 
 type EditorUi = any
@@ -262,19 +263,19 @@ function hasShapes(xml: string): boolean {
     })
 }
 
-// Page settings draw.io applies on a full load only: replacing the page in
-// place (Editor.readGraphState) keeps the old ones. (Its adaptive colors and
-// theme stay too: a diagram the AI writes does not set them.)
-function hasLoadOnlySettings(model: string): boolean {
-    const page = new DOMParser().parseFromString(
-        model,
-        "text/xml",
-    ).documentElement
+/**
+ * Page settings draw.io applies on a full load only: replacing the page in
+ * place (Editor.readGraphState) keeps the old ones. (Its adaptive colors and
+ * theme stay too: a diagram the AI writes does not set them.) Takes the
+ * page's mxGraphModel element; the MCP shell's sync asks the same question
+ * of a document before it reaches the editor.
+ */
+export function hasLoadOnlySettings(model: Element): boolean {
     return (
-        page.hasAttribute("backgroundImage") ||
-        page.hasAttribute("extFonts") ||
-        page.getAttribute("math") === "1" ||
-        page.getAttribute("shadow") === "1"
+        model.hasAttribute("backgroundImage") ||
+        model.hasAttribute("extFonts") ||
+        model.getAttribute("math") === "1" ||
+        model.getAttribute("shadow") === "1"
     )
 }
 
@@ -322,7 +323,9 @@ export function canReplaceDiagram(xml: string): boolean {
     // A document with them, or replacing one with them, loads in full
     return (
         model !== null &&
-        !hasLoadOnlySettings(model) &&
+        !hasLoadOnlySettings(
+            new DOMParser().parseFromString(model, "text/xml").documentElement,
+        ) &&
         !canvasHasLoadOnlySettings()
     )
 }
@@ -547,6 +550,19 @@ export function highlightCells(ids: string[], color: string) {
     }
 }
 
+/**
+ * Marks the cells an AI change touched in the page's marker color, once
+ * draw.io has drawn them (the web app's versions and the MCP shell share it)
+ */
+export function highlightChangedCells(ids: string[]) {
+    setTimeout(() => {
+        const marker = getComputedStyle(document.documentElement)
+            .getPropertyValue("--marker")
+            .trim()
+        highlightCells(ids, marker || "#ffd84d")
+    }, 60)
+}
+
 // ---------------------------------------------------------------------------
 // Selection
 // ---------------------------------------------------------------------------
@@ -582,6 +598,56 @@ function readSelection(): SelectedCell[] {
             label: cellLabel(cell),
             isEdge: !!g.model.isEdge(cell),
         }))
+}
+
+/**
+ * The selection with what an editing model needs (the MCP's get_selection):
+ * the page it is on, each cell's label, an edge's ends, a shape's geometry
+ * as the XML has it (relative to its container) and that container. Null
+ * without an editor (a cross-origin draw.io).
+ */
+export function readSelectionDetails(): SelectionAnswer | null {
+    const g = graph()
+    if (!g) return null
+    const page = ui?.currentPage
+    const cells = (g.getSelectionCells() as any[])
+        .filter((cell) => cell?.id)
+        .map((cell) => {
+            const info: SelectionAnswer["cells"][number] = {
+                id: String(cell.id),
+                label: cellLabel(cell),
+                edge: !!g.model.isEdge(cell),
+            }
+            if (info.edge) {
+                const source = g.model.getTerminal(cell, true)
+                const target = g.model.getTerminal(cell, false)
+                if (source?.id) info.source = String(source.id)
+                if (target?.id) info.target = String(target.id)
+            } else {
+                const geo = g.getCellGeometry(cell)
+                if (geo) {
+                    info.geometry = {
+                        x: geo.x,
+                        y: geo.y,
+                        width: geo.width,
+                        height: geo.height,
+                    }
+                }
+            }
+            // The container the cell is in; a layer is none (and the
+            // default parent is the group the user entered, if any, so it
+            // cannot tell the two apart)
+            const parent = g.model.getParent(cell)
+            if (parent?.id && !g.model.isLayer(parent)) {
+                info.parent = String(parent.id)
+            }
+            return info
+        })
+    return {
+        pageId: page?.getId ? String(page.getId()) : null,
+        pageName: page?.getName ? String(page.getName()) : null,
+        cells,
+    }
 }
 
 function readSelectionRect() {
