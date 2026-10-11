@@ -122,8 +122,11 @@ describe("canvas import boundary", () => {
             platform: "browser",
             format: "esm",
             jsx: "automatic",
-            alias: { "@": root },
+            // The MCP core (packages/mcp-server/src) resolves pako from its
+            // own node_modules; one copy, as the shell build must do
+            alias: { "@": root, pako: path.join(root, "node_modules/pako") },
             external: ["react", "react-dom", "next/*"],
+            minify: true,
             logLevel: "silent",
         })
         const inputs = result.metafile.inputs
@@ -145,5 +148,12 @@ describe("canvas import boundary", () => {
                 .map((specifier) => `${file} -> ${specifier}`),
         )
         expect(nextImports).toEqual([])
+        // The canvas core stays small enough for the MCP's browser shell
+        // (134 KB minified, pako once)
+        const stage = Object.values(result.metafile.outputs).find(
+            (output) =>
+                output.entryPoint === "components/canvas/canvas-stage.tsx",
+        )
+        expect(stage?.bytes).toBeLessThan(160 * 1024)
     })
 })

@@ -33,10 +33,7 @@ interface CanvasState {
     /** Something is changing the canvas (an answer streams in, a sync
      * runs): version actions and "ask AI" wait */
     isBusy: boolean
-    /** Who set the busy flag ("chat", "sync"); null when not busy */
-    busyReason: string | null
-    set: (partial: Partial<Omit<CanvasState, "set" | "setBusy">>) => void
-    setBusy: (reason: string | null) => void
+    set: (partial: Partial<Omit<CanvasState, "set">>) => void
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -48,7 +45,5 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     isFreehand: false,
     isDrawioPopupOpen: false,
     isBusy: false,
-    busyReason: null,
     set: (partial) => set(partial),
-    setBusy: (reason) => set({ isBusy: reason !== null, busyReason: reason }),
 }))
