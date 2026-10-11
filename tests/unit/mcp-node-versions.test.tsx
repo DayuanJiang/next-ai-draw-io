@@ -11,6 +11,7 @@ import type {
 } from "@/packages/mcp-server/shell/mcp-sync-core"
 import {
     buildVersions,
+    newVersionCache as cache,
     useNodeVersions,
 } from "@/packages/mcp-server/shell/node-versions-source"
 import { versionLabel } from "@/packages/mcp-server/shell/versions-panel"
@@ -57,8 +58,7 @@ describe("buildVersions", () => {
     it("makes one numbered version per History entry, with what changed since the one before", () => {
         const { versions, onCanvasId } = buildVersions(
             list([entry(0, A), entry(1, AB, { svg: "data:AB" })], 1),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions.map((v) => [v.id, v.number])).toEqual([
             ["0", 1],
@@ -81,8 +81,7 @@ describe("buildVersions", () => {
         const named = blank.replace('name="Page-1"', 'name="Plan"')
         const { versions, onCanvasId } = buildVersions(
             list([entry(0, blank), entry(1, A), entry(2, named)], 2),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions.map((v) => [v.id, v.number])).toEqual([
             ["1", 1],
@@ -91,9 +90,10 @@ describe("buildVersions", () => {
         expect(versions[0].fromScratch).toBe(true)
         expect(onCanvasId).toBe("2")
         // Blank on the canvas: no version is
-        expect(
-            buildVersions(list([entry(0, blank)], 0), new Map(), new Map()),
-        ).toEqual({ versions: [], onCanvasId: "0" })
+        expect(buildVersions(list([entry(0, blank)], 0), cache())).toEqual({
+            versions: [],
+            onCanvasId: "0",
+        })
     })
 
     it("folds a restore's copy into the version it copies, where that one is", () => {
@@ -111,8 +111,7 @@ describe("buildVersions", () => {
                 ],
                 2,
             ),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions.map((v) => v.id)).toEqual(["0", "1"])
         // The copy's picture stands in for the first copy's missing one
@@ -121,16 +120,107 @@ describe("buildVersions", () => {
     })
 
     it("keeps the numbers once given, and gives new versions the next", () => {
-        const numbers = new Map<string, number>()
-        const changes = new Map()
-        buildVersions(list([entry(0, A), entry(1, AB)], 1), numbers, changes)
+        const kept = cache()
+        buildVersions(list([entry(0, A), entry(1, AB)], 1), kept)
         // The oldest entry dropped out of the server's buffer
         const { versions } = buildVersions(
             list([entry(1, AB), entry(2, ABC)], 2),
-            numbers,
-            changes,
+            kept,
         )
         expect(versions.map((v) => v.number)).toEqual([2, 3])
+    })
+
+    it("keeps in its cache only the content the list still has, and never hands out a number twice", () => {
+        // 25 writes, the server's buffer holding the last 20: what dropped
+        // out (its full documents) goes, the numbering runs on
+        const kept = cache()
+        const docs = Array.from({ length: 25 }, (_, i) =>
+            doc(
+                Array.from({ length: i + 1 }, (_, j) =>
+                    cell(`c${j}`, `C${j}`),
+                ).join(""),
+            ),
+        )
+        const entries = docs.map((xml, i) => entry(i, xml))
+        let versions: ReturnType<typeof buildVersions>["versions"] = []
+        for (let n = 1; n <= 25; n++) {
+            const window = entries.slice(Math.max(0, n - 20), n)
+            versions = buildVersions(list(window, n - 1), kept).versions
+        }
+        expect(versions).toHaveLength(20)
+        expect(versions.at(-1)?.number).toBe(25)
+        expect(kept.numbers.size).toBe(20)
+        expect(kept.changes.size).toBe(20)
+        // Only the ones before the drawing restored: a restore of the
+        // newest content gives it no new number
+        const back = buildVersions(
+            list(
+                [
+                    ...entries.slice(6),
+                    entry(25, docs[24], { firstId: 24, source: "restore" }),
+                ],
+                25,
+            ),
+            kept,
+        ).versions
+        expect(back.map((v) => v.number)).not.toContain(26)
+        const AD = doc(cell("a", "A") + cell("d", "D"))
+        const next = buildVersions(
+            list([...entries.slice(7), entry(26, AD)], 26),
+            kept,
+        ).versions
+        expect(next.at(-1)?.number).toBe(26)
+    })
+
+    it("keeps showing a clear once the drawing before it dropped out of the server's buffer", () => {
+        const blank = `<mxfile><diagram name="Page-1" id="page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
+        const kept = cache()
+        const later = Array.from({ length: 19 }, (_, i) =>
+            entry(
+                i + 3,
+                doc(
+                    Array.from({ length: i + 1 }, (_, j) =>
+                        cell(`c${j}`, `C${j}`),
+                    ).join(""),
+                ),
+            ),
+        )
+        // The blank page, A, the user cleared the canvas, 19 writes
+        const first = buildVersions(
+            list(
+                [
+                    entry(0, blank),
+                    entry(1, A),
+                    entry(2, blank, { firstId: 0, source: "user" }),
+                    ...later.slice(0, 17),
+                ],
+                19,
+            ),
+            kept,
+        )
+        expect(first.versions[1]).toMatchObject({ id: "2", number: 2 })
+        // The buffer moved on: the clear is now the oldest entry, and a
+        // restore of it after that folds into it
+        const scrolled = buildVersions(
+            list(
+                [
+                    entry(2, blank, { firstId: 2, source: "user" }),
+                    ...later,
+                    entry(22, blank, { firstId: 2, source: "restore" }),
+                ],
+                22,
+            ),
+            kept,
+        )
+        expect(scrolled.versions[0]).toMatchObject({ id: "2", number: 2 })
+        expect(scrolled.versions[1].beforeId).toBe("2")
+        expect(scrolled.onCanvasId).toBe("2")
+        // A tab opened now never showed it: the blank is the one it starts with
+        const fresh = buildVersions(
+            list([entry(2, blank, { firstId: 2 }), ...later], 21),
+            cache(),
+        )
+        expect(fresh.versions[0].id).toBe("3")
     })
 
     it("counts a write from the state it replaced, not from the card before, after a restore", () => {
@@ -147,8 +237,7 @@ describe("buildVersions", () => {
                 ],
                 4,
             ),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions.map((v) => v.id)).toEqual(["0", "1", "2", "4"])
         const latest = versions[3]
@@ -177,14 +266,51 @@ describe("buildVersions", () => {
                 ],
                 2,
             ),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions).toHaveLength(2)
         expect(versions[0].id).toBe("0")
         expect(versions[0].entryId).toBe(1)
         expect(versions[0].xml).toBe(yellow)
         expect(versions[0].source).toBeNull()
+    })
+
+    it("pictures a version as its newest copy looks", () => {
+        // The thumbnail shows the background: the yellow copy's picture
+        // goes with the yellow document the card restores, not the white
+        // one's, and no picture at all when the yellow copy has none
+        const yellow = A.replace(
+            "<mxGraphModel>",
+            '<mxGraphModel background="#ffcc00">',
+        )
+        const pictured = buildVersions(
+            list(
+                [
+                    entry(0, A, { svg: "data:white" }),
+                    entry(1, yellow, {
+                        firstId: 0,
+                        source: "user",
+                        svg: "data:yellow",
+                    }),
+                    entry(2, AB, { svg: "data:AB" }),
+                ],
+                2,
+            ),
+            cache(),
+        )
+        expect(pictured.versions[0].svg).toBe("data:yellow")
+        const unpictured = buildVersions(
+            list(
+                [
+                    entry(0, A, { svg: "data:white" }),
+                    entry(1, yellow, { firstId: 0, source: "user" }),
+                    entry(2, AB, { svg: "data:AB" }),
+                ],
+                2,
+            ),
+            cache(),
+        )
+        expect(unpictured.versions[0].svg).toBe("")
     })
 
     it("shows a clear of the canvas as a version, hiding only the blank page before any drawing", () => {
@@ -198,16 +324,12 @@ describe("buildVersions", () => {
             entry(3, blank, { firstId: 0 }),
             entry(4, AB, { firstId: 2, source: "restore" }),
         ]
-        const cleared = buildVersions(
-            list(entries.slice(0, 4), 3),
-            new Map(),
-            new Map(),
-        )
+        const cleared = buildVersions(list(entries.slice(0, 4), 3), cache())
         expect(cleared.versions.map((v) => v.id)).toEqual(["1", "2", "3"])
         expect(cleared.onCanvasId).toBe("3")
         expect(cleared.versions[2].beforeId).toBe("2")
         expect(cleared.versions[2].summary.shapesRemoved).toBe(2)
-        const back = buildVersions(list(entries, 4), new Map(), new Map())
+        const back = buildVersions(list(entries, 4), cache())
         expect(back.versions.map((v) => v.id)).toEqual(["1", "2", "3"])
         expect(back.onCanvasId).toBe("2")
         // A second clear is a version of its own; a restore of a clear is
@@ -221,8 +343,7 @@ describe("buildVersions", () => {
                 ],
                 6,
             ),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(twice.versions.map((v) => [v.id, v.number])).toEqual([
             ["1", 1],
@@ -234,8 +355,7 @@ describe("buildVersions", () => {
     })
 
     it("keeps a version's number and change when its first copy drops out of the server's buffer", () => {
-        const numbers = new Map<string, number>()
-        const changes = new Map()
+        const kept = cache()
         const docs = Array.from({ length: 20 }, (_, i) =>
             doc(
                 Array.from({ length: i + 1 }, (_, j) =>
@@ -244,18 +364,14 @@ describe("buildVersions", () => {
             ),
         )
         const full = docs.map((xml, i) => entry(i, xml))
-        buildVersions(list(full, 19), numbers, changes)
+        buildVersions(list(full, 19), kept)
         // v1 restored: its copy is added and the original, the oldest
         // entry, drops out; the copy is now the first with that content
         const after = [
             ...full.slice(1),
             entry(20, docs[0], { firstId: 20, source: "restore" }),
         ]
-        const { versions, onCanvasId } = buildVersions(
-            list(after, 20),
-            numbers,
-            changes,
-        )
+        const { versions, onCanvasId } = buildVersions(list(after, 20), kept)
         const v1 = versions.find((v) => v.id === "20")
         expect(v1?.number).toBe(1)
         expect(v1?.fromScratch).toBe(true)
@@ -268,15 +384,13 @@ describe("buildVersions", () => {
     it("lets the newest version on the canvas wait for its picture, older ones show none", () => {
         const { versions } = buildVersions(
             list([entry(0, A), entry(1, AB)], 1),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions[0].svg).toBe("")
         expect(versions[1].svg).toBeUndefined()
         const edited = buildVersions(
             list([entry(0, A), entry(1, AB)], null),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(edited.versions[1].svg).toBe("")
     })
@@ -288,8 +402,7 @@ describe("buildVersions", () => {
                 [entry(0, A), entry(1, AB, { source: "user" }), entry(2, ABC)],
                 2,
             ),
-            new Map(),
-            new Map(),
+            cache(),
         )
         expect(versions.map((v) => versionLabel(v, dict))).toEqual([
             "Drew the diagram",

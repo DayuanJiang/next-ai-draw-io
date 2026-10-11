@@ -5,7 +5,11 @@ import type {
     VersionsSource,
 } from "@/components/canvas/versions-context"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { type ChangeSummary, diffDiagrams } from "@/lib/diagram-diff"
+import {
+    type ChangeSummary,
+    diffDiagrams,
+    isSameDocument,
+} from "@/lib/diagram-diff"
 import { formatMessage } from "@/lib/i18n/utils"
 import { contentFingerprint } from "@/packages/mcp-server/src/edit-gate.ts"
 import { BLANK_MXFILE, hasCells } from "@/packages/mcp-server/src/pages.ts"
@@ -62,20 +66,38 @@ interface Change {
 }
 
 /**
+ * What buildVersions keeps between calls, keyed by content: a version's
+ * number and change never move, also when its first copy drops out of the
+ * server's buffer and a later copy stands in. Content no entry of the
+ * list has any more is dropped (the server keeps 20 entries; the full
+ * documents in here would otherwise grow with every edit of the session)
+ */
+export interface VersionCache {
+    numbers: Map<string, number>
+    changes: Map<string, Change>
+    /** The number the next new version gets */
+    next: number
+}
+
+export const newVersionCache = (): VersionCache => ({
+    numbers: new Map(),
+    changes: new Map(),
+    next: 1,
+})
+
+/**
  * The version cards for a History list: entries folded by content, in the
  * order of their first copy, numbered as they first appeared in this tab,
  * each with what changed since the state it replaced (the entry right
  * before its first copy; after a restore that is another than the card
- * before). numbers and changes are kept between calls, keyed by content:
- * a version keeps its number and change when its first copy drops out of
- * the server's buffer and a later copy stands in. The thumbnail is the
- * first copy's that has one; the newest version on the canvas waits for
+ * before). The thumbnail is the newest copy's that has one, or an older
+ * copy's of the same document (isSameDocument: a copy with other page
+ * settings looks different); the newest version on the canvas waits for
  * its picture (the sync sends it), older ones without any show none.
  */
 export function buildVersions(
     list: HistoryList,
-    numbers: Map<string, number>,
-    changes: Map<string, Change>,
+    cache: VersionCache,
 ): { versions: NodeVersion[]; onCanvasId: string | null } {
     // The server folds entries by content (firstId). A blank page after a
     // drawing is a clear of the canvas, a version of its own, which the
@@ -91,7 +113,10 @@ export function buildVersions(
         let key = entry.firstId
         if (!isBlankPage(entry.xml)) {
             drawn = true
-        } else if (drawn) {
+        } else if (drawn || cache.numbers.has(`clear:${entry.id}`)) {
+            // A clear this tab has shown stays one when the drawing before
+            // it dropped out of the server's buffer
+            drawn = true
             key =
                 entry.source === "restore" && lastClear !== null
                     ? lastClear
@@ -113,6 +138,7 @@ export function buildVersions(
             ? String(keys.get(list.currentId))
             : null
     const versions: NodeVersion[] = []
+    const seen = new Set<string>() // the content keys of this list
     for (const [key, copies] of groups) {
         if (hidden.has(key)) continue
         const first = copies[0]
@@ -122,12 +148,13 @@ export function buildVersions(
         const contentKey = isBlankPage(first.xml)
             ? `clear:${key}`
             : contentFingerprint(first.xml)
-        let number = numbers.get(contentKey)
+        seen.add(contentKey)
+        let number = cache.numbers.get(contentKey)
         if (number === undefined) {
-            number = Math.max(0, ...numbers.values()) + 1
-            numbers.set(contentKey, number)
+            number = cache.next++
+            cache.numbers.set(contentKey, number)
         }
-        let change = changes.get(contentKey)
+        let change = cache.changes.get(contentKey)
         if (!change) {
             const beforeXml = previous?.xml ?? ""
             const pageId = changedPage(beforeXml, first.xml)
@@ -137,9 +164,11 @@ export function buildVersions(
                 pageId,
             )
             change = { beforeXml, pageId, summary, fromScratch }
-            changes.set(contentKey, change)
+            cache.changes.set(contentKey, change)
         }
-        const svg = copies.find((c) => c.svg)?.svg
+        const svg = [...copies]
+            .reverse()
+            .find((c) => c.svg && isSameDocument(c.xml, newest.xml))?.svg
         const beforeKey = previous ? keys.get(previous.id) : undefined
         versions.push({
             id: String(key),
@@ -163,6 +192,12 @@ export function buildVersions(
     if (latest && !latest.svg && latest.id === onCanvasId) {
         latest.svg = undefined
     }
+    for (const key of cache.numbers.keys()) {
+        if (!seen.has(key)) cache.numbers.delete(key)
+    }
+    for (const key of cache.changes.keys()) {
+        if (!seen.has(key)) cache.changes.delete(key)
+    }
     return { versions, onCanvasId }
 }
 
@@ -183,8 +218,7 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
     const [list, setList] = useState<HistoryList | null>(null)
     const [busy, setBusy] = useState(false)
     // Stable across refreshes: a version's number and change never move
-    const numbersRef = useRef(new Map<string, number>())
-    const changesRef = useRef(new Map<string, Change>())
+    const cacheRef = useRef(newVersionCache())
     // The server state the cards are of: another one (the session expired,
     // the process restarted) is a History of its own, numbered anew
     const cacheStateIdRef = useRef<string | null>(null)
@@ -197,8 +231,7 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
         const next = await sync.fetchHistory()
         if (!next || seq !== readSeqRef.current) return
         if (next.stateId !== cacheStateIdRef.current) {
-            numbersRef.current.clear()
-            changesRef.current.clear()
+            cacheRef.current = newVersionCache()
             cacheStateIdRef.current = next.stateId
         }
         setList(next)
@@ -213,7 +246,7 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
     const { versions, onCanvasId } = useMemo(
         () =>
             list
-                ? buildVersions(list, numbersRef.current, changesRef.current)
+                ? buildVersions(list, cacheRef.current)
                 : { versions: [], onCanvasId: null },
         [list],
     )
