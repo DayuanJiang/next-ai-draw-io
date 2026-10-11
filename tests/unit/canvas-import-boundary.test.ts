@@ -21,6 +21,8 @@ const SCANNED = [
     "lib/diagram-diff.ts",
     "stores/canvas-store.ts",
     "stores/versions-store.ts",
+    // The MCP's browser shell, built from these modules by esbuild
+    "packages/mcp-server/shell",
 ]
 
 const FORBIDDEN = [
@@ -92,6 +94,7 @@ describe("canvas import boundary", () => {
     it("scans the canvas modules", () => {
         expect(files).toContain("components/canvas/canvas-stage.tsx")
         expect(files).toContain("lib/drawio/editor-bridge.ts")
+        expect(files).toContain("packages/mcp-server/shell/main.tsx")
     })
 
     it.each(files)("%s imports no chat or Next-only module", (file) => {

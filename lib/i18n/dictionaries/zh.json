@@ -699,5 +699,9 @@
         "recent": "最近的图纸",
         "drawYourself": "从空白画布开始",
         "openFileHint": "接着编辑已有的图"
+    },
+    "shell": {
+        "waiting": "正在等待 MCP 服务器…",
+        "toggleTheme": "切换浅色或深色"
     }
 }

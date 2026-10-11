@@ -12,7 +12,16 @@ const REQUIRED = [
     "dist/drawio/index.html",
     "dist/drawio/js/app.min.js",
     "dist/drawio/LICENSE",
+    "dist/shell/index.html",
+    "dist/shell/shell.js",
+    "dist/shell/shell.css",
 ]
+// The canvas shell (708 KB and 50 KB when it was added); a jump means a
+// dependency of the shared components grew the bundle
+const MAX_FILE_BYTES = {
+    "dist/shell/shell.js": 1.5 * 1024 * 1024,
+    "dist/shell/shell.css": 300 * 1024,
+}
 // The bundled draw.io is most of the package (15.1 MB packed with draw.io
 // v32.0.2); a jump means the file list grew more than intended
 const MAX_TARBALL_BYTES = 20 * 1024 * 1024
@@ -29,6 +38,16 @@ if (missing.length > 0) {
     process.exit(1)
 }
 const mb = (n) => (n / 1048576).toFixed(1)
+const kb = (n) => (n / 1024).toFixed(0)
+for (const [path, limit] of Object.entries(MAX_FILE_BYTES)) {
+    const size = pack.files.find((f) => f.path === path).size
+    if (size > limit) {
+        console.error(
+            `${path} is ${kb(size)} KB, over the ${kb(limit)} KB limit`,
+        )
+        process.exit(1)
+    }
+}
 if (pack.size > MAX_TARBALL_BYTES) {
     console.error(
         `npm package is ${mb(pack.size)} MB packed, over the ${mb(MAX_TARBALL_BYTES)} MB limit`,

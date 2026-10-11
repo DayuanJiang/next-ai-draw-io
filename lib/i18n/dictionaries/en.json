@@ -699,5 +699,9 @@
         "recent": "Recent diagrams",
         "drawYourself": "Start with a blank canvas",
         "openFileHint": "Keep working on a diagram you have"
+    },
+    "shell": {
+        "waiting": "Waiting for the MCP server…",
+        "toggleTheme": "Switch between light and dark"
     }
 }
