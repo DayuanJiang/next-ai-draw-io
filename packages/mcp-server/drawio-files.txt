@@ -31,8 +31,10 @@ js/app.min.js
 js/bootstrap.js
 js/extensions.min.js
 js/main.js
+js/open.js
 js/shapes-14-6-5.min.js
 js/stencils.min.js
 math4/es5/drawio-mathjax.min.js
 mxgraph/images/maximize.gif
+open.html
 shortcuts.svg

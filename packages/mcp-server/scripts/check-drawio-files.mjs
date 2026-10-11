@@ -327,6 +327,13 @@ async function drive(browser, ui, full) {
     }
     console.log(`  ${opened} of ${actions.length} actions opened a dialog`)
 
+    // File > Open Library from > Browser (libraries=1): the picker is an
+    // iframe on open.html, which loads js/open.js
+    await frame.evaluate(() => window.__ui.pickLibrary(window.App.MODE_BROWSER))
+    await wait(page, 1000)
+    report("library picker")
+    await closeAll()
+
     // Menus: the visible menubar items, the toolbar buttons that open a menu
     // in the other themes, and every menu rendered with its submenus
     const menubarItems = frame.locator(".geMenubar .geItem:visible")
