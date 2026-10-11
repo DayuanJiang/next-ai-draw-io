@@ -35,7 +35,6 @@ const result = await build({
     target: "es2022",
     platform: "browser",
     jsx: "automatic",
-    legalComments: "none",
     metafile: true,
     absWorkingDir: root,
     alias: {
