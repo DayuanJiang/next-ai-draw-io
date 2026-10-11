@@ -3,7 +3,12 @@ import { DrawioFrame } from "@/components/canvas/drawio-frame"
 import { useLocale } from "@/components/canvas/locale-context"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { DRAWIO_CSS, getDrawioSrc } from "@/lib/drawio/drawio-config"
+import {
+    DRAWIO_CSS,
+    type DrawioSource,
+    getDrawioSrc,
+    webDrawioSource,
+} from "@/lib/drawio/drawio-config"
 import { keepCenter, refitIfRecent } from "@/lib/drawio/editor-bridge"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
@@ -28,6 +33,7 @@ export function CanvasStage({
     style,
     hideOverlays = false,
     overlay,
+    drawioSource,
     waitForSavedLocale = false,
 }: {
     className?: string
@@ -36,6 +42,9 @@ export function CanvasStage({
     hideOverlays?: boolean
     /** Rendered over the canvas once draw.io is ready */
     overlay?: (size: CanvasSize) => React.ReactNode
+    /** Where the editor comes from; none: the web app's own copy (the MCP
+     * shell passes what its server configured) */
+    drawioSource?: DrawioSource
     /** Web app: the page is about to switch to the language picked last
      * time (useSavedLocale in the workspace); do not load draw.io in the
      * URL's language meanwhile */
@@ -74,11 +83,10 @@ export function CanvasStage({
                 return
             }
         }
-        const isElectron = !!(window as { electronAPI?: unknown }).electronAPI
         // The theme class is set before the page renders; the settings store
         // may not have read it yet
         const dark = document.documentElement.classList.contains("dark")
-        setSrc(getDrawioSrc({ lang, isElectron, dark }))
+        setSrc(getDrawioSrc(drawioSource ?? webDrawioSource(lang), dark))
     }, [lang])
 
     // A new iframe starts over: draw.io reports load and access again
@@ -94,8 +102,7 @@ export function CanvasStage({
         if (editorAccess !== false || !src) return
         const startedDark = new URL(src).searchParams.get("dark") === "1"
         if (startedDark === isDark) return
-        const isElectron = !!(window as { electronAPI?: unknown }).electronAPI
-        setSrc(getDrawioSrc({ lang, isElectron, dark: isDark }))
+        setSrc(getDrawioSrc(drawioSource ?? webDrawioSource(lang), isDark))
     }, [isDark, editorAccess, lang, src])
 
     useEffect(() => {
