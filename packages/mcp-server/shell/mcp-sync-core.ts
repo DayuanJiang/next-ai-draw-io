@@ -14,6 +14,7 @@
  * it) and screenshots and file exports for an image, both through the poll.
  */
 import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
+import { hasLoadOnlySettings } from "@/lib/drawio/editor-bridge"
 import { contentFingerprint } from "@/packages/mcp-server/src/edit-gate.ts"
 import {
     normalizeToMxfile,
@@ -120,7 +121,9 @@ export interface McpSync {
     /** draw.io reported a load done */
     onDrawioLoad(): void
     /** The server's History, with the state its ids belong to; null when
-     * it could not be read, or the state changed meanwhile */
+     * it could not be read, or the state changed meanwhile. For the versions
+     * strip (plan step 5), with restoreEntry below; until then only the
+     * unit tests call them */
     fetchHistory(): Promise<{
         entries: HistoryEntryInfo[]
         stateId: string | null
@@ -174,24 +177,12 @@ function svgDataUrl(svg: string): string {
     return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 }
 
-// Page settings draw.io applies on a full load only (the editor bridge's
-// hasLoadOnlySettings): replacing the page in place would keep the old ones
-function hasLoadOnlySettings(page: Element): boolean {
-    const model = page.querySelector("mxGraphModel")
-    return (
-        !!model &&
-        (model.hasAttribute("backgroundImage") ||
-            model.hasAttribute("extFonts") ||
-            model.getAttribute("math") === "1" ||
-            model.getAttribute("shadow") === "1")
-    )
-}
-
 /**
  * Whether a server write can go on the canvas as one undo step: it has the
  * same pages as the canvas, changes only the one the user is viewing (the
- * one with currentPageId, else the first), keeps the file variables and
- * needs no load-only page setting. Pages are compared with the MCP core's
+ * one with currentPageId; a one-page document needs no id, several pages
+ * with the page unknown load in full), keeps the file variables and needs
+ * no load-only page setting. Pages are compared with the MCP core's
  * contentFingerprint (names and cells). The editor bridge checks the same
  * against the live editor and falls back to a full load on its own.
  */
@@ -221,10 +212,15 @@ export function decideLoad(
     if (pagesNow.length === 0 || pagesNow.length !== pagesNext.length) {
         return full
     }
-    const index = Math.max(
-        0,
-        pagesNow.findIndex((page) => page.getAttribute("id") === currentPageId),
+    let index = pagesNow.findIndex(
+        (page) => page.getAttribute("id") === currentPageId,
     )
+    if (index < 0) {
+        // The page on screen is unknown (an external draw.io cannot tell):
+        // with several pages the target cannot be told, load in full
+        if (pagesNow.length > 1) return full
+        index = 0
+    }
     const target = pagesNext[index]
     // The page is found by its id when the document has several
     if (
@@ -233,7 +229,8 @@ export function decideLoad(
     ) {
         return full
     }
-    if (hasLoadOnlySettings(target)) return full
+    const targetModel = target.querySelector("mxGraphModel")
+    if (targetModel && hasLoadOnlySettings(targetModel)) return full
     // The other pages, as the MCP core compares them (edit-gate.ts)
     const others = (doc: Document, pages: Element[]) => {
         pages[index].remove()
@@ -262,6 +259,9 @@ export function createMcpSync(options: SyncOptions): McpSync {
     // an autosave still on its way belongs to the canvas being replaced
     let awaitingLoad = false
     let awaitingLoadTimer: ReturnType<typeof setTimeout> | null = null
+    // A write taken in place (a commit) makes draw.io autosave its own copy
+    // of it, serialized its way: that one autosave is not an edit
+    let awaitingCommitCopy = false
     let pollSeq = 0
     let lastHandledPoll = 0 // polls overlap; older answers are dropped
     // The edit whose SVG export is pending, and what it was based on
@@ -278,6 +278,14 @@ export function createMcpSync(options: SyncOptions): McpSync {
     let mcpExportId: string | null = null
     // A one-page projection is on screen for a page-targeted export
     let projectionExportActive = false
+    // The restore load of the real document was sent; until draw.io reports
+    // it (or 5 s), the projection still counts as on screen
+    let projectionRestoreTimer: ReturnType<typeof setTimeout> | null = null
+    const endProjection = () => {
+        projectionExportActive = false
+        if (projectionRestoreTimer) clearTimeout(projectionRestoreTimer)
+        projectionRestoreTimer = null
+    }
     // Load the server state on the next poll even at the same version
     let forceReload = false
     let pendingSyncExport = false
@@ -345,10 +353,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 ? decideLoad(canvas.currentXml(), xml, canvas.currentPageId())
                 : { mode: "load" }
         canvas.load(xml, decision)
+        awaitingCommitCopy = decision.mode === "commit"
         // currentVersion is the write's version
         thumbExport = { stateId, version: currentVersion, xml }
         setTimeout(captureThumbnail, 500)
-        return decision
     }
 
     // The image of the server write on the canvas, for its History entry:
@@ -469,7 +477,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
         options.onStateRecreated?.()
         // The old state's pending work is gone with it
         const projectionShown = projectionExportActive
-        projectionExportActive = false
+        endProjection()
         forceReload = false
         pendingMcpExport = null
         pendingSyncExport = false
@@ -489,10 +497,13 @@ export function createMcpSync(options: SyncOptions): McpSync {
         } else if (s.xml) {
             // The server has a diagram this tab never showed (an AI write it
             // missed, a saved file): show that, and keep this tab's copy in
-            // History unless it is the same
-            const decision = loadFromServer(s.xml, "decide")
-            // A commit replaces the page in place: draw.io reports no load
-            if (decision.mode === "load") expectLoad()
+            // History unless it is the same. A full load, as the classic
+            // page does: whether the canvas can take the write in place is
+            // decided inside DiagramProvider, and the sync cannot tell; until
+            // draw.io reports the load, an autosave is from the canvas being
+            // replaced
+            loadFromServer(s.xml, "full")
+            expectLoad()
             if (mine && !sameDiagram(mine, s.xml)) {
                 pushState(mine, "", s.version, "recover")
             }
@@ -581,6 +592,16 @@ export function createMcpSync(options: SyncOptions): McpSync {
         } else {
             fire()
         }
+        // The whole export, result delivery included, ends in time: a result
+        // POST that never answers must not keep the projection on screen
+        // past the server's deadline (15 s). Only for this export: a later
+        // one may be running by then.
+        setTimeout(() => {
+            if (pendingMcpExport && seq === mcpExportSeq) {
+                pendingMcpExport = null
+                restoreFromProjection()
+            }
+        }, 15000)
     }
 
     async function poll(): Promise<void> {
@@ -590,7 +611,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
             const r = await api(
                 `/state?sessionId=${encodeURIComponent(sessionId)}`,
             )
-            if (!r.ok) return
+            if (!r.ok) {
+                // Refused (another process answers on this port and its
+                // token could not be read) or failing: edits are not saved
+                setStatus("offline")
+                return
+            }
             const s: ServerState = await r.json()
             // An older answer than one already handled (the interval, the
             // 409 handler and the projection restore each poll): it could
@@ -619,9 +645,14 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 // document the user had
                 const how = forceReload ? "full" : "decide"
                 forceReload = false
-                projectionExportActive = false
                 currentVersion = s.version
                 loadFromServer(s.xml, how)
+                // The projection stays on screen until draw.io reports this
+                // load (its messages come in order): an autosave before that
+                // is of the projection, not an edit
+                if (projectionExportActive && !projectionRestoreTimer) {
+                    projectionRestoreTimer = setTimeout(endProjection, 5000)
+                }
                 justLoaded = true
             }
             // A sync request (get_diagram): after the load above, so draw.io
@@ -635,7 +666,14 @@ export function createMcpSync(options: SyncOptions): McpSync {
             ) {
                 startSyncExport()
             }
-            if (s.exportFormat && !pendingMcpExport && isReady) {
+            // Nor an export while the projection is still on screen: it
+            // would picture the projection
+            if (
+                s.exportFormat &&
+                !pendingMcpExport &&
+                isReady &&
+                !projectionExportActive
+            ) {
                 startMcpExport(s, justLoaded)
             }
             // Extension point (plan step 6, the get_selection tool): a
@@ -659,6 +697,16 @@ export function createMcpSync(options: SyncOptions): McpSync {
         poll,
         setReady(ready) {
             isReady = ready
+            // draw.io is starting over (an external editor reloads on a
+            // theme switch): an export in flight gets no answer, and a
+            // projection on the canvas is gone with the old frame. The next
+            // poll puts the document back and starts the server's export
+            // again
+            if (!ready && pendingMcpExport !== null) {
+                mcpExportSeq++
+                pendingMcpExport = null
+                if (projectionExportActive) forceReload = true
+            }
             // A write loaded before draw.io was ready gets its thumbnail now
             if (ready && thumbExport) captureThumbnail()
         },
@@ -674,9 +722,16 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 return
             }
             // Also an edit undone back to what the server has, or draw.io's
-            // own copy of a write it took in place (a commit)
+            // own copy of a write it took in place (a commit). Compared as
+            // documents only for that copy: a change of the paper size alone
+            // is the same document to isSameDocument when the server's copy
+            // names none
             latestXml = xml
-            if (sameDiagram(xml, lastXml)) return
+            const commitCopy = awaitingCommitCopy
+            awaitingCommitCopy = false
+            if (xml === lastXml || (commitCopy && sameDiagram(xml, lastXml))) {
+                return
+            }
             // Request an SVG export, then push the edit with it; remember
             // the version and state it is based on. Without an answer in
             // time, push it without the image.
@@ -693,6 +748,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
         },
         onDrawioLoad() {
             awaitingLoad = false
+            // A commit that fell back to a full load sends no copy
+            awaitingCommitCopy = false
+            // The restore load after a projection export is done
+            if (projectionRestoreTimer) endProjection()
         },
         async fetchHistory() {
             // A list for a state the server recreated meanwhile has old ids

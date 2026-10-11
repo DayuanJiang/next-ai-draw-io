@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { diffDiagrams } from "@/lib/diagram-diff"
-import { highlightCells } from "@/lib/drawio/editor-bridge"
+import { highlightChangedCells } from "@/lib/drawio/editor-bridge"
 import { useCanvasStore } from "@/stores/canvas-store"
 import { createMcpSync, type McpSync, type SyncStatus } from "./mcp-sync-core"
 import type { ShellConfig } from "./runtime-config"
@@ -102,14 +102,7 @@ export function useMcpSync(config: ShellConfig): SyncStatus {
                 afterXml,
                 pageId,
             )
-            if (fromScratch) return
-            // Once draw.io has drawn the replaced cells
-            setTimeout(() => {
-                const marker = getComputedStyle(document.documentElement)
-                    .getPropertyValue("--marker")
-                    .trim()
-                highlightCells(touchedIds, marker || "#ffd84d")
-            }, 60)
+            if (!fromScratch) highlightChangedCells(touchedIds)
         })
         return () => diagram.setCommitHandler(null)
     }, [])

@@ -262,19 +262,19 @@ function hasShapes(xml: string): boolean {
     })
 }
 
-// Page settings draw.io applies on a full load only: replacing the page in
-// place (Editor.readGraphState) keeps the old ones. (Its adaptive colors and
-// theme stay too: a diagram the AI writes does not set them.)
-function hasLoadOnlySettings(model: string): boolean {
-    const page = new DOMParser().parseFromString(
-        model,
-        "text/xml",
-    ).documentElement
+/**
+ * Page settings draw.io applies on a full load only: replacing the page in
+ * place (Editor.readGraphState) keeps the old ones. (Its adaptive colors and
+ * theme stay too: a diagram the AI writes does not set them.) Takes the
+ * page's mxGraphModel element; the MCP shell's sync asks the same question
+ * of a document before it reaches the editor.
+ */
+export function hasLoadOnlySettings(model: Element): boolean {
     return (
-        page.hasAttribute("backgroundImage") ||
-        page.hasAttribute("extFonts") ||
-        page.getAttribute("math") === "1" ||
-        page.getAttribute("shadow") === "1"
+        model.hasAttribute("backgroundImage") ||
+        model.hasAttribute("extFonts") ||
+        model.getAttribute("math") === "1" ||
+        model.getAttribute("shadow") === "1"
     )
 }
 
@@ -322,7 +322,9 @@ export function canReplaceDiagram(xml: string): boolean {
     // A document with them, or replacing one with them, loads in full
     return (
         model !== null &&
-        !hasLoadOnlySettings(model) &&
+        !hasLoadOnlySettings(
+            new DOMParser().parseFromString(model, "text/xml").documentElement,
+        ) &&
         !canvasHasLoadOnlySettings()
     )
 }
@@ -545,6 +547,19 @@ export function highlightCells(ids: string[], color: string) {
         if (!g.model.isEdge(cell)) add(state, color, 8, 18)
         add(state, HIGHLIGHT_OUTLINE, 2, 100)
     }
+}
+
+/**
+ * Marks the cells an AI change touched in the page's marker color, once
+ * draw.io has drawn them (the web app's versions and the MCP shell share it)
+ */
+export function highlightChangedCells(ids: string[]) {
+    setTimeout(() => {
+        const marker = getComputedStyle(document.documentElement)
+            .getPropertyValue("--marker")
+            .trim()
+        highlightCells(ids, marker || "#ffd84d")
+    }, 60)
 }
 
 // ---------------------------------------------------------------------------

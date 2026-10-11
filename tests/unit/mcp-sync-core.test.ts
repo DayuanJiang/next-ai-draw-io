@@ -417,6 +417,22 @@ describe("MCP sync status", () => {
         expect(t.statuses).toEqual(["connected", "offline"])
     })
 
+    it("reports offline when the server refuses the poll", async () => {
+        const t = await inStep()
+        expect(t.statuses).toEqual(["connected"])
+        // Another process took the port: it refuses our token, and its page
+        // (an older version without the shell) has none to read
+        const poll = t.sync.poll()
+        t.next("GET").answer({ status: 403, body: { error: "Forbidden" } })
+        await t.settle()
+        t.next("GET", location.href).answer({ status: 404, body: "Not Found" })
+        await t.settle()
+        await t.settle()
+        t.next("GET").answer({ status: 403, body: { error: "Forbidden" } })
+        await poll
+        expect(t.statuses).toEqual(["connected", "offline"])
+    })
+
     it("polls every 2 seconds once started", async () => {
         const t = open()
         t.sync.start()
@@ -649,6 +665,13 @@ describe("MCP sync export requests", () => {
             xml: "<mxfile>A2</mxfile>",
             decision: { mode: "load" },
         })
+        // Until draw.io reports that load, an autosave is still of the
+        // projection (the user moved a shape as the export ended)
+        expect(t.sync.read().projectionActive).toBe(true)
+        t.sync.onAutoSave("<mxfile>page 2 moved</mxfile>")
+        await t.settle()
+        expect(t.posts()).toHaveLength(0)
+        t.sync.onDrawioLoad()
         expect(t.sync.read()).toMatchObject({
             projectionActive: false,
             currentVersion: 3,
@@ -656,6 +679,129 @@ describe("MCP sync export requests", () => {
         // Edits are pushed again
         await edit(t, "<mxfile>A2 edited</mxfile>")
         expect(t.next("POST").body.xml).toBe("<mxfile>A2 edited</mxfile>")
+    })
+
+    /** A projection export whose result reached the server; the restore
+     * poll is pending */
+    async function projectionExported() {
+        const t = await inStep()
+        const poll = t.sync.poll()
+        t.next("GET").answer(
+            exportState({
+                exportFormat: "svg",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+            }),
+        )
+        await poll
+        await vi.advanceTimersByTimeAsync(600)
+        t.nextExport().answer({ data: "<svg>page 2</svg>" })
+        await t.settle()
+        const result = t.next("POST")
+        return { t, result }
+    }
+
+    it("ends the projection 5 s after the restore load if draw.io never reports it", async () => {
+        const { t, result } = await projectionExported()
+        result.answer({ status: 200, body: { success: true } })
+        await t.settle()
+        await t.settle()
+        t.next("GET").answer(state("S1", 2, "<mxfile>A</mxfile>"))
+        await t.settle()
+        await t.settle()
+        expect(t.sync.read().projectionActive).toBe(true)
+        // No new export or sync starts over the projection meanwhile
+        const again = t.sync.poll()
+        t.next("GET").answer(
+            exportState({
+                exportId: "e2",
+                exportFormat: "svg",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+                syncRequested: true,
+            }),
+        )
+        await again
+        expect(t.transients).toHaveLength(1)
+        expect(t.exports).toHaveLength(0)
+        await vi.advanceTimersByTimeAsync(5000)
+        expect(t.sync.read().projectionActive).toBe(false)
+    })
+
+    it("restores the document when the result POST never answers", async () => {
+        const { t, result } = await projectionExported()
+        // The result POST hangs; the server gives the export up at 15 s
+        await vi.advanceTimersByTimeAsync(15000)
+        expect(t.sync.read().projectionActive).toBe(true)
+        // The restore poll
+        t.next("GET").answer(state("S1", 3, "<mxfile>A3</mxfile>"))
+        await t.settle()
+        await t.settle()
+        expect(t.loads.at(-1)).toEqual({
+            xml: "<mxfile>A3</mxfile>",
+            decision: { mode: "load" },
+        })
+        t.sync.onDrawioLoad()
+        expect(t.sync.read().projectionActive).toBe(false)
+        // A new export request is answered
+        const later = t.sync.poll()
+        t.next("GET").answer(exportState({ version: 3, exportId: "e2" }))
+        await later
+        expect(t.exports).toHaveLength(1)
+        // The late answer changes nothing
+        result.answer({ status: 200, body: { success: true } })
+        await t.settle()
+        expect(t.exports).toHaveLength(1)
+        expect(t.sync.read().projectionActive).toBe(false)
+    })
+
+    it("drops an export and reloads the document when draw.io starts over", async () => {
+        const t = await inStep()
+        const poll = t.sync.poll()
+        t.next("GET").answer(
+            exportState({
+                exportFormat: "svg",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+            }),
+        )
+        await poll
+        await vi.advanceTimersByTimeAsync(600)
+        const request = t.nextExport()
+        // The frame remounts (an external draw.io on a theme switch): the
+        // projection is gone with it, the old frame's answer means nothing
+        t.sync.setReady(false)
+        request.answer({ data: "<svg>page 2</svg>" })
+        await t.settle()
+        expect(t.posts()).toHaveLength(0)
+        // The next poll puts the document back, in full
+        const restore = t.sync.poll()
+        t.next("GET").answer(
+            exportState({
+                exportFormat: "svg",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+            }),
+        )
+        await restore
+        expect(t.loads.at(-1)).toEqual({
+            xml: "<mxfile>A</mxfile>",
+            decision: { mode: "load" },
+        })
+        expect(t.transients).toHaveLength(1)
+        // The new frame is ready: the server's export starts again
+        t.sync.setReady(true)
+        t.nextExport().answer({ data: "<svg>thumb</svg>" })
+        await t.settle()
+        t.next("POST", "/api/history-svg").answer({ status: 200, body: {} })
+        t.sync.onDrawioLoad()
+        const again = t.sync.poll()
+        t.next("GET").answer(
+            exportState({
+                exportFormat: "svg",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+            }),
+        )
+        await again
+        expect(t.transients).toHaveLength(2)
+        await vi.advanceTimersByTimeAsync(600)
+        expect(t.exports.map((e) => e.request)).toEqual([{ format: "svg" }])
     })
 
     it("gives up on an export draw.io never answers and restores the document", async () => {
@@ -874,13 +1020,13 @@ describe("decideLoad: one undo step on the page on screen, or a full load", () =
             { mode: "load" },
         ],
         [
-            "the page on screen is unknown: the first page counts",
+            "the page on screen is unknown with several pages: a full load",
             file(
                 page("p1", "One", cell("a", "A2")) +
                     page("p2", "Two", cell("b", "B")),
             ),
             null,
-            { mode: "commit", pageId: "p1" },
+            { mode: "load" },
         ],
     ] as [string, string, string | null, LoadDecision][])(
         "%s",
@@ -982,7 +1128,7 @@ describe("MCP sync with server writes taken in place", () => {
         expect(t.next("POST").body.source).toBe("edit")
     })
 
-    it("after a restart, takes the server's diagram in place and keeps the tab's copy", async () => {
+    it("after a restart, loads the server's diagram in full and keeps the tab's copy", async () => {
         const t = await inStep({ currentPageId: "p1" })
         t.canvas.xml = canvasXml
         t.sync.onAutoSave(canvasXml)
@@ -996,25 +1142,24 @@ describe("MCP sync with server writes taken in place", () => {
         const poll = t.sync.poll()
         t.next("GET").answer(state("S2", 1, written))
         await poll
-        expect(t.loads.at(-1)?.decision).toEqual({
-            mode: "commit",
-            pageId: "p1",
-        })
+        // Even a write the page on screen could take in place: whether it
+        // does is decided in DiagramProvider, and an autosave before
+        // draw.io reports the load is of the canvas being replaced
+        expect(t.loads.at(-1)?.decision).toEqual({ mode: "load" })
         expect(t.next("POST").body).toMatchObject({
             xml: canvasXml,
             source: "recover",
             stateId: "S2",
         })
-        // No load is awaited after a commit: the autosave of the committed
-        // page is draw.io's copy of the write, and an edit after it is an edit
         t.sync.onAutoSave(
             file(
-                drawioPage("p1", "One", cell("a", "A") + cell("c", "C", 300)) +
+                drawioPage("p1", "One", cell("a", "A2")) +
                     drawioPage("p2", "Two", cell("b", "B")),
             ),
         )
         await t.settle()
-        expect(t.posts()).toHaveLength(0)
+        expect(t.next("POST").body.source).toBe("recover")
+        t.sync.onDrawioLoad()
         await edit(
             t,
             file(
@@ -1023,5 +1168,77 @@ describe("MCP sync with server writes taken in place", () => {
             ),
         )
         expect(t.next("POST").body.source).toBe("edit")
+    })
+
+    it("after a restart, an autosave of the old one-page canvas goes to History (external draw.io)", async () => {
+        // An external draw.io: the page on screen is unknown, so decideLoad
+        // would call a one-page write a commit; the provider loads in full
+        // anyway (no editor access), and draw.io applies the load later
+        const t = open({ currentPageId: null })
+        const canvasB = file(drawioPage("abc", "Page-1", cell("a", "B")))
+        const canvasC = file(page("xyz", "Page-1", cell("a", "C")))
+        t.sync.setReady(true)
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 2, canvasB))
+        await poll
+        expect(decideLoad(canvasB, canvasC, null).mode).toBe("commit")
+        // The server restarts and recovers C, a one-page document like B
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S2", 1, canvasC))
+        await poll
+        expect(t.loads.at(-1)?.decision).toEqual({ mode: "load" })
+        expect(t.next("POST").body).toMatchObject({
+            xml: canvasB,
+            source: "recover",
+        })
+        // An edit of B that draw.io queued before the load of C
+        const editedB = file(drawioPage("abc", "Page-1", cell("a", "B2")))
+        t.sync.onAutoSave(editedB)
+        await t.settle()
+        expect(t.next("POST").body).toMatchObject({
+            xml: editedB,
+            source: "recover",
+            baseVersion: 1,
+            stateId: "S2",
+        })
+        expect(t.sync.read().lastXml).toBe(canvasC)
+        t.sync.onDrawioLoad()
+        await edit(t, file(drawioPage("xyz", "Page-1", cell("a", "C2"))))
+        expect(t.next("POST").body.source).toBe("edit")
+    })
+
+    it("a change of the paper size alone is pushed", async () => {
+        const t = await inStep({ currentPageId: "p1" })
+        t.canvas.xml = canvasXml
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, written))
+        await poll
+        expect(t.loads.at(-1)?.decision.mode).toBe("commit")
+        // draw.io's copy of the write names the paper size the write left
+        // out: the same document, not an edit
+        const sized = (width: number, height: number) =>
+            file(
+                page(
+                    "p1",
+                    "One",
+                    cell("a", "A") + cell("c", "C", 300),
+                    ` dx="1000" dy="600" grid="1" pageWidth="${width}" pageHeight="${height}"`,
+                ) + drawioPage("p2", "Two", cell("b", "B")),
+            )
+        t.sync.onAutoSave(sized(850, 1100))
+        await t.settle()
+        expect(t.posts()).toHaveLength(0)
+        expect(t.exports).toHaveLength(0)
+        // The user picks A4: the same document to isSameDocument, an edit
+        // to the user
+        t.sync.onAutoSave(sized(827, 1169))
+        expect(t.exports.map((e) => e.request.format)).toEqual(["svg"])
+        t.nextExport().answer({ data: "<svg/>" })
+        await t.settle()
+        expect(t.next("POST").body).toMatchObject({
+            xml: sized(827, 1169),
+            source: "edit",
+            baseVersion: 3,
+        })
     })
 })
