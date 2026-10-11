@@ -27,11 +27,14 @@ import {
     keepInHistory,
     onSessionRecreate,
     onStateChange,
+    previewUrl,
     requestExport,
     requestSync,
     restoreHistoryEntry,
     setDrawioDir,
+    setShellDir,
     setState,
+    shellConfig,
     shutdown,
     startHttpServer,
     waitForSync,
@@ -41,6 +44,8 @@ let port = 0
 // A stand-in for the bundled draw.io copy (dist/drawio), with a server-side
 // part of the war that must never be served
 let drawioDir = ""
+// A stand-in for the built canvas shell (dist/shell)
+let shellDir = ""
 
 beforeAll(async () => {
     // XML parsing, as the server installs it at startup
@@ -53,12 +58,21 @@ beforeAll(async () => {
     writeFileSync(join(drawioDir, "js/app.min.js"), "// app")
     writeFileSync(join(drawioDir, "WEB-INF/web.xml"), "<web-app/>")
     setDrawioDir(drawioDir)
+    shellDir = mkdtempSync(join(tmpdir(), "shell-static-"))
+    writeFileSync(
+        join(shellDir, "index.html"),
+        "<html><script>window.__MCP_CONFIG__ = {{CONFIG_JSON}};</script></html>",
+    )
+    writeFileSync(join(shellDir, "shell.js"), "// shell")
+    writeFileSync(join(shellDir, "shell.css"), "body{}")
+    setShellDir(shellDir)
     port = await startHttpServer(40000 + Math.floor(Math.random() * 10000))
 })
 
 afterAll(() => {
     shutdown()
     rmSync(drawioDir, { recursive: true, force: true })
+    rmSync(shellDir, { recursive: true, force: true })
 })
 
 interface Response {
@@ -702,6 +716,160 @@ describe("bundled draw.io files", () => {
         } finally {
             setDrawioDir(drawioDir)
         }
+    })
+})
+
+describe("canvas shell page", () => {
+    /** The config the served page carries */
+    const configOf = (body: string) => {
+        const match = body.match(
+            /window\.__MCP_CONFIG__ = (\{.*?\});<\/script>/s,
+        )
+        if (!match) throw new Error(`no config in ${body}`)
+        return JSON.parse(match[1])
+    }
+
+    it("writes the session, the token and where draw.io comes from into the page", async () => {
+        const res = await request("/shell/?mcp=mcp-shell-page")
+        expect(res.status).toBe(200)
+        expect(res.headers["content-type"]).toBe("text/html; charset=utf-8")
+        expect(res.body).not.toContain("{{")
+        expect(configOf(res.body)).toEqual({
+            sessionId: "mcp-shell-page",
+            token: getApiToken(),
+            apiBase: "/api",
+            drawioBaseUrl: "/drawio/index.html",
+            drawioUi: "",
+            drawioLang: "",
+            drawioDark: "auto",
+            lang: "",
+        })
+        // The page creates the session, as the classic page does
+        expect(getState("mcp-shell-page")).toBeDefined()
+        // The same page at its index.html name
+        const index = await request("/shell/index.html?mcp=mcp-shell-page")
+        expect(index.status).toBe(200)
+        expect(configOf(index.body).sessionId).toBe("mcp-shell-page")
+    })
+
+    it("passes the host's editor settings on, in the shell's own terms", () => {
+        const config = shellConfig("mcp-s", {
+            DRAWIO_UI: "Sketch",
+            DRAWIO_LANG: "zh-Hant",
+            DRAWIO_DARK: "1",
+        })
+        expect(config.drawioUi).toBe("sketch")
+        expect(config.drawioLang).toBe("zh-tw")
+        expect(config.drawioDark).toBe("dark")
+        // The language as given, for the shell's own texts
+        expect(config.lang).toBe("zh-Hant")
+        expect(shellConfig("mcp-s", { DRAWIO_DARK: "light" }).drawioDark).toBe(
+            "light",
+        )
+        expect(shellConfig("mcp-s", { DRAWIO_UI: "dark" }).drawioDark).toBe(
+            "dark",
+        )
+        expect(shellConfig("mcp-s", { DRAWIO_UI: "neon" }).drawioUi).toBe("")
+    })
+
+    it("names the external draw.io when there is no bundled copy", async () => {
+        setDrawioDir(null)
+        try {
+            const res = await request("/shell/?mcp=mcp-shell-external")
+            expect(configOf(res.body).drawioBaseUrl).toBe(
+                "https://embed.diagrams.net/",
+            )
+        } finally {
+            setDrawioDir(drawioDir)
+        }
+    })
+
+    it("escapes a value that could close the script element", async () => {
+        const before = process.env.DRAWIO_LANG
+        process.env.DRAWIO_LANG = "</script><script>alert(1)</script>"
+        try {
+            const res = await request("/shell/?mcp=mcp-shell-escape")
+            expect(res.body).not.toContain("</script><script>alert")
+            expect(res.body).toContain("\\u003c/script>")
+            expect(configOf(res.body).lang).toBe(process.env.DRAWIO_LANG)
+        } finally {
+            if (before === undefined) delete process.env.DRAWIO_LANG
+            else process.env.DRAWIO_LANG = before
+        }
+    })
+
+    it("sends the security headers, is never cached and needs no token", async () => {
+        const res = await request("/shell/?mcp=mcp-shell-headers", {
+            headers: { "x-drawio-token": "" },
+        })
+        expect(res.status).toBe(200)
+        expect(res.headers["content-security-policy"]).toBe(
+            "frame-ancestors 'self'",
+        )
+        expect(res.headers["x-content-type-options"]).toBe("nosniff")
+        expect(res.headers["cache-control"]).toBe("no-store")
+    })
+
+    it("rejects a bad session id and goes to the most recent session without one", async () => {
+        const bad = await request(
+            `/shell/?mcp=${encodeURIComponent('";alert(1)//')}`,
+        )
+        expect(bad.status).toBe(400)
+        setState("mcp-shell-recent", "<mxfile>recent</mxfile>")
+        const res = await request("/shell/")
+        expect(res.status).toBe(302)
+        // (other tests of this file create sessions in the same millisecond)
+        expect(res.headers.location).toMatch(/^\/shell\/\?mcp=mcp-/)
+        // Without the trailing slash the assets would resolve elsewhere
+        const slash = await request("/shell?mcp=mcp-shell-recent")
+        expect(slash.status).toBe(302)
+        expect(slash.headers.location).toBe("/shell/?mcp=mcp-shell-recent")
+    })
+
+    it("serves the shell's files with their MIME types, without a token", async () => {
+        const js = await request("/shell/shell.js", {
+            headers: { "x-drawio-token": "" },
+        })
+        expect(js.status).toBe(200)
+        expect(js.body).toBe("// shell")
+        expect(js.headers["content-type"]).toBe(
+            "text/javascript; charset=utf-8",
+        )
+        expect(js.headers["x-content-type-options"]).toBe("nosniff")
+        expect(js.headers["cache-control"]).toBe("no-cache")
+        expect(js.headers.etag).toMatch(/^"\d+\.\d+\.\d+-[0-9a-f]+-[0-9a-f]+"$/)
+        const css = await request("/shell/shell.css")
+        expect(css.headers["content-type"]).toBe("text/css; charset=utf-8")
+        for (const path of [
+            "/shell/../package.json",
+            "/shell/%2e%2e/package.json",
+            "/shell/missing.js",
+        ]) {
+            const res = await request(path)
+            expect(res.status, path).toBe(404)
+            expect(res.body).not.toContain('"name"')
+        }
+    })
+
+    it("says so when the shell is not built", async () => {
+        setShellDir(null)
+        try {
+            const page = await request("/shell/?mcp=mcp-shell-unbuilt")
+            expect(page.status).toBe(404)
+            expect(page.body).toContain("npm run build")
+            expect((await request("/shell/shell.js")).status).toBe(404)
+        } finally {
+            setShellDir(shellDir)
+        }
+    })
+
+    it("is what start_session opens with DRAWIO_PREVIEW_UI=shell", () => {
+        expect(previewUrl(6002, "mcp-x", "shell")).toBe(
+            "http://localhost:6002/shell/?mcp=mcp-x",
+        )
+        expect(previewUrl(6002, "mcp-x", "classic")).toBe(
+            "http://localhost:6002?mcp=mcp-x",
+        )
     })
 })
 

@@ -57,6 +57,7 @@ import {
     keepInHistory,
     onSessionRecreate,
     onStateChange,
+    previewUrl,
     requestExport,
     requestSync,
     restoreHistoryEntry,
@@ -382,7 +383,7 @@ registerWriteTool(
             }
 
             // Open browser
-            const browserUrl = `http://localhost:${port}?mcp=${sessionId}`
+            const browserUrl = previewUrl(port, sessionId)
             await open(browserUrl)
 
             // A saved diagram comes back from its file. lastSeenXml stays

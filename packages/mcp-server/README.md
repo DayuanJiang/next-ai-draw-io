@@ -188,6 +188,7 @@ To give the AI your own drawing rules, write them in `~/.next-ai-drawio/instruct
 | `DRAWIO_LANG` | unset | Language of the draw.io editor. Unset, draw.io chooses: the browser language on `embed.diagrams.net`, English on a self-hosted draw.io until the user picks one under **Extras > Language**. A code such as `en`, `zh`, `zh-tw`, `ja` or `de` fixes it and hides that submenu. |
 | `DRAWIO_UI` | unset | draw.io theme. Unset, the user picks one under **Extras > Theme** and draw.io remembers it. `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple` fixes the theme and hides that menu. |
 | `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light. The page header keeps following the system. |
+| `DRAWIO_PREVIEW_UI` | `classic` | The preview page `start_session` opens. `shell` opens the new canvas page built from the web app's canvas (in progress: it does not sync with the server yet). |
 | `DRAWIO_AUTO_SCREENSHOT` | unset | Set to `true` to attach a screenshot to every `create_new_diagram` and `edit_diagram` result, so the AI checks each drawing. Costs 2 to 10 s per call; the preview tab must be open and in front. A call can still pass `screenshot: false`. |
 | `DEBUG` | unset | Set to `true` to log debug messages to stderr. |
 

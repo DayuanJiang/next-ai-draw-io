@@ -88,6 +88,44 @@ export function setDrawioDir(dir: string | null): void {
     drawioVersion = readDrawioVersion(dir)
 }
 
+// The canvas shell (the web app's canvas without the chat), built by
+// scripts/build-shell.mjs into dist/shell
+let shellDir: string | null =
+    [join(HERE, "shell"), join(HERE, "../dist/shell")].find((dir) =>
+        existsSync(join(dir, "index.html")),
+    ) ?? null
+
+/** For tests: serve the shell from this directory (null: not built) */
+export function setShellDir(dir: string | null): void {
+    shellDir = dir
+}
+
+// This package's version, stamped into the shell files' ETags (see
+// readDrawioVersion for why)
+const PACKAGE_VERSION: string = JSON.parse(
+    readFileSync(join(HERE, "../package.json"), "utf8"),
+).version
+
+/**
+ * The preview page start_session opens: the classic page (src/preview), or
+ * the canvas shell with DRAWIO_PREVIEW_UI=shell. The shell becomes the
+ * default once it does everything the classic page does.
+ */
+export type PreviewUi = "classic" | "shell"
+export const PREVIEW_UI: PreviewUi =
+    (process.env.DRAWIO_PREVIEW_UI ?? "").toLowerCase() === "shell"
+        ? "shell"
+        : "classic"
+
+export function previewUrl(
+    port: number,
+    sessionId: string,
+    ui: PreviewUi = PREVIEW_UI,
+): string {
+    const path = ui === "shell" ? "/shell/" : ""
+    return `http://localhost:${port}${path}?mcp=${sessionId}`
+}
+
 /**
  * The draw.io version the fetch script stamps into the copy. It is part of
  * every file's ETag: an install that keeps the archive's dates (npm does
@@ -495,7 +533,28 @@ function routeRequest(
     }
 
     if (url.pathname.startsWith("/drawio/")) {
-        serveDrawioFile(req, res, url.pathname.slice("/drawio/".length))
+        serveStaticFile(
+            req,
+            res,
+            drawioDir,
+            url.pathname.slice("/drawio/".length),
+            drawioVersion,
+        )
+        return
+    }
+
+    if (url.pathname === "/shell") {
+        res.writeHead(302, { Location: `/shell/${url.search}` })
+        res.end()
+        return
+    }
+    if (url.pathname.startsWith("/shell/")) {
+        const rest = url.pathname.slice("/shell/".length)
+        if (rest === "" || rest === "index.html") {
+            servePage(req, res, url, "/shell/", getShellPage)
+        } else {
+            serveStaticFile(req, res, shellDir, rest, PACKAGE_VERSION)
+        }
         return
     }
 
@@ -509,34 +568,7 @@ function routeRequest(
     }
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
-        const sessionId = url.searchParams.get("mcp") || ""
-        if (sessionId && !isValidSessionId(sessionId)) {
-            res.writeHead(400)
-            res.end("Invalid session id")
-            return
-        }
-
-        // Auto-redirect to most recent session if no sessionId provided
-        if (!sessionId) {
-            const recentSessionId = getMostRecentSessionId()
-            if (recentSessionId) {
-                res.writeHead(302, {
-                    Location: `/?mcp=${encodeURIComponent(recentSessionId)}`,
-                })
-                res.end()
-                return
-            }
-        }
-
-        ensureSessionStateInitialized(sessionId)
-
-        // The page holds this process's token: never served from a cache
-        res.writeHead(200, {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-store",
-            ...HTML_SECURITY_HEADERS,
-        })
-        res.end(getHtmlPage(sessionId))
+        servePage(req, res, url, "/", getHtmlPage)
     } else if (url.pathname === "/api/state") {
         handleStateApi(req, res, url)
     } else if (url.pathname === "/api/history") {
@@ -549,6 +581,60 @@ function routeRequest(
         res.writeHead(404)
         res.end("Not Found")
     }
+}
+
+/**
+ * A preview page (the classic one at "/", the shell at "/shell/") for the
+ * session in ?mcp=<id>; without one, the most recent session's.
+ */
+function servePage(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    url: URL,
+    pagePath: string,
+    render: (sessionId: string) => string | null,
+): void {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+        res.writeHead(405)
+        res.end("Method Not Allowed")
+        return
+    }
+    const sessionId = url.searchParams.get("mcp") || ""
+    if (sessionId && !isValidSessionId(sessionId)) {
+        res.writeHead(400)
+        res.end("Invalid session id")
+        return
+    }
+
+    // Auto-redirect to most recent session if no sessionId provided
+    if (!sessionId) {
+        const recentSessionId = getMostRecentSessionId()
+        if (recentSessionId) {
+            res.writeHead(302, {
+                Location: `${pagePath}?mcp=${encodeURIComponent(recentSessionId)}`,
+            })
+            res.end()
+            return
+        }
+    }
+
+    const html = render(sessionId)
+    if (html === null) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" })
+        res.end(
+            "The canvas shell is not built (dist/shell is missing); run npm run build in packages/mcp-server",
+        )
+        return
+    }
+    ensureSessionStateInitialized(sessionId)
+
+    // The page holds this process's token: never served from a cache
+    res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        ...HTML_SECURITY_HEADERS,
+    })
+    res.end(req.method === "HEAD" ? undefined : html)
 }
 
 function handleStateApi(
@@ -899,11 +985,16 @@ const MIME_TYPES: Record<string, string> = {
     ".wasm": "application/wasm",
 }
 
-/** GET /drawio/<path>: a file of the bundled draw.io copy */
-function serveDrawioFile(
+/**
+ * GET /drawio/<path> or /shell/<path>: a file of the bundled draw.io copy or
+ * of the built shell. `stamp` names the files' version in their ETags.
+ */
+function serveStaticFile(
     req: http.IncomingMessage,
     res: http.ServerResponse,
+    dir: string | null,
     rawPath: string,
+    stamp: string,
 ): void {
     if (req.method !== "GET" && req.method !== "HEAD") {
         res.writeHead(405)
@@ -921,13 +1012,13 @@ function serveDrawioFile(
     // One normalized path inside the directory; the war's server-side parts
     // are never served, whatever was extracted
     const normalized = posix.normalize(rel)
-    const file = drawioDir ? resolve(drawioDir, normalized) : null
+    const file = dir ? resolve(dir, normalized) : null
     if (
-        !drawioDir ||
+        !dir ||
         !file ||
         /[\\\0]/.test(rel) ||
         /(^|\/)(WEB-INF|META-INF)(\/|$)/i.test(normalized) ||
-        !file.startsWith(drawioDir + sep)
+        !file.startsWith(dir + sep)
     ) {
         res.writeHead(404)
         res.end("Not Found")
@@ -939,7 +1030,7 @@ function serveDrawioFile(
         const stat = statSync(file)
         if (!stat.isFile()) throw new Error("not a file")
         size = stat.size
-        etag = `"${drawioVersion}-${size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`
+        etag = `"${stamp}-${size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`
     } catch {
         res.writeHead(404)
         res.end("Not Found")
@@ -997,35 +1088,90 @@ function loadPreviewTemplate(): string {
     return previewTemplate
 }
 
-/** A JSON string literal that is safe inside a <script> element */
-const scriptJson = (value: string) =>
+/** JSON that is safe inside a <script> element ("<" escaped) */
+const scriptJson = (value: unknown) =>
     JSON.stringify(value).replace(/</g, "\\u003c")
 
 /**
- * The configurable tail of the draw.io iframe query: dark mode, and the
- * language and theme when the host config fixes them (DRAWIO_DARK,
- * DRAWIO_LANG, DRAWIO_UI). lang and ui are left out unless set, because
- * draw.io hides its Extras > Language / Theme submenu once they are given.
+ * The editor settings the host config fixes: theme (DRAWIO_UI), language
+ * (DRAWIO_LANG) and dark mode (DRAWIO_DARK). ui and lang are "" unless set,
+ * because draw.io hides its Extras > Language / Theme submenu once they
+ * are given.
+ */
+function hostDrawioSettings(env: NodeJS.ProcessEnv): {
+    ui: string
+    lang: string
+    dark: "dark" | "light" | "auto"
+} {
+    const ui = (env.DRAWIO_UI ?? "").toLowerCase()
+    const dark = (env.DRAWIO_DARK ?? "").toLowerCase()
+    const lang = toDrawioLang(env.DRAWIO_LANG ?? "")
+    return {
+        ui: isDrawioTheme(ui) ? ui : "",
+        lang: /^[a-z]{2,3}(-[a-z]{2,4})?$/.test(lang) ? lang : "",
+        dark: ["1", "true", "dark"].includes(dark)
+            ? "dark"
+            : ["0", "false", "light"].includes(dark)
+              ? "light"
+              : // draw.io takes ui=dark as dark mode only when no dark
+                // parameter is present, and the pages always send one
+                !dark && ui === "dark"
+                ? "dark"
+                : "auto",
+    }
+}
+
+/**
+ * The configurable tail of the classic page's draw.io iframe query: dark
+ * mode, and the language and theme when the host config fixes them.
  */
 export function drawioEmbedParams(
     env: NodeJS.ProcessEnv = process.env,
 ): string {
+    const settings = hostDrawioSettings(env)
     const params = new URLSearchParams()
-    const ui = (env.DRAWIO_UI ?? "").toLowerCase()
-    const dark = (env.DRAWIO_DARK ?? "").toLowerCase()
-    const lang = toDrawioLang(env.DRAWIO_LANG ?? "")
-    if (["1", "true", "dark"].includes(dark)) {
-        params.set("dark", "1")
-    } else if (["0", "false", "light"].includes(dark)) {
-        params.set("dark", "0")
-    } else {
-        // draw.io takes ui=dark as dark mode only when no dark parameter is
-        // present, and this page always sends one
-        params.set("dark", !dark && ui === "dark" ? "1" : "auto")
-    }
-    if (/^[a-z]{2,3}(-[a-z]{2,4})?$/.test(lang)) params.set("lang", lang)
-    if (isDrawioTheme(ui)) params.set("ui", ui)
+    params.set(
+        "dark",
+        settings.dark === "auto"
+            ? "auto"
+            : settings.dark === "dark"
+              ? "1"
+              : "0",
+    )
+    if (settings.lang) params.set("lang", settings.lang)
+    if (settings.ui) params.set("ui", settings.ui)
     return params.toString()
+}
+
+/**
+ * What the shell page gets as window.__MCP_CONFIG__ (shell/runtime-config.ts
+ * reads it): the session, the API token, where draw.io comes from and the
+ * host's editor settings.
+ */
+export function shellConfig(
+    sessionId: string,
+    env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+    const settings = hostDrawioSettings(env)
+    return {
+        sessionId,
+        token: API_TOKEN,
+        apiBase: "/api",
+        drawioBaseUrl: drawioEditorUrl(),
+        drawioUi: settings.ui,
+        drawioLang: settings.lang,
+        drawioDark: settings.dark,
+        lang: env.DRAWIO_LANG ?? "",
+    }
+}
+
+/** The shell page, or null when the shell is not built */
+function getShellPage(sessionId: string): string | null {
+    if (!shellDir) return null
+    const template = readFileSync(join(shellDir, "index.html"), "utf8")
+    return template.replace("{{CONFIG_JSON}}", () =>
+        scriptJson(shellConfig(sessionId)),
+    )
 }
 
 function getHtmlPage(sessionId: string): string {
