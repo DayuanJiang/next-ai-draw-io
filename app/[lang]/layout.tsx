@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google"
 import { notFound } from "next/navigation"
 import Script from "next/script"
+import { LocaleProvider } from "@/components/canvas/locale-context"
 import { AppToaster } from "@/components/workspace/app-toaster"
 import { DiagramProvider } from "@/contexts/diagram-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
@@ -184,7 +185,9 @@ export default async function RootLayout({
                 className={`${instrumentSans.variable} ${jetbrainsMono.variable} antialiased`}
             >
                 <DictionaryProvider dictionary={dictionary}>
-                    <DiagramProvider>{children}</DiagramProvider>
+                    <LocaleProvider locale={validLang}>
+                        <DiagramProvider>{children}</DiagramProvider>
+                    </LocaleProvider>
                 </DictionaryProvider>
                 <AppToaster />
             </body>

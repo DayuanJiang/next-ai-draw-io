@@ -1,27 +1,19 @@
 import { nanoid } from "nanoid"
 import { create } from "zustand"
-import type { ChangeSummary } from "@/lib/diagram-diff"
+import type { VersionItem } from "@/components/canvas/versions-context"
 import { EMPTY_SUMMARY } from "@/lib/diagram-diff"
 
-/** One diagram state produced by an AI change, shown as a card in the chat */
-export interface DiagramVersion {
-    id: string
-    /** Shown as v{number}; it stays when older versions are dropped */
-    number: number
-    /** Full multi-page document after the change */
-    xml: string
-    /** The page the change was made on; older sessions have none (the first page) */
-    pageId?: string
-    /** Diagram before the change; kept only on the latest version */
-    beforeXml?: string
-    /** SVG data URL thumbnail; "" when none could be made */
-    svg?: string
+/**
+ * One diagram state produced by an AI change, shown as a card in the chat.
+ * What the card displays is the VersionItem part; the rest ties the version
+ * to its chat turn. The number stays when older versions are dropped; the
+ * "before" document is kept only on the latest version; older sessions
+ * have no pageId (the first page).
+ */
+export interface DiagramVersion extends VersionItem {
     /** Index of the user message that started this turn */
     turnIndex: number
     toolCallId?: string
-    summary: ChangeSummary
-    /** Drawn on an empty canvas (the card shows totals, not changes) */
-    fromScratch?: boolean
     /** Saved with the session: this version is what the canvas shows */
     onCanvas?: boolean
     /** Saved with the session: this version's change was undone */

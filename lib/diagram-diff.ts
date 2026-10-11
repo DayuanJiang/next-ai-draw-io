@@ -285,7 +285,10 @@ export function sameFileVars(a: string | null, b: string | null): boolean {
 
 /**
  * Whether two documents hold the same pages (names, cells, their order),
- * page settings and file variables
+ * page settings and file variables. This is the web app's one rule for "is
+ * this version on the canvas" (versions, compare, one-step commits). The
+ * MCP server's edit gate has its own (contentFingerprint): it compares the
+ * cells as written, and leaves page settings and file variables out.
  */
 export function isSameDocument(a: string, b: string): boolean {
     const pagesOf = (doc: Document) => {
