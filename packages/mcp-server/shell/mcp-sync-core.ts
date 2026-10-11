@@ -769,7 +769,21 @@ export function createMcpSync(options: SyncOptions): McpSync {
             ) {
                 const id = s.selectionId
                 answeredSelectionId = id
-                const answer = () =>
+                const answer = () => {
+                    // A hidden tab answers later: the canvas may have moved
+                    // on since the poll (a projection, a full load, draw.io
+                    // starting over). The same conditions as above; when
+                    // they no longer hold, the next poll decides again
+                    if (
+                        !isReady ||
+                        projectionExportActive ||
+                        canvas.loadPending()
+                    ) {
+                        if (answeredSelectionId === id) {
+                            answeredSelectionId = null
+                        }
+                        return
+                    }
                     postJson("/state", {
                         sessionId,
                         selectionId: id,
@@ -784,6 +798,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                                 answeredSelectionId = null
                             }
                         })
+                }
                 // A hidden tab lets a tab in front (the same session open
                 // twice) answer first; the server takes the first answer
                 // and ignores the later one

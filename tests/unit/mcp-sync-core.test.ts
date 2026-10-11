@@ -1078,6 +1078,84 @@ describe("MCP sync selection requests (get_selection)", () => {
         })
     })
 
+    it("holds a hidden tab's answer when a projection started meanwhile, and answers once it ended", async () => {
+        const t = await inStep({ isHidden: () => true })
+        t.canvas.selection = picked
+        let poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        // The next poll, 2 s later, brings an export of another page: the
+        // projection replaces the user's page before the answer is due
+        await vi.advanceTimersByTimeAsync(2000)
+        poll = t.sync.poll()
+        t.next("GET").answer(
+            selectionState({
+                exportFormat: "svg",
+                exportId: "e1",
+                exportXml: "<mxfile>page 2 only</mxfile>",
+            }),
+        )
+        await poll
+        expect(t.sync.read().projectionActive).toBe(true)
+        t.canvas.selection = { pageId: "p2", pageName: "Page-2", cells: [] }
+        await vi.advanceTimersByTimeAsync(500)
+        expect(t.posts()).toHaveLength(0)
+        // The export answers and the document comes back
+        await vi.advanceTimersByTimeAsync(100)
+        t.nextExport().answer({ data: "<svg>page 2</svg>" })
+        await t.settle()
+        t.next("POST").answer({ status: 200, body: { success: true } })
+        await t.settle()
+        await t.settle()
+        t.next("GET").answer(selectionState())
+        await t.settle()
+        await t.settle()
+        t.sync.onDrawioLoad()
+        t.canvas.selection = picked
+        // The request is still pending: this poll schedules it again
+        poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        expect(t.posts()).toHaveLength(0)
+        await vi.advanceTimersByTimeAsync(2500)
+        expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-1",
+            selection: picked,
+        })
+    })
+
+    it("holds a hidden tab's answer while a full load has yet to reach the editor", async () => {
+        const t = await inStep({ isHidden: () => true })
+        t.canvas.selection = picked
+        let poll = t.sync.poll()
+        t.next("GET").answer(selectionState())
+        await poll
+        // A new version arrives before the answer is due: loaded in full,
+        // the editor still shows the old document
+        await vi.advanceTimersByTimeAsync(2000)
+        t.canvas.loadPending = true
+        poll = t.sync.poll()
+        t.next("GET").answer(
+            state("S1", 3, "<mxfile>B</mxfile>", { selectionId: "sel-1" }),
+        )
+        await poll
+        expect(t.loads.at(-1)?.xml).toBe("<mxfile>B</mxfile>")
+        await vi.advanceTimersByTimeAsync(500)
+        expect(t.posts()).toHaveLength(0)
+        // draw.io reports the load: the next poll answers
+        t.canvas.loadPending = false
+        poll = t.sync.poll()
+        t.next("GET").answer(
+            state("S1", 3, "<mxfile>B</mxfile>", { selectionId: "sel-1" }),
+        )
+        await poll
+        await vi.advanceTimersByTimeAsync(2500)
+        expect(t.next("POST").body).toMatchObject({
+            selectionId: "sel-1",
+            selection: picked,
+        })
+    })
+
     it("never answers while a projection is on screen", async () => {
         const t = await inStep()
         t.canvas.selection = picked
