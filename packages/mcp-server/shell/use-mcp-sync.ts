@@ -3,7 +3,10 @@ import { toast } from "sonner"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { diffDiagrams } from "@/lib/diagram-diff"
-import { highlightChangedCells } from "@/lib/drawio/editor-bridge"
+import {
+    highlightChangedCells,
+    readSelectionDetails,
+} from "@/lib/drawio/editor-bridge"
 import { useCanvasStore } from "@/stores/canvas-store"
 import { createMcpSync, type McpSync, type SyncStatus } from "./mcp-sync-core"
 import type { ShellConfig } from "./runtime-config"
@@ -53,6 +56,15 @@ export function useMcpSync(config: ShellConfig): {
                     diagramRef.current.requestExport(request, timeoutMs),
                 currentXml: () => diagramRef.current.chartXMLRef.current,
                 currentPageId: () => useCanvasStore.getState().currentPageId,
+                // The bridge reads the editor directly; without it (an
+                // external draw.io) the selection cannot be read
+                readSelection: () =>
+                    readSelectionDetails() ?? {
+                        pageId: null,
+                        pageName: null,
+                        cells: [],
+                        unavailable: true,
+                    },
             },
             onNotice: (notice) =>
                 toast(dictRef.current.shell[notice], { duration: 8000 }),

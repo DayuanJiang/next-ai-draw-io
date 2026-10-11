@@ -58,6 +58,7 @@ import {
 } from "./history.ts"
 import { log } from "./logger.ts"
 import { BLANK_MXFILE } from "./pages.ts"
+import { parseSelectionAnswer, type SelectionAnswer } from "./selection.ts"
 
 // Configurable draw.io embed URL for private deployments. Set, it replaces
 // the bundled copy (see drawioDir below).
@@ -245,6 +246,8 @@ interface SessionState {
     exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
     exportId?: string // Random id of the pending export, echoed with its result
     exportData?: string // Base64/SVG data returned by browser after export
+    selectionId?: string // Random id of the pending get_selection request
+    selection?: SelectionAnswer // The page's answer to it
 }
 
 /** draw.io export formats; xmlsvg is an SVG with the diagram embedded */
@@ -319,6 +322,8 @@ export function setState(
         exportOptions: existing?.exportOptions,
         exportId: existing?.exportId,
         exportData: existing?.exportData, // Preserve export result
+        selectionId: existing?.selectionId, // Preserve pending selection request
+        selection: existing?.selection,
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
     if (notify) stateListener?.(sessionId, xml)
@@ -394,6 +399,61 @@ export async function waitForSync(
     }
     log.warn(`Sync timeout for session=${sessionId}`)
     return false // Timeout
+}
+
+/**
+ * Ask the preview tab which cells the user has selected (the get_selection
+ * tool). Answered through the poll like an export: the tab sees selectionId
+ * in GET /api/state and POSTs its reading with that id. Returns false when
+ * the session is unknown.
+ */
+export function requestSelection(sessionId: string): boolean {
+    const state = stateStore.get(sessionId)
+    if (!state) return false
+    state.selection = undefined
+    // Random, as exportId: a late answer to an earlier request, or one meant
+    // for the process that had this port before, is not taken for this one
+    state.selectionId = randomUUID()
+    return true
+}
+
+/** The tab's answer to the pending selection request, or null in time */
+export async function waitForSelection(
+    sessionId: string,
+    timeoutMs = 10000,
+): Promise<SelectionAnswer | null> {
+    const start = Date.now()
+    let answer: SelectionAnswer | undefined
+    while (Date.now() - start < timeoutMs) {
+        // Re-read the store entry each tick: setState replaces it
+        answer = stateStore.get(sessionId)?.selection
+        if (answer) break
+        await new Promise((r) => setTimeout(r, 100))
+    }
+    const state = stateStore.get(sessionId)
+    if (state) {
+        state.selection = undefined
+        state.selectionId = undefined
+    }
+    if (!answer) log.warn(`Selection timeout for session=${sessionId}`)
+    return answer ?? null
+}
+
+/** POST /api/state with a selection: the tab's answer to requestSelection */
+function handleSelectionResult(
+    sessionId: string,
+    data: { selectionId?: unknown; selection?: unknown },
+): void {
+    const state = stateStore.get(sessionId)
+    if (!state || data.selectionId !== state.selectionId) {
+        log.debug(`Ignored a late selection answer for session=${sessionId}`)
+        return
+    }
+    const answer = parseSelectionAnswer(data.selection)
+    if (!answer) return
+    state.selection = answer
+    state.selectionId = undefined
+    log.debug(`Selection received for session=${sessionId}`)
 }
 
 export function startHttpServer(port = 6002): Promise<number> {
@@ -675,6 +735,7 @@ function handleStateApi(
                 exportXml: state?.exportXml || null,
                 exportOptions: state?.exportOptions || null,
                 exportId: state?.exportId ?? null,
+                selectionId: state?.selectionId ?? null,
             }),
         )
     } else if (req.method === "POST") {
@@ -707,6 +768,14 @@ function handleStateApi(
                             `Ignored a late export result for session=${sessionId}`,
                         )
                     }
+                    res.writeHead(200, { "Content-Type": "application/json" })
+                    res.end(JSON.stringify({ success: true }))
+                    return
+                }
+
+                // The tab is answering a selection request (get_selection)
+                if (data.selection !== undefined) {
+                    handleSelectionResult(sessionId, data)
                     res.writeHead(200, { "Content-Type": "application/json" })
                     res.end(JSON.stringify({ success: true }))
                     return

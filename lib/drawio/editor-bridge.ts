@@ -11,6 +11,7 @@
  */
 import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+import type { SelectionAnswer } from "@/packages/mcp-server/src/selection.ts"
 import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 
 type EditorUi = any
@@ -597,6 +598,54 @@ function readSelection(): SelectedCell[] {
             label: cellLabel(cell),
             isEdge: !!g.model.isEdge(cell),
         }))
+}
+
+/**
+ * The selection with what an editing model needs (the MCP's get_selection):
+ * the page it is on, each cell's label, an edge's ends, a shape's geometry
+ * as the XML has it (relative to its container) and that container. Null
+ * without an editor (a cross-origin draw.io).
+ */
+export function readSelectionDetails(): SelectionAnswer | null {
+    const g = graph()
+    if (!g) return null
+    const page = ui?.currentPage
+    const defaultParent = g.getDefaultParent?.()
+    const cells = (g.getSelectionCells() as any[])
+        .filter((cell) => cell?.id)
+        .map((cell) => {
+            const info: SelectionAnswer["cells"][number] = {
+                id: String(cell.id),
+                label: cellLabel(cell),
+                edge: !!g.model.isEdge(cell),
+            }
+            if (info.edge) {
+                const source = g.model.getTerminal(cell, true)
+                const target = g.model.getTerminal(cell, false)
+                if (source?.id) info.source = String(source.id)
+                if (target?.id) info.target = String(target.id)
+            } else {
+                const geo = g.getCellGeometry(cell)
+                if (geo) {
+                    info.geometry = {
+                        x: geo.x,
+                        y: geo.y,
+                        width: geo.width,
+                        height: geo.height,
+                    }
+                }
+            }
+            const parent = g.model.getParent(cell)
+            if (parent?.id && parent !== defaultParent) {
+                info.parent = String(parent.id)
+            }
+            return info
+        })
+    return {
+        pageId: page?.getId ? String(page.getId()) : null,
+        pageName: page?.getName ? String(page.getName()) : null,
+        cells,
+    }
 }
 
 function readSelectionRect() {

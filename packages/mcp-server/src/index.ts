@@ -57,14 +57,17 @@ import {
     keepInHistory,
     onSessionRecreate,
     onStateChange,
+    PREVIEW_UI,
     previewUrl,
     requestExport,
+    requestSelection,
     requestSync,
     restoreHistoryEntry,
     restoreSavedSession,
     setState,
     shutdown,
     startHttpServer,
+    waitForSelection,
     waitForSync,
 } from "./http-server.ts"
 import { parseDrawioFileContent } from "./load-diagram.ts"
@@ -92,6 +95,7 @@ import {
     wrapCellsInModel,
 } from "./pages.ts"
 import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
+import { describeSelection } from "./selection.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
 import { addDefaultStyles, applyStyleClasses } from "./style-classes.ts"
 import { XML_REFERENCE } from "./xml-reference.ts"
@@ -179,6 +183,7 @@ Tools:
 - create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
 - edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry; also used to draw a large diagram in parts.
 - get_diagram: read the current XML, including the user's manual edits.
+- get_selection: the cells the user has selected in the preview, when they say "this box" or "these arrows".
 - screenshot_diagram: see the rendered diagram as an image.
 - load_diagram, export_diagram: open or save .drawio or .drawio.svg files and export .png or .svg. Use absolute paths.
 - list_saved_diagrams: diagrams saved by earlier sessions; continue one with start_session session_id=<id>.
@@ -629,7 +634,9 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                         : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}`,
                 },
             ]
-            // The page on screen is the new document's first page
+            // The page on screen: the new document's first page after a
+            // full load, or the page the user was viewing when the write
+            // went on the canvas in place (both are the model's own work)
             if (screenshot ?? config.autoScreenshot) {
                 const shot = await captureScreenshot(
                     currentSession.id,
@@ -1228,6 +1235,94 @@ server.registerTool(
     },
 )
 
+// Tool: get_selection
+server.registerTool(
+    "get_selection",
+    {
+        title: "Get selection",
+        description:
+            "Return the cells the user has selected in the preview: their ids and labels, for edges the source and target ids, for shapes the position and size, and the page they are on. " +
+            'Call this when the user refers to what they selected ("this box", "these arrows", "the selected shapes"), then act on the ids with edit_diagram. ' +
+            "Says when nothing is selected. Needs the preview tab to be open.",
+        inputSchema: {},
+        annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+        try {
+            if (!currentSession) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: No active session. Please call start_session first.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            const sessionId = currentSession.id
+            // The classic preview page never answers: it has no access to
+            // the editor (the shell reads it through the same-origin frame)
+            if (PREVIEW_UI !== "shell") {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "The classic preview page cannot read the selection; start the server with DRAWIO_PREVIEW_UI=shell. Ask the user which shapes they mean, or call get_diagram.",
+                        },
+                    ],
+                }
+            }
+            if (previewStalled(sessionId)) {
+                return previewStalledError(sessionId)
+            }
+            if (sessionState(sessionId)?.lastPolled === undefined) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: The preview tab is not open, or has not connected yet.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            requestSelection(sessionId)
+            const answer = await waitForSelection(sessionId)
+            if (!answer) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Error: Reading the selection timed out. Make sure the preview tab is open and in front.",
+                        },
+                    ],
+                    isError: true,
+                }
+            }
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: describeSelection(
+                            answer,
+                            isSameOriginDrawio() ? null : DRAWIO_BASE_URL,
+                        ),
+                    },
+                ],
+            }
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error)
+            log.error("get_selection failed:", message)
+            return {
+                content: [{ type: "text", text: `Error: ${message}` }],
+                isError: true,
+            }
+        }
+    },
+)
+
 // The browser bridge has one export slot per session, so export requests
 // run one at a time: a concurrent call waits for the previous one.
 let exportQueue: Promise<unknown> = Promise.resolve()
@@ -1421,7 +1516,7 @@ server.registerTool(
         description:
             "Render the diagram in the preview and return it as a PNG image, so you can see your own result. " +
             "Call this once after drawing or heavily editing a complex diagram, then fix overlaps and edges that cross shapes. " +
-            "Without a page selector it shows the page on screen. Needs the preview tab to be open.",
+            "Without a page selector it shows the page on screen; with one it renders that page without changing what the user sees. Needs the preview tab to be open.",
         inputSchema: { ...pageSelectorSchema },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },

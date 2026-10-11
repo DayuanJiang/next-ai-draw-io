@@ -21,6 +21,7 @@ import {
     parseMxfile,
     serializeMxfile,
 } from "@/packages/mcp-server/src/pages.ts"
+import type { SelectionAnswer } from "@/packages/mcp-server/src/selection.ts"
 
 export type ExportFormat = "png" | "svg" | "xmlsvg"
 
@@ -35,6 +36,8 @@ export interface ServerState {
     exportXml: string | null
     exportOptions: { width?: number; pageId?: string } | null
     exportId: string | null
+    /** A get_selection request waiting for this tab's answer */
+    selectionId?: string | null
 }
 
 /** An entry of GET /api/history */
@@ -93,6 +96,9 @@ export interface SyncCanvas {
     currentXml(): string
     /** The page on screen; null when unknown (external draw.io) */
     currentPageId(): string | null
+    /** The cells selected in the editor, for get_selection; `unavailable`
+     * when the page cannot reach the editor (external draw.io) */
+    readSelection(): SelectionAnswer
 }
 
 export type SyncStatus = "waiting" | "connected" | "offline"
@@ -305,6 +311,9 @@ export function createMcpSync(options: SyncOptions): McpSync {
     let forceReload = false
     let pendingSyncExport = false
     let syncExportSeq = 0
+    // The selection request answered last: the server shows a request until
+    // the answer arrives, and polls overlap
+    let answeredSelectionId: string | null = null
     let status: SyncStatus = "waiting"
     let interval: ReturnType<typeof setInterval> | null = null
 
@@ -722,9 +731,23 @@ export function createMcpSync(options: SyncOptions): McpSync {
             ) {
                 startMcpExport(s, justLoaded)
             }
-            // Extension point (plan step 6, the get_selection tool): a
-            // selection request in the state would be answered here, like
-            // the sync request above, with the ids the editor bridge reads
+            // A selection request (get_selection): the editor's selection
+            // on the page the user is viewing, once draw.io is up (the
+            // bridge attaches to it at its first load), and not while a
+            // projection replaces that page
+            if (
+                s.selectionId &&
+                s.selectionId !== answeredSelectionId &&
+                isReady &&
+                !projectionExportActive
+            ) {
+                answeredSelectionId = s.selectionId
+                postJson("/state", {
+                    sessionId,
+                    selectionId: s.selectionId,
+                    selection: canvas.readSelection(),
+                }).catch(() => {})
+            }
         } catch {
             setStatus("offline")
         }
