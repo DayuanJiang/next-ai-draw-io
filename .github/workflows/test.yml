@@ -93,10 +93,30 @@ jobs:
         env:
           CI: true
 
+      # The canvas shell in a browser, from the package as npm installs it:
+      # the packed tarball goes into an empty directory, its dist/index.js is
+      # started over stdio and headless Chromium opens the URL start_session
+      # returns (packages/mcp-server/tests/e2e). Chromium is installed above;
+      # the build shares the root build's draw.war download.
+      - name: Run the MCP shell E2E tests on the packed tarball
+        if: matrix.shard == 1
+        run: |
+          npm --prefix packages/mcp-server ci
+          npm --prefix packages/mcp-server run build
+          npm pack ./packages/mcp-server --pack-destination "$RUNNER_TEMP/mcp-pack"
+          mkdir -p "$RUNNER_TEMP/mcp-install"
+          npm --prefix "$RUNNER_TEMP/mcp-install" install "$RUNNER_TEMP"/mcp-pack/*.tgz
+          MCP_SERVER_ENTRY="$RUNNER_TEMP/mcp-install/node_modules/@next-ai-drawio/mcp-server/dist/index.js" \
+            npm --prefix packages/mcp-server run test:e2e
+        env:
+          CI: true
+
       - name: Upload test results
         uses: actions/upload-artifact@v6
         if: always()
         with:
           name: playwright-report-${{ matrix.shard }}
-          path: playwright-report/
+          path: |
+            playwright-report/
+            packages/mcp-server/test-results/
           retention-days: 7

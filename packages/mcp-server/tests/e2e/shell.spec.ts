@@ -1,7 +1,8 @@
 /**
  * The canvas shell as start_session opens it with DRAWIO_PREVIEW_UI=shell:
- * the built server (dist/index.js) runs over stdio as an MCP client would
- * start it, and headless Chromium opens the URL it returns.
+ * the built server (dist/index.js, or the copy MCP_SERVER_ENTRY names: CI
+ * installs the packed tarball in an empty directory) runs over stdio as an
+ * MCP client would start it, and headless Chromium opens the URL it returns.
  */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -21,7 +22,7 @@ test.beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), "mcp-shell-e2e-"))
     const transport = new StdioClientTransport({
         command: process.execPath,
-        args: [join(pkg, "dist/index.js")],
+        args: [process.env.MCP_SERVER_ENTRY ?? join(pkg, "dist/index.js")],
         env: {
             ...process.env,
             DRAWIO_DATA_DIR: dataDir,
