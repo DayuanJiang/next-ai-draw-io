@@ -10,7 +10,7 @@
 // - ADMIN_PASSWORD / SETTINGS_FILE: bootstrap values, env-only to avoid lockout
 // - Per-provider reasoning/thinking tuning vars: env-only (see env.example)
 
-export type SettingType = "string" | "secret" | "number" | "boolean"
+type SettingType = "string" | "secret" | "number" | "boolean"
 
 export interface SettingDef {
     key: string

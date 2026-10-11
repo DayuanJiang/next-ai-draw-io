@@ -1349,8 +1349,8 @@ export function ChatEngineProvider({
     }
 
     // Templates fill the input and send it right away (attachments included)
-    // Whether it was sent (it can run after a wait: the template panel
-    // stores its click count first, so busy is read from the ref)
+    // Whether it was sent (it can run after a wait, so busy is read from
+    // the ref)
     const sendTemplate = async (prompt: string): Promise<boolean> => {
         // Like the send button, it waits for an answer or a message being
         // prepared (that message may still come back to the input), and for
