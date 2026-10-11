@@ -9,13 +9,7 @@
 
 import { deflateRawSync } from "node:zlib"
 import { DOMParser } from "linkedom"
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-
-// Install the DOM polyfills exactly as index.ts does at runtime.
-beforeAll(() => {
-    installDomPolyfill()
-})
+import { describe, expect, it } from "vitest"
 
 import {
     decompressPageContent,
