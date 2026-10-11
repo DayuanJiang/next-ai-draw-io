@@ -103,37 +103,85 @@ describe("requestExport", () => {
 })
 
 describe("showTransient", () => {
-    it("shows the document without recording it, and ignores its autosaves until the next load", () => {
-        const { result, loads } = setup()
+    type Result = ReturnType<typeof setup>["result"]
+    // Load the document, with draw.io's "load" reports: its first one makes
+    // the provider send the document once more, which draw.io reports too
+    const start = (result: Result, xml: string) =>
         act(() => {
-            result.current.loadDiagram(doc(page("p1", "real")), true)
+            result.current.loadDiagram(xml, true)
+            result.current.onDrawioLoad()
             result.current.onDrawioLoad()
         })
+    const loaded = (result: Result) => act(() => result.current.onDrawioLoad())
+    const autosave = (result: Result, xml: string) =>
+        act(() => result.current.handleDiagramAutoSave({ xml }))
+
+    it("shows the document without recording it, and ignores its autosaves until the next load", () => {
+        const { result, loads } = setup()
+        start(result, doc(page("p1", "real")))
         expect(result.current.chartXML).toContain('value="real"')
 
         act(() => {
             result.current.showTransient(doc(page("p2", "projection")))
         })
+        loaded(result)
         expect(loads.at(-1)).toContain('value="projection"')
         expect(result.current.chartXML).toContain('value="real"')
-        act(() => {
-            result.current.handleDiagramAutoSave({
-                xml: doc(page("p2", "projection edited")),
-            })
-        })
+        autosave(result, doc(page("p2", "projection edited")))
         expect(result.current.chartXML).toContain('value="real"')
 
-        // The real document comes back: recorded, and saves count again
+        // The real document comes back: recorded, and once draw.io reports
+        // the load, saves count again
         act(() => {
             result.current.loadDiagram(doc(page("p1", "real again")), true)
         })
+        loaded(result)
         expect(result.current.chartXML).toContain('value="real again"')
-        act(() => {
-            result.current.handleDiagramAutoSave({
-                xml: doc(page("p1", "real edited")),
-            })
-        })
+        autosave(result, doc(page("p1", "real edited")))
         expect(result.current.chartXML).toContain('value="real edited"')
+    })
+
+    it("keeps the document over a projection autosave that comes before draw.io reports the load back", () => {
+        const { result, loads } = setup()
+        const twoPages = doc(page("p1", "one") + page("p2", "two"))
+        start(result, twoPages)
+        act(() => {
+            result.current.showTransient(doc(page("p2", "two")))
+        })
+        loaded(result)
+        // The restore load is sent; the user's last drag on the projection
+        // is autosaved before draw.io gets to the load
+        act(() => {
+            result.current.loadDiagram(twoPages, true, "load")
+        })
+        autosave(result, doc(page("p2", "two moved")))
+        const isDocument = (xml: string | undefined) =>
+            !!xml && xml.includes('id="p1"') && !xml.includes("two moved")
+        expect(isDocument(result.current.chartXMLRef.current)).toBe(true)
+        loaded(result)
+        expect(isDocument(result.current.chartXMLRef.current)).toBe(true)
+        // The frame starts over (an external draw.io on a theme switch) and
+        // gets the document, not the projection
+        act(() => {
+            result.current.resetDrawioReady()
+        })
+        loaded(result)
+        expect(isDocument(loads.at(-1))).toBe(true)
+    })
+
+    it("ignores an autosave of the document a full load replaces", () => {
+        const { result } = setup()
+        start(result, doc(page("p1", "first")))
+        act(() => {
+            result.current.loadDiagram(doc(page("p1", "second")), true, "load")
+        })
+        // draw.io autosaved the user's last change of the first document
+        // before it got to the load
+        autosave(result, doc(page("p1", "first moved")))
+        expect(result.current.chartXML).toContain('value="second"')
+        loaded(result)
+        autosave(result, doc(page("p1", "second moved")))
+        expect(result.current.chartXML).toContain('value="second moved"')
     })
 
     it("goes back to the page the user was on before the projection", () => {

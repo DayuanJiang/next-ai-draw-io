@@ -437,8 +437,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // read refs: state captured in its closure would stay stale after a remount
     const handleDiagramAutoSave = (data: { xml?: string }) => {
         if (!data?.xml) return
-        // An edit of a transient document is not the diagram's
-        if (transientRef.current) return
+        // An edit of a transient document is not the diagram's; nor is one
+        // of the canvas a full load still on its way replaces (draw.io
+        // reports each load, in order, so no autosave of the new document
+        // comes before that)
+        if (transientRef.current || pendingLoadsRef.current > 0) return
         // Don't overwrite a pending restore - if we have a diagram but
         // DrawIO hasn't loaded yet, it means we're waiting to restore
         if (!hasCalledOnLoadRef.current && chartXMLRef.current) return
