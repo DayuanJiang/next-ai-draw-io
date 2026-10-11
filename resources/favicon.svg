@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Next AI Draw.io</title>
   <!-- Web icon, source of public/favicon.ico, app/favicon.ico and public/favicon-*.png.
        The tile fills the canvas so the icon stays large in browser tabs. -->
   <rect x="4" y="4" width="1016" height="1016" rx="228" fill="#ffffff" stroke="#dfe3e8" stroke-width="8"/>
