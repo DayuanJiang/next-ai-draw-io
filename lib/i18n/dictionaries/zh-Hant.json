@@ -51,7 +51,8 @@
         "creativeDescription": "繪製有趣且富有創意的內容",
         "cachedNote": "範例使用保存好的答案，立即顯示，不呼叫 AI。",
         "mcpServer": "MCP 伺服器",
-        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用"
+        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用",
+        "mcpTagline": "讓 Claude Code、Cursor 或 VS Code 直接讀取本機檔案和程式碼來繪圖。畫布和這裡一樣：即時預覽、標示改動、一鍵復原。"
     },
     "settings": {
         "title": "設定",

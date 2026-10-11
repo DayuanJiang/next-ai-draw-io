@@ -1,4 +1,4 @@
-import { FileUp, History, Pencil } from "lucide-react"
+import { ArrowUpRight, FileUp, History, Pencil, Terminal } from "lucide-react"
 import type React from "react"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getAssetUrl } from "@/lib/base-path"
@@ -78,6 +78,7 @@ export function LobbyHero({
     const dict = useDictionary()
     const t = dict.lobby
     const engine = useChatEngine()
+    const isSelfHosted = process.env.NEXT_PUBLIC_SELFHOSTED === "true"
 
     // Prompts and file names must stay as they are: cached responses match them
     const examples: Example[] = [
@@ -172,6 +173,35 @@ export function LobbyHero({
             >
                 {t.lede}
             </p>
+
+            {/* MCP server notice, hidden on self-hosted deployments. The lede's
+                margin already spans 24 px (20 px compact); pull the card up so
+                16 px remain above it */}
+            {!isSelfHosted && (
+                <a
+                    href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                        "group mb-5 flex w-full items-center gap-3 rounded-xl border border-purple-500/20 bg-gradient-to-r from-purple-500/10 to-blue-500/10 px-4 py-3 transition-colors hover:border-purple-500/40",
+                        compact ? "-mt-1" : "-mt-2",
+                    )}
+                    data-testid="mcp-notice"
+                >
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/20">
+                        <Terminal className="size-4 text-purple-500" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-foreground transition-colors group-hover:text-purple-500">
+                            {dict.examples.mcpServer}
+                        </span>
+                        <span className="block text-xs leading-relaxed text-balance text-muted-foreground">
+                            {dict.examples.mcpTagline}
+                        </span>
+                    </span>
+                    <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-purple-500" />
+                </a>
+            )}
 
             <Composer
                 variant="hero"

@@ -51,7 +51,8 @@
         "creativeDescription": "绘制有趣且富有创意的内容",
         "cachedNote": "示例使用保存好的答案，立即显示，不调用 AI。",
         "mcpServer": "MCP 服务器",
-        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用"
+        "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用",
+        "mcpTagline": "让 Claude Code、Cursor 或 VS Code 直接读取本地文件和代码来画图。画布和这里一样：实时预览、标出改动、一键撤销。"
     },
     "settings": {
         "title": "设置",
