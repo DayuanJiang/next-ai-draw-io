@@ -8,7 +8,7 @@
         "next-ai-drawio-mcp": "./dist/index.js"
     },
     "scripts": {
-        "build": "tsc && node scripts/copy-assets.mjs",
+        "build": "tsc && node scripts/copy-assets.mjs && node scripts/fetch-drawio.mjs",
         "check-package": "node scripts/check-package.mjs",
         "dev": "tsx watch src/index.ts",
         "start": "node dist/index.js",
