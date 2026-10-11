@@ -112,11 +112,11 @@ Use the standard MCP configuration with:
 - **Edit Support**: Modify existing diagrams with natural language instructions. If any change in an edit fails, nothing is written and the AI gets the reason and the current page XML
 - **Your Edits Are Kept**: Changes you make in the browser are read before the AI edits again. If the AI overwrites a change you were still making, your version is saved in History
 - **Version History**: Click **History** at the top right of the preview page to restore one of the last 20 versions, shown as thumbnails, or ask the AI to undo (`restore_version`)
-- **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io can open and edit again), from the **Download** button or through `export_diagram`
+- **Download and Export**: Save as `.drawio`, `.png`, `.svg`, or `.drawio.svg` (an SVG with the diagram embedded, which draw.io and `load_diagram` can open again), from the **Download** button or through `export_diagram`
 - **Multi-page**: List, add, rename, and delete pages, and edit any page
 - **Auto-save**: Each session's diagram is saved to `~/.next-ai-drawio/<session-id>.drawio`, and its last 20 versions to `<session-id>.history.json`, so the diagram, History and undo survive a restart of the MCP client
 - **Custom Instructions**: keep your own drawing rules in `~/.next-ai-drawio/instructions.md` (for example "Always draw in minimal style"); they are appended to the drawing guide on every call
-- **Themes and Dark Mode**: Pick a draw.io theme under **Extras > Theme**; the page follows the system dark mode
+- **Themes and Dark Mode**: Pick a draw.io theme under **Extras > Theme**; the page follows the system dark mode, or fix them with `DRAWIO_UI`, `DRAWIO_DARK` and `DRAWIO_LANG`
 - **Self-contained**: Embedded server, works offline (except draw.io UI which loads from `embed.diagrams.net` by default, configurable via `DRAWIO_BASE_URL`)
 
 ## Available Tools
@@ -125,10 +125,10 @@ Use the standard MCP configuration with:
 |------|-------------|
 | `start_session` | Opens browser with real-time diagram preview; the result includes the drawing rules. Pass `session_id` to continue a saved diagram |
 | `list_saved_diagrams` | List the auto-saved diagrams of earlier sessions, newest first, with their pages |
-| `get_drawing_guide` | Return the drawing rules again, for example after a long conversation was compacted |
+| `get_drawing_guide` | Return the drawing rules again, for example after a long conversation was compacted, or, with `topic`, a short XML reference for tables, layers or groups |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4`, `azure2`, or `kubernetes` |
 | `create_new_diagram` | Create a new diagram from XML; a plain list of `mxCell` elements is enough |
-| `load_diagram` | Load a `.drawio` file into the session, from a `path` on disk or from its `xml` content (handles compressed files) |
+| `load_diagram` | Load a `.drawio` or `.drawio.svg` file into the session, from a `path` on disk or from its `xml` content (handles compressed files) |
 | `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells); all or nothing |
 | `get_diagram` | Get the current diagram XML, including your edits in the browser |
 | `screenshot_diagram` | Return a PNG of a page so the AI can check the rendered diagram |
@@ -185,6 +185,9 @@ To give the AI your own drawing rules, write them in `~/.next-ai-drawio/instruct
 | `PORT` | `6002` | Port for the embedded HTTP server |
 | `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for the draw.io embed. Set this to use a self-hosted draw.io instance for private deployments. |
 | `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for the auto-saved `.drawio` files and your `instructions.md`. Set to `off` to turn auto-save off (`instructions.md` is then read from the default folder). |
+| `DRAWIO_LANG` | unset | Language of the draw.io editor. Unset, draw.io chooses: the browser language on `embed.diagrams.net`, English on a self-hosted draw.io until the user picks one under **Extras > Language**. A code such as `en`, `zh`, `zh-tw`, `ja` or `de` fixes it and hides that submenu. |
+| `DRAWIO_UI` | unset | draw.io theme. Unset, the user picks one under **Extras > Theme** and draw.io remembers it. `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple` fixes the theme and hides that menu. |
+| `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light. The page header keeps following the system. |
 | `DEBUG` | unset | Set to `true` to log debug messages to stderr. |
 
 ### Private Deployment (Self-hosted draw.io)

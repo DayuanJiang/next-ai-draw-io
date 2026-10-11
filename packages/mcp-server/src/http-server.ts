@@ -44,6 +44,7 @@ function readBody(
     })
 }
 
+import { isDrawioTheme, toDrawioLang } from "./drawio-themes.ts"
 import { contentFingerprint } from "./edit-gate.ts"
 import {
     addHistory,
@@ -813,6 +814,33 @@ function loadPreviewTemplate(): string {
 const scriptJson = (value: string) =>
     JSON.stringify(value).replace(/</g, "\\u003c")
 
+/**
+ * The configurable tail of the draw.io iframe query: dark mode, and the
+ * language and theme when the host config fixes them (DRAWIO_DARK,
+ * DRAWIO_LANG, DRAWIO_UI). lang and ui are left out unless set, because
+ * draw.io hides its Extras > Language / Theme submenu once they are given.
+ */
+export function drawioEmbedParams(
+    env: NodeJS.ProcessEnv = process.env,
+): string {
+    const params = new URLSearchParams()
+    const ui = (env.DRAWIO_UI ?? "").toLowerCase()
+    const dark = (env.DRAWIO_DARK ?? "").toLowerCase()
+    const lang = toDrawioLang(env.DRAWIO_LANG ?? "")
+    if (["1", "true", "dark"].includes(dark)) {
+        params.set("dark", "1")
+    } else if (["0", "false", "light"].includes(dark)) {
+        params.set("dark", "0")
+    } else {
+        // draw.io takes ui=dark as dark mode only when no dark parameter is
+        // present, and this page always sends one
+        params.set("dark", !dark && ui === "dark" ? "1" : "auto")
+    }
+    if (/^[a-z]{2,3}(-[a-z]{2,4})?$/.test(lang)) params.set("lang", lang)
+    if (isDrawioTheme(ui)) params.set("ui", ui)
+    return params.toString()
+}
+
 function getHtmlPage(sessionId: string): string {
     return loadPreviewTemplate()
         .replace("{{SESSION_BADGE}}", () =>
@@ -822,6 +850,7 @@ function getHtmlPage(sessionId: string): string {
         )
         .replaceAll("{{DISABLED}}", sessionId ? "" : "disabled")
         .replace("{{DRAWIO_URL}}", () => normalizeUrl(DRAWIO_BASE_URL))
+        .replace("{{DRAWIO_PARAMS}}", () => drawioEmbedParams())
         .replace("{{SESSION_JSON}}", () => scriptJson(sessionId))
         .replace("{{ORIGIN_JSON}}", () => scriptJson(DRAWIO_ORIGIN))
 }

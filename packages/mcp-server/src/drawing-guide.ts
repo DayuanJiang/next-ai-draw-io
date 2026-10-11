@@ -52,6 +52,8 @@ Containers and swimlanes: children use the container id as parent and coordinate
 
 ${indent(SWIMLANE_EXAMPLE)}
 
+Large diagrams: if the diagram will not fit one call, send the first cells with create_new_diagram and add the rest with edit_diagram add operations (one per cell, same id rules). A call rejected because the XML ends inside an unfinished cell drew nothing: send all of its cells again, in smaller parts if needed.
+
 ## Layout
 - Keep every element of a page within x 0 to 800 and y 0 to 600, so the whole diagram fits one view without a page break.
 - Containers (for example AWS cloud boxes) are at most 700 pixels wide and 550 pixels tall.
@@ -92,6 +94,9 @@ ${indent(STYLE_CLASS_EXAMPLE)}
 - Edges: endArrow=block, open or none; startArrow=classic; curved=1; dashed=1; edgeStyle=orthogonalEdgeStyle
 - Text: fontSize=14, fontStyle=1 (bold), align=center or right
 - Animated connectors: add flowAnimation=1 to the edge style.
+- Edge options: dashed=1; strokeWidth=2; edgeStyle=elbowEdgeStyle;elbow=vertical (or horizontal); jumpStyle=arc;jumpSize=10 where edges cross.
+
+For tables, layers or groups, call get_drawing_guide with topic=tables, layers or groups.
 
 ## Minimal style
 When the user asks for a minimal, plain, black-and-white or unstyled diagram, use these rules instead of the styles above:

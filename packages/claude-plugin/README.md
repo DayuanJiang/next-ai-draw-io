@@ -94,7 +94,7 @@ Recreate the whiteboard photo at ~/Desktop/sketch.jpg as a clean draw.io diagram
 | `get_drawing_guide` | Return the drawing rules again |
 | `get_shape_library` | Return the shapes and icon styles of a library such as `aws4` |
 | `create_new_diagram` | Create a new diagram from XML |
-| `load_diagram` | Load a `.drawio` file from disk |
+| `load_diagram` | Load a `.drawio` or `.drawio.svg` file from disk |
 | `edit_diagram` | Edit diagram by ID-based operations; all or nothing |
 | `get_diagram` | Get the current diagram XML |
 | `screenshot_diagram` | Return a PNG of a page so Claude can check the result |
@@ -120,6 +120,9 @@ Claude Code <--stdio--> MCP Server <--http--> Browser (draw.io)
 | `PORT` | `6002` | Port for the embedded HTTP server |
 | `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for draw.io (for self-hosted deployments) |
 | `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for auto-saved diagrams and your `instructions.md`; `off` turns auto-save off (`instructions.md` is then read from the default folder) |
+| `DRAWIO_LANG` | unset | Language of the draw.io editor, such as `en`, `zh`, `zh-tw`, `ja` or `de`. Unset, draw.io chooses (the browser language on `embed.diagrams.net`, English on a self-hosted draw.io) and the user can change it under **Extras > Language** |
+| `DRAWIO_UI` | unset | draw.io theme: `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple`. Unset, the user picks one under **Extras > Theme** |
+| `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light |
 | `DEBUG` | unset | Set to `true` to log debug messages |
 
 ## Links

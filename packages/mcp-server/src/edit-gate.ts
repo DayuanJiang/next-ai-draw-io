@@ -142,3 +142,116 @@ export function markPageSeen(
         ? liveXml
         : lastSeenXml
 }
+
+const CELL_TAGS = new Set(["mxCell", "UserObject", "object"])
+
+/** The cells of a page by id: the direct children of its <root>. */
+function pageCells(page: Element): Map<string, Element> {
+    const cells = new Map<string, Element>()
+    for (const el of Array.from(page.querySelector("root")?.children ?? [])) {
+        const id = el.getAttribute("id")
+        if (id && CELL_TAGS.has(el.tagName)) cells.set(id, el)
+    }
+    return cells
+}
+
+/** `id ("label")`: the cell's value without HTML, cut at 30 characters. */
+function describeCell(id: string, cell: Element): string {
+    // getAttributeNode gives the decoded value (linkedom's getAttribute
+    // escapes it again); an HTML label then still holds tags and entities
+    const label = (
+        (cell.getAttributeNode("value") ?? cell.getAttributeNode("label"))
+            ?.value ?? ""
+    )
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/\s+/g, " ")
+        .trim()
+    if (!label) return id
+    return `${id} ("${label.length > 30 ? `${label.slice(0, 30)}...` : label}")`
+}
+
+/** At most 20 entries, then "and N more". */
+function listCells(cells: string[]): string {
+    const shown = cells.slice(0, 20).join(", ")
+    return cells.length > 20 ? `${shown} and ${cells.length - 20} more` : shown
+}
+
+/**
+ * One paragraph naming what the user changed between the XML the model last
+ * saw and the live store, for stale rejections and get_diagram. Pages are
+ * paired by index (draw.io regenerates diagram ids on re-serialisation) and
+ * cells by id. Returns "" when there is nothing to compare or the two sides
+ * have the same content.
+ */
+export function describeChanges(lastSeenXml: string, liveXml: string): string {
+    if (!lastSeenXml || lastSeenXml === liveXml) return ""
+    const parse = (xml: string) => {
+        const normalized = normalizeToMxfile(xml)
+        return normalized ? parseMxfile(normalized) : null
+    }
+    const before = parse(lastSeenXml)
+    const live = parse(liveXml)
+    if (!before || !live) return ""
+    // Same rule as checkEditGate: a bare <mxGraphModel> carries no page name
+    const includeNames =
+        !isMxGraphModel(liveXml) && !isMxGraphModel(lastSeenXml)
+    if (
+        contentFingerprint(lastSeenXml, includeNames) ===
+        contentFingerprint(liveXml, includeNames)
+    )
+        return ""
+
+    const pagesBefore = Array.from(before.querySelectorAll("diagram"))
+    const pagesLive = Array.from(live.querySelectorAll("diagram"))
+    const pageCount = Math.max(pagesBefore.length, pagesLive.length)
+    const clauses: string[] = []
+    const renames: string[] = []
+    for (let i = 0; i < pageCount; i++) {
+        const pageBefore = pagesBefore[i]
+        const pageLive = pagesLive[i]
+        if (!pageBefore || !pageLive) {
+            clauses.push(`page ${i + 1} ${pageLive ? "added" : "removed"}`)
+            continue
+        }
+        const cellsBefore = pageCells(pageBefore)
+        const cellsLive = pageCells(pageLive)
+        const modified: string[] = []
+        const added: string[] = []
+        const removed: string[] = []
+        for (const [id, cell] of cellsLive) {
+            const old = cellsBefore.get(id)
+            if (!old) added.push(describeCell(id, cell))
+            else if (canonicalizeElement(old) !== canonicalizeElement(cell))
+                modified.push(describeCell(id, cell))
+        }
+        for (const [id, cell] of cellsBefore) {
+            if (!cellsLive.has(id)) removed.push(describeCell(id, cell))
+        }
+        // Name the page only when the document has several
+        const where = pageCount > 1 ? `page ${i + 1} ` : ""
+        if (modified.length)
+            clauses.push(`${where}modified ${listCells(modified)}`)
+        if (added.length) clauses.push(`${where}added ${listCells(added)}`)
+        if (removed.length)
+            clauses.push(`${where}removed ${listCells(removed)}`)
+        if (includeNames) {
+            const name = pageLive.getAttribute("name") ?? ""
+            if (name !== (pageBefore.getAttribute("name") ?? ""))
+                renames.push(`Page ${i + 1} renamed to "${name}".`)
+        }
+    }
+    // The fingerprint also covers the cell order (z-order) and anything in
+    // <root> that is not a cell
+    if (!clauses.length && !renames.length)
+        clauses.push("the order of the cells changed")
+    const intro = "Since you last saw it, the user changed the diagram"
+    const body = clauses.length
+        ? `${intro}: ${clauses.join("; ")}.`
+        : `${intro}.`
+    return [body, ...renames].join(" ")
+}

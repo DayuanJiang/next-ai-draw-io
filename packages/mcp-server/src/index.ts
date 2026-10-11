@@ -32,7 +32,12 @@ import type { DiagramOperation } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
-import { checkEditGate, contentFingerprint, markPageSeen } from "./edit-gate.ts"
+import {
+    checkEditGate,
+    contentFingerprint,
+    describeChanges,
+    markPageSeen,
+} from "./edit-gate.ts"
 import { createExclusive } from "./exclusive.ts"
 import {
     addHistory,
@@ -64,6 +69,7 @@ import {
     prepareNewDiagram,
     reservedIdError,
     takeStyleDefinitions,
+    truncatedCellError,
 } from "./new-diagram.ts"
 import {
     addPageToDoc,
@@ -84,6 +90,7 @@ import {
 import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
 import { addDefaultStyles, applyStyleClasses } from "./style-classes.ts"
+import { XML_REFERENCE } from "./xml-reference.ts"
 import { validateAndFixXml } from "./xml-validation.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -163,10 +170,10 @@ After drawing a complex diagram, call screenshot_diagram once to see it, and fix
 
 Tools:
 - create_new_diagram: draw a new diagram, replacing the whole document. Send only the mxCell elements of one page (the server adds the wrapper and root cells), or a full <mxfile> for several pages.
-- edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry.
+- edit_diagram: add, update or delete cells of an existing page by id. All-or-nothing; a rejected call includes the current XML so you can retry; also used to draw a large diagram in parts.
 - get_diagram: read the current XML, including the user's manual edits.
 - screenshot_diagram: see the rendered diagram as an image.
-- load_diagram, export_diagram: open or save .drawio files and export .png or .svg. Use absolute paths.
+- load_diagram, export_diagram: open or save .drawio or .drawio.svg files and export .png or .svg. Use absolute paths.
 - list_saved_diagrams: diagrams saved by earlier sessions; continue one with start_session session_id=<id>.
 - list_pages, add_page, rename_page, delete_page: manage pages (tabs).
 - restore_version: undo; go back to an earlier version of the diagram.`
@@ -272,11 +279,26 @@ server.registerTool(
         title: "Get drawing guide",
         description:
             "Return the drawing guide: XML format, layout, edge routing, style and editing rules. " +
-            "start_session already returns it; call this only if the guide is no longer in your context.",
-        inputSchema: {},
+            "start_session already returns it; call this only if the guide is no longer in your context. " +
+            "With topic, returns a short XML reference for tables, layers or groups.",
+        inputSchema: {
+            topic: z
+                .enum(["tables", "layers", "groups"])
+                .optional()
+                .describe(
+                    "Return only the XML reference for this topic instead of the whole guide.",
+                ),
+        },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => ({ content: [{ type: "text", text: guideText() }] }),
+    async ({ topic }) => ({
+        content: [
+            {
+                type: "text",
+                text: topic ? XML_REFERENCE[topic] : guideText(),
+            },
+        ],
+    }),
 )
 
 // Tool: get_shape_library
@@ -610,12 +632,13 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
 registerWriteTool(
     "load_diagram",
     {
-        title: "Load .drawio file",
+        title: "Load diagram file",
         description:
             "Load a .drawio diagram into the current session, REPLACING the entire diagram (all pages). " +
             "Provide ONE of two mutually exclusive sources: 'path' (the server reads the file from disk — you do NOT need to read the file yourself or pass its XML through create_new_diagram) " +
             "or 'xml' (the raw file content you already have — from another tool, a repository read, or an API response — so no temporary file needs to be written first). " +
-            "Both accept plain XML and draw.io's compressed save format.\n\n" +
+            "Both accept plain XML and draw.io's compressed save format. " +
+            ".drawio.svg (Editable SVG, the format export_diagram writes) is accepted too; .png files (also draw.io's editable PNG) and plain .svg files cannot be loaded.\n\n" +
             "After loading from 'path' (or from compressed 'xml'), call get_diagram before edit_diagram — you haven't seen the file's cell IDs yet. " +
             "Plain-XML 'xml' content you supplied yourself is already known and can be edited immediately.",
         inputSchema: {
@@ -623,7 +646,7 @@ registerWriteTool(
                 .string()
                 .optional()
                 .describe(
-                    "Path to the .drawio file to load (e.g. /Users/me/diagram.drawio or ~/diagram.drawio). Relative paths resolve against the MCP server's working directory, which is often not your project. Mutually exclusive with 'xml'.",
+                    "Path to the .drawio or .drawio.svg file to load (e.g. /Users/me/diagram.drawio or ~/diagram.drawio). Relative paths resolve against the MCP server's working directory, which is often not your project. Mutually exclusive with 'xml'.",
                 ),
             xml: z
                 .string()
@@ -897,6 +920,8 @@ registerWriteTool(
                 // seen it and can retry without a get_diagram round-trip,
                 // unless other pages changed too.
                 const liveXml = browserState?.xml || currentSession.xml
+                // What the model saw, before markPageSeen records the live state
+                const before = currentSession.lastSeenXml
                 currentSession.lastSeenXml = markPageSeen(
                     currentSession.lastSeenXml,
                     liveXml,
@@ -906,6 +931,11 @@ registerWriteTool(
                     gate.reason === "stale"
                         ? "The diagram changed in the browser since you last saw it (e.g. manual user edits). No changes were made."
                         : "You have not seen this diagram yet, so no changes were made."
+                // Per-cell summary of the user's changes, when they can be compared
+                const summary =
+                    gate.reason === "stale"
+                        ? describeChanges(before, liveXml)
+                        : ""
                 const next =
                     currentSession.lastSeenXml === liveXml
                         ? "Build your operations on this XML and retry."
@@ -914,7 +944,7 @@ registerWriteTool(
                     content: [
                         {
                             type: "text",
-                            text: `Error: ${reason}\n\nCurrent XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\n${next}`,
+                            text: `Error: ${reason}\n\n${summary ? `${summary}\n\n` : ""}Current XML of ${describeSelector(pageSelector)}:\n\n${foldCells(targetPageXml(currentSession.xml, pageSelector))}\n\n${next}`,
                         },
                     ],
                     isError: true,
@@ -1070,6 +1100,12 @@ server.registerTool(
             // store value — the gate's fast path is plain string equality
             // against the store, with a structural comparison as fallback.
             const liveXml = browserState?.xml || session.xml
+            // What the user changed since the model last looked, computed
+            // before lastSeenXml is overwritten below
+            const changes = session.lastSeenXml
+                ? describeChanges(session.lastSeenXml, liveXml)
+                : ""
+            const changesNote = changes ? `\n\nNote: ${changes}` : ""
             const doc = parseMxfile(session.xml)
             const pages = doc ? listPagesFromDoc(doc) : []
             const pageList = pages.length
@@ -1083,7 +1119,7 @@ server.registerTool(
                     content: [
                         {
                             type: "text",
-                            text: `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}`,
+                            text: `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}${changesNote}`,
                         },
                     ],
                 }
@@ -1120,7 +1156,7 @@ server.registerTool(
                 content: [
                     {
                         type: "text",
-                        text: `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${otherPagesNote}`,
+                        text: `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${changesNote}${otherPagesNote}`,
                     },
                 ],
             }
@@ -1344,7 +1380,7 @@ server.registerTool(
     {
         title: "Export diagram",
         description:
-            "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io can open and edit again). " +
+            "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io and load_diagram can open again). " +
             "The format is auto-detected from the file extension, or can be specified explicitly.\n\n" +
             "Multi-page behaviour:\n" +
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
@@ -1818,6 +1854,13 @@ registerWriteTool(
             if (reserved) {
                 return {
                     content: [{ type: "text", text: `Error: ${reserved}` }],
+                    isError: true,
+                }
+            }
+            const truncated = startXml && truncatedCellError(startXml)
+            if (truncated) {
+                return {
+                    content: [{ type: "text", text: `Error: ${truncated}` }],
                     isError: true,
                 }
             }

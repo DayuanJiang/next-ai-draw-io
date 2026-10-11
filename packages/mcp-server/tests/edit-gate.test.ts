@@ -19,6 +19,7 @@ beforeAll(() => {
 import {
     checkEditGate,
     contentFingerprint,
+    describeChanges,
     markPageSeen,
 } from "../src/edit-gate.ts"
 
@@ -166,5 +167,141 @@ describe("markPageSeen", () => {
     it("counts a one-page document as seen from its only page", () => {
         const live = `<mxfile>${page("A", "a1")}</mxfile>`
         expect(markPageSeen("", live, { page_id: "A" })).toBe(live)
+    })
+})
+
+describe("describeChanges", () => {
+    const BOX2 = `<mxCell id="box2" value="World" vertex="1" parent="1"><mxGeometry x="200" y="40" width="120" height="60" as="geometry"/></mxCell>`
+    const XML_A_PLUS_BOX2 = XML_A.replace("</root>", `${BOX2}</root>`)
+    const PAGE_2 = `<diagram id="p2" name="Page-2"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>`
+    const XML_A_TWO_PAGES = XML_A.replace("</mxfile>", `${PAGE_2}</mxfile>`)
+
+    it("names a moved cell with its label", () => {
+        const summary = describeChanges(XML_A, XML_B)
+        expect(summary).toBe(
+            'Since you last saw it, the user changed the diagram: modified box1 ("Hello").',
+        )
+        expect(summary).toContain("modified box1")
+    })
+
+    it("names a deleted cell", () => {
+        expect(describeChanges(XML_A_PLUS_BOX2, XML_A)).toContain(
+            'removed box2 ("World")',
+        )
+    })
+
+    it("names an added cell", () => {
+        expect(describeChanges(XML_A, XML_A_PLUS_BOX2)).toContain(
+            'added box2 ("World")',
+        )
+    })
+
+    it("is empty for draw.io's re-serialisation of the same content", () => {
+        expect(describeChanges(XML_A, XML_A_RESERIALIZED)).toBe("")
+    })
+
+    it("is empty when the model has seen nothing yet", () => {
+        expect(describeChanges("", XML_B)).toBe("")
+    })
+
+    it("is empty when one side does not parse", () => {
+        expect(describeChanges(XML_A, "not xml at all")).toBe("")
+    })
+
+    it("reports a renamed page", () => {
+        const renamed = XML_A.replace('name="Page-1"', 'name="Renamed"')
+        expect(describeChanges(XML_A, renamed)).toBe(
+            'Since you last saw it, the user changed the diagram. Page 1 renamed to "Renamed".',
+        )
+    })
+
+    // A bare <mxGraphModel> push carries no page name, so the invented
+    // "Page-1" must not read as a rename
+    it("never reports a rename against a bare mxGraphModel", () => {
+        const seenRenamed = XML_A.replace('name="Page-1"', 'name="Arch"')
+        expect(describeChanges(seenRenamed, XML_A_BARE)).toBe("")
+        const bareMoved = XML_A_BARE.replace('x="40" y="40"', 'x="300" y="200"')
+        const summary = describeChanges(seenRenamed, bareMoved)
+        expect(summary).toContain("modified box1")
+        expect(summary).not.toContain("renamed")
+    })
+
+    it("strips HTML from labels and reads UserObject labels", () => {
+        const html = XML_A.replace(
+            'value="Hello"',
+            'value="&lt;b&gt;Hello&lt;/b&gt;"',
+        )
+        expect(describeChanges(XML_A, html)).toContain(
+            'modified box1 ("Hello")',
+        )
+        const userObject = XML_A.replace(
+            "</root>",
+            `<UserObject id="u1" label="&lt;i&gt;Link&lt;/i&gt;" link="https://x.y"><mxCell style="rounded=1;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell></UserObject></root>`,
+        )
+        expect(describeChanges(XML_A, userObject)).toContain(
+            'added u1 ("Link")',
+        )
+    })
+
+    it("keeps the words of an HTML label apart and decodes its spaces", () => {
+        const lines = XML_A.replace(
+            'value="Hello"',
+            'value="Line1&lt;br&gt;Line2&amp;nbsp;end &amp;amp; more"',
+        )
+        expect(describeChanges(XML_A, lines)).toContain(
+            'modified box1 ("Line1 Line2 end & more")',
+        )
+    })
+
+    it("cuts long labels at 30 characters", () => {
+        const long = "a".repeat(40)
+        const summary = describeChanges(
+            XML_A,
+            XML_A.replace('value="Hello"', `value="${long}"`),
+        )
+        expect(summary).toContain(`("${"a".repeat(30)}...")`)
+    })
+
+    it("lists at most 20 cells and counts the rest", () => {
+        const many = Array.from(
+            { length: 25 },
+            (_, i) => `<mxCell id="n${i}" vertex="1" parent="1"/>`,
+        ).join("")
+        const summary = describeChanges(
+            XML_A,
+            XML_A.replace("</root>", `${many}</root>`),
+        )
+        expect(summary).toContain("added n0, n1,")
+        expect(summary).toContain("n19 and 5 more.")
+        expect(summary).not.toContain("n20")
+    })
+
+    it("reports added and removed pages", () => {
+        expect(describeChanges(XML_A, XML_A_TWO_PAGES)).toBe(
+            "Since you last saw it, the user changed the diagram: page 2 added.",
+        )
+        expect(describeChanges(XML_A_TWO_PAGES, XML_A)).toBe(
+            "Since you last saw it, the user changed the diagram: page 2 removed.",
+        )
+    })
+
+    it("names the page of a cell change in a multi-page document", () => {
+        const movedOnPage1 = XML_A_TWO_PAGES.replace(
+            'x="40" y="40"',
+            'x="300" y="200"',
+        )
+        expect(describeChanges(XML_A_TWO_PAGES, movedOnPage1)).toContain(
+            'page 1 modified box1 ("Hello")',
+        )
+    })
+
+    it("falls back to a generic clause when only the cell order changed", () => {
+        const reordered = XML_A_PLUS_BOX2.replace(BOX2, "").replace(
+            '<mxCell id="box1"',
+            `${BOX2}<mxCell id="box1"`,
+        )
+        expect(describeChanges(XML_A_PLUS_BOX2, reordered)).toBe(
+            "Since you last saw it, the user changed the diagram: the order of the cells changed.",
+        )
     })
 })
