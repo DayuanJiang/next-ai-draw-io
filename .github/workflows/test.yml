@@ -103,8 +103,8 @@ jobs:
         run: |
           npm --prefix packages/mcp-server ci
           npm --prefix packages/mcp-server run build
+          mkdir -p "$RUNNER_TEMP/mcp-pack" "$RUNNER_TEMP/mcp-install"
           npm pack ./packages/mcp-server --pack-destination "$RUNNER_TEMP/mcp-pack"
-          mkdir -p "$RUNNER_TEMP/mcp-install"
           npm --prefix "$RUNNER_TEMP/mcp-install" install "$RUNNER_TEMP"/mcp-pack/*.tgz
           MCP_SERVER_ENTRY="$RUNNER_TEMP/mcp-install/node_modules/@next-ai-drawio/mcp-server/dist/index.js" \
             npm --prefix packages/mcp-server run test:e2e
