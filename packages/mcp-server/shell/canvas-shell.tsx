@@ -4,7 +4,7 @@ import { CanvasStage } from "@/components/canvas/canvas-stage"
 import { CompareDialog } from "@/components/canvas/compare-dialog"
 import { VersionStrip } from "@/components/canvas/version-strip"
 import { VersionsProvider } from "@/components/canvas/versions-context"
-import { SaveDialog } from "@/components/save-dialog"
+import { type ExportFormat, SaveDialog } from "@/components/save-dialog"
 import { AppToaster } from "@/components/workspace/app-toaster"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
@@ -29,7 +29,7 @@ const iconButton =
 export function CanvasShell({ config }: { config: ShellConfig }) {
     const dict = useDictionary()
     const isDark = useSettingsStore((s) => s.isDark)
-    const { saveDiagramToFile } = useDiagram()
+    const { saveDiagramToFile, hasPendingLoad } = useDiagram()
     const { status, sync } = useMcpSync(config)
     const versions = useNodeVersions(sync)
     const [panelOpen, setPanelOpen] = useState(true)
@@ -46,6 +46,24 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
     )
     const hasVersions = versions.versions.length > 0
     const showPanel = panelOpen && hasVersions
+
+    // draw.io exports what it shows: while a page export's one-page
+    // projection is on the canvas, or a full load has yet to reach the
+    // editor, that is not the document. Both end within seconds (the
+    // export's deadline is 15 s); the save waits for them, up to 20 s
+    const save = (filename: string, format: ExportFormat, tries = 0) => {
+        const canvasBusy = sync?.read().projectionActive || hasPendingLoad()
+        if (canvasBusy && tries < 66) {
+            setTimeout(() => save(filename, format, tries + 1), 300)
+            return
+        }
+        saveDiagramToFile(
+            filename,
+            format,
+            undefined,
+            dict.save.savedSuccessfully,
+        )
+    }
 
     return (
         <VersionsProvider value={versions}>
@@ -136,14 +154,7 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                 <SaveDialog
                     open={saveOpen}
                     onOpenChange={setSaveOpen}
-                    onSave={(filename, format) =>
-                        saveDiagramToFile(
-                            filename,
-                            format,
-                            undefined,
-                            dict.save.savedSuccessfully,
-                        )
-                    }
+                    onSave={save}
                     defaultFilename={`diagram-${new Date().toLocaleDateString("sv-SE")}`}
                 />
                 <AppToaster />

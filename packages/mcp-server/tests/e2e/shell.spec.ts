@@ -349,6 +349,12 @@ test("the download button saves the diagram as a file", async ({ page }) => {
     await page.getByTestId("download").click()
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()
+    // The dialog's utility classes are in the shell's stylesheet (shell.css
+    // names the shared component with @source): the formats in two columns
+    const columns = await dialog
+        .getByRole("radiogroup")
+        .evaluate((el) => getComputedStyle(el).gridTemplateColumns)
+    expect(columns.split(" ")).toHaveLength(2)
     // .drawio is the default format
     const download = page.waitForEvent("download")
     await dialog.getByRole("button", { name: "Export" }).click()
@@ -361,6 +367,53 @@ test("the download button saves the diagram as a file", async ({ page }) => {
     const saved = readFileSync(await file.path(), "utf8")
     expect(saved).toMatch(/^<mxfile\b/)
     expect(saved).toContain('name="Page-1"')
+})
+
+test("the download waits for a page export's projection, and saves every page", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Stay here", 40) })
+    await expect(frame.getByText("Stay here")).toBeVisible({ timeout: 10_000 })
+    await toolText("add_page", {
+        name: "Elsewhere",
+        xml: `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="e1" value="OnElsewhere" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`,
+    })
+    await expect(
+        frame
+            .locator(".geTabContainer")
+            .getByText("Elsewhere", { exact: true }),
+    ).toBeVisible({ timeout: 10_000 })
+    await page.getByTestId("download").click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    // The export's result is held up for 2 s: the one-page projection of
+    // the other page is surely still on the canvas when Export is clicked
+    await page.route("**/api/state", async (route) => {
+        const request = route.request()
+        if (
+            request.method() === "POST" &&
+            (request.postData() ?? "").includes('"exportData"')
+        ) {
+            await new Promise((r) => setTimeout(r, 2000))
+        }
+        await route.continue()
+    })
+    const exported = toolText("export_diagram", {
+        path: join(dataDir, "elsewhere.svg"),
+        page_name: "Elsewhere",
+    })
+    await expect(frame.getByText("OnElsewhere")).toBeVisible({
+        timeout: 10_000,
+    })
+    const download = page.waitForEvent("download")
+    await dialog.getByRole("button", { name: "Export" }).click()
+    // Saved once the user's document is back: both pages, not the projection
+    const saved = readFileSync(await (await download).path(), "utf8")
+    expect(saved.match(/<diagram\b/g)).toHaveLength(2)
+    expect(saved).toContain('name="Page-1"')
+    expect(saved).toContain('name="Elsewhere"')
+    expect(await exported).toContain("exported successfully")
 })
 
 // --- Version cards from the server's History (shell/node-versions-source.ts) ---

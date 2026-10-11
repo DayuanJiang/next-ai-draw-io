@@ -9,6 +9,7 @@
 @source "../../../components/ui";
 @source "../../../components/ai-elements";
 @source "../../../components/workspace/app-toaster.tsx";
+@source "../../../components/save-dialog.tsx";
 
 /* System fonts stand in for the web fonts the Next.js layout loads */
 :root {
