@@ -35,7 +35,9 @@ jobs:
         with:
           node-version: 24
           cache: "npm"
-          cache-dependency-path: packages/mcp-server/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            packages/mcp-server/package-lock.json
           registry-url: "https://registry.npmjs.org"
 
       # Trusted publishing requires npm >= 11.5.1
@@ -53,6 +55,13 @@ jobs:
             echo "Version ${LOCAL} not on npm - publishing"
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # The canvas shell (scripts/build-shell.mjs) is bundled from the web
+      # app's components with the root's esbuild, Tailwind and React
+      - name: Install repository dependencies
+        if: steps.version.outputs.publish == 'true'
+        working-directory: .
+        run: npm ci
 
       - name: Install dependencies
         if: steps.version.outputs.publish == 'true'
