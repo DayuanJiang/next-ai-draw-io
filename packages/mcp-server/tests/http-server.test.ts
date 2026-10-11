@@ -870,6 +870,15 @@ describe("canvas shell page", () => {
         expect(previewUrl(6002, "mcp-x", "classic")).toBe(
             "http://localhost:6002?mcp=mcp-x",
         )
+        // Not built: the classic page, which works, rather than a 404
+        setShellDir(null)
+        try {
+            expect(previewUrl(6002, "mcp-x", "shell")).toBe(
+                "http://localhost:6002?mcp=mcp-x",
+            )
+        } finally {
+            setShellDir(shellDir)
+        }
     })
 })
 

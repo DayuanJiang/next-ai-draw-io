@@ -190,6 +190,7 @@ To give the AI your own drawing rules, write them in `~/.next-ai-drawio/instruct
 | `DRAWIO_DARK` | `auto` | Dark mode of the draw.io editor: `auto` follows the system, `1` forces dark, `0` forces light. The page header keeps following the system. |
 | `DRAWIO_PREVIEW_UI` | `classic` | The preview page `start_session` opens. `shell` opens the new canvas page built from the web app's canvas: it syncs with the server like the classic page, and an AI change of the page on screen is marked and undone with one Ctrl+Z (in progress: no History panel or download yet). |
 | `DRAWIO_AUTO_SCREENSHOT` | unset | Set to `true` to attach a screenshot to every `create_new_diagram` and `edit_diagram` result, so the AI checks each drawing. Costs 2 to 10 s per call; the preview tab must be open and in front. A call can still pass `screenshot: false`. |
+| `BROWSER` | unset | Set to `none` and `start_session` does not open the preview in the system browser (the convention of Vite and Create React App dev servers); the result still names the URL. |
 | `DEBUG` | unset | Set to `true` to log debug messages to stderr. |
 
 ### Private Deployment (Self-hosted draw.io)

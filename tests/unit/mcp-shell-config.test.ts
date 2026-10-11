@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { getDrawioSrc } from "@/lib/drawio/drawio-config"
 import { i18n } from "@/lib/i18n/config"
 import {
     getShellDictionary,
@@ -56,6 +57,25 @@ describe("shell runtime config", () => {
         expect(odd.sessionId).toBe("")
         expect(odd.drawioDark).toBe("auto")
         expect(odd.token).toBe("t")
+    })
+})
+
+describe("shell draw.io URL", () => {
+    it("offers draw.io's theme menu unless a theme is fixed", () => {
+        // Embedded draw.io shows Extras > Theme only with themes=1 and no ui
+        const free = new URL(
+            getDrawioSrc({ editorUrl: "/drawio/index.html" }, false),
+        )
+        expect(free.searchParams.get("themes")).toBe("1")
+        expect(free.searchParams.get("ui")).toBeNull()
+        const fixed = new URL(
+            getDrawioSrc(
+                { editorUrl: "/drawio/index.html", ui: "kennedy" },
+                false,
+            ),
+        )
+        expect(fixed.searchParams.get("ui")).toBe("kennedy")
+        expect(fixed.searchParams.get("themes")).toBeNull()
     })
 })
 

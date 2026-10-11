@@ -122,7 +122,9 @@ export function previewUrl(
     sessionId: string,
     ui: PreviewUi = PREVIEW_UI,
 ): string {
-    const path = ui === "shell" ? "/shell/" : ""
+    // The classic page stands in while the shell is not built (a run from
+    // the sources), as embed.diagrams.net does for a missing dist/drawio
+    const path = ui === "shell" && shellDir !== null ? "/shell/" : ""
     return `http://localhost:${port}${path}?mcp=${sessionId}`
 }
 
@@ -428,6 +430,11 @@ export function startHttpServer(port = 6002): Promise<number> {
             if (!EXTERNAL_DRAWIO && drawioDir === null) {
                 log.warn(
                     "No bundled draw.io (dist/drawio missing); the preview loads it from embed.diagrams.net",
+                )
+            }
+            if (PREVIEW_UI === "shell" && shellDir === null) {
+                log.warn(
+                    "The canvas shell is not built (dist/shell missing); start_session opens the classic page",
                 )
             }
             resolve(port)

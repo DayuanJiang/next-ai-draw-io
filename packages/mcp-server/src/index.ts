@@ -382,9 +382,10 @@ registerWriteTool(
                 lastSeenXml: "",
             }
 
-            // Open browser
+            // Open the browser. BROWSER=none (the convention of CRA and Vite
+            // dev servers) skips it: the e2e tests and headless hosts set it
             const browserUrl = previewUrl(port, sessionId)
-            await open(browserUrl)
+            if (process.env.BROWSER !== "none") await open(browserUrl)
 
             // A saved diagram comes back from its file. lastSeenXml stays
             // empty, so edit_diagram asks for get_diagram first.
@@ -1287,7 +1288,7 @@ function previewStalled(sessionId: string): boolean {
  * already succeeded must not run again, so it points to screenshot_diagram.
  */
 function previewStalledNote(sessionId: string, next = "then retry") {
-    return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (http://localhost:${getServerPort()}?mcp=${sessionId}), ${next}.`
+    return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (${previewUrl(getServerPort(), sessionId)}), ${next}.`
 }
 
 function previewStalledError(sessionId: string) {

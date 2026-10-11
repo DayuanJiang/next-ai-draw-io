@@ -47,7 +47,10 @@ export function getDrawioSrc(source: DrawioSource, dark: boolean): string {
         proto: "json",
         configure: "1",
     }
+    // Without a fixed theme, embedded draw.io shows Extras > Theme only
+    // with themes=1 (its isThemeMenuVisible)
     if (source.ui) params.ui = source.ui
+    else params.themes = "1"
     Object.assign(params, {
         spin: "0",
         libraries: "0",
