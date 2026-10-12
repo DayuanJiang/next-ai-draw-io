@@ -127,7 +127,7 @@ test("the provider picker searches, marks added ones, and Enter picks", async ({
         dialog.getByTestId("pick-provider-anthropic"),
     ).not.toContainText("Added")
     await expect(dialog.locator('[data-testid^="pick-provider-"]')).toHaveCount(
-        24,
+        25,
     )
 
     await search.fill("zzz")
@@ -594,6 +594,34 @@ test("Azure needs its resource URL before it counts as connected", async ({
         .locator("#base-url")
         .fill("https://contoso.openai.azure.com/openai")
     await expect(dialog.getByTestId("test-models")).toBeEnabled()
+})
+
+test("the OpenAI-compatible preset takes any URL and shows where requests go", async ({
+    page,
+}) => {
+    await openApp(page)
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    // Not among the popular ones: it is in the full picker
+    await dialog.getByRole("button", { name: /^See all \d+ providers/ }).click()
+    await dialog.getByTestId("pick-provider-custom").click()
+    await expect(
+        dialog.getByRole("heading", { name: "OpenAI-compatible", exact: true }),
+    ).toBeVisible()
+    // No URL yet: a key alone does not count as connected
+    await dialog.locator("#api-key").fill("any")
+    await expect(dialog.getByTestId("step-1-todo")).toBeVisible()
+    await expect(
+        dialog.getByText("Fill in the API key and the base URL first."),
+    ).toBeVisible()
+    // Its options start open; the URL field shows the chat endpoint
+    await dialog.locator("#base-url").fill("http://127.0.0.1:1234/v1")
+    await expect(
+        dialog.getByText(
+            "Requests go to http://127.0.0.1:1234/v1/chat/completions",
+        ),
+    ).toBeVisible()
+    await expect(dialog.getByTestId("step-1-done")).toBeVisible()
 })
 
 test("a model id typed for one provider does not follow to the next", async ({

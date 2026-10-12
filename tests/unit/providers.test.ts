@@ -24,16 +24,16 @@ const sorted = (list: Iterable<string>) => [...list].sort()
 describe("the provider record", () => {
     it("is what the rest of the app imports as PROVIDER_INFO", () => {
         expect(PROVIDER_INFO).toBe(PROVIDERS)
-        expect(PROVIDER_NAMES).toHaveLength(24)
+        expect(PROVIDER_NAMES).toHaveLength(25)
     })
 
-    it("has 21 providers taking part in server key auto-detection", () => {
+    it("has 22 providers taking part in server key auto-detection", () => {
         // credential apiKey or vertexKey: the providers whose <P>_API_KEY the
         // server must have; aws, optionalKey and none need no key
         const detected = PROVIDER_NAMES.filter((p) =>
             ["apiKey", "vertexKey"].includes(PROVIDERS[p].credential),
         )
-        expect(detected).toHaveLength(21)
+        expect(detected).toHaveLength(22)
         // Ollama has a key variable too, an optional one
         const withKeyVar = PROVIDER_NAMES.filter((p) => !!envVarsOf(p).apiKey)
         expect(sorted(detected)).toEqual(
@@ -142,7 +142,7 @@ describe("the picker's order", () => {
                 id: "cloud",
                 providers: ["bedrock", "vertexai", "azure", "edgeone"],
             },
-            { id: "selfHosted", providers: ["ollama", "sglang"] },
+            { id: "selfHosted", providers: ["ollama", "sglang", "custom"] },
         ])
     })
 

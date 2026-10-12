@@ -516,6 +516,27 @@ const defs = {
             "zh-Hant": "填服務位址",
         },
     },
+    // Any OpenAI-compatible API: vLLM, LM Studio, LiteLLM, a gateway. The
+    // user enters the URL; a server that ignores keys takes any non-empty
+    // one (a custom URL always needs a key, see getAIModel's guard)
+    custom: {
+        label: "OpenAI-compatible",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "selfHosted",
+        envPrefix: "CUSTOM",
+        modelList: "openai",
+        icon: "server",
+        optionsOpen: true,
+        // Open-source chat templates reject several system messages
+        singleSystem: true,
+        note: {
+            en: "Any OpenAI-compatible URL and key",
+            zh: "任何 OpenAI 兼容地址和 key",
+            ja: "OpenAI 互換の URL とキー",
+            "zh-Hant": "任何 OpenAI 相容位址和 key",
+        },
+    },
 } satisfies Record<string, ProviderDef>
 
 export type ProviderName = keyof typeof defs

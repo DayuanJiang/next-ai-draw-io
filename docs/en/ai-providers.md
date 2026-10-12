@@ -338,6 +338,18 @@ Optional custom endpoint (Token Plan subscribers should set their dedicated Base
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### Any OpenAI-compatible API (custom)
+
+For a server not listed above (vLLM, LM Studio, LiteLLM, an API gateway), pick **OpenAI-compatible** in the settings and enter its base URL and a key; a server that ignores keys takes any non-empty value. Several system messages are merged into one, as open-source chat templates expect, and `<think>` reasoning is split from the reply.
+
+```bash
+CUSTOM_API_KEY=your_api_key
+CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
+AI_MODEL=your_model_id
+```
+
+---
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.

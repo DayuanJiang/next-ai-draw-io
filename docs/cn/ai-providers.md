@@ -323,6 +323,18 @@ AI_MODEL=mimo-v2.5-pro
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### 任何 OpenAI 兼容接口（custom）
+
+上面没有列出的服务（vLLM、LM Studio、LiteLLM、API 网关），在设置里选择 **OpenAI-compatible**，填入它的地址和 key；服务端不校验 key 时填任意非空内容即可。多条 system 消息会合并成一条（开源模型的对话模板通常要求这样），`<think>` 里的推理内容会从回复里分离出来。
+
+```bash
+CUSTOM_API_KEY=your_api_key
+CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
+AI_MODEL=your_model_id
+```
+
+---
+
 ## 自动检测
 
 如果您只配置了**一个**提供商的 API 密钥，系统将自动检测并使用该提供商。无需设置 `AI_PROVIDER`。
