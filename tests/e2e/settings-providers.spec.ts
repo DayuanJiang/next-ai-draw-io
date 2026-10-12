@@ -51,26 +51,39 @@ test("a first provider: pick it, fill in the key, test, use it", async ({
         tested.push(route.request().postDataJSON().modelId)
         await route.fulfill({ json: { valid: true, responseTime: 1400 } })
     })
+    const listedWith: string[] = []
+    await page.route("**/api/provider-models", async (route) => {
+        listedWith.push(route.request().postDataJSON().apiKey)
+        await route.fulfill({
+            json: {
+                models: [{ id: "deepseek-v4-pro" }, { id: "deepseek-chat" }],
+            },
+        })
+    })
     await openApp(page)
     await openSettings(page)
     const dialog = settingsDialog(page)
     await expect(dialog.getByText("Use your own API key")).toBeVisible()
 
     await dialog.getByTestId("pick-provider-deepseek").click()
-    // The first suggested model is added, and the key field has the cursor
+    // No model yet (DeepSeek lists its own), and the key field has the cursor
     await expect(
         dialog.getByRole("heading", { name: "DeepSeek", exact: true }),
     ).toBeVisible()
-    await expect(dialog.locator('input[title="deepseek-v4-pro"]')).toBeVisible()
     await expect(dialog.locator("#api-key")).toBeFocused()
     await expect(dialog.getByTestId("step-1-todo")).toBeVisible()
-    await expect(dialog.getByTestId("step-2-done")).toBeVisible()
+    await expect(dialog.getByTestId("step-2-todo")).toBeVisible()
     const testButton = dialog.getByTestId("test-models")
     await expect(testButton).toBeDisabled()
     await expect(dialog.getByText("Fill in the API key first.")).toBeVisible()
 
+    // The key is in: the list is fetched once and opens; pick a model
     await dialog.locator("#api-key").fill("sk-1234")
     await expect(dialog.getByTestId("step-1-done")).toBeVisible()
+    await page.getByRole("option", { name: "deepseek-v4-pro" }).click()
+    expect(listedWith).toEqual(["sk-1234"])
+    await expect(dialog.locator('input[title="deepseek-v4-pro"]')).toBeVisible()
+    await expect(dialog.getByTestId("step-2-done")).toBeVisible()
     await expect(testButton).toHaveText("Test deepseek-v4-pro")
     await testButton.click()
     // The visible panel, not the screen reader's copy
@@ -648,10 +661,11 @@ test("a model list that loads leaves a refused test's mark", async ({
 })
 
 test("an empty model list says so and opens nothing", async ({ page }) => {
+    let models: { id: string }[] = []
     await page.route("**/api/provider-models", (route) =>
-        route.fulfill({ json: { models: [] } }),
+        route.fulfill({ json: { models } }),
     )
-    // OpenAI has suggested models: they come back once the key changes
+    // OpenAI lists its own models: nothing to browse until a list arrives
     await openApp(page, {
         config: {
             version: 1,
@@ -663,16 +677,21 @@ test("an empty model list says so and opens nothing", async ({ page }) => {
     await openSettings(page)
     const dialog = settingsDialog(page)
     await dialog.getByTestId("provider-row-o1").click()
+    // A key the provider already had fetches nothing by itself
+    await page.waitForTimeout(800)
+    await expect(
+        dialog.getByRole("button", { name: "Browse models" }),
+    ).toHaveCount(0)
     await dialog.getByRole("button", { name: /^Get all models from/ }).click()
     await expect(
         dialog.getByText("The provider returned no models."),
     ).toBeVisible()
-    await dialog.locator("#api-key").fill("k-new")
-    await expect(
-        dialog.getByRole("button", { name: "Browse models" }),
-    ).toBeVisible()
-    await page.waitForTimeout(300)
     // The picker did not open by itself
     await expect(page.getByRole("listbox")).toHaveCount(0)
-    await expect(dialog.locator("#api-key")).toBeFocused()
+    // A new key fetches the list again by itself and opens it once it has models
+    models = [{ id: "fresh-model" }]
+    await dialog.locator("#api-key").fill("k-new")
+    await expect(
+        page.getByRole("option", { name: "fresh-model" }),
+    ).toBeVisible()
 })

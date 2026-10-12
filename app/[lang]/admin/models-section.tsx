@@ -35,7 +35,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
-import { generateId, SUGGESTED_MODELS } from "@/lib/types/model-config"
+import { generateId } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 import {
     type AdminProvider,
@@ -68,7 +68,9 @@ function ProviderDetail({
     >({})
 
     const info = PROVIDERS[provider.provider]
-    const suggestions = (SUGGESTED_MODELS[provider.provider] || []).filter(
+    // Only providers that cannot list their models have a list here; for
+    // the others the admin types the model id
+    const suggestions = (PROVIDERS[provider.provider].models ?? []).filter(
         (m) => !provider.models.includes(m),
     )
 

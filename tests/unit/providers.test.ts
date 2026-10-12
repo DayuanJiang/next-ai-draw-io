@@ -12,7 +12,7 @@ import { envVarsOf } from "@/lib/ai-providers"
 import { i18n } from "@/lib/i18n/config"
 import { POPULAR_PROVIDERS, PROVIDER_GROUPS } from "@/lib/provider-setup"
 import { PROVIDER_NAMES, PROVIDERS, publicDefaultUrl } from "@/lib/providers"
-import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
+import { PROVIDER_INFO } from "@/lib/types/model-config"
 
 vi.mock("@/lib/admin/settings", () => ({
     loadSettings: () => ({}),
@@ -82,7 +82,7 @@ describe("the provider record", () => {
             if (modelList) {
                 expect([p, models]).toEqual([p, undefined])
             } else {
-                expect([p, models]).toEqual([p, SUGGESTED_MODELS[p]])
+                expect([p, models?.length ?? 0]).not.toEqual([p, 0])
             }
         }
     })

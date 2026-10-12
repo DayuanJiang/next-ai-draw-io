@@ -62,7 +62,6 @@ import type {
     ProviderConfig,
     ProviderName,
 } from "@/lib/types/model-config"
-import { SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
 
@@ -367,16 +366,18 @@ export function ModelConfigDialog({
     }
 
     // The provider's own list, if fetched with the credentials it has now,
-    // else the suggested models
+    // else the record's short list (only providers that cannot list models
+    // have one)
     const fetched = selectedProvider
         ? fetchedModels[selectedProvider.id]
         : undefined
+    const recordModels = selectedProvider
+        ? (PROVIDERS[selectedProvider.provider].models ?? [])
+        : []
     const suggestedModels: ListedModel[] = selectedProvider
         ? fetched && fetched.askedWith === credentialsOf(selectedProvider.id)
             ? fetched.models
-            : (SUGGESTED_MODELS[selectedProvider.provider] || []).map((id) => ({
-                  id,
-              }))
+            : recordModels.map((id) => ({ id }))
         : []
     // The picker closes when there is nothing left to pick from, so it does
     // not open by itself once there is again
@@ -399,20 +400,50 @@ export function ModelConfigDialog({
     const availableSuggestions = suggestedModels.filter(
         (model) => !existingModelIds.includes(model.id),
     )
-    // A few suggested models to add with one click
-    const quickSuggestions = selectedProvider
-        ? (SUGGESTED_MODELS[selectedProvider.provider] || [])
-              .filter((modelId) => !existingModelIds.includes(modelId))
-              .slice(0, 4)
-        : []
+    // A few of the record's models to add with one click
+    const quickSuggestions = recordModels
+        .filter((modelId) => !existingModelIds.includes(modelId))
+        .slice(0, 4)
+
+    // A provider that can list its models gets its list fetched by itself,
+    // once, for credentials entered on its page while it has no model yet:
+    // the user picks from the list instead of a hand-written one. Credentials
+    // a provider already had when its page opened fetch nothing (the button
+    // does), nor does a provider with models.
+    const shownWith = useRef<{ id: string; credentials: string } | null>(null)
+    const autoFetched = useRef<Record<string, string>>({})
+    useEffect(() => {
+        if (!open || !selectedProvider) return
+        const id = selectedProvider.id
+        const now = credentialsOf(id)
+        if (shownWith.current?.id !== id) {
+            shownWith.current = { id, credentials: now }
+        }
+        if (
+            !PROVIDERS[selectedProvider.provider].modelList ||
+            selectedProvider.models.length > 0 ||
+            !hasCredentials(selectedProvider) ||
+            now === shownWith.current.credentials ||
+            autoFetched.current[id] === now
+        ) {
+            return
+        }
+        // Once the typing or pasting pauses
+        const timer = setTimeout(() => {
+            autoFetched.current[id] = now
+            void handleFetchModels()
+        }, 600)
+        return () => clearTimeout(timer)
+    }, [open, selectedProvider])
 
     const openProvider = (providerId: string) => setModelsPage({ providerId })
 
     // Handle adding a new provider
     const handleAddProvider = (providerType: ProviderName) => {
         const newProvider = addProvider(providerType)
-        // With the first suggested model picked, a key is all a test needs
-        const firstModel = SUGGESTED_MODELS[providerType]?.[0]
+        // A provider that cannot list its models starts with the first of
+        // the record's; the others fetch their list once the key is in
+        const firstModel = PROVIDERS[providerType].models?.[0]
         if (firstModel) addModel(newProvider.id, firstModel)
         openProvider(newProvider.id)
     }
