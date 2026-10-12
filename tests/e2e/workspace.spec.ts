@@ -170,18 +170,17 @@ test.describe("Workspace", () => {
         await expect(getChatInput(page)).toHaveValue("Draw a cat for me")
     })
 
-    test("the MCP card's video stays away once closed", async ({ page }) => {
+    test("the MCP card and its video stay away once closed", async ({
+        page,
+    }) => {
         await openApp(page)
         const card = page.locator('[data-testid="mcp-notice"]')
-        const video = page.locator('[data-testid="mcp-video"]')
         await expect(card.locator('[data-testid="mcp-video"]')).toBeVisible()
         await page.locator('[data-testid="mcp-video-close"]').click()
-        await expect(video).toHaveCount(0)
-        await expect(card).toBeVisible()
+        await expect(card).toHaveCount(0)
         await page.reload({ waitUntil: "networkidle" })
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
-        await expect(card).toBeVisible()
-        await expect(video).toHaveCount(0)
+        await expect(card).toHaveCount(0)
     })
 
     test("each AI change becomes a version card; the latest undoes and redoes it", async ({

@@ -11,7 +11,7 @@ const MCP_URL =
     "https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
 
 /**
- * Whether the user closed the MCP video once. Starts as closed so the server
+ * Whether the user closed the MCP notice once. Starts as closed so the server
  * render and the first client render agree; the stored choice is read after
  * mount.
  */
@@ -90,25 +90,12 @@ const cardClass =
     "w-full rounded-xl border border-purple-500/20 bg-gradient-to-r from-purple-500/10 to-blue-500/10"
 
 /**
- * MCP server notice on the start screen. Until the user closes it, the card
- * also plays the promo video; after that it is the plain card for good.
+ * MCP server notice on the start screen: the card with the promo video. Once
+ * the user closes it, it does not come back.
  */
 export function McpNotice({ className }: { className?: string }) {
     const [closed, close] = useVideoClosed()
-    if (closed) {
-        return (
-            <div
-                className={cn(
-                    cardClass,
-                    "px-4 py-3 transition-colors hover:border-purple-500/40",
-                    className,
-                )}
-                data-testid="mcp-notice"
-            >
-                <NoticeLink />
-            </div>
-        )
-    }
+    if (closed) return null
     return (
         <div
             className={cn(cardClass, "p-3", className)}
