@@ -11,6 +11,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import {
     type ClientOverrides,
+    resolveEndpoint,
     SINGLE_SYSTEM_PROVIDERS,
     usesServerCredentials,
     usesServerEndpoint,
@@ -177,6 +178,22 @@ describe("usesServerCredentials against its pre-refactor body", () => {
                                             if (actual !== expected) {
                                                 expect.fail(
                                                     `${provider} ${JSON.stringify(overrides)} desktop=${desktop} ollamaKey=${ollamaKey}: ${actual} instead of ${expected}`,
+                                                )
+                                            }
+                                            // resolveEndpoint's keySource is
+                                            // what the function will read;
+                                            // the desktop rule stays outside
+                                            const fromEndpoint =
+                                                !desktop &&
+                                                resolveEndpoint(provider, {
+                                                    ...overrides,
+                                                    baseUrl: normalizeBaseUrl(
+                                                        baseUrl ?? "",
+                                                    ),
+                                                }).keySource === "server"
+                                            if (fromEndpoint !== expected) {
+                                                expect.fail(
+                                                    `resolveEndpoint ${provider} ${JSON.stringify(overrides)} ollamaKey=${ollamaKey}: ${fromEndpoint} instead of ${expected}`,
                                                 )
                                             }
                                             count++
