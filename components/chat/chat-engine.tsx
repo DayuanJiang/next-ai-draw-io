@@ -4,8 +4,8 @@ import { useChat } from "@ai-sdk/react"
 import {
     type ChatStatus,
     DefaultChatTransport,
+    getToolName,
     isToolUIPart,
-    type UIMessage,
 } from "ai"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type React from "react"
@@ -19,7 +19,6 @@ import {
     useRef,
     useState,
 } from "react"
-import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import type { ValidationState } from "@/components/chat/ValidationCard"
 import { useDiagram } from "@/contexts/diagram-context"
@@ -37,6 +36,12 @@ import {
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
+import {
+    type ChatToolName,
+    type ChatUIMessage,
+    type MessageSelection,
+    noticeMessage,
+} from "@/lib/chat-message"
 import { buildChatHeaders } from "@/lib/chat-request"
 import { pageModelXml, placeOnPage } from "@/lib/diagram-pages"
 import { EMPTY_DRAWIO_DOCUMENT } from "@/lib/drawio/drawio-config"
@@ -76,7 +81,7 @@ const SAVE_DEBOUNCE_MS = 1000
  * Only checks the LAST tool part (most recent tool call), not all tool parts.
  * A call the user stopped is not one to retry.
  */
-function hasToolErrors(messages: UIMessage[]): boolean {
+function hasToolErrors(messages: ChatUIMessage[]): boolean {
     const lastMessage = messages[messages.length - 1]
     if (lastMessage?.role !== "assistant") return false
     const lastToolPart = lastMessage.parts.filter(isToolUIPart).at(-1)
@@ -103,14 +108,9 @@ function viewedPageId(): string | null {
     return useCanvasStore.getState().currentPageId
 }
 
-// Shapes sent with a user message (also kept in its metadata)
-type MessageSelection = Pick<SelectedCell, "id" | "label">[]
-
-function selectionOf(message: UIMessage): MessageSelection {
-    const meta = message.metadata as
-        | { selectedCells?: MessageSelection }
-        | undefined
-    return Array.isArray(meta?.selectedCells) ? meta.selectedCells : []
+function selectionOf(message: ChatUIMessage): MessageSelection {
+    const selected = message.metadata?.selectedCells
+    return Array.isArray(selected) ? selected : []
 }
 
 function newLangfuseSessionId() {
@@ -169,15 +169,13 @@ function withUniquePageIds(xml: string): string {
 class FileReadError extends Error {}
 
 export interface ChatEngine {
-    messages: UIMessage[]
+    messages: ChatUIMessage[]
     status: ChatStatus
     error: Error | undefined
     isBusy: boolean
     /** The chat on screen is being left (saved, then another one shown) */
     isLeaving: boolean
-    /** A message is being sent again; the chat is not empty meanwhile */
-    isResending: boolean
-    setMessages: (messages: UIMessage[]) => void
+    setMessages: (messages: ChatUIMessage[]) => void
     stop: () => void
 
     input: string
@@ -361,9 +359,6 @@ export function ChatEngineProvider({
     const [isLeaving, setIsLeaving] = useState(false)
     // The user's provider the current turn was sent to, for its errors
     const requestProviderIdRef = useRef<string | undefined>(undefined)
-    // A message is being sent again (retry, regenerate, edit), until the
-    // SDK has put it back
-    const [isResending, setIsResending] = useState(false)
     // Presses of Stop: a check that began before one still knows of it after
     // the next message clears stoppedRef
     const stopCountRef = useRef(0)
@@ -429,9 +424,40 @@ export function ChatEngineProvider({
         onDisplayChart(original, true, "revert")
     }
 
+    // Requests made in the turn so far. The first carries the diagram the
+    // message was sent with (exported then, or the snapshot it is sent
+    // again from). Each later one, an automatic retry after a tool error,
+    // carries the canvas as it is then: a drawing is committed before its
+    // screenshot check can fail, and the model must go on from that
+    // drawing, not from the one before the turn.
+    const turnRequestsRef = useRef(0)
     const transport = useMemo(
-        () => new DefaultChatTransport({ api: getApiEndpoint("/api/chat") }),
-        [],
+        () =>
+            new DefaultChatTransport<ChatUIMessage>({
+                api: getApiEndpoint("/api/chat"),
+                prepareSendMessagesRequest: ({
+                    id,
+                    messages,
+                    body,
+                    trigger,
+                    messageId,
+                }) => ({
+                    body: {
+                        ...body,
+                        ...(turnRequestsRef.current++ > 0 && {
+                            xml: getPageXml(
+                                chartXMLRef.current,
+                                turnPageIdRef.current,
+                            ),
+                        }),
+                        id,
+                        messages,
+                        trigger,
+                        messageId,
+                    },
+                }),
+            }),
+        [chartXMLRef],
     )
 
     const {
@@ -442,19 +468,19 @@ export function ChatEngineProvider({
         error,
         setMessages,
         stop,
-    } = useChat({
+    } = useChat<ChatUIMessage>({
         transport,
         onToolCall: async ({ toolCall }) => {
             await handleToolCall({ toolCall }, addToolOutputSafely)
         },
-        onFinish: ({ message, isAbort, isError }) => {
+        onFinish: ({ message, isAbort, isError, finishReason }) => {
             // Stopped, failed, or the reply just ended (a closed connection):
             // tool calls still streaming never reach the tool handler. Mark
             // them handled so a later render of the stream does not draw
             // their preview again.
-            const cut = (message.parts as any[]).filter(
-                (part) => part.state === "input-streaming" && part.toolCallId,
-            )
+            const cut = message.parts
+                .filter(isToolUIPart)
+                .filter((part) => part.state === "input-streaming")
             for (const part of cut) {
                 processedToolCallsRef.current.add(part.toolCallId)
             }
@@ -463,18 +489,16 @@ export function ChatEngineProvider({
             // or the page going, aborts a reply). Not once another chat is
             // on screen: the call is not among its messages.
             if (isAbort && getChatGeneration() === turnChatRef.current) {
-                for (const part of cut) {
-                    addToolOutputSafely({
-                        tool: part.type.replace("tool-", ""),
-                        toolCallId: part.toolCallId,
-                        state: "output-error",
-                        errorText: "Stopped by user",
-                    })
-                }
+                for (const part of cut) stopToolCall(part)
             }
-            if (isAbort || isError || cut.length === 0) return
-            // Ended with no error: undo the preview, and say so, as an
-            // error does (with Retry)
+            if (isAbort || isError) return
+            // The output budget ran out before the model called a tool (its
+            // thinking took it all): nothing was drawn
+            const outOfTokens =
+                finishReason === "length" && !message.parts.some(isToolUIPart)
+            if (cut.length === 0 && !outOfTokens) return
+            // Ended with no error and no diagram: undo the preview, and say
+            // so, as an error does (with Retry)
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
@@ -483,16 +507,11 @@ export function ChatEngineProvider({
             if (getChatGeneration() !== turnChatRef.current) return
             setMessages((currentMessages) => [
                 ...currentMessages,
-                {
-                    id: `error-${Date.now()}`,
-                    role: "system" as const,
-                    parts: [
-                        {
-                            type: "text" as const,
-                            text: dict.errors.answerEndedEarly,
-                        },
-                    ],
-                },
+                noticeMessage({
+                    text: outOfTokens
+                        ? dict.errors.llm.output_truncated
+                        : dict.errors.answerEndedEarly,
+                }),
             ])
         },
         onError: (error) => {
@@ -561,19 +580,15 @@ export function ChatEngineProvider({
             // the model selected may have changed since, e.g. in another tab
             const providerId = requestProviderIdRef.current
 
-            // A system message, so it can be cleared with the conversation
+            // In the chat, so it is cleared with the conversation; with a
+            // button that opens model settings, on the page of the provider
+            // that refused
             setMessages((currentMessages) => [
                 ...currentMessages,
-                {
-                    id: `error-${Date.now()}`,
-                    role: "system" as const,
-                    parts: [{ type: "text" as const, text }],
-                    // The message shows a button that opens model settings,
-                    // on the page of the provider that refused
-                    ...(openModelConfig && {
-                        metadata: { openModelConfig: true, providerId },
-                    }),
-                },
+                noticeMessage({
+                    text,
+                    ...(openModelConfig && { openModelConfig, providerId }),
+                }),
             ])
 
             if (isAccessCodeError) openSettings("general")
@@ -603,9 +618,19 @@ export function ChatEngineProvider({
         )
     }
 
+    // A call the user stopped before it reached the tool handler. The SDK
+    // finds the call by its id; the tool name is for the types only.
+    const stopToolCall = (part: Parameters<typeof getToolName>[0]) =>
+        addToolOutputSafely({
+            tool: getToolName(part) as ChatToolName,
+            toolCallId: part.toolCallId,
+            state: "output-error",
+            errorText: "Stopped by user",
+        })
+
     // After each request: send the next one (retry, continue a cut off
     // drawing) or end the turn
-    const shouldSendAgain = (messages: UIMessage[]) => {
+    const shouldSendAgain = (messages: ChatUIMessage[]) => {
         // The user stopped: a tool result that arrives later (a VLM
         // check still running) must not start a new request
         if (stoppedRef.current) return false
@@ -657,9 +682,6 @@ export function ChatEngineProvider({
     }
 
     const isBusy = status === "streaming" || status === "submitted"
-    useEffect(() => {
-        if (messages.length > 0) setIsResending(false)
-    }, [messages.length])
     // isBusy of the latest render, for code that runs after an await
     const busyRef = useRef(isBusy)
     busyRef.current = isBusy
@@ -771,7 +793,7 @@ export function ChatEngineProvider({
     const [shownChats, setShownChats] = useState(0)
     // The messages shown when another chat was put on screen: useChat can
     // show that chat's own up to 150 ms later than the rest of its state
-    const messagesBeforeShownRef = useRef<UIMessage[] | null>(null)
+    const messagesBeforeShownRef = useRef<ChatUIMessage[] | null>(null)
 
     const syncUIWithSession = useCallback(
         (data: SessionData | null) => {
@@ -811,7 +833,7 @@ export function ChatEngineProvider({
                 loadedMessageIdsRef.current = new Set(
                     (data.messages as { id: string }[]).map((m) => m.id),
                 )
-                setMessages(data.messages as unknown as UIMessage[])
+                setMessages(data.messages as unknown as ChatUIMessage[])
                 xmlSnapshotsRef.current = new Map(data.xmlSnapshots)
                 if (data.diagramXml) onDisplayChart(data.diagramXml, true)
                 else clearDiagram()
@@ -1118,12 +1140,15 @@ export function ChatEngineProvider({
             : ""
     }
 
+    // messageId: the user message sent again (regenerate, edit, retry); the
+    // SDK puts the new one in its place and drops the answers after it
     const sendChatMessage = (
         parts: any,
         xml: string,
         previousXml: string,
         turnIndex: number,
         selectedCells: MessageSelection,
+        messageId?: string,
     ) => {
         autoRetryCountRef.current = 0
         continuationRetryCountRef.current = 0
@@ -1161,9 +1186,11 @@ export function ChatEngineProvider({
                 maxOutputTokens,
             }),
         }
+        turnRequestsRef.current = 0
         // The selection stays with the message, for regenerate and retry
         sendMessage(
             {
+                ...(messageId !== undefined && { messageId }),
                 parts,
                 ...(selected.length > 0 && {
                     metadata: { selectedCells: selected },
@@ -1416,18 +1443,13 @@ export function ChatEngineProvider({
         dropLaterSnapshots(index)
         useVersionsStore.getState().removeFromTurn(index)
 
-        // Remove the user message onwards (sendMessage re-adds it). For a
-        // moment there may be no message: that is no empty chat.
-        flushSync(() => {
-            setIsResending(true)
-            setMessages(messages.slice(0, index))
-        })
         sendChatMessage(
             parts,
             getPageXml(savedXml, viewedPageId()),
             previousXml,
             index,
             selectionOf(messages[index]),
+            messages[index].id,
         )
 
         return true
@@ -1493,16 +1515,13 @@ export function ChatEngineProvider({
                     chartXMLRef.current || chartXml,
                 )
             }
-            flushSync(() => {
-                setIsResending(true)
-                setMessages(messagesRef.current.slice(0, index))
-            })
             sendChatMessage(
                 message.parts,
                 chartXml,
                 getPreviousXml(index),
                 index,
                 selectionOf(message),
+                message.id,
             )
         } catch (error) {
             console.error("Error fetching chart data:", error)
@@ -1521,25 +1540,17 @@ export function ChatEngineProvider({
         const lastMessage = messages[messages.length - 1]
         // Calls the tool handler already took can still show as streaming:
         // the messages update at most every 150 ms (useChat throttle)
-        const toolParts = lastMessage?.parts?.filter(
-            (part: any) =>
-                part.type?.startsWith("tool-") &&
-                part.state === "input-streaming" &&
-                !processedToolCallsRef.current.has(part.toolCallId),
-        )
-        for (const part of (toolParts ?? []) as any[]) {
-            if (part.toolCallId) {
-                addToolOutputSafely({
-                    tool: part.type.replace("tool-", ""),
-                    toolCallId: part.toolCallId,
-                    state: "output-error",
-                    errorText: "Stopped by user",
-                })
-            }
-        }
+        const streaming = (lastMessage?.parts ?? [])
+            .filter(isToolUIPart)
+            .filter(
+                (part) =>
+                    part.state === "input-streaming" &&
+                    !processedToolCallsRef.current.has(part.toolCallId),
+            )
+        for (const part of streaming) stopToolCall(part)
         stop()
         abandonContinuation()
-    }, [messages, addToolOutputSafely, stop, cancelValidation])
+    }, [messages, stopToolCall, stop, cancelValidation])
 
     // ---------------------------------------------------------------------
     // Session actions
@@ -1849,8 +1860,7 @@ export function ChatEngineProvider({
         error,
         isBusy,
         isLeaving,
-        isResending,
-        setMessages: setMessages as (messages: UIMessage[]) => void,
+        setMessages: setMessages as (messages: ChatUIMessage[]) => void,
         stop: handleStop,
         input,
         setInput,

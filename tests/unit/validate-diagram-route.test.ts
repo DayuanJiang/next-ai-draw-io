@@ -15,19 +15,32 @@ const RESULT = {
     suggestions: ["Move box B to the right"],
 }
 
-// A vision model that answers with the result as JSON text
+// A vision model that answers with the result as JSON text; told to wait,
+// it answers only once its call is aborted
+const model = vi.hoisted(() => ({ waitForAbort: false }))
 vi.mock("@/lib/ai-providers", () => ({
     getValidationModel: () =>
         new MockLanguageModelV3({
-            doGenerate: (async () => ({
-                content: [{ type: "text", text: JSON.stringify(RESULT) }],
-                finishReason: { unified: "stop", raw: "stop" },
-                usage: {
-                    inputTokens: { total: 1 },
-                    outputTokens: { total: 1 },
-                },
-                warnings: [],
-            })) as any,
+            doGenerate: (async (options: { abortSignal?: AbortSignal }) => {
+                if (model.waitForAbort) {
+                    const signal = options.abortSignal
+                    await new Promise((_, reject) => {
+                        if (signal?.aborted) reject(signal.reason)
+                        signal?.addEventListener("abort", () =>
+                            reject(signal.reason),
+                        )
+                    })
+                }
+                return {
+                    content: [{ type: "text", text: JSON.stringify(RESULT) }],
+                    finishReason: { unified: "stop", raw: "stop" },
+                    usage: {
+                        inputTokens: { total: 1 },
+                        outputTokens: { total: 1 },
+                    },
+                    warnings: [],
+                }
+            }) as any,
         }),
 }))
 
@@ -61,9 +74,10 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
     },
 }))
 
-const post = () =>
+const post = (signal?: AbortSignal) =>
     new Request("http://localhost/api/validate-diagram", {
         method: "POST",
+        signal,
         headers: {
             "Content-Type": "application/json",
             "x-forwarded-for": "203.0.113.7",
@@ -72,6 +86,7 @@ const post = () =>
     })
 
 afterEach(() => {
+    model.waitForAbort = false
     quota.enabled = false
     quota.allowed = true
     quota.checks = []
@@ -104,6 +119,20 @@ describe("POST /api/validate-diagram", () => {
         const res = await validateDiagram(post())
         expect(res.headers.get("content-type")).toContain("application/json")
         expect(await res.json()).toEqual(RESULT)
+    })
+
+    it("ends its model call when the request is aborted", async () => {
+        // The user pressed Stop: the browser aborts the request, and the
+        // model call must not run on (and be paid for)
+        model.waitForAbort = true
+        const stop = new AbortController()
+        const pending = validateDiagram(post(stop.signal))
+        stop.abort()
+        expect(await (await pending).json()).toEqual({
+            valid: true,
+            issues: [],
+            suggestions: [],
+        })
     })
 
     it("answers valid when the check is turned off", async () => {

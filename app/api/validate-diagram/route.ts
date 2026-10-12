@@ -11,6 +11,7 @@ import {
     isQuotaEnabled,
     recordTokenUsage,
 } from "@/lib/dynamo-quota-manager"
+import { getTelemetryConfig } from "@/lib/langfuse"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
 import {
@@ -146,13 +147,18 @@ export async function POST(req: Request): Promise<Response> {
                 },
             ],
             maxOutputTokens: 1024,
-            abortSignal: AbortSignal.timeout(timeout),
+            // Ends with the request: the user pressed Stop, or left
+            abortSignal: req.signal,
+            timeout,
+            // Its usage and cost show in Langfuse next to the chat's
+            experimental_telemetry: getTelemetryConfig({
+                functionId: "validate-diagram",
+                sessionId,
+                userId,
+            }),
         })
         if (countsQuota) {
-            await recordTokenUsage(
-                userId,
-                (totalUsage.inputTokens || 0) + (totalUsage.outputTokens || 0),
-            )
+            await recordTokenUsage(userId, totalUsage.totalTokens ?? 0)
         }
         if (sessionId) {
             console.log(

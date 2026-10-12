@@ -150,7 +150,6 @@ function WorkspaceLayout() {
     const showHero =
         engine.isRestored &&
         engine.messages.length === 0 &&
-        !engine.isResending &&
         !isRealDiagram(chartXML) &&
         !heroDismissed
 

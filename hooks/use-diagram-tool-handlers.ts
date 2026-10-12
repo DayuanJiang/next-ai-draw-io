@@ -1,3 +1,4 @@
+import type { ChatAddToolOutputFunction } from "ai"
 import type { RefObject } from "react"
 import type { DiagramOperation } from "@/components/chat/types"
 import type {
@@ -5,6 +6,7 @@ import type {
     ValidationStatus,
 } from "@/components/chat/ValidationCard"
 import type { LoadMode } from "@/contexts/diagram-context"
+import type { ChatUIMessage } from "@/lib/chat-message"
 import { pageModelXml, pageSelectorFor, placeOnPage } from "@/lib/diagram-pages"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
@@ -24,25 +26,8 @@ interface ToolCall {
     input: unknown
 }
 
-type AddToolOutputSuccess = {
-    tool: string
-    toolCallId: string
-    state?: "output-available"
-    output: string
-    errorText?: undefined
-}
-
-type AddToolOutputError = {
-    tool: string
-    toolCallId: string
-    state: "output-error"
-    output?: undefined
-    errorText: string
-}
-
-type AddToolOutputParams = AddToolOutputSuccess | AddToolOutputError
-
-type AddToolOutputFn = (params: AddToolOutputParams) => void
+// useChat's addToolOutput, typed with the chat's tools
+type AddToolOutputFn = ChatAddToolOutputFunction<ChatUIMessage>
 
 const MAX_VALIDATION_RETRIES = 3
 

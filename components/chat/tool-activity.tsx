@@ -1,3 +1,4 @@
+import { getToolName } from "ai"
 import {
     AlertCircle,
     Check,
@@ -164,7 +165,7 @@ function ToolRow({
                 tone === "error" && "border-destructive/25",
             )}
             data-testid="tool-row"
-            data-tool-name={part.type?.replace("tool-", "")}
+            data-tool-name={getToolName(part)}
             data-tool-state={part.state}
         >
             <button
@@ -246,7 +247,7 @@ export function ToolActivity({
     const t = dict.versions
     const engine = useChatEngine()
     const versions = useVersionsStore((s) => s.versions)
-    const toolName = part.type?.replace("tool-", "")
+    const toolName = getToolName(part)
     const { state, errorText, output } = part
 
     const versionIndex = versions.findIndex(
