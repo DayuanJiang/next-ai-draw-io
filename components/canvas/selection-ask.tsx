@@ -10,25 +10,25 @@ const GAP = 10
 /**
  * "Ask AI to change this" next to the selected shapes. Clicking it moves
  * focus to the chat input, where the selection already shows as a chip.
+ * Hidden while an answer is changing the canvas.
  */
 export function SelectionAsk({
     width,
     height,
-    hidden,
 }: {
     /** Size of the canvas area, for keeping the button inside it */
     width: number
     height: number
-    hidden: boolean
 }) {
     const dict = useDictionary()
     const rect = useCanvasStore((s) => s.selectionRect)
     const selection = useCanvasStore((s) => s.selection)
     const isFreehand = useCanvasStore((s) => s.isFreehand)
     const popupOpen = useCanvasStore((s) => s.isDrawioPopupOpen)
+    const isBusy = useCanvasStore((s) => s.isBusy)
     const focusComposer = useUiStore((s) => s.focusComposer)
 
-    if (hidden || popupOpen || !rect || selection.length === 0 || isFreehand) {
+    if (isBusy || popupOpen || !rect || selection.length === 0 || isFreehand) {
         return null
     }
     // Selection scrolled out of view

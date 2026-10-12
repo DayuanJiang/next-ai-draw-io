@@ -1,17 +1,20 @@
 import { useEffect, useRef } from "react"
+import { useVersionsContext } from "@/components/canvas/versions-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
-import { useVersionsStore } from "@/stores/versions-store"
-import { useChatEngine } from "./chat-engine"
 
 /** Row of version thumbnails under the panel header; click to compare */
-export function VersionStrip() {
+export function VersionStrip({
+    minVersions = 2,
+}: {
+    /** Hidden below this many versions: one version alone adds nothing to
+     * its card, unless the caller knows there is no card for it */
+    minVersions?: number
+}) {
     const dict = useDictionary()
-    const versions = useVersionsStore((s) => s.versions)
-    const onCanvasVersionId = useVersionsStore((s) => s.onCanvasVersionId)
+    const { versions, onCanvasId } = useVersionsContext()
     const openCompare = useUiStore((s) => s.openCompare)
-    const engine = useChatEngine()
     const scrollRef = useRef<HTMLDivElement>(null)
 
     // Keep the newest version in view
@@ -20,24 +23,7 @@ export function VersionStrip() {
         if (el) el.scrollTo({ left: el.scrollWidth, behavior: "smooth" })
     }, [versions.length])
 
-    // Versions with no card in the chat: saved by older app versions, from
-    // a turn that was retried, or drawn by a call that then failed its
-    // screenshot check (a call still running gets its card when done)
-    const hasCardless = versions.some(
-        (v) =>
-            !v.toolCallId ||
-            !engine.messages.some((m) =>
-                m.parts?.some((p) => {
-                    const part = p as { toolCallId?: string; state?: string }
-                    return (
-                        part.toolCallId === v.toolCallId &&
-                        part.state !== "output-error"
-                    )
-                }),
-            ),
-    )
-    // One version with a card: the strip adds nothing to it
-    if (versions.length < 2 && !hasCardless) return null
+    if (versions.length < minVersions) return null
 
     return (
         <div className="flex items-center gap-2 border-b border-border px-3.5 pt-1 pb-3">
@@ -49,13 +35,13 @@ export function VersionStrip() {
                 className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto p-1 scrollbar-thin"
             >
                 {versions.map((version) => {
-                    const isCurrent = version.id === onCanvasVersionId
+                    const isCurrent = version.id === onCanvasId
                     return (
                         <button
                             key={version.id}
                             type="button"
                             onClick={() => openCompare(version.id)}
-                            title={`v${version.number}${version.id === onCanvasVersionId ? ` · ${dict.versions.currentCanvas}` : ""}`}
+                            title={`v${version.number}${isCurrent ? ` · ${dict.versions.currentCanvas}` : ""}`}
                             className={cn(
                                 "sheet-light relative flex h-12 w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-white transition-colors hover:border-foreground/30",
                                 // An outline with a gap reads on the white

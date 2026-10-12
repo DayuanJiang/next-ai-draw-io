@@ -1,7 +1,8 @@
 name: Publish MCP Server
 
 # Publishes @next-ai-drawio/mcp-server to npm via OIDC trusted publishing
-# (no token, no OTP). Triggers when packages/mcp-server changes on main;
+# (no token, no OTP). Triggers when packages/mcp-server or the web app code
+# bundled into the canvas shell (scripts/build-shell.mjs) changes on main;
 # skips silently if the package.json version is already on npm — so a
 # release is just "bump the version in a PR and merge".
 on:
@@ -10,6 +11,16 @@ on:
       - main
     paths:
       - "packages/mcp-server/**"
+      # The canvas shell is bundled from these with the root's lockfile
+      - "components/**"
+      - "contexts/**"
+      - "hooks/**"
+      - "lib/**"
+      - "stores/**"
+      - "app/globals.css"
+      - "package-lock.json"
+      # The package's build scripts import the root's scripts/drawio-zip.mjs
+      - "scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +46,9 @@ jobs:
         with:
           node-version: 24
           cache: "npm"
-          cache-dependency-path: packages/mcp-server/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            packages/mcp-server/package-lock.json
           registry-url: "https://registry.npmjs.org"
 
       # Trusted publishing requires npm >= 11.5.1
@@ -54,6 +67,13 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # The canvas shell (scripts/build-shell.mjs) is bundled from the web
+      # app's components with the root's esbuild, Tailwind and React
+      - name: Install repository dependencies
+        if: steps.version.outputs.publish == 'true'
+        working-directory: .
+        run: npm ci
+
       - name: Install dependencies
         if: steps.version.outputs.publish == 'true'
         run: npm ci
@@ -62,6 +82,9 @@ jobs:
         if: steps.version.outputs.publish == 'true'
         run: npm test
 
+      # The build downloads the pinned draw.war from GitHub releases
+      # (scripts/fetch-drawio.mjs) and bundles a trimmed draw.io into
+      # dist/drawio; check-package confirms it is in the tarball
       - name: Build and check package contents
         if: steps.version.outputs.publish == 'true'
         run: npm run build && npm run check-package

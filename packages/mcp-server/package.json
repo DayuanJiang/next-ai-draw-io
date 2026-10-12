@@ -1,6 +1,6 @@
 {
     "name": "@next-ai-drawio/mcp-server",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
     "type": "module",
     "main": "dist/index.js",
@@ -8,12 +8,14 @@
         "next-ai-drawio-mcp": "./dist/index.js"
     },
     "scripts": {
-        "build": "tsc && node scripts/copy-assets.mjs",
+        "build": "tsc && tsc -p shell && node scripts/copy-assets.mjs && node scripts/fetch-drawio.mjs && node scripts/build-shell.mjs",
+        "check-drawio": "node scripts/check-drawio-files.mjs",
         "check-package": "node scripts/check-package.mjs",
         "dev": "tsx watch src/index.ts",
         "start": "node dist/index.js",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:e2e": "playwright test",
         "prepublishOnly": "npm run build"
     },
     "keywords": [

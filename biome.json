@@ -11,6 +11,7 @@
             "**",
             "!public",
             "!packages/mcp-server/src/preview",
+            "!packages/mcp-server/shell/index.html",
             "!lib/model-catalog.json"
         ]
     },

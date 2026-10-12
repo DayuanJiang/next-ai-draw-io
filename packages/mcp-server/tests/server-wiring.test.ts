@@ -9,11 +9,12 @@
  * package before testing). Running from source via tsx means it executes as
  * part of the normal `vitest run`.
  *
- * We deliberately do NOT call start_session — it would open a real browser
- * window via open(). The browser bridge is covered by the Playwright e2e suite.
+ * start_session is called only at the end, with BROWSER=none so no browser
+ * window opens, for the tools that need a session but no preview tab. The
+ * browser bridge is covered by the Playwright e2e suite.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -46,6 +47,7 @@ const EXPECTED_TOOLS = [
     "get_drawing_guide",
     "get_shape_library",
     "screenshot_diagram",
+    "get_selection",
     "list_saved_diagrams",
     "restore_version",
 ]
@@ -84,10 +86,15 @@ beforeAll(async () => {
         new StdioClientTransport({
             command: tsxBin,
             args: [entry],
-            env: { ...process.env, DRAWIO_DATA_DIR: dataDir } as Record<
-                string,
-                string
-            >,
+            env: {
+                ...process.env,
+                DRAWIO_DATA_DIR: dataDir,
+                // For the session tests at the end: no browser window, the
+                // default preview (the canvas shell), a port away from other
+                // servers
+                BROWSER: "none",
+                PORT: String(6500 + Math.floor(Math.random() * 400)),
+            } as Record<string, string>,
             // The server's log lines
             stderr: "ignore",
         }),
@@ -154,6 +161,12 @@ describe("MCP server wiring", () => {
 
     it("refuses restore_version without a session", async () => {
         const result = await callTool("restore_version", {})
+        expect(result.isError).toBe(true)
+        expect(textOf(result)).toContain("start_session")
+    })
+
+    it("refuses get_selection without a session", async () => {
+        const result = await callTool("get_selection", {})
         expect(result.isError).toBe(true)
         expect(textOf(result)).toContain("start_session")
     })
@@ -248,5 +261,32 @@ describe("load_diagram dual-source arguments", () => {
         })
         expect(result.isError).toBe(true)
         expect(textOf(result)).toContain("No active session")
+    })
+})
+
+// After the tests above: start_session makes a session current
+describe("MCP server wiring with a session, without a preview tab", () => {
+    it("get_selection says the preview tab is not connected", async () => {
+        const started = await callTool("start_session", {})
+        expect(started.isError).toBeFalsy()
+        expect(textOf(started)).toContain("Browser URL:")
+        const result = await callTool("get_selection", {})
+        // Without the built shell (tests run before the build on CI and on
+        // a fresh clone) start_session opens the classic page, which cannot
+        // answer a selection request; the tool says so instead of waiting
+        const shellBuilt = existsSync(
+            path.join(__dirname, "../dist/shell/index.html"),
+        )
+        if (shellBuilt) {
+            expect(result.isError).toBe(true)
+            expect(textOf(result)).toBe(
+                "Error: The preview tab is not open, or has not connected yet.",
+            )
+        } else {
+            expect(result.isError).toBeFalsy()
+            expect(textOf(result)).toContain(
+                "classic preview page cannot read the selection",
+            )
+        }
     })
 })

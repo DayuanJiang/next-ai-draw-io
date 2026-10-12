@@ -4,7 +4,10 @@ import { toast } from "sonner"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
-import { clearHighlights, highlightCells } from "@/lib/drawio/editor-bridge"
+import {
+    clearHighlights,
+    highlightChangedCells,
+} from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 import { useVersionsStore } from "@/stores/versions-store"
@@ -63,14 +66,7 @@ export function useVersions({
                 fromScratch,
             })
             // Mark what changed, unless the whole diagram is new
-            if (!fromScratch) {
-                setTimeout(() => {
-                    const marker = getComputedStyle(document.documentElement)
-                        .getPropertyValue("--marker")
-                        .trim()
-                    highlightCells(touchedIds, marker || "#ffd84d")
-                }, 60)
-            }
+            if (!fromScratch) highlightChangedCells(touchedIds)
             // The picture is of the canvas: take it right away, before a
             // newer version can be on it; once one is, this one gets none
             // rather than the newer one's

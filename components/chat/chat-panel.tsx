@@ -7,6 +7,7 @@ import {
     Settings,
 } from "lucide-react"
 import { useRef } from "react"
+import { VersionStrip } from "@/components/canvas/version-strip"
 import { DevXmlSimulator } from "@/components/dev-xml-simulator"
 import { BrandMark } from "@/components/workspace/brand-mark"
 import { IconButton } from "@/components/workspace/icon-button"
@@ -21,11 +22,11 @@ import {
     useSettingsStore,
 } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
+import { useVersionsStore } from "@/stores/versions-store"
 import { useChatEngine } from "./chat-engine"
 import { Composer } from "./composer"
 import { MessageList } from "./message-list"
 import { SessionMenu, useSessionTitle } from "./session-menu"
-import { VersionStrip } from "./version-strip"
 
 const DEBUG = process.env.NODE_ENV === "development"
 
@@ -97,6 +98,25 @@ export function ChatPanel({
     const openSettings = useUiStore((s) => s.openSettings)
     const setPanelOpen = useUiStore((s) => s.setPanelOpen)
 
+    // Versions with no card in the chat: saved by older app versions, from
+    // a turn that was retried, or drawn by a call that then failed its
+    // screenshot check (a call still running gets its card when done). The
+    // strip shows them even when there is only one.
+    const versions = useVersionsStore((s) => s.versions)
+    const hasCardless = versions.some(
+        (v) =>
+            !v.toolCallId ||
+            !engine.messages.some((m) =>
+                m.parts?.some((p) => {
+                    const part = p as { toolCallId?: string; state?: string }
+                    return (
+                        part.toolCallId === v.toolCallId &&
+                        part.state !== "output-error"
+                    )
+                }),
+            ),
+    )
+
     return (
         <aside
             className={cn(
@@ -160,7 +180,7 @@ export function ChatPanel({
                 </div>
             </header>
 
-            <VersionStrip />
+            <VersionStrip minVersions={hasCardless ? 1 : 2} />
 
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
                 {engine.messages.length > 0 ? <MessageList /> : <EmptyThread />}

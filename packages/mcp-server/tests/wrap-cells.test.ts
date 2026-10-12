@@ -156,6 +156,24 @@ describe("reservedIdError", () => {
 })
 
 describe("prepareNewDiagram", () => {
+    it("gives every <diagram> without an id one, so the server and draw.io name the same pages", () => {
+        // draw.io makes up an id for a page without one, which the server
+        // never sees; get_selection would then name a page edit_diagram
+        // cannot find
+        const out = prepareNewDiagram(
+            `<mxfile><diagram name="One"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram><diagram name="Two" id="kept"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        const ids = [...out.xml.matchAll(/<diagram\b[^>]*\bid="([^"]*)"/g)].map(
+            (m) => m[1],
+        )
+        expect(ids).toHaveLength(2)
+        expect(ids[0]).toMatch(/^[a-z0-9]+-[a-z0-9]+$/)
+        expect(ids[1]).toBe("kept")
+        expect(out.xml).toContain('name="One"')
+    })
+
     it("rejects a shape that uses a root cell id", () => {
         // It would clash with the added root cell "1" and be renamed,
         // which breaks the edges that point to it

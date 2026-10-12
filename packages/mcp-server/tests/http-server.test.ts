@@ -6,32 +6,75 @@
  * node:http so tests can set raw paths and Host/Origin headers.
  */
 
+import {
+    mkdirSync,
+    mkdtempSync,
+    rmSync,
+    utimesSync,
+    writeFileSync,
+} from "node:fs"
 import http from "node:http"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
+    activePreviewUi,
     drawioEmbedParams,
+    getApiToken,
     getState,
+    isSameOriginDrawio,
     keepInHistory,
     onSessionRecreate,
     onStateChange,
+    previewUiFromEnv,
+    previewUrl,
+    readSelection,
     requestExport,
+    requestSelection,
     requestSync,
     restoreHistoryEntry,
+    setDrawioDir,
+    setShellDir,
     setState,
+    shellConfig,
     shutdown,
     startHttpServer,
+    waitForSelection,
     waitForSync,
 } from "../src/http-server.ts"
 
 let port = 0
+// A stand-in for the bundled draw.io copy (dist/drawio), with a server-side
+// part of the war that must never be served
+let drawioDir = ""
+// A stand-in for the built canvas shell (dist/shell)
+let shellDir = ""
 
 beforeAll(async () => {
+    drawioDir = mkdtempSync(join(tmpdir(), "drawio-static-"))
+    mkdirSync(join(drawioDir, "js"))
+    mkdirSync(join(drawioDir, "WEB-INF"))
+    writeFileSync(join(drawioDir, "index.html"), "<html>draw.io</html>")
+    writeFileSync(join(drawioDir, ".version"), "v1\n")
+    writeFileSync(join(drawioDir, "js/app.min.js"), "// app")
+    writeFileSync(join(drawioDir, "WEB-INF/web.xml"), "<web-app/>")
+    setDrawioDir(drawioDir)
+    shellDir = mkdtempSync(join(tmpdir(), "shell-static-"))
+    writeFileSync(
+        join(shellDir, "index.html"),
+        "<html><script>window.__MCP_CONFIG__ = {{CONFIG_JSON}};</script></html>",
+    )
+    writeFileSync(join(shellDir, "shell.js"), "// shell")
+    writeFileSync(join(shellDir, "shell.css"), "body{}")
+    setShellDir(shellDir)
     port = await startHttpServer(40000 + Math.floor(Math.random() * 10000))
 })
 
 afterAll(() => {
     shutdown()
+    rmSync(drawioDir, { recursive: true, force: true })
+    rmSync(shellDir, { recursive: true, force: true })
 })
 
 interface Response {
@@ -40,7 +83,10 @@ interface Response {
     body: string
 }
 
-/** Send a request; `body` may be split into several writes. */
+/**
+ * Send a request as the preview page does (same Host, the API token);
+ * `body` may be split into several writes.
+ */
 function request(
     path: string,
     opts: {
@@ -56,7 +102,11 @@ function request(
                 port,
                 path,
                 method: opts.method ?? "GET",
-                headers: { host: `localhost:${port}`, ...opts.headers },
+                headers: {
+                    host: `localhost:${port}`,
+                    "x-drawio-token": getApiToken(),
+                    ...opts.headers,
+                },
             },
             (res) => {
                 const chunks: Buffer[] = []
@@ -327,15 +377,15 @@ describe("export requests", () => {
         const poll = JSON.parse(
             (await request(`/api/state?sessionId=${id}`)).body,
         )
-        expect(poll.export.format).toBe("png")
-        expect(poll.export.options).toEqual({ width: 1000, pageId: "p2" })
+        expect(poll.exportFormat).toBe("png")
+        expect(poll.exportOptions).toEqual({ width: 1000, pageId: "p2" })
 
         await postJson("/api/state", {
             sessionId: id,
             exportData: "data:image/png;base64,AAAA",
-            exportId: poll.export.id,
+            exportId: poll.exportId,
         })
-        expect(getState(id)?.pendingExport).toBeUndefined()
+        expect(getState(id)?.exportFormat).toBeUndefined()
     })
 
     it("ignores a late result of an export that already timed out", async () => {
@@ -350,10 +400,158 @@ describe("export requests", () => {
         await postJson("/api/state", {
             sessionId: id,
             exportData: "data:image/png;base64,LATE",
-            exportId: first.export.id,
+            exportId: first.exportId,
         })
         expect(getState(id)?.exportData).toBeUndefined()
-        expect(getState(id)?.pendingExport?.format).toBe("svg")
+        expect(getState(id)?.exportFormat).toBe("svg")
+    })
+
+    it("names exports at random, so a result meant for another process is not taken", async () => {
+        const id = "mcp-export-random-id"
+        setState(id, "<mxfile>x</mxfile>")
+        requestExport(id, "svg")
+        const poll = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(poll.exportId).toMatch(/^[0-9a-f-]{36}$/)
+        // The page retries a result refused with 403 against the process
+        // that took over the port; a per-process counter would restart at 1
+        await postJson("/api/state", {
+            sessionId: id,
+            exportData: "<svg>OLD</svg>",
+            exportId: 1,
+        })
+        expect(getState(id)?.exportData).toBeUndefined()
+        expect(getState(id)?.exportFormat).toBe("svg")
+    })
+})
+
+describe("selection requests (get_selection)", () => {
+    const picked = {
+        pageId: "p1",
+        pageName: "Page-1",
+        cells: [{ id: "3", label: "Login", edge: false }],
+    }
+
+    it("shows the request to the page and takes its answer once", async () => {
+        const id = "mcp-selection"
+        setState(id, "<mxfile>x</mxfile>")
+        expect(requestSelection(id)).toBe(true)
+        const poll = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(poll.selectionId).toMatch(/^[0-9a-f-]{36}$/)
+        // The request survives a write meanwhile
+        setState(id, "<mxfile>y</mxfile>")
+        const waiting = waitForSelection(id, 3000)
+        const answer = await postJson("/api/state", {
+            sessionId: id,
+            selectionId: poll.selectionId,
+            selection: picked,
+        })
+        expect(answer.status).toBe(200)
+        expect(await waiting).toEqual(picked)
+        // Taken: the next poll shows no request
+        const after = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(after.selectionId).toBeNull()
+        expect(getState(id)?.xml).toBe("<mxfile>y</mxfile>")
+    })
+
+    it("ignores an answer to another request, and gives up in time", async () => {
+        const id = "mcp-selection-late"
+        setState(id, "<mxfile>x</mxfile>")
+        requestSelection(id)
+        const first = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        requestSelection(id)
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: first.selectionId,
+            selection: picked,
+        })
+        expect(getState(id)?.selection).toBeUndefined()
+        expect(getState(id)?.selectionId).not.toBe(first.selectionId)
+        // A malformed answer is not taken either
+        const second = getState(id)?.selectionId
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: second,
+            selection: { cells: "3" },
+        })
+        expect(getState(id)?.selection).toBeUndefined()
+        expect(await waitForSelection(id, 250)).toBeNull()
+        // The request is withdrawn with the timeout
+        expect(getState(id)?.selectionId).toBeUndefined()
+        expect(requestSelection("mcp-unknown-session")).toBe(false)
+    })
+
+    it("takes no answer while no request is pending", async () => {
+        const id = "mcp-selection-unasked"
+        setState(id, "<mxfile>x</mxfile>")
+        // Both undefined would compare equal
+        await postJson("/api/state", { sessionId: id, selection: picked })
+        expect(getState(id)?.selection).toBeUndefined()
+        requestSelection(id)
+        const { selectionId } = getState(id) ?? {}
+        await postJson("/api/state", { sessionId: id, selection: picked })
+        expect(getState(id)?.selection).toBeUndefined()
+        expect(getState(id)?.selectionId).toBe(selectionId)
+        await waitForSelection(id, 50)
+    })
+
+    it("keeps the first answer when two tabs answer the same request", async () => {
+        const id = "mcp-selection-two-tabs"
+        setState(id, "<mxfile>x</mxfile>")
+        requestSelection(id)
+        const { selectionId } = getState(id) ?? {}
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId,
+            selection: picked,
+        })
+        const other = { ...picked, cells: [] }
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId,
+            selection: other,
+        })
+        expect(await waitForSelection(id, 1000)).toEqual(picked)
+    })
+
+    it("lets overlapping get_selection calls take turns, each getting its own answer", async () => {
+        const id = "mcp-selection-overlap"
+        setState(id, "<mxfile>x</mxfile>")
+        const poll = async () =>
+            JSON.parse((await request(`/api/state?sessionId=${id}`)).body)
+        const first = readSelection(id, 3000)
+        const second = readSelection(id, 3000)
+        // The tab sees one request and answers it
+        let shown = await poll()
+        expect(shown.selectionId).toMatch(/^[0-9a-f-]{36}$/)
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: shown.selectionId,
+            selection: picked,
+        })
+        expect(await first).toEqual(picked)
+        // Then the second call's request, another id, answered in turn
+        await new Promise((r) => setTimeout(r, 150))
+        const next = await poll()
+        expect(next.selectionId).toMatch(/^[0-9a-f-]{36}$/)
+        expect(next.selectionId).not.toBe(shown.selectionId)
+        const other = { ...picked, cells: [] }
+        await postJson("/api/state", {
+            sessionId: id,
+            selectionId: next.selectionId,
+            selection: other,
+        })
+        expect(await second).toEqual(other)
+        shown = await poll()
+        expect(shown.selectionId).toBeNull()
+        expect(await readSelection("mcp-unknown-session", 100)).toBeNull()
     })
 })
 
@@ -460,7 +658,370 @@ describe("preview page", () => {
             .map((m) => m[1])
             .join("\n")
         expect(scripts).toContain('const sessionId = "mcp-test-script";')
+        expect(scripts).toContain(`let API_TOKEN = "${getApiToken()}";`)
         expect(() => new Function(scripts)).not.toThrow()
+    })
+
+    it("embeds the bundled draw.io from its own origin, else the external one", async () => {
+        expect(isSameOriginDrawio()).toBe(true)
+        const res = await request("/?mcp=mcp-test-origin")
+        expect(res.body).toContain('src="/drawio/index.html?embed=1&')
+        // The page takes its own origin for draw.io's messages
+        expect(res.body).toContain(
+            'const DRAWIO_ORIGIN = "" || location.origin;',
+        )
+
+        setDrawioDir(null)
+        try {
+            expect(isSameOriginDrawio()).toBe(false)
+            const external = await request("/?mcp=mcp-test-origin")
+            expect(external.body).toContain(
+                'src="https://embed.diagrams.net/?embed=1&',
+            )
+            expect(external.body).toContain(
+                'const DRAWIO_ORIGIN = "https://embed.diagrams.net" || location.origin;',
+            )
+        } finally {
+            setDrawioDir(drawioDir)
+        }
+    })
+
+    it("sends the security headers with the page, which is never cached", async () => {
+        const res = await request("/?mcp=mcp-test-headers")
+        expect(res.headers["content-security-policy"]).toBe(
+            "frame-ancestors 'self'",
+        )
+        expect(res.headers["x-content-type-options"]).toBe("nosniff")
+        // It holds the process's token
+        expect(res.headers["cache-control"]).toBe("no-store")
+    })
+})
+
+describe("API token", () => {
+    it("refuses an API request without the token, or with another one", async () => {
+        setState("mcp-token", "<mxfile>kept</mxfile>")
+        for (const headers of [
+            { "x-drawio-token": "" },
+            { "x-drawio-token": "0123456789abcdef0123456789abcdef" },
+        ]) {
+            const get = await request("/api/state?sessionId=mcp-token", {
+                headers,
+            })
+            expect(get.status).toBe(403)
+            const post = await postJson(
+                "/api/state",
+                { sessionId: "mcp-token", xml: "<mxfile>replaced</mxfile>" },
+                headers,
+            )
+            expect(post.status).toBe(403)
+            const history = await request("/api/history?sessionId=mcp-token", {
+                headers,
+            })
+            expect(history.status).toBe(403)
+        }
+        expect(getState("mcp-token")?.xml).toBe("<mxfile>kept</mxfile>")
+    })
+
+    it("is not needed for the page and the draw.io files", async () => {
+        const headers = { "x-drawio-token": "" }
+        expect((await request("/?mcp=mcp-token", { headers })).status).toBe(200)
+        expect((await request("/drawio/index.html", { headers })).status).toBe(
+            200,
+        )
+    })
+})
+
+describe("bundled draw.io files", () => {
+    it("serves a file with its MIME type, cache and nosniff headers", async () => {
+        const res = await request("/drawio/js/app.min.js")
+        expect(res.status).toBe(200)
+        expect(res.body).toBe("// app")
+        expect(res.headers["content-type"]).toBe(
+            "text/javascript; charset=utf-8",
+        )
+        // Revalidated on every use: the file names stay the same across
+        // draw.io versions, so a package upgrade must reach the browser
+        expect(res.headers["cache-control"]).toBe("no-cache")
+        expect(res.headers.etag).toMatch(/^"v1-[0-9a-f]+-[0-9a-f]+"$/)
+        expect(res.headers["x-content-type-options"]).toBe("nosniff")
+        expect(res.headers["content-security-policy"]).toBeUndefined()
+    })
+
+    it("changes the ETag with the draw.io version, whatever the file dates say", async () => {
+        // An install that keeps the archive's dates gives the upgraded file
+        // the same date and, here, the same size as before
+        const file = join(drawioDir, "js/same-size.js")
+        const date = new Date("2020-01-01T00:00:00Z")
+        writeFileSync(file, "// v1")
+        utimesSync(file, date, date)
+        const first = await request("/drawio/js/same-size.js")
+        writeFileSync(file, "// v2")
+        utimesSync(file, date, date)
+        writeFileSync(join(drawioDir, ".version"), "v2\n")
+        setDrawioDir(drawioDir)
+        try {
+            const again = await request("/drawio/js/same-size.js", {
+                headers: { "if-none-match": first.headers.etag as string },
+            })
+            expect(again.status).toBe(200)
+            expect(again.body).toBe("// v2")
+            expect(again.headers.etag).not.toBe(first.headers.etag)
+        } finally {
+            writeFileSync(join(drawioDir, ".version"), "v1\n")
+            setDrawioDir(drawioDir)
+            rmSync(file, { force: true })
+        }
+    })
+
+    it("answers 304 to a matching If-None-Match, and HEAD without a body", async () => {
+        const first = await request("/drawio/js/app.min.js")
+        const again = await request("/drawio/js/app.min.js", {
+            headers: { "if-none-match": first.headers.etag as string },
+        })
+        expect(again.status).toBe(304)
+        expect(again.body).toBe("")
+        expect(again.headers.etag).toBe(first.headers.etag)
+        const changed = await request("/drawio/js/app.min.js", {
+            headers: { "if-none-match": '"0-0"' },
+        })
+        expect(changed.status).toBe(200)
+        const head = await request("/drawio/js/app.min.js", {
+            method: "HEAD",
+        })
+        expect(head.status).toBe(200)
+        expect(head.body).toBe("")
+        expect(head.headers["content-length"]).toBe("6")
+    })
+
+    it("keeps running when a file cannot be read", async () => {
+        // Readable for stat, not for open (root reads anything: skipped)
+        if (process.getuid?.() === 0) return
+        const file = join(drawioDir, "js/locked.js")
+        writeFileSync(file, "// locked", { mode: 0o000 })
+        try {
+            // The connection is dropped (the headers may be out already)
+            const res = await request("/drawio/js/locked.js").catch(() => null)
+            expect(res?.body ?? "").toBe("")
+        } finally {
+            rmSync(file, { force: true })
+        }
+        const next = await request("/drawio/js/app.min.js")
+        expect(next.status).toBe(200)
+        expect(next.body).toBe("// app")
+    })
+
+    it("frames the editor page only from this origin", async () => {
+        const res = await request("/drawio/index.html")
+        expect(res.status).toBe(200)
+        expect(res.headers["content-type"]).toBe("text/html; charset=utf-8")
+        expect(res.headers["content-security-policy"]).toBe(
+            "frame-ancestors 'self'",
+        )
+    })
+
+    it("never serves the war's server-side parts or files outside the copy", async () => {
+        for (const path of [
+            "/drawio/WEB-INF/web.xml",
+            "/drawio/web-inf/web.xml",
+            "/drawio/js/../WEB-INF/web.xml",
+            "/drawio/META-INF/MANIFEST.MF",
+            "/drawio/../package.json",
+            "/drawio/%2e%2e/package.json",
+            "/drawio/js/%2e%2e/%2e%2e/package.json",
+            "/drawio/js/..%5c..%5cpackage.json",
+            "/drawio/",
+            "/drawio/js",
+            "/drawio/missing.js",
+        ]) {
+            const res = await request(path)
+            expect([403, 404], path).toContain(res.status)
+            expect(res.body).not.toContain("web-app")
+            expect(res.body).not.toContain('"name"')
+        }
+    })
+
+    it("answers 404 when no copy is bundled", async () => {
+        setDrawioDir(null)
+        try {
+            expect((await request("/drawio/index.html")).status).toBe(404)
+        } finally {
+            setDrawioDir(drawioDir)
+        }
+    })
+})
+
+describe("canvas shell page", () => {
+    /** The config the served page carries */
+    const configOf = (body: string) => {
+        const match = body.match(
+            /window\.__MCP_CONFIG__ = (\{.*?\});<\/script>/s,
+        )
+        if (!match) throw new Error(`no config in ${body}`)
+        return JSON.parse(match[1])
+    }
+
+    it("writes the session, the token and where draw.io comes from into the page", async () => {
+        const res = await request("/shell/?mcp=mcp-shell-page")
+        expect(res.status).toBe(200)
+        expect(res.headers["content-type"]).toBe("text/html; charset=utf-8")
+        expect(res.body).not.toContain("{{")
+        expect(configOf(res.body)).toEqual({
+            sessionId: "mcp-shell-page",
+            token: getApiToken(),
+            apiBase: "/api",
+            drawioBaseUrl: "/drawio/index.html",
+            drawioUi: "",
+            drawioLang: "",
+            drawioDark: "auto",
+            lang: "",
+        })
+        // The page creates the session, as the classic page does
+        expect(getState("mcp-shell-page")).toBeDefined()
+        // The same page at its index.html name
+        const index = await request("/shell/index.html?mcp=mcp-shell-page")
+        expect(index.status).toBe(200)
+        expect(configOf(index.body).sessionId).toBe("mcp-shell-page")
+    })
+
+    it("passes the host's editor settings on, in the shell's own terms", () => {
+        const config = shellConfig("mcp-s", {
+            DRAWIO_UI: "Sketch",
+            DRAWIO_LANG: "zh-Hant",
+            DRAWIO_DARK: "1",
+        })
+        expect(config.drawioUi).toBe("sketch")
+        expect(config.drawioLang).toBe("zh-tw")
+        expect(config.drawioDark).toBe("dark")
+        // The language as given, for the shell's own texts
+        expect(config.lang).toBe("zh-Hant")
+        expect(shellConfig("mcp-s", { DRAWIO_DARK: "light" }).drawioDark).toBe(
+            "light",
+        )
+        expect(shellConfig("mcp-s", { DRAWIO_UI: "dark" }).drawioDark).toBe(
+            "dark",
+        )
+        expect(shellConfig("mcp-s", { DRAWIO_UI: "neon" }).drawioUi).toBe("")
+    })
+
+    it("names the external draw.io when there is no bundled copy", async () => {
+        setDrawioDir(null)
+        try {
+            const res = await request("/shell/?mcp=mcp-shell-external")
+            expect(configOf(res.body).drawioBaseUrl).toBe(
+                "https://embed.diagrams.net/",
+            )
+        } finally {
+            setDrawioDir(drawioDir)
+        }
+    })
+
+    it("escapes a value that could close the script element", async () => {
+        const before = process.env.DRAWIO_LANG
+        process.env.DRAWIO_LANG = "</script><script>alert(1)</script>"
+        try {
+            const res = await request("/shell/?mcp=mcp-shell-escape")
+            expect(res.body).not.toContain("</script><script>alert")
+            expect(res.body).toContain("\\u003c/script>")
+            expect(configOf(res.body).lang).toBe(process.env.DRAWIO_LANG)
+        } finally {
+            if (before === undefined) delete process.env.DRAWIO_LANG
+            else process.env.DRAWIO_LANG = before
+        }
+    })
+
+    it("sends the security headers, is never cached and needs no token", async () => {
+        const res = await request("/shell/?mcp=mcp-shell-headers", {
+            headers: { "x-drawio-token": "" },
+        })
+        expect(res.status).toBe(200)
+        expect(res.headers["content-security-policy"]).toBe(
+            "frame-ancestors 'self'",
+        )
+        expect(res.headers["x-content-type-options"]).toBe("nosniff")
+        expect(res.headers["cache-control"]).toBe("no-store")
+    })
+
+    it("rejects a bad session id and goes to the most recent session without one", async () => {
+        const bad = await request(
+            `/shell/?mcp=${encodeURIComponent('";alert(1)//')}`,
+        )
+        expect(bad.status).toBe(400)
+        setState("mcp-shell-recent", "<mxfile>recent</mxfile>")
+        const res = await request("/shell/")
+        expect(res.status).toBe(302)
+        // (other tests of this file create sessions in the same millisecond)
+        expect(res.headers.location).toMatch(/^\/shell\/\?mcp=mcp-/)
+        // Without the trailing slash the assets would resolve elsewhere
+        const slash = await request("/shell?mcp=mcp-shell-recent")
+        expect(slash.status).toBe(302)
+        expect(slash.headers.location).toBe("/shell/?mcp=mcp-shell-recent")
+    })
+
+    it("serves the shell's files with their MIME types, without a token", async () => {
+        const js = await request("/shell/shell.js", {
+            headers: { "x-drawio-token": "" },
+        })
+        expect(js.status).toBe(200)
+        expect(js.body).toBe("// shell")
+        expect(js.headers["content-type"]).toBe(
+            "text/javascript; charset=utf-8",
+        )
+        expect(js.headers["x-content-type-options"]).toBe("nosniff")
+        expect(js.headers["cache-control"]).toBe("no-cache")
+        expect(js.headers.etag).toMatch(/^"\d+\.\d+\.\d+-[0-9a-f]+-[0-9a-f]+"$/)
+        const css = await request("/shell/shell.css")
+        expect(css.headers["content-type"]).toBe("text/css; charset=utf-8")
+        for (const path of [
+            "/shell/../package.json",
+            "/shell/%2e%2e/package.json",
+            "/shell/missing.js",
+        ]) {
+            const res = await request(path)
+            expect(res.status, path).toBe(404)
+            expect(res.body).not.toContain('"name"')
+        }
+    })
+
+    it("says so when the shell is not built", async () => {
+        setShellDir(null)
+        try {
+            const page = await request("/shell/?mcp=mcp-shell-unbuilt")
+            expect(page.status).toBe(404)
+            expect(page.body).toContain("npm run build")
+            expect((await request("/shell/shell.js")).status).toBe(404)
+        } finally {
+            setShellDir(shellDir)
+        }
+    })
+
+    it("is what start_session opens, unless DRAWIO_PREVIEW_UI=classic", () => {
+        expect(previewUiFromEnv({})).toBe("shell")
+        expect(previewUiFromEnv({ DRAWIO_PREVIEW_UI: "shell" })).toBe("shell")
+        expect(previewUiFromEnv({ DRAWIO_PREVIEW_UI: "classic" })).toBe(
+            "classic",
+        )
+        expect(previewUiFromEnv({ DRAWIO_PREVIEW_UI: "Classic" })).toBe(
+            "classic",
+        )
+        expect(previewUrl(6002, "mcp-x", "shell")).toBe(
+            "http://localhost:6002/shell/?mcp=mcp-x",
+        )
+        expect(previewUrl(6002, "mcp-x", "classic")).toBe(
+            "http://localhost:6002?mcp=mcp-x",
+        )
+        // Not built: the classic page, which works, rather than a 404; the
+        // tools that need the shell (get_selection) see the classic page too
+        expect(activePreviewUi("shell")).toBe("shell")
+        expect(activePreviewUi("classic")).toBe("classic")
+        setShellDir(null)
+        try {
+            expect(previewUrl(6002, "mcp-x", "shell")).toBe(
+                "http://localhost:6002?mcp=mcp-x",
+            )
+            expect(activePreviewUi("shell")).toBe("classic")
+        } finally {
+            setShellDir(shellDir)
+        }
     })
 })
 
@@ -679,6 +1240,164 @@ describe("history restore", () => {
         // The missing image is filled in
         expect(getHistory(id)[0].svg).toBe("SVG")
     })
+})
+
+// What the shell's version cards read (the classic page uses index, id
+// and svg of the same list)
+describe("GET /api/history for the version cards", () => {
+    const page = (cellId: string) =>
+        `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+
+    it("lists each entry's document, maker and first copy, with the state and the entry on the canvas", async () => {
+        const id = "mcp-history-cards"
+        addHistory(id, page("a"))
+        addHistory(id, page("b"), "SVG-B", "user")
+        setState(id, page("b"))
+        const res = await request(`/api/history?sessionId=${id}`)
+        expect(res.status).toBe(200)
+        const d = JSON.parse(res.body)
+        const [a, b] = getHistory(id)
+        expect(d.count).toBe(2)
+        expect(d.stateId).toBe(getState(id)?.stateId)
+        expect(d.currentId).toBe(b.id)
+        expect(d.entries[0]).toEqual({
+            index: 0,
+            id: a.id,
+            svg: "",
+            xml: page("a"),
+            source: null,
+            firstId: a.id,
+        })
+        expect(d.entries[1]).toMatchObject({
+            id: b.id,
+            svg: "SVG-B",
+            source: "user",
+            firstId: b.id,
+        })
+    })
+
+    it("gives the state a History key, which a hand edit changes once and a further one not at all", async () => {
+        // The shell reads History (every entry's XML and picture) again
+        // only when the key changes
+        const id = "mcp-history-key"
+        setState(id, page("a"))
+        addHistory(id, page("a"))
+        const [a] = getHistory(id)
+        const first = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(first.historyKey).toBe(`1:${a.id}:${a.id}`)
+        // A hand edit: the canvas is at no entry now, History is the same
+        const push = await postJson("/api/state", {
+            sessionId: id,
+            xml: page("b"),
+            baseVersion: first.version,
+            stateId: first.stateId,
+        })
+        expect(push.status).toBe(200)
+        expect(JSON.parse(push.body).historyKey).toBe(`1:${a.id}:null`)
+        const again = await postJson("/api/state", {
+            sessionId: id,
+            xml: page("c"),
+            baseVersion: first.version + 1,
+            stateId: first.stateId,
+        })
+        expect(JSON.parse(again.body).historyKey).toBe(`1:${a.id}:null`)
+        const polled = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(polled.historyKey).toBe(`1:${a.id}:null`)
+        // A write keeps the edit in History: the key names the new entry
+        keepInHistory(id, page("c"))
+        setState(id, page("d"))
+        addHistory(id, page("d"))
+        const [, c, d] = getHistory(id)
+        expect(c.xml).toBe(page("c"))
+        const after = JSON.parse(
+            (await request(`/api/state?sessionId=${id}`)).body,
+        )
+        expect(after.historyKey).toBe(`3:${d.id}:${d.id}`)
+    })
+
+    it("names the entry a restored copy stands for, and marks the copy as a restore", async () => {
+        const id = "mcp-history-cards-restore"
+        addHistory(id, page("a"))
+        addHistory(id, page("b"))
+        setState(id, page("b"))
+        const [a, b] = getHistory(id)
+        const restore = await postJson("/api/restore", {
+            sessionId: id,
+            id: a.id,
+            stateId: getState(id)?.stateId,
+        })
+        expect(restore.status).toBe(200)
+        const d = JSON.parse(
+            (await request(`/api/history?sessionId=${id}`)).body,
+        )
+        // History: a, b, a' (the copy); the canvas shows a's content
+        expect(d.entries.map((e: { firstId: number }) => e.firstId)).toEqual([
+            a.id,
+            b.id,
+            a.id,
+        ])
+        expect(d.entries[2].source).toBe("restore")
+        expect(d.currentId).toBe(d.entries[2].id)
+    })
+
+    it("marks the user's edit that a write replaces, and one that lost the race", async () => {
+        const id = "mcp-history-cards-user"
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        // The user edits in the browser; the AI writes over it
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: page("user"),
+            baseVersion: version,
+            stateId: getState(id)?.stateId,
+        })
+        keepInHistory(id, page("user"))
+        const ai2 = setState(id, page("ai2"))
+        addHistory(id, page("ai2"))
+        // A tab that had not loaded the write yet pushes another edit
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: page("late"),
+            baseVersion: ai2 - 1,
+            stateId: getState(id)?.stateId,
+        })
+        const d = JSON.parse(
+            (await request(`/api/history?sessionId=${id}`)).body,
+        )
+        expect(
+            d.entries.map((e: { xml: string; source: string | null }) => [
+                e.xml === page("user")
+                    ? "user"
+                    : e.xml === page("late")
+                      ? "late"
+                      : "ai",
+                e.source,
+            ]),
+        ).toEqual([
+            ["ai", null],
+            ["user", "user"],
+            ["ai", null],
+            ["late", "user"],
+        ])
+        // The canvas shows the write, not an edit
+        expect(d.currentId).toBe(getHistory(id)[2].id)
+    })
+
+    it("reports no state and no current entry for a session it does not know", async () => {
+        const d = JSON.parse(
+            (await request("/api/history?sessionId=mcp-never-seen")).body,
+        )
+        expect(d).toEqual({
+            entries: [],
+            count: 0,
+            stateId: null,
+            currentId: null,
+        })
+    })
 
     // draw.io's own copy of a diagram, as a sync reply or an edit brings it
     const drawioCopy = (xml: string, attrs = 'pageWidth="850"') =>
@@ -803,6 +1522,7 @@ describe("bodies over the size limit", () => {
                         method: "POST",
                         headers: {
                             host: `localhost:${port}`,
+                            "x-drawio-token": getApiToken(),
                             "content-type": "application/json",
                         },
                     },

@@ -4,12 +4,14 @@ import { MessageSquare, PanelRightOpen, Settings, Shapes } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
+import { CompareDialog } from "@/components/canvas/compare-dialog"
+import { SelectionAsk } from "@/components/canvas/selection-ask"
 import {
     ChatEngineProvider,
     useChatEngine,
 } from "@/components/chat/chat-engine"
 import { ChatPanel } from "@/components/chat/chat-panel"
-import { CompareDialog } from "@/components/chat/compare-dialog"
+import { ChatVersionsProvider } from "@/components/chat/chat-versions"
 import { LobbyHero } from "@/components/chat/lobby-hero"
 import { SaveDialog } from "@/components/save-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
@@ -116,7 +118,9 @@ export function Workspace() {
 
     return (
         <ChatEngineProvider>
-            <WorkspaceLayout />
+            <ChatVersionsProvider>
+                <WorkspaceLayout />
+            </ChatVersionsProvider>
         </ChatEngineProvider>
     )
 }
@@ -267,6 +271,13 @@ function WorkspaceLayout() {
                         }
                         style={isMobile ? undefined : { right: canvasRight }}
                         hideOverlays={!isMobile && showHero}
+                        overlay={(size) => (
+                            <SelectionAsk
+                                width={size.width}
+                                height={size.height}
+                            />
+                        )}
+                        waitForSavedLocale
                     />
                     {isMobile ? (
                         mobileView === "chat" &&

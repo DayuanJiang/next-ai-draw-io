@@ -114,6 +114,8 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 Then ask the AI for "a flowchart of user authentication with login, MFA and session management" and the diagram appears in your browser as it is drawn. The MCP server has most of the web app's drawing features:
 
 -   The same drawing rules and icon libraries (AWS, Azure, GCP, Kubernetes and more)
+-   The preview is the same canvas as the web app: the AI's changes are outlined, one Ctrl+Z takes them back, and the AI can read the shapes you select
+-   The draw.io editor ships inside the package, so after install the preview works offline (`DRAWIO_BASE_URL` points it at an external draw.io instead)
 -   A screenshot tool, so the AI can look at the rendered diagram and fix it
 -   Version history, multi-page diagrams, and download as `.drawio`, `.png`, `.svg` or `.drawio.svg`
 -   Auto-save to `~/.next-ai-drawio/`, so a diagram survives a restart

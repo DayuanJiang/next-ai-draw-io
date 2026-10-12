@@ -38,19 +38,103 @@ jobs:
       - name: Run unit tests
         run: npm run test -- --run
 
-      # The MCP server package ships its own vitest because its DOM polyfill
-      # (linkedom) needs `environment: node`, while the root vitest uses jsdom
-      # for the Next.js app. Install + run its tests separately so CI catches
-      # multi-page mxfile regressions.
+  # The MCP server package: its own vitest (its DOM polyfill, linkedom, needs
+  # `environment: node`, while the root vitest uses jsdom for the Next.js
+  # app), the npm package as it is built, the draw.io file list, and the
+  # canvas shell in a browser.
+  mcp-shell:
+    name: MCP Server & Shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # HEAD^1 is the base branch for the version bump reminder below
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            packages/mcp-server/package-lock.json
+
+      # The shell is bundled from the web app's components with the root's
+      # esbuild, Tailwind and React; Playwright comes from the root too
+      - name: Install dependencies
+        run: npm ci
+
       - name: Install MCP server dependencies
         run: npm --prefix packages/mcp-server ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright deps (cached)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Run MCP server unit tests
         run: npm --prefix packages/mcp-server test
 
-      # Tests run from src/, so check the built npm package separately
+      # Tests run from src/, so check the built npm package separately. The
+      # build downloads the pinned draw.war and bundles a trimmed draw.io.
       - name: Build MCP server and check package contents
         run: npm --prefix packages/mcp-server run build && npm --prefix packages/mcp-server run check-package
+
+      # The trimmed draw.io is cut from this list; the guard drives the full
+      # copy (public/drawio) in Chromium and fails when the editor requests a
+      # file the list does not have
+      - name: Download the full draw.io
+        run: node scripts/fetch-drawio.mjs
+
+      - name: Check the MCP draw.io file list
+        run: npm --prefix packages/mcp-server run check-drawio
+
+      # The canvas shell in a browser, from the package as npm installs it:
+      # the packed tarball goes into an empty directory, its dist/index.js is
+      # started over stdio and headless Chromium opens the URL start_session
+      # returns (packages/mcp-server/tests/e2e)
+      - name: Run the MCP shell E2E tests on the packed tarball
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-pack" "$RUNNER_TEMP/mcp-install"
+          npm pack ./packages/mcp-server --pack-destination "$RUNNER_TEMP/mcp-pack"
+          npm --prefix "$RUNNER_TEMP/mcp-install" install "$RUNNER_TEMP"/mcp-pack/*.tgz
+          MCP_SERVER_ENTRY="$RUNNER_TEMP/mcp-install/node_modules/@next-ai-drawio/mcp-server/dist/index.js" \
+            npm --prefix packages/mcp-server run test:e2e
+        env:
+          CI: true
+
+      # The shell bundles the web app's canvas and the root's dependencies,
+      # so a change under these paths (the ones publish-mcp.yml triggers on)
+      # reaches users with the next MCP release, and publish-mcp.yml only
+      # publishes a new version number
+      - name: Remind to bump the MCP version when bundled code changed
+        if: github.event_name == 'pull_request'
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD -- components contexts hooks lib stores app/globals.css package-lock.json scripts packages/mcp-server)
+          base_version=$(git show HEAD^1:packages/mcp-server/package.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          head_version=$(node -p "require('./packages/mcp-server/package.json').version")
+          if [ -n "$changed" ] && [ "$base_version" = "$head_version" ]; then
+            echo "::warning::Code bundled into the MCP server changed without a version bump in packages/mcp-server/package.json (still ${head_version}). Bump it if the change should be published."
+          fi
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: playwright-report-mcp-shell
+          path: packages/mcp-server/test-results/
+          retention-days: 7
 
   e2e:
     # Six jobs at once, each with a sixth of the tests and one worker: the

@@ -16,6 +16,7 @@ import {
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import type { HistorySource } from "../src/history.ts"
 import { Autosaver, defaultDataDir } from "../src/persistence.ts"
 
 const DIAGRAM = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
@@ -242,8 +243,10 @@ describe("Autosaver History", () => {
     const V3 = DIAGRAM.replace('id="a"', 'id="v3"')
     // One session's History entries, as history.ts keeps them (the saver
     // leaves the thumbnails out)
-    const withHistory = (dir: string, entries: { id: number; xml: string }[]) =>
-        new Autosaver(dir, 30, 50, () => entries)
+    const withHistory = (
+        dir: string,
+        entries: { id: number; xml: string; source?: HistorySource }[],
+    ) => new Autosaver(dir, 30, 50, () => entries)
 
     it("saves the XML of the History entries next to the diagram", async () => {
         const dir = tempDir()
@@ -257,8 +260,11 @@ describe("Autosaver History", () => {
         saver.schedule("mcp-h", V2)
         expect(existsSync(path)).toBe(false)
         await sleep(80)
-        expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual([V1, V2])
-        expect(saver.loadHistory("mcp-h")).toEqual([V1, V2])
+        expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual([
+            { xml: V1 },
+            { xml: V2 },
+        ])
+        expect(saver.loadHistory("mcp-h")).toEqual([{ xml: V1 }, { xml: V2 }])
         expect(readdirSync(dir).sort()).toEqual([
             "mcp-h.drawio",
             "mcp-h.history.json",
@@ -273,7 +279,7 @@ describe("Autosaver History", () => {
         expect(
             readFileSync(saver.pathFor("mcp-cleared") as string, "utf-8"),
         ).toBe(BLANK)
-        expect(saver.loadHistory("mcp-cleared")).toEqual([V1])
+        expect(saver.loadHistory("mcp-cleared")).toEqual([{ xml: V1 }])
     })
 
     it("still skips a blank page whose History holds only blank pages", () => {
@@ -299,7 +305,7 @@ describe("Autosaver History", () => {
         // The old session is still open and saves again, History unchanged
         saver.schedule(old, V1)
         saver.flush()
-        expect(saver.loadHistory(old)).toEqual([V1])
+        expect(saver.loadHistory(old)).toEqual([{ xml: V1 }])
     })
 
     it("rewrites the History file only when the entries changed", () => {
@@ -321,14 +327,20 @@ describe("Autosaver History", () => {
         saver.schedule("mcp-same", V2)
         saver.flush()
         expect(statSync(path).mtimeMs).not.toBe(old)
-        expect(saver.loadHistory("mcp-same")).toEqual([V1, V2])
+        expect(saver.loadHistory("mcp-same")).toEqual([
+            { xml: V1 },
+            { xml: V2 },
+        ])
 
         // The circular buffer dropped the oldest entry: same length, new id
         entries.shift()
         entries.push({ id: 2, xml: V3 })
         saver.schedule("mcp-same", V3)
         saver.flush()
-        expect(saver.loadHistory("mcp-same")).toEqual([V2, V3])
+        expect(saver.loadHistory("mcp-same")).toEqual([
+            { xml: V2 },
+            { xml: V3 },
+        ])
     })
 
     it("writes no History file while there are no entries", () => {
@@ -344,10 +356,52 @@ describe("Autosaver History", () => {
         const saver = new Autosaver(dir, 10)
         const path = saver.historyPathFor("mcp-bad") as string
         expect(saver.loadHistory("mcp-bad")).toEqual([])
-        for (const content of ["{not json", '{"a":1}', "[1, 2]", '"x"']) {
+        for (const content of [
+            "{not json",
+            '{"a":1}',
+            "[1, 2]",
+            '"x"',
+            '[{"source":"user"}]',
+        ]) {
             writeFileSync(path, content)
             expect(saver.loadHistory("mcp-bad")).toEqual([])
         }
+    })
+
+    it("reads the History files of earlier versions, which hold the XML alone", () => {
+        const dir = tempDir()
+        const saver = new Autosaver(dir, 10)
+        writeFileSync(
+            saver.historyPathFor("mcp-old") as string,
+            JSON.stringify([V1, V2]),
+        )
+        expect(saver.loadHistory("mcp-old")).toEqual([{ xml: V1 }, { xml: V2 }])
+    })
+
+    it("keeps who made each entry, so the shell's cards look the same after a restart", () => {
+        // A clear of the canvas and a restore of it: without the source, the
+        // restored copy would show as a second clear
+        const dir = tempDir()
+        const saver = withHistory(dir, [
+            { id: 0, xml: V1 },
+            { id: 1, xml: BLANK, source: "user" },
+            { id: 2, xml: V2, source: "restore" },
+            { id: 3, xml: V1, source: "recover" },
+        ])
+        saver.schedule("mcp-who", V1)
+        saver.flush()
+        expect(saver.loadHistory("mcp-who")).toEqual([
+            { xml: V1 },
+            { xml: BLANK, source: "user" },
+            { xml: V2, source: "restore" },
+            { xml: V1, source: "recover" },
+        ])
+        // A source the server does not know is left out
+        writeFileSync(
+            saver.historyPathFor("mcp-who") as string,
+            JSON.stringify([{ xml: V1, source: "robot" }]),
+        )
+        expect(saver.loadHistory("mcp-who")).toEqual([{ xml: V1 }])
     })
 
     it("flush() writes the History on shutdown", () => {
@@ -355,7 +409,7 @@ describe("Autosaver History", () => {
         const saver = withHistory(dir, [{ id: 0, xml: V1 }])
         saver.schedule("mcp-exit", V1)
         saver.flush()
-        expect(saver.loadHistory("mcp-exit")).toEqual([V1])
+        expect(saver.loadHistory("mcp-exit")).toEqual([{ xml: V1 }])
     })
 })
 

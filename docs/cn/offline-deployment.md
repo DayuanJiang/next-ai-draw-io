@@ -14,7 +14,7 @@ Next AI Draw.io 自带一份 draw.io。`npm run build`（包括 Docker 构建）
 
 构建会从 [draw.io 发布页](https://github.com/jgraph/drawio/releases) 下载 `draw.war`（约 50 MB）。如果构建机器访问不了 GitHub：
 
-- 在另一台机器上下载 `scripts/fetch-drawio.mjs` 里写明的那个版本的 `draw.war`，解压到 `public/drawio`（删掉 `WEB-INF` 和 `META-INF`），再把版本号（例如 `v32.0.2`）写进 `public/drawio/.version`。构建时就会使用这份副本。
+- 在另一台机器上下载 `packages/mcp-server/src/drawio-version.json` 里写明的那个版本的 `draw.war`，解压到 `public/drawio`（删掉 `WEB-INF` 和 `META-INF`），再把版本号（例如 `v32.0.2`）写进 `public/drawio/.version`。构建时就会使用这份副本。
 - 或者在能联网的机器上构建镜像，再拷到离线网络里。
 
 ## 来自其他网站的图片

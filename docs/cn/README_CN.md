@@ -114,6 +114,8 @@ claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 然后对 AI 说"画一个用户认证流程图，包含登录、MFA 和会话管理"，图会实时出现在浏览器里。MCP 服务器包含网页版的大部分画图能力：
 
 -   同一套画图规则和图标库（AWS、Azure、GCP、Kubernetes 等）
+-   预览页就是网页版的画布：AI 的改动会被标出，按一次 Ctrl+Z 就能撤销，AI 还能读到你选中的图形
+-   draw.io 编辑器随包一起安装，装好后预览不需要联网（也可以用 `DRAWIO_BASE_URL` 改用外部的 draw.io）
 -   截图工具，AI 可以看一眼画好的图并自行修正
 -   版本历史、多页图表，下载为 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`
 -   自动保存到 `~/.next-ai-drawio/`，重启后接着画
