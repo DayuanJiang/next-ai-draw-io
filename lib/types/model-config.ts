@@ -1,6 +1,6 @@
 // Types for multi-provider model configuration
 
-import { PROVIDER_NAMES, PROVIDERS, type ProviderName } from "@/lib/providers"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 
 // The provider record, under the name the rest of the app imports it by
 export {
@@ -66,21 +66,6 @@ export interface FlattenedModel {
     // Whether this model is the server default (matches AI_MODEL env var)
     isDefault?: boolean
 }
-
-// Providers whose server credentials live in fixed env vars
-// (AWS_ACCESS_KEY_ID, GOOGLE_VERTEX_API_KEY, OLLAMA_API_KEY) with no
-// apiKeyEnv redirection support: their credentials are global
-export const FIXED_CRED_PROVIDERS: ProviderName[] = PROVIDER_NAMES.filter(
-    (p) => PROVIDERS[p].fixedCredentials,
-)
-
-// models.dev logo names that differ from the provider name
-export const PROVIDER_LOGO_MAP: Record<string, string> = Object.fromEntries(
-    PROVIDER_NAMES.flatMap((p) => {
-        const logo = PROVIDERS[p].logo
-        return logo ? [[p, logo]] : []
-    }),
-)
 
 // Suggested models per provider for quick add
 export const SUGGESTED_MODELS: Partial<Record<ProviderName, string[]>> = {

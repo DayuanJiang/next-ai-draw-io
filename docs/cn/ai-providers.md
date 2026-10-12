@@ -431,3 +431,26 @@ TEMPERATURE=0  # 输出更具确定性（推荐用于图表）
 -   **经济实惠**：DeepSeek 提供具有竞争力的价格
 -   **隐私保护**：使用 Ollama 进行完全本地、离线的操作（需要强大的硬件支持）
 -   **灵活性**：OpenRouter 通过单一 API 提供对众多模型的访问
+
+## 新增一个服务商
+
+一个服务商的全部事实都在 `lib/providers.ts` 的一条记录里：用哪个 AI SDK（`sdk`）、用什么凭据登录（`credential`）、环境变量 `<PREFIX>_API_KEY` / `<PREFIX>_BASE_URL` 的前缀（`envPrefix`）、官方地址、选择器里的分组，以及可选的提示文案。设置界面、连接测试、聊天路由和管理面板都读这条记录，所以新增一个 OpenAI 兼容服务商只需：
+
+1. 在 `lib/providers.ts` 里加一条记录，例如：
+
+    ```ts
+    acme: {
+        label: "Acme AI",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "ACME",
+        defaultBaseUrl: "https://api.acme.example/v1",
+        apiKeyUrl: "https://acme.example/keys",
+        modelList: "openai",
+    },
+    ```
+
+    需要在地址输入框下方显示提示，或在选择器里显示说明的服务商，在记录里加 `baseUrlHint` 或 `note` 对象，四种界面语言（`en`、`zh`、`ja`、`zh-Hant`）都要写。不能在线列出模型的服务商不写 `modelList`，改写一个短的 `models` 列表。
+2. 在 `env.example` 里加上 `ACME_API_KEY` 和 `ACME_BASE_URL`（有一个单元测试检查每条记录的变量名都出现在里面）。
+3. 在 `docs/en`、`docs/cn`、`docs/ja` 的本文档里各加一节说明。

@@ -31,15 +31,6 @@ export const POPULAR_PROVIDERS: ProviderName[] = [
     "qwen",
 ]
 
-/**
- * Providers whose base URL usually needs changing (Azure has no default;
- * Ollama's is its cloud, SGLang's a local server) or comes with a hint
- * (MiniMax, MiMo): their folded options start open
- */
-export const OPTIONS_OPEN: ProviderName[] = PROVIDER_NAMES.filter(
-    (p) => PROVIDERS[p].optionsOpen,
-)
-
 /** The groups with only the providers whose name matches the search */
 export function filterProviderGroups(query: string) {
     const q = query.trim().toLowerCase()

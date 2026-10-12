@@ -446,3 +446,26 @@ When unset, the model uses its default behavior.
 -   **Budget-friendly**: DeepSeek offers competitive pricing
 -   **Privacy**: Use Ollama for fully local, offline operation (requires powerful hardware)
 -   **Flexibility**: OpenRouter provides access to many models through a single API
+
+## Adding a Provider
+
+Every fact about a provider lives in one record in `lib/providers.ts`: which AI SDK runs it (`sdk`), what it signs in with (`credential`), the prefix of its `<PREFIX>_API_KEY` / `<PREFIX>_BASE_URL` variables (`envPrefix`), its official URL, the picker group, and optional notes. The settings UI, the connection test, the chat route and the admin panel all read that record, so adding an OpenAI-compatible provider is:
+
+1. Add a record to `lib/providers.ts`, for example:
+
+    ```ts
+    acme: {
+        label: "Acme AI",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "ACME",
+        defaultBaseUrl: "https://api.acme.example/v1",
+        apiKeyUrl: "https://acme.example/keys",
+        modelList: "openai",
+    },
+    ```
+
+    A provider that needs a hint under its base URL field, or a note in the picker, gets a `baseUrlHint` or `note` object with all four UI languages (`en`, `zh`, `ja`, `zh-Hant`). Providers that cannot list their models online keep a short `models` list instead of `modelList`.
+2. Add `ACME_API_KEY` and `ACME_BASE_URL` to `env.example` (a unit test checks that every record's variables appear there).
+3. Add a section for it to this document in `docs/en`, `docs/cn` and `docs/ja`.
