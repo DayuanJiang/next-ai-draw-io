@@ -9,6 +9,9 @@ on:
   pull_request:
     branches:
       - main
+  # Run it by hand on main when a push did not trigger it (GitHub drops an
+  # event now and then); it then pushes to ECR like a push to main
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
