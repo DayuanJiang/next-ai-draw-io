@@ -1203,10 +1203,11 @@ export function getServerProvider(): ProviderName | null {
 
 /**
  * Whether a call made with the caller's own settings runs on an endpoint of
- * the deployment: its EdgeOne function, the server's keyless Ollama, or an
+ * the deployment: the site's own function (EdgeOne, credential "none"), the
+ * server's keyless local provider (Ollama, credential "optionalKey"), or an
  * address on the server's network (which ignores a dummy key header).
- * Bedrock and EdgeOne never use a client base URL. Never in the desktop
- * app, where every endpoint is the user's. clientBaseUrl: normalized.
+ * Bedrock never uses a client base URL. Never in the desktop app, where
+ * every endpoint is the user's. clientBaseUrl: normalized.
  */
 export async function usesServerEndpoint(
     provider: ProviderName | null | undefined,
@@ -1214,10 +1215,13 @@ export async function usesServerEndpoint(
     apiKey: string | null | undefined,
 ): Promise<boolean> {
     if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
-    if (provider === "edgeone") return true
-    if (provider === "ollama" && !clientBaseUrl && !apiKey) return true
+    const def = provider ? providerDef(provider) : undefined
+    if (def?.credential === "none") return true
+    if (def?.credential === "optionalKey" && !clientBaseUrl && !apiKey) {
+        return true
+    }
     return (
-        provider !== "bedrock" &&
+        def?.sdk !== "bedrock" &&
         !!clientBaseUrl &&
         (await isPrivateUrl(clientBaseUrl))
     )
@@ -1225,8 +1229,8 @@ export async function usesServerEndpoint(
 
 /**
  * Whether the call is paid for by the server's own credentials (env keys or
- * IAM role) rather than credentials sent with the request. Mirrors which key
- * each branch of getAIModel ends up using.
+ * IAM role) rather than credentials sent with the request: the key
+ * resolveEndpoint picks for getAIModel is the server's.
  */
 export function usesServerCredentials(
     provider: ProviderName,
@@ -1236,28 +1240,10 @@ export function usesServerCredentials(
     if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
     // Cleaned like getAIModel does: "/" means no base URL
     const baseUrl = normalizeBaseUrl(overrides?.baseUrl ?? "")
-    switch (provider) {
-        case "bedrock":
-            return !(
-                overrides?.apiKey ||
-                (overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey)
-            )
-        case "vertexai":
-            return !overrides?.vertexApiKey
-        case "edgeone":
-            // The platform's own endpoint, no key involved
-            return false
-        case "ollama":
-            // Only a server key costs money; a keyless local server or the
-            // client's own server does not
-            return (
-                !baseUrl &&
-                !overrides?.apiKey &&
-                !!(overrides?.apiKeyEnv || process.env.OLLAMA_API_KEY)
-            )
-        default:
-            return !overrides?.apiKey
-    }
+    return (
+        resolveEndpoint(provider, { ...overrides, baseUrl }).keySource ===
+        "server"
+    )
 }
 
 /**

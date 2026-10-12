@@ -1,12 +1,8 @@
 import { createGateway } from "ai"
 import { getModelInfo } from "@/lib/model-catalog"
+import { PROVIDERS, type ProviderName, publicDefaultUrl } from "@/lib/providers"
 import { readLimitedBody } from "@/lib/read-limited-body"
-import {
-    normalizeBaseUrl,
-    ollamaApiUrl,
-    PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/types/model-config"
+import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
 
 /** A model a provider offers. tools is false when it cannot call tools. */
 export interface ListedModel {
@@ -17,10 +13,7 @@ export interface ListedModel {
 const AIHUBMIX_MODELS_ENDPOINT = "https://aihubmix.com/api/v1/models"
 
 export function canListModels(provider: ProviderName): boolean {
-    return (
-        Object.hasOwn(PROVIDER_INFO, provider) &&
-        !!PROVIDER_INFO[provider].modelList
-    )
+    return Object.hasOwn(PROVIDERS, provider) && !!PROVIDERS[provider].modelList
 }
 
 // Models in OpenAI-style lists that are not for chat
@@ -131,16 +124,15 @@ async function getJson(
 
 /**
  * Where to list from without the user's base URL: where chat goes then. For
- * Ollama without a key that is the server's Ollama, else the SDK's local
- * default; a local default in PROVIDER_INFO (SGLang's) only fills the
- * settings form.
+ * Ollama (an optional key) without a key that is the server's Ollama, else
+ * the SDK's local default; a local default in the record (SGLang's) only
+ * fills the settings form.
  */
 function listFallbackUrl(provider: ProviderName, apiKey?: string): string {
-    if (provider === "ollama" && !apiKey) {
+    if (PROVIDERS[provider].credential === "optionalKey" && !apiKey) {
         return process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434/api"
     }
-    const url = PROVIDER_INFO[provider].defaultBaseUrl
-    return url?.startsWith("https://") ? url : ""
+    return publicDefaultUrl(provider) ?? ""
 }
 
 /**
@@ -167,7 +159,7 @@ export async function listProviderModels(
         baseUrl &&
         !/^https:\/\/aihubmix\.com(\/v1)?$/.test(base)
             ? "openai"
-            : PROVIDER_INFO[provider].modelList
+            : PROVIDERS[provider].modelList
 
     switch (style) {
         case "anthropic": {
@@ -242,7 +234,7 @@ export async function listProviderModels(
         default: {
             if (!base) {
                 throw new ModelListError(
-                    `${PROVIDER_INFO[provider].label} needs a base URL to list its models.`,
+                    `${PROVIDERS[provider].label} needs a base URL to list its models.`,
                 )
             }
             const data = await getJson(`${base}/models`, bearer, fetchFn)
