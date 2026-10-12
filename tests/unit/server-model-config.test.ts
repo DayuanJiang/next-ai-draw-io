@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { _resetForTests } from "@/lib/admin/settings"
 import {
     loadFlattenedServerModels,
@@ -7,22 +7,15 @@ import {
     slugify,
 } from "@/lib/server-model-config"
 
-const ORIGINAL_ENV = { ...process.env }
-
 beforeEach(() => {
     // Isolate from any local data/settings.json (admin panel providers
     // are merged into the server models config)
-    process.env.SETTINGS_FILE = "/nonexistent/settings.json"
+    vi.stubEnv("SETTINGS_FILE", "/nonexistent/settings.json")
     _resetForTests()
 })
 
 afterEach(() => {
     _resetForTests()
-    process.env.AI_PROVIDER = ORIGINAL_ENV.AI_PROVIDER
-    process.env.AI_MODEL = ORIGINAL_ENV.AI_MODEL
-    process.env.AI_MODELS_CONFIG_PATH = ORIGINAL_ENV.AI_MODELS_CONFIG_PATH
-    process.env.AI_MODELS_CONFIG = ORIGINAL_ENV.AI_MODELS_CONFIG
-    delete process.env.SETTINGS_FILE
 })
 
 describe("ServerModelsConfigSchema", () => {
@@ -143,7 +136,10 @@ describe("ServerModelsConfigSchema", () => {
 describe("loadFlattenedServerModels", () => {
     it("returns empty array when config file is missing", async () => {
         // Point to a non-existent config path so fs.readFile throws ENOENT
-        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
+        vi.stubEnv(
+            "AI_MODELS_CONFIG_PATH",
+            `non-existent-config-${Date.now()}.json`,
+        )
 
         const models = await loadFlattenedServerModels()
         expect(models).toEqual([])
@@ -161,8 +157,8 @@ describe("loadFlattenedServerModels", () => {
                 },
             ],
         }
-        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
-        process.env.AI_MODELS_CONFIG_PATH = "" // Clear file path
+        vi.stubEnv("AI_MODELS_CONFIG", JSON.stringify(config))
+        vi.stubEnv("AI_MODELS_CONFIG_PATH", "") // Clear file path
 
         const models = await loadFlattenedServerModels()
 
@@ -177,10 +173,13 @@ describe("loadFlattenedServerModels", () => {
     })
 
     it("falls back to comma-separated AI_MODEL when no other config is set", async () => {
-        process.env.AI_MODELS_CONFIG = ""
-        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
-        process.env.AI_PROVIDER = "openai"
-        process.env.AI_MODEL = "gpt-4o, gpt-4o-mini, gpt-4o"
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        vi.stubEnv(
+            "AI_MODELS_CONFIG_PATH",
+            `non-existent-config-${Date.now()}.json`,
+        )
+        vi.stubEnv("AI_PROVIDER", "openai")
+        vi.stubEnv("AI_MODEL", "gpt-4o, gpt-4o-mini, gpt-4o")
 
         const models = await loadFlattenedServerModels()
 
@@ -195,20 +194,26 @@ describe("loadFlattenedServerModels", () => {
     })
 
     it("does not synthesize when AI_MODEL has no comma", async () => {
-        process.env.AI_MODELS_CONFIG = ""
-        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
-        process.env.AI_PROVIDER = "openai"
-        process.env.AI_MODEL = "gpt-4o"
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        vi.stubEnv(
+            "AI_MODELS_CONFIG_PATH",
+            `non-existent-config-${Date.now()}.json`,
+        )
+        vi.stubEnv("AI_PROVIDER", "openai")
+        vi.stubEnv("AI_MODEL", "gpt-4o")
 
         const models = await loadFlattenedServerModels()
         expect(models).toEqual([])
     })
 
     it("does not synthesize when AI_PROVIDER is unset", async () => {
-        process.env.AI_MODELS_CONFIG = ""
-        process.env.AI_MODELS_CONFIG_PATH = `non-existent-config-${Date.now()}.json`
-        delete process.env.AI_PROVIDER
-        process.env.AI_MODEL = "gpt-4o, gpt-4o-mini"
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        vi.stubEnv(
+            "AI_MODELS_CONFIG_PATH",
+            `non-existent-config-${Date.now()}.json`,
+        )
+        vi.stubEnv("AI_PROVIDER", undefined)
+        vi.stubEnv("AI_MODEL", "gpt-4o, gpt-4o-mini")
 
         const models = await loadFlattenedServerModels()
         expect(models).toEqual([])
@@ -225,8 +230,8 @@ describe("loadFlattenedServerModels", () => {
                 },
             ],
         }
-        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
-        process.env.AI_MODELS_CONFIG_PATH = "" // Clear file path
+        vi.stubEnv("AI_MODELS_CONFIG", JSON.stringify(config))
+        vi.stubEnv("AI_MODELS_CONFIG_PATH", "") // Clear file path
 
         const models = await loadFlattenedServerModels()
 
@@ -272,7 +277,7 @@ describe("loadFlattenedServerModels id collisions", () => {
                 },
             ],
         }
-        process.env.AI_MODELS_CONFIG = JSON.stringify(config)
+        vi.stubEnv("AI_MODELS_CONFIG", JSON.stringify(config))
 
         const models = await loadFlattenedServerModels()
         const ids = models.map((m) => m.id)

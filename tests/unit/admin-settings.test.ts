@@ -16,14 +16,14 @@ let tmpDir: string
 
 beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "admin-settings-"))
-    process.env.SETTINGS_FILE = path.join(tmpDir, "settings.json")
+    vi.stubEnv("SETTINGS_FILE", path.join(tmpDir, "settings.json"))
     _resetForTests()
 })
 
 afterEach(() => {
     _resetForTests()
-    delete process.env.SETTINGS_FILE
     fs.rmSync(tmpDir, { recursive: true, force: true })
+    // Written by saveSettings and applyToEnv, not stubbed by every test
     delete process.env.TEST_ADMIN_VAR
 })
 
@@ -82,13 +82,13 @@ describe("applyToEnv / saveSettings", () => {
     })
 
     it("file value wins over pre-existing env value", () => {
-        process.env.TEST_ADMIN_VAR = "from-env"
+        vi.stubEnv("TEST_ADMIN_VAR", "from-env")
         saveSettings({ TEST_ADMIN_VAR: "from-file" })
         expect(process.env.TEST_ADMIN_VAR).toBe("from-file")
     })
 
     it("deleting a key restores the original env value", () => {
-        process.env.TEST_ADMIN_VAR = "from-env"
+        vi.stubEnv("TEST_ADMIN_VAR", "from-env")
         saveSettings({ TEST_ADMIN_VAR: "from-file" })
         saveSettings({ TEST_ADMIN_VAR: null })
         expect(process.env.TEST_ADMIN_VAR).toBe("from-env")
@@ -102,7 +102,7 @@ describe("applyToEnv / saveSettings", () => {
 
     it("a second module instance can remove a key the first one overlaid", async () => {
         // instrumentation.ts and API routes load separate copies in a build
-        process.env.TEST_ADMIN_VAR = "from-env"
+        vi.stubEnv("TEST_ADMIN_VAR", "from-env")
         fs.writeFileSync(
             process.env.SETTINGS_FILE!,
             JSON.stringify({ version: 1, values: { TEST_ADMIN_VAR: "abc" } }),
@@ -133,7 +133,7 @@ describe("getValueSource / getEnvFallback", () => {
     })
 
     it("reports env source when only env is set", () => {
-        process.env.TEST_ADMIN_VAR = "from-env"
+        vi.stubEnv("TEST_ADMIN_VAR", "from-env")
         applyToEnv()
         expect(getValueSource("TEST_ADMIN_VAR")).toBe("env")
     })
@@ -143,7 +143,7 @@ describe("getValueSource / getEnvFallback", () => {
     })
 
     it("returns the shadowed env value as fallback", () => {
-        process.env.TEST_ADMIN_VAR = "from-env"
+        vi.stubEnv("TEST_ADMIN_VAR", "from-env")
         saveSettings({ TEST_ADMIN_VAR: "from-file" })
         expect(getEnvFallback("TEST_ADMIN_VAR")).toBe("from-env")
     })
@@ -156,7 +156,7 @@ describe("isSettingsWritable", () => {
 
     it("returns false when the settings path is a directory", () => {
         _resetForTests()
-        process.env.SETTINGS_FILE = tmpDir
+        vi.stubEnv("SETTINGS_FILE", tmpDir)
         expect(isSettingsWritable()).toBe(false)
     })
 })

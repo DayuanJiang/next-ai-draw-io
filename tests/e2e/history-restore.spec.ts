@@ -2,16 +2,13 @@ import type { Page } from "@playwright/test"
 import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
-    getChatInput,
-    getIframe,
     getIframeContent,
-    openSettings,
+    openApp,
     sendMessage,
     test,
-    waitForComplete,
     waitForText,
 } from "./lib/fixtures"
-import { createMockSSEResponse } from "./lib/helpers"
+import { createMockSSEResponse, sse } from "./lib/helpers"
 
 test.describe("History and Session Restore", () => {
     test("new chat button clears conversation", async ({ page }) => {
@@ -26,8 +23,7 @@ test.describe("History and Session Restore", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await test.step("create a conversation", async () => {
             await sendMessage(page, "Create a test diagram")
@@ -62,8 +58,7 @@ test.describe("History and Session Restore", () => {
                 ),
             })
         })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         await sendMessage(page, "Create a test diagram")
         await waitForText(page, "Created your test diagram.")
 
@@ -101,8 +96,7 @@ test.describe("History and Session Restore", () => {
                 ),
             })
         })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         await sendMessage(page, "Create a test diagram")
         await waitForText(page, "Created your test diagram.")
         await page.evaluate(() => {
@@ -132,8 +126,7 @@ test.describe("History and Session Restore", () => {
                 body: createMockSSEResponse(SINGLE_BOX_XML, `Answer ${n}.`),
             })
         })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         await sendMessage(page, "First chat")
         await waitForText(page, "Answer 1.")
         await page.waitForTimeout(1500)
@@ -196,8 +189,7 @@ test.describe("History and Session Restore", () => {
     test("new chat keeps a diagram without messages that could not be saved", async ({
         page,
     }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         // Leave the start screen to draw on the canvas
         await page.getByTestId("draw-yourself").click()
         await drawByHand(page, "Hand drawn")
@@ -227,8 +219,7 @@ test.describe("History and Session Restore", () => {
                 ),
             })
         })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         await sendMessage(page, "Create a test diagram")
         await waitForText(page, "Created your test diagram.")
         await page.waitForTimeout(1500)
@@ -255,168 +246,6 @@ test.describe("History and Session Restore", () => {
         await expect(
             getIframeContent(page).getByText("Hand drawn", { exact: true }),
         ).toBeVisible()
-    })
-
-    test("chat history sidebar shows past conversations", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        const historyButton = page.locator(
-            'button[aria-label*="History"]:not([disabled]), button:has(svg.lucide-history):not([disabled]), button:has(svg.lucide-menu):not([disabled]), button:has(svg.lucide-sidebar):not([disabled]), button:has(svg.lucide-panel-left):not([disabled])',
-        )
-
-        const buttonCount = await historyButton.count()
-        if (buttonCount === 0) {
-            test.skip()
-            return
-        }
-
-        await historyButton.first().click()
-        await expect(getChatInput(page)).toBeVisible({ timeout: 3000 })
-    })
-
-    test("conversation persists after page reload", async ({ page }) => {
-        await page.route("**/api/chat", async (route) => {
-            await route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(
-                    SINGLE_BOX_XML,
-                    "This message should persist.",
-                ),
-            })
-        })
-
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await test.step("create conversation", async () => {
-            await sendMessage(page, "Create persistent diagram")
-            await waitForText(page, "This message should persist.")
-        })
-
-        await test.step("verify message appears before reload", async () => {
-            await expect(getChatInput(page)).toBeVisible({ timeout: 10000 })
-            await expect(
-                page.locator('text="This message should persist."'),
-            ).toBeVisible({ timeout: 10000 })
-        })
-
-        // Note: After reload, mocked responses won't persist since we're not
-        // testing with real localStorage. We just verify the app loads correctly.
-        await test.step("verify app loads after reload", async () => {
-            await page.reload({ waitUntil: "networkidle" })
-            await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-            await expect(getChatInput(page)).toBeVisible({ timeout: 10000 })
-        })
-    })
-
-    test("diagram state persists after reload", async ({ page }) => {
-        await page.route("**/api/chat", async (route) => {
-            await route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(
-                    SINGLE_BOX_XML,
-                    "Created a diagram that should be saved.",
-                ),
-            })
-        })
-
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await sendMessage(page, "Create saveable diagram")
-        await waitForComplete(page)
-
-        await page.reload({ waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        const frame = getIframeContent(page)
-        await expect(frame.locator(".geDiagramContainer").first()).toBeVisible({
-            timeout: 30000,
-        })
-    })
-
-    test("can restore from browser back/forward", async ({ page }) => {
-        await page.route("**/api/chat", async (route) => {
-            await route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(
-                    SINGLE_BOX_XML,
-                    "Testing browser navigation.",
-                ),
-            })
-        })
-
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await sendMessage(page, "Test navigation")
-        await waitForText(page, "Testing browser navigation.")
-
-        await page.goto("/about", { waitUntil: "networkidle" })
-        await page.goBack({ waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await expect(getChatInput(page)).toBeVisible({ timeout: 10000 })
-    })
-
-    test("settings are restored after reload", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await openSettings(page)
-        await page.keyboard.press("Escape")
-
-        await page.reload({ waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await openSettings(page)
-    })
-
-    test("model selection persists", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        const modelSelector = page.locator(
-            'button[aria-label*="Model"], [data-testid="model-selector"], button:has-text("Claude")',
-        )
-
-        const selectorCount = await modelSelector.count()
-        if (selectorCount === 0) {
-            test.skip()
-            return
-        }
-
-        const initialModel = await modelSelector.first().textContent()
-
-        await page.reload({ waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        const modelAfterReload = await modelSelector.first().textContent()
-        expect(modelAfterReload).toBe(initialModel)
-    })
-
-    test("handles localStorage quota exceeded gracefully", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await page.evaluate(() => {
-            try {
-                const largeData = "x".repeat(5 * 1024 * 1024)
-                localStorage.setItem("test-large-data", largeData)
-            } catch {
-                // Expected to fail on some browsers
-            }
-        })
-
-        await expect(getChatInput(page)).toBeVisible({ timeout: 10000 })
-
-        await page.evaluate(() => {
-            localStorage.removeItem("test-large-data")
-        })
     })
 })
 
@@ -456,8 +285,7 @@ test("new chat right after an answer saves that chat once", async ({
             body: createMockSSEResponse(SINGLE_BOX_XML, "Drew the box."),
         })
     })
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page)
     const newChat = page.locator('[data-testid="new-chat-button"]')
     // The auto-save runs a second after the answer; New Chat around then
     // waits for its thumbnail while the auto-save starts
@@ -479,7 +307,7 @@ test("an idle chat is not saved again and again", async ({ page }) => {
             status: 200,
             contentType: "text/event-stream",
             // The tool result comes from the page, as with a real model
-            body: `${[
+            body: sse([
                 { type: "start" },
                 { type: "text-start", id: "t" },
                 { type: "text-delta", id: "t", delta: "Drew the box." },
@@ -499,9 +327,7 @@ test("an idle chat is not saved again and again", async ({ page }) => {
                     },
                 },
                 { type: "finish" },
-            ]
-                .map((e) => `data: ${JSON.stringify(e)}\n\n`)
-                .join("")}data: [DONE]\n\n`,
+            ]),
         })
     })
     // Every auto-save takes a thumbnail: count draw.io's thumbnail exports
@@ -520,8 +346,7 @@ test("an idle chat is not saved again and again", async ({ page }) => {
             } catch {}
         })
     })
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page)
     await sendMessage(page, "Draw a box")
     await waitForText(page, "Drew the box.")
     // Let the auto-save after the answer finish

@@ -6,7 +6,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
     CUSTOM_INSTRUCTIONS_FILE,
     customInstructionsDir,
@@ -62,16 +62,10 @@ describe("readCustomInstructions", () => {
 })
 
 describe("customInstructionsDir", () => {
-    const original = process.env.DRAWIO_DATA_DIR
-    afterEach(() => {
-        if (original === undefined) delete process.env.DRAWIO_DATA_DIR
-        else process.env.DRAWIO_DATA_DIR = original
-    })
-
     it("honours DRAWIO_DATA_DIR", () => {
         const dir = tempDir()
         writeRules(dir, "Use blue fill #dae8fc.")
-        process.env.DRAWIO_DATA_DIR = dir
+        vi.stubEnv("DRAWIO_DATA_DIR", dir)
         expect(customInstructionsDir()).toBe(dir)
         expect(guideWithCustomInstructions(GUIDE)).toBe(
             `${GUIDE}\n\n## Custom Instructions\nUse blue fill #dae8fc.`,
@@ -79,15 +73,15 @@ describe("customInstructionsDir", () => {
     })
 
     it("expands ~, which JSON configs pass on as it is", () => {
-        process.env.DRAWIO_DATA_DIR = "~/drawio-saves"
+        vi.stubEnv("DRAWIO_DATA_DIR", "~/drawio-saves")
         expect(customInstructionsDir()).toBe(join(homedir(), "drawio-saves"))
     })
 
     it("falls back to the home folder when DRAWIO_DATA_DIR is off or unset", () => {
         const home = join(homedir(), ".next-ai-drawio")
-        process.env.DRAWIO_DATA_DIR = "off"
+        vi.stubEnv("DRAWIO_DATA_DIR", "off")
         expect(customInstructionsDir()).toBe(home)
-        delete process.env.DRAWIO_DATA_DIR
+        vi.stubEnv("DRAWIO_DATA_DIR", undefined)
         expect(customInstructionsDir()).toBe(home)
     })
 })

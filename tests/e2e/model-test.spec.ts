@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { getIframe } from "./lib/fixtures"
+import { openApp } from "./lib/fixtures"
 
 // One provider with three models; the test endpoint answers each differently
 const CONFIG = {
@@ -21,12 +21,6 @@ const CONFIG = {
 test("the Test button checks all models at once and shows each result", async ({
     page,
 }) => {
-    await page.addInitScript((config) => {
-        localStorage.setItem(
-            "next-ai-draw-io-model-configs",
-            JSON.stringify(config),
-        )
-    }, CONFIG)
     const started: string[] = []
     await page.route("**/api/validate-model", async (route) => {
         const { modelId } = route.request().postDataJSON()
@@ -45,8 +39,7 @@ test("the Test button checks all models at once and shows each result", async ({
         }
         await route.fulfill({ json: answers[modelId] })
     })
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page, { config: CONFIG })
 
     await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
@@ -67,14 +60,7 @@ test("the Test button checks all models at once and shows each result", async ({
 })
 
 test("the key link and the base URL cleanup", async ({ page }) => {
-    await page.addInitScript((config) => {
-        localStorage.setItem(
-            "next-ai-draw-io-model-configs",
-            JSON.stringify(config),
-        )
-    }, CONFIG)
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page, { config: CONFIG })
     await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')

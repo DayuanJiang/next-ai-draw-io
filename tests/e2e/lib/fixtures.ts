@@ -1,28 +1,11 @@
 /**
- * Playwright test fixtures for E2E tests
- * Uses test.extend to provide common setup and helpers
+ * Shared helpers for the E2E tests: locators, actions and chat API mocks
  */
 
-import { test as base, expect, type Page, type Route } from "@playwright/test"
+import { expect, type Locator, type Page, type Route } from "@playwright/test"
 import { createMockSSEResponse, createTextOnlyResponse } from "./helpers"
 
-/**
- * Extended test with common fixtures
- */
-export const test = base.extend<{
-    /** Page with iframe already loaded */
-    appPage: Page
-}>({
-    appPage: async ({ page }, use) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
-        await use(page)
-    },
-})
-
-export { expect }
+export { expect, test } from "@playwright/test"
 
 // ============================================
 // Locator helpers
@@ -56,13 +39,74 @@ export async function openDrawioFile(page: Page, name: string, xml: string) {
 }
 
 /** Get the settings button */
-export function getSettingsButton(page: Page) {
+function getSettingsButton(page: Page) {
     return page.locator('[data-testid="settings-button"]')
 }
+
+/** The settings dialog */
+export const settingsDialog = (page: Page) =>
+    page.getByRole("dialog", { name: "Settings" })
+
+/** Back from a provider's page to the list of the models tab */
+export const backToModels = (dialog: Locator) =>
+    dialog.locator("header button", { hasText: /^Models$/ }).click()
 
 // ============================================
 // Action helpers
 // ============================================
+
+/** The key under which the app saves the user's own model configs */
+export const MODEL_CONFIGS_KEY = "next-ai-draw-io-model-configs"
+
+/**
+ * Open the app and wait for draw.io's frame. A config is saved as the
+ * user's model configs on the first load only: a reload keeps what the
+ * test did.
+ */
+export async function openApp(
+    page: Page,
+    { path = "/", config }: { path?: string; config?: object } = {},
+) {
+    if (config) {
+        await page.addInitScript(
+            ([key, config]) => {
+                if (!sessionStorage.getItem("seeded")) {
+                    localStorage.setItem(key, JSON.stringify(config))
+                    sessionStorage.setItem("seeded", "1")
+                }
+            },
+            [MODEL_CONFIGS_KEY, config] as const,
+        )
+    }
+    await page.goto(path, { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+}
+
+/** The model configs as saved in the browser */
+export const savedModelConfigs = (page: Page) =>
+    page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) ?? "{}"),
+        MODEL_CONFIGS_KEY,
+    )
+
+/** What another browser tab saving the config looks like to this one */
+export async function changeInAnotherTab(
+    page: Page,
+    change: (config: any) => void,
+) {
+    await page.evaluate(
+        ([key, body]) => {
+            const config = JSON.parse(localStorage.getItem(key) ?? "{}")
+            new Function("config", body)(config)
+            const value = JSON.stringify(config)
+            localStorage.setItem(key, value)
+            window.dispatchEvent(
+                new StorageEvent("storage", { key, newValue: value }),
+            )
+        },
+        [MODEL_CONFIGS_KEY, `(${change.toString()})(config)`] as const,
+    )
+}
 
 /** Send a message in the chat input */
 export async function sendMessage(page: Page, message: string) {
@@ -73,7 +117,7 @@ export async function sendMessage(page: Page, message: string) {
 }
 
 /** Tool calls that finished (version cards and tool rows) */
-export function getCompletedTools(page: Page) {
+function getCompletedTools(page: Page) {
     return page.locator('[data-tool-state="output-available"]')
 }
 
@@ -122,6 +166,29 @@ export async function openSettingsTab(
 }
 
 // ============================================
+// Test data
+// ============================================
+
+/** Two providers with one model each, for the settings dialog's tests */
+export const TWO_PROVIDERS = {
+    version: 1,
+    providers: [
+        {
+            id: "p1",
+            provider: "glm",
+            apiKey: "k1",
+            models: [{ id: "a1", modelId: "glm-a" }],
+        },
+        {
+            id: "p2",
+            provider: "kimi",
+            apiKey: "k2",
+            models: [{ id: "b1", modelId: "kimi-b" }],
+        },
+    ],
+}
+
+// ============================================
 // Mock helpers
 // ============================================
 
@@ -149,22 +216,6 @@ export function createMultiTurnMock(responses: MockResponse[]) {
                 response.text,
                 response.toolName,
             ),
-        })
-    }
-}
-
-/**
- * Create a mock that returns text-only responses
- */
-export function createTextOnlyMock(responses: string[]) {
-    let requestCount = 0
-    return async (route: Route) => {
-        const text = responses[requestCount] || responses[responses.length - 1]
-        requestCount++
-        await route.fulfill({
-            status: 200,
-            contentType: "text/event-stream",
-            body: createTextOnlyResponse(text),
         })
     }
 }
@@ -212,28 +263,58 @@ export function createErrorMock(status: number, error: string) {
     }
 }
 
-// ============================================
-// Persistence helpers
-// ============================================
-
 /**
- * Test that state persists across page reload.
- * Runs assertions before reload, reloads page, then runs assertions again.
- * Keep assertions narrow and explicit - test one specific thing.
- *
- * @param page - Playwright page
- * @param description - What persistence is being tested (for debugging)
- * @param assertion - Async function with expect() calls
+ * Answer each chat request with the next reply, in the browser. Each string
+ * in a reply is one network chunk, sent gapMs apart, so the throttled UI
+ * renders between chunks like with a real model. A number in a reply sets
+ * the wait before the next chunk instead. With holdLast, the last reply
+ * never ends. Requests past the list get an answer with nothing in it.
  */
-export async function expectBeforeAndAfterReload(
+export async function chunkedReplies(
     page: Page,
-    description: string,
-    assertion: () => Promise<void>,
+    replies: (string | number)[][],
+    {
+        gapMs = 300,
+        holdLast = false,
+    }: { gapMs?: number; holdLast?: boolean } = {},
 ) {
-    await test.step(`verify ${description} before reload`, assertion)
-    await page.reload({ waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-    await test.step(`verify ${description} after reload`, assertion)
+    await page.addInitScript(
+        ({ replies, gapMs, holdLast }) => {
+            const realFetch = window.fetch
+            let n = 0
+            window.fetch = async (input, init) => {
+                // Next.js passes URL objects for its own requests
+                const url = input instanceof Request ? input.url : String(input)
+                if (!url.endsWith("/api/chat")) return realFetch(input, init)
+                const index = n++
+                const chunks = replies[index] ?? [
+                    'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
+                ]
+                const body = new ReadableStream({
+                    async start(controller) {
+                        for (const [i, chunk] of chunks.entries()) {
+                            if (typeof chunk === "number") continue
+                            controller.enqueue(new TextEncoder().encode(chunk))
+                            const next = chunks[i + 1]
+                            await new Promise((r) =>
+                                setTimeout(
+                                    r,
+                                    typeof next === "number" ? next : gapMs,
+                                ),
+                            )
+                        }
+                        if (!(holdLast && index === replies.length - 1)) {
+                            controller.close()
+                        }
+                    },
+                })
+                return new Response(body, {
+                    headers: { "content-type": "text/event-stream" },
+                })
+            }
+        },
+        { replies, gapMs, holdLast },
+    )
 }
 
 /** Simple sleep helper */

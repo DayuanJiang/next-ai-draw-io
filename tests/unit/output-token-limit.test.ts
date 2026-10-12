@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
     DEFAULT_MAX_OUTPUT_TOKENS,
     readCeiling,
@@ -273,39 +273,27 @@ describe("resolveMaxOutputTokens", () => {
     })
 
     it("uses the env value when no header is sent, and validates it too", () => {
-        const original = process.env.MAX_OUTPUT_TOKENS
-        try {
-            process.env.MAX_OUTPUT_TOKENS = "24000"
-            expect(resolveMaxOutputTokens(null, true)).toBe(24000)
-            // A lower header still wins
-            expect(resolveMaxOutputTokens("8000", true)).toBe(8000)
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "24000")
+        expect(resolveMaxOutputTokens(null, true)).toBe(24000)
+        // A lower header still wins
+        expect(resolveMaxOutputTokens("8000", true)).toBe(8000)
 
-            process.env.MAX_OUTPUT_TOKENS = "-1"
-            expect(resolveMaxOutputTokens(null, true)).toBe(
-                DEFAULT_MAX_OUTPUT_TOKENS,
-            )
-        } finally {
-            if (original === undefined) delete process.env.MAX_OUTPUT_TOKENS
-            else process.env.MAX_OUTPUT_TOKENS = original
-        }
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "-1")
+        expect(resolveMaxOutputTokens(null, true)).toBe(
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
     })
 
     it("lets the header raise the budget only on the user's own credentials", () => {
-        const original = process.env.MAX_OUTPUT_TOKENS
-        try {
-            process.env.MAX_OUTPUT_TOKENS = "16000"
-            expect(resolveMaxOutputTokens("200000", true)).toBe(16000)
-            expect(resolveMaxOutputTokens("200000", false)).toBe(200000)
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "16000")
+        expect(resolveMaxOutputTokens("200000", true)).toBe(16000)
+        expect(resolveMaxOutputTokens("200000", false)).toBe(200000)
 
-            // Without MAX_OUTPUT_TOKENS the default is the cap
-            delete process.env.MAX_OUTPUT_TOKENS
-            expect(resolveMaxOutputTokens("100000", true)).toBe(
-                DEFAULT_MAX_OUTPUT_TOKENS,
-            )
-        } finally {
-            if (original === undefined) delete process.env.MAX_OUTPUT_TOKENS
-            else process.env.MAX_OUTPUT_TOKENS = original
-        }
+        // Without MAX_OUTPUT_TOKENS the default is the cap
+        vi.stubEnv("MAX_OUTPUT_TOKENS", undefined)
+        expect(resolveMaxOutputTokens("100000", true)).toBe(
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
     })
 })
 

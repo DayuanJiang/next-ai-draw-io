@@ -7,5 +7,7 @@ export default defineConfig({
     test: {
         environment: "jsdom",
         include: ["tests/**/*.test.{ts,tsx}"],
+        // vi.stubEnv values are undone after each test
+        unstubEnvs: true,
     },
 })

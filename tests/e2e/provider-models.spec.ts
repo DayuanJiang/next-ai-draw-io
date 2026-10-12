@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { getIframe } from "./lib/fixtures"
+import { changeInAnotherTab, openApp, savedModelConfigs } from "./lib/fixtures"
 
 // qwen-mt-plus is a translation model; models.dev lists no tool calls for it
 const CONFIG = {
@@ -22,14 +22,7 @@ async function showProvider(dialog: Locator, id: string) {
 }
 
 async function openQwenSettings(page: Page, config: object = CONFIG) {
-    await page.addInitScript((config) => {
-        localStorage.setItem(
-            "next-ai-draw-io-model-configs",
-            JSON.stringify(config),
-        )
-    }, config)
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page, { config })
     await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')
@@ -255,15 +248,8 @@ test("a test result for an old API key is dropped", async ({ page }) => {
     const dialog = await openQwenSettings(page, TWO_PROVIDERS)
     await testButton(dialog).click()
     // Another tab saves a different key for this provider
-    await page.evaluate(() => {
-        const key = "next-ai-draw-io-model-configs"
-        const config = JSON.parse(localStorage.getItem(key) ?? "{}")
+    await changeInAnotherTab(page, (config) => {
         config.providers[0].apiKey = "key-from-another-tab"
-        const value = JSON.stringify(config)
-        localStorage.setItem(key, value)
-        window.dispatchEvent(
-            new StorageEvent("storage", { key, newValue: value }),
-        )
     })
     release()
     await page.waitForTimeout(500)
@@ -337,28 +323,14 @@ test("no spinner stays after another tab's change while elsewhere", async ({
     await testButton(dialog).click()
     // The user looks at the other provider while another tab changes the key
     await showProvider(dialog, "p2")
-    await page.evaluate(() => {
-        const key = "next-ai-draw-io-model-configs"
-        const config = JSON.parse(localStorage.getItem(key) ?? "{}")
+    await changeInAnotherTab(page, (config) => {
         config.providers[0].apiKey = "key-from-another-tab"
-        const value = JSON.stringify(config)
-        localStorage.setItem(key, value)
-        window.dispatchEvent(
-            new StorageEvent("storage", { key, newValue: value }),
-        )
     })
     release()
     await page.waitForTimeout(500)
     await showProvider(dialog, "p1")
     await expect(dialog.locator(".animate-spin")).toHaveCount(0)
 })
-
-const savedConfig = (page: Page) =>
-    page.evaluate(() =>
-        JSON.parse(
-            localStorage.getItem("next-ai-draw-io-model-configs") ?? "{}",
-        ),
-    )
 
 test("a test result that arrives after the settings closed is kept", async ({
     page,
@@ -375,7 +347,8 @@ test("a test result that arrives after the settings closed is kept", async ({
     await expect
         .poll(
             async () =>
-                (await savedConfig(page)).providers[0].models[0].validated,
+                (await savedModelConfigs(page)).providers[0].models[0]
+                    .validated,
         )
         .toBe(true)
 })
@@ -396,7 +369,7 @@ test("a test result for a key changed on another settings tab is dropped", async
     await dialog.locator("input[type=password]").first().fill("new-key")
     release()
     await page.waitForTimeout(800)
-    const saved = await savedConfig(page)
+    const saved = await savedModelConfigs(page)
     expect(saved.providers[0].apiKey).toBe("new-key")
     expect(saved.providers[0].models[0].validated).not.toBe(true)
 })
@@ -419,22 +392,14 @@ test("a test result for a model renamed on another settings tab is dropped", asy
     await input.blur()
     release()
     await page.waitForTimeout(800)
-    const saved = await savedConfig(page)
+    const saved = await savedModelConfigs(page)
     expect(saved.providers[0].models[0].modelId).toBe("qwen-plus")
     expect(saved.providers[0].models[0].validated).not.toBe(true)
 })
 
 test("a failed test speaks the page's language", async ({ page }) => {
-    await page.addInitScript((config) => {
-        localStorage.setItem("next-ai-draw-io-locale", "zh")
-        localStorage.setItem(
-            "next-ai-draw-io-model-configs",
-            JSON.stringify(config),
-        )
-    }, TWO_PROVIDERS)
     await page.route("**/api/validate-model", (route) => route.abort())
-    await page.goto("/zh", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page, { path: "/zh", config: TWO_PROVIDERS })
     await page.getByTestId("settings-button").first().click()
     const dialog = page.locator('[role="dialog"]')
     await showProvider(dialog, "p1")
@@ -453,21 +418,13 @@ test("a failed test speaks the page's language", async ({ page }) => {
 test("testing a provider without models speaks the page's language", async ({
     page,
 }) => {
-    await page.addInitScript(
-        (config) => {
-            localStorage.setItem("next-ai-draw-io-locale", "zh")
-            localStorage.setItem(
-                "next-ai-draw-io-model-configs",
-                JSON.stringify(config),
-            )
-        },
-        {
+    await openApp(page, {
+        path: "/zh",
+        config: {
             version: 1,
             providers: [{ ...CONFIG.providers[0], models: [] }],
         },
-    )
-    await page.goto("/zh", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    })
     await page.getByTestId("settings-button").first().click()
     const dialog = page.locator('[role="dialog"]')
     await showProvider(dialog, "p1")
@@ -479,15 +436,7 @@ test("testing a provider without models speaks the page's language", async ({
 test("adding a model id twice is refused in the page's language", async ({
     page,
 }) => {
-    await page.addInitScript((config) => {
-        localStorage.setItem("next-ai-draw-io-locale", "zh")
-        localStorage.setItem(
-            "next-ai-draw-io-model-configs",
-            JSON.stringify(config),
-        )
-    }, CONFIG)
-    await page.goto("/zh", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page, { path: "/zh", config: CONFIG })
     await page.getByTestId("settings-button").first().click()
     const dialog = page.locator('[role="dialog"]')
     await showProvider(dialog, "p1")
@@ -508,14 +457,8 @@ test("Bedrock can be tested and used with an API key alone", async ({
             json: { valid: true, responseTime: 900 },
         })
     })
-    await page.addInitScript(
-        (config) => {
-            localStorage.setItem(
-                "next-ai-draw-io-model-configs",
-                JSON.stringify(config),
-            )
-        },
-        {
+    await openApp(page, {
+        config: {
             version: 1,
             providers: [
                 {
@@ -526,9 +469,7 @@ test("Bedrock can be tested and used with an API key alone", async ({
                 },
             ],
         },
-    )
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    })
     await page.getByTestId("model-selector").click()
     await page.getByText("Configure Models...").click()
     const dialog = page.locator('[role="dialog"]')

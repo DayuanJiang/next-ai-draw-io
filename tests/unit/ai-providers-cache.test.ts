@@ -3,14 +3,7 @@ import { generateText, type ModelMessage } from "ai"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CACHE_POINT, getAIModel } from "@/lib/ai-providers"
 
-const ENV = ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"]
-const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]))
-
 afterEach(() => {
-    for (const k of ENV) {
-        if (saved[k] === undefined) delete process.env[k]
-        else process.env[k] = saved[k]
-    }
     vi.unstubAllGlobals()
 })
 
@@ -48,7 +41,7 @@ async function requestBody(
 
 describe("prompt cache breakpoints", () => {
     it("reach the Anthropic API", async () => {
-        process.env.ANTHROPIC_API_KEY = "test-key"
+        vi.stubEnv("ANTHROPIC_API_KEY", "test-key")
         const body = await requestBody("anthropic", {
             id: "msg_1",
             type: "message",
@@ -67,7 +60,7 @@ describe("prompt cache breakpoints", () => {
     })
 
     it("reach OpenRouter", async () => {
-        process.env.OPENROUTER_API_KEY = "test-key"
+        vi.stubEnv("OPENROUTER_API_KEY", "test-key")
         const body = await requestBody("openrouter", {
             id: "gen-1",
             choices: [

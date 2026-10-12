@@ -27,22 +27,10 @@ vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
 
 import { POST as chat } from "@/app/api/chat/route"
 
-const ENV = [
-    "AI_PROVIDER",
-    "AI_MODEL",
-    "OPENAI_API_KEY",
-    "OLLAMA_BASE_URL",
-    "OLLAMA_API_KEY",
-    "AI_GATEWAY_API_KEY",
-    "ALLOW_PRIVATE_URLS",
-]
-const saved: Record<string, string | undefined> = {}
-
 beforeEach(() => {
-    for (const k of ENV) saved[k] = process.env[k]
-    process.env.AI_PROVIDER = "openai"
-    process.env.AI_MODEL = "gpt-5.5"
-    process.env.OPENAI_API_KEY = "server-key"
+    vi.stubEnv("AI_PROVIDER", "openai")
+    vi.stubEnv("AI_MODEL", "gpt-5.5")
+    vi.stubEnv("OPENAI_API_KEY", "server-key")
     quota.checks = 0
     // No request may reach a provider
     vi.stubGlobal(
@@ -54,10 +42,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-    for (const k of ENV) {
-        if (saved[k] === undefined) delete process.env[k]
-        else process.env[k] = saved[k]
-    }
     vi.unstubAllGlobals()
 })
 
@@ -105,9 +89,9 @@ describe("chat quota", () => {
     })
 
     it("counts the server's keyless Ollama and EdgeOne", async () => {
-        process.env.AI_PROVIDER = "ollama"
-        process.env.AI_MODEL = "llama3.2"
-        process.env.OLLAMA_BASE_URL = "http://ollama.internal:11434/api"
+        vi.stubEnv("AI_PROVIDER", "ollama")
+        vi.stubEnv("AI_MODEL", "llama3.2")
+        vi.stubEnv("OLLAMA_BASE_URL", "http://ollama.internal:11434/api")
         expect((await send({})).status).toBe(429)
         expect(
             (
@@ -189,18 +173,14 @@ describe("chat quota", () => {
     })
 
     it("never counts in the desktop app, where every endpoint is the user's", async () => {
-        process.env.NEXT_AI_DRAWIO_DESKTOP = "1"
-        try {
-            const res = await send({
-                "x-ai-provider": "ollama",
-                "x-ai-base-url": "http://127.0.0.1:11434/api",
-                "x-ai-model": "llama3.2",
-            })
-            expect(res.status).not.toBe(429)
-            expect(quota.checks).toBe(0)
-        } finally {
-            delete process.env.NEXT_AI_DRAWIO_DESKTOP
-        }
+        vi.stubEnv("NEXT_AI_DRAWIO_DESKTOP", "1")
+        const res = await send({
+            "x-ai-provider": "ollama",
+            "x-ai-base-url": "http://127.0.0.1:11434/api",
+            "x-ai-model": "llama3.2",
+        })
+        expect(res.status).not.toBe(429)
+        expect(quota.checks).toBe(0)
     })
 
     it("does not count Ollama on the user's own server", async () => {
@@ -216,8 +196,8 @@ describe("chat quota", () => {
 
 describe("request checks", () => {
     it("refuses an AWS region that is not a region name", async () => {
-        process.env.AI_PROVIDER = "bedrock"
-        process.env.AI_MODEL = "amazon.nova-lite-v1:0"
+        vi.stubEnv("AI_PROVIDER", "bedrock")
+        vi.stubEnv("AI_MODEL", "amazon.nova-lite-v1:0")
         const res = await send({
             "x-aws-region": "us-east-1.attacker.example/",
         })
@@ -230,7 +210,7 @@ describe("request checks", () => {
 describe("server model allowlist", () => {
     it("runs AI_MODEL only on the server's AI_PROVIDER", async () => {
         // Another provider's server key must not run it
-        process.env.AI_GATEWAY_API_KEY = "server-gateway-key"
+        vi.stubEnv("AI_GATEWAY_API_KEY", "server-gateway-key")
         const res = await send({
             "x-ai-provider": "gateway",
             "x-ai-model": "gpt-5.5",

@@ -1,7 +1,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     ADMIN_PROVIDERS_KEY,
     adminProvidersToConfig,
@@ -19,14 +19,12 @@ let tmpDir: string
 
 beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "admin-providers-"))
-    process.env.SETTINGS_FILE = path.join(tmpDir, "settings.json")
+    vi.stubEnv("SETTINGS_FILE", path.join(tmpDir, "settings.json"))
     _resetForTests()
 })
 
 afterEach(() => {
     _resetForTests()
-    delete process.env.SETTINGS_FILE
-    delete process.env.AI_MODELS_CONFIG
     fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -227,16 +225,19 @@ describe("mergeSecrets", () => {
 
 describe("loadRawServerModelsConfig merge", () => {
     it("combines env AI_MODELS_CONFIG with panel providers", async () => {
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Env OpenAI",
-                    provider: "openai",
-                    models: ["gpt-from-env"],
-                    default: true,
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env OpenAI",
+                        provider: "openai",
+                        models: ["gpt-from-env"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
         saveSettings(deriveEnvUpdates([provider({ name: "Panel" })], []))
 
         const merged = await loadRawServerModelsConfig()
@@ -249,16 +250,19 @@ describe("loadRawServerModelsConfig merge", () => {
     })
 
     it("panel default overrides the env default", async () => {
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Env OpenAI",
-                    provider: "openai",
-                    models: ["gpt-from-env"],
-                    default: true,
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env OpenAI",
+                        provider: "openai",
+                        models: ["gpt-from-env"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
         saveSettings(
             deriveEnvUpdates(
                 [provider({ name: "Panel", isDefault: true })],
@@ -272,15 +276,18 @@ describe("loadRawServerModelsConfig merge", () => {
     })
 
     it("returns only env config when the panel has no providers", async () => {
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Env Only",
-                    provider: "openai",
-                    models: ["gpt-from-env"],
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env Only",
+                        provider: "openai",
+                        models: ["gpt-from-env"],
+                    },
+                ],
+            }),
+        )
         const merged = await loadRawServerModelsConfig()
         expect(merged?.providers.map((p) => p.name)).toEqual(["Env Only"])
     })

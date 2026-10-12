@@ -72,7 +72,6 @@ const post = () =>
     })
 
 afterEach(() => {
-    delete process.env.ENABLE_VLM_VALIDATION
     quota.enabled = false
     quota.allowed = true
     quota.checks = []
@@ -108,7 +107,7 @@ describe("POST /api/validate-diagram", () => {
     })
 
     it("answers valid when the check is turned off", async () => {
-        process.env.ENABLE_VLM_VALIDATION = "false"
+        vi.stubEnv("ENABLE_VLM_VALIDATION", "false")
         const res = await validateDiagram(post())
         expect(await res.json()).toEqual({
             valid: true,

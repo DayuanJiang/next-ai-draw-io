@@ -93,12 +93,11 @@ describe("redirectGuardedFetch with the quota on", () => {
                 ? [{ address: "93.184.216.34", family: 4 }]
                 : [],
         )
-        process.env.DYNAMODB_QUOTA_TABLE = "quota"
-        delete process.env.ALLOW_PRIVATE_URLS
+        vi.stubEnv("DYNAMODB_QUOTA_TABLE", "quota")
+        vi.stubEnv("ALLOW_PRIVATE_URLS", undefined)
     })
 
     afterEach(() => {
-        delete process.env.DYNAMODB_QUOTA_TABLE
         vi.unstubAllGlobals()
     })
 
@@ -202,7 +201,7 @@ describe("redirectGuardedFetch with the quota on", () => {
     })
 
     it("is not used without the quota", () => {
-        delete process.env.DYNAMODB_QUOTA_TABLE
+        vi.stubEnv("DYNAMODB_QUOTA_TABLE", undefined)
         expect(redirectGuardedFetch()).toBeUndefined()
     })
 })
