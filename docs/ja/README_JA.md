@@ -92,6 +92,8 @@ Web アプリ、Windows / macOS / Linux 向けデスクトップアプリ、そ�
 
 ### AI エージェントから使う（MCP）
 
+https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
+
 MCP（Model Context Protocol、AI エージェントが外部ツールを呼び出すためのプロトコル）を通して、Claude Desktop、Cursor、VS Code などから直接 draw.io のダイアグラムを描けます。クライアントの MCP 設定に次を追加します。
 
 ```json

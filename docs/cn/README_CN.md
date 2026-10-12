@@ -92,6 +92,8 @@ https://github.com/user-attachments/assets/66b9f12f-219f-4d62-acc0-0725e6850eec
 
 ### 在 AI 代理里使用（MCP）
 
+https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
+
 通过 MCP（Model Context Protocol，让 AI 代理调用外部工具的协议），Claude Desktop、Cursor、VS Code 等都能直接画 draw.io 图。在客户端的 MCP 配置里加上：
 
 ```json
