@@ -30,6 +30,6 @@ export const STORAGE_KEYS = {
     // Langfuse session id
     sessionId: "next-ai-draw-io-session-id",
 
-    // The start screen's MCP video was closed (it does not come back)
+    // The start screen's MCP card with its video was closed (it does not come back)
     mcpVideoClosed: "next-ai-draw-io-mcp-video-closed",
 } as const
