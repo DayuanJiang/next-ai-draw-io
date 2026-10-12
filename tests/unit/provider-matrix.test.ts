@@ -267,7 +267,7 @@ const ENVIRONMENTS: Record<string, (p: ProviderName) => Env> = {
 const CLIENT_URL = "https://u.example/v1"
 const CLIENT_KEY = "client-key"
 
-/** Fifteen shapes of client override; some need variables of their own */
+/** Sixteen shapes of client override; some need variables of their own */
 const SHAPES: Record<
     string,
     { overrides: Omit<ClientOverrides, "provider" | "modelId">; env?: Env }
@@ -318,6 +318,10 @@ const SHAPES: Record<
         overrides: { vertexApiKey: "client-vertex-key", baseUrl: CLIENT_URL },
     },
     trustedUrl: { overrides: { baseUrl: CLIENT_URL, trustedBaseUrl: true } },
+    // A private address: usesServerEndpoint counts it as the server's network
+    keyAndPrivateUrl: {
+        overrides: { apiKey: CLIENT_KEY, baseUrl: "http://10.0.0.5:8000/v1" },
+    },
 }
 
 /** The shapes that carry a client URL, for the MiniMax /anthropic probe */
@@ -445,7 +449,7 @@ describe("provider behavior snapshot", () => {
     })
 
     it("matches the recorded behavior", async () => {
-        // The matrix: 24 providers, 15 shapes, 9 environments
+        // The matrix: 24 providers, 16 shapes, 9 environments
         for (const provider of MATRIX_PROVIDERS) {
             await matrix(provider, MATRIX_MODEL_IDS[provider])
         }
