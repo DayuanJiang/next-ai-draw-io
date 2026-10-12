@@ -1,14 +1,11 @@
 import { z } from "zod"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     ProviderNameSchema,
     type ServerModelsConfig,
     slugify,
 } from "@/lib/server-model-config"
-import {
-    FIXED_CRED_PROVIDERS,
-    PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/types/model-config"
+import { FIXED_CRED_PROVIDERS, PROVIDER_INFO } from "@/lib/types/model-config"
 import { type MaskedSecret, maskSecret } from "./auth"
 import { loadSettings } from "./settings"
 
@@ -80,20 +77,19 @@ const SECRET_FIELDS = [
     "vertexApiKey",
 ] as const
 
-// ADMIN_-prefixed env var names for instance `index` (0-based) of a provider
-function credEnvNames(
+// ADMIN_-prefixed env var names for instance `index` (0-based) of a
+// provider. None for providers whose credentials live in fixed variables
+// (Bedrock, Vertex AI, Ollama) or that have none (EdgeOne).
+export function credEnvNames(
     provider: ProviderName,
     index: number,
 ): { key?: string; url?: string } {
-    if (FIXED_CRED_PROVIDERS.includes(provider) || provider === "edgeone") {
-        return {}
-    }
-    const prefix =
-        provider === "gateway" ? "AI_GATEWAY" : provider.toUpperCase()
+    const { fixedCredentials, envPrefix } = PROVIDERS[provider]
+    if (fixedCredentials || envPrefix === null) return {}
     const suffix = index === 0 ? "" : `_${index + 1}`
     return {
-        key: `ADMIN_${prefix}_API_KEY${suffix}`,
-        url: `ADMIN_${prefix}_BASE_URL${suffix}`,
+        key: `ADMIN_${envPrefix}_API_KEY${suffix}`,
+        url: `ADMIN_${envPrefix}_BASE_URL${suffix}`,
     }
 }
 

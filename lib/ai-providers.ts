@@ -438,56 +438,112 @@ function buildProviderOptions(
     return Object.keys(options).length > 0 ? options : undefined
 }
 
+/**
+ * The names of a provider's server key and base URL variables, from the
+ * record: <PREFIX>_API_KEY (or the record's own keyEnv) and <PREFIX>_BASE_URL.
+ * Empty for Bedrock and EdgeOne. Always the spelling; whether the server
+ * must have the key is serverCredentialError's question.
+ */
+export function envVarsOf(provider: ProviderName): {
+    apiKey?: string
+    baseUrl?: string
+} {
+    const { envPrefix, keyEnv } = PROVIDERS[provider]
+    if (envPrefix === null) return {}
+    return {
+        apiKey: keyEnv ?? `${envPrefix}_API_KEY`,
+        baseUrl: `${envPrefix}_BASE_URL`,
+    }
+}
+
 // Map of provider to required environment variable. null where the server
 // needs no key of this kind: Bedrock (the AWS SDK uses an IAM role or the
 // AWS_* variables), local Ollama, EdgeOne (the site's own function)
 const PROVIDER_ENV_VARS = Object.fromEntries(
     PROVIDER_NAMES.map((p) => {
-        const { credential, envPrefix, keyEnv } = PROVIDERS[p]
+        const { credential } = PROVIDERS[p]
         const required = credential === "apiKey" || credential === "vertexKey"
-        return [p, required ? (keyEnv ?? `${envPrefix}_API_KEY`) : null]
+        return [p, required ? (envVarsOf(p).apiKey ?? null) : null]
     }),
 ) as Record<ProviderName, string | null>
+
+/**
+ * Why the server lacks this provider's credentials, or null when it has
+ * them. detectProvider asks for null; validateProviderCredentials throws
+ * the text. In order: an array apiKeyEnv passes when any of its variables
+ * has a value, and nothing else is checked; without a custom variable a
+ * provider with an altKeyEnv (Anthropic's ANTHROPIC_AUTH_TOKEN) accepts
+ * either variable; a custom variable without a value fails, with no fall
+ * back to the default one; a provider with a resourceNameEnv (Azure) then
+ * needs its base URL variable, the server model's own URL variable or the
+ * resource name. Providers with no required key variable pass.
+ */
+function serverCredentialError(
+    provider: ProviderName,
+    customApiKeyEnv?: string | string[],
+    customBaseUrlEnv?: string,
+): string | null {
+    if (Array.isArray(customApiKeyEnv)) {
+        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
+        if (!hasAnyKey) {
+            return (
+                `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
+                `Please set at least one in your .env.local file.`
+            )
+        }
+        return null
+    }
+
+    const { altKeyEnv, resourceNameEnv } = PROVIDERS[provider]
+    const keyEnv = PROVIDER_ENV_VARS[provider]
+    if (altKeyEnv && !customApiKeyEnv) {
+        const hasCredential = !!(
+            (keyEnv && process.env[keyEnv]) ||
+            process.env[altKeyEnv]
+        )
+        if (!hasCredential) {
+            return (
+                `Either ${keyEnv} or ${altKeyEnv} environment variable is required for ${provider} provider. ` +
+                `Please set one in your .env.local file.`
+            )
+        }
+    } else {
+        const requiredVar = customApiKeyEnv || keyEnv
+        if (requiredVar && !process.env[requiredVar]) {
+            return (
+                `${requiredVar} environment variable is required for ${provider} provider. ` +
+                `Please set it in your .env.local file.`
+            )
+        }
+    }
+
+    // The SDK builds the URL from the resource name when there is no URL
+    if (resourceNameEnv) {
+        const baseUrlEnv = envVarsOf(provider).baseUrl as string
+        const hasBaseUrl =
+            !!process.env[baseUrlEnv] ||
+            !!(customBaseUrlEnv && process.env[customBaseUrlEnv])
+        const hasResourceName = !!process.env[resourceNameEnv]
+        if (!hasBaseUrl && !hasResourceName) {
+            return (
+                `Azure requires either ${baseUrlEnv} or ${resourceNameEnv} to be set. ` +
+                `Please set one in your .env.local file.`
+            )
+        }
+    }
+    return null
+}
 
 /**
  * Auto-detect provider based on available API keys
  * Returns the provider if exactly one is configured, otherwise null
  */
 function detectProvider(): ProviderName | null {
-    const configuredProviders: ProviderName[] = []
-
-    for (const [provider, envVar] of Object.entries(PROVIDER_ENV_VARS)) {
-        if (envVar === null) {
-            // Skip ollama - it doesn't require credentials
-            continue
-        }
-        // Anthropic accepts ANTHROPIC_AUTH_TOKEN (Bearer auth) as alternative to ANTHROPIC_API_KEY
-        const hasCredential =
-            provider === "anthropic"
-                ? !!(
-                      process.env.ANTHROPIC_API_KEY ||
-                      process.env.ANTHROPIC_AUTH_TOKEN
-                  )
-                : !!process.env[envVar]
-        if (hasCredential) {
-            // Azure requires additional config (baseURL or resourceName)
-            if (provider === "azure") {
-                const hasBaseUrl = !!process.env.AZURE_BASE_URL
-                const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
-                if (hasBaseUrl || hasResourceName) {
-                    configuredProviders.push(provider as ProviderName)
-                }
-            } else {
-                configuredProviders.push(provider as ProviderName)
-            }
-        }
-    }
-
-    if (configuredProviders.length === 1) {
-        return configuredProviders[0]
-    }
-
-    return null
+    const configuredProviders = PROVIDER_NAMES.filter(
+        (p) =>
+            PROVIDER_ENV_VARS[p] !== null && serverCredentialError(p) === null,
+    )
+    return configuredProviders.length === 1 ? configuredProviders[0] : null
 }
 
 /**
@@ -500,54 +556,12 @@ function validateProviderCredentials(
     customApiKeyEnv?: string | string[],
     customBaseUrlEnv?: string,
 ): void {
-    // Handle array of env var names - at least one must be set
-    if (Array.isArray(customApiKeyEnv)) {
-        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
-        if (!hasAnyKey) {
-            throw new Error(
-                `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
-                    `Please set at least one in your .env.local file.`,
-            )
-        }
-        return
-    }
-
-    // Anthropic accepts ANTHROPIC_AUTH_TOKEN (Bearer auth) as alternative to ANTHROPIC_API_KEY
-    if (provider === "anthropic" && !customApiKeyEnv) {
-        const hasCredential = !!(
-            process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN
-        )
-        if (!hasCredential) {
-            throw new Error(
-                `Either ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable is required for anthropic provider. ` +
-                    `Please set one in your .env.local file.`,
-            )
-        }
-    } else {
-        // Use custom env var name if provided, otherwise use default
-        const requiredVar = customApiKeyEnv || PROVIDER_ENV_VARS[provider]
-        if (requiredVar && !process.env[requiredVar]) {
-            throw new Error(
-                `${requiredVar} environment variable is required for ${provider} provider. ` +
-                    `Please set it in your .env.local file.`,
-            )
-        }
-    }
-
-    // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition
-    // to API key, or a server model's own URL variable (an admin panel entry)
-    if (provider === "azure") {
-        const hasBaseUrl =
-            !!process.env.AZURE_BASE_URL ||
-            !!(customBaseUrlEnv && process.env[customBaseUrlEnv])
-        const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
-        if (!hasBaseUrl && !hasResourceName) {
-            throw new Error(
-                `Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME to be set. ` +
-                    `Please set one in your .env.local file.`,
-            )
-        }
-    }
+    const error = serverCredentialError(
+        provider,
+        customApiKeyEnv,
+        customBaseUrlEnv,
+    )
+    if (error) throw new Error(error)
 }
 
 /** AWS's Bedrock endpoint for a region, as the Bedrock SDK builds it */
@@ -987,10 +1001,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 overrides,
                 PROVIDER_ENV_VARS[provider] as string,
             )
-            const baseUrlEnv =
-                provider === "gateway"
-                    ? "AI_GATEWAY_BASE_URL"
-                    : `${provider.toUpperCase()}_BASE_URL`
+            const baseUrlEnv = envVarsOf(provider).baseUrl as string
             // A local default (SGLang's 127.0.0.1) only fills the settings
             // form; the server must not call its own machine for it. With a
             // user's key the OpenAI SDK would read the server's
@@ -1078,10 +1089,7 @@ export function globalBaseUrl(provider: ProviderName): string | undefined {
     ) {
         return `https://${process.env.AZURE_RESOURCE_NAME}.openai.azure.com/openai`
     }
-    const name =
-        provider === "gateway"
-            ? "AI_GATEWAY_BASE_URL"
-            : `${provider.toUpperCase()}_BASE_URL`
+    const name = envVarsOf(provider).baseUrl as string
     return process.env[name] || undefined
 }
 
