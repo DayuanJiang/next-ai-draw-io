@@ -51,7 +51,8 @@
         "creativeDescription": "Draw something fun and creative",
         "cachedNote": "Examples use saved answers: they appear instantly and don't call the AI.",
         "mcpServer": "MCP Server",
-        "mcpDescription": "Use in Claude Desktop, VS Code & Cursor"
+        "mcpDescription": "Use in Claude Desktop, VS Code & Cursor",
+        "mcpTagline": "Let Claude Code, Cursor or VS Code draw from your local files and code. You get the same canvas as here: live preview, outlined changes, undo."
     },
     "settings": {
         "title": "Settings",

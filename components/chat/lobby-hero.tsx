@@ -5,6 +5,7 @@ import { getAssetUrl } from "@/lib/base-path"
 import { cn } from "@/lib/utils"
 import { useChatEngine } from "./chat-engine"
 import { Composer } from "./composer"
+import { McpNotice } from "./mcp-notice"
 import { SessionMenu } from "./session-menu"
 
 interface Example {
@@ -78,6 +79,7 @@ export function LobbyHero({
     const dict = useDictionary()
     const t = dict.lobby
     const engine = useChatEngine()
+    const isSelfHosted = process.env.NEXT_PUBLIC_SELFHOSTED === "true"
 
     // Prompts and file names must stay as they are: cached responses match them
     const examples: Example[] = [
@@ -172,6 +174,15 @@ export function LobbyHero({
             >
                 {t.lede}
             </p>
+
+            {/* MCP server notice, hidden on self-hosted deployments. The lede's
+                margin already spans 24 px (20 px compact); pull the card up so
+                16 px remain above it */}
+            {!isSelfHosted && (
+                <McpNotice
+                    className={cn("mb-5", compact ? "-mt-1" : "-mt-2")}
+                />
+            )}
 
             <Composer
                 variant="hero"
