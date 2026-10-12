@@ -552,6 +552,7 @@ test("a local server's base URL is shown from the start", async ({ page }) => {
 test("Azure needs its resource URL before it counts as connected", async ({
     page,
 }) => {
+    // Azure has no default URL: a new entry starts without one
     await openApp(page, {
         config: {
             version: 1,
@@ -560,7 +561,6 @@ test("Azure needs its resource URL before it counts as connected", async ({
                     id: "z1",
                     provider: "azure",
                     apiKey: "k",
-                    baseUrl: "https://your-resource.openai.azure.com/openai",
                     models: [{ id: "m1", modelId: "gpt-6-astra" }],
                 },
             ],
@@ -575,9 +575,7 @@ test("Azure needs its resource URL before it counts as connected", async ({
     await expect(dialog.getByTestId("step-1-todo")).toBeVisible()
     await expect(dialog.getByTestId("test-models")).toBeDisabled()
     await expect(
-        dialog.getByText(
-            "Fill in the API key and your Azure resource's base URL first.",
-        ),
+        dialog.getByText("Fill in the API key and the base URL first."),
     ).toBeVisible()
     await dialog
         .locator("#base-url")

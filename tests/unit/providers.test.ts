@@ -8,10 +8,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { SINGLE_SYSTEM_PROVIDERS } from "@/lib/ai-providers"
 import { i18n } from "@/lib/i18n/config"
-import enDict from "@/lib/i18n/dictionaries/en.json"
-import jaDict from "@/lib/i18n/dictionaries/ja.json"
-import zhDict from "@/lib/i18n/dictionaries/zh.json"
-import zhHantDict from "@/lib/i18n/dictionaries/zh-Hant.json"
 import {
     OPTIONS_OPEN,
     POPULAR_PROVIDERS,
@@ -309,18 +305,63 @@ const fixture = {
         "openrouter",
         "qwen",
     ],
-    providerNoteKeys: {
-        bedrock: "noteBedrock",
-        vertexai: "noteVertex",
-        azure: "noteAzure",
-        edgeone: "noteEdgeone",
-        ollama: "noteOllama",
-        sglang: "noteSglang",
-    } as Record<string, string>,
-    baseUrlHintKeys: {
-        minimax: "minimaxBaseUrlHint",
-        mimo: "mimoBaseUrlHint",
-    } as Record<string, string>,
+    // The dictionaries' noteBedrock, noteVertex, noteAzure, noteEdgeone,
+    // noteOllama and noteSglang entries
+    notes: {
+        bedrock: {
+            en: "AWS credentials",
+            zh: "AWS 凭证",
+            ja: "AWS 認証情報",
+            "zh-Hant": "AWS 憑證",
+        },
+        vertexai: {
+            en: "Express mode key",
+            zh: "Express 模式 Key",
+            ja: "Express モードのキー",
+            "zh-Hant": "Express 模式 Key",
+        },
+        azure: {
+            en: "Key and resource URL",
+            zh: "Key 和资源地址",
+            ja: "キーとリソース URL",
+            "zh-Hant": "Key 和資源位址",
+        },
+        edgeone: {
+            en: "No key needed",
+            zh: "不用 Key",
+            ja: "キー不要",
+            "zh-Hant": "不用 Key",
+        },
+        ollama: {
+            en: "Key optional",
+            zh: "Key 可不填",
+            ja: "キーは任意",
+            "zh-Hant": "Key 可不填",
+        },
+        sglang: {
+            en: "Your server's URL",
+            zh: "填服务地址",
+            ja: "サーバーの URL",
+            "zh-Hant": "填服務位址",
+        },
+    } as Record<string, Record<string, string>>,
+    // The dictionaries' minimaxBaseUrlHint and mimoBaseUrlHint entries
+    baseUrlHints: {
+        minimax: {
+            en: "Use /anthropic for Anthropic-compatible API (recommended), or /v1 for OpenAI-compatible API",
+            zh: "使用 /anthropic 端点为 Anthropic 兼容 API（推荐），或使用 /v1 端点为 OpenAI 兼容 API",
+            ja: "/anthropic で Anthropic 互換 API（推奨）、または /v1 で OpenAI 互換 API を使用",
+            "zh-Hant":
+                "使用 /anthropic 端點為 Anthropic 相容 API（推薦），或使用 /v1 端點為 OpenAI 相容 API",
+        },
+        mimo: {
+            en: "Default works with pay-as-you-go keys (sk-...). Token Plan subscribers (tp-... keys) must set https://token-plan-cn.xiaomimimo.com/v1",
+            zh: "默认地址适用于按量付费密钥（sk-...）。Token Plan 订阅用户（tp-... 密钥）请设置为 https://token-plan-cn.xiaomimimo.com/v1",
+            ja: "デフォルトは従量課金キー（sk-...）用です。Token Plan 加入者（tp-... キー）は https://token-plan-cn.xiaomimimo.com/v1 を設定してください",
+            "zh-Hant":
+                "預設地址適用於按量付費金鑰（sk-...）。Token Plan 訂閱用戶（tp-... 金鑰）請設定為 https://token-plan-cn.xiaomimimo.com/v1",
+        },
+    } as Record<string, Record<string, string>>,
     optionsOpen: ["azure", "ollama", "sglang", "minimax", "mimo"],
     noKeyNeeded: ["ollama", "openrouter", "aihubmix"],
 }
@@ -336,10 +377,14 @@ describe("the provider record derives the old tables", () => {
     it("PROVIDER_INFO: label, defaultBaseUrl, apiKeyUrl and modelList", () => {
         for (const p of PROVIDER_NAMES) {
             const { label, defaultBaseUrl, apiKeyUrl, modelList } = PROVIDERS[p]
+            const expected = { ...fixture.providerInfo[p] }
+            // The one intended difference: Azure's placeholder URL named no
+            // real resource and is gone; the form treats no URL as unset
+            if (p === "azure") delete expected.defaultBaseUrl
             expect([
                 p,
                 { label, defaultBaseUrl, apiKeyUrl, modelList },
-            ]).toEqual([p, { ...fixture.providerInfo[p] }])
+            ]).toEqual([p, expected])
         }
     })
 
@@ -410,37 +455,22 @@ describe("the provider record derives the old tables", () => {
     })
 
     it("the picker notes and base URL hints, word for word in every language", () => {
-        const dicts: Record<string, Record<string, string>> = {
-            en: enDict.modelConfig,
-            zh: zhDict.modelConfig,
-            ja: jaDict.modelConfig,
-            "zh-Hant": zhHantDict.modelConfig,
-        }
         const noted = PROVIDER_NAMES.filter((p) => PROVIDERS[p].note)
-        expect(sorted(noted)).toEqual(
-            sorted(Object.keys(fixture.providerNoteKeys)),
-        )
+        expect(sorted(noted)).toEqual(sorted(Object.keys(fixture.notes)))
         for (const p of noted) {
-            for (const [lang, dict] of Object.entries(dicts)) {
-                expect([p, lang, PROVIDERS[p].note?.[lang as never]]).toEqual([
-                    p,
-                    lang,
-                    dict[fixture.providerNoteKeys[p]],
-                ])
-            }
+            expect([p, PROVIDERS[p].note]).toEqual([p, fixture.notes[p]])
         }
+        // Azure's hint is new (it replaces the placeholder URL); the other
+        // two came from the dictionaries
         const hinted = PROVIDER_NAMES.filter((p) => PROVIDERS[p].baseUrlHint)
         expect(sorted(hinted)).toEqual(
-            sorted(Object.keys(fixture.baseUrlHintKeys)),
+            sorted([...Object.keys(fixture.baseUrlHints), "azure"]),
         )
-        for (const p of hinted) {
-            for (const [lang, dict] of Object.entries(dicts)) {
-                expect([
-                    p,
-                    lang,
-                    PROVIDERS[p].baseUrlHint?.[lang as never],
-                ]).toEqual([p, lang, dict[fixture.baseUrlHintKeys[p]]])
-            }
+        for (const p of Object.keys(fixture.baseUrlHints) as typeof hinted) {
+            expect([p, PROVIDERS[p].baseUrlHint]).toEqual([
+                p,
+                fixture.baseUrlHints[p],
+            ])
         }
     })
 

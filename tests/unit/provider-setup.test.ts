@@ -1,16 +1,12 @@
 import { describe, expect, it } from "vitest"
-import enDict from "@/lib/i18n/dictionaries/en.json"
-import jaDict from "@/lib/i18n/dictionaries/ja.json"
-import zhDict from "@/lib/i18n/dictionaries/zh.json"
-import zhHantDict from "@/lib/i18n/dictionaries/zh-Hant.json"
 import {
     filterProviderGroups,
     hasCredentials,
     POPULAR_PROVIDERS,
     PROVIDER_GROUPS,
-    PROVIDER_NOTE_KEYS,
     providerStatus,
 } from "@/lib/provider-setup"
+import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
 import { PROVIDER_INFO, type ProviderConfig } from "@/lib/types/model-config"
 import { useUiStore } from "@/stores/ui-store"
 
@@ -31,15 +27,6 @@ describe("provider groups", () => {
 
     it("offer known providers as popular ones", () => {
         for (const p of POPULAR_PROVIDERS) expect(PROVIDER_INFO[p]).toBeTruthy()
-    })
-
-    it("have their notes in every language", () => {
-        for (const dict of [enDict, zhDict, jaDict, zhHantDict]) {
-            const t = dict.modelConfig as Record<string, string>
-            for (const key of Object.values(PROVIDER_NOTE_KEYS)) {
-                expect(t[key as string]).toBeTruthy()
-            }
-        }
     })
 
     it("are searched by label or name, ignoring case and spaces", () => {
@@ -63,6 +50,18 @@ describe("hasCredentials", () => {
             [{ provider: "edgeone" }, true],
             [{ provider: "vertexai", apiKey: "k" }, false],
             [{ provider: "vertexai", vertexApiKey: "k" }, true],
+            // Azure has no default URL: the user's own is part of signing in
+            [{ provider: "azure", apiKey: "k" }, false],
+            [
+                {
+                    provider: "azure",
+                    apiKey: "k",
+                    baseUrl: "https://contoso.openai.azure.com/openai",
+                },
+                true,
+            ],
+            // SGLang's local default fills the form, so a key is enough here
+            [{ provider: "sglang", apiKey: "k" }, true],
             [{ provider: "bedrock", apiKey: "k" }, false],
             [
                 { provider: "bedrock", apiKey: "k", awsRegion: "us-east-1" },
@@ -88,6 +87,23 @@ describe("hasCredentials", () => {
         ]
         for (const [p, expected] of cases) {
             expect([p, hasCredentials(provider(p))]).toEqual([p, expected])
+        }
+    })
+
+    it("asks every provider for a key, an AWS pair, a Vertex key or nothing", () => {
+        // With only a key filled in, by the record's credential kind
+        for (const p of PROVIDER_NAMES) {
+            const { credential, defaultBaseUrl } = PROVIDERS[p]
+            const expected =
+                credential === "none" || credential === "optionalKey"
+                    ? true
+                    : credential === "apiKey"
+                      ? !!defaultBaseUrl
+                      : false
+            expect([
+                p,
+                hasCredentials(provider({ provider: p, apiKey: "k" })),
+            ]).toEqual([p, expected])
         }
     })
 })

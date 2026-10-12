@@ -6,11 +6,7 @@ import {
     PROVIDERS,
     type ProviderGroup as ProviderGroupId,
 } from "@/lib/providers"
-import {
-    PROVIDER_INFO,
-    type ProviderConfig,
-    type ProviderName,
-} from "@/lib/types/model-config"
+import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 
 export type { ProviderGroupId }
 
@@ -35,20 +31,10 @@ export const POPULAR_PROVIDERS: ProviderName[] = [
     "qwen",
 ]
 
-/** Providers that need something other than a plain API key */
-export const PROVIDER_NOTE_KEYS: Partial<Record<ProviderName, string>> = {
-    bedrock: "noteBedrock",
-    vertexai: "noteVertex",
-    azure: "noteAzure",
-    edgeone: "noteEdgeone",
-    ollama: "noteOllama",
-    sglang: "noteSglang",
-}
-
 /**
- * Providers whose base URL usually needs changing (Azure's default is only
- * an example; Ollama's is its cloud, SGLang's a local server) or comes with
- * a hint (MiniMax, MiMo): their folded options start open
+ * Providers whose base URL usually needs changing (Azure has no default;
+ * Ollama's is its cloud, SGLang's a local server) or comes with a hint
+ * (MiniMax, MiMo): their folded options start open
  */
 export const OPTIONS_OPEN: ProviderName[] = PROVIDER_NAMES.filter(
     (p) => PROVIDERS[p].optionsOpen,
@@ -62,35 +48,30 @@ export function filterProviderGroups(query: string) {
         ...group,
         providers: group.providers.filter(
             (p) =>
-                PROVIDER_INFO[p].label.toLowerCase().includes(q) ||
-                p.includes(q),
+                PROVIDERS[p].label.toLowerCase().includes(q) || p.includes(q),
         ),
     })).filter((group) => group.providers.length > 0)
 }
 
 /** The credentials a test or a chat request needs are filled in */
 export function hasCredentials(p: ProviderConfig): boolean {
-    switch (p.provider) {
-        case "bedrock":
+    const def = PROVIDERS[p.provider]
+    switch (def.credential) {
+        case "aws":
             return (
                 (!!p.apiKey ||
                     (!!p.awsAccessKeyId && !!p.awsSecretAccessKey)) &&
                 !!p.awsRegion
             )
-        case "vertexai":
+        case "vertexKey":
             return !!p.vertexApiKey
-        // Its default base URL names no real resource
-        case "azure":
-            return (
-                !!p.apiKey &&
-                !!p.baseUrl &&
-                p.baseUrl !== PROVIDER_INFO.azure.defaultBaseUrl
-            )
-        case "edgeone":
-        case "ollama":
+        case "none":
+        case "optionalKey":
             return true
-        default:
-            return !!p.apiKey
+        case "apiKey":
+            // Without a default URL in the record (Azure) the user's own is
+            // part of the credentials
+            return !!p.apiKey && (!!def.defaultBaseUrl || !!p.baseUrl)
     }
 }
 

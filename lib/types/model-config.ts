@@ -447,9 +447,10 @@ export function chatRequestUrl(
 ): string | null {
     const url = normalizeBaseUrl(baseUrl)
     if (!url) return null
-    if (provider === "anthropic") return `${url}/messages`
-    if (provider === "ollama") return `${ollamaApiUrl(url)}/chat`
+    const { sdk, ownRequestPath } = PROVIDERS[provider]
+    if (sdk === "anthropic") return `${url}/messages`
+    if (sdk === "ollama") return `${ollamaApiUrl(url)}/chat`
     // These SDKs build their own paths (or, for MiniMax, pick the protocol
     // from the URL)
-    return PROVIDERS[provider].ownRequestPath ? null : `${url}/chat/completions`
+    return ownRequestPath ? null : `${url}/chat/completions`
 }

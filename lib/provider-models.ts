@@ -155,7 +155,7 @@ export async function listProviderModels(
     // AIHubMix has a public list, unless the user points to another
     // endpoint, which is OpenAI-compatible
     const style =
-        provider === "aihubmix" &&
+        PROVIDERS[provider].sdk === "aihubmix" &&
         baseUrl &&
         !/^https:\/\/aihubmix\.com(\/v1)?$/.test(base)
             ? "openai"

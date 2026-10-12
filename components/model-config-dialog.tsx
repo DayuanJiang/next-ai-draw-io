@@ -55,13 +55,14 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { ListedModel } from "@/lib/provider-models"
 import { hasCredentials } from "@/lib/provider-setup"
+import { PROVIDERS } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type {
     ModelConfig,
     ProviderConfig,
     ProviderName,
 } from "@/lib/types/model-config"
-import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
+import { SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
 
@@ -300,7 +301,7 @@ export function ModelConfigDialog({
     const errorHints = (p: ProviderConfig): Record<string, string> => ({
         ...(dict.errors.llm as Record<string, string>),
         invalid_api_key:
-            p.provider === "bedrock" && !p.apiKey
+            PROVIDERS[p.provider].credential === "aws" && !p.apiKey
                 ? t.awsKeysRejected
                 : t.keyRejected,
         model_not_found: t.modelNotFound,
@@ -530,9 +531,9 @@ export function ModelConfigDialog({
         const run = (latestTestRun.get(selectedProviderId) ?? 0) + 1
         latestTestRun.set(selectedProviderId, run)
 
-        // For EdgeOne, construct baseUrl from current origin
+        // The site's own function (EdgeOne): its URL is this origin's
         const baseUrl =
-            selectedProvider.provider === "edgeone"
+            PROVIDERS[selectedProvider.provider].credential === "none"
                 ? `${window.location.origin}/api/edgeai`
                 : selectedProvider.baseUrl
         const hints = errorHints(selectedProvider)
@@ -741,7 +742,7 @@ export function ModelConfigDialog({
     }
 
     const providerName = (p: ProviderConfig) =>
-        p.name || PROVIDER_INFO[p.provider].label
+        p.name || PROVIDERS[p.provider].label
 
     const renderModelRow = (model: ModelConfig) => {
         if (!selectedProvider) return null
@@ -922,11 +923,13 @@ export function ModelConfigDialog({
                 : undefined
         const canTest = credentialsDone && models.length > 0
         const testing = validationStatus === "validating"
+        const def = PROVIDERS[provider.provider]
+        // A key-only provider without a default URL (Azure) needs its URL too
         const testBlocker = !credentialsDone
-            ? provider.provider === "bedrock"
+            ? def.credential === "aws"
                 ? t.needAws
-                : provider.provider === "azure"
-                  ? t.needAzure
+                : def.credential === "apiKey" && !def.defaultBaseUrl
+                  ? t.needUrl
                   : t.needKey
             : models.length === 0
               ? t.needModel
@@ -984,7 +987,7 @@ export function ModelConfigDialog({
                             done={credentialsDone && !keyRejected}
                             title={t.stepConnect}
                         >
-                            {provider.provider === "edgeone" ? (
+                            {def.credential === "none" ? (
                                 <p className="text-xs text-muted-foreground">
                                     {t.edgeoneNoKey}
                                 </p>
@@ -1027,7 +1030,7 @@ export function ModelConfigDialog({
                             done={models.length > 0}
                             title={t.stepModels}
                             action={
-                                PROVIDER_INFO[provider.provider].modelList && (
+                                def.modelList && (
                                     <button
                                         type="button"
                                         onClick={handleFetchModels}

@@ -1,11 +1,10 @@
 import { z } from "zod"
-import { PROVIDERS, type ProviderName } from "@/lib/providers"
+import { PROVIDER_NAMES, PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     ProviderNameSchema,
     type ServerModelsConfig,
     slugify,
 } from "@/lib/server-model-config"
-import { FIXED_CRED_PROVIDERS, PROVIDER_INFO } from "@/lib/types/model-config"
 import { type MaskedSecret, maskSecret } from "./auth"
 import { loadSettings } from "./settings"
 
@@ -158,7 +157,7 @@ export function mergeSecrets(
 }
 
 function displayName(p: StoredAdminProvider): string {
-    return p.name?.trim() || PROVIDER_INFO[p.provider].label
+    return p.name?.trim() || PROVIDERS[p.provider].label
 }
 
 export function validateAdminProviders(
@@ -166,9 +165,11 @@ export function validateAdminProviders(
     envConfig: ServerModelsConfig | null = null,
 ): string | null {
     const envProviders = envConfig?.providers ?? []
-    for (const single of FIXED_CRED_PROVIDERS) {
+    // Providers whose credentials live in fixed variables can have one entry
+    const fixed = PROVIDER_NAMES.filter((p) => PROVIDERS[p].fixedCredentials)
+    for (const single of fixed) {
         if (list.filter((p) => p.provider === single).length > 1) {
-            return `Only one ${PROVIDER_INFO[single].label} provider is supported (its credentials use fixed environment variables).`
+            return `Only one ${PROVIDERS[single].label} provider is supported (its credentials use fixed environment variables).`
         }
         // Its credentials are global; a panel instance would silently
         // override the credentials env-configured models rely on
@@ -176,7 +177,7 @@ export function validateAdminProviders(
             list.some((p) => p.provider === single) &&
             envProviders.some((p) => p.provider === single)
         ) {
-            return `${PROVIDER_INFO[single].label} is already configured in AI_MODELS_CONFIG / ai-models.json and shares global credentials. Manage it via the environment configuration instead.`
+            return `${PROVIDERS[single].label} is already configured in AI_MODELS_CONFIG / ai-models.json and shares global credentials. Manage it via the environment configuration instead.`
         }
     }
     // Server model ids are built from the slugified name, so names must

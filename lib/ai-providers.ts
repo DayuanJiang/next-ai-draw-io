@@ -1031,7 +1031,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     const isClientOverride = !!(
         overrides?.provider &&
         (overrides?.apiKey ||
-            (overrides?.provider === "vertexai" && overrides?.vertexApiKey))
+            (requested?.credential === "vertexKey" && overrides?.vertexApiKey))
     )
 
     // Use client override if provided, otherwise fall back to env vars.

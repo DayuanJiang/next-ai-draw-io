@@ -47,6 +47,7 @@ import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
 } from "@/lib/output-token-limit"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     type FlattenedServerModel,
     findServerModelById,
@@ -173,14 +174,17 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // A server model's provider comes from its config: for one set up in
     // the admin panel the header holds the provider name's slug. Without
     // either, the server's own AI_PROVIDER.
-    const isEdgeOne =
-        (serverModelConfig.provider || provider || getServerProvider()) ===
-        "edgeone"
-
-    // EdgeOne is this deployment's own function, whatever URL the request
-    // names: another host would get the user's EdgeOne cookies, and the
-    // quota counts it. Absolute, as the SDK needs.
-    if (isEdgeOne) baseUrl = edgeOneEndpoint(req)
+    const requestedProvider =
+        serverModelConfig.provider || provider || getServerProvider()
+    // A provider without credentials (EdgeOne) is this deployment's own
+    // function, whatever URL the request names: another host would get the
+    // user's EdgeOne cookies, and the quota counts it. Absolute, as the SDK
+    // needs.
+    const onSiteFunction =
+        !!requestedProvider &&
+        Object.hasOwn(PROVIDERS, requestedProvider) &&
+        PROVIDERS[requestedProvider as ProviderName].credential === "none"
+    if (onSiteFunction) baseUrl = edgeOneEndpoint(req)
 
     // Same rule as validate-model: with ALLOW_PRIVATE_URLS=false a request may
     // not point the server at a private or internal address
@@ -195,12 +199,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const cookieHeader = req.headers.get("cookie")
 
     const clientOverrides = {
-        // Server model provider takes precedence over client header; EdgeOne
-        // named only in AI_PROVIDER is named here, for its own base URL
+        // Server model provider takes precedence over client header; the
+        // site's function named only in AI_PROVIDER is named here, for its
+        // own base URL
         provider:
             serverModelConfig.provider ||
             provider ||
-            (isEdgeOne ? "edgeone" : null),
+            (onSiteFunction ? requestedProvider : null),
         baseUrl,
         apiKey: req.headers.get("x-ai-api-key"),
         // A server model runs the model it was configured with, whatever the header says
@@ -216,7 +221,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         vertexApiKey: req.headers.get("x-vertex-api-key"),
         // Pass cookies for EdgeOne Pages authentication, and the access code,
         // which the EdgeOne function checks too
-        ...(isEdgeOne && {
+        ...(onSiteFunction && {
             headers: {
                 ...(cookieHeader && { cookie: cookieHeader }),
                 "x-access-code": req.headers.get("x-access-code") || "",
@@ -420,7 +425,7 @@ ${userInputText}
     // Also merge for OpenAI-compatible providers with custom base URLs (e.g. vLLM, LMStudio)
     // because open-source model chat templates (Qwen, Llama, etc.) typically reject multiple system messages
     const isCustomOpenAIEndpoint =
-        resolvedProvider === "openai" &&
+        PROVIDERS[resolvedProvider].sdk === "openai" &&
         !!(
             baseUrl ||
             process.env.OPENAI_BASE_URL ||

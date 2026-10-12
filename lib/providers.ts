@@ -429,8 +429,7 @@ const defs = {
         group: "cloud",
         envPrefix: "AZURE",
         resourceNameEnv: "AZURE_RESOURCE_NAME",
-        // A placeholder, not a real resource; the form treats it as unset
-        defaultBaseUrl: "https://your-resource.openai.azure.com/openai",
+        // No default: the URL names the user's own resource
         sdkKnowsEndpoint: true,
         ownRequestPath: true,
         optionsOpen: true,
@@ -439,6 +438,13 @@ const defs = {
             zh: "Key 和资源地址",
             ja: "キーとリソース URL",
             "zh-Hant": "Key 和資源位址",
+        },
+        baseUrlHint: {
+            en: "Your Azure OpenAI resource's URL, https://<resource>.openai.azure.com/openai",
+            zh: "Azure OpenAI 资源的地址，形如 https://<资源名>.openai.azure.com/openai",
+            ja: "Azure OpenAI リソースの URL。例: https://<リソース名>.openai.azure.com/openai",
+            "zh-Hant":
+                "Azure OpenAI 資源的位址，形如 https://<資源名稱>.openai.azure.com/openai",
         },
         // Deployment names in the user's resource
         models: [
