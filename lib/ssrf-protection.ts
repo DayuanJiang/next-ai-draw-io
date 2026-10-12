@@ -126,9 +126,9 @@ export class RedirectRefusedError extends Error {
 
 const MAX_REDIRECTS = 5
 
-// Dropped when a redirect goes to another origin: those fetch drops, and
-// the key headers of providers that do not use Authorization (Anthropic,
-// Google, Azure)
+// Dropped when a redirect goes to another origin: those fetch drops, the
+// key headers of providers that do not use Authorization (Anthropic,
+// Google, Azure) and this site's access code (EdgeOne's function checks it)
 const CREDENTIAL_HEADERS = [
     "authorization",
     "proxy-authorization",
@@ -136,6 +136,7 @@ const CREDENTIAL_HEADERS = [
     "x-api-key",
     "x-goog-api-key",
     "api-key",
+    "x-access-code",
 ]
 
 /**

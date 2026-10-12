@@ -1154,11 +1154,34 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
 /**
  * The deployment's EdgeOne Pages function, as an absolute URL (the SDK
  * needs one). EdgeOne serves functions by their folder from the site root,
- * so Next's base path does not apply.
+ * so Next's base path does not apply. Behind a proxy req.url is the internal
+ * address and the browser's Origin header is the site's, so Origin wins,
+ * but only for the host the request was addressed to: another site's page
+ * sends its own Origin, and the request's cookies must not go there.
  */
 export function edgeOneEndpoint(req: Request): string {
-    const origin = req.headers.get("origin") || new URL(req.url).origin
-    return `${origin}/api/edgeai`
+    const own = new URL(req.url)
+    const origin = req.headers.get("origin")
+    const originHost = origin ? hostOf(origin) : undefined
+    const addressed = [
+        req.headers.get("x-forwarded-host"),
+        req.headers.get("host"),
+    ].filter((h): h is string => !!h)
+    // Without Host headers (tests, odd runtimes) Origin is all there is
+    const trusted =
+        !!originHost &&
+        (addressed.length === 0 ||
+            addressed.includes(originHost) ||
+            originHost === own.host)
+    return `${trusted ? origin : own.origin}/api/edgeai`
+}
+
+function hostOf(url: string): string | undefined {
+    try {
+        return new URL(url).host
+    } catch {
+        return undefined
+    }
 }
 
 /**

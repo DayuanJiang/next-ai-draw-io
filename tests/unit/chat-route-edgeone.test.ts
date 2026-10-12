@@ -126,3 +126,28 @@ describe("EdgeOne endpoints", () => {
         )
     })
 })
+
+describe("the EdgeOne endpoint's origin", () => {
+    it("takes the browser's Origin for the host the request was addressed to", async () => {
+        vi.stubEnv("AI_PROVIDER", "edgeone")
+        vi.stubEnv("AI_MODEL", "@tx/deepseek-ai/deepseek-v3-0324")
+        // Behind a proxy the request URL is internal; Origin names the site
+        await send({ origin: "https://draw.example", host: "draw.example" })
+        expect(calls[0]?.url).toBe(
+            "https://draw.example/api/edgeai/chat/completions",
+        )
+    })
+
+    it("ignores another site's Origin, so the cookies stay on this site", async () => {
+        vi.stubEnv("AI_PROVIDER", "edgeone")
+        vi.stubEnv("AI_MODEL", "@tx/deepseek-ai/deepseek-v3-0324")
+        await send({
+            origin: "https://attacker.example",
+            host: "localhost",
+            cookie: "eo_token=t",
+        })
+        expect(calls[0]?.url).toBe(
+            "http://localhost/api/edgeai/chat/completions",
+        )
+    })
+})

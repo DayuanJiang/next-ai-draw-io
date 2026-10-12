@@ -179,6 +179,7 @@ describe("redirectGuardedFetch with the quota on", () => {
                 "x-api-key": "anthropic-key",
                 "x-goog-api-key": "google-key",
                 "api-key": "azure-key",
+                "x-access-code": "site-code",
                 "Content-Type": "application/json",
             },
         })
@@ -194,7 +195,12 @@ describe("redirectGuardedFetch with the quota on", () => {
         expect(sent(0).get("authorization")).toBe("Bearer user-key")
         expect(sent(1).get("authorization")).toBeNull()
         expect(sent(1).get("cookie")).toBeNull()
-        for (const name of ["x-api-key", "x-goog-api-key", "api-key"]) {
+        for (const name of [
+            "x-api-key",
+            "x-goog-api-key",
+            "api-key",
+            "x-access-code",
+        ]) {
             expect(sent(1).get(name)).toBeNull()
         }
         expect(sent(1).get("content-type")).toBe("application/json")
