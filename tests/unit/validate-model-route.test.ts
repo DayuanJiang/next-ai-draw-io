@@ -141,6 +141,24 @@ describe("POST /api/validate-model", () => {
         expect(data.valid).toBe(true)
         expect(data.warning).toMatch(/without calling a tool/)
     })
+
+    it("warns when the model calls a tool that does not exist", async () => {
+        // The SDK passes the call on, marked invalid
+        streamReply({
+            role: "assistant",
+            tool_calls: [
+                {
+                    index: 0,
+                    id: "call_1",
+                    type: "function",
+                    function: { name: "pong", arguments: "{}" },
+                },
+            ],
+        })
+        const data = await testGlm()
+        expect(data.valid).toBe(true)
+        expect(data.warning).toMatch(/without calling a tool/)
+    })
 })
 
 describe("chat requests to a client base URL", () => {

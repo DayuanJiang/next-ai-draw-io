@@ -199,13 +199,16 @@ export async function testModelConnection(
             tools: { ping: PING_TOOL },
             maxOutputTokens: 1024,
             maxRetries: 0,
-            abortSignal: AbortSignal.timeout(TEST_TIMEOUT_MS),
+            // Ends with the request: the user closed the dialog or the page
+            abortSignal: req.signal,
+            timeout: TEST_TIMEOUT_MS,
         })
         let calledTool = false
         let finishReason: string | undefined
         for await (const part of result.fullStream) {
             if (part.type === "error") throw part.error
-            // The timeout ends the stream with an abort part, not an error
+            // The timeout (or the request's end) ends the stream with an
+            // abort part, not an error
             if (part.type === "abort") {
                 const timeout = new Error(
                     `The model did not answer within ${TEST_TIMEOUT_MS / 1000} s.`,
@@ -213,7 +216,9 @@ export async function testModelConnection(
                 timeout.name = "TimeoutError"
                 throw timeout
             }
-            if (part.type === "tool-call") {
+            // A call of a tool that does not exist, or with unreadable
+            // input, arrives marked invalid: no proof of tool support
+            if (part.type === "tool-call" && !part.invalid) {
                 calledTool = true
                 break
             }

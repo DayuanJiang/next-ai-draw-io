@@ -1,6 +1,7 @@
 import { LangfuseClient } from "@langfuse/client"
 import { observe, updateActiveTrace } from "@langfuse/tracing"
 import * as api from "@opentelemetry/api"
+import type { TelemetrySettings } from "ai"
 import { randomUUID } from "crypto"
 
 // Singleton LangfuseClient instance for direct API calls
@@ -115,20 +116,23 @@ export function endTrace() {
     }
 }
 
-// Get telemetry config for streamText
+// Telemetry settings for streamText and generateText
 export function getTelemetryConfig(params: {
     sessionId?: string
     userId?: string
-}) {
+    /** Names the trace of a model call outside the chat's observe() span */
+    functionId?: string
+}): TelemetrySettings | undefined {
     if (!isLangfuseEnabled()) return undefined
 
     return {
         isEnabled: true,
+        functionId: params.functionId,
         recordInputs: true,
         recordOutputs: true,
         metadata: {
-            sessionId: params.sessionId,
-            userId: params.userId,
+            ...(params.sessionId && { sessionId: params.sessionId }),
+            ...(params.userId && { userId: params.userId }),
         },
     }
 }

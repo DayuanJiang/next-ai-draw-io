@@ -1,4 +1,4 @@
-import type { UIMessage } from "ai"
+import { isToolUIPart, type UIMessage } from "ai"
 import {
     AlertCircle,
     BookmarkPlus,
@@ -24,6 +24,7 @@ import { ValidationCard } from "@/components/chat/ValidationCard"
 import Image from "@/components/image-with-basepath"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
+import { noticeOf } from "@/lib/chat-message"
 import { useCopy } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
@@ -369,7 +370,7 @@ function AssistantMessage({
     parts.forEach((part, partIndex) => {
         if (part.type === "reasoning")
             blocks.push({ kind: "reasoning", index: partIndex, texts: [] })
-        else if (part.type?.startsWith("tool-"))
+        else if (isToolUIPart(part))
             blocks.push({ kind: "tool", index: partIndex, texts: [] })
         else if (part.type === "text") {
             const text = (part as { text: string }).text
@@ -568,9 +569,10 @@ export function MessageList() {
         }
     }, [messages])
 
-    const lastAssistantIndex = messages
-        .map((m) => m.role)
-        .lastIndexOf("assistant")
+    // A notice (a failed request) is an assistant message without an answer
+    const lastAssistantIndex = messages.findLastIndex(
+        (m) => m.role === "assistant" && !noticeOf(m),
+    )
     const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user")
 
     return (
@@ -579,6 +581,7 @@ export function MessageList() {
                 const isRestored = engine.loadedMessageIdsRef.current.has(
                     message.id,
                 )
+                const notice = noticeOf(message)
                 return (
                     <div
                         key={message.id}
@@ -590,33 +593,18 @@ export function MessageList() {
                                 index={index}
                                 isLast={index === lastUserIndex}
                             />
-                        ) : message.role === "assistant" ? (
-                            <AssistantMessage
-                                message={message}
-                                index={index}
-                                isLastMessage={index === messages.length - 1}
-                                isLastAssistant={index === lastAssistantIndex}
-                            />
-                        ) : (
+                        ) : notice ? (
                             <ErrorNotice
-                                text={getMessageTextContent(message)}
-                                openModelConfig={
-                                    !!(
-                                        message.metadata as
-                                            | { openModelConfig?: boolean }
-                                            | undefined
-                                    )?.openModelConfig
-                                }
-                                onOpenModelConfig={() => {
-                                    const { providerId } =
-                                        (message.metadata as
-                                            | { providerId?: string }
-                                            | undefined) ?? {}
+                                text={notice.text}
+                                openModelConfig={!!notice.openModelConfig}
+                                onOpenModelConfig={() =>
                                     openSettings(
                                         "models",
-                                        providerId ? { providerId } : "list",
+                                        notice.providerId
+                                            ? { providerId: notice.providerId }
+                                            : "list",
                                     )
-                                }}
+                                }
                                 onRetry={
                                     index === messages.length - 1 &&
                                     !engine.isBusy &&
@@ -624,6 +612,13 @@ export function MessageList() {
                                         ? engine.retryLastMessage
                                         : undefined
                                 }
+                            />
+                        ) : (
+                            <AssistantMessage
+                                message={message}
+                                index={index}
+                                isLastMessage={index === messages.length - 1}
+                                isLastAssistant={index === lastAssistantIndex}
                             />
                         )}
                     </div>

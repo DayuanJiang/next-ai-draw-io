@@ -2,12 +2,14 @@ import {
     APICallError,
     convertToModelMessages,
     InvalidToolInputError,
+    isFileUIPart,
+    isTextUIPart,
+    pruneMessages,
+    safeValidateUIMessages,
     stepCountIs,
     streamText,
 } from "ai"
 import { jsonrepair } from "jsonrepair"
-import path from "path"
-import { z } from "zod"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import {
     CACHE_POINT,
@@ -25,6 +27,8 @@ import {
     formatSelectionContext,
     validateFileParts,
 } from "@/lib/chat-helpers"
+import type { ChatUIMessage } from "@/lib/chat-message"
+import { chatTools } from "@/lib/chat-tools"
 import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import {
     checkAndIncrementRequest,
@@ -52,14 +56,6 @@ import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
-import {
-    getShapeLibrary,
-    SHAPE_LIBRARY_LIST,
-} from "@/packages/mcp-server/src/shape-library.ts"
-import {
-    STYLE_CLASS_EXAMPLE,
-    SWIMLANE_EXAMPLE,
-} from "@/packages/mcp-server/src/xml-examples.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -99,7 +95,19 @@ async function handleChatRequest(req: Request): Promise<Response> {
     if (accessDenied) return accessDenied
 
     const body = await req.json()
-    const { messages, xml, previousXml, sessionId } = body
+    // The messages in the SDK's UI shape. The route writes its own system
+    // messages, so none may come from the client.
+    const validated = await safeValidateUIMessages<ChatUIMessage>({
+        messages: body.messages,
+    })
+    if (!validated.success) {
+        return Response.json(
+            { error: validated.error.message },
+            { status: 400 },
+        )
+    }
+    const messages = validated.data.filter((m) => m.role !== "system")
+    const { xml, previousXml, sessionId } = body
     const customSystemMessage =
         typeof body.customSystemMessage === "string"
             ? body.customSystemMessage.slice(0, 5000)
@@ -118,9 +126,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Find the last USER message, not just the last message (which could be assistant in multi-step tool flows)
     const lastUserMessage = [...messages]
         .reverse()
-        .find((m: any) => m.role === "user")
-    const userInputText =
-        lastUserMessage?.parts?.find((p: any) => p.type === "text")?.text || ""
+        .find((m) => m.role === "user")
+    const userInputText = lastUserMessage?.parts.find(isTextUIPart)?.text || ""
 
     // Update Langfuse trace with input, session, and user
     setTraceInput({
@@ -318,9 +325,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         : systemMessage
 
     // Extract file parts (images) from the last user message
-    const fileParts =
-        lastUserMessage?.parts?.filter((part: any) => part.type === "file") ||
-        []
+    const fileParts = lastUserMessage?.parts.filter(isFileUIPart) ?? []
 
     // Note: we used to pre-emptively reject images for models we guessed were
     // text-only (by name matching). That heuristic misfired on newer models
@@ -333,12 +338,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
 ${userInputText}
 """`
 
-    // Convert UIMessages to ModelMessages and add system message. A tool
-    // call that never got its result (the user stopped while it ran) is
-    // left out: the SDK would refuse this and every later request of the
-    // chat (MissingToolResultsError)
-    const modelMessages = await convertToModelMessages(messages, {
-        ignoreIncompleteToolCalls: true,
+    // Convert UIMessages to ModelMessages. A tool call that never got its
+    // result (the user stopped while it ran) is left out: the SDK would
+    // refuse this and every later request of the chat
+    // (MissingToolResultsError). Messages left without content (a notice
+    // the chat shows is a data part, which the model never sees) are
+    // dropped: Bedrock rejects empty content.
+    const modelMessages = pruneMessages({
+        messages: await convertToModelMessages(messages, {
+            ignoreIncompleteToolCalls: true,
+        }),
     })
 
     // DEBUG_LLM_PAYLOAD=true logs the incoming message structure
@@ -349,17 +358,10 @@ ${userInputText}
         )
     }
 
-    // Filter out messages with empty content arrays (Bedrock API rejects these)
-    // This is a safety measure - ideally convertToModelMessages should handle all cases
-    let enhancedMessages = modelMessages.filter(
-        (msg: any) =>
-            msg.content && Array.isArray(msg.content) && msg.content.length > 0,
-    )
-
     // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
     // and their results. Bedrock API rejects messages where toolUse.input is not a valid
     // JSON object, and every provider rejects a tool result whose call is gone.
-    enhancedMessages = dropInvalidToolCalls(enhancedMessages)
+    let enhancedMessages = dropInvalidToolCalls(modelMessages)
 
     // DEBUG_LLM_PAYLOAD=true logs what is sent to the model
     if (DEBUG_LLM_PAYLOAD) {
@@ -471,13 +473,10 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
-    // Set by onAbort, which records the finished steps' tokens itself
-    let stopped = false
     const result = streamText({
         model,
-        // The system messages carry cache points, so they go in messages.
-        // A client's own system messages have string content and were
-        // dropped by the empty-content filter above.
+        // The system messages carry cache points, so they go in messages
+        // (the client's own system messages were dropped above)
         allowSystemInMessages: true,
         abortSignal: req.signal,
         // Must be sent: unset means the provider's own default, and Bedrock's is
@@ -524,166 +523,31 @@ IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on
         },
         messages: allMessages,
         ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
-        // Langfuse telemetry config (returns undefined if not configured)
-        ...(getTelemetryConfig({ sessionId: validSessionId, userId }) && {
-            experimental_telemetry: getTelemetryConfig({
-                sessionId: validSessionId,
-                userId,
-            }),
+        // Langfuse telemetry (undefined when not configured)
+        experimental_telemetry: getTelemetryConfig({
+            sessionId: validSessionId,
+            userId,
         }),
-        onFinish: ({ text, totalUsage }) => {
+        // The quota counts each step as it ends: a later step that fails or
+        // is stopped has still used these tokens (onFinish runs only for a
+        // completed answer). Awaited, so the write is done before the host
+        // may freeze the function after the answer ends.
+        onStepFinish: async ({ usage }) => {
+            if (countsQuota) {
+                await recordTokenUsage(userId, usage.totalTokens ?? 0)
+            }
+        },
+        onFinish: ({ text }) => {
             // AI SDK 6 telemetry auto-reports token usage on its spans
             setTraceOutput(text)
-
-            // Record token usage for server-side quota tracking (if enabled)
-            // Use totalUsage (cumulative across all steps) instead of usage (final step only)
-            // inputTokens already includes cache reads and writes in AI SDK 6
-            if (countsQuota && totalUsage && !stopped) {
-                const totalTokens =
-                    (totalUsage.inputTokens || 0) +
-                    (totalUsage.outputTokens || 0)
-                recordTokenUsage(userId, totalTokens)
-            }
         },
         // onFinish is skipped when the stream fails or is aborted, so end the trace here
         onError: ({ error }) => {
             console.error(error) // what AI SDK does without an onError
             endTrace()
         },
-        onAbort: ({ steps }) => {
-            stopped = true
-            endTrace()
-            // Stopped (or disconnected) after some steps finished: their
-            // tokens were used, or stopping every request after a costly
-            // first step would get around the token limits
-            if (countsQuota) {
-                const tokens = steps.reduce(
-                    (sum, step) =>
-                        sum +
-                        (step.usage.inputTokens || 0) +
-                        (step.usage.outputTokens || 0),
-                    0,
-                )
-                if (tokens > 0) recordTokenUsage(userId, tokens)
-            }
-        },
-        tools: {
-            // Client-side tool that will be executed on the client
-            display_diagram: {
-                description: `Display a diagram on draw.io. Pass ONLY the mxStyle definitions and the mxCell elements - wrapper tags and root cells are added automatically.
-
-VALIDATION RULES (XML will be rejected if violated):
-1. Generate ONLY mxStyle definitions and mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
-2. Do NOT include root cells (id="0" or id="1") - they are added automatically
-3. All mxCell elements must be siblings - never nested
-4. Every mxCell needs a unique id (start from "2")
-5. parent defaults to "1"; write parent="<container-id>" only for shapes inside a container
-6. Escape special chars in values: &lt; &gt; &amp; &quot;
-
-A shape is one self-closing mxCell with x, y, w and h; an edge is one with source and target (a cell with source or target is always an edge). vertex="1", edge="1", parent="1" and the mxGeometry element are added automatically. Write parent only for a shape inside a container, and an mxGeometry element only for edge waypoints or for a separate label cell placed on an edge: <mxCell id="9" value="yes" style="edgeLabel;" parent="<edge id>" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>. An edge's own text simply goes in its value.
-
-Example (generate ONLY this - no wrapper tags):
-${SWIMLANE_EXAMPLE}
-
-Styles: define a style used by several cells ONCE with <mxStyle name="..." value="..."/> before the cells and use the name in style like a CSS class; overrides after the name win. Name only styles that two or more cells share; names must not be draw.io's own style names (text, ellipse, rhombus, swimlane, label, image, blue, green, red, gray, yellow, orange, purple, pink). A definition applies to the call it is in. html=1 and whiteSpace=wrap are added automatically, never write them. Labels are HTML: use &lt;br&gt; for a line break, never \\n; a literal < or > is written &amp;lt; or &amp;gt;.
-${STYLE_CLASS_EXAMPLE}
-
-Notes:
-- For AWS diagrams, use **AWS 2025 icons**.
-- For animated connectors, add "flowAnimation=1" to edge style.
-`,
-                inputSchema: z.object({
-                    xml: z
-                        .string()
-                        .describe("XML string to be displayed on draw.io"),
-                }),
-            },
-            edit_diagram: {
-                description: `Edit the current diagram by ID-based operations (update/add/delete cells).
-
-Operations:
-- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.
-- add: Add a new cell. Provide cell_id (new unique id) and new_xml.
-- delete: Remove a cell. Cascade is automatic: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
-
-For update/add, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target), with its complete style (named styles are not available in edit_diagram).
-
-⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
-
-Example - Add a rectangle:
-{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
-
-Example - Delete container (children & edges auto-deleted):
-{"operations": [{"operation": "delete", "cell_id": "2"}]}`,
-                inputSchema: z.object({
-                    operations: z
-                        .array(
-                            z.object({
-                                operation: z
-                                    .enum(["update", "add", "delete"])
-                                    .describe(
-                                        "Operation to perform: add, update, or delete",
-                                    ),
-                                cell_id: z
-                                    .string()
-                                    .describe(
-                                        "The id of the mxCell. Must match the id attribute in new_xml.",
-                                    ),
-                                new_xml: z
-                                    .string()
-                                    .optional()
-                                    .describe(
-                                        "Complete mxCell XML element (required for update/add)",
-                                    ),
-                            }),
-                        )
-                        .describe("Array of operations to apply"),
-                }),
-            },
-            append_diagram: {
-                description: `Continue generating diagram XML when previous display_diagram output was truncated due to length limits.
-
-WHEN TO USE: Only call this tool after display_diagram was truncated (you'll see an error message about truncation).
-
-CRITICAL INSTRUCTIONS:
-1. Do NOT include any wrapper tags - just continue the mxCell elements
-2. Continue from EXACTLY where your previous output stopped
-3. Complete the remaining mxCell elements
-4. If still truncated, call append_diagram again with the next fragment
-
-Example: If previous output ended with '<mxCell id="x" style="rounded=1', continue with ';" x="40" y="40" w="120" h="60"/>' and complete the remaining elements.`,
-                inputSchema: z.object({
-                    xml: z
-                        .string()
-                        .describe(
-                            "Continuation XML fragment to append (NO wrapper tags)",
-                        ),
-                }),
-            },
-            get_shape_library: {
-                description: `Get draw.io shape/icon library documentation with style syntax and shape names.
-
-Available libraries:
-${SHAPE_LIBRARY_LIST}
-
-Call this tool to get shape names and usage syntax for a specific library.`,
-                inputSchema: z.object({
-                    library: z
-                        .string()
-                        .describe(
-                            "Library name (e.g., 'aws4', 'kubernetes', 'flowchart')",
-                        ),
-                }),
-                execute: async ({ library }) => {
-                    // Only known library names reach the file system
-                    const result = await getShapeLibrary(
-                        library,
-                        path.join(process.cwd(), "docs/shape-libraries"),
-                    )
-                    return result.ok ? result.text : result.error
-                },
-            },
-        },
+        onAbort: () => endTrace(),
+        tools: chatTools,
         ...(process.env.TEMPERATURE !== undefined && {
             temperature: parseFloat(process.env.TEMPERATURE),
         }),

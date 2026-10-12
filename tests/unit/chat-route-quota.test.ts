@@ -205,6 +205,21 @@ describe("request checks", () => {
         expect(await res.text()).toMatch(/Invalid AWS region/)
         expect(fetch).not.toHaveBeenCalled()
     })
+
+    it("refuses messages that are not UI messages", async () => {
+        const res = await chat(
+            new Request("http://localhost/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: [{ id: "u1", role: "user", text: "no parts" }],
+                    xml: "",
+                }),
+            }),
+        )
+        expect(res.status).toBe(400)
+        expect(fetch).not.toHaveBeenCalled()
+    })
 })
 
 describe("server model allowlist", () => {
