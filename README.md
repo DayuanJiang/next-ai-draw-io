@@ -92,6 +92,8 @@ Download the Windows, macOS or Linux installer from the [Releases page](https://
 
 ### In your AI agent (MCP)
 
+https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
+
 Through MCP (Model Context Protocol, the protocol AI agents use to call outside tools), Claude Desktop, Cursor, VS Code and others can draw draw.io diagrams directly. Add this to your client's MCP configuration:
 
 ```json
