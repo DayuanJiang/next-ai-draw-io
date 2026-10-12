@@ -22,13 +22,9 @@ import {
     loadAdminProviders,
 } from "@/lib/admin/providers"
 import { getEnvFallback } from "@/lib/admin/settings"
+import { PROVIDER_NAMES, PROVIDERS, type ProviderName } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
-import {
-    normalizeBaseUrl,
-    ollamaApiUrl,
-    PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/types/model-config"
+import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
 
 const AIHUBMIX_APP_CODE = "MSBS9675"
 
@@ -40,15 +36,9 @@ interface ModelConfig {
 }
 
 // Providers that only support a single system message
-export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
-    "minimax",
-    "glm",
-    "qwen",
-    "kimi",
-    "qiniu",
-    "novita",
-    "mimo",
-])
+export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>(
+    PROVIDER_NAMES.filter((p) => PROVIDERS[p].singleSystem),
+)
 
 /**
  * Normalize MiniMax base URL for AI SDK compatibility.
@@ -448,33 +438,16 @@ function buildProviderOptions(
     return Object.keys(options).length > 0 ? options : undefined
 }
 
-// Map of provider to required environment variable
-const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
-    bedrock: null, // AWS SDK auto-uses IAM role on AWS, or env vars locally
-    openai: "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    google: "GOOGLE_GENERATIVE_AI_API_KEY",
-    vertexai: "GOOGLE_VERTEX_API_KEY",
-    azure: "AZURE_API_KEY",
-    ollama: null, // No credentials needed for local Ollama
-    openrouter: "OPENROUTER_API_KEY",
-    aihubmix: "AIHUBMIX_API_KEY",
-    deepseek: "DEEPSEEK_API_KEY",
-    siliconflow: "SILICONFLOW_API_KEY",
-    sglang: "SGLANG_API_KEY",
-    gateway: "AI_GATEWAY_API_KEY",
-    edgeone: null, // No credentials needed - uses EdgeOne Edge AI
-    doubao: "DOUBAO_API_KEY",
-    modelscope: "MODELSCOPE_API_KEY",
-    glm: "GLM_API_KEY",
-    qwen: "QWEN_API_KEY",
-    qiniu: "QINIU_API_KEY",
-    kimi: "KIMI_API_KEY",
-    minimax: "MINIMAX_API_KEY",
-    novita: "NOVITA_API_KEY",
-    mimo: "MIMO_API_KEY",
-    atlascloud: "ATLASCLOUD_API_KEY",
-}
+// Map of provider to required environment variable. null where the server
+// needs no key of this kind: Bedrock (the AWS SDK uses an IAM role or the
+// AWS_* variables), local Ollama, EdgeOne (the site's own function)
+const PROVIDER_ENV_VARS = Object.fromEntries(
+    PROVIDER_NAMES.map((p) => {
+        const { credential, envPrefix, keyEnv } = PROVIDERS[p]
+        const required = credential === "apiKey" || credential === "vertexKey"
+        return [p, required ? (keyEnv ?? `${envPrefix}_API_KEY`) : null]
+    }),
+) as Record<ProviderName, string | null>
 
 /**
  * Auto-detect provider based on available API keys
@@ -593,17 +566,12 @@ function bedrockRuntimeUrl(region: string): string {
 
 /**
  * Providers whose SDK has the official endpoint built in. The others are
- * OpenAI-compatible APIs (or Anthropic) that are called at
- * PROVIDER_INFO.defaultBaseUrl unless a base URL is configured.
+ * OpenAI-compatible APIs (or Anthropic) that are called at the record's
+ * defaultBaseUrl unless a base URL is configured.
  */
-const SDK_KNOWS_ENDPOINT = new Set<ProviderName>([
-    "openai",
-    "google",
-    "azure",
-    "openrouter",
-    "gateway",
-    "deepseek",
-])
+const SDK_KNOWS_ENDPOINT = new Set<ProviderName>(
+    PROVIDER_NAMES.filter((p) => PROVIDERS[p].sdkKnowsEndpoint),
+)
 
 /** Where and how to call a provider, once credentials are resolved */
 interface Endpoint {
@@ -798,9 +766,9 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     let provider: ProviderName
     if (overrides?.provider) {
         // Validate client-provided provider
-        if (!Object.hasOwn(PROVIDER_INFO, overrides.provider)) {
+        if (!Object.hasOwn(PROVIDERS, overrides.provider)) {
             throw new Error(
-                `Invalid provider: ${overrides.provider}. Allowed providers: ${Object.keys(PROVIDER_INFO).join(", ")}`,
+                `Invalid provider: ${overrides.provider}. Allowed providers: ${Object.keys(PROVIDERS).join(", ")}`,
             )
         }
         provider = overrides.provider as ProviderName
@@ -834,9 +802,9 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             )
         }
     }
-    if (!Object.hasOwn(PROVIDER_INFO, provider)) {
+    if (!Object.hasOwn(PROVIDERS, provider)) {
         throw new Error(
-            `Unknown AI provider: ${provider}. Supported providers: ${Object.keys(PROVIDER_INFO).join(", ")}`,
+            `Unknown AI provider: ${provider}. Supported providers: ${Object.keys(PROVIDERS).join(", ")}`,
         )
     }
 
@@ -988,7 +956,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             const baseURL =
                 overrides?.baseUrl ||
                 (overrides?.apiKey
-                    ? PROVIDER_INFO.ollama.defaultBaseUrl
+                    ? PROVIDERS.ollama.defaultBaseUrl
                     : resolveBaseUrlEnv(overrides, "OLLAMA_BASE_URL"))
             model = createOllama({
                 ...(baseURL && { baseURL: ollamaApiUrl(baseURL) }),
@@ -1027,7 +995,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             // form; the server must not call its own machine for it. With a
             // user's key the OpenAI SDK would read the server's
             // OPENAI_BASE_URL, so name the official endpoint.
-            const defaultUrl = PROVIDER_INFO[provider].defaultBaseUrl
+            const defaultUrl = PROVIDERS[provider].defaultBaseUrl
             const publicDefault = defaultUrl?.startsWith("https://")
                 ? defaultUrl
                 : undefined
@@ -1050,7 +1018,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                     (provider === "azure" && overrides?.apiKey))
             ) {
                 throw new Error(
-                    `${PROVIDER_INFO[provider].label} needs a base URL. Add it in the model settings.`,
+                    `${PROVIDERS[provider].label} needs a base URL. Add it in the model settings.`,
                 )
             }
             model = createModel(provider, modelId, {

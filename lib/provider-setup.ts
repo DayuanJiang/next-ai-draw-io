@@ -2,49 +2,28 @@
 // picker, and how far a provider's setup has come
 
 import {
+    PROVIDER_NAMES,
+    PROVIDERS,
+    type ProviderGroup as ProviderGroupId,
+} from "@/lib/providers"
+import {
     PROVIDER_INFO,
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
 
-export type ProviderGroupId = "vendors" | "aggregators" | "cloud" | "selfHosted"
+export type { ProviderGroupId }
 
-/** The provider picker's groups, each provider in exactly one */
+/** The provider picker's groups, each provider in exactly one, in record order */
 export const PROVIDER_GROUPS: {
     id: ProviderGroupId
     providers: ProviderName[]
-}[] = [
-    {
-        id: "vendors",
-        providers: [
-            "openai",
-            "anthropic",
-            "google",
-            "deepseek",
-            "qwen",
-            "doubao",
-            "glm",
-            "kimi",
-            "minimax",
-            "mimo",
-        ],
-    },
-    {
-        id: "aggregators",
-        providers: [
-            "openrouter",
-            "aihubmix",
-            "siliconflow",
-            "modelscope",
-            "novita",
-            "atlascloud",
-            "qiniu",
-            "gateway",
-        ],
-    },
-    { id: "cloud", providers: ["bedrock", "vertexai", "azure", "edgeone"] },
-    { id: "selfHosted", providers: ["ollama", "sglang"] },
-]
+}[] = (["vendors", "aggregators", "cloud", "selfHosted"] as const).map(
+    (id) => ({
+        id,
+        providers: PROVIDER_NAMES.filter((p) => PROVIDERS[p].group === id),
+    }),
+)
 
 /** Shown when the user has no provider yet */
 export const POPULAR_PROVIDERS: ProviderName[] = [
@@ -71,13 +50,9 @@ export const PROVIDER_NOTE_KEYS: Partial<Record<ProviderName, string>> = {
  * an example; Ollama's is its cloud, SGLang's a local server) or comes with
  * a hint (MiniMax, MiMo): their folded options start open
  */
-export const OPTIONS_OPEN: ProviderName[] = [
-    "azure",
-    "ollama",
-    "sglang",
-    "minimax",
-    "mimo",
-]
+export const OPTIONS_OPEN: ProviderName[] = PROVIDER_NAMES.filter(
+    (p) => PROVIDERS[p].optionsOpen,
+)
 
 /** The groups with only the providers whose name matches the search */
 export function filterProviderGroups(query: string) {

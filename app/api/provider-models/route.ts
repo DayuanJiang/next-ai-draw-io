@@ -6,22 +6,20 @@ import {
     listProviderModels,
     ModelListError,
 } from "@/lib/provider-models"
+import { PROVIDER_NAMES, PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     allowPrivateUrls,
     isPrivateUrl,
     RedirectRefusedError,
     redirectGuardedFetch,
 } from "@/lib/ssrf-protection"
-import type { ProviderName } from "@/lib/types/model-config"
 
 export const runtime = "nodejs"
 
 // Public lists need no key
-const NO_KEY_NEEDED = new Set<ProviderName>([
-    "ollama",
-    "openrouter",
-    "aihubmix",
-])
+const NO_KEY_NEEDED = new Set<ProviderName>(
+    PROVIDER_NAMES.filter((p) => PROVIDERS[p].listNeedsNoKey),
+)
 
 /**
  * The models a provider offers, for the "Fetch models" button in model
