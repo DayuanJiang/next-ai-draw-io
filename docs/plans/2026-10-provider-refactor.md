@@ -723,3 +723,20 @@ Docker：.github/workflows/docker-build.yml 在每个 PR 上已经构建 standal
 上一版修订经过一轮多模型评审：五位评审者在五个模型上审阅了本方案，34 条合并后的发现逐条对照代码核实，其中 15 条确认、17 条部分确认、2 条推翻。该修订应用了确认和部分确认的发现，待决问题下的"评审者建议"句子来自同一轮评审。
 
 本次修订把方案核对到 main 的提交 99ced88：死代码清理（#986）删除了 Electron 的 provider 表和界面配置的旧格式迁移，把连接测试搬进 lib/test-model-connection.ts，并重写了模型选择器；AI SDK 用法修正（#987）改写了 chat 路由。文中每个行号、每个计数都按这两次改动之后的文件重新核对。同时写入了所有者的五项决定：推荐模型列表按能否在线列模型分两类处理（18 家在线拉取，6 家的短列表进记录）；层外的 provider 名判断改读 credential 和 sdk 字段，只保留管理面板的三家固定变量分支；Azure 去掉占位默认地址，落入通用的"无默认地址必须填地址"规则；服务商专属的 8 条文案以四语对象进记录，字典只留通用文案；env.example 继续手写并由测试保证同步。待决问题去掉了 Electron 和推荐列表位置两条，其余重新编号并各补一句本方案的建议。
+
+## 实施记录（2026-10-12）
+
+分支 provider-refactor 在本文档的三次提交之上实施了第 0 步到第 8 步，共 10 个提交，每步一个（第 4 步拆成 4a 加 4b、快照扩充、4c 三个）。第 9 步按待决问题 4 的建议维持现状，没有做。所有者在实施前决定：推荐列表按 B 处理，层外的名字判断改读字段，Azure 去掉占位地址，服务商文案进记录，env.example 继续手写，custom 预设一并做。
+
+与上文方案的差别，按步骤：
+
+1. 第 1 步没有单独提交。所有者已决定全部推广，三家样例和其余 21 家在同一个提交（第 2 步）里进入记录。
+2. 第 2 步的 Azure 记录暂时保留了占位地址，第 5 步连同 hasCredentials、对话框文案和 e2e 一起去掉，这样第 2 步的行为完全不变。方案原本写在第 2 步的 fixture 里列为例外。
+3. 第 0 步的 9 种环境里，第 9 种"ALLOW_PRIVATE_URLS=false"换成"全部服务器变量同时设置"：守卫 fetch 已经 mock 成哨兵，前者没有可观察效果。第 4c 步之前给矩阵补了第 16 种形状（带 key 的私网地址），记录 usesServerEndpoint 对服务器网络的回答，新增 252 行，旧行不变。快照最终 4277 行。
+4. 第 4a 步的差分测试只比对 keySource（30720 个组合），guarded 和 configuredBaseURL 的正确性由第 4b 步"快照不变"证明，没有另写断言；第 4c 步后差分文件 tests/unit/provider-legacy.test.ts 删除。
+5. 第 5 步连带把 isClientOverride 里的 vertexai 名字判断改读 credential；方案的清单漏了这一处。字典里 8 个服务商专属 key 删除后，记录文案与旧字典逐字相同的核对在第 5 步的 providers.test.ts 里用冻结的旧文案完成，第 6 步随 fixture 一起删除。
+6. 第 7 步自动拉取的触发条件比方案窄：只在服务商页面打开期间填入凭据、且该服务商还没有模型时拉取一次（输入停顿 600 毫秒后），结果到达时打开选择器；打开页面时已有的凭据不触发，有模型的服务商由"获取全部模型"按钮拉取。原因是无条件拉取会让多条现有 e2e 用例多出一次请求并改变它们的断言。方案列出的 tests/unit/model-config-dialog.test.tsx 没有写，三种行为由 e2e 覆盖（首个服务商流程、空列表再拉取、custom 预设）。
+7. `[API Key Routing]` 日志移到 getAIModel 后只记录选中的变量名，不再记录候选数量。
+8. 行数：lib/ai-providers.ts 1305、lib/types/model-config.ts 180、lib/provider-setup.ts 85、lib/provider-models.ts 251、lib/admin/providers.ts 306、lib/providers.ts 559，合计 2686 行，改动前 2594 行。方案估计约 2430。多出的部分是记录字段的注释（ProviderDef 的 20 个字段各有说明）、resolveEndpoint 里保留的安全规则说明、custom 记录和 Azure 的地址提示。本方案的收益在改动面和单点决策，行数上没有收益，这一点与第 7 节的说明一致。
+
+核对结果：单元测试 66 个文件 749 个用例全部通过（含 tests/unit/canvas-import-boundary.test.ts，它在 worktree 里安装 node_modules 后才能通过）；`tsc --noEmit` 无错；`biome ci` 无错误，37 条警告全部在未改动的文件里；e2e 五个文件 65 个用例通过（settings-providers 27、settings-bedrock 8、provider-models 20、model-test 2、settings-tabs-sync 8），其中"the provider list shows what needs attention"在并行运行时超时一次，单独运行通过。层外按 provider 名的判断剩 6 处，全部在 lib/admin/providers.ts 的 deriveEnvUpdates 和 derivedEnvKeys 里。真实 key 的检查（第 5.6 节）没有做：这台机器上只有 Bedrock 的 AWS 凭据，重构前已用它跑通过 GPT-6 Luna 和 Claude Haiku 4.5 两次连接测试，重构后待所有者按清单验收。
