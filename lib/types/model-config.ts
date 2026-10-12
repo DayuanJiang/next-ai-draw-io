@@ -2,12 +2,7 @@
 
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 
-// The provider record, under the name the rest of the app imports it by
-export {
-    type ModelListStyle,
-    PROVIDERS as PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/providers"
+export type { ProviderName } from "@/lib/providers"
 
 // Individual model configuration
 export interface ModelConfig {

@@ -147,7 +147,7 @@ Or use a custom endpoint instead of resource name:
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com  # Alternative to AZURE_RESOURCE_NAME
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # Alternative to AZURE_RESOURCE_NAME
 AI_MODEL=your-deployment-name
 ```
 
@@ -357,7 +357,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
 ```
 
 ## Server-Side Multi-Model Configuration
@@ -481,3 +481,4 @@ Every fact about a provider lives in one record in `lib/providers.ts`: which AI 
     A provider that needs a hint under its base URL field, or a note in the picker, gets a `baseUrlHint` or `note` object with all four UI languages (`en`, `zh`, `ja`, `zh-Hant`). Providers that cannot list their models online keep a short `models` list instead of `modelList`.
 2. Add `ACME_API_KEY` and `ACME_BASE_URL` to `env.example` (a unit test checks that every record's variables appear there).
 3. Add a section for it to this document in `docs/en`, `docs/cn` and `docs/ja`.
+4. Add it to the two lists at the top of `tests/unit/provider-matrix.test.ts` (`MATRIX_PROVIDERS` and `MATRIX_MODEL_IDS`) and regenerate the behavior snapshot with `npx vitest run tests/unit/provider-matrix.test.ts -u`; the new rows are the provider's, the existing rows must not change. `tests/unit/providers.test.ts` spells out the picker's groups and the provider sets that change what the server does (auto-detection, single system message), so add it there too. The provider count in the three READMEs and the `AI_PROVIDER` list in this document change as well.

@@ -132,7 +132,7 @@ AI_MODEL=your-deployment-name
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com  # AZURE_RESOURCE_NAME の代替
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME の代替
 AI_MODEL=your-deployment-name
 ```
 
@@ -342,7 +342,7 @@ AI_MODEL=your_model_id
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
 ```
 
 ## サーバーサイドマルチモデル設定
@@ -466,3 +466,4 @@ TEMPERATURE=0  # より決定論的な出力（ダイアグラムに推奨）
     ベース URL 欄の下にヒントを表示したい、またはピッカーに注記を表示したいプロバイダーには、4 つの UI 言語（`en`、`zh`、`ja`、`zh-Hant`）をすべて含む `baseUrlHint` または `note` オブジェクトを追加します。モデル一覧をオンラインで取得できないプロバイダーは、`modelList` の代わりに短い `models` リストを持ちます。
 2. `env.example` に `ACME_API_KEY` と `ACME_BASE_URL` を追加します（各レコードの変数名がそこに現れることをユニットテストが確認します）。
 3. `docs/en`、`docs/cn`、`docs/ja` のこのドキュメントにセクションを追加します。
+4. `tests/unit/provider-matrix.test.ts` 先頭の 2 つのリスト（`MATRIX_PROVIDERS` と `MATRIX_MODEL_IDS`）に追加し、`npx vitest run tests/unit/provider-matrix.test.ts -u` で動作スナップショットを再生成します。追加される行はこのプロバイダーのものだけで、既存の行は変わってはいけません。`tests/unit/providers.test.ts` にはピッカーのグループと、サーバーの動作を変えるプロバイダーの集合（自動検出、system メッセージが 1 つだけ）が書き出されているので、そこにも追加します。3 つの README のプロバイダー数と、このドキュメントの `AI_PROVIDER` の選択肢一覧も更新します。

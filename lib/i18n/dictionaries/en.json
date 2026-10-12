@@ -298,6 +298,7 @@
         "mayNotDraw": "models.dev lists no tool call support for this model, so it may not be able to draw.",
         "requestUrl": "Requests go to {url}",
         "baseUrlWithExample": "Base URL (optional, e.g. {example})",
+        "baseUrlRequired": "Base URL (required)",
         "customEndpoint": "Custom endpoint URL",
         "models": "Models",
         "customModelId": "Custom model ID...",

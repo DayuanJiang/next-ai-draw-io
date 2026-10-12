@@ -3,8 +3,9 @@
  * of client override and every server environment it records what
  * getAIModel hands to the SDK factory (or the error it throws) together with
  * the answers of usesServerCredentials, usesServerEndpoint, globalBaseUrl
- * and chatRequestUrl. Each refactor step must leave the snapshot file
- * unchanged; a diff names the provider and the scenario whose behavior moved.
+ * and chatRequestUrl. A change to the provider layer must leave the
+ * existing rows unchanged (a new provider only adds rows); a diff names the
+ * provider and the scenario whose behavior moved.
  *
  * Every SDK factory is mocked to return a plain description of its options.
  * redirectGuardedFetch returns a sentinel, so the snapshot shows whether
@@ -22,12 +23,8 @@ import {
     usesServerCredentials,
     usesServerEndpoint,
 } from "@/lib/ai-providers"
-import {
-    chatRequestUrl,
-    normalizeBaseUrl,
-    PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/types/model-config"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
+import { chatRequestUrl, normalizeBaseUrl } from "@/lib/types/model-config"
 
 const hoisted = vi.hoisted(() => {
     /** An SDK factory whose models describe the factory call that made them */
@@ -130,8 +127,9 @@ vi.mock("ollama-ai-provider-v2", () => ({
 }))
 
 /**
- * The providers in the order of today's ProviderName union. Written out so
- * the snapshot's row order does not follow the order of the provider record.
+ * The providers in the order they had before the record existed, then the
+ * ones added since. Written out so the snapshot's row order does not follow
+ * the order of the provider record.
  */
 const MATRIX_PROVIDERS: ProviderName[] = [
     "openai",
@@ -161,7 +159,7 @@ const MATRIX_PROVIDERS: ProviderName[] = [
     "custom",
 ]
 
-/** The model id each provider runs in the matrix (the first suggested one) */
+/** The model id each provider runs in the matrix (the first of its former suggested list, or test-model) */
 const MATRIX_MODEL_IDS: Record<ProviderName, string> = {
     openai: "gpt-6.1-sol",
     anthropic: "claude-opus-5-5",
@@ -269,7 +267,7 @@ const ENVIRONMENTS: Record<string, (p: ProviderName) => Env> = {
 const CLIENT_URL = "https://u.example/v1"
 const CLIENT_KEY = "client-key"
 
-/** Sixteen shapes of client override; some need variables of their own */
+/** Twenty-two shapes of client override; some need variables of their own */
 const SHAPES: Record<
     string,
     { overrides: Omit<ClientOverrides, "provider" | "modelId">; env?: Env }
@@ -324,6 +322,40 @@ const SHAPES: Record<
     keyAndPrivateUrl: {
         overrides: { apiKey: CLIENT_KEY, baseUrl: "http://10.0.0.5:8000/v1" },
     },
+    // The Vertex key alone goes to the official endpoint
+    vertexKeyOnly: { overrides: { vertexApiKey: "client-vertex-key" } },
+    // Temporary AWS credentials carry a session token
+    awsPairWithSession: {
+        overrides: {
+            awsAccessKeyId: "client-id",
+            awsSecretAccessKey: "client-secret",
+            awsSessionToken: "client-session",
+            awsRegion: "ap-northeast-1",
+        },
+    },
+    // The site's cookies and access code, as the routes pass them for EdgeOne
+    headersAndUrl: {
+        overrides: {
+            baseUrl: CLIENT_URL,
+            headers: { cookie: "eo_token=t", "x-access-code": "code" },
+        },
+    },
+    // The admin panel's Test of an entry with a key and the server's own URL
+    trustedUrlAndKey: {
+        overrides: {
+            apiKey: CLIENT_KEY,
+            baseUrl: CLIENT_URL,
+            trustedBaseUrl: true,
+        },
+    },
+    // A user's key with a server model's own URL variable: the key must not
+    // go to that URL
+    keyAndUrlEnv: {
+        overrides: { apiKey: CLIENT_KEY, baseUrlEnv: "CUSTOM_URL" },
+        env: { CUSTOM_URL: "https://custom-env.example/v1" },
+    },
+    // "/" alone cleans up to no URL at all
+    slashOnly: { overrides: { baseUrl: "/" } },
 }
 
 /** The shapes that carry a client URL, for the MiniMax /anthropic probe */
@@ -421,7 +453,7 @@ async function matrix(
 // Variables the layer reads, cleared before the matrix runs so the
 // machine's own environment cannot reach the snapshot
 const AMBIENT =
-    /_API_KEY|_BASE_URL|_RESOURCE_NAME|_AUTH_TOKEN|_REASONING_|_THINKING_|^AWS_|^ADMIN_|^AI_|^GOOGLE_TOP_|^OLLAMA_|^NEXT_AI_DRAWIO_DESKTOP$|^ALLOW_PRIVATE_URLS$|^DYNAMODB_QUOTA_TABLE$|^VALIDATION_MODEL$/
+    /_API_KEY|_BASE_URL|_RESOURCE_NAME|_AUTH_TOKEN|_REASONING_|_THINKING_|^AWS_|^ADMIN_|^AI_|^GOOGLE_TOP_|^OLLAMA_|^NEXT_AI_DRAWIO_DESKTOP$|^ALLOW_PRIVATE_URLS$|^DYNAMODB_QUOTA_TABLE$|^VALIDATION_MODEL$|^CUSTOM_KEY|^CUSTOM_URL$|^KEY_[ABC]$/
 const saved: Record<string, string | undefined> = {}
 
 beforeAll(() => {
@@ -446,12 +478,12 @@ afterAll(() => {
 describe("provider behavior snapshot", () => {
     it("covers every provider", () => {
         expect([...MATRIX_PROVIDERS].sort()).toEqual(
-            Object.keys(PROVIDER_INFO).sort(),
+            Object.keys(PROVIDERS).sort(),
         )
     })
 
     it("matches the recorded behavior", async () => {
-        // The matrix: 25 providers, 16 shapes, 9 environments
+        // The matrix: 25 providers, 22 shapes, 9 environments
         for (const provider of MATRIX_PROVIDERS) {
             await matrix(provider, MATRIX_MODEL_IDS[provider])
         }

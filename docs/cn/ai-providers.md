@@ -132,7 +132,7 @@ AI_MODEL=your-deployment-name
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com  # AZURE_RESOURCE_NAME 的替代方案
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME 的替代方案
 AI_MODEL=your-deployment-name
 ```
 
@@ -325,7 +325,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 
 ### 任何 OpenAI 兼容接口（custom）
 
-上面没有列出的服务（vLLM、LM Studio、LiteLLM、API 网关），在设置里选择 **OpenAI-compatible**，填入它的地址和 key；服务端不校验 key 时填任意非空内容即可。多条 system 消息会合并成一条（开源模型的对话模板通常要求这样），`<think>` 里的推理内容会从回复里分离出来。
+上面没有列出的服务（vLLM、LM Studio、LiteLLM、API 网关），在设置里选择 **OpenAI-compatible**，填入它的地址和 Key；服务端不校验 key 时填任意非空内容即可。多条 system 消息会合并成一条（开源模型的对话模板通常要求这样），`<think>` 里的推理内容会从回复里分离出来。
 
 ```bash
 CUSTOM_API_KEY=your_api_key
@@ -342,7 +342,7 @@ AI_MODEL=your_model_id
 如果您配置了**多个** API 密钥，则必须显式设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
 ```
 
 ## 服务端多模型配置
@@ -466,3 +466,4 @@ TEMPERATURE=0  # 输出更具确定性（推荐用于图表）
     需要在地址输入框下方显示提示，或在选择器里显示说明的服务商，在记录里加 `baseUrlHint` 或 `note` 对象，四种界面语言（`en`、`zh`、`ja`、`zh-Hant`）都要写。不能在线列出模型的服务商不写 `modelList`，改写一个短的 `models` 列表。
 2. 在 `env.example` 里加上 `ACME_API_KEY` 和 `ACME_BASE_URL`（有一个单元测试检查每条记录的变量名都出现在里面）。
 3. 在 `docs/en`、`docs/cn`、`docs/ja` 的本文档里各加一节说明。
+4. 把它加进 `tests/unit/provider-matrix.test.ts` 开头的两个清单（`MATRIX_PROVIDERS` 和 `MATRIX_MODEL_IDS`），用 `npx vitest run tests/unit/provider-matrix.test.ts -u` 重新生成行为快照；新增的行都属于这家服务商，已有的行不能变。`tests/unit/providers.test.ts` 写明了选择器的分组和会改变服务端行为的服务商集合（自动检测、只接受一条 system 消息），也要加进去。三份 README 里的服务商数量和本文档的 `AI_PROVIDER` 可选值清单同样要改。

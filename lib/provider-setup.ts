@@ -8,8 +8,6 @@ import {
 } from "@/lib/providers"
 import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 
-export type { ProviderGroupId }
-
 /** The provider picker's groups, each provider in exactly one, in record order */
 export const PROVIDER_GROUPS: {
     id: ProviderGroupId
@@ -44,6 +42,8 @@ export function filterProviderGroups(query: string) {
     })).filter((group) => group.providers.length > 0)
 }
 
+const LEGACY_AZURE_PLACEHOLDER = "https://your-resource.openai.azure.com/openai"
+
 /** The credentials a test or a chat request needs are filled in */
 export function hasCredentials(p: ProviderConfig): boolean {
     const def = PROVIDERS[p.provider]
@@ -59,10 +59,15 @@ export function hasCredentials(p: ProviderConfig): boolean {
         case "none":
         case "optionalKey":
             return true
-        case "apiKey":
-            // Without a default URL in the record (Azure) the user's own is
-            // part of the credentials
-            return !!p.apiKey && (!!def.defaultBaseUrl || !!p.baseUrl)
+        case "apiKey": {
+            // Without a default URL in the record (Azure, custom) the user's
+            // own is part of the credentials. Entries saved while Azure still
+            // had a placeholder default hold that placeholder; it names no
+            // real resource
+            const baseUrl =
+                p.baseUrl === LEGACY_AZURE_PLACEHOLDER ? "" : p.baseUrl
+            return !!p.apiKey && (!!def.defaultBaseUrl || !!baseUrl)
+        }
     }
 }
 

@@ -55,7 +55,7 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { ListedModel } from "@/lib/provider-models"
 import { hasCredentials } from "@/lib/provider-setup"
-import { PROVIDERS } from "@/lib/providers"
+import { PROVIDERS, publicDefaultUrl } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type {
     ModelConfig,
@@ -306,13 +306,30 @@ export function ModelConfigDialog({
         model_not_found: t.modelNotFound,
     })
 
-    const handleFetchModels = async () => {
+    // Requests in flight, by provider id: a second request for the same
+    // provider (the button clicked while the automatic fetch runs, or the
+    // reverse) is not sent
+    const inFlight = useRef(new Set<string>())
+    // The credentials each provider's automatic fetch ran with, or was
+    // overtaken by a click with: one automatic fetch per set of credentials
+    const autoFetched = useRef<Record<string, string>>({})
+
+    /**
+     * Fetch the shown provider's model list. A click opens the picker with
+     * the result and shows what went wrong; the automatic fetch after
+     * credentials were entered (auto) only fills the list, so it never
+     * takes the focus or flashes an error while the user is still typing.
+     */
+    const handleFetchModels = async (auto = false) => {
         if (!selectedProvider) return
         const providerId = selectedProvider.id
+        if (inFlight.current.has(providerId)) return
         const askedWith = credentialsOf(providerId)
+        autoFetched.current[providerId] = askedWith
         const hints = errorHints(selectedProvider)
+        inFlight.current.add(providerId)
         setFetchingFor((current) => [...current, providerId])
-        setFetchModelsError("")
+        if (!auto) setFetchModelsError("")
         try {
             const response = await fetch(
                 getApiEndpoint("/api/provider-models"),
@@ -339,11 +356,11 @@ export function ModelConfigDialog({
                     ...current,
                     [providerId]: { askedWith, models: data.models },
                 }))
-                if (!stillShown) return
+                if (!stillShown || auto) return
                 if (data.models.length > 0) setModelPickerOpen(true)
                 else setFetchModelsError(t.noModelsReturned)
             } else {
-                if (!stillShown) return
+                if (!stillShown || auto) return
                 setFetchModelsError(
                     [hints[data.code], data.error].filter(Boolean).join(" ") ||
                         formatMessage(t.requestFailed, {
@@ -353,12 +370,14 @@ export function ModelConfigDialog({
             }
         } catch {
             if (
+                !auto &&
                 selectedProviderIdRef.current === providerId &&
                 credentialsOf(providerId) === askedWith
             ) {
                 setFetchModelsError(dict.errors.networkError)
             }
         } finally {
+            inFlight.current.delete(providerId)
             setFetchingFor((current) =>
                 current.filter((id) => id !== providerId),
             )
@@ -406,23 +425,33 @@ export function ModelConfigDialog({
         .slice(0, 4)
 
     // A provider that can list its models gets its list fetched by itself,
-    // once, for credentials entered on its page while it has no model yet:
-    // the user picks from the list instead of a hand-written one. Credentials
-    // a provider already had when its page opened fetch nothing (the button
-    // does), nor does a provider with models.
+    // once, for credentials entered on its page while it has no model yet,
+    // so "Browse models" offers the provider's own list instead of a
+    // hand-written one. Credentials a provider already had when its page
+    // opened fetch nothing (the button does), nor does a provider with
+    // models, nor a local example URL still in the field (SGLang's).
     const shownWith = useRef<{ id: string; credentials: string } | null>(null)
-    const autoFetched = useRef<Record<string, string>>({})
     useEffect(() => {
-        if (!open || !selectedProvider) return
+        if (!open || !selectedProvider) {
+            // The baseline belongs to one visit of one provider's page
+            shownWith.current = null
+            return
+        }
         const id = selectedProvider.id
         const now = credentialsOf(id)
         if (shownWith.current?.id !== id) {
             shownWith.current = { id, credentials: now }
         }
+        const def = PROVIDERS[selectedProvider.provider]
+        const localExample =
+            !!selectedProvider.baseUrl &&
+            selectedProvider.baseUrl === def.defaultBaseUrl &&
+            !publicDefaultUrl(selectedProvider.provider)
         if (
-            !PROVIDERS[selectedProvider.provider].modelList ||
+            !def.modelList ||
             selectedProvider.models.length > 0 ||
             !hasCredentials(selectedProvider) ||
+            localExample ||
             now === shownWith.current.credentials ||
             autoFetched.current[id] === now
         ) {
@@ -430,8 +459,8 @@ export function ModelConfigDialog({
         }
         // Once the typing or pasting pauses
         const timer = setTimeout(() => {
-            autoFetched.current[id] = now
-            void handleFetchModels()
+            if (autoFetched.current[id] === now) return
+            void handleFetchModels(true)
         }, 600)
         return () => clearTimeout(timer)
     }, [open, selectedProvider])
@@ -1064,7 +1093,7 @@ export function ModelConfigDialog({
                                 def.modelList && (
                                     <button
                                         type="button"
-                                        onClick={handleFetchModels}
+                                        onClick={() => handleFetchModels()}
                                         disabled={fetchingFor.includes(
                                             provider.id,
                                         )}

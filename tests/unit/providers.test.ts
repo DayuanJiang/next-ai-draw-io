@@ -12,7 +12,6 @@ import { envVarsOf } from "@/lib/ai-providers"
 import { i18n } from "@/lib/i18n/config"
 import { POPULAR_PROVIDERS, PROVIDER_GROUPS } from "@/lib/provider-setup"
 import { PROVIDER_NAMES, PROVIDERS, publicDefaultUrl } from "@/lib/providers"
-import { PROVIDER_INFO } from "@/lib/types/model-config"
 
 vi.mock("@/lib/admin/settings", () => ({
     loadSettings: () => ({}),
@@ -22,22 +21,82 @@ vi.mock("@/lib/admin/settings", () => ({
 const sorted = (list: Iterable<string>) => [...list].sort()
 
 describe("the provider record", () => {
-    it("is what the rest of the app imports as PROVIDER_INFO", () => {
-        expect(PROVIDER_INFO).toBe(PROVIDERS)
-        expect(PROVIDER_NAMES).toHaveLength(25)
-    })
+    // The fields that change what the server does are spelled out here, so
+    // a slip in one record fails a test instead of changing a request
+    const withField = (
+        field: "singleSystem" | "listNeedsNoKey" | "sdkKnowsEndpoint",
+    ) => sorted(PROVIDER_NAMES.filter((p) => PROVIDERS[p][field]))
 
-    it("has 22 providers taking part in server key auto-detection", () => {
+    it("lets the server auto-detect exactly the providers that need a key", () => {
         // credential apiKey or vertexKey: the providers whose <P>_API_KEY the
         // server must have; aws, optionalKey and none need no key
         const detected = PROVIDER_NAMES.filter((p) =>
             ["apiKey", "vertexKey"].includes(PROVIDERS[p].credential),
         )
-        expect(detected).toHaveLength(22)
+        expect(sorted(detected)).toEqual(
+            sorted([
+                "openai",
+                "anthropic",
+                "google",
+                "deepseek",
+                "qwen",
+                "doubao",
+                "glm",
+                "kimi",
+                "minimax",
+                "mimo",
+                "openrouter",
+                "aihubmix",
+                "siliconflow",
+                "modelscope",
+                "novita",
+                "atlascloud",
+                "qiniu",
+                "gateway",
+                "vertexai",
+                "azure",
+                "sglang",
+                "custom",
+            ]),
+        )
         // Ollama has a key variable too, an optional one
         const withKeyVar = PROVIDER_NAMES.filter((p) => !!envVarsOf(p).apiKey)
         expect(sorted(detected)).toEqual(
             sorted(withKeyVar.filter((p) => p !== "ollama")),
+        )
+    })
+
+    it("merges system messages for the providers that reject several", () => {
+        expect(withField("singleSystem")).toEqual(
+            sorted([
+                "minimax",
+                "glm",
+                "qwen",
+                "kimi",
+                "qiniu",
+                "novita",
+                "mimo",
+                "custom",
+            ]),
+        )
+    })
+
+    it("lists models without a key for the providers with a public or local list", () => {
+        expect(withField("listNeedsNoKey")).toEqual(
+            sorted(["ollama", "openrouter", "aihubmix"]),
+        )
+    })
+
+    it("leaves the base URL to the SDKs that know their endpoint", () => {
+        expect(withField("sdkKnowsEndpoint")).toEqual(
+            sorted([
+                "openai",
+                "google",
+                "azure",
+                "openrouter",
+                "gateway",
+                "deepseek",
+            ]),
         )
     })
 
@@ -59,7 +118,7 @@ describe("the provider record", () => {
         expect(publicDefaultUrl("bedrock")).toBeUndefined()
     })
 
-    it("gives the no-key and fixed-credential providers no key variable to detect", () => {
+    it("gives the no-key providers no env prefix and limits fixed credentials to non-key kinds", () => {
         for (const p of PROVIDER_NAMES) {
             const { credential, envPrefix, fixedCredentials } = PROVIDERS[p]
             if (credential === "none") expect([p, envPrefix]).toEqual([p, null])

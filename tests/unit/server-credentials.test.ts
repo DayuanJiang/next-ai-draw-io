@@ -6,7 +6,8 @@
  * answer and every error text below.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { getAIModel, getServerProvider } from "@/lib/ai-providers"
+import { envVarsOf, getAIModel, getServerProvider } from "@/lib/ai-providers"
+import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
 
 vi.mock("@/lib/admin/settings", () => ({
     loadSettings: () => ({}),
@@ -22,21 +23,22 @@ vi.mock("@ai-sdk/azure", () => ({ createAzure: factory }))
 vi.mock("@ai-sdk/google-vertex", () => ({ createVertex: factory }))
 vi.mock("ollama-ai-provider-v2", () => ({ createOllama: factory }))
 
+// Every provider's key and URL variables, the alternative and resource
+// variables, and this file's own: the machine's environment must not reach
+// the checks under test
 const VARS = [
     "AI_PROVIDER",
     "AI_MODEL",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
-    "AZURE_API_KEY",
-    "AZURE_BASE_URL",
-    "AZURE_RESOURCE_NAME",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "GOOGLE_VERTEX_API_KEY",
-    "OLLAMA_API_KEY",
     "MY_KEY",
     "MY_KEY_2",
     "MY_URL",
+    ...PROVIDER_NAMES.flatMap((p) => {
+        const { apiKey, baseUrl } = envVarsOf(p)
+        const { altKeyEnv, resourceNameEnv } = PROVIDERS[p]
+        return [apiKey, baseUrl, altKeyEnv, resourceNameEnv].filter(
+            (name): name is string => !!name,
+        )
+    }),
 ]
 
 beforeEach(() => {

@@ -92,9 +92,13 @@ export function ProviderCredentialsFields({
     const dict = useDictionary()
     const locale = useLocale()
     const info = PROVIDERS[provider]
-    const baseUrlLabel = formatMessage(dict.modelConfig.baseUrlWithExample, {
-        example: info.defaultBaseUrl || "https://api.example.com/v1",
-    })
+    // A key-only provider without a default URL (Azure, custom) needs one
+    const baseUrlLabel =
+        info.credential === "apiKey" && !info.defaultBaseUrl
+            ? dict.modelConfig.baseUrlRequired
+            : formatMessage(dict.modelConfig.baseUrlWithExample, {
+                  example: info.defaultBaseUrl || "https://api.example.com/v1",
+              })
     const requestUrl = baseUrl ? chatRequestUrl(provider, baseUrl) : null
     // Open when it holds something the user set, or for a provider whose
     // base URL usually needs changing or comes with a hint

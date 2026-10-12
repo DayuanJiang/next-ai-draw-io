@@ -77,9 +77,15 @@ test("a first provider: pick it, fill in the key, test, use it", async ({
     await expect(testButton).toBeDisabled()
     await expect(dialog.getByText("Fill in the API key first.")).toBeVisible()
 
-    // The key is in: the list is fetched once and opens; pick a model
+    // The key is in: the list is fetched once by itself, without taking the
+    // focus; it is behind "Browse models"
     await dialog.locator("#api-key").fill("sk-1234")
     await expect(dialog.getByTestId("step-1-done")).toBeVisible()
+    const browse = dialog.getByRole("button", { name: "Browse models" })
+    await expect(browse).toBeVisible()
+    await expect(dialog.locator("#api-key")).toBeFocused()
+    expect(listedWith).toEqual(["sk-1234"])
+    await browse.click()
     await page.getByRole("option", { name: "deepseek-v4-pro" }).click()
     expect(listedWith).toEqual(["sk-1234"])
     await expect(dialog.locator('input[title="deepseek-v4-pro"]')).toBeVisible()
@@ -565,7 +571,8 @@ test("a local server's base URL is shown from the start", async ({ page }) => {
 test("Azure needs its resource URL before it counts as connected", async ({
     page,
 }) => {
-    // Azure has no default URL: a new entry starts without one
+    // An entry saved while Azure still had a placeholder default URL: the
+    // placeholder names no resource, so the entry is not set up yet
     await openApp(page, {
         config: {
             version: 1,
@@ -574,6 +581,7 @@ test("Azure needs its resource URL before it counts as connected", async ({
                     id: "z1",
                     provider: "azure",
                     apiKey: "k",
+                    baseUrl: "https://your-resource.openai.azure.com/openai",
                     models: [{ id: "m1", modelId: "gpt-6-astra" }],
                 },
             ],
@@ -716,10 +724,13 @@ test("an empty model list says so and opens nothing", async ({ page }) => {
     ).toBeVisible()
     // The picker did not open by itself
     await expect(page.getByRole("listbox")).toHaveCount(0)
-    // A new key fetches the list again by itself and opens it once it has models
+    // A new key fetches the list again by itself; the list waits behind
+    // "Browse models" and the cursor stays in the key field
     models = [{ id: "fresh-model" }]
     await dialog.locator("#api-key").fill("k-new")
     await expect(
-        page.getByRole("option", { name: "fresh-model" }),
+        dialog.getByRole("button", { name: "Browse models" }),
     ).toBeVisible()
+    await expect(page.getByRole("listbox")).toHaveCount(0)
+    await expect(dialog.locator("#api-key")).toBeFocused()
 })

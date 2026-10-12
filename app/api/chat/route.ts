@@ -16,7 +16,6 @@ import {
     edgeOneEndpoint,
     getAIModel,
     getServerProvider,
-    SINGLE_SYSTEM_PROVIDERS,
     supportsPromptCaching,
     usesServerCredentials,
     usesServerEndpoint,
@@ -433,7 +432,7 @@ ${userInputText}
                 process.env[serverModelConfig.baseUrlEnv])
         )
     const isSingleSystemProvider =
-        SINGLE_SYSTEM_PROVIDERS.has(resolvedProvider) || isCustomOpenAIEndpoint
+        !!PROVIDERS[resolvedProvider].singleSystem || isCustomOpenAIEndpoint
 
     const selectionContext = formatSelectionContext(body.selectedCells)
     // The model reads the diagram in the compact notation it writes

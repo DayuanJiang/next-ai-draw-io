@@ -740,3 +740,18 @@ Docker：.github/workflows/docker-build.yml 在每个 PR 上已经构建 standal
 8. 行数：lib/ai-providers.ts 1305、lib/types/model-config.ts 180、lib/provider-setup.ts 85、lib/provider-models.ts 251、lib/admin/providers.ts 306、lib/providers.ts 559，合计 2686 行，改动前 2594 行。方案估计约 2430。多出的部分是记录字段的注释（ProviderDef 的 20 个字段各有说明）、resolveEndpoint 里保留的安全规则说明、custom 记录和 Azure 的地址提示。本方案的收益在改动面和单点决策，行数上没有收益，这一点与第 7 节的说明一致。
 
 核对结果：单元测试 66 个文件 749 个用例全部通过（含 tests/unit/canvas-import-boundary.test.ts，它在 worktree 里安装 node_modules 后才能通过）；`tsc --noEmit` 无错；`biome ci` 无错误，37 条警告全部在未改动的文件里；e2e 五个文件 65 个用例通过（settings-providers 27、settings-bedrock 8、provider-models 20、model-test 2、settings-tabs-sync 8），其中"the provider list shows what needs attention"在并行运行时超时一次，单独运行通过。层外按 provider 名的判断剩 6 处，全部在 lib/admin/providers.ts 的 deriveEnvUpdates 和 derivedEnvKeys 里。真实 key 的检查（第 5.6 节）没有做：这台机器上只有 Bedrock 的 AWS 凭据，重构前已用它跑通过 GPT-6 Luna 和 Claude Haiku 4.5 两次连接测试，重构后待所有者按清单验收。
+
+### 合并前评审（2026-10-12）
+
+PR #988 由五个模型评审（Fable 5.1、Opus 5.5、Sonnet 5.5、Codex GPT-6 Astra、Codex GPT-6.1 Sol），同一份清单的五种表述。五份都没有发现行为回退或安全问题：Astra 用程序重建旧逻辑比对了 291,600 个输入组合，Sonnet 把旧代码解包后重新生成快照并比对了 43,200 个配额组合，Sol 比对了 4,512 个，Fable 和 Opus 逐段人工比对。合并后的逐条结论在 PR 的评审记录里；按它们改了以下内容：
+
+- 自动拉取模型列表只填充列表，不再打开选择器，失败也不显示错误（五位都指出弹出的模态选择器会抢走正在输入的焦点）；同一服务商同时只发一个列表请求；回到列表再进入同一家时重新记录基线；SGLang 预填的本地示例地址不触发拉取。
+- 旧配置里保存着 Azure 占位地址的条目仍判为"未填地址"（hasCredentials 里两行兼容判断）。
+- custom 和 Azure 的地址输入框标签改为"必填"（新字典键 baseUrlRequired）。
+- PROVIDER_INFO 别名删除，三个源文件和四个测试改用 PROVIDERS；bedrock、doubao、sglang 记录里不会被读到的 logo 删除；ModelListStyle、ProviderGroupId 的再导出和 KeySource、Endpoint、resolveEndpoint 的导出删除；SINGLE_SYSTEM_PROVIDERS 删除，聊天路由直接读 singleSystem。
+- 改名：PROVIDER_ENV_VARS 改为 REQUIRED_KEY_VARS，serverCredentialError 的局部变量 keyEnv 改为 requiredKeyEnv，resolveEndpoint 的局部变量 configuredBaseURL 改为 configuredUrl，类型 Copy 改为 LocalizedText；七处过时注释改写。
+- 测试：快照矩阵加 6 种输入形状（只带 Vertex key、带会话令牌的 AWS 密钥对、请求头加地址、可信地址加 key、key 加服务器模型自己的地址变量、只有 "/"），共 22 种，5843 行；新增的 1566 行在 99ced88 的旧代码上重新生成后逐行相同，差异只有 custom 的 200 行和两段报错文案的顺序。矩阵测试和服务器凭据测试清理全部相关环境变量；管理面板变量名测试覆盖 custom 并与 PROVIDER_NAMES 比对；用被测函数公式算期望值的用例删除；singleSystem、listNeedsNoKey、sdkKnowsEndpoint 三个集合和参与自动检测的 22 家逐一写明。
+- 文档：三份 README 改为 25 家并提到 OpenAI 兼容预设；三份服务商文档的 AI_PROVIDER 可选值补全、Azure 示例地址补 /openai 后缀、"新增服务商"加第 4 步（要同步的测试）。
+- 两个重构之前就有的问题单独提交：重定向守卫跨域时同时清掉 x-access-code；edgeOneEndpoint 只在请求的 Origin 头与 Host 或 X-Forwarded-Host 相符时采用它，否则用请求地址自己的 origin。
+
+评审者指出但有意不改的：另外三段报错文案和管理面板下拉框的顺序随记录顺序变化（待决问题 2 已接受）；服务器配置里原型链名字从放行变为拒绝（收紧）；日志少了候选 key 数量；usesServerCredentials 对数组变量多抽一次随机数；fixedCredentials、ownRequestPath、listNeedsNoKey 可由其他字段推出但保留为显式事实。

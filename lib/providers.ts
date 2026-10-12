@@ -46,7 +46,7 @@ export type ModelListStyle =
 export type ProviderGroup = "vendors" | "aggregators" | "cloud" | "selfHosted"
 
 /** One sentence in every UI language */
-export type Copy = Record<Locale, string>
+export type LocalizedText = Record<Locale, string>
 
 export interface ProviderDef {
     label: string
@@ -70,8 +70,9 @@ export interface ProviderDef {
     resourceNameEnv?: string
     /**
      * The official endpoint, also the form's placeholder. A non-https value
-     * (SGLang's 127.0.0.1) only fills the form: the server never calls it.
-     * Missing for a credential "apiKey" provider: the user must enter one
+     * (SGLang's 127.0.0.1) only fills the form; the server never falls back
+     * to it. A credential "apiKey" provider without one (Azure, custom)
+     * needs the user's URL
      */
     defaultBaseUrl?: string
     /** The SDK has the official endpoint built in: pass no baseURL unless one is configured */
@@ -92,12 +93,12 @@ export interface ProviderDef {
     fixedCredentials?: true
     /** models.dev logo name when it differs from the key */
     logo?: string
-    /** A Lucide icon for providers without a logo on models.dev */
+    /** A Lucide icon shown instead of a models.dev logo */
     icon?: "cloud" | "server" | "sparkles"
     /** The note shown under the name in the picker (Bedrock: "AWS credentials") */
-    note?: Copy
+    note?: LocalizedText
     /** A hint under the base URL field (MiniMax: which path selects which protocol) */
-    baseUrlHint?: Copy
+    baseUrlHint?: LocalizedText
     /** The folded options start open: the base URL usually needs changing */
     optionsOpen?: true
 }
@@ -171,7 +172,6 @@ const defs = {
         defaultBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
         apiKeyUrl:
             "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
-        logo: "bytedance",
         icon: "sparkles",
         // Volcengine Ark ids use the dash form
         models: [
@@ -356,7 +356,6 @@ const defs = {
         envPrefix: null,
         fixedCredentials: true,
         ownRequestPath: true,
-        logo: "amazon-bedrock",
         icon: "cloud",
         note: {
             en: "AWS credentials",
@@ -503,10 +502,10 @@ const defs = {
         credential: "apiKey",
         group: "selfHosted",
         envPrefix: "SGLANG",
-        // A local example: the server never calls it, see publicDefaultUrl
+        // A local example that only fills the form; the server never falls
+        // back to it (publicDefaultUrl)
         defaultBaseUrl: "http://127.0.0.1:8000/v1",
         modelList: "openai",
-        logo: "openai",
         icon: "server",
         optionsOpen: true,
         note: {
@@ -531,10 +530,10 @@ const defs = {
         // Open-source chat templates reject several system messages
         singleSystem: true,
         note: {
-            en: "Any OpenAI-compatible URL and key",
-            zh: "任何 OpenAI 兼容地址和 key",
-            ja: "OpenAI 互換の URL とキー",
-            "zh-Hant": "任何 OpenAI 相容位址和 key",
+            en: "Your URL and key",
+            zh: "填地址和 Key",
+            ja: "URL とキー",
+            "zh-Hant": "填位址和 Key",
         },
     },
 } satisfies Record<string, ProviderDef>

@@ -41,11 +41,6 @@ interface ModelConfig {
     provider: ProviderName
 }
 
-// Providers that only support a single system message
-export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>(
-    PROVIDER_NAMES.filter((p) => PROVIDERS[p].singleSystem),
-)
-
 /**
  * Normalize MiniMax base URL for AI SDK compatibility.
  * MiniMax supports Anthropic-compatible and OpenAI-compatible endpoints.
@@ -203,10 +198,7 @@ function resolveApiKey(
     }
 }
 
-/**
- * Resolve base URL from custom env var name or default env var.
- * Supports multiple base URLs per provider via ai-models.json baseUrlEnv config.
- */
+/** The server's base URL: a server model's own variable (baseUrlEnv) or the default one */
 function resolveBaseUrlEnv(
     overrides: ClientOverrides | undefined,
     defaultEnvVar: string,
@@ -484,10 +476,10 @@ export function envVarsOf(provider: ProviderName): {
     }
 }
 
-// Map of provider to required environment variable. null where the server
-// needs no key of this kind: Bedrock (the AWS SDK uses an IAM role or the
+// The key variable the server must have for each provider; null where it
+// needs none of this kind: Bedrock (the AWS SDK uses an IAM role or the
 // AWS_* variables), local Ollama, EdgeOne (the site's own function)
-const PROVIDER_ENV_VARS = Object.fromEntries(
+const REQUIRED_KEY_VARS = Object.fromEntries(
     PROVIDER_NAMES.map((p) => {
         const { credential } = PROVIDERS[p]
         const required = credential === "apiKey" || credential === "vertexKey"
@@ -504,7 +496,8 @@ const PROVIDER_ENV_VARS = Object.fromEntries(
  * either variable; a custom variable without a value fails, with no fall
  * back to the default one; a provider with a resourceNameEnv (Azure) then
  * needs its base URL variable, the server model's own URL variable or the
- * resource name. Providers with no required key variable pass.
+ * resource name. Providers with no required key variable pass unless a
+ * custom variable was given.
  */
 function serverCredentialError(
     provider: ProviderName,
@@ -523,20 +516,20 @@ function serverCredentialError(
     }
 
     const { altKeyEnv, resourceNameEnv } = PROVIDERS[provider]
-    const keyEnv = PROVIDER_ENV_VARS[provider]
+    const requiredKeyEnv = REQUIRED_KEY_VARS[provider]
     if (altKeyEnv && !customApiKeyEnv) {
         const hasCredential = !!(
-            (keyEnv && process.env[keyEnv]) ||
+            (requiredKeyEnv && process.env[requiredKeyEnv]) ||
             process.env[altKeyEnv]
         )
         if (!hasCredential) {
             return (
-                `Either ${keyEnv} or ${altKeyEnv} environment variable is required for ${provider} provider. ` +
+                `Either ${requiredKeyEnv} or ${altKeyEnv} environment variable is required for ${provider} provider. ` +
                 `Please set one in your .env.local file.`
             )
         }
     } else {
-        const requiredVar = customApiKeyEnv || keyEnv
+        const requiredVar = customApiKeyEnv || requiredKeyEnv
         if (requiredVar && !process.env[requiredVar]) {
             return (
                 `${requiredVar} environment variable is required for ${provider} provider. ` +
@@ -545,7 +538,8 @@ function serverCredentialError(
         }
     }
 
-    // The SDK builds the URL from the resource name when there is no URL
+    // The SDK builds the URL from the resource name when there is no URL.
+    // Only Azure has one, and the text stays as it was (tests freeze it)
     if (resourceNameEnv) {
         const baseUrlEnv = envVarsOf(provider).baseUrl as string
         const hasBaseUrl =
@@ -569,7 +563,7 @@ function serverCredentialError(
 function detectProvider(): ProviderName | null {
     const configuredProviders = PROVIDER_NAMES.filter(
         (p) =>
-            PROVIDER_ENV_VARS[p] !== null && serverCredentialError(p) === null,
+            REQUIRED_KEY_VARS[p] !== null && serverCredentialError(p) === null,
     )
     return configuredProviders.length === 1 ? configuredProviders[0] : null
 }
@@ -606,10 +600,10 @@ function bedrockRuntimeUrl(region: string): string {
     return `https://bedrock-runtime.${region}.${suffix}`
 }
 
-export type KeySource = "client" | "server" | "none"
+type KeySource = "client" | "server" | "none"
 
 /** Where and how to call a provider, once credentials are resolved */
-export interface Endpoint {
+interface Endpoint {
     apiKey?: string
     /** Anthropic Bearer auth (ANTHROPIC_AUTH_TOKEN), server only */
     authToken?: string
@@ -639,7 +633,7 @@ export interface Endpoint {
  * drops one pasted endpoint path per call, so it runs once, in the caller).
  * Bedrock gets only keySource: bedrockModel() builds its SDK parameters.
  */
-export function resolveEndpoint(
+function resolveEndpoint(
     provider: ProviderName,
     overrides?: ClientOverrides,
 ): Endpoint {
@@ -735,7 +729,7 @@ export function resolveEndpoint(
             // An API key and a base URL from <PREFIX>_API_KEY /
             // <PREFIX>_BASE_URL, or a server model's apiKeyEnv / baseUrlEnv
             const key = resolveApiKey(overrides, vars.apiKey)
-            const configuredBaseURL = resolveBaseURL(
+            const configuredUrl = resolveBaseURL(
                 overrides?.apiKey,
                 clientUrl,
                 resolveBaseUrlEnv(overrides, vars.baseUrl as string),
@@ -746,7 +740,7 @@ export function resolveEndpoint(
             // The others get the record's https default (a local default,
             // SGLang's 127.0.0.1, only fills the settings form).
             const baseURL =
-                configuredBaseURL ||
+                configuredUrl ||
                 (def.sdkKnowsEndpoint &&
                 !(def.sdk === "openai" && overrides?.apiKey)
                     ? undefined
@@ -754,7 +748,7 @@ export function resolveEndpoint(
             return {
                 apiKey: key.value,
                 baseURL,
-                configuredBaseURL: !!configuredBaseURL,
+                configuredBaseURL: !!configuredUrl,
                 guarded,
                 keySource: key.source,
                 selectedKeyEnv: key.selectedKeyEnv,
@@ -1069,12 +1063,12 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             console.log(`[AI Provider] Auto-detected provider: ${provider}`)
         } else {
             // List configured providers for better error message
-            const configured = Object.entries(PROVIDER_ENV_VARS)
+            const configured = Object.entries(REQUIRED_KEY_VARS)
                 .filter(([, envVar]) => envVar && process.env[envVar as string])
                 .map(([p]) => p)
 
             if (configured.length === 0) {
-                const keys = Object.entries(PROVIDER_ENV_VARS)
+                const keys = Object.entries(REQUIRED_KEY_VARS)
                     .filter(([, envVar]) => envVar)
                     .map(([p, envVar]) => `- ${envVar} for ${p}`)
                 throw new Error(

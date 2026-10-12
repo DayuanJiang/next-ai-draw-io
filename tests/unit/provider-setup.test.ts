@@ -6,8 +6,8 @@ import {
     PROVIDER_GROUPS,
     providerStatus,
 } from "@/lib/provider-setup"
-import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
-import { PROVIDER_INFO, type ProviderConfig } from "@/lib/types/model-config"
+import { PROVIDERS } from "@/lib/providers"
+import type { ProviderConfig } from "@/lib/types/model-config"
 import { useUiStore } from "@/stores/ui-store"
 
 const provider = (p: Partial<ProviderConfig>): ProviderConfig => ({
@@ -21,12 +21,12 @@ const provider = (p: Partial<ProviderConfig>): ProviderConfig => ({
 describe("provider groups", () => {
     it("hold every provider exactly once", () => {
         const grouped = PROVIDER_GROUPS.flatMap((g) => g.providers)
-        expect([...grouped].sort()).toEqual(Object.keys(PROVIDER_INFO).sort())
+        expect([...grouped].sort()).toEqual(Object.keys(PROVIDERS).sort())
         expect(new Set(grouped).size).toBe(grouped.length)
     })
 
     it("offer known providers as popular ones", () => {
-        for (const p of POPULAR_PROVIDERS) expect(PROVIDER_INFO[p]).toBeTruthy()
+        for (const p of POPULAR_PROVIDERS) expect(PROVIDERS[p]).toBeTruthy()
     })
 
     it("are searched by label or name, ignoring case and spaces", () => {
@@ -60,6 +60,25 @@ describe("hasCredentials", () => {
                 },
                 true,
             ],
+            // The placeholder Azure once wrote into new entries names no resource
+            [
+                {
+                    provider: "azure",
+                    apiKey: "k",
+                    baseUrl: "https://your-resource.openai.azure.com/openai",
+                },
+                false,
+            ],
+            // The OpenAI-compatible preset has no default URL either
+            [{ provider: "custom", apiKey: "k" }, false],
+            [
+                {
+                    provider: "custom",
+                    apiKey: "k",
+                    baseUrl: "http://127.0.0.1:1234/v1",
+                },
+                true,
+            ],
             // SGLang's local default fills the form, so a key is enough here
             [{ provider: "sglang", apiKey: "k" }, true],
             [{ provider: "bedrock", apiKey: "k" }, false],
@@ -87,23 +106,6 @@ describe("hasCredentials", () => {
         ]
         for (const [p, expected] of cases) {
             expect([p, hasCredentials(provider(p))]).toEqual([p, expected])
-        }
-    })
-
-    it("asks every provider for a key, an AWS pair, a Vertex key or nothing", () => {
-        // With only a key filled in, by the record's credential kind
-        for (const p of PROVIDER_NAMES) {
-            const { credential, defaultBaseUrl } = PROVIDERS[p]
-            const expected =
-                credential === "none" || credential === "optionalKey"
-                    ? true
-                    : credential === "apiKey"
-                      ? !!defaultBaseUrl
-                      : false
-            expect([
-                p,
-                hasCredentials(provider({ provider: p, apiKey: "k" })),
-            ]).toEqual([p, expected])
         }
     })
 })

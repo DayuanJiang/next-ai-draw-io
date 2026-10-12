@@ -70,7 +70,7 @@ function ProviderDetail({
     const info = PROVIDERS[provider.provider]
     // Only providers that cannot list their models have a list here; for
     // the others the admin types the model id
-    const suggestions = (PROVIDERS[provider.provider].models ?? []).filter(
+    const suggestions = (info.models ?? []).filter(
         (m) => !provider.models.includes(m),
     )
 

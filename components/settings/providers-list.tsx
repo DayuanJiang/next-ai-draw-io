@@ -16,11 +16,11 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { POPULAR_PROVIDERS, providerStatus } from "@/lib/provider-setup"
-import {
-    type FlattenedModel,
-    PROVIDER_INFO,
-    type ProviderConfig,
-    type ProviderName,
+import { PROVIDERS } from "@/lib/providers"
+import type {
+    FlattenedModel,
+    ProviderConfig,
+    ProviderName,
 } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -169,7 +169,7 @@ export function ProvidersList({
                                                 />
                                             </span>
                                             <span className="truncate">
-                                                {PROVIDER_INFO[provider].label}
+                                                {PROVIDERS[provider].label}
                                             </span>
                                         </button>
                                     ))}
@@ -180,8 +180,7 @@ export function ProvidersList({
                                     className="flex items-center gap-1 text-[13px] font-medium hover:underline"
                                 >
                                     {formatMessage(t.viewAllProviders, {
-                                        count: Object.keys(PROVIDER_INFO)
-                                            .length,
+                                        count: Object.keys(PROVIDERS).length,
                                     })}
                                     <ChevronRight className="size-3.5" />
                                 </button>
@@ -225,7 +224,7 @@ export function ProvidersList({
                                                 <span className="flex items-center gap-2 text-[13px] font-medium">
                                                     <span className="truncate">
                                                         {p.name ||
-                                                            PROVIDER_INFO[
+                                                            PROVIDERS[
                                                                 p.provider
                                                             ].label}
                                                     </span>

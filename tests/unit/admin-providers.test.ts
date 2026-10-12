@@ -14,6 +14,7 @@ import {
     validateAdminProviders,
 } from "@/lib/admin/providers"
 import { _resetForTests, saveSettings } from "@/lib/admin/settings"
+import { PROVIDER_NAMES } from "@/lib/providers"
 import { loadRawServerModelsConfig } from "@/lib/server-model-config"
 
 let tmpDir: string
@@ -501,7 +502,9 @@ describe("credEnvNames", () => {
             edgeone: null,
             ollama: null,
             sglang: "SGLANG",
+            custom: "CUSTOM",
         }
+        expect(Object.keys(expected).sort()).toEqual([...PROVIDER_NAMES].sort())
         for (const [p, prefix] of Object.entries(expected)) {
             const first = credEnvNames(p as StoredAdminProvider["provider"], 0)
             const third = credEnvNames(p as StoredAdminProvider["provider"], 2)
@@ -521,6 +524,5 @@ describe("credEnvNames", () => {
                     : {},
             ])
         }
-        expect(Object.keys(expected)).toHaveLength(24)
     })
 })
