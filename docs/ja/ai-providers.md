@@ -132,7 +132,7 @@ AI_MODEL=your-deployment-name
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com  # AZURE_RESOURCE_NAME の代替
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME の代替
 AI_MODEL=your-deployment-name
 ```
 
@@ -323,6 +323,18 @@ AI_MODEL=mimo-v2.5-pro
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### 任意の OpenAI 互換 API（custom）
+
+上に挙がっていないサーバー（vLLM、LM Studio、LiteLLM、API ゲートウェイ）は、設定で **OpenAI-compatible** を選び、そのベース URL とキーを入力します。キーを確認しないサーバーには空でない任意の値を入れてください。複数の system メッセージは 1 つにまとめられ（オープンソースモデルのチャットテンプレートはそれを前提にしています）、`<think>` 内の推論は返答から分離されます。
+
+```bash
+CUSTOM_API_KEY=your_api_key
+CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
+AI_MODEL=your_model_id
+```
+
+---
+
 ## 自動検出
 
 **1つ**のプロバイダーの API キーのみを設定した場合、システムはそのプロバイダーを自動的に検出して使用します。`AI_PROVIDER` を設定する必要はありません。
@@ -330,7 +342,7 @@ MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 **複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
 ```
 
 ## サーバーサイドマルチモデル設定
@@ -431,3 +443,27 @@ TEMPERATURE=0  # より決定論的な出力（ダイアグラムに推奨）
 -   **低コスト**: DeepSeek は競争力のある価格を提供しています
 -   **プライバシー**: 完全にローカルなオフライン操作には Ollama を使用してください（強力なハードウェアが必要です）
 -   **柔軟性**: OpenRouter は単一の API で多数のモデルへのアクセスを提供します
+
+## プロバイダーの追加
+
+プロバイダーに関する事実はすべて `lib/providers.ts` の 1 つのレコードにあります。使用する AI SDK（`sdk`）、サインインに使う資格情報（`credential`）、環境変数 `<PREFIX>_API_KEY` / `<PREFIX>_BASE_URL` のプレフィックス（`envPrefix`）、公式 URL、ピッカーのグループ、任意の注記です。設定画面、接続テスト、チャットのルート、管理パネルはすべてこのレコードを読むため、OpenAI 互換プロバイダーの追加は次の手順だけです。
+
+1. `lib/providers.ts` にレコードを追加します。例：
+
+    ```ts
+    acme: {
+        label: "Acme AI",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "ACME",
+        defaultBaseUrl: "https://api.acme.example/v1",
+        apiKeyUrl: "https://acme.example/keys",
+        modelList: "openai",
+    },
+    ```
+
+    ベース URL 欄の下にヒントを表示したい、またはピッカーに注記を表示したいプロバイダーには、4 つの UI 言語（`en`、`zh`、`ja`、`zh-Hant`）をすべて含む `baseUrlHint` または `note` オブジェクトを追加します。モデル一覧をオンラインで取得できないプロバイダーは、`modelList` の代わりに短い `models` リストを持ちます。
+2. `env.example` に `ACME_API_KEY` と `ACME_BASE_URL` を追加します（各レコードの変数名がそこに現れることをユニットテストが確認します）。
+3. `docs/en`、`docs/cn`、`docs/ja` のこのドキュメントにセクションを追加します。
+4. `tests/unit/provider-matrix.test.ts` 先頭の 2 つのリスト（`MATRIX_PROVIDERS` と `MATRIX_MODEL_IDS`）に追加し、`npx vitest run tests/unit/provider-matrix.test.ts -u` で動作スナップショットを再生成します。追加される行はこのプロバイダーのものだけで、既存の行は変わってはいけません。`tests/unit/providers.test.ts` にはピッカーのグループと、サーバーの動作を変えるプロバイダーの集合（自動検出、system メッセージが 1 つだけ）が書き出されているので、そこにも追加します。3 つの README のプロバイダー数と、このドキュメントの `AI_PROVIDER` の選択肢一覧も更新します。

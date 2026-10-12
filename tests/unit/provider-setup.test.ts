@@ -1,17 +1,13 @@
 import { describe, expect, it } from "vitest"
-import enDict from "@/lib/i18n/dictionaries/en.json"
-import jaDict from "@/lib/i18n/dictionaries/ja.json"
-import zhDict from "@/lib/i18n/dictionaries/zh.json"
-import zhHantDict from "@/lib/i18n/dictionaries/zh-Hant.json"
 import {
     filterProviderGroups,
     hasCredentials,
     POPULAR_PROVIDERS,
     PROVIDER_GROUPS,
-    PROVIDER_NOTE_KEYS,
     providerStatus,
 } from "@/lib/provider-setup"
-import { PROVIDER_INFO, type ProviderConfig } from "@/lib/types/model-config"
+import { PROVIDERS } from "@/lib/providers"
+import type { ProviderConfig } from "@/lib/types/model-config"
 import { useUiStore } from "@/stores/ui-store"
 
 const provider = (p: Partial<ProviderConfig>): ProviderConfig => ({
@@ -25,21 +21,12 @@ const provider = (p: Partial<ProviderConfig>): ProviderConfig => ({
 describe("provider groups", () => {
     it("hold every provider exactly once", () => {
         const grouped = PROVIDER_GROUPS.flatMap((g) => g.providers)
-        expect([...grouped].sort()).toEqual(Object.keys(PROVIDER_INFO).sort())
+        expect([...grouped].sort()).toEqual(Object.keys(PROVIDERS).sort())
         expect(new Set(grouped).size).toBe(grouped.length)
     })
 
     it("offer known providers as popular ones", () => {
-        for (const p of POPULAR_PROVIDERS) expect(PROVIDER_INFO[p]).toBeTruthy()
-    })
-
-    it("have their notes in every language", () => {
-        for (const dict of [enDict, zhDict, jaDict, zhHantDict]) {
-            const t = dict.modelConfig as Record<string, string>
-            for (const key of Object.values(PROVIDER_NOTE_KEYS)) {
-                expect(t[key as string]).toBeTruthy()
-            }
-        }
+        for (const p of POPULAR_PROVIDERS) expect(PROVIDERS[p]).toBeTruthy()
     })
 
     it("are searched by label or name, ignoring case and spaces", () => {
@@ -63,6 +50,37 @@ describe("hasCredentials", () => {
             [{ provider: "edgeone" }, true],
             [{ provider: "vertexai", apiKey: "k" }, false],
             [{ provider: "vertexai", vertexApiKey: "k" }, true],
+            // Azure has no default URL: the user's own is part of signing in
+            [{ provider: "azure", apiKey: "k" }, false],
+            [
+                {
+                    provider: "azure",
+                    apiKey: "k",
+                    baseUrl: "https://contoso.openai.azure.com/openai",
+                },
+                true,
+            ],
+            // The placeholder Azure once wrote into new entries names no resource
+            [
+                {
+                    provider: "azure",
+                    apiKey: "k",
+                    baseUrl: "https://your-resource.openai.azure.com/openai",
+                },
+                false,
+            ],
+            // The OpenAI-compatible preset has no default URL either
+            [{ provider: "custom", apiKey: "k" }, false],
+            [
+                {
+                    provider: "custom",
+                    apiKey: "k",
+                    baseUrl: "http://127.0.0.1:1234/v1",
+                },
+                true,
+            ],
+            // SGLang's local default fills the form, so a key is enough here
+            [{ provider: "sglang", apiKey: "k" }, true],
             [{ provider: "bedrock", apiKey: "k" }, false],
             [
                 { provider: "bedrock", apiKey: "k", awsRegion: "us-east-1" },

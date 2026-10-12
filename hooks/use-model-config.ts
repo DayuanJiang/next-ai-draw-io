@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { getApiEndpoint } from "@/lib/base-path"
+import { PROVIDERS } from "@/lib/providers"
 import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import {
@@ -13,13 +14,12 @@ import {
     flattenModels,
     type ModelConfig,
     type MultiModelConfig,
-    PROVIDER_INFO,
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
 
 const isKnownProvider = (p: { provider: string }) =>
-    Object.hasOwn(PROVIDER_INFO, p.provider)
+    Object.hasOwn(PROVIDERS, p.provider)
 
 /**
  * The stored config without providers this version does not know (saved

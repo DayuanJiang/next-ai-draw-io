@@ -147,7 +147,7 @@ Or use a custom endpoint instead of resource name:
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com  # Alternative to AZURE_RESOURCE_NAME
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # Alternative to AZURE_RESOURCE_NAME
 AI_MODEL=your-deployment-name
 ```
 
@@ -338,6 +338,18 @@ Optional custom endpoint (Token Plan subscribers should set their dedicated Base
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
+### Any OpenAI-compatible API (custom)
+
+For a server not listed above (vLLM, LM Studio, LiteLLM, an API gateway), pick **OpenAI-compatible** in the settings and enter its base URL and a key; a server that ignores keys takes any non-empty value. Several system messages are merged into one, as open-source chat templates expect, and `<think>` reasoning is split from the reply.
+
+```bash
+CUSTOM_API_KEY=your_api_key
+CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
+AI_MODEL=your_model_id
+```
+
+---
+
 ## Auto-Detection
 
 If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
@@ -345,7 +357,7 @@ If you only configure **one** provider's API key, the system will automatically 
 If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, aihubmix, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu, mimo
+AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
 ```
 
 ## Server-Side Multi-Model Configuration
@@ -446,3 +458,27 @@ When unset, the model uses its default behavior.
 -   **Budget-friendly**: DeepSeek offers competitive pricing
 -   **Privacy**: Use Ollama for fully local, offline operation (requires powerful hardware)
 -   **Flexibility**: OpenRouter provides access to many models through a single API
+
+## Adding a Provider
+
+Every fact about a provider lives in one record in `lib/providers.ts`: which AI SDK runs it (`sdk`), what it signs in with (`credential`), the prefix of its `<PREFIX>_API_KEY` / `<PREFIX>_BASE_URL` variables (`envPrefix`), its official URL, the picker group, and optional notes. The settings UI, the connection test, the chat route and the admin panel all read that record, so adding an OpenAI-compatible provider is:
+
+1. Add a record to `lib/providers.ts`, for example:
+
+    ```ts
+    acme: {
+        label: "Acme AI",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "ACME",
+        defaultBaseUrl: "https://api.acme.example/v1",
+        apiKeyUrl: "https://acme.example/keys",
+        modelList: "openai",
+    },
+    ```
+
+    A provider that needs a hint under its base URL field, or a note in the picker, gets a `baseUrlHint` or `note` object with all four UI languages (`en`, `zh`, `ja`, `zh-Hant`). Providers that cannot list their models online keep a short `models` list instead of `modelList`.
+2. Add `ACME_API_KEY` and `ACME_BASE_URL` to `env.example` (a unit test checks that every record's variables appear there).
+3. Add a section for it to this document in `docs/en`, `docs/cn` and `docs/ja`.
+4. Add it to the two lists at the top of `tests/unit/provider-matrix.test.ts` (`MATRIX_PROVIDERS` and `MATRIX_MODEL_IDS`) and regenerate the behavior snapshot with `npx vitest run tests/unit/provider-matrix.test.ts -u`; the new rows are the provider's, the existing rows must not change. `tests/unit/providers.test.ts` spells out the picker's groups and the provider sets that change what the server does (auto-detection, single system message), so add it there too. The provider count in the three READMEs and the `AI_PROVIDER` list in this document change as well.

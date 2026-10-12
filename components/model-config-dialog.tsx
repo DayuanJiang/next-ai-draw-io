@@ -55,13 +55,13 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { ListedModel } from "@/lib/provider-models"
 import { hasCredentials } from "@/lib/provider-setup"
+import { PROVIDERS, publicDefaultUrl } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type {
     ModelConfig,
     ProviderConfig,
     ProviderName,
 } from "@/lib/types/model-config"
-import { PROVIDER_INFO, SUGGESTED_MODELS } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
 
@@ -300,19 +300,36 @@ export function ModelConfigDialog({
     const errorHints = (p: ProviderConfig): Record<string, string> => ({
         ...(dict.errors.llm as Record<string, string>),
         invalid_api_key:
-            p.provider === "bedrock" && !p.apiKey
+            PROVIDERS[p.provider].credential === "aws" && !p.apiKey
                 ? t.awsKeysRejected
                 : t.keyRejected,
         model_not_found: t.modelNotFound,
     })
 
-    const handleFetchModels = async () => {
+    // Requests in flight, by provider id: a second request for the same
+    // provider (the button clicked while the automatic fetch runs, or the
+    // reverse) is not sent
+    const inFlight = useRef(new Set<string>())
+    // The credentials each provider's automatic fetch ran with, or was
+    // overtaken by a click with: one automatic fetch per set of credentials
+    const autoFetched = useRef<Record<string, string>>({})
+
+    /**
+     * Fetch the shown provider's model list. A click opens the picker with
+     * the result and shows what went wrong; the automatic fetch after
+     * credentials were entered (auto) only fills the list, so it never
+     * takes the focus or flashes an error while the user is still typing.
+     */
+    const handleFetchModels = async (auto = false) => {
         if (!selectedProvider) return
         const providerId = selectedProvider.id
+        if (inFlight.current.has(providerId)) return
         const askedWith = credentialsOf(providerId)
+        autoFetched.current[providerId] = askedWith
         const hints = errorHints(selectedProvider)
+        inFlight.current.add(providerId)
         setFetchingFor((current) => [...current, providerId])
-        setFetchModelsError("")
+        if (!auto) setFetchModelsError("")
         try {
             const response = await fetch(
                 getApiEndpoint("/api/provider-models"),
@@ -339,11 +356,11 @@ export function ModelConfigDialog({
                     ...current,
                     [providerId]: { askedWith, models: data.models },
                 }))
-                if (!stillShown) return
+                if (!stillShown || auto) return
                 if (data.models.length > 0) setModelPickerOpen(true)
                 else setFetchModelsError(t.noModelsReturned)
             } else {
-                if (!stillShown) return
+                if (!stillShown || auto) return
                 setFetchModelsError(
                     [hints[data.code], data.error].filter(Boolean).join(" ") ||
                         formatMessage(t.requestFailed, {
@@ -353,12 +370,14 @@ export function ModelConfigDialog({
             }
         } catch {
             if (
+                !auto &&
                 selectedProviderIdRef.current === providerId &&
                 credentialsOf(providerId) === askedWith
             ) {
                 setFetchModelsError(dict.errors.networkError)
             }
         } finally {
+            inFlight.current.delete(providerId)
             setFetchingFor((current) =>
                 current.filter((id) => id !== providerId),
             )
@@ -366,16 +385,18 @@ export function ModelConfigDialog({
     }
 
     // The provider's own list, if fetched with the credentials it has now,
-    // else the suggested models
+    // else the record's short list (only providers that cannot list models
+    // have one)
     const fetched = selectedProvider
         ? fetchedModels[selectedProvider.id]
         : undefined
+    const recordModels = selectedProvider
+        ? (PROVIDERS[selectedProvider.provider].models ?? [])
+        : []
     const suggestedModels: ListedModel[] = selectedProvider
         ? fetched && fetched.askedWith === credentialsOf(selectedProvider.id)
             ? fetched.models
-            : (SUGGESTED_MODELS[selectedProvider.provider] || []).map((id) => ({
-                  id,
-              }))
+            : recordModels.map((id) => ({ id }))
         : []
     // The picker closes when there is nothing left to pick from, so it does
     // not open by itself once there is again
@@ -398,20 +419,60 @@ export function ModelConfigDialog({
     const availableSuggestions = suggestedModels.filter(
         (model) => !existingModelIds.includes(model.id),
     )
-    // A few suggested models to add with one click
-    const quickSuggestions = selectedProvider
-        ? (SUGGESTED_MODELS[selectedProvider.provider] || [])
-              .filter((modelId) => !existingModelIds.includes(modelId))
-              .slice(0, 4)
-        : []
+    // A few of the record's models to add with one click
+    const quickSuggestions = recordModels
+        .filter((modelId) => !existingModelIds.includes(modelId))
+        .slice(0, 4)
+
+    // A provider that can list its models gets its list fetched by itself,
+    // once, for credentials entered on its page while it has no model yet,
+    // so "Browse models" offers the provider's own list instead of a
+    // hand-written one. Credentials a provider already had when its page
+    // opened fetch nothing (the button does), nor does a provider with
+    // models, nor a local example URL still in the field (SGLang's).
+    const shownWith = useRef<{ id: string; credentials: string } | null>(null)
+    useEffect(() => {
+        if (!open || !selectedProvider) {
+            // The baseline belongs to one visit of one provider's page
+            shownWith.current = null
+            return
+        }
+        const id = selectedProvider.id
+        const now = credentialsOf(id)
+        if (shownWith.current?.id !== id) {
+            shownWith.current = { id, credentials: now }
+        }
+        const def = PROVIDERS[selectedProvider.provider]
+        const localExample =
+            !!selectedProvider.baseUrl &&
+            selectedProvider.baseUrl === def.defaultBaseUrl &&
+            !publicDefaultUrl(selectedProvider.provider)
+        if (
+            !def.modelList ||
+            selectedProvider.models.length > 0 ||
+            !hasCredentials(selectedProvider) ||
+            localExample ||
+            now === shownWith.current.credentials ||
+            autoFetched.current[id] === now
+        ) {
+            return
+        }
+        // Once the typing or pasting pauses
+        const timer = setTimeout(() => {
+            if (autoFetched.current[id] === now) return
+            void handleFetchModels(true)
+        }, 600)
+        return () => clearTimeout(timer)
+    }, [open, selectedProvider])
 
     const openProvider = (providerId: string) => setModelsPage({ providerId })
 
     // Handle adding a new provider
     const handleAddProvider = (providerType: ProviderName) => {
         const newProvider = addProvider(providerType)
-        // With the first suggested model picked, a key is all a test needs
-        const firstModel = SUGGESTED_MODELS[providerType]?.[0]
+        // A provider that cannot list its models starts with the first of
+        // the record's; the others fetch their list once the key is in
+        const firstModel = PROVIDERS[providerType].models?.[0]
         if (firstModel) addModel(newProvider.id, firstModel)
         openProvider(newProvider.id)
     }
@@ -530,9 +591,9 @@ export function ModelConfigDialog({
         const run = (latestTestRun.get(selectedProviderId) ?? 0) + 1
         latestTestRun.set(selectedProviderId, run)
 
-        // For EdgeOne, construct baseUrl from current origin
+        // The site's own function (EdgeOne): its URL is this origin's
         const baseUrl =
-            selectedProvider.provider === "edgeone"
+            PROVIDERS[selectedProvider.provider].credential === "none"
                 ? `${window.location.origin}/api/edgeai`
                 : selectedProvider.baseUrl
         const hints = errorHints(selectedProvider)
@@ -741,7 +802,7 @@ export function ModelConfigDialog({
     }
 
     const providerName = (p: ProviderConfig) =>
-        p.name || PROVIDER_INFO[p.provider].label
+        p.name || PROVIDERS[p.provider].label
 
     const renderModelRow = (model: ModelConfig) => {
         if (!selectedProvider) return null
@@ -922,11 +983,13 @@ export function ModelConfigDialog({
                 : undefined
         const canTest = credentialsDone && models.length > 0
         const testing = validationStatus === "validating"
+        const def = PROVIDERS[provider.provider]
+        // A key-only provider without a default URL (Azure) needs its URL too
         const testBlocker = !credentialsDone
-            ? provider.provider === "bedrock"
+            ? def.credential === "aws"
                 ? t.needAws
-                : provider.provider === "azure"
-                  ? t.needAzure
+                : def.credential === "apiKey" && !def.defaultBaseUrl
+                  ? t.needUrl
                   : t.needKey
             : models.length === 0
               ? t.needModel
@@ -984,7 +1047,7 @@ export function ModelConfigDialog({
                             done={credentialsDone && !keyRejected}
                             title={t.stepConnect}
                         >
-                            {provider.provider === "edgeone" ? (
+                            {def.credential === "none" ? (
                                 <p className="text-xs text-muted-foreground">
                                     {t.edgeoneNoKey}
                                 </p>
@@ -1027,10 +1090,10 @@ export function ModelConfigDialog({
                             done={models.length > 0}
                             title={t.stepModels}
                             action={
-                                PROVIDER_INFO[provider.provider].modelList && (
+                                def.modelList && (
                                     <button
                                         type="button"
-                                        onClick={handleFetchModels}
+                                        onClick={() => handleFetchModels()}
                                         disabled={fetchingFor.includes(
                                             provider.id,
                                         )}

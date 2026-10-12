@@ -2,49 +2,22 @@
 // picker, and how far a provider's setup has come
 
 import {
-    PROVIDER_INFO,
-    type ProviderConfig,
-    type ProviderName,
-} from "@/lib/types/model-config"
+    PROVIDER_NAMES,
+    PROVIDERS,
+    type ProviderGroup as ProviderGroupId,
+} from "@/lib/providers"
+import type { ProviderConfig, ProviderName } from "@/lib/types/model-config"
 
-export type ProviderGroupId = "vendors" | "aggregators" | "cloud" | "selfHosted"
-
-/** The provider picker's groups, each provider in exactly one */
+/** The provider picker's groups, each provider in exactly one, in record order */
 export const PROVIDER_GROUPS: {
     id: ProviderGroupId
     providers: ProviderName[]
-}[] = [
-    {
-        id: "vendors",
-        providers: [
-            "openai",
-            "anthropic",
-            "google",
-            "deepseek",
-            "qwen",
-            "doubao",
-            "glm",
-            "kimi",
-            "minimax",
-            "mimo",
-        ],
-    },
-    {
-        id: "aggregators",
-        providers: [
-            "openrouter",
-            "aihubmix",
-            "siliconflow",
-            "modelscope",
-            "novita",
-            "atlascloud",
-            "qiniu",
-            "gateway",
-        ],
-    },
-    { id: "cloud", providers: ["bedrock", "vertexai", "azure", "edgeone"] },
-    { id: "selfHosted", providers: ["ollama", "sglang"] },
-]
+}[] = (["vendors", "aggregators", "cloud", "selfHosted"] as const).map(
+    (id) => ({
+        id,
+        providers: PROVIDER_NAMES.filter((p) => PROVIDERS[p].group === id),
+    }),
+)
 
 /** Shown when the user has no provider yet */
 export const POPULAR_PROVIDERS: ProviderName[] = [
@@ -56,29 +29,6 @@ export const POPULAR_PROVIDERS: ProviderName[] = [
     "qwen",
 ]
 
-/** Providers that need something other than a plain API key */
-export const PROVIDER_NOTE_KEYS: Partial<Record<ProviderName, string>> = {
-    bedrock: "noteBedrock",
-    vertexai: "noteVertex",
-    azure: "noteAzure",
-    edgeone: "noteEdgeone",
-    ollama: "noteOllama",
-    sglang: "noteSglang",
-}
-
-/**
- * Providers whose base URL usually needs changing (Azure's default is only
- * an example; Ollama's is its cloud, SGLang's a local server) or comes with
- * a hint (MiniMax, MiMo): their folded options start open
- */
-export const OPTIONS_OPEN: ProviderName[] = [
-    "azure",
-    "ollama",
-    "sglang",
-    "minimax",
-    "mimo",
-]
-
 /** The groups with only the providers whose name matches the search */
 export function filterProviderGroups(query: string) {
     const q = query.trim().toLowerCase()
@@ -87,35 +37,37 @@ export function filterProviderGroups(query: string) {
         ...group,
         providers: group.providers.filter(
             (p) =>
-                PROVIDER_INFO[p].label.toLowerCase().includes(q) ||
-                p.includes(q),
+                PROVIDERS[p].label.toLowerCase().includes(q) || p.includes(q),
         ),
     })).filter((group) => group.providers.length > 0)
 }
 
+const LEGACY_AZURE_PLACEHOLDER = "https://your-resource.openai.azure.com/openai"
+
 /** The credentials a test or a chat request needs are filled in */
 export function hasCredentials(p: ProviderConfig): boolean {
-    switch (p.provider) {
-        case "bedrock":
+    const def = PROVIDERS[p.provider]
+    switch (def.credential) {
+        case "aws":
             return (
                 (!!p.apiKey ||
                     (!!p.awsAccessKeyId && !!p.awsSecretAccessKey)) &&
                 !!p.awsRegion
             )
-        case "vertexai":
+        case "vertexKey":
             return !!p.vertexApiKey
-        // Its default base URL names no real resource
-        case "azure":
-            return (
-                !!p.apiKey &&
-                !!p.baseUrl &&
-                p.baseUrl !== PROVIDER_INFO.azure.defaultBaseUrl
-            )
-        case "edgeone":
-        case "ollama":
+        case "none":
+        case "optionalKey":
             return true
-        default:
-            return !!p.apiKey
+        case "apiKey": {
+            // Without a default URL in the record (Azure, custom) the user's
+            // own is part of the credentials. Entries saved while Azure still
+            // had a placeholder default hold that placeholder; it names no
+            // real resource
+            const baseUrl =
+                p.baseUrl === LEGACY_AZURE_PLACEHOLDER ? "" : p.baseUrl
+            return !!p.apiKey && (!!def.defaultBaseUrl || !!baseUrl)
+        }
     }
 }
 

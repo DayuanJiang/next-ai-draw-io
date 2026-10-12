@@ -1,12 +1,11 @@
 import fs from "fs/promises"
 import path from "path"
 import { z } from "zod"
-import type { ProviderName } from "@/lib/types/model-config"
-import { PROVIDER_INFO } from "@/lib/types/model-config"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 
 export const ProviderNameSchema: z.ZodType<ProviderName> = z
     .string()
-    .refine((val): val is ProviderName => val in PROVIDER_INFO, {
+    .refine((val): val is ProviderName => Object.hasOwn(PROVIDERS, val), {
         message: "Invalid provider name",
     })
 
@@ -81,7 +80,7 @@ function configFromCommaSeparatedAiModel(): ServerModelsConfig | null {
         )
         return null
     }
-    if (!(aiProvider in PROVIDER_INFO)) {
+    if (!Object.hasOwn(PROVIDERS, aiProvider)) {
         console.warn(
             `[server-model-config] AI_PROVIDER="${aiProvider}" is not a known provider; skipping multi-model fallback.`,
         )
@@ -102,7 +101,7 @@ function configFromCommaSeparatedAiModel(): ServerModelsConfig | null {
     return {
         providers: [
             {
-                name: PROVIDER_INFO[providerName]?.label || providerName,
+                name: PROVIDERS[providerName]?.label || providerName,
                 provider: providerName,
                 models,
                 default: true,
@@ -195,7 +194,7 @@ export async function loadFlattenedServerModels(): Promise<
 
     for (const p of cfg.providers) {
         const providerLabel =
-            p.name || PROVIDER_INFO[p.provider]?.label || p.provider
+            p.name || PROVIDERS[p.provider]?.label || p.provider
 
         // Use slugified name for unique ID (supports multiple API keys per provider)
         const nameSlug = slugify(p.name)

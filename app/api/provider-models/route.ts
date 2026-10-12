@@ -6,22 +6,15 @@ import {
     listProviderModels,
     ModelListError,
 } from "@/lib/provider-models"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     allowPrivateUrls,
     isPrivateUrl,
     RedirectRefusedError,
     redirectGuardedFetch,
 } from "@/lib/ssrf-protection"
-import type { ProviderName } from "@/lib/types/model-config"
 
 export const runtime = "nodejs"
-
-// Public lists need no key
-const NO_KEY_NEEDED = new Set<ProviderName>([
-    "ollama",
-    "openrouter",
-    "aihubmix",
-])
 
 /**
  * The models a provider offers, for the "Fetch models" button in model
@@ -47,7 +40,8 @@ export async function POST(req: Request) {
     if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
         return NextResponse.json({ error: "Invalid base URL" }, { status: 400 })
     }
-    if (!apiKey && !NO_KEY_NEEDED.has(provider)) {
+    // Public and local lists need no key
+    if (!apiKey && !PROVIDERS[provider].listNeedsNoKey) {
         return NextResponse.json(
             { error: "API key is required" },
             { status: 400 },

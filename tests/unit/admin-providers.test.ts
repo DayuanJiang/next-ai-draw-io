@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     ADMIN_PROVIDERS_KEY,
     adminProvidersToConfig,
+    credEnvNames,
     deriveEnvUpdates,
     loadAdminProviders,
     maskAdminProviders,
@@ -13,6 +14,7 @@ import {
     validateAdminProviders,
 } from "@/lib/admin/providers"
 import { _resetForTests, saveSettings } from "@/lib/admin/settings"
+import { PROVIDER_NAMES } from "@/lib/providers"
 import { loadRawServerModelsConfig } from "@/lib/server-model-config"
 
 let tmpDir: string
@@ -469,5 +471,58 @@ describe("loadAdminProviders", () => {
         expect(loaded).toEqual([])
         // Masking the loaded list must not throw
         expect(() => maskAdminProviders(loaded)).not.toThrow()
+    })
+})
+
+describe("credEnvNames", () => {
+    it("names the panel's variables for every provider", () => {
+        // bedrock, vertexai and ollama write fixed variables; EdgeOne has none
+        const expected: Record<string, string | null> = {
+            openai: "OPENAI",
+            anthropic: "ANTHROPIC",
+            google: "GOOGLE",
+            deepseek: "DEEPSEEK",
+            qwen: "QWEN",
+            doubao: "DOUBAO",
+            glm: "GLM",
+            kimi: "KIMI",
+            minimax: "MINIMAX",
+            mimo: "MIMO",
+            openrouter: "OPENROUTER",
+            aihubmix: "AIHUBMIX",
+            siliconflow: "SILICONFLOW",
+            modelscope: "MODELSCOPE",
+            novita: "NOVITA",
+            atlascloud: "ATLASCLOUD",
+            qiniu: "QINIU",
+            gateway: "AI_GATEWAY",
+            bedrock: null,
+            vertexai: null,
+            azure: "AZURE",
+            edgeone: null,
+            ollama: null,
+            sglang: "SGLANG",
+            custom: "CUSTOM",
+        }
+        expect(Object.keys(expected).sort()).toEqual([...PROVIDER_NAMES].sort())
+        for (const [p, prefix] of Object.entries(expected)) {
+            const first = credEnvNames(p as StoredAdminProvider["provider"], 0)
+            const third = credEnvNames(p as StoredAdminProvider["provider"], 2)
+            expect([p, first, third]).toEqual([
+                p,
+                prefix
+                    ? {
+                          key: `ADMIN_${prefix}_API_KEY`,
+                          url: `ADMIN_${prefix}_BASE_URL`,
+                      }
+                    : {},
+                prefix
+                    ? {
+                          key: `ADMIN_${prefix}_API_KEY_3`,
+                          url: `ADMIN_${prefix}_BASE_URL_3`,
+                      }
+                    : {},
+            ])
+        }
     })
 })

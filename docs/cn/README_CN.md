@@ -151,7 +151,7 @@ npm run dev
 
 ### 模型与服务商
 
-支持 AWS Bedrock（默认）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、腾讯云 EdgeOne、字节跳动豆包、ModelScope、智谱 GLM、通义千问、七牛云、Kimi、MiniMax、Novita、小米 MiMo、Atlas Cloud 共 24 家。各家的环境变量和注意事项见[服务商配置指南](./ai-providers.md)。
+支持 AWS Bedrock（默认）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、腾讯云 EdgeOne、字节跳动豆包、ModelScope、智谱 GLM、通义千问、七牛云、Kimi、MiniMax、Novita、小米 MiMo、Atlas Cloud，以及一个可填任意地址的 OpenAI 兼容预设（vLLM、LM Studio、网关），共 25 家。各家的环境变量和注意事项见[服务商配置指南](./ai-providers.md)。
 
 **选哪个模型**：这项任务要生成格式严格的长文本（draw.io XML），请选能力较强的模型，小模型容易画出错误的图。
 

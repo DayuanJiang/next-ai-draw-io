@@ -1,11 +1,12 @@
 import { ChevronRight, Search } from "lucide-react"
 import { useState } from "react"
+import { useLocale } from "@/components/canvas/locale-context"
 import { ProviderLogo } from "@/components/provider-logo"
 import { SettingsHeader } from "@/components/settings/settings-header"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { filterProviderGroups, PROVIDER_NOTE_KEYS } from "@/lib/provider-setup"
-import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
+import { filterProviderGroups } from "@/lib/provider-setup"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 
 /** Every provider in groups, with a search; picking one adds it */
 export function ProviderPicker({
@@ -20,6 +21,7 @@ export function ProviderPicker({
 }) {
     const dict = useDictionary()
     const t = dict.modelConfig
+    const locale = useLocale()
     const [query, setQuery] = useState("")
     const groups = filterProviderGroups(query)
     const groupLabels: Record<string, string> = {
@@ -28,8 +30,6 @@ export function ProviderPicker({
         cloud: t.groupCloud,
         selfHosted: t.groupSelfHosted,
     }
-    const notes = t as Record<string, string>
-
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <SettingsHeader>
@@ -93,9 +93,8 @@ export function ProviderPicker({
                             </h3>
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-2">
                                 {group.providers.map((provider) => {
-                                    const noteKey = PROVIDER_NOTE_KEYS[provider]
                                     const note = [
-                                        noteKey && notes[noteKey],
+                                        PROVIDERS[provider].note?.[locale],
                                         added.includes(provider) && t.added,
                                     ]
                                         .filter(Boolean)
@@ -116,14 +115,11 @@ export function ProviderPicker({
                                                 <span
                                                     className="block truncate text-[12.5px] font-medium"
                                                     title={
-                                                        PROVIDER_INFO[provider]
+                                                        PROVIDERS[provider]
                                                             .label
                                                     }
                                                 >
-                                                    {
-                                                        PROVIDER_INFO[provider]
-                                                            .label
-                                                    }
+                                                    {PROVIDERS[provider].label}
                                                 </span>
                                                 {note && (
                                                     <span className="block truncate text-[11px] text-muted-foreground">

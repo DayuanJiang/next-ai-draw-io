@@ -382,3 +382,28 @@ describe("the Test on the deployment's own endpoints", () => {
         expect(quota.checks).toBe(0)
     })
 })
+
+describe("POST /api/validate-model with an unknown provider", () => {
+    const send = (body: object) =>
+        validateModel(
+            new Request("http://localhost/api/validate-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ modelId: "m", ...body }),
+            }),
+        )
+
+    it("refuses a name that is not a provider, with or without a key", async () => {
+        for (const body of [
+            { provider: "nope", apiKey: "k" },
+            { provider: "nope" },
+            // A prototype property is not a provider either
+            { provider: "toString", apiKey: "k" },
+        ]) {
+            const res = await send(body)
+            expect(res.status).toBe(400)
+            const { error } = await res.json()
+            expect(error).toMatch(/^Invalid provider: /)
+        }
+    })
+})

@@ -12,8 +12,9 @@ import {
     isQuotaEnabled,
 } from "@/lib/dynamo-quota-manager"
 import { classifyLLMError } from "@/lib/llm-errors"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
-import { normalizeBaseUrl, type ProviderName } from "@/lib/types/model-config"
+import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
 
 export interface TestModelRequest {
@@ -74,10 +75,22 @@ export async function testModelConnection(
                 { status: 400 },
             )
         }
-        // EdgeOne is this site's own function, as in the chat; the admin
-        // panel's Test sends no URL, and a relative one cannot be fetched
-        const baseUrl =
-            provider === "edgeone" ? edgeOneEndpoint(req) : body.baseUrl
+        // The body is untrusted: an unknown name has no record to read
+        if (!Object.hasOwn(PROVIDERS, provider)) {
+            return NextResponse.json(
+                {
+                    valid: false,
+                    error: `Invalid provider: ${provider}. Allowed providers: ${Object.keys(PROVIDERS).join(", ")}`,
+                },
+                { status: 400 },
+            )
+        }
+        const { credential } = PROVIDERS[provider]
+        // The site's own function (EdgeOne) is this site's, as in the chat;
+        // the admin panel's Test sends no URL, and a relative one cannot be
+        // fetched
+        const onSiteFunction = credential === "none"
+        const baseUrl = onSiteFunction ? edgeOneEndpoint(req) : body.baseUrl
 
         // SECURITY: Block SSRF attacks via custom baseUrl
         if (
@@ -92,35 +105,44 @@ export async function testModelConnection(
             )
         }
 
-        // Validate credentials based on provider
-        if (provider === "bedrock") {
-            if (
-                !(apiKey || (awsAccessKeyId && awsSecretAccessKey)) ||
-                !awsRegion
-            ) {
-                return NextResponse.json(
-                    {
-                        valid: false,
-                        error: "AWS credentials (a Bedrock API key, or an Access Key ID and Secret Access Key, and a Region) are required",
-                    },
-                    { status: 400 },
-                )
-            }
-        } else if (provider === "vertexai") {
-            if (!vertexApiKey) {
-                return NextResponse.json(
-                    {
-                        valid: false,
-                        error: "Vertex AI API key is required for Express Mode",
-                    },
-                    { status: 400 },
-                )
-            }
-        } else if (provider !== "ollama" && provider !== "edgeone" && !apiKey) {
-            return NextResponse.json(
-                { valid: false, error: "API key is required" },
-                { status: 400 },
-            )
+        // The credentials the provider's kind asks for
+        switch (credential) {
+            case "aws":
+                if (
+                    !(apiKey || (awsAccessKeyId && awsSecretAccessKey)) ||
+                    !awsRegion
+                ) {
+                    return NextResponse.json(
+                        {
+                            valid: false,
+                            error: "AWS credentials (a Bedrock API key, or an Access Key ID and Secret Access Key, and a Region) are required",
+                        },
+                        { status: 400 },
+                    )
+                }
+                break
+            case "vertexKey":
+                if (!vertexApiKey) {
+                    return NextResponse.json(
+                        {
+                            valid: false,
+                            error: "Vertex AI API key is required for Express Mode",
+                        },
+                        { status: 400 },
+                    )
+                }
+                break
+            case "apiKey":
+                if (!apiKey) {
+                    return NextResponse.json(
+                        { valid: false, error: "API key is required" },
+                        { status: 400 },
+                    )
+                }
+                break
+            case "optionalKey":
+            case "none":
+                break
         }
         // The Test button checks the user's own provider. On the server's
         // keys (Ollama Cloud without a key or URL) anyone could run any model.
@@ -180,8 +202,9 @@ export async function testModelConnection(
             // Temporary AWS credentials need it, as in the chat
             awsSessionToken,
             vertexApiKey,
-            // EdgeOne checks the Pages cookies and the access code
-            ...(provider === "edgeone" && {
+            // The site's function (EdgeOne) checks the Pages cookies and
+            // the access code
+            ...(onSiteFunction && {
                 headers: {
                     cookie: req.headers.get("cookie") || "",
                     "x-access-code": req.headers.get("x-access-code") || "",

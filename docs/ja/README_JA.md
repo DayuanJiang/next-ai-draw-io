@@ -151,7 +151,7 @@ npm run dev
 
 ### モデルとプロバイダー
 
-AWS Bedrock（既定）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、Tencent EdgeOne、ByteDance Doubao、ModelScope、Zhipu GLM、Qwen、Qiniu、Kimi、MiniMax、Novita、Xiaomi MiMo、Atlas Cloud の 24 プロバイダーに対応しています。各プロバイダーの環境変数と注意点は[プロバイダー設定ガイド](./ai-providers.md)にあります。
+AWS Bedrock（既定）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、Tencent EdgeOne、ByteDance Doubao、ModelScope、Zhipu GLM、Qwen、Qiniu、Kimi、MiniMax、Novita、Xiaomi MiMo、Atlas Cloud、および任意の URL を使える OpenAI 互換プリセット（vLLM、LM Studio、ゲートウェイ）の 25 プロバイダーに対応しています。各プロバイダーの環境変数と注意点は[プロバイダー設定ガイド](./ai-providers.md)にあります。
 
 **どのモデルを選ぶか**：厳密な形式の長いテキスト（draw.io の XML）を生成するタスクなので、能力の高いモデルを選んでください。小さなモデルは壊れた図を出しがちです。
 

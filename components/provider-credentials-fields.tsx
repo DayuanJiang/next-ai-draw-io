@@ -2,6 +2,7 @@
 
 import { ChevronRight, Key, Link2, Tag } from "lucide-react"
 import { type ReactNode, useState } from "react"
+import { useLocale } from "@/components/canvas/locale-context"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -13,13 +14,8 @@ import {
 } from "@/components/ui/select"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
-import { OPTIONS_OPEN } from "@/lib/provider-setup"
-import {
-    chatRequestUrl,
-    normalizeBaseUrl,
-    PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/types/model-config"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
+import { chatRequestUrl, normalizeBaseUrl } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
 // Logical secret field. The caller owns the actual input — plaintext for the
@@ -94,10 +90,15 @@ export function ProviderCredentialsFields({
     sessionTokenInput,
 }: ProviderCredentialsFieldsProps) {
     const dict = useDictionary()
-    const info = PROVIDER_INFO[provider]
-    const baseUrlLabel = formatMessage(dict.modelConfig.baseUrlWithExample, {
-        example: info.defaultBaseUrl || "https://api.example.com/v1",
-    })
+    const locale = useLocale()
+    const info = PROVIDERS[provider]
+    // A key-only provider without a default URL (Azure, custom) needs one
+    const baseUrlLabel =
+        info.credential === "apiKey" && !info.defaultBaseUrl
+            ? dict.modelConfig.baseUrlRequired
+            : formatMessage(dict.modelConfig.baseUrlWithExample, {
+                  example: info.defaultBaseUrl || "https://api.example.com/v1",
+              })
     const requestUrl = baseUrl ? chatRequestUrl(provider, baseUrl) : null
     // Open when it holds something the user set, or for a provider whose
     // base URL usually needs changing or comes with a hint
@@ -105,7 +106,7 @@ export function ProviderCredentialsFields({
         () =>
             !!name ||
             (!!baseUrl && baseUrl !== info.defaultBaseUrl) ||
-            OPTIONS_OPEN.includes(provider),
+            !!info.optionsOpen,
     )
     // Bedrock: the way that is filled in (an API key is used first when both
     // are, as the server does), else the one shown last, so emptying the
@@ -199,7 +200,8 @@ export function ProviderCredentialsFields({
                 >
                     <Key className="h-3.5 w-3.5 text-muted-foreground" />
                     {dict.modelConfig.apiKey}
-                    {provider === "ollama" && ` ${dict.modelConfig.optional}`}
+                    {info.credential === "optionalKey" &&
+                        ` ${dict.modelConfig.optional}`}
                 </Label>
                 {info.apiKeyUrl && (
                     <a
@@ -248,26 +250,21 @@ export function ProviderCredentialsFields({
                     })}
                 </p>
             )}
-            {provider === "minimax" && (
+            {info.baseUrlHint && (
                 <p className="text-xs text-muted-foreground">
-                    {dict.modelConfig.minimaxBaseUrlHint}
-                </p>
-            )}
-            {provider === "mimo" && (
-                <p className="text-xs text-muted-foreground">
-                    {dict.modelConfig.mimoBaseUrlHint}
+                    {info.baseUrlHint[locale]}
                 </p>
             )}
         </div>
     )
 
-    // EdgeOne needs no credentials
-    if (provider === "edgeone") return null
+    // A provider without credentials (EdgeOne) has no fields
+    if (info.credential === "none") return null
 
     if (settingsLayout) {
         return (
             <div className="space-y-4">
-                {provider === "bedrock" ? (
+                {info.credential === "aws" ? (
                     <>
                         {/* Buttons, not radios: arrow keys would empty
                             secrets without a deliberate press */}
@@ -393,7 +390,7 @@ export function ProviderCredentialsFields({
                         )}
                         {regionField}
                     </>
-                ) : provider === "vertexai" ? (
+                ) : info.credential === "vertexKey" ? (
                     <div className="space-y-2">
                         <Label
                             htmlFor="vertex-api-key"
@@ -423,14 +420,14 @@ export function ProviderCredentialsFields({
                                 optionsOpen && "rotate-90",
                             )}
                         />
-                        {provider === "bedrock"
+                        {info.credential === "aws"
                             ? dict.modelConfig.moreOptionsName
                             : dict.modelConfig.moreOptions}
                     </button>
                     {optionsOpen && (
                         <>
-                            {provider !== "bedrock" &&
-                                (provider === "vertexai"
+                            {info.credential !== "aws" &&
+                                (info.credential === "vertexKey"
                                     ? vertexBaseUrlField
                                     : baseUrlField)}
                             {nameField}
@@ -445,7 +442,7 @@ export function ProviderCredentialsFields({
         <div className="space-y-5">
             {nameField}
 
-            {provider === "bedrock" ? (
+            {info.credential === "aws" ? (
                 <>
                     {/* AWS Access Key ID */}
                     <div className="space-y-2">
@@ -479,7 +476,7 @@ export function ProviderCredentialsFields({
 
                     {regionField}
                 </>
-            ) : provider === "vertexai" ? (
+            ) : info.credential === "vertexKey" ? (
                 <>
                     {/* Vertex AI API Key (Express Mode) */}
                     <div className="space-y-2">
