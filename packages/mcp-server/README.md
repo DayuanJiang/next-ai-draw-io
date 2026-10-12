@@ -4,6 +4,8 @@ MCP (Model Context Protocol) server that enables AI agents like Claude Desktop a
 
 **Self-contained**: the embedded HTTP server and the draw.io editor are in the package, so after install the preview works offline.
 
+https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
+
 ## Quick Start
 
 ```json
