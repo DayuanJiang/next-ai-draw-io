@@ -58,9 +58,6 @@ interface ProviderCredentialsFieldsProps {
     name?: string
     baseUrl?: string
     awsRegion?: string
-    // Bedrock: also offer an API key (the user dialog; the admin panel
-    // stores access keys only)
-    bedrockApiKey?: boolean
     disabled?: boolean
     // Update a plain text field
     onChange: (field: "name" | "baseUrl" | "awsRegion", value: string) => void
@@ -68,9 +65,6 @@ interface ProviderCredentialsFieldsProps {
     // UI (e.g. the user dialog's inline Test button + validation error); the
     // shared component only supplies the label above it.
     renderSecret: (opts: { field: SecretField; id: string }) => ReactNode
-    // Extra content after the fields — used for the Bedrock test row and the
-    // EdgeOne test button, which aren't beside a credential input.
-    footer?: ReactNode
     // The user's settings page: the secrets come first, the display name and
     // base URL fold under "More options", and Bedrock shows only the way of
     // signing in that is chosen. Switching it empties the other way's
@@ -91,11 +85,9 @@ export function ProviderCredentialsFields({
     name,
     baseUrl,
     awsRegion,
-    bedrockApiKey,
     disabled,
     onChange,
     renderSecret,
-    footer,
     settingsLayout,
     clearSecrets,
     bedrockFilled,
@@ -269,10 +261,8 @@ export function ProviderCredentialsFields({
         </div>
     )
 
-    // EdgeOne needs no credentials — the caller supplies just a test button
-    if (provider === "edgeone") {
-        return <div className="space-y-5">{footer}</div>
-    }
+    // EdgeOne needs no credentials
+    if (provider === "edgeone") return null
 
     if (settingsLayout) {
         return (
@@ -447,7 +437,6 @@ export function ProviderCredentialsFields({
                         </>
                     )}
                 </div>
-                {footer}
             </div>
         )
     }
@@ -458,26 +447,6 @@ export function ProviderCredentialsFields({
 
             {provider === "bedrock" ? (
                 <>
-                    {/* Bedrock API key: used instead of the access keys */}
-                    {bedrockApiKey && (
-                        <div className="space-y-2">
-                            <Label
-                                htmlFor="bedrock-api-key"
-                                className="text-xs font-medium flex items-center gap-1.5"
-                            >
-                                <Key className="h-3.5 w-3.5 text-muted-foreground" />
-                                {dict.modelConfig.bedrockApiKey}
-                            </Label>
-                            {renderSecret({
-                                field: "apiKey",
-                                id: "bedrock-api-key",
-                            })}
-                            <p className="text-xs text-muted-foreground">
-                                {dict.modelConfig.bedrockApiKeyHint}
-                            </p>
-                        </div>
-                    )}
-
                     {/* AWS Access Key ID */}
                     <div className="space-y-2">
                         <Label
@@ -535,8 +504,6 @@ export function ProviderCredentialsFields({
                     {baseUrlField}
                 </>
             )}
-
-            {footer}
         </div>
     )
 }

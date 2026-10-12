@@ -2,17 +2,20 @@ import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
     getAttachmentInput,
-    getChatInput,
-    getIframe,
+    openApp,
     sendMessage,
     test,
 } from "./lib/fixtures"
 import { createMockSSEResponse } from "./lib/helpers"
 
+const ONE_PIXEL_PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64",
+)
+
 test.describe("File Upload", () => {
     test("upload button opens file picker", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // The "Add" menu holds the upload entry
         const addButton = page.locator('[data-testid="composer-add"]')
@@ -25,57 +28,24 @@ test.describe("File Upload", () => {
         expect(chooser.isMultiple()).toBe(true)
     })
 
-    test("shows file preview after selecting image", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        const fileInput = getAttachmentInput(page)
-
-        await fileInput.setInputFiles({
-            name: "test-image.png",
-            mimeType: "image/png",
-            buffer: Buffer.from(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                "base64",
-            ),
-        })
-
-        await expect(
-            page.locator('[role="alert"][data-type="error"]'),
-        ).not.toBeVisible({ timeout: 2000 })
-    })
-
     test("can remove uploaded file", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
-        const fileInput = getAttachmentInput(page)
-
-        await fileInput.setInputFiles({
+        await getAttachmentInput(page).setInputFiles({
             name: "test-image.png",
             mimeType: "image/png",
-            buffer: Buffer.from(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                "base64",
-            ),
+            buffer: ONE_PIXEL_PNG,
         })
 
-        await expect(
-            page.locator('[role="alert"][data-type="error"]'),
-        ).not.toBeVisible({ timeout: 2000 })
+        // The image shows as a preview
+        await expect(page.getByAltText("test-image.png")).toBeVisible({
+            timeout: 3000,
+        })
 
-        const removeButton = page.locator(
-            '[data-testid="remove-file-button"], button[aria-label*="Remove"], button:has(svg.lucide-x)',
-        )
-
-        const removeButtonCount = await removeButton.count()
-        if (removeButtonCount === 0) {
-            test.skip()
-            return
-        }
-
+        const removeButton = page.getByRole("button", { name: "Remove file" })
         await removeButton.first().click()
-        await expect(removeButton.first()).not.toBeVisible({ timeout: 2000 })
+        await expect(removeButton).toHaveCount(0, { timeout: 2000 })
+        await expect(page.getByAltText("test-image.png")).toHaveCount(0)
     })
 
     test("sends file with message to API", async ({ page }) => {
@@ -93,18 +63,12 @@ test.describe("File Upload", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
-        const fileInput = getAttachmentInput(page)
-
-        await fileInput.setInputFiles({
+        await getAttachmentInput(page).setInputFiles({
             name: "architecture.png",
             mimeType: "image/png",
-            buffer: Buffer.from(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                "base64",
-            ),
+            buffer: ONE_PIXEL_PNG,
         })
 
         await sendMessage(page, "Convert this to a diagram")
@@ -117,8 +81,7 @@ test.describe("File Upload", () => {
     })
 
     test("shows error for oversized file", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         const fileInput = getAttachmentInput(page)
         const largeBuffer = Buffer.alloc(3 * 1024 * 1024, "x")
@@ -135,8 +98,7 @@ test.describe("File Upload", () => {
     })
 
     test("drag and drop file upload works", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         const chatForm = page.locator("form").first()
 
@@ -152,6 +114,9 @@ test.describe("File Upload", () => {
         await chatForm.dispatchEvent("dragover", { dataTransfer })
         await chatForm.dispatchEvent("drop", { dataTransfer })
 
-        await expect(getChatInput(page)).toBeVisible({ timeout: 3000 })
+        // The dropped file shows as a preview
+        await expect(page.getByAltText("dropped-image.png")).toBeVisible({
+            timeout: 3000,
+        })
     })
 })

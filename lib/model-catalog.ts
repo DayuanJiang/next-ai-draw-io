@@ -6,7 +6,7 @@ import type { ProviderName } from "@/lib/types/model-config"
  * Only used for hints: requests are sent the same way either way, since
  * the data can be wrong or out of date.
  */
-export interface ModelInfo {
+interface ModelInfo {
     tools: boolean
     images: boolean
     reasoning: boolean

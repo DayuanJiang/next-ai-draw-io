@@ -23,10 +23,7 @@ import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import type { ValidationState } from "@/components/chat/ValidationCard"
 import { useDiagram } from "@/contexts/diagram-context"
-import {
-    keepFileVars,
-    useDiagramToolHandlers,
-} from "@/hooks/use-diagram-tool-handlers"
+import { useDiagramToolHandlers } from "@/hooks/use-diagram-tool-handlers"
 import { useDictionary } from "@/hooks/use-dictionary"
 import {
     getSelectedAIConfig,
@@ -34,7 +31,6 @@ import {
     useModelConfig,
 } from "@/hooks/use-model-config"
 import {
-    getSessionVersions,
     type SessionData,
     useSessionManager,
 } from "@/hooks/use-session-manager"
@@ -121,31 +117,14 @@ function newLangfuseSessionId() {
     return `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-const XML_PROLOG =
-    /^(?:\s|<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>[]*(?:\[[\s\S]*?\])?\s*>)*/i
-
 /**
  * Read the diagram document out of a .drawio, .xml or .drawio.svg file, with
  * its pages inflated: previews and the model read it before draw.io saves
  * it again. A broken or cut off file gives null.
  */
 async function readDiagramFile(file: File): Promise<string | null> {
-    const raw = await file.text()
-    // What XML allows before the root element: the declaration, comments,
-    // a DOCTYPE (the parser below expects the root first)
-    let text = raw.replace(XML_PROLOG, "")
-    // Editable SVG: the diagram is stored in the root's `content` attribute.
-    // Parsed whole: its DOCTYPE may define entities the content uses.
-    if (/^<(?:[\w.-]+:)?svg[\s>]/i.test(text)) {
-        const doc = new DOMParser().parseFromString(raw, "image/svg+xml")
-        text = (doc.documentElement?.getAttribute("content") ?? "").replace(
-            XML_PROLOG,
-            "",
-        )
-    }
-    const loaded = parseDrawioFileContent(text)
-    if (!loaded.ok) return null
-    return withUniquePageIds(loaded.xml)
+    const loaded = parseDrawioFileContent(await file.text())
+    return loaded.ok ? withUniquePageIds(loaded.xml) : null
 }
 
 /**
@@ -267,11 +246,10 @@ export function ChatEngineProvider({
 }) {
     const {
         loadDiagram: onDisplayChart,
-        handleExport: onExport,
-        exportResolversRef,
+        fetchDiagramXml,
         chartXML,
-        chartXMLRef: liveChartXMLRef,
-        latestSvg,
+        chartXMLRef,
+        latestSvgRef,
         clearDiagram,
         getThumbnailSvg,
         captureValidationPng,
@@ -284,25 +262,9 @@ export function ChatEngineProvider({
     const searchParams = useSearchParams()
     const urlSessionId = searchParams.get("session")
 
-    const settings = useSettingsStore()
+    const vlmValidationEnabled = useSettingsStore((s) => s.vlmValidationEnabled)
     const openSettings = useUiStore((s) => s.openSettings)
     const focusComposer = useUiStore((s) => s.focusComposer)
-
-    const onFetchChart = () => {
-        // Waits for the reply to its own export, by its tag
-        const tag = onExport()
-        return Promise.race([
-            new Promise<string>((resolve) => {
-                if (tag) exportResolversRef.current[tag] = resolve
-            }),
-            new Promise<string>((_, reject) => {
-                setTimeout(() => {
-                    delete exportResolversRef.current[tag]
-                    reject(new Error("Chart export timed out after 10 seconds"))
-                }, 10000)
-            }),
-        ])
-    }
 
     const { files, pdfData, handleFileChange, setFiles } = useFileProcessor({
         tooLong: dict.errors.fileTooLong,
@@ -318,9 +280,6 @@ export function ChatEngineProvider({
     const sessionManager = useSessionManager({ initialSessionId: urlSessionId })
 
     const [input, setInputState] = useState("")
-    const [dailyRequestLimit, setDailyRequestLimit] = useState(0)
-    const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
-    const [tpmLimit, setTpmLimit] = useState(0)
 
     // Restore the unsent input from sessionStorage
     useEffect(() => {
@@ -340,21 +299,7 @@ export function ChatEngineProvider({
         else sessionStorage.removeItem(SESSION_STORAGE_INPUT_KEY)
     }, [])
 
-    useEffect(() => {
-        fetch(getApiEndpoint("/api/config"))
-            .then((res) => res.json())
-            .then((data) => {
-                setDailyRequestLimit(data.dailyRequestLimit || 0)
-                setDailyTokenLimit(data.dailyTokenLimit || 0)
-                setTpmLimit(data.tpmLimit || 0)
-            })
-            .catch(() => {})
-    }, [])
-
     const quotaManager = useQuotaManager({
-        dailyRequestLimit,
-        dailyTokenLimit,
-        tpmLimit,
         onConfigModel: () => openSettings("models"),
     })
 
@@ -392,19 +337,11 @@ export function ChatEngineProvider({
     const hasRestoredRef = useRef(false)
     const [isRestored, setIsRestored] = useState(false)
 
-    // Latest chartXML for callbacks (avoids stale closures)
-    const chartXMLRef = useRef(chartXML)
     // Session loaded without a diagram (prevents thumbnail contamination)
     const justLoadedSessionIdRef = useRef<string | null>(null)
     useEffect(() => {
-        chartXMLRef.current = chartXML
         if (chartXML) justLoadedSessionIdRef.current = null
     }, [chartXML])
-
-    const latestSvgRef = useRef(latestSvg)
-    useEffect(() => {
-        latestSvgRef.current = latestSvg
-    }, [latestSvg])
 
     const autoRetryCountRef = useRef(0)
     const continuationRetryCountRef = useRef(0)
@@ -458,13 +395,13 @@ export function ChatEngineProvider({
         processedToolCallsRef,
         validationRetryCountRef,
         // A preview undone just before the tool call is in this one already
-        chartXMLRef: liveChartXMLRef,
+        chartXMLRef,
         turnPageIdRef,
         onDisplayChart,
-        onFetchChart,
+        onFetchChart: fetchDiagramXml,
         captureValidationPng,
         validateDiagram: validateWithFallback,
-        enableVlmValidation: settings.vlmValidationEnabled,
+        enableVlmValidation: vlmValidationEnabled,
         sessionId: langfuseSessionId,
         watchStop: () => {
             const stopsBefore = stopCountRef.current
@@ -837,13 +774,7 @@ export function ChatEngineProvider({
     const messagesBeforeShownRef = useRef<UIMessage[] | null>(null)
 
     const syncUIWithSession = useCallback(
-        (
-            data:
-                | (SessionData & {
-                      diagramHistory?: { svg: string; xml: string }[]
-                  })
-                | null,
-        ) => {
+        (data: SessionData | null) => {
             // An answer still coming in belongs to the chat that was on
             // screen (browser back or forward): it stops, before this chat's
             // messages are put in its place, so none of it lands here
@@ -882,24 +813,15 @@ export function ChatEngineProvider({
                 )
                 setMessages(data.messages as unknown as UIMessage[])
                 xmlSnapshotsRef.current = new Map(data.xmlSnapshots)
-                if (data.diagramXml) {
-                    onDisplayChart(data.diagramXml, true)
-                    chartXMLRef.current = data.diagramXml
-                } else {
-                    clearDiagram()
-                    chartXMLRef.current = ""
-                }
+                if (data.diagramXml) onDisplayChart(data.diagramXml, true)
+                else clearDiagram()
                 if (!isRealDiagram(data.diagramXml)) latestSvgRef.current = ""
-                useVersionsStore
-                    .getState()
-                    .setVersions(getSessionVersions(data))
+                useVersionsStore.getState().setVersions(data.versions ?? [])
             } else {
                 loadedMessageIdsRef.current = new Set()
                 setMessages([])
                 xmlSnapshotsRef.current.clear()
                 clearDiagram()
-                chartXMLRef.current = ""
-                latestSvgRef.current = ""
                 useVersionsStore.getState().clear()
             }
         },
@@ -932,7 +854,6 @@ export function ChatEngineProvider({
             if (isRealDiagram(currentDiagramXml) && options.withThumbnail) {
                 const freshThumb = await getThumbnailSvg()
                 if (freshThumb) {
-                    latestSvgRef.current = freshThumb
                     thumbnailDataUrl = freshThumb
                 } else if (latestSvgRef.current) {
                     thumbnailDataUrl = latestSvgRef.current
@@ -1261,7 +1182,7 @@ export function ChatEngineProvider({
         selectedCells: MessageSelection = [],
         generation = getChatGeneration(),
     ): Promise<boolean> => {
-        const chartXml = formatXML(await onFetchChart())
+        const chartXml = formatXML(await fetchDiagramXml())
         if (getChatGeneration() !== generation || leavingRef.current) {
             return false
         }
@@ -1344,12 +1265,8 @@ export function ChatEngineProvider({
                 })
                 if (prepared.ok) {
                     const pageId = viewedPageId()
-                    const canvasXml = chartXMLRef.current || ""
                     onDisplayChart(
-                        keepFileVars(
-                            placeOnPage(prepared.xml, canvasXml, pageId),
-                            canvasXml,
-                        ),
+                        placeOnPage(prepared.xml, chartXMLRef.current, pageId),
                         true,
                         "commit",
                         { toolCallId, pageId },
@@ -1437,8 +1354,8 @@ export function ChatEngineProvider({
     }
 
     // Templates fill the input and send it right away (attachments included)
-    // Whether it was sent (it can run after a wait: the template panel
-    // stores its click count first, so busy is read from the ref)
+    // Whether it was sent (it can run after a wait, so busy is read from
+    // the ref)
     const sendTemplate = async (prompt: string): Promise<boolean> => {
         // Like the send button, it waits for an answer or a message being
         // prepared (that message may still come back to the input), and for
@@ -1478,11 +1395,6 @@ export function ChatEngineProvider({
         }
     }
 
-    const restoreDiagramFromSnapshot = (savedXml: string) => {
-        onDisplayChart(savedXml, true)
-        chartXMLRef.current = savedXml
-    }
-
     // Snapshots of the messages after this one go with them
     const dropLaterSnapshots = (messageIndex: number) => {
         for (const key of xmlSnapshotsRef.current.keys()) {
@@ -1500,7 +1412,7 @@ export function ChatEngineProvider({
             return false
         }
         const previousXml = getPreviousXml(index)
-        restoreDiagramFromSnapshot(savedXml)
+        onDisplayChart(savedXml, true)
         dropLaterSnapshots(index)
         useVersionsStore.getState().removeFromTurn(index)
 
@@ -1568,7 +1480,7 @@ export function ChatEngineProvider({
         // Like submit: the diagram export comes first
         preparingSendRef.current = true
         try {
-            const chartXml = formatXML(await onFetchChart())
+            const chartXml = formatXML(await fetchDiagramXml())
             // Another chat came on screen meanwhile (browser back/forward),
             // or this one is being left
             if (getChatGeneration() !== generation || leavingRef.current) {

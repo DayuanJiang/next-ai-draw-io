@@ -16,16 +16,21 @@ const nextConfig: NextConfig = {
         "*": ["./instrumentation.ts"],
         "/api/chat": ["./docs/shape-libraries/*.md"],
     },
+    // The Chinese and Japanese About pages used to be separate routes
+    async redirects() {
+        return [
+            {
+                source: "/:lang/about/cn",
+                destination: "/zh/about",
+                permanent: true,
+            },
+            {
+                source: "/:lang/about/ja",
+                destination: "/ja/about",
+                permanent: true,
+            },
+        ]
+    },
 }
 
 export default nextConfig
-
-// Initialize OpenNext Cloudflare for local development only
-// This must be a dynamic import to avoid loading workerd binary during builds
-if (process.env.NODE_ENV === "development") {
-    import("@opennextjs/cloudflare").then(
-        ({ initOpenNextCloudflareForDev }) => {
-            initOpenNextCloudflareForDev()
-        },
-    )
-}

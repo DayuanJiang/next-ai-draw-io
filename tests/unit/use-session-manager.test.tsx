@@ -17,7 +17,6 @@ vi.mock("@/lib/session-storage", async (importActual) => {
         createEmptySession: actual.createEmptySession,
         extractTitle: actual.extractTitle,
         isIndexedDBAvailable: () => true,
-        migrateFromLocalStorage: async () => null,
         readSessionCount: async () => stored.size,
         enforceSessionLimit: async () => {},
         getSession: async (id: string) => {

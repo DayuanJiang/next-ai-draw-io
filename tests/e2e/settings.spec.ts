@@ -1,6 +1,6 @@
 import {
     expect,
-    getIframe,
+    openApp,
     openSettings,
     openSettingsTab,
     test,
@@ -8,8 +8,7 @@ import {
 
 test.describe("Settings", () => {
     test.beforeEach(async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
     })
 
     test("settings dialog opens", async ({ page }) => {

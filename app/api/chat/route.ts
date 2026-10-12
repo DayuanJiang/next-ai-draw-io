@@ -1,8 +1,6 @@
 import {
     APICallError,
     convertToModelMessages,
-    createUIMessageStream,
-    createUIMessageStreamResponse,
     InvalidToolInputError,
     stepCountIs,
     streamText,
@@ -21,12 +19,10 @@ import {
     usesServerCredentials,
     usesServerEndpoint,
 } from "@/lib/ai-providers"
-import { findCachedResponse } from "@/lib/cached-responses"
 import {
     dropInvalidToolCalls,
     fixToolInputJson,
     formatSelectionContext,
-    replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
 import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
@@ -56,7 +52,6 @@ import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
-import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import {
     getShapeLibrary,
     SHAPE_LIBRARY_LIST,
@@ -70,36 +65,6 @@ import {
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
 // which is also where Node's response-body timeout on the upstream stream lands.
 
-// Helper function to create cached stream response
-function createCachedStreamResponse(xml: string): Response {
-    const toolCallId = `cached-${Date.now()}`
-
-    const stream = createUIMessageStream({
-        execute: async ({ writer }) => {
-            writer.write({ type: "start" })
-            writer.write({
-                type: "tool-input-start",
-                toolCallId,
-                toolName: "display_diagram",
-            })
-            writer.write({
-                type: "tool-input-delta",
-                toolCallId,
-                inputTextDelta: xml,
-            })
-            writer.write({
-                type: "tool-input-available",
-                toolCallId,
-                toolName: "display_diagram",
-                input: { xml },
-            })
-            writer.write({ type: "finish" })
-        },
-    })
-
-    return createUIMessageStreamResponse({ stream })
-}
-
 // Responses streamed from the model, whose trace streamText's callbacks end
 const modelStreamResponses = new WeakSet<Response>()
 // A Request's signal follows the client's disconnect only while the Request
@@ -110,6 +75,21 @@ const requestOfResponse = new WeakMap<Response, Request>()
 
 // Inner handler function
 const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
+
+// Message structure for DEBUG_LLM_PAYLOAD logs: roles, part types, tool names
+// and input keys, without the diagram XML or image data
+const describeMessages = (msgs: any[]) =>
+    msgs.map((m) => ({
+        role: m.role,
+        parts: (m.parts ?? m.content ?? []).map(
+            (p: any) =>
+                p.type +
+                (p.toolName ? `:${p.toolName}` : "") +
+                (p.input && typeof p.input === "object"
+                    ? `(${Object.keys(p.input).join(",")})`
+                    : ""),
+        ),
+    }))
 
 async function handleChatRequest(req: Request): Promise<Response> {
     const crossSite = rejectCrossSite(req)
@@ -155,23 +135,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
         return Response.json({ error: fileValidation.error }, { status: 400 })
     }
     // === FILE VALIDATION END ===
-
-    // === CACHE CHECK START ===
-    const isFirstMessage = messages.length === 1
-    const isEmptyDiagram = !xml || !hasCells(xml)
-
-    if (isFirstMessage && isEmptyDiagram) {
-        const lastMessage = messages[0]
-        const textPart = lastMessage.parts?.find((p: any) => p.type === "text")
-        const filePart = lastMessage.parts?.find((p: any) => p.type === "file")
-
-        const cached = findCachedResponse(textPart?.text || "", !!filePart)
-
-        if (cached) {
-            return createCachedStreamResponse(cached.xml)
-        }
-    }
-    // === CACHE CHECK END ===
 
     // Read client AI provider overrides from headers
     const provider = req.headers.get("x-ai-provider")
@@ -348,7 +311,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         `[Prompt Caching] ${shouldCache ? "ENABLED" : "DISABLED"} for model: ${modelId}`,
     )
 
-    // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
+    // System prompt, with the model name filled in and the style section chosen
     const systemMessage = getSystemPrompt(modelId, minimalStyle)
     const finalSystemMessage = customSystemMessage
         ? `${systemMessage}\n\n## Custom Instructions\n${customSystemMessage}`
@@ -380,47 +343,15 @@ ${userInputText}
 
     // DEBUG_LLM_PAYLOAD=true logs the incoming message structure
     if (DEBUG_LLM_PAYLOAD) {
-        console.log("[route.ts] Incoming messages count:", messages.length)
-        messages.forEach((msg: any, idx: number) => {
-            console.log(
-                `[route.ts] Message ${idx} role:`,
-                msg.role,
-                "parts count:",
-                msg.parts?.length,
-            )
-            if (msg.parts) {
-                msg.parts.forEach((part: any, partIdx: number) => {
-                    if (
-                        part.type === "tool-invocation" ||
-                        part.type === "tool-result"
-                    ) {
-                        console.log(`[route.ts]   Part ${partIdx}:`, {
-                            type: part.type,
-                            toolName: part.toolName,
-                            hasInput: !!part.input,
-                            inputType: typeof part.input,
-                            inputKeys:
-                                part.input && typeof part.input === "object"
-                                    ? Object.keys(part.input)
-                                    : null,
-                        })
-                    }
-                })
-            }
-        })
+        console.log(
+            "[route.ts] incoming",
+            JSON.stringify(describeMessages(messages)),
+        )
     }
-
-    // Replace historical tool call XML with placeholders to reduce tokens
-    // Disabled by default - some models (e.g. minimax) copy placeholders instead of generating XML
-    const enableHistoryReplace =
-        process.env.ENABLE_HISTORY_XML_REPLACE === "true"
-    const placeholderMessages = enableHistoryReplace
-        ? replaceHistoricalToolInputs(modelMessages)
-        : modelMessages
 
     // Filter out messages with empty content arrays (Bedrock API rejects these)
     // This is a safety measure - ideally convertToModelMessages should handle all cases
-    let enhancedMessages = placeholderMessages.filter(
+    let enhancedMessages = modelMessages.filter(
         (msg: any) =>
             msg.content && Array.isArray(msg.content) && msg.content.length > 0,
     )
@@ -432,36 +363,10 @@ ${userInputText}
 
     // DEBUG_LLM_PAYLOAD=true logs what is sent to the model
     if (DEBUG_LLM_PAYLOAD) {
-        console.log("[route.ts] Model messages count:", enhancedMessages.length)
-        enhancedMessages.forEach((msg: any, idx: number) => {
-            console.log(
-                `[route.ts] ModelMsg ${idx} role:`,
-                msg.role,
-                "content count:",
-                msg.content?.length,
-            )
-            if (msg.content) {
-                msg.content.forEach((part: any, partIdx: number) => {
-                    if (
-                        part.type === "tool-call" ||
-                        part.type === "tool-result"
-                    ) {
-                        console.log(`[route.ts]   Content ${partIdx}:`, {
-                            type: part.type,
-                            toolName: part.toolName,
-                            hasInput: !!part.input,
-                            inputType: typeof part.input,
-                            inputValue:
-                                part.input === undefined
-                                    ? "undefined"
-                                    : part.input === null
-                                      ? "null"
-                                      : "object",
-                        })
-                    }
-                })
-            }
-        })
+        console.log(
+            "[route.ts] to model",
+            JSON.stringify(describeMessages(enhancedMessages)),
+        )
     }
 
     // Update the last message with user input only (XML moved to separate cached system message)
@@ -790,17 +695,6 @@ Call this tool to get shape names and usage syntax for a specific library.`,
         // Keyless endpoints keep theirs: the desktop app's Ollama is the
         // user's own, and EdgeOne's text is our function's explanation.
         onError: (error) => streamErrorText(error, onServerCredentials),
-        messageMetadata: ({ part }) => {
-            if (part.type === "finish") {
-                const usage = (part as any).totalUsage
-                // AI SDK 6 provides totalTokens directly
-                return {
-                    totalTokens: usage?.totalTokens ?? 0,
-                    finishReason: (part as any).finishReason,
-                }
-            }
-            return undefined
-        },
     })
     modelStreamResponses.add(response)
     requestOfResponse.set(response, req)
@@ -840,7 +734,7 @@ async function safeHandler(req: Request): Promise<Response> {
     } catch (error) {
         response = handleError(error)
     }
-    // Early returns, cache hits and errors never reach streamText's callbacks,
+    // Early returns and errors never reach streamText's callbacks,
     // so their Langfuse trace has to be ended here
     if (!modelStreamResponses.has(response)) endTrace()
     return response

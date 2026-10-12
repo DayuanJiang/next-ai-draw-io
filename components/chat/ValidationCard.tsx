@@ -16,7 +16,6 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { ValidationResult } from "@/lib/diagram-validator"
 
 export type ValidationStatus =
-    | "idle"
     | "capturing"
     | "validating"
     | "success"
@@ -159,13 +158,10 @@ export function ValidationCard({
                     color: "text-gray-600 bg-gray-50",
                     icon: <Check className="h-4 w-4" aria-hidden="true" />,
                 }
-            default:
-                return null
         }
     }
 
     const statusDisplay = getStatusDisplay()
-    if (!statusDisplay || state.status === "idle") return null
 
     return (
         <div className="my-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden">

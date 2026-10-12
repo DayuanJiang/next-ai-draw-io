@@ -1,4 +1,4 @@
-import { FileText, FileUp, History, Pencil } from "lucide-react"
+import { FileUp, History, Pencil } from "lucide-react"
 import type React from "react"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getAssetUrl } from "@/lib/base-path"
@@ -12,7 +12,7 @@ interface Example {
     title: string
     description: string
     /** Picture of the result (or of the input, for "replicate" examples) */
-    image?: string
+    image: string
     prompt: string
     /** Bundled file sent with the prompt; matches the cached example */
     file?: { path: string; name: string; type: string }
@@ -34,7 +34,6 @@ function ExampleTile({
     title,
     description,
     picture,
-    plain,
     testId,
 }: {
     onClick: () => void
@@ -42,8 +41,6 @@ function ExampleTile({
     /** Shown as the tooltip: the title alone names the example */
     description: string
     picture: React.ReactNode
-    /** An icon on a tinted tile instead of a diagram on paper */
-    plain?: boolean
     testId?: string
 }) {
     return (
@@ -54,12 +51,7 @@ function ExampleTile({
             className="group/example flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-1.5 pb-2.5 text-left transition-colors hover:border-foreground/25"
             data-testid={testId}
         >
-            <span
-                className={cn(
-                    "flex h-16 w-full items-center justify-center overflow-hidden rounded-lg",
-                    plain ? "bg-muted" : "sheet-light bg-white",
-                )}
-            >
+            <span className="flex h-16 w-full items-center justify-center overflow-hidden rounded-lg sheet-light bg-white">
                 {picture}
             </span>
             <span className="px-1 text-[13px] leading-snug font-medium text-foreground">
@@ -220,18 +212,13 @@ export function LobbyHero({
                             description={example.description}
                             testId={`example-${example.key}`}
                             picture={
-                                example.image ? (
-                                    // biome-ignore lint/performance/noImgElement: static preview
-                                    <img
-                                        src={getAssetUrl(example.image)}
-                                        alt=""
-                                        className="max-h-14 max-w-[88%] object-contain transition-transform duration-300 group-hover/example:scale-[1.06]"
-                                    />
-                                ) : (
-                                    <FileText className="size-5 text-muted-foreground" />
-                                )
+                                // biome-ignore lint/performance/noImgElement: static preview
+                                <img
+                                    src={getAssetUrl(example.image)}
+                                    alt=""
+                                    className="max-h-14 max-w-[88%] object-contain transition-transform duration-300 group-hover/example:scale-[1.06]"
+                                />
                             }
-                            plain={!example.image}
                         />
                     ),
                 )}

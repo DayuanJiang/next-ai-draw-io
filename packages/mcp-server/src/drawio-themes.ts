@@ -1,4 +1,4 @@
-export const DRAWIO_THEMES = [
+const DRAWIO_THEMES = [
     "kennedy",
     "atlas",
     "dark",
@@ -7,7 +7,7 @@ export const DRAWIO_THEMES = [
     "simple",
 ] as const
 
-export type DrawioTheme = (typeof DRAWIO_THEMES)[number]
+type DrawioTheme = (typeof DRAWIO_THEMES)[number]
 
 export function isDrawioTheme(value: unknown): value is DrawioTheme {
     return (

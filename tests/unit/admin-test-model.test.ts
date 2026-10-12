@@ -1,12 +1,12 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// The request the admin Test hands to validate-model
-const sent = vi.hoisted(() => ({ body: null as any, headers: null as any }))
-vi.mock("@/app/api/validate-model/route", () => ({
-    POST: async (req: Request) => {
-        sent.body = await req.json()
-        sent.headers = Object.fromEntries(req.headers)
+// What the admin Test hands to testModelConnection
+const sent = vi.hoisted(() => ({ body: null as any, trusted: null as any }))
+vi.mock("@/lib/test-model-connection", () => ({
+    testModelConnection: async (_req: Request, body: any, trusted: boolean) => {
+        sent.body = body
+        sent.trusted = trusted
         return Response.json({ valid: true })
     },
 }))
@@ -27,19 +27,9 @@ const ENV = [
     "AZURE_BASE_URL",
     "AZURE_RESOURCE_NAME",
 ]
-const saved: Record<string, string | undefined> = {}
 beforeEach(() => {
     envFallback.values = {}
-    for (const k of ENV) {
-        saved[k] = process.env[k]
-        delete process.env[k]
-    }
-})
-afterEach(() => {
-    for (const k of ENV) {
-        if (saved[k] === undefined) delete process.env[k]
-        else process.env[k] = saved[k]
-    }
+    for (const k of ENV) vi.stubEnv(k, undefined)
 })
 
 const test = (provider: Record<string, unknown>) =>
@@ -61,7 +51,7 @@ describe("admin Test of an entry without a URL", () => {
         await test({ provider: "openai", apiKey: "panel-key" })
         expect(sent.body.baseUrl).toBe("https://operator-proxy.example.com/v1")
         // The server's own URL, tested without the rules for typed URLs
-        expect(sent.body.serverBaseUrl).toBe(true)
+        expect(sent.trusted).toBe(true)
 
         process.env.AI_GATEWAY_BASE_URL = "https://gateway.example.com/v3/ai"
         await test({ provider: "gateway", apiKey: "k" })
@@ -82,19 +72,15 @@ describe("admin Test of an entry without a URL", () => {
 
     it("does not use Vertex's variable, which the panel writes itself", async () => {
         // Before a save it still holds the entry's previous URL
-        process.env.GOOGLE_VERTEX_BASE_URL = "https://old-proxy.example.com"
-        try {
-            await test({ provider: "vertexai", vertexApiKey: "new-key" })
-            expect(sent.body.baseUrl).toBeUndefined()
-            // The environment's own URL, which chat uses once it is saved
-            envFallback.values.GOOGLE_VERTEX_BASE_URL =
-                "https://vertex-proxy.example.com"
-            await test({ provider: "vertexai", vertexApiKey: "new-key" })
-            expect(sent.body.baseUrl).toBe("https://vertex-proxy.example.com")
-            expect(sent.body.serverBaseUrl).toBe(true)
-        } finally {
-            delete process.env.GOOGLE_VERTEX_BASE_URL
-        }
+        vi.stubEnv("GOOGLE_VERTEX_BASE_URL", "https://old-proxy.example.com")
+        await test({ provider: "vertexai", vertexApiKey: "new-key" })
+        expect(sent.body.baseUrl).toBeUndefined()
+        // The environment's own URL, which chat uses once it is saved
+        envFallback.values.GOOGLE_VERTEX_BASE_URL =
+            "https://vertex-proxy.example.com"
+        await test({ provider: "vertexai", vertexApiKey: "new-key" })
+        expect(sent.body.baseUrl).toBe("https://vertex-proxy.example.com")
+        expect(sent.trusted).toBe(true)
     })
 
     it("tests Azure set up by resource name where chat goes", async () => {
@@ -103,7 +89,7 @@ describe("admin Test of an entry without a URL", () => {
         expect(sent.body.baseUrl).toBe(
             "https://team-openai.openai.azure.com/openai",
         )
-        expect(sent.body.serverBaseUrl).toBe(true)
+        expect(sent.trusted).toBe(true)
     })
 
     it("tests Ollama where chat sends the entry's key", async () => {
@@ -111,7 +97,7 @@ describe("admin Test of an entry without a URL", () => {
         // the SDK's local default (the Test used to go to Ollama Cloud)
         await test({ provider: "ollama", apiKey: "k" })
         expect(sent.body.baseUrl).toBe("http://127.0.0.1:11434/api")
-        expect(sent.body.serverBaseUrl).toBe(true)
+        expect(sent.trusted).toBe(true)
         envFallback.values.OLLAMA_BASE_URL = "http://gpu:11434/api"
         await test({ provider: "ollama", apiKey: "k" })
         expect(sent.body.baseUrl).toBe("http://gpu:11434/api")

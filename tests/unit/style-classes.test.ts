@@ -9,9 +9,14 @@ import {
 import {
     addDefaultStyles,
     applyStyleClasses,
-    expandStyles,
     readStyleClasses,
 } from "@/packages/mcp-server/src/style-classes.ts"
+
+/** The named styles of a model's XML expanded, with the default styles */
+const expandStyles = (xml: string) => {
+    const { classes, xml: cells } = readStyleClasses(xml)
+    return addDefaultStyles(applyStyleClasses(cells, classes))
+}
 
 const geometry =
     '<mxGeometry x="0" y="0" width="80" height="40" as="geometry"/>'

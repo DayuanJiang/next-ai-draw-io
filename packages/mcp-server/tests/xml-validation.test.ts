@@ -7,15 +7,9 @@
  * leave valid parts of the document untouched.
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-import { getXmlSyntaxError } from "../src/xml-syntax.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
-
+import { describe, expect, it } from "vitest"
 import { addPageToDoc, parseMxfile, serializeMxfile } from "../src/pages.ts"
+import { getXmlSyntaxError } from "../src/xml-syntax.ts"
 import { validateAndFixXml } from "../src/xml-validation.ts"
 
 /** Bare model with the root cells plus the given cells. */

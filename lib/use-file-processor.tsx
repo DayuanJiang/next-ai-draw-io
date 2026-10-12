@@ -23,18 +23,11 @@ export interface FileProcessorMessages {
     readFailed: string
 }
 
-const DEFAULT_MESSAGES: FileProcessorMessages = {
-    tooLong: "{name}: Content exceeds {limit}k character limit ({size}k chars)",
-    readFailed: "Failed to read file: {name}",
-}
-
 /**
  * Hook for processing file uploads, especially PDFs and text files.
  * Handles text extraction, character limit validation, and cleanup.
  */
-export function useFileProcessor(
-    messages: FileProcessorMessages = DEFAULT_MESSAGES,
-) {
+export function useFileProcessor(messages: FileProcessorMessages) {
     const [files, setFiles] = useState<File[]>([])
     const [pdfData, setPdfData] = useState<Map<File, FileData>>(new Map())
 

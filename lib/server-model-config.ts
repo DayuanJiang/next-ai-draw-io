@@ -10,7 +10,7 @@ export const ProviderNameSchema: z.ZodType<ProviderName> = z
         message: "Invalid provider name",
     })
 
-export const ServerProviderSchema = z.object({
+const ServerProviderSchema = z.object({
     name: z.string().min(1),
     provider: ProviderNameSchema,
     models: z.array(z.string().min(1)),
@@ -30,7 +30,6 @@ export const ServerModelsConfigSchema = z.object({
     providers: z.array(ServerProviderSchema),
 })
 
-export type ServerProviderConfig = z.infer<typeof ServerProviderSchema>
 export type ServerModelsConfig = z.infer<typeof ServerModelsConfigSchema>
 
 export interface FlattenedServerModel {

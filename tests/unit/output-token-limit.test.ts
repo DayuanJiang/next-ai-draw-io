@@ -1,19 +1,26 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
     DEFAULT_MAX_OUTPUT_TOKENS,
-    parseOutputTokenLimit,
+    readCeiling,
+    rejectionText,
     resolveMaxOutputTokens,
     retryOutputTokens,
     withOutputTokenLimitFallback,
 } from "@/lib/output-token-limit"
 
-describe("parseOutputTokenLimit", () => {
+// The ceiling a rejection names, before the "too small to retry" check
+const parse = (error: unknown) => {
+    const text = rejectionText(error)
+    return text ? readCeiling(text) : null
+}
+
+describe("readCeiling", () => {
     it("reads the ceiling from a Bedrock rejection", () => {
         const error = {
             message:
                 "The maximum tokens you requested exceeds the model limit of 4096. Try again with a maximum tokens value that is lower than 4096.",
         }
-        expect(parseOutputTokenLimit(error)).toBe(4096)
+        expect(parse(error)).toBe(4096)
     })
 
     it("subtracts the input when the ceiling covers input plus output", () => {
@@ -22,7 +29,7 @@ describe("parseOutputTokenLimit", () => {
                 "This endpoint's maximum context length is 64000 tokens. However, you requested about 64025 tokens (25 of text input, 64000 in the output).",
         }
         // 64000 - 25 - 1024 margin
-        expect(parseOutputTokenLimit(error)).toBe(62951)
+        expect(parse(error)).toBe(62951)
     })
 
     it("reads the ceiling from an Anthropic rejection", () => {
@@ -30,7 +37,7 @@ describe("parseOutputTokenLimit", () => {
             message:
                 "max_tokens: 200000 > 64000, which is the maximum allowed number of output tokens for claude-sonnet-4-5",
         }
-        expect(parseOutputTokenLimit(error)).toBe(64000)
+        expect(parse(error)).toBe(64000)
     })
 
     it("reads the ceiling from an OpenAI rejection", () => {
@@ -38,7 +45,7 @@ describe("parseOutputTokenLimit", () => {
             message:
                 "max_tokens is too large: 64000. This model supports at most 16384 completion tokens",
         }
-        expect(parseOutputTokenLimit(error)).toBe(16384)
+        expect(parse(error)).toBe(16384)
     })
 
     it("looks in the response body too", () => {
@@ -46,25 +53,25 @@ describe("parseOutputTokenLimit", () => {
             message: "Bad request",
             responseBody: '{"message":"exceeds the model limit of 10000."}',
         }
-        expect(parseOutputTokenLimit(error)).toBe(10000)
+        expect(parse(error)).toBe(10000)
     })
 
     it("returns null for unrelated errors", () => {
-        expect(parseOutputTokenLimit({ message: "Invalid API key" })).toBeNull()
-        expect(parseOutputTokenLimit(undefined)).toBeNull()
+        expect(parse({ message: "Invalid API key" })).toBeNull()
+        expect(parse(undefined)).toBeNull()
     })
 
     it("ignores a number that is not about tokens", () => {
         // An earlier draft matched "lower than N" generically, which turned any
         // message shaped like this into a bogus budget
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message: "temperature must be lower than 2",
                 statusCode: 400,
             }),
         ).toBeNull()
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message: "reduce requests to lower than 60 per minute",
                 statusCode: 429,
             }),
@@ -76,28 +83,26 @@ describe("parseOutputTokenLimit", () => {
             message: "exceeds the model limit of 4096",
             statusCode: 429,
         }
-        expect(parseOutputTokenLimit(error)).toBeNull()
+        expect(parse(error)).toBeNull()
     })
 
-    it("rejects a ceiling too small to hold a diagram", () => {
-        expect(
-            parseOutputTokenLimit({ message: "model limit of 200" }),
-        ).toBeNull()
+    it("reads a ceiling too small to hold a diagram as it is", () => {
+        // retryOutputTokens is what refuses to retry on these
+        expect(parse({ message: "model limit of 200" })).toBe(200)
         // Context ceiling that leaves almost nothing after the input
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message:
                     "This endpoint's maximum context length is 64000 tokens. However, you requested about 128000 tokens (63500 of text input, 64000 in the output).",
             }),
-        ).toBeNull()
-    })
-
-    it("returns null when the input alone fills the context", () => {
-        const error = {
-            message:
-                "This endpoint's maximum context length is 1000 tokens. However, you requested about 65000 tokens (64000 of text input, 1000 in the output).",
-        }
-        expect(parseOutputTokenLimit(error)).toBeNull()
+        ).toBe(64000 - 63500 - 1024)
+        // The input alone fills the context
+        expect(
+            parse({
+                message:
+                    "This endpoint's maximum context length is 1000 tokens. However, you requested about 65000 tokens (64000 of text input, 1000 in the output).",
+            }),
+        ).toBe(1000 - 64000 - 1024)
     })
 
     it("reads the ceiling from a Volcengine Ark rejection", () => {
@@ -106,10 +111,10 @@ describe("parseOutputTokenLimit", () => {
                 "The parameter `max_tokens` specified in the request are not valid: integer above maximum value, expected a value <= 32768, but got 64000 instead.",
             statusCode: 400,
         }
-        expect(parseOutputTokenLimit(error)).toBe(32768)
+        expect(parse(error)).toBe(32768)
         // Same message JSON-escaped in the response body
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message: "Bad request",
                 responseBody:
                     '{"error":{"message":"The parameter `max_tokens` specified in the request are not valid: integer above maximum value, expected a value \\u003c= 16384, but got 64000 instead."}}',
@@ -122,27 +127,27 @@ describe("parseOutputTokenLimit", () => {
             message:
                 "<400> InternalError.Algo.InvalidParameter: Range of max_tokens should be [1, 8192]",
         }
-        expect(parseOutputTokenLimit(error)).toBe(8192)
+        expect(parse(error)).toBe(8192)
     })
 
     it("subtracts the input in SGLang and vLLM context rejections", () => {
         // SGLang
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message:
                     "Requested token count exceeds the model's maximum context length of 32768 tokens. You requested a total of 70000 tokens: 6000 tokens from the input messages and 64000 tokens for the completion.",
             }),
         ).toBe(32768 - 6000 - 1024)
         // vLLM, older wording
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message:
                     "This model's maximum context length is 32768 tokens. However, you requested 70000 tokens (6000 in the messages, 64000 in the completion).",
             }),
         ).toBe(32768 - 6000 - 1024)
         // vLLM, newer wording
         expect(
-            parseOutputTokenLimit({
+            parse({
                 message:
                     "This model's maximum context length is 32768 tokens and your request has 6000 input tokens (64000 > 32768 - 6000).",
             }),
@@ -268,39 +273,27 @@ describe("resolveMaxOutputTokens", () => {
     })
 
     it("uses the env value when no header is sent, and validates it too", () => {
-        const original = process.env.MAX_OUTPUT_TOKENS
-        try {
-            process.env.MAX_OUTPUT_TOKENS = "24000"
-            expect(resolveMaxOutputTokens(null, true)).toBe(24000)
-            // A lower header still wins
-            expect(resolveMaxOutputTokens("8000", true)).toBe(8000)
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "24000")
+        expect(resolveMaxOutputTokens(null, true)).toBe(24000)
+        // A lower header still wins
+        expect(resolveMaxOutputTokens("8000", true)).toBe(8000)
 
-            process.env.MAX_OUTPUT_TOKENS = "-1"
-            expect(resolveMaxOutputTokens(null, true)).toBe(
-                DEFAULT_MAX_OUTPUT_TOKENS,
-            )
-        } finally {
-            if (original === undefined) delete process.env.MAX_OUTPUT_TOKENS
-            else process.env.MAX_OUTPUT_TOKENS = original
-        }
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "-1")
+        expect(resolveMaxOutputTokens(null, true)).toBe(
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
     })
 
     it("lets the header raise the budget only on the user's own credentials", () => {
-        const original = process.env.MAX_OUTPUT_TOKENS
-        try {
-            process.env.MAX_OUTPUT_TOKENS = "16000"
-            expect(resolveMaxOutputTokens("200000", true)).toBe(16000)
-            expect(resolveMaxOutputTokens("200000", false)).toBe(200000)
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "16000")
+        expect(resolveMaxOutputTokens("200000", true)).toBe(16000)
+        expect(resolveMaxOutputTokens("200000", false)).toBe(200000)
 
-            // Without MAX_OUTPUT_TOKENS the default is the cap
-            delete process.env.MAX_OUTPUT_TOKENS
-            expect(resolveMaxOutputTokens("100000", true)).toBe(
-                DEFAULT_MAX_OUTPUT_TOKENS,
-            )
-        } finally {
-            if (original === undefined) delete process.env.MAX_OUTPUT_TOKENS
-            else process.env.MAX_OUTPUT_TOKENS = original
-        }
+        // Without MAX_OUTPUT_TOKENS the default is the cap
+        vi.stubEnv("MAX_OUTPUT_TOKENS", undefined)
+        expect(resolveMaxOutputTokens("100000", true)).toBe(
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
     })
 })
 

@@ -1,73 +1,38 @@
 import {
+    chunkedReplies,
     expect,
     getChatInput,
-    getIframe,
+    openApp,
     sendMessage,
     test,
 } from "./lib/fixtures"
-import { createTextOnlyResponse } from "./lib/helpers"
-
-test.describe("Chat Panel", () => {
-    test.beforeEach(async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-    })
-
-    test("page has interactive elements", async ({ page }) => {
-        const buttons = page.locator("button")
-        const count = await buttons.count()
-        expect(count).toBeGreaterThan(0)
-    })
-
-    test("draw.io iframe is interactive", async ({ page }) => {
-        const iframe = getIframe(page)
-        await expect(iframe).toBeVisible()
-
-        const src = await iframe.getAttribute("src")
-        expect(src).toBeTruthy()
-    })
-})
+import { createTextOnlyResponse, sse } from "./lib/helpers"
 
 test.describe("Crossing the mobile breakpoint", () => {
     test.beforeEach(async ({ page }) => {
         // A text answer that arrives in parts over a few seconds
-        await page.addInitScript(() => {
-            const realFetch = window.fetch
-            window.fetch = async (input, init) => {
-                const url = input instanceof Request ? input.url : String(input)
-                if (!url.endsWith("/api/chat")) return realFetch(input, init)
-                const events = [
-                    { type: "start" },
-                    { type: "text-start", id: "t" },
-                    { type: "text-delta", id: "t", delta: "Once upon" },
-                    { type: "text-delta", id: "t", delta: " a time." },
-                    { type: "text-end", id: "t" },
-                    { type: "finish" },
-                ]
-                const body = new ReadableStream({
-                    async start(controller) {
-                        for (const event of events) {
-                            controller.enqueue(
-                                new TextEncoder().encode(
-                                    `data: ${JSON.stringify(event)}\n\n`,
-                                ),
-                            )
-                            await new Promise((r) => setTimeout(r, 1500))
-                        }
-                        controller.enqueue(
-                            new TextEncoder().encode("data: [DONE]\n\n"),
-                        )
-                        controller.close()
-                    },
-                })
-                return new Response(body, {
-                    headers: { "content-type": "text/event-stream" },
-                })
-            }
-        })
+        await chunkedReplies(
+            page,
+            [
+                [
+                    sse([{ type: "start" }], false),
+                    sse([{ type: "text-start", id: "t" }], false),
+                    sse(
+                        [{ type: "text-delta", id: "t", delta: "Once upon" }],
+                        false,
+                    ),
+                    sse(
+                        [{ type: "text-delta", id: "t", delta: " a time." }],
+                        false,
+                    ),
+                    sse([{ type: "text-end", id: "t" }], false),
+                    sse([{ type: "finish" }]),
+                ],
+            ],
+            { gapMs: 1500 },
+        )
         await page.setViewportSize({ width: 1280, height: 800 })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
     })
 
     test("keeps the chat and its streaming answer", async ({ page }) => {
@@ -115,8 +80,7 @@ test.describe("Sending", () => {
                 body: createTextOnlyResponse("Hello there."),
             })
         })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         const input = getChatInput(page)
         await input.fill("Hi")
         // The second press comes while the diagram is being exported
@@ -128,5 +92,31 @@ test.describe("Sending", () => {
         await page.waitForTimeout(1500)
         expect(requests).toBe(1)
         await expect(page.getByText("Hello there.")).toHaveCount(1)
+    })
+})
+
+test.describe("Answers", () => {
+    test("copy button copies response text", async ({ page }) => {
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse(
+                    "Here is your diagram with a test box.",
+                ),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a test box")
+        await expect(
+            page.getByText("Here is your diagram with a test box."),
+        ).toBeVisible({ timeout: 15000 })
+
+        // The user's message has one too: the answer's is the last
+        await page.getByRole("button", { name: "Copy response" }).last().click()
+        // The button shows a check mark for a moment
+        await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible(
+            { timeout: 3000 },
+        )
     })
 })

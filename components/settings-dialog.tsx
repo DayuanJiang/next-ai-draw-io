@@ -1,5 +1,4 @@
 import {
-    Github,
     Info,
     Monitor,
     Moon,
@@ -13,6 +12,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useChatEngine } from "@/components/chat/chat-engine"
+import { GitHubIcon } from "@/components/icons/github"
 import { ModelConfigDialog } from "@/components/model-config-dialog"
 import { SettingsHeader } from "@/components/settings/settings-header"
 import { Button } from "@/components/ui/button"
@@ -510,7 +510,7 @@ function AboutTab() {
     const lang = pathname.split("/").filter(Boolean)[0] || i18n.defaultLocale
     const showAbout = process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE === "true"
     const isSelfHosted = process.env.NEXT_PUBLIC_SELFHOSTED === "true"
-    const aboutPath = `/${lang}/about${lang === "zh" ? "/cn" : lang === "ja" ? "/ja" : ""}`
+    const aboutPath = `/${lang}/about`
 
     return (
         <div className="space-y-5">
@@ -553,7 +553,7 @@ function AboutTab() {
                     rel="noopener noreferrer"
                     className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground"
                 >
-                    <Github className="size-3.5" />
+                    <GitHubIcon className="size-3.5" />
                     GitHub
                 </a>
                 {showAbout && (

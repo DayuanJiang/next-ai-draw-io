@@ -1,6 +1,6 @@
 /**
- * XML Validation and Auto-Fix for draw.io diagrams
- * Copied from lib/utils.ts to avoid cross-package imports
+ * XML validation and auto-fix for draw.io diagrams, shared by the MCP server
+ * and the web app (contexts/diagram-context.tsx)
  */
 
 import { readAttributes } from "./xml-attributes.ts"
@@ -9,9 +9,6 @@ import { getXmlSyntaxError } from "./xml-syntax.ts"
 // ============================================================================
 // Constants
 // ============================================================================
-
-/** Maximum XML size to process (1MB) - larger XMLs may cause performance issues */
-const MAX_XML_SIZE = 1_000_000
 
 /** Structural attributes that should not be duplicated in draw.io */
 const STRUCTURAL_ATTRS = [
@@ -22,9 +19,6 @@ const STRUCTURAL_ATTRS = [
     "vertex",
     "connectable",
 ]
-
-/** Valid XML entity names */
-const VALID_ENTITIES = new Set(["lt", "gt", "amp", "quot", "apos"])
 
 /** Element names draw.io understands (case-sensitive) */
 const VALID_DRAWIO_TAGS = new Set([
@@ -261,77 +255,6 @@ function checkDuplicateIds(xml: string): string | null {
     return null
 }
 
-/** Check for tag mismatches using parsed tags */
-function checkTagMismatches(xml: string): string | null {
-    const xmlWithoutComments = xml.replace(/<!--[\s\S]*?-->/g, "")
-    const tags = parseXmlTags(xmlWithoutComments)
-    const tagStack: string[] = []
-
-    for (const { tagName, isClosing, isSelfClosing } of tags) {
-        if (isClosing) {
-            if (tagStack.length === 0) {
-                return `Invalid XML: Closing tag </${tagName}> without matching opening tag`
-            }
-            const expected = tagStack.pop()
-            if (expected?.toLowerCase() !== tagName.toLowerCase()) {
-                return `Invalid XML: Expected closing tag </${expected}> but found </${tagName}>`
-            }
-        } else if (!isSelfClosing) {
-            tagStack.push(tagName)
-        }
-    }
-    if (tagStack.length > 0) {
-        return `Invalid XML: Document has ${tagStack.length} unclosed tag(s): ${tagStack.join(", ")}`
-    }
-    return null
-}
-
-/** Check for invalid character references */
-function checkCharacterReferences(xml: string): string | null {
-    const charRefPattern = /&#x?[^;]+;?/g
-    let charMatch
-    while ((charMatch = charRefPattern.exec(xml)) !== null) {
-        const ref = charMatch[0]
-        if (ref.startsWith("&#x")) {
-            if (!ref.endsWith(";")) {
-                return `Invalid XML: Missing semicolon after hex reference: ${ref}`
-            }
-            const hexDigits = ref.substring(3, ref.length - 1)
-            if (hexDigits.length === 0 || !/^[0-9a-fA-F]+$/.test(hexDigits)) {
-                return `Invalid XML: Invalid hex character reference: ${ref}`
-            }
-        } else if (ref.startsWith("&#")) {
-            if (!ref.endsWith(";")) {
-                return `Invalid XML: Missing semicolon after decimal reference: ${ref}`
-            }
-            const decDigits = ref.substring(2, ref.length - 1)
-            if (decDigits.length === 0 || !/^[0-9]+$/.test(decDigits)) {
-                return `Invalid XML: Invalid decimal character reference: ${ref}`
-            }
-        }
-    }
-    return null
-}
-
-/** Check for invalid entity references */
-function checkEntityReferences(xml: string): string | null {
-    const xmlWithoutComments = xml.replace(/<!--[\s\S]*?-->/g, "")
-    const bareAmpPattern = /&(?!(?:lt|gt|amp|quot|apos|#))/g
-    if (bareAmpPattern.test(xmlWithoutComments)) {
-        return "Invalid XML: Found unescaped & character(s). Replace & with &amp;"
-    }
-    const invalidEntityPattern = /&([a-zA-Z][a-zA-Z0-9]*);/g
-    let entityMatch
-    while (
-        (entityMatch = invalidEntityPattern.exec(xmlWithoutComments)) !== null
-    ) {
-        if (!VALID_ENTITIES.has(entityMatch[1])) {
-            return `Invalid XML: Invalid entity reference: &${entityMatch[1]}; - use only valid XML entities (lt, gt, amp, quot, apos)`
-        }
-    }
-    return null
-}
-
 /** Check for nested mxCell tags using regex */
 function checkNestedMxCells(xml: string): string | null {
     // Quoted values may hold ">", so the tag ends at the first ">" outside them
@@ -427,13 +350,6 @@ export function validateMxCellStructure(
     xml: string,
     opts: { strict?: boolean } = {},
 ): string | null {
-    // Size check for performance
-    if (xml.length > MAX_XML_SIZE) {
-        console.warn(
-            `[validateMxCellStructure] XML size (${xml.length}) exceeds ${MAX_XML_SIZE} bytes, may cause performance issues`,
-        )
-    }
-
     // 0. DOM-based checks. Syntax errors are caught by the strict check at
     // the end: linkedom's DOMParser never reports them.
     try {
@@ -464,66 +380,24 @@ export function validateMxCellStructure(
         )
     }
 
-    // 1. Check for CDATA wrapper (invalid at document root)
-    if (/^\s*<!\[CDATA\[/.test(xml)) {
-        return "Invalid XML: XML is wrapped in CDATA section - remove <![CDATA[ from start and ]]> from end"
-    }
-
-    // 2. Check for duplicate structural attributes
+    // 1. Check for duplicate structural attributes
     const dupAttrError = checkDuplicateAttributes(xml)
     if (dupAttrError) {
         return dupAttrError
     }
 
-    // 3. Check for unescaped < in attribute values
-    const attrValuePattern = /=\s*"([^"]*)"/g
-    let attrValMatch
-    while ((attrValMatch = attrValuePattern.exec(xml)) !== null) {
-        const value = attrValMatch[1]
-        if (/</.test(value) && !/&lt;/.test(value)) {
-            return "Invalid XML: Unescaped < character in attribute values. Replace < with &lt;"
-        }
-    }
-
-    // 4. Check for duplicate IDs
+    // 2. Check for duplicate IDs
     const dupIdError = checkDuplicateIds(xml)
     if (dupIdError) {
         return dupIdError
     }
 
-    // 5. Check for tag mismatches
-    const tagMismatchError = checkTagMismatches(xml)
-    if (tagMismatchError) {
-        return tagMismatchError
-    }
-
-    // 6. Check invalid character references
-    const charRefError = checkCharacterReferences(xml)
-    if (charRefError) {
-        return charRefError
-    }
-
-    // 7. Check for invalid comment syntax (-- inside comments)
-    const commentPattern = /<!--([\s\S]*?)-->/g
-    let commentMatch
-    while ((commentMatch = commentPattern.exec(xml)) !== null) {
-        if (/--/.test(commentMatch[1])) {
-            return "Invalid XML: Comment contains -- (double hyphen) which is not allowed"
-        }
-    }
-
-    // 8. Check for unescaped entity references and invalid entity names
-    const entityError = checkEntityReferences(xml)
-    if (entityError) {
-        return entityError
-    }
-
-    // 9. Check for empty id attributes on mxCell
+    // 3. Check for empty id attributes on mxCell
     if (/<mxCell[^>]*\sid\s*=\s*["']\s*["'][^>]*>/g.test(xml)) {
         return "Invalid XML: Found mxCell element(s) with empty id attribute"
     }
 
-    // 10. Check for nested mxCell tags
+    // 4. Check for nested mxCell tags
     const nestedCellError = checkNestedMxCells(xml)
     if (nestedCellError) {
         return nestedCellError
@@ -539,9 +413,10 @@ export function validateMxCellStructure(
         }
     }
 
-    // 11. Strict XML syntax check, run last so the checks above can give
-    // more specific messages. Catches what they miss, e.g. duplicate or
-    // unquoted attributes, which make draw.io refuse to load the diagram.
+    // 5. Strict XML syntax check (saxes), which reports every
+    // well-formedness error: unbalanced tags, bad character or entity
+    // references, an unescaped < or &, duplicate or unquoted attributes.
+    // Any of them makes draw.io refuse to load the diagram.
     const syntaxError = getXmlSyntaxError(xml)
     if (syntaxError) {
         return `Invalid XML: syntax error at ${syntaxError} Escape special characters in attribute values (&lt; for <, &amp; for &, &quot; for "), quote every attribute value, and do not repeat an attribute.`

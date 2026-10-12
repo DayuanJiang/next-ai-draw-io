@@ -392,7 +392,7 @@ AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
 | `provider` | はい | プロバイダータイプ（`openai`, `anthropic`, `google`, `bedrock` など） |
 | `models` | はい | モデルIDのリスト |
 | `default` | いいえ | `true` に設定すると、そのプロバイダーの最初のモデルがデフォルトで選択されます |
-| `apiKeyEnv` | いいえ | カスタムAPIキー環境変数名（デフォルトは `OPENAI_API_KEY` などの標準変数） |
+| `apiKeyEnv` | いいえ | カスタムAPIキー環境変数名（デフォルトは `OPENAI_API_KEY` などの標準変数）。環境変数名の配列も指定でき、リクエストごとに値のある変数から1つがランダムに選ばれます（複数キーへの負荷分散） |
 | `baseUrlEnv` | いいえ | カスタムBase URL環境変数名 |
 
 ### 備考

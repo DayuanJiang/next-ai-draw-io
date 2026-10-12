@@ -1,6 +1,5 @@
-import { randomUUID } from "crypto"
 import { z } from "zod"
-import { getLangfuseClient } from "@/lib/langfuse"
+import { getLangfuseClient, scoreLatestTrace } from "@/lib/langfuse"
 
 const saveSchema = z.object({
     filename: z.string().min(1).max(255),
@@ -33,39 +32,16 @@ export async function POST(req: Request) {
     }
 
     try {
-        const timestamp = new Date().toISOString()
-
-        // Find the most recent chat trace for this session to attach the save flag
-        const tracesResponse = await langfuse.api.trace.list({
+        // Flag the session's latest chat trace as saved; a session without a
+        // trace (no chat yet) is skipped
+        const logged = await scoreLatestTrace(langfuse, {
             sessionId,
-            limit: 1,
+            name: "diagram-saved",
+            value: 1,
+            comment: `User saved diagram as ${filename}.${format}`,
         })
 
-        const traces = tracesResponse.data || []
-        const latestTrace = traces[0]
-
-        if (latestTrace) {
-            // Add a score to the existing trace to flag that user saved
-            await langfuse.api.ingestion.batch({
-                batch: [
-                    {
-                        type: "score-create",
-                        id: randomUUID(),
-                        timestamp,
-                        body: {
-                            id: randomUUID(),
-                            traceId: latestTrace.id,
-                            name: "diagram-saved",
-                            value: 1,
-                            comment: `User saved diagram as ${filename}.${format}`,
-                        },
-                    },
-                ],
-            })
-        }
-        // If no trace found, skip logging (user hasn't chatted yet)
-
-        return Response.json({ success: true, logged: !!latestTrace })
+        return Response.json({ success: true, logged })
     } catch (error) {
         console.error("Langfuse save error:", error)
         return Response.json(

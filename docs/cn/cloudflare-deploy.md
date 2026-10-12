@@ -68,47 +68,15 @@ cp env.example .env.local
 
 ## 第三步 — 选择部署类型
 
-### 选项 A：不使用 R2 部署（简单，免费）
+### 选项 A：不使用 R2 部署（默认，免费）
 
-如果您不需要 ISR 缓存，可以选择不使用 R2 进行部署：
-
-**1. 使用简单的 `open-next.config.ts`：**
-
-```ts
-import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
-
-export default defineCloudflareConfig({})
-```
-
-**2. 使用简单的 `wrangler.jsonc`（不包含 r2_buckets）：**
-
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "next-ai-draw-io-worker",
-  "compatibility_date": "2025-12-08",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "next-ai-draw-io-worker"
-    }
-  ]
-}
-```
-
-直接跳至 **第四步**。
+仓库自带的就是这套配置：`open-next.config.ts` 为 `defineCloudflareConfig({})`，`wrangler.jsonc` 中没有 `r2_buckets`。无需改动任何文件，直接跳至 **第四步**。
 
 ---
 
-### 选项 B：使用 R2 部署（完整的 ISR 支持）
+### 选项 B：使用 R2 部署（可选，用于 ISR 缓存）
 
-R2 开启了 **增量静态再生 (ISR)** 缓存功能。需要在您的 Cloudflare 账户中绑定支付方式。
+R2 为 OpenNext 提供存放 **增量静态再生 (ISR)** 页面的空间。本应用目前没有 ISR 页面，只有在您自己添加了此类页面时才需要这一步。需要在您的 Cloudflare 账户中绑定支付方式。
 
 **1. 在 Cloudflare 控制台中创建 R2 存储桶：**
 
@@ -127,7 +95,7 @@ export default defineCloudflareConfig({
 })
 ```
 
-**3. 配置 `wrangler.jsonc`（包含 R2）：**
+**3. 在 `wrangler.jsonc` 中加入 `r2_buckets`：**
 
 ```jsonc
 {
@@ -156,6 +124,8 @@ export default defineCloudflareConfig({
 ```
 
 > **重要提示：** `bucket_name` 必须与您在 Cloudflare 控制台中创建的名称完全一致。
+
+> **注意：** 定时重新验证（页面或 fetch 上的 `revalidate`）还需要在 `open-next.config.ts` 中配置 `queue`，请参阅 OpenNext 的 Cloudflare 缓存文档。
 
 ---
 
@@ -264,4 +234,4 @@ npm run preview
 | API 路由 | 支持 | 支持 |
 | 配置复杂度 | 简单 | 中等 |
 
-测试或简单应用请选择 **不使用 R2**。需要 ISR 缓存的生产环境应用请选择 **使用 R2**。
+仓库默认 **不使用 R2**。只有当您添加了需要 ISR 缓存的页面时，才选择 **使用 R2**。

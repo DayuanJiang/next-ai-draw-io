@@ -1,6 +1,7 @@
 import type { Locator, Page, Route } from "@playwright/test"
 import { FLOWCHART_XML } from "./fixtures/diagrams"
 import {
+    chunkedReplies,
     expect,
     getAttachmentInput,
     getChatInput,
@@ -8,13 +9,14 @@ import {
     getIframeContent,
     getSendButton,
     openDrawioFile,
+    openApp as openPage,
     openSettingsTab,
     sendMessage,
     test,
     waitForComplete,
     waitForCompleteCount,
 } from "./lib/fixtures"
-import { createMockSSEResponse } from "./lib/helpers"
+import { createMockSSEResponse, sse, toolCallEvents } from "./lib/helpers"
 
 /** An edit_diagram response that adds one node next to "Start" */
 function createEditResponse() {
@@ -35,10 +37,7 @@ function createEditResponse() {
         },
         { type: "finish" },
     ]
-    return (
-        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
-        "data: [DONE]\n\n"
-    )
+    return sse(events)
 }
 
 /** First request draws the flowchart, later ones add a node */
@@ -60,8 +59,7 @@ function drawThenEdit(onRequest?: (body: any) => void) {
 }
 
 async function openApp(page: Page) {
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openPage(page)
     // The cover goes away once draw.io has loaded and been styled
     await expect(page.locator('[data-testid="canvas-loading"]')).toHaveCount(
         0,
@@ -900,9 +898,7 @@ test.describe("Workspace", () => {
             route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
-                body: events
-                    .map((e) => `data: ${JSON.stringify(e)}\n\n`)
-                    .join(""),
+                body: sse(events, false),
             }),
         )
         await openApp(page)
@@ -2003,45 +1999,8 @@ test.describe("Workspace", () => {
 // Edge cases found in review
 // ---------------------------------------------------------------------------
 
-const sseOf = (events: object[], done = true) =>
-    events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") +
-    (done ? "data: [DONE]\n\n" : "")
 const boxCell = (id: string, label: string, x: number, parent = "1") =>
     `<mxCell id="${id}" value="${label}" style="rounded=1;" vertex="1" parent="${parent}"><mxGeometry x="${x}" y="40" width="120" height="60" as="geometry"/></mxCell>`
-
-/**
- * Replies to /api/chat in order, each a list of chunks sent 800 ms apart.
- * With holdLast, the last reply never ends.
- */
-async function slowReplies(page: Page, replies: string[][], holdLast = false) {
-    await page.addInitScript(
-        ({ replies, holdLast }) => {
-            const realFetch = window.fetch
-            let n = 0
-            window.fetch = async (input, init) => {
-                const url = input instanceof Request ? input.url : String(input)
-                if (!url.endsWith("/api/chat")) return realFetch(input, init)
-                const index = n++
-                const chunks = replies[index] ?? []
-                const body = new ReadableStream({
-                    async start(c) {
-                        for (const chunk of chunks) {
-                            c.enqueue(new TextEncoder().encode(chunk))
-                            await new Promise((r) => setTimeout(r, 800))
-                        }
-                        if (!(holdLast && index === replies.length - 1)) {
-                            c.close()
-                        }
-                    },
-                })
-                return new Response(body, {
-                    headers: { "content-type": "text/event-stream" },
-                })
-            }
-        },
-        { replies, holdLast },
-    )
-}
 
 /** Puts a saved chat into the browser's storage */
 async function seedSession(page: Page, session: object) {
@@ -2169,27 +2128,13 @@ async function twoChats(page: Page) {
 
 /** Streamed display_diagram deltas for this input, the last one held back */
 function streamedDisplay(id: string, input: object) {
-    const deltas = (JSON.stringify(input).match(/[\s\S]{1,30}/g) ?? []).map(
-        (d) => ({
-            type: "tool-input-delta",
-            toolCallId: id,
-            inputTextDelta: d,
-        }),
-    )
+    const call = toolCallEvents(id, "display_diagram", input, 30)
     return {
-        head: sseOf(
-            [
-                { type: "start" },
-                {
-                    type: "tool-input-start",
-                    toolCallId: id,
-                    toolName: "display_diagram",
-                },
-                ...deltas.slice(0, -1),
-            ],
+        head: sse(
+            [{ type: "start" }, call.start, ...call.deltas.slice(0, -1)],
             false,
         ),
-        last: deltas.at(-1) as object,
+        last: call.deltas.at(-1) as object,
     }
 }
 
@@ -2331,22 +2276,26 @@ test.describe("Edge cases", () => {
             xml: boxCell("a", "OldOne", 40) + boxCell("b", "NewOne", 240),
         }
         const stream = streamedDisplay("d2", input)
-        await slowReplies(page, [
-            [createMockSSEResponse(boxCell("a", "OldOne", 40), "One.")],
+        await chunkedReplies(
+            page,
             [
-                stream.head,
-                sseOf([
-                    stream.last,
-                    {
-                        type: "tool-input-available",
-                        toolCallId: "d2",
-                        toolName: "display_diagram",
-                        input,
-                    },
-                    { type: "finish" },
-                ]),
+                [createMockSSEResponse(boxCell("a", "OldOne", 40), "One.")],
+                [
+                    stream.head,
+                    sse([
+                        stream.last,
+                        {
+                            type: "tool-input-available",
+                            toolCallId: "d2",
+                            toolName: "display_diagram",
+                            input,
+                        },
+                        { type: "finish" },
+                    ]),
+                ],
             ],
-        ])
+            { gapMs: 800 },
+        )
         await openApp(page)
         await sendMessage(page, "One")
         await waitForComplete(page)
@@ -2372,10 +2321,14 @@ test.describe("Edge cases", () => {
             xml: boxCell("b", "Beta", 240) + boxCell("c", "Gamma", 440),
         }
         const stream = streamedDisplay("d2", input)
-        await slowReplies(page, [
-            [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
-            [stream.head],
-        ])
+        await chunkedReplies(
+            page,
+            [
+                [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
+                [stream.head],
+            ],
+            { gapMs: 800 },
+        )
         await openApp(page)
         await sendMessage(page, "One")
         await waitForComplete(page)
@@ -2477,7 +2430,7 @@ test.describe("Edge cases", () => {
             route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
-                body: sseOf([
+                body: sse([
                     { type: "start" },
                     {
                         type: "tool-input-start",
@@ -2987,9 +2940,25 @@ test.describe("Edge cases", () => {
         ).toBeVisible()
     })
 
-    test("compare closes when another chat with the same old version ids comes on screen", async ({
+    test("compare closes when another chat with the same version ids comes on screen", async ({
         page,
     }) => {
+        // Both chats' versions share their ids
+        const version = (id: string, number: number) => ({
+            id,
+            number,
+            xml: `<mxGraphModel><root/></mxGraphModel>`,
+            svg: "",
+            turnIndex: 0,
+            summary: {
+                shapesAdded: 0,
+                shapesRemoved: 0,
+                shapesChanged: 0,
+                edgesAdded: 0,
+                edgesRemoved: 0,
+                edgesChanged: 0,
+            },
+        })
         const legacy = (id: string, label: string) => ({
             id,
             title: `Chat ${id}`,
@@ -3004,10 +2973,7 @@ test.describe("Edge cases", () => {
             ],
             xmlSnapshots: [],
             diagramXml: `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("a", label, 40)}</root></mxGraphModel></diagram></mxfile>`,
-            diagramHistory: [
-                { svg: "", xml: `<mxGraphModel><root/></mxGraphModel>` },
-                { svg: "", xml: `<mxGraphModel><root/></mxGraphModel>` },
-            ],
+            versions: [version("v-1", 1), version("v-2", 2)],
         })
         await openApp(page)
         await page.evaluate(
@@ -3060,7 +3026,7 @@ test.describe("Edge cases", () => {
             { type: "text-end", id },
         ]
         const replies = [
-            sseOf([
+            sse([
                 { type: "start", messageId: "m1" },
                 { type: "start-step" },
                 ...call("d1", bad),
@@ -3068,7 +3034,7 @@ test.describe("Edge cases", () => {
                 { type: "finish-step" },
                 { type: "finish" },
             ]),
-            sseOf([
+            sse([
                 { type: "start", messageId: "m1" },
                 { type: "start-step" },
                 ...text("t2", "Second words."),
@@ -3084,7 +3050,7 @@ test.describe("Edge cases", () => {
                 contentType: "text/event-stream",
                 body:
                     replies[n++] ??
-                    sseOf([{ type: "start" }, { type: "finish" }]),
+                    sse([{ type: "start" }, { type: "finish" }]),
             }),
         )
         await openApp(page)
@@ -3481,33 +3447,37 @@ test.describe("Edge cases", () => {
             toolCallId: "d1",
             inputTextDelta,
         })
-        await slowReplies(page, [
+        await chunkedReplies(
+            page,
             [
-                sseOf(
-                    [
-                        { type: "start" },
+                [
+                    sse(
+                        [
+                            { type: "start" },
+                            {
+                                type: "tool-input-start",
+                                toolCallId: "d1",
+                                toolName: "display_diagram",
+                            },
+                        ],
+                        false,
+                    ),
+                    // The first preview shows only the near shape
+                    sse([delta(json.slice(0, cut))], false),
+                    sse([delta(json.slice(cut))], false),
+                    sse([
                         {
-                            type: "tool-input-start",
+                            type: "tool-input-available",
                             toolCallId: "d1",
                             toolName: "display_diagram",
+                            input: { xml: near + far },
                         },
-                    ],
-                    false,
-                ),
-                // The first preview shows only the near shape
-                sseOf([delta(json.slice(0, cut))], false),
-                sseOf([delta(json.slice(cut))], false),
-                sseOf([
-                    {
-                        type: "tool-input-available",
-                        toolCallId: "d1",
-                        toolName: "display_diagram",
-                        input: { xml: near + far },
-                    },
-                    { type: "finish" },
-                ]),
+                        { type: "finish" },
+                    ]),
+                ],
             ],
-        ])
+            { gapMs: 800 },
+        )
         await openApp(page)
         await openDrawioFile(
             page,
@@ -3527,11 +3497,15 @@ test.describe("Edge cases", () => {
         const stream = streamedDisplay("d2", {
             xml: boxCell("b", "Beta", 240) + boxCell("c", "Gamma", 440),
         })
-        await slowReplies(page, [
-            [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
-            [stream.head],
-            [createMockSSEResponse(boxCell("d", "Delta", 40), "Again.")],
-        ])
+        await chunkedReplies(
+            page,
+            [
+                [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
+                [stream.head],
+                [createMockSSEResponse(boxCell("d", "Delta", 40), "Again.")],
+            ],
+            { gapMs: 800 },
+        )
         await openApp(page)
         await sendMessage(page, "One")
         await waitForComplete(page)
@@ -3551,13 +3525,13 @@ test.describe("Edge cases", () => {
         const stream = streamedDisplay("d2", {
             xml: boxCell("b", "Beta", 240) + boxCell("c", "Gamma", 440),
         })
-        await slowReplies(
+        await chunkedReplies(
             page,
             [
                 [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
                 [stream.head],
             ],
-            true,
+            { gapMs: 800, holdLast: true },
         )
         await openApp(page)
         await sendMessage(page, "One")
@@ -3599,39 +3573,43 @@ test.describe("Edge cases", () => {
             toolCallId: "e1",
             inputTextDelta,
         })
-        await slowReplies(page, [
-            [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
+        await chunkedReplies(
+            page,
             [
-                sseOf(
-                    [
-                        { type: "start" },
+                [createMockSSEResponse(boxCell("a", "Alpha", 40), "One.")],
+                [
+                    sse(
+                        [
+                            { type: "start" },
+                            {
+                                type: "tool-input-start",
+                                toolCallId: "e1",
+                                toolName: "edit_diagram",
+                            },
+                        ],
+                        false,
+                    ),
+                    sse([delta(json.slice(0, split))], false),
+                    // The operation's XML is complete; the call is not
+                    sse([delta(json.slice(split, end))], false),
+                    ": wait\n\n",
+                    ": wait\n\n",
+                    ": wait\n\n",
+                    ": wait\n\n",
+                    sse([
+                        delta(json.slice(end)),
                         {
-                            type: "tool-input-start",
+                            type: "tool-input-available",
                             toolCallId: "e1",
                             toolName: "edit_diagram",
+                            input,
                         },
-                    ],
-                    false,
-                ),
-                sseOf([delta(json.slice(0, split))], false),
-                // The operation's XML is complete; the call is not
-                sseOf([delta(json.slice(split, end))], false),
-                ": wait\n\n",
-                ": wait\n\n",
-                ": wait\n\n",
-                ": wait\n\n",
-                sseOf([
-                    delta(json.slice(end)),
-                    {
-                        type: "tool-input-available",
-                        toolCallId: "e1",
-                        toolName: "edit_diagram",
-                        input,
-                    },
-                    { type: "finish" },
-                ]),
+                        { type: "finish" },
+                    ]),
+                ],
             ],
-        ])
+            { gapMs: 800 },
+        )
         await openApp(page)
         await sendMessage(page, "One")
         await waitForComplete(page)
@@ -3902,14 +3880,14 @@ test.describe("Edge cases", () => {
         const stream = streamedDisplay("d3", {
             xml: boxCell("p", "PrevOne", 240) + boxCell("q", "QueueOne", 440),
         })
-        await slowReplies(
+        await chunkedReplies(
             page,
             [
                 [createMockSSEResponse(boxCell("a", "BeeOne", 40), "B.")],
                 [createMockSSEResponse(boxCell("a", "AyOne", 40), "A.")],
                 [stream.head],
             ],
-            true,
+            { gapMs: 800, holdLast: true },
         )
         await openApp(page)
         const chatB = await twoChats(page)
@@ -3941,27 +3919,31 @@ test.describe("Edge cases", () => {
     test("a reply of the chat left that ends late adds nothing to the chat on screen", async ({
         page,
     }) => {
-        await slowReplies(page, [
-            [createMockSSEResponse(boxCell("a", "BeeOne", 40), "B.")],
-            [createMockSSEResponse(boxCell("a", "AyOne", 40), "A.")],
+        await chunkedReplies(
+            page,
             [
-                sseOf(
-                    [
-                        { type: "start" },
-                        {
-                            type: "tool-input-start",
-                            toolCallId: "d3",
-                            toolName: "display_diagram",
-                        },
-                    ],
-                    false,
-                ),
-                ": wait\n\n",
-                ": wait\n\n",
-                ": wait\n\n",
-                ": wait\n\n",
+                [createMockSSEResponse(boxCell("a", "BeeOne", 40), "B.")],
+                [createMockSSEResponse(boxCell("a", "AyOne", 40), "A.")],
+                [
+                    sse(
+                        [
+                            { type: "start" },
+                            {
+                                type: "tool-input-start",
+                                toolCallId: "d3",
+                                toolName: "display_diagram",
+                            },
+                        ],
+                        false,
+                    ),
+                    ": wait\n\n",
+                    ": wait\n\n",
+                    ": wait\n\n",
+                    ": wait\n\n",
+                ],
             ],
-        ])
+            { gapMs: 800 },
+        )
         await openApp(page)
         const chatB = await twoChats(page)
         await sendMessage(page, "Chat A two")
@@ -4256,35 +4238,27 @@ test.describe("Edge cases", () => {
     test("Stop in one chat does not label another chat's cut off drawing", async ({
         page,
     }) => {
-        await page.addInitScript(() => {
-            const sse = (events: object[]) =>
-                events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")
-            const realFetch = window.fetch
-            window.fetch = async (input, init) => {
-                const url = input instanceof Request ? input.url : String(input)
-                if (!url.endsWith("/api/chat")) return realFetch(input, init)
-                const body = new ReadableStream({
-                    start(c) {
-                        c.enqueue(
-                            new TextEncoder().encode(
-                                sse([
-                                    { type: "start" },
-                                    { type: "text-start", id: "t1" },
-                                    {
-                                        type: "text-delta",
-                                        id: "t1",
-                                        delta: "Thinking about it.",
-                                    },
-                                ]),
-                            ),
-                        )
-                    },
-                })
-                return new Response(body, {
-                    headers: { "content-type": "text/event-stream" },
-                })
-            }
-        })
+        // The answer starts and never ends
+        await chunkedReplies(
+            page,
+            [
+                [
+                    sse(
+                        [
+                            { type: "start" },
+                            { type: "text-start", id: "t1" },
+                            {
+                                type: "text-delta",
+                                id: "t1",
+                                delta: "Thinking about it.",
+                            },
+                        ],
+                        false,
+                    ),
+                ],
+            ],
+            { holdLast: true },
+        )
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("a", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         // Chat B was saved while a drawing streamed (its tab was closed)
@@ -4336,77 +4310,48 @@ test.describe("Edge cases", () => {
     test("a drawing of the chat left that ends late leaves the canvas on screen as it was", async ({
         page,
     }) => {
-        await page.addInitScript(() => {
-            const sse = (events: object[]) =>
-                events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("")
-            const cell = (id: string, label: string, x: number) =>
-                `<mxCell id="${id}" value="${label}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="${x}" y="40" width="120" height="60" as="geometry"/></mxCell>`
-            const realFetch = window.fetch
-            let n = 0
-            window.fetch = async (input, init) => {
-                const url = input instanceof Request ? input.url : String(input)
-                if (!url.endsWith("/api/chat")) return realFetch(input, init)
-                const i = n++
-                const body = new ReadableStream({
-                    async start(c) {
-                        const send = (events: object[]) =>
-                            c.enqueue(new TextEncoder().encode(sse(events)))
-                        if (i < 2) {
-                            send([
-                                { type: "start" },
-                                {
-                                    type: "tool-input-start",
-                                    toolCallId: `x${i}`,
-                                    toolName: "display_diagram",
-                                },
-                                {
-                                    type: "tool-input-available",
-                                    toolCallId: `x${i}`,
-                                    toolName: "display_diagram",
-                                    input: {
-                                        xml: cell(
-                                            "a",
-                                            i === 0 ? "BeeOne" : "AyOne",
-                                            40,
-                                        ),
-                                    },
-                                },
-                                { type: "finish" },
-                            ])
-                            c.close()
-                            return
-                        }
-                        send([
-                            { type: "start" },
-                            {
-                                type: "tool-input-start",
-                                toolCallId: "d3",
-                                toolName: "display_diagram",
-                            },
-                        ])
-                        // The chat is left meanwhile; then the drawing streams on
-                        await new Promise((r) => setTimeout(r, 4000))
-                        const json = JSON.stringify({
-                            xml:
-                                cell("p", "PrevOne", 240) +
-                                cell("q", "QueueOne", 440),
-                        })
-                        send([
-                            {
-                                type: "tool-input-delta",
-                                toolCallId: "d3",
-                                inputTextDelta: json.slice(0, json.length - 30),
-                            },
-                        ])
-                        await new Promise((r) => setTimeout(r, 2000))
-                        c.close()
-                    },
-                })
-                return new Response(body, {
-                    headers: { "content-type": "text/event-stream" },
-                })
-            }
+        const drawn = (id: string, label: string) => {
+            const call = toolCallEvents(id, "display_diagram", {
+                xml: boxCell("a", label, 40),
+            })
+            return sse(
+                [{ type: "start" }, call.start, call.done, { type: "finish" }],
+                false,
+            )
+        }
+        const json = JSON.stringify({
+            xml: boxCell("p", "PrevOne", 240) + boxCell("q", "QueueOne", 440),
         })
+        await chunkedReplies(page, [
+            [drawn("x0", "BeeOne")],
+            [drawn("x1", "AyOne")],
+            [
+                sse(
+                    [
+                        { type: "start" },
+                        {
+                            type: "tool-input-start",
+                            toolCallId: "d3",
+                            toolName: "display_diagram",
+                        },
+                    ],
+                    false,
+                ),
+                // The chat is left meanwhile; then the drawing streams on
+                4000,
+                sse(
+                    [
+                        {
+                            type: "tool-input-delta",
+                            toolCallId: "d3",
+                            inputTextDelta: json.slice(0, json.length - 30),
+                        },
+                    ],
+                    false,
+                ),
+                2000,
+            ],
+        ])
         await openApp(page)
         const chatB = await twoChats(page)
         await sendMessage(page, "Chat A two")
@@ -4657,7 +4602,7 @@ test.describe("Edge cases", () => {
                     held.push(event)
                 }
             })
-            // Keeps the saved prompts' store busy, so the panel's click count waits
+            // Keeps the saved prompts' store busy, so the panel's run count waits
             w.__blockTemplates = () =>
                 new Promise<void>((started) => {
                     const request = indexedDB.open("next-ai-drawio-templates")
@@ -4909,7 +4854,7 @@ test.describe("Edge cases", () => {
         ).toBeVisible()
     })
 
-    test("a saved prompt goes out at once, also while its click count waits for storage", async ({
+    test("a saved prompt goes out at once, also while its run count waits for storage", async ({
         page,
     }) => {
         await page.addInitScript(() => {
@@ -5124,7 +5069,7 @@ test.describe("Edge cases", () => {
         page,
     }) => {
         const first = `<mxGraphModel math="1"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("a", "FirstOne", 40)}</root></mxGraphModel>`
-        const body = sseOf([
+        const body = sse([
             { type: "start" },
             {
                 type: "tool-input-start",
@@ -5158,7 +5103,7 @@ test.describe("Edge cases", () => {
                 body:
                     n++ === 0
                         ? body
-                        : sseOf([{ type: "start" }, { type: "finish" }]),
+                        : sse([{ type: "start" }, { type: "finish" }]),
             }),
         )
         await openApp(page)
@@ -5482,19 +5427,18 @@ test.describe("Edge cases", () => {
     }) => {
         // Cut off in the middle of its second shape
         const cut = `${boxCell("p", "PartOne", 240)}<mxCell id="q" value="Cut" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="440"`
-        const deltas = (
-            JSON.stringify({ xml: cut }).match(/[\s\S]{1,30}/g) ?? []
-        ).map((d) => ({
-            type: "tool-input-delta",
-            toolCallId: "cut",
-            inputTextDelta: d,
-        }))
-        await slowReplies(
+        const { deltas } = toolCallEvents(
+            "cut",
+            "display_diagram",
+            { xml: cut },
+            30,
+        )
+        await chunkedReplies(
             page,
             [
                 [createMockSSEResponse(boxCell("a", "AyOne", 40), "A.")],
                 [
-                    sseOf(
+                    sse(
                         [
                             { type: "start" },
                             {
@@ -5506,7 +5450,7 @@ test.describe("Edge cases", () => {
                         ],
                         false,
                     ),
-                    sseOf([
+                    sse([
                         {
                             type: "tool-input-available",
                             toolCallId: "cut",
@@ -5517,9 +5461,9 @@ test.describe("Edge cases", () => {
                     ]),
                 ],
                 // The continuation never comes
-                [sseOf([{ type: "start" }], false)],
+                [sse([{ type: "start" }], false)],
             ],
-            true,
+            { gapMs: 800, holdLast: true },
         )
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)

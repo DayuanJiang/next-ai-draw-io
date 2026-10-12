@@ -18,17 +18,18 @@ function setup() {
         exportDiagram: (r: any) => requests.push(r),
         load: vi.fn(),
     } as any
-    // draw.io's reply to a request: it echoes the request in `message`
+    // draw.io's reply to a request: it echoes the request in `message`.
+    // Async, so what the caller does with the result runs before it returns
     const reply = (request: { message: string }, data: string, xml = "") =>
-        act(() =>
+        act(async () => {
             result.current.handleDiagramExport({
                 event: "export",
                 data,
                 xml,
                 format: "xmlsvg",
                 message: request,
-            } as any),
-        )
+            } as any)
+        })
     return { result, requests, reply }
 }
 
@@ -53,25 +54,20 @@ afterEach(() => {
 })
 
 describe("exports in flight at the same time", () => {
-    it("give the chat's export only its own reply", () => {
+    it("give the chat's export only its own reply", async () => {
         const { result, requests, reply } = setup()
         // An edit's history export is still on its way when the chat exports
-        act(() => {
-            result.current.handleExport()
+        const older = result.current.fetchDiagramXml()
+        const current = result.current.fetchDiagramXml()
+        let currentDone = false
+        current.then(() => {
+            currentDone = true
         })
-        let tag = ""
-        const got: string[] = []
-        act(() => {
-            tag = result.current.handleExport()
-            result.current.exportResolversRef.current[tag] = (xml) =>
-                got.push(xml)
-        })
-        reply(requests[0], svgOf("older"))
-        expect(got).toEqual([])
-        reply(requests[1], svgOf("current"))
-        expect(got).toHaveLength(1)
-        expect(got[0]).toContain('value="current"')
-        expect(result.current.exportResolversRef.current[tag]).toBeUndefined()
+        await reply(requests[0], svgOf("older"))
+        expect(await older).toContain('value="older"')
+        expect(currentDone).toBe(false)
+        await reply(requests[1], svgOf("current"))
+        expect(await current).toContain('value="current"')
     })
 
     it("save each file with its own result", async () => {
@@ -101,8 +97,8 @@ describe("exports in flight at the same time", () => {
             result.current.saveDiagramToFile("pic", "png")
         })
         // The PNG answers first
-        reply(requests[1], "data:image/png;base64,iVBORw0KGgo=")
-        reply(requests[0], svgOf("doc"), twoPages)
+        await reply(requests[1], "data:image/png;base64,iVBORw0KGgo=")
+        await reply(requests[0], svgOf("doc"), twoPages)
 
         expect(saved.map((s) => s.name)).toEqual(["pic.png", "doc.drawio"])
         expect(saved[0].href).toMatch(/^data:image\/png/)

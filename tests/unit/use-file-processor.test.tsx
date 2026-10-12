@@ -22,6 +22,8 @@ function deferred<T>() {
 const pdfFile = () =>
     new File(["%PDF"], "slow.pdf", { type: "application/pdf" })
 const textFile = () => new File(["notes"], "notes.txt", { type: "text/plain" })
+// The toast texts the hook formats; toast is mocked, so any texts do
+const messages = { tooLong: "{name} too long", readFailed: "failed {name}" }
 
 describe("useFileProcessor", () => {
     beforeEach(() => {
@@ -35,7 +37,7 @@ describe("useFileProcessor", () => {
         vi.mocked(extractTextFileContent).mockResolvedValue("notes")
         const a = pdfFile()
         const b = textFile()
-        const { result } = renderHook(() => useFileProcessor())
+        const { result } = renderHook(() => useFileProcessor(messages))
 
         let done!: Promise<void>
         act(() => {
@@ -59,7 +61,7 @@ describe("useFileProcessor", () => {
         vi.mocked(extractTextFileContent).mockResolvedValue("notes")
         const a = pdfFile()
         const b = textFile()
-        const { result } = renderHook(() => useFileProcessor())
+        const { result } = renderHook(() => useFileProcessor(messages))
 
         let first!: Promise<void>
         act(() => {
@@ -82,7 +84,7 @@ describe("useFileProcessor", () => {
         const pdf = deferred<string>()
         vi.mocked(extractPdfText).mockReturnValue(pdf.promise)
         const a = pdfFile()
-        const { result } = renderHook(() => useFileProcessor())
+        const { result } = renderHook(() => useFileProcessor(messages))
 
         let first!: Promise<void>
         act(() => {

@@ -26,11 +26,6 @@ export const SINGLE_BOX_XML = `<mxCell id="box" value="Test Box" style="rounded=
   <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
 </mxCell>`
 
-// Test node for iframe interaction tests
-export const TEST_NODE_XML = `<mxCell id="test-node-123" value="Test Node" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
-  <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
-</mxCell>`
-
 // Architecture box
 export const ARCHITECTURE_XML = `<mxCell id="arch" value="Architecture" style="rounded=1;" vertex="1" parent="1">
   <mxGeometry x="100" y="100" width="120" height="50" as="geometry"/>

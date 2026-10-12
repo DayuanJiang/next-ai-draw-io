@@ -18,18 +18,11 @@ const ENV = [
     "OLLAMA_API_KEY",
     "NEXT_AI_DRAWIO_DESKTOP",
 ]
-const saved: Record<string, string | undefined> = {}
-
 beforeEach(() => {
-    for (const k of ENV) saved[k] = process.env[k]
-    for (const k of ENV) delete process.env[k]
+    for (const k of ENV) vi.stubEnv(k, undefined)
 })
 
 afterEach(() => {
-    for (const k of ENV) {
-        if (saved[k] === undefined) delete process.env[k]
-        else process.env[k] = saved[k]
-    }
     vi.unstubAllGlobals()
 })
 
@@ -146,7 +139,7 @@ describe("provider error texts in the stream", () => {
 
 describe("the output cap", () => {
     it("holds for the server's own keyless endpoints too", async () => {
-        process.env.MAX_OUTPUT_TOKENS = "8000"
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "8000")
         const sent: string[] = []
         vi.stubGlobal(
             "fetch",
@@ -155,34 +148,30 @@ describe("the output cap", () => {
                 return new Response("{}", { status: 400 })
             }),
         )
-        try {
-            const res = await chat(
-                new Request("http://localhost/api/chat", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-ai-provider": "ollama",
-                        "x-ai-base-url": "http://127.0.0.1:11434/api",
-                        "x-ai-model": "llama3",
-                        "x-max-output-tokens": "200000",
-                    },
-                    body: JSON.stringify({
-                        messages: [
-                            {
-                                id: "u1",
-                                role: "user",
-                                parts: [{ type: "text", text: "Draw" }],
-                            },
-                        ],
-                        xml: "",
-                    }),
+        const res = await chat(
+            new Request("http://localhost/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-ai-provider": "ollama",
+                    "x-ai-base-url": "http://127.0.0.1:11434/api",
+                    "x-ai-model": "llama3",
+                    "x-max-output-tokens": "200000",
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            id: "u1",
+                            role: "user",
+                            parts: [{ type: "text", text: "Draw" }],
+                        },
+                    ],
+                    xml: "",
                 }),
-            )
-            await res.text()
-            expect(sent[0]).toContain('"max_output_tokens":8000')
-        } finally {
-            delete process.env.MAX_OUTPUT_TOKENS
-        }
+            }),
+        )
+        await res.text()
+        expect(sent[0]).toContain('"max_output_tokens":8000')
     })
 })
 

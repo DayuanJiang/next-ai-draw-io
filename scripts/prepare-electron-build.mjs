@@ -6,53 +6,13 @@
  * that electron-builder can properly include
  */
 
-import {
-    copyFileSync,
-    existsSync,
-    lstatSync,
-    mkdirSync,
-    readdirSync,
-    rmSync,
-    statSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import copyDereferenced from "./copy-dereferenced.cjs"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const rootDir = join(__dirname, "..")
-
-/**
- * Copy directory recursively, converting symlinks to regular files/directories.
- * This is needed because cpSync with dereference:true does NOT convert symlinks.
- * macOS codesign fails if bundle contains symlinks pointing outside the bundle.
- */
-function copyDereferenced(src, dst) {
-    const lstat = lstatSync(src)
-
-    if (lstat.isSymbolicLink()) {
-        // Follow symlink and check what it points to
-        const stat = statSync(src)
-        if (stat.isDirectory()) {
-            // Symlink to directory: recursively copy the directory contents
-            mkdirSync(dst, { recursive: true })
-            for (const entry of readdirSync(src)) {
-                copyDereferenced(join(src, entry), join(dst, entry))
-            }
-        } else {
-            // Symlink to file: copy the actual file content
-            mkdirSync(join(dst, ".."), { recursive: true })
-            copyFileSync(src, dst)
-        }
-    } else if (lstat.isDirectory()) {
-        mkdirSync(dst, { recursive: true })
-        for (const entry of readdirSync(src)) {
-            copyDereferenced(join(src, entry), join(dst, entry))
-        }
-    } else {
-        mkdirSync(join(dst, ".."), { recursive: true })
-        copyFileSync(src, dst)
-    }
-}
 
 const standaloneDir = join(rootDir, ".next", "standalone")
 const staticDir = join(rootDir, ".next", "static")

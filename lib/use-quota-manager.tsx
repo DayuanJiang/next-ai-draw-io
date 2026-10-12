@@ -7,34 +7,30 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 
 export interface QuotaConfig {
-    dailyRequestLimit: number
-    dailyTokenLimit: number
-    tpmLimit: number
     onConfigModel?: () => void
 }
 
 /**
  * Hook for displaying quota limit toasts.
- * Server-side handles actual quota enforcement via DynamoDB.
- * This hook only provides UI feedback when limits are exceeded.
+ * Server-side handles actual quota enforcement via DynamoDB, and its 429
+ * responses carry the used and limit values shown here.
  */
 export function useQuotaManager(config: QuotaConfig): {
-    showQuotaLimitToast: (used?: number, limit?: number) => void
-    showTokenLimitToast: (used?: number, limit?: number) => void
-    showTPMLimitToast: (limit?: number) => void
+    showQuotaLimitToast: (used: number, limit: number) => void
+    showTokenLimitToast: (used: number, limit: number) => void
+    showTPMLimitToast: (limit: number) => void
 } {
-    const { dailyRequestLimit, dailyTokenLimit, tpmLimit, onConfigModel } =
-        config
+    const { onConfigModel } = config
     const dict = useDictionary()
 
     // Show quota limit toast (request-based)
     const showQuotaLimitToast = useCallback(
-        (used?: number, limit?: number) => {
+        (used: number, limit: number) => {
             toast.custom(
                 (t) => (
                     <QuotaLimitToast
-                        used={used ?? dailyRequestLimit}
-                        limit={limit ?? dailyRequestLimit}
+                        used={used}
+                        limit={limit}
                         onDismiss={() => toast.dismiss(t)}
                         onConfigModel={onConfigModel}
                     />
@@ -42,18 +38,18 @@ export function useQuotaManager(config: QuotaConfig): {
                 { duration: 15000 },
             )
         },
-        [dailyRequestLimit, onConfigModel],
+        [onConfigModel],
     )
 
     // Show token limit toast
     const showTokenLimitToast = useCallback(
-        (used?: number, limit?: number) => {
+        (used: number, limit: number) => {
             toast.custom(
                 (t) => (
                     <QuotaLimitToast
                         type="token"
-                        used={used ?? dailyTokenLimit}
-                        limit={limit ?? dailyTokenLimit}
+                        used={used}
+                        limit={limit}
                         onDismiss={() => toast.dismiss(t)}
                         onConfigModel={onConfigModel}
                     />
@@ -61,24 +57,21 @@ export function useQuotaManager(config: QuotaConfig): {
                 { duration: 15000 },
             )
         },
-        [dailyTokenLimit, onConfigModel],
+        [onConfigModel],
     )
 
     // Show TPM limit toast
     const showTPMLimitToast = useCallback(
-        (limit?: number) => {
-            const effectiveLimit = limit ?? tpmLimit
+        (limit: number) => {
             const limitDisplay =
-                effectiveLimit >= 1000
-                    ? `${effectiveLimit / 1000}k`
-                    : String(effectiveLimit)
+                limit >= 1000 ? `${limit / 1000}k` : String(limit)
             const message = formatMessage(dict.quota.tpmMessageDetailed, {
                 limit: limitDisplay,
                 seconds: 60,
             })
             toast.error(message, { duration: 8000 })
         },
-        [tpmLimit, dict],
+        [dict],
     )
 
     return {

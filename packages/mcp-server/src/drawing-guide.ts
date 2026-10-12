@@ -2,18 +2,22 @@
  * Drawing guide for the model, returned by start_session, get_drawing_guide
  * and the diagram-workflow prompt.
  *
- * Adapted from the web app's system prompt (lib/system-prompts.ts) and its
- * tool descriptions (app/api/chat/route.ts). When drawing rules change there,
- * update this file too.
+ * The XML examples and the style rules are shared with the web app's system
+ * prompt (xml-examples.ts). The other rules are adapted from that prompt
+ * (lib/system-prompts.ts) and the web app's tool descriptions
+ * (app/api/chat/route.ts); when they change there, update this file too.
  */
 
 import {
     indent,
     STYLE_CLASS_EXAMPLE,
     SWIMLANE_EXAMPLE,
+    styleRules,
     TWO_EDGES_EXAMPLE,
     WAYPOINT_EXAMPLE,
 } from "./xml-examples.ts"
+
+const styles = styleRules("create_new_diagram or add_page", "the server")
 
 export const DRAWING_GUIDE = `# Draw.io drawing guide
 
@@ -85,12 +89,12 @@ Waypoints go inside <Array as="points"> in the edge geometry. Example: Hotfix (r
 ${indent(WAYPOINT_EXAMPLE)}
 
 ## Styles
-Define each style used by several cells ONCE, as a named style before the cells, and use the name in the cells like a CSS class. A cell's style can combine a shape token, a name and overrides; later pairs win. Name only styles that two or more cells share; a style used by one cell stays inline. Names must not be draw.io's own style names: shapes such as text, ellipse, rhombus, swimlane, label, image, and colors such as blue, green, red, gray, yellow, orange, purple, pink. A definition applies to the call it is in: each create_new_diagram or add_page call defines the names it uses. The server expands the names, so the saved file is standard draw.io XML.
+${styles.namedStyles}
 
 ${indent(STYLE_CLASS_EXAMPLE)}
 
-- NEVER write html=1 or whiteSpace=wrap: the server adds html=1 to every cell and whiteSpace=wrap to shapes. Labels are HTML: use &lt;br&gt; for a line break and &lt;b&gt; for bold, never \\n; a literal < or > in a label is written &amp;lt; or &amp;gt;.
-- Do NOT repeat what draw.io already uses. For a plain shape: rounded=0, align=center, verticalAlign=middle, fontSize=12, strokeWidth=1, fillColor=#ffffff, strokeColor=#000000, fontColor=#000000. For an edge: endArrow=classic, strokeColor=#000000. Writing one of them is right only when it overrides what a name or the shape sets: an edge is rounded by default, so rounded=0 on an edge is a real setting, and a text cell is left/top aligned by default, so there align=center or verticalAlign=middle are real settings.
+- ${styles.noHtml}
+- ${styles.noDefaults}
 - Shapes: rounded=1, fillColor=#hex, strokeColor=#hex
 - Edges: endArrow=block, open or none; startArrow=classic; curved=1; dashed=1; edgeStyle=orthogonalEdgeStyle
 - Text: fontSize=14, fontStyle=1 (bold), align=center or right

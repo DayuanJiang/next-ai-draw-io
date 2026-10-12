@@ -1,4 +1,9 @@
-import { modelOfPage, pageElement } from "@/lib/diagram-pages"
+import {
+    fileVars,
+    modelOfPage,
+    pageElement,
+    parseXml,
+} from "@/lib/diagram-pages"
 
 /** What changed on one page between two versions of a diagram */
 export interface ChangeSummary {
@@ -32,18 +37,12 @@ interface CellInfo {
     signature: string
 }
 
-function parse(xml: string): Document | null {
-    if (!xml?.trim()) return null
-    const doc = new DOMParser().parseFromString(xml, "text/xml")
-    return doc.querySelector("parsererror") ? null : doc
-}
-
 /**
  * A page's mxGraphModel element, whatever wrapper the XML has: the page
  * with this id, else the first
  */
 function pageModel(xml: string, pageId?: string | null): Element | null {
-    const doc = parse(xml)
+    const doc = parseXml(xml)
     if (!doc) return null
     const diagram = pageElement(doc, pageId)
     if (diagram) return modelOfPage(diagram)
@@ -304,14 +303,10 @@ export function isSameDocument(a: string, b: string): boolean {
             model: modelOfPage(d),
         }))
     }
-    const docA = parse(a)
-    const docB = parse(b)
+    const docA = parseXml(a)
+    const docB = parseXml(b)
     if (!docA || !docB) return a === b
-    const varsOf = (doc: Document) =>
-        doc.documentElement.nodeName === "mxfile"
-            ? doc.documentElement.getAttribute("vars")
-            : null
-    if (!sameFileVars(varsOf(docA), varsOf(docB))) return false
+    if (!sameFileVars(fileVars(docA), fileVars(docB))) return false
     const pagesA = pagesOf(docA)
     const pagesB = pagesOf(docB)
     if (pagesA.length !== pagesB.length) return false

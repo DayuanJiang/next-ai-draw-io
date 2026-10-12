@@ -667,18 +667,6 @@ function readSelectionRect() {
 }
 
 // ---------------------------------------------------------------------------
-// Pages
-// ---------------------------------------------------------------------------
-
-function readPages() {
-    const pages = (ui?.pages ?? []) as any[]
-    return pages.map((page, index) => ({
-        id: String(page.getId?.() ?? index),
-        name: String(page.getName?.() ?? `Page-${index + 1}`),
-    }))
-}
-
-// ---------------------------------------------------------------------------
 // Keeping the store in sync
 // ---------------------------------------------------------------------------
 
@@ -690,7 +678,6 @@ function syncAll() {
     if (!ui) return
     const g = graph()
     useCanvasStore.getState().set({
-        pages: readPages(),
         currentPageId: ui.currentPage?.getId
             ? String(ui.currentPage.getId())
             : null,

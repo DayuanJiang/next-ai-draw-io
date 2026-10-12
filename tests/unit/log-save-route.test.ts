@@ -2,9 +2,11 @@
 import { describe, expect, it, vi } from "vitest"
 import { POST as logSave } from "@/app/api/log-save/route"
 
-// A Langfuse client with a trace to attach the save score to
+// A Langfuse client with a trace to attach the save score to; the real
+// scoreLatestTrace runs against it
 const batch = vi.fn(async () => ({}))
-vi.mock("@/lib/langfuse", () => ({
+vi.mock("@/lib/langfuse", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/lib/langfuse")>()),
     getLangfuseClient: () => ({
         api: {
             trace: { list: async () => ({ data: [{ id: "trace-1" }] }) },

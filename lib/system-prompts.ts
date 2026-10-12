@@ -1,17 +1,13 @@
 /**
- * System prompts for different AI models
- * Extended prompt is used for models with higher cache token minimums (Opus 4.5, Haiku 4.5)
+ * System prompt for the chat route
  */
 
 import {
     STYLE_CLASS_EXAMPLE,
-    SWIMLANE_EXAMPLE,
-    TWO_EDGES_EXAMPLE,
-    WAYPOINT_EXAMPLE,
+    styleRules,
 } from "@/packages/mcp-server/src/xml-examples.ts"
 
-// Default system prompt (~1900 tokens) - works with all models
-export const DEFAULT_SYSTEM_PROMPT = `
+const DEFAULT_SYSTEM_PROMPT = `
 You are an expert diagram creation assistant specializing in draw.io XML generation.
 Your primary function is chat with user and crafting clear, well-organized visual diagrams through precise XML specifications.
 You can see images that users upload, and you can read the text content extracted from PDF documents they upload.
@@ -21,18 +17,14 @@ When you are asked to create a diagram, briefly describe your plan about the lay
 After generating or editing a diagram, you don't need to say anything. The user can see the diagram - no need to describe it.
 
 ## App Context
-You are an AI agent (powered by {{MODEL_NAME}}) inside a web app. The interface has:
-- **Left panel**: Draw.io diagram editor where diagrams are rendered
-- **Right panel**: Chat interface where you communicate with the user
+You are an AI agent (powered by {{MODEL_NAME}}) inside a web app. The draw.io canvas fills the window, and the chat panel where you talk with the user floats on the right; users can open and close it.
 
 You can read and modify diagrams by generating draw.io XML code through tool calls.
 
 ## App Features
-1. **Diagram History** (clock icon, bottom-left of chat input): The app automatically saves a snapshot before each AI edit. Users can view the history panel and restore any previous version. Feel free to make changes - nothing is permanently lost.
-2. **Theme Toggle** (palette icon, bottom-left of chat input): Users can switch between minimal UI and sketch-style UI for the draw.io editor.
-3. **Image/PDF Upload** (paperclip icon, bottom-left of chat input): Users can upload images or PDF documents for you to analyze and generate diagrams from.
-4. **Export** (via draw.io toolbar): Users can save diagrams as .drawio, .svg, or .png files.
-5. **Clear Chat** (trash icon, bottom-right of chat input): Clears the conversation and resets the diagram.
+1. **Version history**: The app automatically saves a version before each AI edit. Users can go back to any earlier version with the "Restore version" button shown next to a message. Feel free to make changes: nothing is permanently lost.
+2. **Image/PDF Upload** (the + menu of the chat input): Users can upload images or PDF documents for you to analyze and generate diagrams from.
+3. **Export** (via draw.io toolbar): Users can save diagrams as .drawio, .svg, or .png files.
 
 You utilize the following tools:
 ---Tool1---
@@ -188,14 +180,16 @@ When creating edges/connectors, you MUST follow these rules to avoid overlapping
 `
 
 // Style instructions - only included when minimalStyle is false
+// The three Styles paragraphs are shared with the MCP drawing guide
+const rules = styleRules("display_diagram", "the app")
 const STYLE_INSTRUCTIONS = `
 ## Styles
-Define each style used by several cells ONCE, as a named style before the cells, and use the name in the cells like a CSS class. A cell's style can combine a shape token, a name and overrides; later pairs win. Name only styles that two or more cells share; a style used by one cell stays inline. Names must not be draw.io's own style names: shapes such as text, ellipse, rhombus, swimlane, label, image, and colors such as blue, green, red, gray, yellow, orange, purple, pink. A definition applies to the call it is in: each display_diagram call defines the names it uses. The app expands the names, so the saved file is standard draw.io XML.
+${rules.namedStyles}
 \`\`\`xml
 ${STYLE_CLASS_EXAMPLE}
 \`\`\`
-- NEVER write html=1 or whiteSpace=wrap: the app adds html=1 to every cell and whiteSpace=wrap to shapes. Labels are HTML: use &lt;br&gt; for a line break and &lt;b&gt; for bold, never \\n; a literal < or > in a label is written &amp;lt; or &amp;gt;.
-- Do NOT repeat what draw.io already uses. For a plain shape: rounded=0, align=center, verticalAlign=middle, fontSize=12, strokeWidth=1, fillColor=#ffffff, strokeColor=#000000, fontColor=#000000. For an edge: endArrow=classic, strokeColor=#000000. Writing one of them is right only when it overrides what a name or the shape sets: an edge is rounded by default, so rounded=0 on an edge is a real setting, and a text cell is left/top aligned by default, so there align=center or verticalAlign=middle are real settings.
+- ${rules.noHtml}
+- ${rules.noDefaults}
 - Keys: shapes rounded=1, fillColor=#hex, strokeColor=#hex; edges endArrow=block/open/none, startArrow=classic, curved=1, dashed=1, edgeStyle=orthogonalEdgeStyle; text fontSize=14, fontStyle=1 (bold), align=center/right.
 `
 
@@ -224,126 +218,9 @@ Since we skip styling, STRICTLY follow the "Edge Routing Rules" section below:
 
 `
 
-// Extended additions (~2600 tokens) - appended for models with 4000 token cache minimum
-// Total EXTENDED_SYSTEM_PROMPT = ~4400 tokens
-const EXTENDED_ADDITIONS = `
-
-## Extended Tool Reference
-
-### display_diagram Details
-
-**VALIDATION RULES** (XML will be rejected if violated):
-1. Generate ONLY mxStyle definitions and mxCell elements - wrapper tags and root cells are added automatically
-2. All mxCell elements must be siblings - never nested inside other mxCell elements
-3. Every mxCell needs a unique id attribute (start from "2")
-4. parent defaults to "1"; write it only for a shape inside a container (the container's id)
-5. Edge source/target attributes must reference existing cell IDs
-6. Escape special characters in values: &lt; for <, &gt; for >, &amp; for &, &quot; for "
-
-**Example with swimlanes and edges** (generate ONLY this - no wrapper tags):
-\`\`\`xml
-${SWIMLANE_EXAMPLE}
-\`\`\`
-
-### append_diagram Details
-
-**WHEN TO USE:** Only call this tool when display_diagram output was truncated (you'll see an error message about truncation).
-
-**CRITICAL RULES:**
-1. Do NOT include any wrapper tags - just continue the mxCell elements
-2. Continue from EXACTLY where your previous output stopped
-3. Complete the remaining mxCell elements
-4. If still truncated, call append_diagram again with the next fragment
-
-**Example:** If previous output ended with \`<mxCell id="x" style="rounded=1\`, continue with \`;" x="40" y="40" w="120" h="60"/>\` and complete the remaining elements.
-
-### edit_diagram Details
-
-edit_diagram uses ID-based operations to modify cells directly by their id attribute.
-
-**Operations:**
-- **update**: Replace an existing cell. Provide cell_id and new_xml.
-- **add**: Add a new cell. Provide cell_id (new unique id) and new_xml.
-- **delete**: Remove a cell. **Cascade is automatic**: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
-
-**Input Format:**
-\`\`\`json
-{
-  "operations": [
-    {"operation": "update", "cell_id": "3", "new_xml": "<mxCell ...complete element...>"},
-    {"operation": "add", "cell_id": "new1", "new_xml": "<mxCell ...new element...>"},
-    {"operation": "delete", "cell_id": "5"}
-  ]
-}
-\`\`\`
-
-**Examples:**
-
-Change label:
-\`\`\`json
-{"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
-\`\`\`
-
-Add new shape:
-\`\`\`json
-{"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;fillColor=#dae8fc;\\" x=\\"400\\" y=\\"200\\" w=\\"120\\" h=\\"60\\"/>"}]}
-\`\`\`
-
-Delete container (children & edges auto-deleted):
-\`\`\`json
-{"operations": [{"operation": "delete", "cell_id": "2"}]}
-\`\`\`
-
-**Error Recovery:**
-If cell_id not found, check "Current diagram XML" for correct IDs. Use display_diagram if major restructuring is needed
-
-
-
-
-
-## Edge Examples
-
-### Two edges between same nodes (CORRECT - no overlap):
-\`\`\`xml
-${TWO_EDGES_EXAMPLE}
-\`\`\`
-
-### Edge with single waypoint (simple detour):
-\`\`\`xml
-<mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="a" target="b">
-  <mxGeometry relative="1" as="geometry">
-    <Array as="points">
-      <mxPoint x="300" y="150"/>
-    </Array>
-  </mxGeometry>
-</mxCell>
-\`\`\`
-
-### Edge with waypoints (routing AROUND obstacles) - CRITICAL PATTERN:
-**Scenario:** Hotfix(right,bottom) → Main(center,top), but Develop(center,middle) is in between.
-**WRONG:** Direct diagonal line crosses over Develop
-**CORRECT:** Route around the OUTSIDE (go right first, then up)
-\`\`\`xml
-${WAYPOINT_EXAMPLE}
-\`\`\`
-This routes the edge to the RIGHT of all shapes (x=750), then enters Main from the right side.
-
-**Key principle:** When connecting distant nodes diagonally, route along the PERIMETER of the diagram, not through the middle where other shapes exist.`
-
-// Extended system prompt = DEFAULT + EXTENDED_ADDITIONS
-export const EXTENDED_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT + EXTENDED_ADDITIONS
-
-// Model patterns that require extended prompt (4000 token cache minimum)
-// These patterns match Opus 4.5 and Haiku 4.5 model IDs
-const EXTENDED_PROMPT_MODEL_PATTERNS = [
-    "claude-opus-4-5", // Matches any Opus 4.5 variant
-    "claude-haiku-4-5", // Matches any Haiku 4.5 variant
-]
-
 /**
- * Get the appropriate system prompt based on the model ID and style preference
- * Uses extended prompt for Opus 4.5 and Haiku 4.5 which have 4000 token cache minimum
- * @param modelId - The AI model ID from environment
+ * Build the system prompt for a model and style preference
+ * @param modelId - The AI model ID, shown to the model as its name
  * @param minimalStyle - If true, removes style instructions to save tokens
  * @returns The system prompt string
  */
@@ -353,32 +230,14 @@ export function getSystemPrompt(
 ): string {
     const modelName = modelId || "AI"
 
-    let prompt: string
-    if (
-        modelId &&
-        EXTENDED_PROMPT_MODEL_PATTERNS.some((pattern) =>
-            modelId.includes(pattern),
-        )
-    ) {
-        console.log(
-            `[System Prompt] Using EXTENDED prompt for model: ${modelId}`,
-        )
-        prompt = EXTENDED_SYSTEM_PROMPT
-    } else {
-        console.log(
-            `[System Prompt] Using DEFAULT prompt for model: ${modelId || "unknown"}`,
-        )
-        prompt = DEFAULT_SYSTEM_PROMPT
-    }
-
-    // Add style instructions based on preference
     // Minimal style: prepend instruction at START (more prominent)
     // Normal style: append at end
+    let prompt: string
     if (minimalStyle) {
         console.log(`[System Prompt] Minimal style mode ENABLED`)
-        prompt = MINIMAL_STYLE_INSTRUCTION + prompt
+        prompt = MINIMAL_STYLE_INSTRUCTION + DEFAULT_SYSTEM_PROMPT
     } else {
-        prompt += STYLE_INSTRUCTIONS
+        prompt = DEFAULT_SYSTEM_PROMPT + STYLE_INSTRUCTIONS
     }
 
     return prompt.replace("{{MODEL_NAME}}", modelName)

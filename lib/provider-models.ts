@@ -14,7 +14,7 @@ export interface ListedModel {
     tools?: boolean
 }
 
-export const AIHUBMIX_MODELS_ENDPOINT = "https://aihubmix.com/api/v1/models"
+const AIHUBMIX_MODELS_ENDPOINT = "https://aihubmix.com/api/v1/models"
 
 export function canListModels(provider: ProviderName): boolean {
     return (

@@ -80,6 +80,32 @@ function cellAttr(cell: Element, name: string): string | null {
 }
 
 /**
+ * The cell an add or update operation sends in new_xml, imported into doc,
+ * or the error message for the model.
+ */
+function parseNewCell(
+    op: DiagramOperation,
+    parser: DOMParser,
+    doc: Document,
+): Element | string {
+    if (!op.new_xml) return `new_xml is required for ${op.operation} operation`
+    // A cut-off cell (its XML still streaming in a preview) would parse in
+    // Chrome to a cell without its geometry
+    const wrapped = `<wrapper>${op.new_xml}</wrapper>`
+    const syntaxError = getXmlSyntaxError(wrapped)
+    if (syntaxError) return `new_xml is not well-formed XML: ${syntaxError}`
+    const newCell = parser
+        .parseFromString(wrapped, "text/xml")
+        .querySelector(CELL_SELECTOR)
+    if (!newCell) return "new_xml must contain an mxCell element"
+    const newCellId = newCell.getAttribute("id")
+    if (newCellId !== op.cell_id) {
+        return `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`
+    }
+    return doc.importNode(newCell, true)
+}
+
+/**
  * Apply diagram operations (update/add/delete) using ID-based lookup.
  *
  * @param xmlContent - The diagram XML. May be either a bare <mxGraphModel> or
@@ -207,63 +233,19 @@ export function applyDiagramOperations(
                 continue
             }
 
-            if (!op.new_xml) {
+            const newCell = parseNewCell(op, parser, doc)
+            if (typeof newCell === "string") {
                 errors.push({
                     type: "update",
                     cellId: op.cell_id,
-                    message: "new_xml is required for update operation",
+                    message: newCell,
                 })
                 continue
             }
 
-            // A cut-off cell (its XML still streaming in a preview) would
-            // parse in Chrome to a cell without its geometry
-            const syntaxError = getXmlSyntaxError(
-                `<wrapper>${op.new_xml}</wrapper>`,
-            )
-            if (syntaxError) {
-                errors.push({
-                    type: "update",
-                    cellId: op.cell_id,
-                    message: `new_xml is not well-formed XML: ${syntaxError}`,
-                })
-                continue
-            }
-
-            // Parse the new XML
-            const newDoc = parser.parseFromString(
-                `<wrapper>${op.new_xml}</wrapper>`,
-                "text/xml",
-            )
-            const newCell = newDoc.querySelector(CELL_SELECTOR)
-            if (!newCell) {
-                errors.push({
-                    type: "update",
-                    cellId: op.cell_id,
-                    message: "new_xml must contain an mxCell element",
-                })
-                continue
-            }
-
-            // Validate ID matches
-            const newCellId = newCell.getAttribute("id")
-            if (newCellId !== op.cell_id) {
-                errors.push({
-                    type: "update",
-                    cellId: op.cell_id,
-                    message: `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`,
-                })
-                continue
-            }
-
-            // Import and replace the node
-            const importedNode = doc.importNode(newCell, true)
-            existingCell.parentNode?.replaceChild(importedNode, existingCell)
-
-            // Update the map with the new element
-            cellMap.set(op.cell_id, importedNode)
+            existingCell.parentNode?.replaceChild(newCell, existingCell)
+            cellMap.set(op.cell_id, newCell)
         } else if (op.operation === "add") {
-            // Check if ID already exists
             if (cellMap.has(op.cell_id)) {
                 errors.push({
                     type: "add",
@@ -273,61 +255,18 @@ export function applyDiagramOperations(
                 continue
             }
 
-            if (!op.new_xml) {
+            const newCell = parseNewCell(op, parser, doc)
+            if (typeof newCell === "string") {
                 errors.push({
                     type: "add",
                     cellId: op.cell_id,
-                    message: "new_xml is required for add operation",
+                    message: newCell,
                 })
                 continue
             }
 
-            // A cut-off cell (its XML still streaming in a preview) would
-            // parse in Chrome to a cell without its geometry
-            const syntaxError = getXmlSyntaxError(
-                `<wrapper>${op.new_xml}</wrapper>`,
-            )
-            if (syntaxError) {
-                errors.push({
-                    type: "add",
-                    cellId: op.cell_id,
-                    message: `new_xml is not well-formed XML: ${syntaxError}`,
-                })
-                continue
-            }
-
-            // Parse the new XML
-            const newDoc = parser.parseFromString(
-                `<wrapper>${op.new_xml}</wrapper>`,
-                "text/xml",
-            )
-            const newCell = newDoc.querySelector(CELL_SELECTOR)
-            if (!newCell) {
-                errors.push({
-                    type: "add",
-                    cellId: op.cell_id,
-                    message: "new_xml must contain an mxCell element",
-                })
-                continue
-            }
-
-            // Validate ID matches
-            const newCellId = newCell.getAttribute("id")
-            if (newCellId !== op.cell_id) {
-                errors.push({
-                    type: "add",
-                    cellId: op.cell_id,
-                    message: `ID mismatch: cell_id is "${op.cell_id}" but new_xml has id="${newCellId}"`,
-                })
-                continue
-            }
-
-            // Import and append the node
-            const importedNode = doc.importNode(newCell, true)
-            root.appendChild(importedNode)
-
-            // Add to map
-            cellMap.set(op.cell_id, importedNode)
+            root.appendChild(newCell)
+            cellMap.set(op.cell_id, newCell)
         } else if (op.operation === "delete") {
             // Protect root cells from deletion
             if (op.cell_id === "0" || op.cell_id === "1") {

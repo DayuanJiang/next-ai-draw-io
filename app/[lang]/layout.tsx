@@ -41,6 +41,13 @@ export async function generateStaticParams() {
     return i18n.locales.map((locale) => ({ lang: locale }))
 }
 
+const OG_LOCALE: Record<Locale, string> = {
+    en: "en_US",
+    zh: "zh_CN",
+    ja: "ja_JP",
+    "zh-Hant": "zh_HK",
+}
+
 // Generate metadata per locale
 export async function generateMetadata({
     params,
@@ -48,22 +55,19 @@ export async function generateMetadata({
     params: Promise<{ lang: string }>
 }): Promise<Metadata> {
     const { lang: rawLang } = await params
-    const lang = (
-        rawLang in { en: 1, zh: 1, ja: 1, "zh-Hant": 1 } ? rawLang : "en"
-    ) as Locale
+    const lang: Locale = hasLocale(rawLang) ? rawLang : i18n.defaultLocale
 
-    // Default to English metadata
     const titles: Record<Locale, string> = {
         en: "Next AI Draw.io - AI-Powered Diagram Generator",
-        zh: "Next AI Draw.io - AI powered diagram generator",
-        ja: "Next AI Draw.io - AI-powered diagram generator",
+        zh: "Next AI Draw.io - AI 驱动的图表生成器",
+        ja: "Next AI Draw.io - AI 搭載ダイアグラム生成ツール",
         "zh-Hant": "Next AI Draw.io - AI 驅動的圖表產生器",
     }
 
     const descriptions: Record<Locale, string> = {
         en: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Free online tool integrating draw.io with AI assistance for professional diagram creation.",
-        zh: "Use AI to create AWS architecture diagrams, flowcharts, and technical diagrams. Free online tool integrated with draw.io and AI assistance for professional diagram creation.",
-        ja: "Create AWS architecture diagrams, flowcharts, and technical diagrams using AI. Create professional diagrams with a free online tool that integrates draw.io with an AI assistant.",
+        zh: "使用 AI 创建 AWS 架构图、流程图和技术图表。免费在线工具，整合 draw.io 与 AI 辅助，轻松创建专业图表。",
+        ja: "AI で AWS アーキテクチャ図、フローチャート、技術図を作成。draw.io と AI アシスタントを統合した無料オンラインツールで、プロ品質の図を簡単に作成できます。",
         "zh-Hant":
             "使用 AI 建立 AWS 架構圖、流程圖和技術圖表。免費線上工具整合 draw.io 與 AI 輔助，輕鬆建立專業圖表。",
     }
@@ -92,14 +96,7 @@ export async function generateMetadata({
             type: "website",
             url: "https://next-ai-drawio.jiang.jp",
             siteName: "Next AI Draw.io",
-            locale:
-                lang === "zh"
-                    ? "zh_CN"
-                    : lang === "zh-Hant"
-                      ? "zh_HK"
-                      : lang === "ja"
-                        ? "ja_JP"
-                        : "en_US",
+            locale: OG_LOCALE[lang],
             images: [
                 {
                     url: "/architecture.png",

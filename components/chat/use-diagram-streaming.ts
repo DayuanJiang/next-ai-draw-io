@@ -5,25 +5,25 @@ import type { RefObject } from "react"
 import { useCallback, useEffect, useRef } from "react"
 import type { DiagramOperation, ToolPartLike } from "@/components/chat/types"
 import { useDiagram } from "@/contexts/diagram-context"
-import { pageSelectorFor } from "@/lib/diagram-pages"
-import {
-    convertToLegalXml,
-    extractCompleteMxCells,
-    replaceNodes,
-} from "@/lib/utils"
+import { pageSelectorFor, replacePageModel } from "@/lib/diagram-pages"
+import { extractCompleteMxCells } from "@/lib/utils"
 import {
     defaultLayerOf,
     expandCompactCells,
 } from "@/packages/mcp-server/src/compact-cells.ts"
 import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
 import { targetPageXml } from "@/packages/mcp-server/src/edit-diagram.ts"
-import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
+import {
+    BLANK_MXFILE,
+    wrapCellsInModel,
+} from "@/packages/mcp-server/src/pages.ts"
 import {
     addDefaultStyles,
     applyStyleClasses,
     edgeIdsOf,
     readStyleClasses,
 } from "@/packages/mcp-server/src/style-classes.ts"
+import { autoFixXml } from "@/packages/mcp-server/src/xml-validation.ts"
 
 // Helper to extract complete operations from streaming input
 function getCompleteOperations(
@@ -91,32 +91,31 @@ export function useDiagramStreaming({
             const { classes, xml: cellsXml } = readStyleClasses(xml || "")
             const completeCells = extractCompleteMxCells(cellsXml)
             if (!completeCells) return
-            const convertedXml = addDefaultStyles(
+            // The same wrapping, fixes and expansion as the final diagram
+            // (prepareNewDiagram), so the preview matches what is committed
+            const model = addDefaultStyles(
                 applyStyleClasses(
-                    expandCompactCells(convertToLegalXml(completeCells)),
+                    expandCompactCells(
+                        autoFixXml(wrapCellsInModel(completeCells)).fixed,
+                    ),
                     classes,
                 ),
             )
-            if (convertedXml === previousXML.current) return
+            if (model === previousXML.current) return
 
             // Skip this update while the cells written so far don't parse
-            const testDoc = new DOMParser().parseFromString(
-                `<root>${convertedXml}</root>`,
-                "text/xml",
-            )
+            const testDoc = new DOMParser().parseFromString(model, "text/xml")
             if (testDoc.querySelector("parsererror")) return
 
             try {
-                // Replace the model's page's cells so other pages stay
-                // intact. An empty canvas gets a default mxfile to put the
-                // cells in.
-                const baseXML = chartXML || BLANK_MXFILE
-                const replacedXML = replaceNodes(
-                    baseXML,
-                    convertedXml,
+                // Replace the model's page so other pages stay intact; an
+                // empty canvas gets the blank mxfile to put the page in
+                const replacedXML = replacePageModel(
+                    chartXML,
                     turnPageIdRef?.current,
+                    model,
                 )
-                previousXML.current = convertedXml
+                previousXML.current = model
                 loadDiagram(replacedXML, true, "preview")
             } catch (error) {
                 console.error("Error processing XML:", error)

@@ -2,7 +2,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { GET, PUT } from "@/app/api/admin/providers/route"
 import { _resetForTests } from "@/lib/admin/settings"
 
@@ -10,17 +10,15 @@ let tmpDir: string
 
 beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "admin-providers-route-"))
-    process.env.SETTINGS_FILE = path.join(tmpDir, "settings.json")
-    process.env.ADMIN_PASSWORD = "pw"
-    process.env.AI_MODELS_CONFIG_PATH = path.join(tmpDir, "none.json")
+    vi.stubEnv("SETTINGS_FILE", path.join(tmpDir, "settings.json"))
+    vi.stubEnv("ADMIN_PASSWORD", "pw")
+    vi.stubEnv("AI_MODELS_CONFIG_PATH", path.join(tmpDir, "none.json"))
     _resetForTests()
 })
 
 afterEach(() => {
     _resetForTests()
-    delete process.env.SETTINGS_FILE
-    delete process.env.ADMIN_PASSWORD
-    delete process.env.AI_MODELS_CONFIG_PATH
+    // Written by the panel default's save, not stubbed by a test
     delete process.env.AI_MODEL
     fs.rmSync(tmpDir, { recursive: true, force: true })
 })
@@ -57,7 +55,7 @@ async function envHasDefaultModel(): Promise<boolean> {
 
 describe("envHasDefaultModel", () => {
     it("is true when .env sets AI_MODEL, even after a panel default", async () => {
-        process.env.AI_MODEL = "gpt-env"
+        vi.stubEnv("AI_MODEL", "gpt-env")
         expect(await envHasDefaultModel()).toBe(true)
         await saveDefaultPanelProvider()
         expect(await envHasDefaultModel()).toBe(true)

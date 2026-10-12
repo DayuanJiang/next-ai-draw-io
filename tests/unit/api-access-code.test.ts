@@ -24,18 +24,16 @@ function post(path: string, body: unknown, accessCode?: string): Request {
 }
 
 beforeEach(() => {
-    process.env.ACCESS_CODE_LIST = "secret, other"
+    vi.stubEnv("ACCESS_CODE_LIST", "secret, other")
 })
 
 afterEach(() => {
-    delete process.env.ACCESS_CODE_LIST
-    delete process.env.ALLOW_PRIVATE_URLS
     vi.unstubAllGlobals()
 })
 
 describe("checkAccessCode", () => {
     it("passes when no access codes are configured", () => {
-        delete process.env.ACCESS_CODE_LIST
+        vi.stubEnv("ACCESS_CODE_LIST", undefined)
         expect(checkAccessCode(post("/x", {}))).toBeNull()
     })
 
@@ -124,7 +122,7 @@ describe("size limits", () => {
 
 describe("validate-model redirects", () => {
     it("refuses redirects when private URLs are blocked", async () => {
-        process.env.ALLOW_PRIVATE_URLS = "false"
+        vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
         vi.stubGlobal(
             "fetch",
             vi.fn(

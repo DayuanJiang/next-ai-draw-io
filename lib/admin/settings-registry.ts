@@ -10,7 +10,7 @@
 // - ADMIN_PASSWORD / SETTINGS_FILE: bootstrap values, env-only to avoid lockout
 // - Per-provider reasoning/thinking tuning vars: env-only (see env.example)
 
-export type SettingType = "string" | "secret" | "number" | "boolean" | "enum"
+type SettingType = "string" | "secret" | "number" | "boolean"
 
 export interface SettingDef {
     key: string
@@ -18,7 +18,6 @@ export interface SettingDef {
     type: SettingType
     label: string
     description?: string
-    options?: string[]
     min?: number
     max?: number
     placeholder?: string
@@ -122,13 +121,6 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
         type: "number",
         label: "Validation Timeout (ms)",
         min: 1000,
-    },
-    {
-        key: "ENABLE_HISTORY_XML_REPLACE",
-        group: "features",
-        type: "boolean",
-        label: "History XML Compression",
-        description: "Replace old diagram XML in history with placeholders.",
     },
     {
         key: "ALLOW_PRIVATE_URLS",

@@ -46,7 +46,8 @@ export function decompressPageContent(compressed: string): string | null {
 /**
  * Read the diagram XML a .drawio.svg (Editable SVG) carries in its root
  * element's content attribute. Returns undefined when the text is not an
- * SVG, and "" when the SVG has no embedded diagram.
+ * SVG, and "" when the SVG has no embedded diagram. The root may carry a
+ * namespace prefix (<svg:svg>).
  *
  * Uses getAttributeNode().value rather than getAttribute(): linkedom's
  * getAttribute re-escapes <, > and & in XML documents, which would turn
@@ -55,9 +56,15 @@ export function decompressPageContent(compressed: string): string | null {
 export function extractSvgEmbeddedXml(text: string): string | undefined {
     const doc = new DOMParser().parseFromString(text, "text/xml")
     const root = doc.documentElement
-    if (root?.tagName !== "svg") return undefined
+    // (linkedom keeps the prefix in localName too)
+    if (root?.tagName.split(":").pop() !== "svg") return undefined
     return (root.getAttributeNode("content")?.value ?? "").trim()
 }
+
+// What XML allows before the root element: the declaration, comments, a
+// DOCTYPE (the root checks below expect the root first)
+const XML_PROLOG =
+    /^(?:\s|<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>[]*(?:\[[\s\S]*?\])?\s*>)*/i
 
 /**
  * Parse the content of a .drawio file into the canonical session shape:
@@ -66,7 +73,7 @@ export function extractSvgEmbeddedXml(text: string): string | undefined {
  * the diagram embedded, and decompresses any compressed pages.
  */
 export function parseDrawioFileContent(content: string): LoadResult {
-    let trimmed = content.trim()
+    let trimmed = content.replace(XML_PROLOG, "").trim()
     if (!trimmed) return { ok: false, error: "File is empty." }
 
     if (isMxGraphModel(trimmed)) {
@@ -78,7 +85,8 @@ export function parseDrawioFileContent(content: string): LoadResult {
         trimmed = normalized
     }
     if (!isMxFile(trimmed)) {
-        const embedded = extractSvgEmbeddedXml(trimmed)
+        // Parsed whole: the SVG's DOCTYPE may define entities its content uses
+        const embedded = extractSvgEmbeddedXml(content)
         if (embedded === undefined) {
             return {
                 ok: false,

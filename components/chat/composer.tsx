@@ -18,9 +18,8 @@ import {
     useState,
 } from "react"
 import { toast } from "sonner"
-import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
+import { TemplateFormDialog } from "@/components/chat/TemplateFormDialog"
 import { TemplatePanel } from "@/components/chat/TemplatePanel"
-import { ErrorToast } from "@/components/error-toast"
 import { FilePreviewList } from "@/components/file-preview-list"
 import { ModelSelector } from "@/components/model-selector"
 import {
@@ -46,24 +45,16 @@ import { useUiStore } from "@/stores/ui-store"
 import { ATTACHMENT_ACCEPT, validateFiles } from "./attachments"
 import { useChatEngine } from "./chat-engine"
 
-function showErrorToast(message: React.ReactNode) {
-    toast.custom(
-        (t) => (
-            <ErrorToast message={message} onDismiss={() => toast.dismiss(t)} />
-        ),
-        { duration: 5000 },
-    )
-}
-
 function showValidationErrors(errors: string[], dict: any) {
     if (errors.length === 0) return
     if (errors.length === 1) {
-        showErrorToast(
+        toast.error(
             <span className="text-muted-foreground">{errors[0]}</span>,
+            { duration: 5000 },
         )
         return
     }
-    showErrorToast(
+    toast.error(
         <div className="flex flex-col gap-1">
             <span className="font-medium">
                 {formatMessage(dict.errors.filesRejected, {
@@ -83,6 +74,7 @@ function showValidationErrors(errors: string[], dict: any) {
                 )}
             </ul>
         </div>,
+        { duration: 5000 },
     )
 }
 
@@ -277,10 +269,11 @@ export function Composer({
                 next.delete(url)
                 return next
             })
-            showErrorToast(
+            toast.error(
                 <span className="text-muted-foreground">
                     {err instanceof Error ? err.message : dict.url.failed}
                 </span>,
+                { duration: 5000 },
             )
         } finally {
             setIsExtractingUrl(false)
@@ -519,7 +512,7 @@ export function Composer({
                 onSubmit={handleUrlExtract}
                 isExtracting={isExtractingUrl}
             />
-            <TemplateCreateDialog
+            <TemplateFormDialog
                 open={saveTemplateOpen}
                 onOpenChange={setSaveTemplateOpen}
                 onSuccess={() => setSaveTemplateOpen(false)}
@@ -532,10 +525,6 @@ export function Composer({
                     </DialogHeader>
                     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
                         <TemplatePanel
-                            setInput={(value) => {
-                                setInput(value)
-                                setTemplatesOpen(false)
-                            }}
                             currentInput={input}
                             onSendTemplate={(template) => {
                                 setTemplatesOpen(false)

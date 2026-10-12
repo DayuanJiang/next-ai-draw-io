@@ -15,15 +15,7 @@
  * (diagram-operations.ts) — i.e. the layers underneath the MCP tool surface.
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-
-// Install the DOM polyfill exactly as index.ts does at runtime — the
-// helpers under test rely on it.
-beforeAll(() => {
-    installDomPolyfill()
-})
-
+import { describe, expect, it } from "vitest"
 import { applyDiagramOperations } from "../src/diagram-operations.ts"
 import {
     addPageToDoc,

@@ -115,7 +115,7 @@ export function loadAdminProviders(): StoredAdminProvider[] {
     }
 }
 
-export type MaskedAdminProvider = Omit<
+type MaskedAdminProvider = Omit<
     StoredAdminProvider,
     (typeof SECRET_FIELDS)[number]
 > & {
@@ -278,15 +278,9 @@ export function deriveEnvUpdates(
     return updates
 }
 
-// Every settings key the panel may have written for a given list.
-// AI_MODELS_CONFIG is included to clean up values written by older
-// versions of the panel (it is no longer written).
+// Every settings key the panel may have written for a given list
 function derivedEnvKeys(list: StoredAdminProvider[]): string[] {
-    const keys = new Set<string>([
-        "AI_MODELS_CONFIG",
-        "AI_PROVIDER",
-        "AI_MODEL",
-    ])
+    const keys = new Set<string>(["AI_PROVIDER", "AI_MODEL"])
     const indexByProvider = new Map<ProviderName, number>()
     for (const p of list) {
         const index = indexByProvider.get(p.provider) ?? 0

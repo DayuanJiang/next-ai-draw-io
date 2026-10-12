@@ -85,14 +85,13 @@ describe("requestExport", () => {
 
     it("resolves to null when draw.io does not answer in time", async () => {
         vi.useFakeTimers()
-        const { result, requests } = setup()
+        const { result, requests, reply } = setup()
         const pending = result.current.requestExport({ format: "svg" }, 1000)
         await vi.advanceTimersByTimeAsync(1000)
         expect(await pending).toBeNull()
         // A late answer goes nowhere
-        expect(
-            result.current.exportResolversRef.current[requests[0].message],
-        ).toBeUndefined()
+        reply(requests[0], "data:image/svg+xml;base64,AAAA")
+        expect(await pending).toBeNull()
     })
 
     it("resolves to null without draw.io", async () => {

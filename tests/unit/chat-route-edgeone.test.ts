@@ -9,14 +9,11 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
 
 import { POST as chat } from "@/app/api/chat/route"
 
-const ENV = ["AI_MODELS_CONFIG", "AI_PROVIDER", "AI_MODEL"]
-const saved: Record<string, string | undefined> = {}
 const calls: Array<{ url: string; headers: Headers }> = []
 
 beforeEach(() => {
-    for (const k of ENV) saved[k] = process.env[k]
-    delete process.env.AI_PROVIDER
-    delete process.env.AI_MODEL
+    vi.stubEnv("AI_PROVIDER", undefined)
+    vi.stubEnv("AI_MODEL", undefined)
     calls.length = 0
     vi.stubGlobal(
         "fetch",
@@ -28,10 +25,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-    for (const k of ENV) {
-        if (saved[k] === undefined) delete process.env[k]
-        else process.env[k] = saved[k]
-    }
     vi.unstubAllGlobals()
 })
 
@@ -39,15 +32,18 @@ describe("EdgeOne as a server model", () => {
     it("calls the site's Edge AI function with the cookies", async () => {
         // An admin panel or ai-models.json provider: the client sends the
         // provider name's slug, not "edgeone"
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Edge Pages",
-                    provider: "edgeone",
-                    models: ["@tx/deepseek-ai/deepseek-v3-0324"],
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Edge Pages",
+                        provider: "edgeone",
+                        models: ["@tx/deepseek-ai/deepseek-v3-0324"],
+                    },
+                ],
+            }),
+        )
         const res = await chat(
             new Request("http://localhost/api/chat", {
                 method: "POST",
@@ -98,8 +94,8 @@ const send = (headers: Record<string, string>) =>
 
 describe("EdgeOne endpoints", () => {
     it("works when the deployment names EdgeOne only in AI_PROVIDER", async () => {
-        process.env.AI_PROVIDER = "edgeone"
-        process.env.AI_MODEL = "@tx/deepseek-ai/deepseek-v3-0324"
+        vi.stubEnv("AI_PROVIDER", "edgeone")
+        vi.stubEnv("AI_MODEL", "@tx/deepseek-ai/deepseek-v3-0324")
         await send({})
         expect(calls[0]?.url).toBe(
             "http://localhost/api/edgeai/chat/completions",
@@ -120,20 +116,13 @@ describe("EdgeOne endpoints", () => {
     })
 
     it("calls the function at the site root, also with a base path", async () => {
-        const savedPath = process.env.NEXT_PUBLIC_BASE_PATH
-        process.env.NEXT_PUBLIC_BASE_PATH = "/draw"
-        try {
-            await send({
-                "x-ai-provider": "edgeone",
-                "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
-            })
-            expect(calls[0]?.url).toBe(
-                "http://localhost/api/edgeai/chat/completions",
-            )
-        } finally {
-            if (savedPath === undefined)
-                delete process.env.NEXT_PUBLIC_BASE_PATH
-            else process.env.NEXT_PUBLIC_BASE_PATH = savedPath
-        }
+        vi.stubEnv("NEXT_PUBLIC_BASE_PATH", "/draw")
+        await send({
+            "x-ai-provider": "edgeone",
+            "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
+        })
+        expect(calls[0]?.url).toBe(
+            "http://localhost/api/edgeai/chat/completions",
+        )
     })
 })

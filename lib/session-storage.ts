@@ -2,13 +2,11 @@ import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
 import { toast } from "sonner"
 import type { DiagramVersion } from "@/stores/versions-store"
-import type { Template } from "./template-storage"
 
 // Constants
 const DB_NAME = "next-ai-drawio"
 const DB_VERSION = 2
 const STORE_NAME = "sessions"
-const MIGRATION_FLAG = "next-ai-drawio-migrated-to-idb"
 const MAX_SESSIONS = 50
 
 // Types
@@ -21,8 +19,6 @@ export interface ChatSession {
     xmlSnapshots: [number, string][]
     diagramXml: string
     thumbnailDataUrl?: string // Small PNG preview of the diagram
-    // Old version list (before AI versions existed); read once, then replaced
-    diagramHistory?: { svg: string; xml: string }[]
     // Diagram states produced by AI changes, shown as cards in the chat
     versions?: DiagramVersion[]
 }
@@ -51,16 +47,6 @@ interface ChatSessionDB extends DBSchema {
         value: ChatSession
         indexes: { "by-updated": number }
     }
-    templates: {
-        key: string
-        value: Template
-        indexes: {
-            "by-updated": number
-            "by-pinned": number
-            "by-run-count": number
-            "by-last-used": number
-        }
-    }
 }
 
 // Database singleton
@@ -76,24 +62,6 @@ async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
                         keyPath: "id",
                     })
                     store.createIndex("by-updated", "updatedAt")
-                }
-                // Version 2: templates store (added by template-storage.ts)
-                // Note: We also need to include this here to ensure the upgrade
-                // callback properly handles all migrations when opening from this file
-                if (oldVersion < 2) {
-                    // Check if templates store already exists (created by template-storage.ts)
-                    if (!db.objectStoreNames.contains("templates")) {
-                        const templateStore = db.createObjectStore(
-                            "templates",
-                            {
-                                keyPath: "id",
-                            },
-                        )
-                        templateStore.createIndex("by-updated", "updatedAt")
-                        templateStore.createIndex("by-pinned", "pinned")
-                        templateStore.createIndex("by-run-count", "runCount")
-                        templateStore.createIndex("by-last-used", "lastUsedAt")
-                    }
                 }
             },
             blocked() {
@@ -307,16 +275,13 @@ export function sanitizeMessage(message: unknown): StoredMessage | null {
     const role = msg.role as string
     if (!["user", "assistant", "system"].includes(role)) return null
 
-    // Extract parts, removing streaming state artifacts
     let parts: Array<{ type: string; [key: string]: unknown }> = []
     if (Array.isArray(msg.parts)) {
-        parts = msg.parts.map((part: unknown) => {
-            if (!part || typeof part !== "object") return { type: "unknown" }
-            const p = part as Record<string, unknown>
-            // Remove streaming-related fields
-            const { isStreaming, streamingState, ...cleanPart } = p
-            return cleanPart as { type: string; [key: string]: unknown }
-        })
+        parts = msg.parts.map((part: unknown) =>
+            part && typeof part === "object"
+                ? (part as { type: string; [key: string]: unknown })
+                : { type: "unknown" },
+        )
     }
 
     return {
@@ -331,75 +296,4 @@ export function sanitizeMessages(messages: unknown[]): StoredMessage[] {
     return messages
         .map(sanitizeMessage)
         .filter((m): m is StoredMessage => m !== null)
-}
-
-// Migration from localStorage
-export async function migrateFromLocalStorage(): Promise<string | null> {
-    if (typeof window === "undefined") return null
-    if (!isIndexedDBAvailable()) return null
-
-    // Check if already migrated
-    if (localStorage.getItem(MIGRATION_FLAG)) return null
-
-    try {
-        const savedMessages = localStorage.getItem("next-ai-draw-io-messages")
-        const savedSnapshots = localStorage.getItem(
-            "next-ai-draw-io-xml-snapshots",
-        )
-        const savedXml = localStorage.getItem("next-ai-draw-io-diagram-xml")
-
-        let newSessionId: string | null = null
-        let migrationSucceeded = false
-
-        if (savedMessages) {
-            const messages = JSON.parse(savedMessages)
-            if (Array.isArray(messages) && messages.length > 0) {
-                const sanitized = sanitizeMessages(messages)
-                const session: ChatSession = {
-                    id: nanoid(),
-                    title: extractTitle(sanitized),
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                    messages: sanitized,
-                    xmlSnapshots: savedSnapshots
-                        ? JSON.parse(savedSnapshots)
-                        : [],
-                    diagramXml: savedXml || "",
-                }
-                const saved = await saveSession(session)
-                if (saved) {
-                    // Verify the session was actually written
-                    const verified = await getSession(session.id)
-                    if (verified) {
-                        newSessionId = session.id
-                        migrationSucceeded = true
-                    }
-                }
-            } else {
-                // Empty array or invalid data - nothing to migrate, mark as success
-                migrationSucceeded = true
-            }
-        } else {
-            // No data to migrate - mark as success
-            migrationSucceeded = true
-        }
-
-        // Only clean up old data if migration succeeded
-        if (migrationSucceeded) {
-            localStorage.setItem(MIGRATION_FLAG, "true")
-            localStorage.removeItem("next-ai-draw-io-messages")
-            localStorage.removeItem("next-ai-draw-io-xml-snapshots")
-            localStorage.removeItem("next-ai-draw-io-diagram-xml")
-        } else {
-            console.warn(
-                "Migration to IndexedDB failed - keeping localStorage data for retry",
-            )
-        }
-
-        return newSessionId
-    } catch (error) {
-        console.error("Migration failed:", error)
-        // Don't mark as migrated - allow retry on next load
-        return null
-    }
 }

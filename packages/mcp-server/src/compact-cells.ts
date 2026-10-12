@@ -158,7 +158,7 @@ function plainGeometry(body: string): Map<string, string> | null {
  * missing one. Everything else, including wrapped cells' extra data and
  * edge labels, is left as written.
  */
-export function foldCells(xml: string, layer = "1"): string {
+export function foldCells(xml: string): string {
     return xml.replace(CELL_BLOCK, (block, attrText: string, body?: string) => {
         if (body === undefined) return block
         const attrs = readAttributes(attrText)
@@ -174,7 +174,7 @@ export function foldCells(xml: string, layer = "1"): string {
             (a) =>
                 a.name !== "vertex" &&
                 a.name !== "edge" &&
-                !(a.name === "parent" && a.value === layer),
+                !(a.name === "parent" && a.value === "1"),
         )
         if (byName.get("vertex") === "1" && byName.get("edge") !== "1") {
             if (geometryKeys.join() !== "height,width,x,y") return block

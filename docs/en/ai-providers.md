@@ -407,7 +407,7 @@ This is shorthand for the equivalent `ai-models.json`. For multiple providers or
 | `provider` | Yes | Provider type (`openai`, `anthropic`, `google`, `bedrock`, etc.) |
 | `models` | Yes | List of model IDs |
 | `default` | No | Set to `true` to auto-select this provider's first model as default |
-| `apiKeyEnv` | No | Custom API key env var name (defaults to provider's standard var like `OPENAI_API_KEY`) |
+| `apiKeyEnv` | No | Custom API key env var name (defaults to provider's standard var like `OPENAI_API_KEY`). May also be an array of env var names: each request picks one that has a value at random, spreading load over several keys |
 | `baseUrlEnv` | No | Custom base URL env var name |
 
 ### Notes

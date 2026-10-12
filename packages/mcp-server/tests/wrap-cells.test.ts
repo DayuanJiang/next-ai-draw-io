@@ -3,13 +3,7 @@
  * a page, like in the web app, and the server adds the wrapper and root cells.
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
-
+import { describe, expect, it } from "vitest"
 import { prepareNewDiagram, reservedIdError } from "../src/new-diagram.ts"
 import { hasCells, wrapCellsInModel } from "../src/pages.ts"
 import { validateAndFixXml } from "../src/xml-validation.ts"
@@ -99,6 +93,22 @@ describe("hasCells", () => {
         expect(
             hasCells(`<mxCell id = "0"/><mxCell id = "1" parent="0"/>`),
         ).toBe(false)
+    })
+
+    it("does not mistake ids that start with 0 or 1 for root cells", () => {
+        expect(
+            hasCells(
+                '<mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="10"/>',
+            ),
+        ).toBe(true)
+    })
+
+    it("counts a cell wrapped in a UserObject", () => {
+        expect(
+            hasCells(
+                '<mxCell id="0"/><mxCell id="1" parent="0"/><UserObject id="u" link="x"><mxCell vertex="1" parent="1"/></UserObject>',
+            ),
+        ).toBe(true)
     })
 })
 

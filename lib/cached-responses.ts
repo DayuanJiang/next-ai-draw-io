@@ -892,9 +892,9 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
     },
 ]
 
+// The chat panel answers a built-in example from here, without a request.
 // Examples that come with a file only match when that exact example file is
 // attached, so a user's own file with the same prompt still goes to the model.
-// Callers that can't tell file names (the server) only get text-only examples.
 export function findCachedResponse(
     promptText: string,
     hasImage: boolean,
@@ -904,7 +904,6 @@ export function findCachedResponse(
         (c) =>
             c.promptText === promptText &&
             c.hasImage === hasImage &&
-            (!c.fileName || c.fileName === fileName) &&
-            c.xml !== "",
+            (!c.fileName || c.fileName === fileName),
     )
 }

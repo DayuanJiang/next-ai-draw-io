@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest"
 import {
     dropInvalidToolCalls,
     fixToolInputJson,
-    replaceHistoricalToolInputs,
     validateFileParts,
 } from "@/lib/chat-helpers"
 
@@ -91,91 +90,6 @@ describe("validateFileParts", () => {
             { role: "user", parts: [{ type: "text", text: "hello" }] },
         ]
         expect(validateFileParts(messages).valid).toBe(false)
-    })
-})
-
-describe("replaceHistoricalToolInputs", () => {
-    it("replaces display_diagram tool inputs with placeholder", () => {
-        const messages = [
-            {
-                role: "assistant",
-                content: [
-                    {
-                        type: "tool-call",
-                        toolName: "display_diagram",
-                        input: { xml: "<mxCell...>" },
-                    },
-                ],
-            },
-        ]
-        const result = replaceHistoricalToolInputs(messages)
-        expect(result[0].content[0].input.placeholder).toContain(
-            "XML content replaced",
-        )
-    })
-
-    it("replaces edit_diagram tool inputs with placeholder", () => {
-        const messages = [
-            {
-                role: "assistant",
-                content: [
-                    {
-                        type: "tool-call",
-                        toolName: "edit_diagram",
-                        input: { operations: [] },
-                    },
-                ],
-            },
-        ]
-        const result = replaceHistoricalToolInputs(messages)
-        expect(result[0].content[0].input.placeholder).toContain(
-            "XML content replaced",
-        )
-    })
-
-    it("leaves tool calls with invalid inputs for dropInvalidToolCalls", () => {
-        const messages = [
-            {
-                role: "assistant",
-                content: [
-                    {
-                        type: "tool-call",
-                        toolName: "display_diagram",
-                        input: {},
-                    },
-                    {
-                        type: "tool-call",
-                        toolName: "display_diagram",
-                        input: null,
-                    },
-                ],
-            },
-        ]
-        const result = replaceHistoricalToolInputs(messages)
-        expect(result[0].content).toEqual(messages[0].content)
-    })
-
-    it("preserves non-assistant messages", () => {
-        const messages = [{ role: "user", content: "hello" }]
-        const result = replaceHistoricalToolInputs(messages)
-        expect(result).toEqual(messages)
-    })
-
-    it("preserves other tool calls", () => {
-        const messages = [
-            {
-                role: "assistant",
-                content: [
-                    {
-                        type: "tool-call",
-                        toolName: "other_tool",
-                        input: { foo: "bar" },
-                    },
-                ],
-            },
-        ]
-        const result = replaceHistoricalToolInputs(messages)
-        expect(result[0].content[0].input).toEqual({ foo: "bar" })
     })
 })
 

@@ -24,12 +24,6 @@ function DialogPortal({
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
 }
 
-function DialogClose({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
-}
-
 function DialogOverlay({
   className,
   ...props
@@ -65,7 +59,7 @@ function DialogContent({
           "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
           "grid gap-4 p-6",
           // Refined visual treatment
-          "bg-surface-0 rounded-2xl border border-border-subtle shadow-dialog",
+          "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
           // Entry/exit animations
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -151,13 +145,10 @@ function DialogDescription({
 
 export {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 }

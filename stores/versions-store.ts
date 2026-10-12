@@ -1,7 +1,6 @@
 import { nanoid } from "nanoid"
 import { create } from "zustand"
 import type { VersionItem } from "@/components/canvas/versions-context"
-import { EMPTY_SUMMARY } from "@/lib/diagram-diff"
 
 /**
  * One diagram state produced by an AI change, shown as a card in the chat.
@@ -63,10 +62,8 @@ export const useVersionsStore = create<VersionsState>((set) => ({
     setVersions: (versions) =>
         set({
             // A missing thumbnail could not be made: no "rendering" forever.
-            // Versions saved before they had numbers count from 1.
-            versions: versions.map((v, i) => ({
+            versions: versions.map((v) => ({
                 ...v,
-                number: v.number ?? i + 1,
                 svg: v.svg ?? "",
             })),
             undoneVersionId: versions.find((v) => v.undone)?.id ?? null,
@@ -133,18 +130,3 @@ export const useVersionsStore = create<VersionsState>((set) => ({
     clear: () =>
         set({ versions: [], undoneVersionId: null, onCanvasVersionId: null }),
 }))
-
-/** Convert the old `diagramHistory` list ({svg, xml}) saved by earlier versions */
-export function versionsFromLegacyHistory(
-    history: { svg: string; xml: string }[] | undefined,
-): DiagramVersion[] {
-    if (!history?.length) return []
-    return history.slice(-MAX_VERSIONS).map((entry, index) => ({
-        id: `legacy-${index}`,
-        number: index + 1,
-        xml: entry.xml,
-        svg: entry.svg,
-        turnIndex: -1,
-        summary: { ...EMPTY_SUMMARY },
-    }))
-}

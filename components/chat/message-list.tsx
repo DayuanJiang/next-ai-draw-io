@@ -16,13 +16,9 @@ import {
 import { useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
-import {
-    Reasoning,
-    ReasoningContent,
-    ReasoningTrigger,
-} from "@/components/ai-elements/reasoning"
+import { Reasoning } from "@/components/ai-elements/reasoning"
 import { Shimmer } from "@/components/ai-elements/shimmer"
-import { TemplateCreateDialog } from "@/components/chat/TemplateCreateDialog"
+import { TemplateFormDialog } from "@/components/chat/TemplateFormDialog"
 import type { ToolPartLike } from "@/components/chat/types"
 import { ValidationCard } from "@/components/chat/ValidationCard"
 import Image from "@/components/image-with-basepath"
@@ -291,7 +287,7 @@ function UserMessage({
                 {text && <MessageText text={text} />}
             </div>
             {saveTemplate && (
-                <TemplateCreateDialog
+                <TemplateFormDialog
                     open
                     onOpenChange={(open) => !open && setSaveTemplate(false)}
                     onSuccess={() => setSaveTemplate(false)}
@@ -398,13 +394,9 @@ function AssistantMessage({
                             className="w-full"
                             isStreaming={isStreamingReasoning}
                             defaultOpen={!isRestored}
+                            getThinkingMessage={thinkingMessage}
                         >
-                            <ReasoningTrigger
-                                getThinkingMessage={thinkingMessage}
-                            />
-                            <ReasoningContent>
-                                {(part as { text: string }).text}
-                            </ReasoningContent>
+                            {(part as { text: string }).text}
                         </Reasoning>
                     )
                 }

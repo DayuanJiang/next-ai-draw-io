@@ -501,7 +501,7 @@ describe("MCP preview History and a recreated session", () => {
     }
     const historyList = {
         status: 200,
-        body: { entries: [{ id: 5, index: 0, svg: "" }], count: 1 },
+        body: { entries: [{ id: 5, index: 0, svg: "" }] },
     }
     const modalOpen = () =>
         document.getElementById("history-modal")?.classList.contains("open")

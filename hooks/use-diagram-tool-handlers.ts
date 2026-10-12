@@ -14,31 +14,9 @@ import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 
-const DEBUG = process.env.NODE_ENV === "development"
-
 // The page a drawing is wrapped in; on the canvas it replaces the page the
 // model works on, so the canvas page keeps its own id and name
 const NEW_PAGE = { pageId: "page-1", pageName: "Page-1" }
-
-/**
- * A new diagram written without file variables (%name% placeholders) keeps
- * the canvas file's, as replacing the page in draw.io does
- */
-export function keepFileVars(xml: string, canvasXml: string): string {
-    const varsOf = (doc: Document) =>
-        doc.documentElement?.nodeName === "mxfile"
-            ? doc.documentElement.getAttribute("vars")
-            : null
-    const parser = new DOMParser()
-    const canvasVars = varsOf(parser.parseFromString(canvasXml, "text/xml"))
-    if (!canvasVars) return xml
-    const doc = parser.parseFromString(xml, "text/xml")
-    if (doc.documentElement?.nodeName !== "mxfile" || varsOf(doc) !== null) {
-        return xml
-    }
-    doc.documentElement.setAttribute("vars", canvasVars)
-    return new XMLSerializer().serializeToString(doc)
-}
 
 interface ToolCall {
     toolCallId: string
@@ -157,12 +135,6 @@ export function useDiagramToolHandlers({
         { toolCall }: { toolCall: ToolCall },
         addToolOutput: AddToolOutputFn,
     ) => {
-        if (DEBUG) {
-            console.log(
-                `[onToolCall] Tool: ${toolCall.toolName}, CallId: ${toolCall.toolCallId}`,
-            )
-        }
-
         processedToolCallsRef.current.add(toolCall.toolCallId)
         // Only display_diagram, edit_diagram and a completing append_diagram
         // put their result on the canvas. Other tools (get_shape_library,
@@ -204,12 +176,9 @@ export function useDiagramToolHandlers({
 
     // A drawn page goes onto the model's page of the canvas file, which
     // keeps its other pages; a drawing that brings several pages replaces
-    // the file, and gets its variables
+    // the file. Either way it keeps the file's variables unless it sets its own.
     const onAiPage = (drawnXml: string) =>
-        keepFileVars(
-            placeOnPage(drawnXml, chartXMLRef.current, aiPageId()),
-            chartXMLRef.current,
-        )
+        placeOnPage(drawnXml, chartXMLRef.current, aiPageId())
 
     const takeOriginals = (): string | undefined => {
         const [originalXml] = editDiagramOriginalXmlRef.current.values()
@@ -228,20 +197,8 @@ export function useDiagramToolHandlers({
     ) => {
         const { xml } = toolCall.input as { xml: string }
 
-        // DEBUG: Log raw input to diagnose false truncation detection
-        if (DEBUG) {
-            console.log(
-                "[display_diagram] XML ending (last 100 chars):",
-                xml.slice(-100),
-            )
-            console.log("[display_diagram] XML length:", xml.length)
-        }
-
         // Check if XML is truncated (incomplete mxCell indicates truncated output)
         const isTruncated = !isMxCellXmlComplete(xml)
-        if (DEBUG) {
-            console.log("[display_diagram] isTruncated:", isTruncated)
-        }
 
         if (isTruncated) {
             // Store the partial XML for continuation via append_diagram
@@ -298,11 +255,6 @@ NEXT STEP: Call append_diagram with the continuation XML.
             // keeps the diagram from before this failed call
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             // Return error to model - sendAutomaticallyWhen will trigger retry
-            if (DEBUG) {
-                console.log(
-                    "[display_diagram] Adding tool output with state: output-error",
-                )
-            }
             addToolOutput({
                 tool: "display_diagram",
                 toolCallId: toolCall.toolCallId,
@@ -318,12 +270,6 @@ ${finalXml}
             })
         } else {
             // Success - diagram will be rendered by chat-message-display
-            if (DEBUG) {
-                console.log(
-                    "[display_diagram] Success! Checking if VLM validation is enabled...",
-                )
-            }
-
             // VLM validation after successful display
             if (
                 enableVlmValidation &&
@@ -348,12 +294,6 @@ ${finalXml}
                     if (stopped?.()) {
                         updateValidationState(toolCall.toolCallId, "skipped")
                     } else if (capturedPngData) {
-                        if (DEBUG) {
-                            console.log(
-                                "[display_diagram] Captured PNG for validation",
-                            )
-                        }
-
                         // Each retry is a new tool call, so count attempts
                         // per user turn (the chat resets it when the user sends)
                         const attempt = validationRetryCountRef.current + 1
@@ -379,12 +319,6 @@ ${finalXml}
                             if (attempt < MAX_VALIDATION_RETRIES) {
                                 const feedback =
                                     formatValidationFeedback(result)
-                                if (DEBUG) {
-                                    console.log(
-                                        `[display_diagram] Validation failed (attempt ${attempt}/${MAX_VALIDATION_RETRIES}):`,
-                                        result.issues,
-                                    )
-                                }
 
                                 // Notify UI of validation failure (include the image)
                                 updateValidationState(
@@ -407,11 +341,6 @@ ${finalXml}
                                 return
                             } else {
                                 // Last attempt - accept the diagram with warning
-                                if (DEBUG) {
-                                    console.log(
-                                        "[display_diagram] Max validation retries reached, accepting diagram",
-                                    )
-                                }
                                 // Notify UI that we're accepting with issues (include the image)
                                 updateValidationState(
                                     toolCall.toolCallId,
@@ -427,12 +356,6 @@ ${finalXml}
                                 return
                             }
                         } else {
-                            if (DEBUG) {
-                                console.log(
-                                    "[display_diagram] Validation passed!",
-                                )
-                            }
-
                             // Notify UI of success (include the image)
                             // Use "success_with_warnings" if valid but has issues
                             const hasWarnings = result.issues.length > 0
@@ -474,21 +397,11 @@ ${finalXml}
                 }
             }
 
-            if (DEBUG) {
-                console.log(
-                    "[display_diagram] Adding tool output with state: output-available",
-                )
-            }
             addToolOutput({
                 tool: "display_diagram",
                 toolCallId: toolCall.toolCallId,
                 output: "Successfully displayed the diagram.",
             })
-            if (DEBUG) {
-                console.log(
-                    "[display_diagram] Tool output added. Diagram should be visible now.",
-                )
-            }
         }
     }
 

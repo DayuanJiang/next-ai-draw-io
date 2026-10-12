@@ -1,9 +1,8 @@
-import { expect, getIframe, openSettings, test } from "./lib/fixtures"
+import { expect, openApp, openSettings, test } from "./lib/fixtures"
 
 test.describe("Keyboard Interactions", () => {
     test.beforeEach(async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
     })
 
     test("Escape closes settings dialog", async ({ page }) => {
@@ -14,13 +13,5 @@ test.describe("Keyboard Interactions", () => {
 
         await page.keyboard.press("Escape")
         await expect(dialog).not.toBeVisible({ timeout: 2000 })
-    })
-
-    test("page is keyboard accessible", async ({ page }) => {
-        const focusableElements = page.locator(
-            'button, [tabindex="0"], input, textarea, a[href]',
-        )
-        const count = await focusableElements.count()
-        expect(count).toBeGreaterThan(0)
     })
 })

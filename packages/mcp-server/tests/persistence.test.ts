@@ -15,14 +15,9 @@ import {
 } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
+import { describe, expect, it, vi } from "vitest"
 import type { HistorySource } from "../src/history.ts"
 import { Autosaver, defaultDataDir } from "../src/persistence.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
 
 const DIAGRAM = `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
 const BLANK = `<mxfile><diagram id="page-1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`
@@ -419,23 +414,17 @@ describe("Autosaver History", () => {
 })
 
 describe("defaultDataDir", () => {
-    const original = process.env.DRAWIO_DATA_DIR
-    afterEach(() => {
-        if (original === undefined) delete process.env.DRAWIO_DATA_DIR
-        else process.env.DRAWIO_DATA_DIR = original
-    })
-
     it("reads DRAWIO_DATA_DIR, where off disables saving", () => {
-        process.env.DRAWIO_DATA_DIR = "off"
+        vi.stubEnv("DRAWIO_DATA_DIR", "off")
         expect(defaultDataDir()).toBeNull()
-        process.env.DRAWIO_DATA_DIR = "/tmp/x"
+        vi.stubEnv("DRAWIO_DATA_DIR", "/tmp/x")
         expect(defaultDataDir()).toBe("/tmp/x")
-        delete process.env.DRAWIO_DATA_DIR
+        vi.stubEnv("DRAWIO_DATA_DIR", undefined)
         expect(defaultDataDir()).toMatch(/\.next-ai-drawio$/)
     })
 
     it("expands ~, which JSON configs pass on as it is", () => {
-        process.env.DRAWIO_DATA_DIR = "~/drawio-saves"
+        vi.stubEnv("DRAWIO_DATA_DIR", "~/drawio-saves")
         expect(defaultDataDir()).toBe(join(homedir(), "drawio-saves"))
     })
 })

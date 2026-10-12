@@ -113,7 +113,24 @@ describe("placeOnPage", () => {
 
     it("lets a drawing with several pages replace the document", () => {
         const drawn = `<mxfile>${page("x", box("X"))}${page("y", box("Y"))}</mxfile>`
-        expect(placeOnPage(drawn, TWO_PAGES, "b")).toBe(drawn)
+        expect(pagesOf(placeOnPage(drawn, TWO_PAGES, "b"))).toEqual([
+            { id: "x", name: "Page x", cells: ["X"] },
+            { id: "y", name: "Page y", cells: ["Y"] },
+        ])
+        // A canvas without variables leaves it as it is
+        const plainCanvas = `<mxfile>${page("a", box("A"))}</mxfile>`
+        expect(placeOnPage(drawn, plainCanvas, "a")).toBe(drawn)
+    })
+
+    it("gives a drawing with several pages the canvas's variables unless it has its own", () => {
+        const drawn = `<mxfile>${page("x", box("X"))}${page("y", box("Y"))}</mxfile>`
+        expect(placeOnPage(drawn, TWO_PAGES, "b")).toContain(
+            'vars="{&quot;x&quot;:&quot;1&quot;}"',
+        )
+        const withVars = `<mxfile vars="{&quot;team&quot;:&quot;New&quot;}">${page("x", box("X"))}${page("y", box("Y"))}</mxfile>`
+        const result = placeOnPage(withVars, TWO_PAGES, "b")
+        expect(result).toContain('vars="{&quot;team&quot;:&quot;New&quot;}"')
+        expect(result).not.toContain("&quot;x&quot;")
     })
 
     it("draws on the blank file when the canvas is empty", () => {

@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test"
-import { getIframe, sendMessage } from "./lib/fixtures"
+import { openApp, sendMessage } from "./lib/fixtures"
 
 /** Answer the chat request with the given response and send a message */
 async function chatWith(
@@ -7,8 +7,7 @@ async function chatWith(
     response: { status: number; contentType: string; body: string },
 ) {
     await page.route("**/api/chat", (route) => route.fulfill(response))
-    await page.goto("/", { waitUntil: "networkidle" })
-    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    await openApp(page)
     await sendMessage(page, "Draw a box")
 }
 

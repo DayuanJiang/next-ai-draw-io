@@ -224,9 +224,3 @@ export function addDefaultStyles(
         return `${current}${separator}${added.join(";")};`
     })
 }
-
-/** Expand the named styles of a model's XML and add the default styles */
-export function expandStyles(xml: string): string {
-    const { classes, xml: cells } = readStyleClasses(xml)
-    return addDefaultStyles(applyStyleClasses(cells, classes))
-}

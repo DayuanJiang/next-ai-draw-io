@@ -20,7 +20,6 @@ beforeEach(() => {
 })
 afterEach(() => {
     vi.unstubAllGlobals()
-    vi.unstubAllEnvs()
 })
 
 const run = async (apiKey: string) => {

@@ -155,8 +155,7 @@ export function CanvasStage({
                     key={src}
                     ref={drawioRef}
                     src={src}
-                    configCss={DRAWIO_CSS}
-                    editorCss={DRAWIO_CSS}
+                    css={DRAWIO_CSS}
                     dark={isDark}
                     onLoad={onDrawioLoad}
                     onAutoSave={handleDiagramAutoSave}

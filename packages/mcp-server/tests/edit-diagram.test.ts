@@ -2,13 +2,7 @@
  * Tests for the all-or-nothing edit_diagram core (src/edit-diagram.ts).
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
-
+import { describe, expect, it } from "vitest"
 import { editDiagram, targetPageXml } from "../src/edit-diagram.ts"
 import { validateMxCellStructure } from "../src/xml-validation.ts"
 

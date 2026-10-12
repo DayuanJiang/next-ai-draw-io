@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
     getAIModel,
     isAihubmixStandardBaseURL,
@@ -9,7 +9,6 @@ import {
 describe("resolveBaseURL", () => {
     const SERVER_BASE_URL = "https://server-proxy.example.com"
     const USER_BASE_URL = "https://user-proxy.example.com"
-    const DEFAULT_BASE_URL = "https://api.provider.com/v1"
     const USER_API_KEY = "user-api-key-123"
 
     describe("when user provides their own API key", () => {
@@ -18,28 +17,12 @@ describe("resolveBaseURL", () => {
                 USER_API_KEY,
                 USER_BASE_URL,
                 SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
             )
             expect(result).toBe(USER_BASE_URL)
         })
 
-        it("uses default baseUrl when user provides no baseUrl", () => {
-            const result = resolveBaseURL(
-                USER_API_KEY,
-                null,
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
-            expect(result).toBe(DEFAULT_BASE_URL)
-        })
-
-        it("returns undefined when user provides no baseUrl and no default exists", () => {
-            const result = resolveBaseURL(
-                USER_API_KEY,
-                null,
-                SERVER_BASE_URL,
-                undefined,
-            )
+        it("returns undefined when user provides no baseUrl", () => {
+            const result = resolveBaseURL(USER_API_KEY, null, SERVER_BASE_URL)
             expect(result).toBeUndefined()
         })
 
@@ -48,92 +31,47 @@ describe("resolveBaseURL", () => {
                 USER_API_KEY,
                 undefined,
                 SERVER_BASE_URL,
-                undefined,
             )
             // Should NOT return SERVER_BASE_URL
             expect(result).not.toBe(SERVER_BASE_URL)
             expect(result).toBeUndefined()
         })
-
-        it("prefers user's baseUrl over default", () => {
-            const result = resolveBaseURL(
-                USER_API_KEY,
-                USER_BASE_URL,
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
-            expect(result).toBe(USER_BASE_URL)
-        })
     })
 
     describe("when using server credentials (no user API key)", () => {
         it("uses user's baseUrl when provided (overrides server)", () => {
-            const result = resolveBaseURL(
-                null,
-                USER_BASE_URL,
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
+            const result = resolveBaseURL(null, USER_BASE_URL, SERVER_BASE_URL)
             expect(result).toBe(USER_BASE_URL)
         })
 
         it("falls back to server's baseUrl when no user baseUrl", () => {
-            const result = resolveBaseURL(
-                null,
-                null,
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
+            const result = resolveBaseURL(null, null, SERVER_BASE_URL)
             expect(result).toBe(SERVER_BASE_URL)
         })
 
-        it("falls back to default when no user or server baseUrl", () => {
-            const result = resolveBaseURL(
-                null,
-                null,
-                undefined,
-                DEFAULT_BASE_URL,
-            )
-            expect(result).toBe(DEFAULT_BASE_URL)
-        })
-
         it("returns undefined when no baseUrl available anywhere", () => {
-            const result = resolveBaseURL(null, null, undefined, undefined)
+            const result = resolveBaseURL(null, null, undefined)
             expect(result).toBeUndefined()
         })
 
         it("handles undefined apiKey same as null", () => {
-            const result = resolveBaseURL(
-                undefined,
-                null,
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
+            const result = resolveBaseURL(undefined, null, SERVER_BASE_URL)
             expect(result).toBe(SERVER_BASE_URL)
         })
     })
 
     describe("edge cases", () => {
         it("handles empty string apiKey as falsy (uses server config)", () => {
-            const result = resolveBaseURL(
-                "",
-                null,
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
+            const result = resolveBaseURL("", null, SERVER_BASE_URL)
             // Empty string is falsy, so should use server config
             expect(result).toBe(SERVER_BASE_URL)
         })
 
         it("handles empty string baseUrl as falsy", () => {
-            const result = resolveBaseURL(
-                USER_API_KEY,
-                "",
-                SERVER_BASE_URL,
-                DEFAULT_BASE_URL,
-            )
-            // Empty string baseUrl is falsy, should fall back to default
-            expect(result).toBe(DEFAULT_BASE_URL)
+            const result = resolveBaseURL(USER_API_KEY, "", SERVER_BASE_URL)
+            // Empty string baseUrl is falsy; a user's key never goes to the
+            // server's URL, so nothing is left
+            expect(result).toBeUndefined()
         })
     })
 })
@@ -193,25 +131,16 @@ vi.mock("@ai-sdk/openai", () => {
 
 describe("AIHubMix provider", () => {
     let createAihubmixMock: ReturnType<typeof vi.fn>
-    const savedEnv: Record<string, string | undefined> = {}
-
     beforeEach(async () => {
-        savedEnv.AIHUBMIX_API_KEY = process.env.AIHUBMIX_API_KEY
-        savedEnv.AIHUBMIX_BASE_URL = process.env.AIHUBMIX_BASE_URL
-        delete process.env.AIHUBMIX_BASE_URL
+        vi.stubEnv("AIHUBMIX_BASE_URL", undefined)
 
         const mod = await import("@aihubmix/ai-sdk-provider")
         createAihubmixMock = mod.createAihubmix as ReturnType<typeof vi.fn>
         createAihubmixMock.mockClear()
     })
 
-    afterEach(() => {
-        process.env.AIHUBMIX_API_KEY = savedEnv.AIHUBMIX_API_KEY
-        process.env.AIHUBMIX_BASE_URL = savedEnv.AIHUBMIX_BASE_URL
-    })
-
     it("uses AIHUBMIX_API_KEY for server configured AIHubMix", () => {
-        process.env.AIHUBMIX_API_KEY = "server-aihubmix-key"
+        vi.stubEnv("AIHUBMIX_API_KEY", "server-aihubmix-key")
 
         getAIModel({
             provider: "aihubmix",
@@ -256,12 +185,8 @@ vi.mock("@ai-sdk/openai-compatible", () => {
 
 describe("Atlas Cloud provider", () => {
     let createCompatibleMock: ReturnType<typeof vi.fn>
-    const savedEnv: Record<string, string | undefined> = {}
-
     beforeEach(async () => {
-        savedEnv.ATLASCLOUD_API_KEY = process.env.ATLASCLOUD_API_KEY
-        savedEnv.ATLASCLOUD_BASE_URL = process.env.ATLASCLOUD_BASE_URL
-        delete process.env.ATLASCLOUD_BASE_URL
+        vi.stubEnv("ATLASCLOUD_BASE_URL", undefined)
 
         const mod = await import("@ai-sdk/openai-compatible")
         createCompatibleMock = mod.createOpenAICompatible as ReturnType<
@@ -270,13 +195,8 @@ describe("Atlas Cloud provider", () => {
         createCompatibleMock.mockClear()
     })
 
-    afterEach(() => {
-        process.env.ATLASCLOUD_API_KEY = savedEnv.ATLASCLOUD_API_KEY
-        process.env.ATLASCLOUD_BASE_URL = savedEnv.ATLASCLOUD_BASE_URL
-    })
-
     it("uses Atlas Cloud default endpoint with ATLASCLOUD_API_KEY", () => {
-        process.env.ATLASCLOUD_API_KEY = "server-atlas-key"
+        vi.stubEnv("ATLASCLOUD_API_KEY", "server-atlas-key")
 
         getAIModel({
             provider: "atlascloud",
@@ -326,25 +246,16 @@ describe("Atlas Cloud provider", () => {
 
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
     let createDeepSeekMock: ReturnType<typeof vi.fn>
-    const savedEnv: Record<string, string | undefined> = {}
-
     beforeEach(async () => {
-        savedEnv.KIMI_API_KEY = process.env.KIMI_API_KEY
-        savedEnv.KIMI_BASE_URL = process.env.KIMI_BASE_URL
-        delete process.env.KIMI_BASE_URL
+        vi.stubEnv("KIMI_BASE_URL", undefined)
 
         const mod = await import("@ai-sdk/deepseek")
         createDeepSeekMock = mod.createDeepSeek as ReturnType<typeof vi.fn>
         createDeepSeekMock.mockClear()
     })
 
-    afterEach(() => {
-        process.env.KIMI_API_KEY = savedEnv.KIMI_API_KEY
-        process.env.KIMI_BASE_URL = savedEnv.KIMI_BASE_URL
-    })
-
     it("uses createDeepSeek with Kimi default base URL for reasoning_content support", () => {
-        process.env.KIMI_API_KEY = "test-kimi-key"
+        vi.stubEnv("KIMI_API_KEY", "test-kimi-key")
 
         getAIModel({
             provider: "kimi",
@@ -360,7 +271,7 @@ describe("Kimi provider uses createDeepSeek for reasoning_content support", () =
     })
 
     it("uses custom base URL when provided for kimi provider", () => {
-        process.env.KIMI_API_KEY = "test-kimi-key"
+        vi.stubEnv("KIMI_API_KEY", "test-kimi-key")
 
         getAIModel({
             provider: "kimi",
@@ -379,25 +290,16 @@ describe("Kimi provider uses createDeepSeek for reasoning_content support", () =
 
 describe("Ollama API key security", () => {
     let createOllamaMock: ReturnType<typeof vi.fn>
-    const savedEnv: Record<string, string | undefined> = {}
-
     beforeEach(async () => {
-        savedEnv.OLLAMA_API_KEY = process.env.OLLAMA_API_KEY
-        savedEnv.OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL
-        delete process.env.OLLAMA_BASE_URL
+        vi.stubEnv("OLLAMA_BASE_URL", undefined)
 
         const mod = await import("ollama-ai-provider-v2")
         createOllamaMock = mod.createOllama as ReturnType<typeof vi.fn>
         createOllamaMock.mockClear()
     })
 
-    afterEach(() => {
-        process.env.OLLAMA_API_KEY = savedEnv.OLLAMA_API_KEY
-        process.env.OLLAMA_BASE_URL = savedEnv.OLLAMA_BASE_URL
-    })
-
     it("applies server OLLAMA_API_KEY when no client baseUrl is provided", () => {
-        process.env.OLLAMA_API_KEY = "server-secret-key"
+        vi.stubEnv("OLLAMA_API_KEY", "server-secret-key")
 
         getAIModel({ provider: "ollama", modelId: "llama2" })
 
@@ -409,7 +311,7 @@ describe("Ollama API key security", () => {
     })
 
     it("does NOT leak server OLLAMA_API_KEY when client provides a custom baseUrl", () => {
-        process.env.OLLAMA_API_KEY = "server-secret-key"
+        vi.stubEnv("OLLAMA_API_KEY", "server-secret-key")
 
         // When server has OLLAMA_API_KEY, the SSRF guard rejects
         // client-provided baseUrl without an apiKey outright
@@ -423,7 +325,7 @@ describe("Ollama API key security", () => {
     })
 
     it("uses client API key when client provides both baseUrl and apiKey", () => {
-        process.env.OLLAMA_API_KEY = "server-secret-key"
+        vi.stubEnv("OLLAMA_API_KEY", "server-secret-key")
 
         getAIModel({
             provider: "ollama",
@@ -441,8 +343,8 @@ describe("Ollama API key security", () => {
     })
 
     it("applies both server OLLAMA_BASE_URL and OLLAMA_API_KEY when no client overrides", () => {
-        process.env.OLLAMA_BASE_URL = "https://cloud.ollama.com"
-        process.env.OLLAMA_API_KEY = "server-key"
+        vi.stubEnv("OLLAMA_BASE_URL", "https://cloud.ollama.com")
+        vi.stubEnv("OLLAMA_API_KEY", "server-key")
 
         getAIModel({ provider: "ollama", modelId: "llama2" })
 
@@ -455,8 +357,8 @@ describe("Ollama API key security", () => {
     })
 
     it("works when OLLAMA_API_KEY is set but OLLAMA_BASE_URL is not", () => {
-        process.env.OLLAMA_API_KEY = "server-key"
-        delete process.env.OLLAMA_BASE_URL
+        vi.stubEnv("OLLAMA_API_KEY", "server-key")
+        vi.stubEnv("OLLAMA_BASE_URL", undefined)
 
         getAIModel({ provider: "ollama", modelId: "llama2" })
 
@@ -473,7 +375,7 @@ describe("Ollama API key security", () => {
     })
 
     it("allows client custom baseUrl without apiKey when no server OLLAMA_API_KEY", () => {
-        delete process.env.OLLAMA_API_KEY
+        vi.stubEnv("OLLAMA_API_KEY", undefined)
 
         getAIModel({
             provider: "ollama",
@@ -488,7 +390,7 @@ describe("Ollama API key security", () => {
     })
 
     it("sends chat to Ollama's /api for a server address or a /v1 URL", () => {
-        delete process.env.OLLAMA_API_KEY
+        vi.stubEnv("OLLAMA_API_KEY", undefined)
 
         for (const baseUrl of [
             "http://localhost:11434",

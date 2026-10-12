@@ -4,13 +4,7 @@
  * whether draw.io renders it as intended is checked by hand.
  */
 
-import { beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
-
-beforeAll(() => {
-    installDomPolyfill()
-})
-
+import { describe, expect, it } from "vitest"
 import { prepareNewDiagram } from "../src/new-diagram.ts"
 import { hasCells } from "../src/pages.ts"
 import { XML_REFERENCE } from "../src/xml-reference.ts"

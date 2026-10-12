@@ -275,7 +275,7 @@ export interface ExportOptions {
     pageId?: string
 }
 
-export const stateStore = new Map<string, SessionState>()
+const stateStore = new Map<string, SessionState>()
 
 let server: http.Server | null = null
 let serverPort = 6002
@@ -551,7 +551,7 @@ export function startHttpServer(port = 6002): Promise<number> {
     })
 }
 
-export function stopHttpServer(): void {
+function stopHttpServer(): void {
     if (server) {
         server.close()
         server = null
@@ -845,11 +845,7 @@ function handleStateApi(
                             "Content-Type": "application/json",
                         })
                         res.end(
-                            JSON.stringify({
-                                error: "Session was recreated",
-                                stateChanged: true,
-                                version: current.version,
-                            }),
+                            JSON.stringify({ error: "Session was recreated" }),
                         )
                         return
                     }
@@ -875,7 +871,6 @@ function handleStateApi(
                         res.end(
                             JSON.stringify({
                                 error: "Diagram changed on the server",
-                                version: current.version,
                                 savedToHistory: saved,
                             }),
                         )
@@ -910,7 +905,6 @@ function handleStateApi(
                     res.end(
                         JSON.stringify({
                             error: "Diagram changed on the server",
-                            version: current?.version,
                             savedToHistory,
                         }),
                     )
@@ -1049,15 +1043,14 @@ function handleRestoreApi(
                 return
             }
 
-            const newVersion = restoreHistoryEntry(sessionId, id)
-            if (newVersion === null) {
+            if (restoreHistoryEntry(sessionId, id) === null) {
                 res.writeHead(404, { "Content-Type": "application/json" })
                 res.end(JSON.stringify({ error: "Entry not found" }))
                 return
             }
 
             res.writeHead(200, { "Content-Type": "application/json" })
-            res.end(JSON.stringify({ success: true, newVersion }))
+            res.end(JSON.stringify({ success: true }))
         } catch {
             res.writeHead(400, { "Content-Type": "application/json" })
             res.end(JSON.stringify({ error: "Invalid JSON" }))

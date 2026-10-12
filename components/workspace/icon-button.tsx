@@ -13,9 +13,7 @@ interface IconButtonProps extends React.ComponentProps<"button"> {
     label: string
     /** Shown next to the label in the tooltip, e.g. "⌘B" */
     shortcut?: string
-    active?: boolean
     tooltipSide?: "top" | "bottom" | "left" | "right"
-    size?: "sm" | "md"
 }
 
 /** Square icon button with a tooltip; the tooltip text is also its label */
@@ -24,9 +22,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         {
             label,
             shortcut,
-            active = false,
             tooltipSide = "bottom",
-            size = "md",
             className,
             children,
             ...props
@@ -40,17 +36,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
                         ref={ref}
                         type="button"
                         aria-label={label}
-                        aria-pressed={active || undefined}
                         className={cn(
-                            "inline-flex shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors",
+                            "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors",
                             "hover:bg-accent hover:text-foreground",
                             "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
                             "disabled:pointer-events-none disabled:opacity-35",
                             "[&_svg]:size-4 [&_svg]:stroke-[1.75]",
-                            size === "md" ? "size-8" : "size-7",
-                            // A tinted tile: solid ink is for the main action
-                            active &&
-                                "bg-interactive-active text-foreground hover:bg-interactive-active [&_svg]:stroke-2",
                             className,
                         )}
                         {...props}
@@ -73,8 +64,3 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         )
     },
 )
-
-/** Thin vertical divider between toolbar groups */
-export function ToolbarDivider() {
-    return <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden />
-}

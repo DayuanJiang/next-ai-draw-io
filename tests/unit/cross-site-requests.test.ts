@@ -27,8 +27,6 @@ const body = JSON.stringify({
     imageData: "data:image/png;base64,AAAA",
 })
 
-const saved = process.env.NEXT_AI_DRAWIO_DESKTOP
-
 beforeEach(() => {
     vi.stubGlobal(
         "fetch",
@@ -39,8 +37,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-    if (saved === undefined) delete process.env.NEXT_AI_DRAWIO_DESKTOP
-    else process.env.NEXT_AI_DRAWIO_DESKTOP = saved
     vi.unstubAllGlobals()
 })
 
@@ -60,7 +56,7 @@ describe("requests another website could send", () => {
         })
 
         it(`${name}: desktop app refuses a foreign Host (DNS rebinding)`, async () => {
-            process.env.NEXT_AI_DRAWIO_DESKTOP = "1"
+            vi.stubEnv("NEXT_AI_DRAWIO_DESKTOP", "1")
             const res = await post(
                 new Request(`http://127.0.0.1:61337/api/${name}`, {
                     method: "POST",
@@ -77,7 +73,7 @@ describe("requests another website could send", () => {
     }
 
     it("lets the desktop window's own requests through", async () => {
-        process.env.NEXT_AI_DRAWIO_DESKTOP = "1"
+        vi.stubEnv("NEXT_AI_DRAWIO_DESKTOP", "1")
         const res = await validateModel(
             new Request("http://127.0.0.1:61337/api/validate-model", {
                 method: "POST",

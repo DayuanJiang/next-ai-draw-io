@@ -3,6 +3,7 @@ import {
     createMixedMock,
     createMultiTurnMock,
     expect,
+    openApp,
     sendMessage,
     test,
     waitForComplete,
@@ -26,10 +27,7 @@ test.describe("Multi-turn Conversation", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // First request
         await sendMessage(page, "Draw first box")
@@ -63,10 +61,7 @@ test.describe("Multi-turn Conversation", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // First message
         await sendMessage(page, "Hello")
@@ -93,10 +88,7 @@ test.describe("Multi-turn Conversation", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // Ask for explanation first
         await sendMessage(page, "Explain the architecture")

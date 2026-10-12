@@ -3,13 +3,6 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { SettingDef } from "@/lib/admin/settings-registry"
@@ -206,26 +199,6 @@ export function SettingField({
             )
             break
         }
-        case "enum":
-            control = (
-                <Select
-                    value={currentValue || undefined}
-                    disabled={disabled}
-                    onValueChange={onChange}
-                >
-                    <SelectTrigger id={inputId} className="w-full max-w-xs">
-                        <SelectValue placeholder={dict.admin.notSet} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {def.options?.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                                {opt}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            )
-            break
         case "secret":
             control = (
                 <div className="w-full max-w-md">

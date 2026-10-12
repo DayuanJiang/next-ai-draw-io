@@ -7,6 +7,7 @@ import {
     createMultiTurnMock,
     expect,
     getChatInput,
+    openApp,
     sendMessage,
     test,
     waitForComplete,
@@ -27,10 +28,7 @@ test.describe("Diagram Generation", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
     })
 
     test("generates and displays a diagram", async ({ page }) => {
@@ -77,10 +75,7 @@ test.describe("Diagram Edit", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
     })
 
     test("can edit an existing diagram", async ({ page }) => {
@@ -108,10 +103,7 @@ test.describe("Diagram Append", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
     })
 
     test("can append to an existing diagram", async ({ page }) => {

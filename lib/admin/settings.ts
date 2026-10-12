@@ -32,7 +32,7 @@ globalState.__adminSettingsState ??= {
 }
 const state = globalState.__adminSettingsState
 
-export function getSettingsPath(): string {
+function getSettingsPath(): string {
     const custom = process.env.SETTINGS_FILE
     if (custom && custom.trim().length > 0) return custom
     return path.join(process.cwd(), "data", "settings.json")

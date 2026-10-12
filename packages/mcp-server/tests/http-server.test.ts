@@ -17,7 +17,6 @@ import http from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { installDomPolyfill } from "../src/dom.ts"
 import { addHistory, getHistory } from "../src/history.ts"
 import {
     activePreviewUi,
@@ -53,8 +52,6 @@ let drawioDir = ""
 let shellDir = ""
 
 beforeAll(async () => {
-    // XML parsing, as the server installs it at startup
-    installDomPolyfill()
     drawioDir = mkdtempSync(join(tmpdir(), "drawio-static-"))
     mkdirSync(join(drawioDir, "js"))
     mkdirSync(join(drawioDir, "WEB-INF"))
@@ -388,7 +385,7 @@ describe("export requests", () => {
             exportData: "data:image/png;base64,AAAA",
             exportId: poll.exportId,
         })
-        expect(getState(id)?.exportOptions).toBeUndefined()
+        expect(getState(id)?.exportFormat).toBeUndefined()
     })
 
     it("ignores a late result of an export that already timed out", async () => {
@@ -586,7 +583,7 @@ describe("a session state recreated after it was lost", () => {
                     stateId,
                 })
                 expect(res.status).toBe(409)
-                expect(JSON.parse(res.body).stateChanged).toBe(true)
+                expect(JSON.parse(res.body).error).toBe("Session was recreated")
                 // The saved file was recovered first and is kept
                 expect(getState("mcp-sid-restart")?.xml).toBe(SAVED)
             }

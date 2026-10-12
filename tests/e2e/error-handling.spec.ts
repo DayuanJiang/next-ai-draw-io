@@ -3,10 +3,11 @@ import {
     createErrorMock,
     expect,
     getChatInput,
-    getIframe,
+    openApp,
     sendMessage,
     test,
 } from "./lib/fixtures"
+import { sse } from "./lib/helpers"
 
 test.describe("Error Handling", () => {
     test("displays error message when API returns 500", async ({ page }) => {
@@ -15,8 +16,7 @@ test.describe("Error Handling", () => {
             createErrorMock(500, "Internal server error"),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await sendMessage(page, "Draw a cat")
 
@@ -41,8 +41,7 @@ test.describe("Error Handling", () => {
             createErrorMock(429, "Rate limit exceeded"),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await sendMessage(page, "Draw a cat")
 
@@ -65,8 +64,7 @@ test.describe("Error Handling", () => {
             await route.abort("timedout")
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await sendMessage(page, "Draw a cat")
 
@@ -116,15 +114,11 @@ test.describe("Error Handling", () => {
             await route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
-                body:
-                    events
-                        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
-                        .join("") + "data: [DONE]\n\n",
+                body: sse(events),
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await sendMessage(page, "Draw something")
 
@@ -159,14 +153,10 @@ test.describe("Error Handling", () => {
             await route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
-                body:
-                    events
-                        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
-                        .join("") + "data: [DONE]\n\n",
+                body: sse(events),
             })
         })
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
         await sendMessage(page, "Draw something")
 
         // The failed call's row opens to show the error
