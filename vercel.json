@@ -8,5 +8,13 @@
             "memory": 256,
             "maxDuration": 10
         }
-    }
+    },
+    "redirects": [
+        {
+            "source": "/:path*",
+            "has": [{ "type": "host", "value": "next-ai-draw-io.vercel.app" }],
+            "destination": "https://next-ai-drawio.jiang.jp/:path*",
+            "permanent": true
+        }
+    ]
 }
