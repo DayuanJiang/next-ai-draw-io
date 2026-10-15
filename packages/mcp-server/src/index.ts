@@ -70,6 +70,7 @@ import {
     keepInHistory,
     onSessionRecreate,
     onStateChange,
+    PREVIEW_UI,
     previewUrl,
     readSelection,
     requestExport,
@@ -144,8 +145,8 @@ const OTHER_PAGES_UNSEEN =
 // which the model's own screenshots never show
 const OUTLINE_NOTE =
     "The preview outlines the changed cells for a few seconds on the page that changed. The outline is not part of the diagram and never appears in exports or screenshots; never edit the diagram to remove it."
-// The classic preview page draws no outline
-const outlineNote = () => (activePreviewUi() === "classic" ? "" : OUTLINE_NOTE)
+// The classic preview page (DRAWIO_PREVIEW_UI=classic) draws no outline
+const outlineNote = () => (PREVIEW_UI === "classic" ? "" : OUTLINE_NOTE)
 
 // get_diagram shows plain cells the way the model writes them (foldCells)
 const COMPACT_NOTE =
