@@ -20,7 +20,7 @@ import { IconButton } from "@/components/workspace/icon-button"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePanelWidth } from "@/hooks/use-panel-width"
-import { setAppShortcutHandler } from "@/lib/drawio/editor-bridge"
+import { setAppShortcutHandler, setFileTitle } from "@/lib/drawio/editor-bridge"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { modKey } from "@/lib/platform"
 import { STORAGE_KEYS } from "@/lib/storage"
@@ -221,6 +221,11 @@ function WorkspaceLayout() {
             setAppShortcutHandler(null)
         }
     }, [isMobile, togglePanel, focusComposer])
+
+    // draw.io's own export dialogs propose the diagram's title as the file name
+    useEffect(() => {
+        setFileTitle(exportFilename(engine.currentTitle))
+    }, [engine.currentTitle])
 
     const openFile = () => fileInputRef.current?.click()
     const dismissHero = () => {

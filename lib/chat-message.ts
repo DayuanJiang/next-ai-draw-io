@@ -2,8 +2,10 @@ import type { InferUITools, UIMessage } from "ai"
 import type { chatTools } from "@/lib/chat-tools"
 import type { SelectedCell } from "@/stores/canvas-store"
 
-/** Shapes sent with a user message (also kept in its metadata) */
-export type MessageSelection = Pick<SelectedCell, "id" | "label">[]
+/** Shapes sent with a user message (also kept in its metadata, where
+ * isEdge names a connector as one; messages saved before it have none) */
+export type MessageSelection = (Pick<SelectedCell, "id" | "label"> &
+    Partial<Pick<SelectedCell, "isEdge">>)[]
 
 export interface ChatMessageMetadata {
     selectedCells?: MessageSelection

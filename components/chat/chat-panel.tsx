@@ -2,6 +2,7 @@ import {
     ChevronDown,
     Download,
     FilePlus,
+    LayoutGrid,
     MessageSquareDashed,
     PanelRightClose,
     Settings,
@@ -9,8 +10,13 @@ import {
 import { useRef } from "react"
 import { VersionStrip } from "@/components/canvas/version-strip"
 import { DevXmlSimulator } from "@/components/dev-xml-simulator"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { BrandMark } from "@/components/workspace/brand-mark"
-import { IconButton } from "@/components/workspace/icon-button"
+import { ButtonTooltip, IconButton } from "@/components/workspace/icon-button"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePanelWidth } from "@/hooks/use-panel-width"
@@ -29,6 +35,10 @@ import { MessageList } from "./message-list"
 import { SessionMenu, useSessionTitle } from "./session-menu"
 
 const DEBUG = process.env.NODE_ENV === "development"
+
+/** A header button with its name next to the icon */
+const headerButtonClass =
+    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2 text-[13px] text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&_svg]:size-4 [&_svg]:stroke-[1.75] [&_svg]:text-muted-foreground"
 
 /** Drag handle on the panel's left edge (the panel sits on the right) */
 function ResizeHandle() {
@@ -129,29 +139,53 @@ export function ChatPanel({
             aria-label={dict.nav.aiChat}
             data-testid="chat-panel"
         >
-            <header className="flex h-[52px] shrink-0 items-center gap-1 pr-2 pl-3">
+            <header className="@container flex h-[52px] shrink-0 items-center gap-1 pr-2 pl-3">
                 <BrandMark />
-                <SessionMenu onOpenFile={onOpenFile}>
-                    <button
-                        type="button"
-                        className="ml-1 flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-accent"
-                        data-testid="session-title"
-                    >
-                        <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">
-                            {title}
-                        </span>
-                        <ChevronDown className="size-4 shrink-0 text-faint" />
-                    </button>
-                </SessionMenu>
-                <div className="ml-auto flex items-center">
+                {/* The title, framed with a grid icon so it reads as the way
+                    to the saved diagrams (its menu) */}
+                <Tooltip>
+                    <SessionMenu onOpenFile={onOpenFile}>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                className={cn(
+                                    headerButtonClass,
+                                    "ml-1 min-w-0 shrink",
+                                )}
+                                data-testid="session-title"
+                            >
+                                <LayoutGrid />
+                                <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">
+                                    {title}
+                                </span>
+                                <ChevronDown className="shrink-0" />
+                            </button>
+                        </TooltipTrigger>
+                    </SessionMenu>
+                    <TooltipContent side="bottom">
+                        {dict.nav.diagrams}
+                    </TooltipContent>
+                </Tooltip>
+                <div className="ml-auto flex shrink-0 items-center">
                     {isDrawioReady && (
-                        <IconButton
-                            label={dict.workspace.export}
-                            onClick={() => setSaveDialogOpen(true)}
-                            data-testid="export-button"
-                        >
-                            <Download />
-                        </IconButton>
+                        // The tooltip of the buttons next to it, also for
+                        // a narrow panel, where only the icon shows
+                        <ButtonTooltip label={dict.workspace.export}>
+                            <button
+                                type="button"
+                                onClick={() => setSaveDialogOpen(true)}
+                                aria-label={dict.workspace.export}
+                                className={cn(headerButtonClass, "border-0")}
+                                data-testid="export-button"
+                            >
+                                <Download />
+                                {/* The name only in a wide panel: the title
+                                    needs the room at the default width */}
+                                <span className="hidden @[480px]:inline">
+                                    {dict.workspace.export}
+                                </span>
+                            </button>
+                        </ButtonTooltip>
                     )}
                     <IconButton
                         label={dict.nav.newChat}

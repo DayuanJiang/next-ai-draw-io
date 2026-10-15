@@ -8,9 +8,11 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn() } }))
 // No editor to drive: every load is a full load, and the page to show after
 // it is recorded
 const selectPage = vi.fn((_id: string) => true)
+const fitOpenedDiagram = vi.fn()
 vi.mock("@/lib/drawio/editor-bridge", () => ({
     canReplaceDiagram: () => false,
     commitDiagram: vi.fn(),
+    fitOpenedDiagram: () => fitOpenedDiagram(),
     previewDiagram: vi.fn(),
     resetPreview: vi.fn(),
     revertPreview: vi.fn(),
@@ -186,11 +188,26 @@ describe("showTransient", () => {
     it("goes back to the page the user was on before the projection", () => {
         const { result } = setup()
         const twoPages = doc(page("p1", "one") + page("p2", "two"))
+        start(result, twoPages)
+        // The user is on page two; the projection shows page one
+        useCanvasStore.setState({ currentPageId: "p2" })
+        act(() => {
+            result.current.showTransient(doc(page("p1", "one")))
+        })
+        loaded(result)
+        useCanvasStore.setState({ currentPageId: "p1" })
+        selectPage.mockClear()
         act(() => {
             result.current.loadDiagram(twoPages, true)
             result.current.onDrawioLoad()
         })
-        // The user is on page two; the projection shows page one
+        expect(selectPage).toHaveBeenCalledWith("p2")
+    })
+
+    it("goes back to that page also when draw.io reports the projection after the restore was sent", () => {
+        const { result } = setup()
+        const twoPages = doc(page("p1", "one") + page("p2", "two"))
+        start(result, twoPages)
         useCanvasStore.setState({ currentPageId: "p2" })
         act(() => {
             result.current.showTransient(doc(page("p1", "one")))
@@ -199,8 +216,73 @@ describe("showTransient", () => {
         selectPage.mockClear()
         act(() => {
             result.current.loadDiagram(twoPages, true)
+        })
+        // The projection's report: the restore is still on its way
+        loaded(result)
+        expect(selectPage).not.toHaveBeenCalled()
+        loaded(result)
+        expect(selectPage).toHaveBeenCalledExactlyOnceWith("p2")
+    })
+})
+
+describe("full loads", () => {
+    it("show the page of the last load sent when two loads overlap", () => {
+        const { result } = setup()
+        const threePages = (label: string) =>
+            doc(
+                page("p1", `one ${label}`) +
+                    page("p2", `two ${label}`) +
+                    page("p3", `three ${label}`),
+            )
+        act(() => {
+            result.current.loadDiagram(threePages("a"), true)
+            result.current.onDrawioLoad()
             result.current.onDrawioLoad()
         })
-        expect(selectPage).toHaveBeenCalledWith("p2")
+        selectPage.mockClear()
+        // A change on page two, then one on page three, before draw.io
+        // reports either load
+        act(() => {
+            result.current.loadDiagram(threePages("b"), true, "load", {
+                pageId: "p2",
+                keepView: true,
+            })
+            result.current.loadDiagram(threePages("c"), true, "load", {
+                pageId: "p3",
+                keepView: true,
+            })
+        })
+        act(() => result.current.onDrawioLoad())
+        expect(selectPage).not.toHaveBeenCalled()
+        act(() => result.current.onDrawioLoad())
+        expect(selectPage).toHaveBeenCalledExactlyOnceWith("p3")
+    })
+
+    it("fit a diagram opened into view once the last load is done; a load that keeps the view does not", () => {
+        const { result } = setup()
+        act(() => {
+            result.current.loadDiagram(doc(page("p1", "first")), true)
+            // draw.io's first load: the provider sends the document again
+            result.current.onDrawioLoad()
+        })
+        fitOpenedDiagram.mockClear()
+        // Two chats opened one after the other: fitted once, after the last
+        act(() => {
+            result.current.loadDiagram(doc(page("p1", "a")), true)
+            result.current.loadDiagram(doc(page("p1", "b")), true)
+            result.current.onDrawioLoad()
+            result.current.onDrawioLoad()
+        })
+        expect(fitOpenedDiagram).not.toHaveBeenCalled()
+        act(() => result.current.onDrawioLoad())
+        expect(fitOpenedDiagram).toHaveBeenCalledTimes(1)
+        // The MCP preview's server writes keep the user's view
+        act(() => {
+            result.current.loadDiagram(doc(page("p1", "c")), true, "load", {
+                keepView: true,
+            })
+            result.current.onDrawioLoad()
+        })
+        expect(fitOpenedDiagram).toHaveBeenCalledTimes(1)
     })
 })

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { DrawioFrame } from "@/components/canvas/drawio-frame"
 import { useLocale } from "@/components/canvas/locale-context"
+import { OutlineOffer } from "@/components/canvas/outline-offer"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import {
@@ -9,7 +10,11 @@ import {
     getDrawioSrc,
     webDrawioSource,
 } from "@/lib/drawio/drawio-config"
-import { keepCenter, refitIfRecent } from "@/lib/drawio/editor-bridge"
+import {
+    centerEmptyPage,
+    keepCenter,
+    refitIfRecent,
+} from "@/lib/drawio/editor-bridge"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import { cn } from "@/lib/utils"
@@ -143,9 +148,10 @@ export function CanvasStage({
                 if (event.target !== event.currentTarget) return
                 if (event.propertyName !== "right") return
                 const stage = event.currentTarget
-                // Let draw.io take the new size first
+                // Let draw.io take the new size first. An empty page (the
+                // first answer is on its way) goes to the middle.
                 setTimeout(() => {
-                    if (refitIfRecent(4000)) return
+                    if (refitIfRecent(4000) || centerEmptyPage()) return
                     keepCenter(slideStartWidthRef.current, stage.clientWidth)
                 }, 60)
             }}
@@ -178,6 +184,7 @@ export function CanvasStage({
             )}
 
             {showOverlays && overlay?.(size)}
+            {showOverlays && <OutlineOffer />}
         </div>
     )
 }

@@ -10,6 +10,7 @@ import {
     Link,
     Pencil,
     RotateCcw,
+    SquareDashedMousePointer,
     ThumbsDown,
     ThumbsUp,
 } from "lucide-react"
@@ -24,9 +25,11 @@ import { ValidationCard } from "@/components/chat/ValidationCard"
 import Image from "@/components/image-with-basepath"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
-import { noticeOf } from "@/lib/chat-message"
+import { type ChatMessageMetadata, noticeOf } from "@/lib/chat-message"
 import { useCopy } from "@/lib/clipboard"
+import { formatMessage } from "@/lib/i18n/utils"
 import { cn } from "@/lib/utils"
+import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
 import { useChatEngine } from "./chat-engine"
 import {
@@ -160,6 +163,7 @@ function UserMessage({
 }) {
     const dict = useDictionary()
     const engine = useChatEngine()
+    const sendShortcut = useSettingsStore((s) => s.sendShortcut)
     const [editing, setEditing] = useState(false)
     const [editText, setEditText] = useState("")
     const [saveTemplate, setSaveTemplate] = useState(false)
@@ -192,9 +196,12 @@ function UserMessage({
                     rows={Math.min(editText.split("\n").length + 1, 6)}
                     onKeyDown={(e) => {
                         if (e.key === "Escape") setEditing(false)
+                        // The send key of the message box; not an Enter
+                        // that picks an IME candidate
                         else if (
-                            e.key === "Enter" &&
-                            (e.metaKey || e.ctrlKey)
+                            !e.nativeEvent.isComposing &&
+                            e.keyCode !== 229 &&
+                            isSendKey(e, sendShortcut)
                         ) {
                             e.preventDefault()
                             submitEdit()
@@ -226,6 +233,20 @@ function UserMessage({
     const images = (message.parts ?? []).filter((p) => p.type === "file") as {
         url: string
     }[]
+    // The shapes that were selected when it was sent
+    const selected =
+        (message.metadata as ChatMessageMetadata | undefined)?.selectedCells ??
+        []
+    const selectionLabel =
+        selected.length === 1
+            ? formatMessage(dict.selection.one, {
+                  label:
+                      selected[0].label ||
+                      (selected[0].isEdge
+                          ? dict.selection.connector
+                          : dict.selection.shape),
+              })
+            : formatMessage(dict.selection.many, { count: selected.length })
 
     return (
         <div className="group/message flex items-start justify-end gap-1">
@@ -271,6 +292,14 @@ function UserMessage({
                 }}
                 title={canEdit ? dict.chat.clickToEdit : undefined}
             >
+                {selected.length > 0 && (
+                    <div className="mb-2 flex" data-testid="sent-selection">
+                        <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-marker-soft px-2 py-1 text-xs font-medium text-marker-ink">
+                            <SquareDashedMousePointer className="size-3.5 shrink-0" />
+                            <span className="truncate">{selectionLabel}</span>
+                        </span>
+                    </div>
+                )}
                 {images.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-1.5">
                         {images.map((image, i) => (
@@ -311,10 +340,19 @@ function AssistantMessage({
     isLastAssistant: boolean
 }) {
     const dict = useDictionary()
-    // The thinking header in the page language
+    // The thinking header in the page language; while streaming, duration
+    // is the seconds so far
     const thinkingMessage = (isStreaming: boolean, duration?: number) => {
         if (isStreaming || duration === 0) {
-            return <Shimmer duration={1}>{dict.reasoning.thinking}</Shimmer>
+            return (
+                <Shimmer duration={1}>
+                    {isStreaming && duration
+                        ? formatMessage(dict.reasoning.thinkingFor, {
+                              duration,
+                          })
+                        : dict.reasoning.thinking}
+                </Shimmer>
+            )
         }
         if (duration === undefined) return <p>{dict.reasoning.thoughtBrief}</p>
         return (
@@ -361,34 +399,50 @@ function AssistantMessage({
     }
 
     // Text parts with nothing shown between them render together (a step
-    // boundary of an automatic retry shows nothing); tools render in place
+    // boundary of an automatic retry shows nothing), and so do reasoning
+    // parts (one row for a run of them); tools render in place
     const blocks: {
         kind: "text" | "tool" | "reasoning"
         index: number
         texts: string[]
     }[] = []
     parts.forEach((part, partIndex) => {
-        if (part.type === "reasoning")
-            blocks.push({ kind: "reasoning", index: partIndex, texts: [] })
-        else if (isToolUIPart(part))
+        const last = blocks[blocks.length - 1]
+        if (part.type === "reasoning") {
+            const text = (part as { text: string }).text
+            if (last?.kind === "reasoning") last.texts.push(text)
+            else
+                blocks.push({
+                    kind: "reasoning",
+                    index: partIndex,
+                    texts: [text],
+                })
+        } else if (isToolUIPart(part))
             blocks.push({ kind: "tool", index: partIndex, texts: [] })
         else if (part.type === "text") {
             const text = (part as { text: string }).text
-            const last = blocks[blocks.length - 1]
             if (last?.kind === "text") last.texts.push(text)
             else blocks.push({ kind: "text", index: partIndex, texts: [text] })
         }
     })
+    // Seconds of each reasoning row, by the index of its first part
+    const savedSeconds = (
+        message.metadata as
+            | { reasoningSeconds?: Record<number, number> }
+            | undefined
+    )?.reasoningSeconds
+    const measuredSeconds = engine.reasoningSecondsRef.current
 
     return (
         <div className="group/message space-y-2.5">
-            {blocks.map((block) => {
+            {blocks.map((block, blockIndex) => {
                 const part = parts[block.index]
                 if (block.kind === "reasoning") {
+                    // Streams until anything else comes after it
                     const isStreamingReasoning =
                         engine.status === "streaming" &&
                         isLastMessage &&
-                        block.index === parts.length - 1
+                        blockIndex === blocks.length - 1
                     return (
                         <Reasoning
                             key={`r-${block.index}`}
@@ -396,8 +450,18 @@ function AssistantMessage({
                             isStreaming={isStreamingReasoning}
                             defaultOpen={!isRestored}
                             getThinkingMessage={thinkingMessage}
+                            initialDuration={
+                                savedSeconds?.[block.index] ??
+                                measuredSeconds.get(message.id)?.[block.index]
+                            }
+                            onDuration={(seconds) =>
+                                measuredSeconds.set(message.id, {
+                                    ...measuredSeconds.get(message.id),
+                                    [block.index]: seconds,
+                                })
+                            }
                         >
-                            {(part as { text: string }).text}
+                            {block.texts.filter(Boolean).join("\n\n")}
                         </Reasoning>
                     )
                 }

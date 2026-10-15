@@ -12,7 +12,8 @@
         "settings": "設定",
         "hidePanel": "隱藏聊天面板",
         "showPanel": "顯示聊天面板",
-        "aiChat": "AI 對話"
+        "aiChat": "AI 對話",
+        "diagrams": "圖紙"
     },
     "chat": {
         "placeholder": "描述您的圖表或上傳檔案...",
@@ -35,8 +36,10 @@
         "attach": "新增",
         "placeholderFollowUp": "說說想怎麼改，也可以先選取要改的圖形",
         "emptyThread": "可以直接在畫布上畫，也可以在下面說說要畫什麼。",
+        "openFileAfterAnswer": "請等回答完成後，再開啟一次 {name}。",
         "attachedImage": "附加的圖片",
-        "retry": "重試"
+        "retry": "重試",
+        "sendKeyHint": "{send} 傳送 · {newline} 換行"
     },
     "examples": {
         "paperToDiagram": "論文轉圖表",
@@ -49,7 +52,7 @@
         "replicateDescription": "上傳並複製現有流程圖",
         "creativeDrawing": "創意繪畫",
         "creativeDescription": "繪製有趣且富有創意的內容",
-        "cachedNote": "範例使用保存好的答案，立即顯示，不呼叫 AI。",
+        "cachedNote": "選一個範例，再按傳送：保存好的答案會立即顯示，不呼叫 AI。",
         "mcpServer": "MCP 伺服器",
         "mcpDescription": "在 Claude Desktop、VS Code 和 Cursor 中使用",
         "mcpTagline": "讓 Claude Code、Cursor 或 VS Code 直接讀取本機檔案和程式碼來繪圖。畫布和這裡一樣：即時預覽、標示改動、一鍵復原。"
@@ -67,7 +70,7 @@
         "diagramStyle": "圖形風格",
         "diagramStyleDescription": "AI 畫新圖時的風格：精緻會用顏色和圖示，簡約只用樸素的圖形。",
         "sendShortcut": "傳送快速鍵",
-        "sendShortcutDescription": "選擇傳送訊息的方式。",
+        "sendShortcutDescription": "Shift+Enter 一律換行，Cmd/Ctrl+Enter 一律傳送。",
         "enterToSend": "Enter 傳送",
         "ctrlEnterToSend": "Cmd/Ctrl+Enter 傳送",
         "proxy": "代理設定",
@@ -110,13 +113,14 @@
             "svg": "SVG 圖片",
             "xmlsvg": "可編輯的 SVG"
         },
-        "savedSuccessfully": "已匯出",
+        "savedSuccessfully": "已匯出 {name}",
         "hints": {
             "drawio": "所有內容都能繼續編輯",
             "png": "用於簡報和文件的圖片",
             "svg": "放大也不會模糊的圖片",
             "xmlsvg": "圖片，也能在 draw.io 裡開啟編輯"
-        }
+        },
+        "transparentBackground": "透明背景"
     },
     "dialogs": {
         "clearSuccess": "已開始新對話"
@@ -202,7 +206,8 @@
         "thinking": "思考中...",
         "thoughtFor": "思考了 {duration} 秒",
         "thoughtForOne": "思考了 1 秒",
-        "thoughtBrief": "思考了幾秒鐘"
+        "thoughtBrief": "思考了幾秒鐘",
+        "thinkingFor": "思考中... {duration} 秒"
     },
     "sessionHistory": {
         "empty": "還沒有圖紙",
@@ -348,7 +353,8 @@
         "bedrockAuthAccessKey": "存取金鑰",
         "moreOptions": "更多選項：Base URL、顯示名稱",
         "moreOptionsName": "更多選項：顯示名稱",
-        "keyRejected": "服務商拒絕了這個 API Key。檢查上面的 Key 是否複製完整。",
+        "keyRejected": "服務商拒絕了這個 API Key。它可能輸錯了、已過期、已被撤銷，或屬於另一個帳號。需要新 Key 可以點「取得 API Key」。",
+        "keyRejectedNoLink": "服務商拒絕了這個 API Key。它可能輸錯了、已過期、已被撤銷，或屬於另一個帳號。",
         "modelNotFound": "服務商找不到這個模型 ID，請檢查拼寫。",
         "modelWorks": "可用",
         "modelWorksTime": "可用 · {seconds} 秒",
@@ -377,7 +383,7 @@
         "backToProviders": "返回服務商列表",
         "deleteProviderOnly": "刪除 {name}",
         "addProviderEntry": "新增服務商…",
-        "awsKeysRejected": "AWS 拒絕了這組存取金鑰。檢查兩個金鑰是否都複製完整。",
+        "awsKeysRejected": "AWS 拒絕了這組存取金鑰。它們可能輸錯了、已停用、已刪除，或屬於另一個帳號。",
         "validationFailedCountOne": "{count} 個模型沒通過測試",
         "validationFailedCountOther": "{count} 個模型沒通過測試",
         "deleteProviderNamedOne": "刪除 {name} 和它的 {count} 個模型",
@@ -388,7 +394,12 @@
         "awsSessionToken": "AWS Session Token（選填）",
         "awsSessionTokenHint": "只有臨時憑證才需要，也就是以 ASIA 開頭的存取金鑰。",
         "bedrockBothSaved": "這個服務商還保存著一對存取金鑰，有 API Key 時它們不會被用到。",
-        "removeAccessKeys": "刪除存取金鑰"
+        "removeAccessKeys": "刪除存取金鑰",
+        "providerSays": "服務商回應：{message}",
+        "catalogModelsNote": "沒有取得模型列表。下面的模型來自 models.dev，還沒在 {name} 上驗證。",
+        "savedInBrowser": "已儲存在這個瀏覽器裡",
+        "selectedModelFailed": "{model} 測試出錯，請在模型設定中檢查。",
+        "demoModelNote": "這些是試用的示範模型。想畫出更好的圖，可以用自己的 API Key 新增服務商。"
     },
     "admin": {
         "title": "後台設定",
@@ -545,7 +556,7 @@
         "shape": "圖形",
         "connector": "連線",
         "remove": "不傳送選取的圖形",
-        "placeholder": "說說要怎麼改選取的圖形"
+        "placeholder": "說說要怎麼改，也可以用右上角的「格式」自己改樣式"
     },
     "versions": {
         "strip": "版本",
@@ -596,7 +607,13 @@
         "noPreview": "沒有預覽",
         "compareSince": "從第 {n} 版到現在，畫布上：",
         "isOnCanvas": "畫布現在顯示的就是這一版。",
-        "differsElsewhere": "第一頁的形狀和連線與第 {n} 版相同，疊放順序、其他頁面或頁面設定有改動。"
+        "differsElsewhere": "第一頁的形狀和連線與第 {n} 版相同，疊放順序、其他頁面或頁面設定有改動。",
+        "showChanges": "顯示改動",
+        "outlineFaded": "AI 改動的地方剛才標出了 3 秒。",
+        "showAgain": "再看一次",
+        "editedSince": "此版本之後您手動改過畫布",
+        "changedNames": "改動或新增：{names}",
+        "changedNamesMore": "改動或新增：{names}，另有 {n} 個"
     },
     "lobby": {
         "title": "說說你要畫什麼",
@@ -618,6 +635,10 @@
         "restoreFailed": "還原失敗，請再試一次。",
         "userEdit": "手動修改",
         "showVersions": "顯示版本",
-        "hideVersions": "隱藏版本"
+        "hideVersions": "隱藏版本",
+        "openedFile": "開啟了檔案",
+        "addedPage": "新增了一頁",
+        "fileChanged": "有未儲存的修改",
+        "fileChangedHint": "開啟或儲存這個檔案之後的修改還沒有寫入檔案。請讓 AI 把圖表儲存到這個檔案。"
     }
 }

@@ -42,6 +42,19 @@ export function pageElement(
     )
 }
 
+/**
+ * The name of the page with this id (the first page without one), when the
+ * document has more than one page: a single page needs no name
+ */
+export function pageNameOf(
+    xml: string,
+    pageId: string | null | undefined,
+): string | null {
+    const doc = parseXml(xml)
+    if (!doc || doc.getElementsByTagName("diagram").length < 2) return null
+    return pageElement(doc, pageId)?.getAttribute("name") || null
+}
+
 /** A page's mxGraphModel element, inflated when the page is compressed */
 export function modelOfPage(diagram: Element): Element | null {
     const model = diagram.querySelector("mxGraphModel")

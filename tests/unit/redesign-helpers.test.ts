@@ -187,4 +187,49 @@ describe("versions store", () => {
         expect(state.undoneVersionId).toBeNull()
         expect(state.versions[0].undone).toBeUndefined()
     })
+
+    it("remembers the version hand edits were made on, until one is on the canvas again", () => {
+        const first = add(0)
+        const second = add(2)
+        useVersionsStore.getState().setOnCanvas(first)
+        useVersionsStore.getState().clearCanvasFlags()
+        expect(useVersionsStore.getState().editedSinceId).toBe(first)
+        // More edits: still since the same version
+        useVersionsStore.getState().clearCanvasFlags()
+        expect(useVersionsStore.getState().editedSinceId).toBe(first)
+        useVersionsStore.getState().setOnCanvas(second)
+        expect(useVersionsStore.getState().editedSinceId).toBeNull()
+    })
+
+    it("saves the version hand edits were made on with the session", () => {
+        const first = add(0)
+        add(2)
+        useVersionsStore.getState().setOnCanvas(first)
+        useVersionsStore.getState().clearCanvasFlags()
+        const saved = useVersionsStore.getState().versions
+        expect(saved.map((v) => v.editedSince)).toEqual([true, undefined])
+        // A reload or a chat switch reads it back
+        useVersionsStore.getState().clear()
+        useVersionsStore.getState().setVersions(saved)
+        expect(useVersionsStore.getState().editedSinceId).toBe(first)
+        // A version on the canvas again ends it, in the saved list too
+        useVersionsStore.getState().setOnCanvas(first)
+        expect(
+            useVersionsStore.getState().versions.some((v) => v.editedSince),
+        ).toBe(false)
+    })
+
+    it("marks the older version an undo goes back to, the undone one kept", () => {
+        const first = add(0)
+        const second = add(2)
+        useVersionsStore.getState().setUndone(second, first)
+        const state = useVersionsStore.getState()
+        expect(state.undoneVersionId).toBe(second)
+        expect(state.onCanvasVersionId).toBe(first)
+        // Saved with the session, both
+        expect(state.versions.map((v) => [v.onCanvas, v.undone])).toEqual([
+            [true, undefined],
+            [undefined, true],
+        ])
+    })
 })

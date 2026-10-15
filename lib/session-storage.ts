@@ -248,6 +248,10 @@ export function createEmptySession(): ChatSession {
 // Helper: Extract title from first user message (truncated to reasonable length)
 const MAX_TITLE_LENGTH = 100
 
+// The [PDF: ...], [File: ...] and [URL: ...] sections the chat appends to
+// the typed text
+const APPENDED_SECTIONS = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
+
 export function extractTitle(messages: StoredMessage[]): string {
     const firstUserMessage = messages.find((m) => m.role === "user")
     if (!firstUserMessage) return "New Chat"
@@ -255,7 +259,11 @@ export function extractTitle(messages: StoredMessage[]): string {
     const textPart = firstUserMessage.parts.find((p) => p.type === "text")
     if (!textPart || typeof textPart.text !== "string") return "New Chat"
 
-    const text = textPart.text.trim()
+    // The typed text only, on one line
+    const text = textPart.text
+        .replace(APPENDED_SECTIONS, "")
+        .replace(/\s+/g, " ")
+        .trim()
     if (!text) return "New Chat"
 
     // Truncate long titles

@@ -263,7 +263,7 @@ test("a refused key marks the key field until it changes", async ({ page }) => {
     await expect(key).toHaveAttribute("aria-invalid", "true")
     await expect(
         dialog.getByText(
-            "The provider rejected this API key. Check that the key above was copied in full. Incorrect API key",
+            "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account. To make a new one, use Get API key. Provider says: Incorrect API key",
         ),
     ).toBeVisible()
     // The visible line, not the screen reader's copy
@@ -630,6 +630,54 @@ test("the OpenAI-compatible preset takes any URL and shows where requests go", a
         ),
     ).toBeVisible()
     await expect(dialog.getByTestId("step-1-done")).toBeVisible()
+})
+
+test("a refused key names Get API key only where the provider has that link", async ({
+    page,
+}) => {
+    await page.route("**/api/provider-models", (route) =>
+        route.fulfill({
+            status: 401,
+            json: { code: "invalid_api_key", error: "Incorrect API key" },
+        }),
+    )
+    await openApp(page)
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByRole("button", { name: /^See all \d+ providers/ }).click()
+    await dialog.getByTestId("pick-provider-custom").click()
+    await dialog.locator("#api-key").fill("sk-wrong")
+    await dialog.locator("#base-url").fill("https://llm.example.com/v1")
+    await dialog
+        .getByRole("button", { name: "Get all models from OpenAI-compatible" })
+        .click()
+    await expect(
+        dialog.getByText(
+            "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account.",
+            { exact: true },
+        ),
+    ).toBeVisible()
+    await expect(dialog.getByRole("link", { name: "Get API key" })).toHaveCount(
+        0,
+    )
+})
+
+test("a provider left as its tile made it goes when the settings show another tab", async ({
+    page,
+}) => {
+    await openApp(page)
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByTestId("pick-provider-openai").click()
+    await expect(
+        dialog.getByRole("heading", { name: "OpenAI", exact: true }),
+    ).toBeVisible()
+    await dialog.getByTestId("settings-tab-general").click()
+    await expect
+        .poll(async () => (await savedModelConfigs(page)).providers)
+        .toEqual([])
+    await dialog.getByTestId("settings-tab-models").click()
+    await expect(dialog.getByText("Use your own API key")).toBeVisible()
 })
 
 test("a model id typed for one provider does not follow to the next", async ({

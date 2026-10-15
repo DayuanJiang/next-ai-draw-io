@@ -212,7 +212,7 @@ test("refused access keys are named as such", async ({ page }) => {
     await dialog.getByTestId("test-models").click()
     await expect(
         dialog.getByText(
-            "AWS rejected these access keys. Check that both were copied in full. Bad keys",
+            "AWS rejected these access keys. They may be mistyped, deactivated, deleted, or from another account. Provider says: Bad keys",
         ),
     ).toBeVisible()
     for (const id of ["#aws-access-key-id", "#aws-secret-access-key"]) {

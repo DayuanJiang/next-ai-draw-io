@@ -2,7 +2,7 @@
 
 import { BrainIcon, ChevronDownIcon } from "lucide-react"
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
     Collapsible,
     CollapsibleContent,
@@ -15,7 +15,14 @@ export type ReasoningProps = {
     isStreaming?: boolean
     /** Open while streaming, then folds once about a second after it ends */
     defaultOpen?: boolean
+    /**
+     * Seconds so far while streaming, then the seconds it took (undefined
+     * when it was not watched)
+     */
     getThinkingMessage: (isStreaming: boolean, duration?: number) => ReactNode
+    /** The seconds measured before (saved with the message) */
+    initialDuration?: number
+    onDuration?: (seconds: number) => void
     children: string
 }
 
@@ -27,12 +34,17 @@ export function Reasoning({
     isStreaming = false,
     defaultOpen = true,
     getThinkingMessage,
+    initialDuration,
+    onDuration,
     children,
 }: ReasoningProps) {
     const [isOpen, setIsOpen] = useState(defaultOpen)
-    const [duration, setDuration] = useState<number>()
+    const [duration, setDuration] = useState(initialDuration)
     const [hasAutoClosed, setHasAutoClosed] = useState(false)
     const [startTime, setStartTime] = useState<number | null>(null)
+    const [now, setNow] = useState(() => Date.now())
+    const onDurationRef = useRef(onDuration)
+    onDurationRef.current = onDuration
 
     // Track duration when streaming starts and ends
     useEffect(() => {
@@ -41,10 +53,23 @@ export function Reasoning({
                 setStartTime(Date.now())
             }
         } else if (startTime !== null) {
-            setDuration(Math.ceil((Date.now() - startTime) / MS_IN_S))
+            const seconds = Math.ceil((Date.now() - startTime) / MS_IN_S)
+            setDuration(seconds)
             setStartTime(null)
+            onDurationRef.current?.(seconds)
         }
     }, [isStreaming, startTime])
+
+    // A running count of the seconds while it streams
+    useEffect(() => {
+        if (!isStreaming) return
+        const timer = setInterval(() => setNow(Date.now()), MS_IN_S)
+        return () => clearInterval(timer)
+    }, [isStreaming])
+    const elapsed =
+        startTime === null
+            ? 0
+            : Math.max(0, Math.floor((now - startTime) / MS_IN_S))
 
     // Auto-close once when streaming ends, after a short delay so the user
     // sees the content
@@ -67,7 +92,10 @@ export function Reasoning({
         >
             <CollapsibleTrigger className="flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground">
                 <BrainIcon className="size-4" />
-                {getThinkingMessage(isStreaming, duration)}
+                {getThinkingMessage(
+                    isStreaming,
+                    isStreaming ? elapsed : duration,
+                )}
                 <ChevronDownIcon
                     className={cn(
                         "size-4 transition-transform",

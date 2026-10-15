@@ -14,12 +14,19 @@ import {
 } from "./lib/fixtures"
 import { createMockSSEResponse } from "./lib/helpers"
 
-/** Pick a language in the settings, then close them */
+/** Pick a language in the settings, then close them (they stay open while
+ * the page mounts anew in the new language) */
 async function pickLanguage(page: Page, name: string) {
     await openSettingsTab(page, "general")
     await page.locator("#language-select").click()
     await page.getByRole("option", { name, exact: true }).click()
-    await page.keyboard.press("Escape")
+    await expect(page.getByRole("listbox")).toHaveCount(0)
+    await expect(async () => {
+        await page.keyboard.press("Escape")
+        await expect(page.getByRole("dialog")).toHaveCount(0, {
+            timeout: 500,
+        })
+    }).toPass({ timeout: 10000 })
 }
 
 test.describe("Language Switching", () => {

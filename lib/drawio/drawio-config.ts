@@ -110,7 +110,8 @@ export const DRAWIO_CONFIG = {
  * CSS injected into draw.io: the table around the sheet and its toolbar in
  * light mode. Dark mode keeps draw.io's own colors: the rules only match
  * while draw.io is light (it puts geDarkMode on the body), so they need no
- * change when the theme switches.
+ * change when the theme switches. draw.io's link to its GitHub page (by
+ * the page tabs) is hidden: on a phone it sits right above the tab bar.
  */
 export const DRAWIO_CSS = `
 body:not(.geDarkMode) {
@@ -121,4 +122,5 @@ body:not(.geDarkMode) .geDiagramContainer { background-color: #f4f5f7; }
 body:not(.geDarkMode) .geBackgroundPage { box-shadow: 0 1px 2px rgba(20,24,29,.08), 0 12px 32px -12px rgba(20,24,29,.18) !important; }
 body:not(.geDarkMode) .geSimpleMainMenu { border-bottom: 1px solid #e4e7eb !important; box-shadow: none !important; }
 .geSidebarContainer[style*="width: 0px"] { border: none !important; }
+a[href*="github.com/jgraph/drawio"] { display: none !important; }
 `

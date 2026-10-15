@@ -11,10 +11,13 @@ import {
 } from "@/components/ui/dialog"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
+import { cellLabels, diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import { formatMessage } from "@/lib/i18n/utils"
 import { describeChangeSummary } from "@/lib/version-text"
 import { useUiStore } from "@/stores/ui-store"
+
+// Changed shapes named under the summary; more are counted
+const MAX_NAMES = 5
 
 function Sheet({
     label,
@@ -55,12 +58,23 @@ export function CompareDialog() {
         [version, chartXML],
     )
     // What the canvas has changed since this version on the page it was
-    // made on (null: nothing there)
+    // made on (null: nothing there), and the labels of the shapes and
+    // connectors added or changed
     const changes = useMemo(() => {
         if (!version || same) return null
-        const { summary } = diffDiagrams(version.xml, chartXML, version.pageId)
-        return Object.values(summary).some((n) => n > 0) ? summary : null
+        const { summary, touchedIds } = diffDiagrams(
+            version.xml,
+            chartXML,
+            version.pageId,
+        )
+        if (!Object.values(summary).some((n) => n > 0)) return null
+        return {
+            summary,
+            names: cellLabels(chartXML, touchedIds, version.pageId),
+        }
     }, [version, chartXML, same])
+    const shownNames = changes?.names.slice(0, MAX_NAMES) ?? []
+    const moreNames = (changes?.names.length ?? 0) - shownNames.length
 
     // The version went away (dropped as the oldest, another chat): the
     // dialog closes, and nothing waits for its Escape
@@ -87,7 +101,7 @@ export function CompareDialog() {
             open={!!version}
             onOpenChange={(open) => !open && closeCompare()}
         >
-            <DialogContent className="gap-5 sm:max-w-4xl">
+            <DialogContent className="gap-5 sm:max-w-4xl xl:max-w-6xl">
                 <DialogHeader>
                     <DialogTitle>{t.compareTitle}</DialogTitle>
                     <DialogDescription>
@@ -96,11 +110,27 @@ export function CompareDialog() {
                             : same
                               ? t.isOnCanvas
                               : changes
-                                ? `${formatMessage(t.compareSince, { n: version.number })} ${describeChangeSummary(changes, t)}`
+                                ? `${formatMessage(t.compareSince, { n: version.number })} ${describeChangeSummary(changes.summary, t)}`
                                 : formatMessage(t.differsElsewhere, {
                                       n: version.number,
                                   })}
                     </DialogDescription>
+                    {shownNames.length > 0 && (
+                        <p
+                            className="text-sm text-muted-foreground"
+                            data-testid="compare-names"
+                        >
+                            {formatMessage(
+                                moreNames > 0
+                                    ? t.changedNamesMore
+                                    : t.changedNames,
+                                {
+                                    names: shownNames.join(t.listSeparator),
+                                    n: moreNames,
+                                },
+                            )}
+                        </p>
+                    )}
                 </DialogHeader>
                 {version && (
                     <div className="flex flex-col gap-4 sm:flex-row">

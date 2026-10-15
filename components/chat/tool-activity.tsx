@@ -9,7 +9,10 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { Shimmer } from "@/components/ai-elements/shimmer"
-import { VersionCard as VersionCardView } from "@/components/canvas/version-card"
+import {
+    SummaryLink,
+    VersionCard as VersionCardView,
+} from "@/components/canvas/version-card"
 import { CodeBlock } from "@/components/code-block"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { useCopy } from "@/lib/clipboard"
@@ -97,26 +100,19 @@ function VersionCard({
     const [showCode, setShowCode] = useState(false)
     const { copied, copy } = useCopy()
     const isEdit = part.type === "tool-edit_diagram"
+    const editedSince = useVersionsStore((s) => s.editedSinceId === version.id)
 
     return (
         <VersionCardView
             version={version}
             isLatest={isLatest}
             label={isEdit ? t.edited : t.created}
+            editedSince={editedSince}
             data-tool-state={part.state}
-            // A text link, so the card's only button is the action (undo
-            // or restore); it wraps as one unit with its separator
             afterSummary={
-                <span className="whitespace-nowrap">
-                    <span aria-hidden> · </span>
-                    <button
-                        type="button"
-                        onClick={() => setShowCode((v) => !v)}
-                        className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
-                    >
-                        {showCode ? t.hideCode : t.showCode}
-                    </button>
-                </span>
+                <SummaryLink onClick={() => setShowCode((v) => !v)}>
+                    {showCode ? t.hideCode : t.showCode}
+                </SummaryLink>
             }
         >
             {showCode && (

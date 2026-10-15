@@ -4,6 +4,7 @@ import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
+import { useDictionary } from "@/hooks/use-dictionary"
 import { cn } from "@/lib/utils"
 
 function Dialog({
@@ -48,6 +49,7 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const dict = useDictionary()
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -81,7 +83,7 @@ function DialogContent({
           "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4"
         )}>
           <XIcon />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{dict.common.close}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

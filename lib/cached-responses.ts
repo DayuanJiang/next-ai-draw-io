@@ -258,32 +258,32 @@ export const CACHED_EXAMPLE_RESPONSES: CachedResponse[] = [
         hasImage: true,
         fileName: "architecture.png",
         xml: `<mxCell id="2" value="AWS" style="sketch=0;outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;rounded=1;arcSize=5;" vertex="1" parent="1">
-    <mxGeometry x="340" y="40" width="880" height="520" as="geometry"/>
+    <mxGeometry x="140" y="40" width="670" height="520" as="geometry"/>
   </mxCell>
 
 
   <mxCell id="3" value="User" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#232F3D;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=14;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.user;rounded=1;" vertex="1" parent="1">
-    <mxGeometry x="80" y="240" width="78" height="78" as="geometry"/>
+    <mxGeometry x="20" y="240" width="78" height="78" as="geometry"/>
   </mxCell>
 
 
   <mxCell id="4" value="EC2" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=14;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ec2;rounded=1;" vertex="1" parent="1">
-    <mxGeometry x="560" y="240" width="78" height="78" as="geometry"/>
+    <mxGeometry x="330" y="240" width="78" height="78" as="geometry"/>
   </mxCell>
 
 
   <mxCell id="5" value="S3" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#7AA116;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=14;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;rounded=1;" vertex="1" parent="1">
-    <mxGeometry x="960" y="120" width="78" height="78" as="geometry"/>
+    <mxGeometry x="660" y="120" width="78" height="78" as="geometry"/>
   </mxCell>
 
 
   <mxCell id="6" value="bedrock" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=14;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock;rounded=1;" vertex="1" parent="1">
-    <mxGeometry x="960" y="260" width="78" height="78" as="geometry"/>
+    <mxGeometry x="660" y="260" width="78" height="78" as="geometry"/>
   </mxCell>
 
 
   <mxCell id="7" value="DynamoDB" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=14;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;rounded=1;" vertex="1" parent="1">
-    <mxGeometry x="960" y="400" width="78" height="78" as="geometry"/>
+    <mxGeometry x="660" y="400" width="78" height="78" as="geometry"/>
   </mxCell>
 
 

@@ -3,8 +3,8 @@ import type { ProviderName } from "@/lib/types/model-config"
 
 /**
  * What models.dev knows about a model (scripts/update-model-catalog.mjs).
- * Only used for hints: requests are sent the same way either way, since
- * the data can be wrong or out of date.
+ * Only used for hints and suggestions: requests are sent the same way
+ * either way, since the data can be wrong or out of date.
  */
 interface ModelInfo {
     tools: boolean
@@ -15,6 +15,16 @@ interface ModelInfo {
 }
 
 const CATALOG = catalog as Record<string, Record<string, ModelInfo>>
+
+/**
+ * The provider's models that models.dev lists with tool calls (drawing
+ * needs them), offered when the provider's own list is not available
+ */
+export function listCatalogModels(provider: ProviderName): string[] {
+    return Object.entries(CATALOG[provider] ?? {})
+        .filter(([, info]) => info.tools)
+        .map(([id]) => id)
+}
 
 /**
  * The entry for a model: an exact match ignoring case, else the longest id

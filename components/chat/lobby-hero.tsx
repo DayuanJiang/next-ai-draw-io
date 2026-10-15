@@ -241,7 +241,11 @@ export function LobbyHero({
             {/* Ways to start without an example, as plain buttons */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                 {engine.sessions.length > 0 && (
-                    <SessionMenu align="center" onOpenFile={onOpenFile}>
+                    <SessionMenu
+                        align="center"
+                        onOpenFile={onOpenFile}
+                        hideActions
+                    >
                         <button type="button" className={startButtonClass}>
                             <History className="size-4" />
                             {t.recent}

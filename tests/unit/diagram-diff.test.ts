@@ -1,6 +1,11 @@
 import pako from "pako"
 import { describe, expect, it } from "vitest"
-import { diffDiagrams, EMPTY_SUMMARY, isSameDocument } from "@/lib/diagram-diff"
+import {
+    cellLabels,
+    diffDiagrams,
+    EMPTY_SUMMARY,
+    isSameDocument,
+} from "@/lib/diagram-diff"
 
 const doc = (cells: string) =>
     `<mxfile><diagram name="Page-1" id="p1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
@@ -168,6 +173,23 @@ describe("diffDiagrams", () => {
         expect(diffDiagrams(twoPages, changedP2, "p9").touchedIds).toEqual([])
     })
 
+    it("counts a page added since as new, not as a change of the first page", () => {
+        const onePage = file(pageOf("p1", box("a") + box("b")))
+        // The new page reuses an id of the first page's
+        const withNew = file(
+            pageOf("p1", box("a") + box("b")),
+            pageOf("p2", box("a", "other") + box("c") + edge("e", "a", "c")),
+        )
+        const diff = diffDiagrams(onePage, withNew, "p2")
+        expect(diff.summary).toEqual({
+            ...EMPTY_SUMMARY,
+            shapesAdded: 2,
+            edgesAdded: 1,
+        })
+        expect(diff.fromScratch).toBe(true)
+        expect(diff.touchedIds.sort()).toEqual(["a", "c", "e"])
+    })
+
     it("reads compressed pages", () => {
         const xml = file(packedPage("p1", box("a") + box("b")))
         expect(diffDiagrams("", xml).summary.shapesAdded).toBe(2)
@@ -178,6 +200,32 @@ describe("diffDiagrams", () => {
         expect(
             diffDiagrams("<mxfile><diagram>", doc(box("a"))).fromScratch,
         ).toBe(true)
+    })
+})
+
+describe("cellLabels", () => {
+    it("names the shapes among the ids, as plain text, in their order", () => {
+        const xml = file(
+            pageOf(
+                "p1",
+                box("a", "Start") +
+                    box("b", "&lt;b&gt;Bold&lt;/b&gt;&lt;br&gt;line") +
+                    box("c", "") +
+                    edge("e", "a", "b"),
+            ),
+            pageOf("p2", box("z", "Other page")),
+        )
+        const wrapped = `<UserObject label="Linked" id="u1"><mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell></UserObject>`
+        const labelled = `<mxCell id="e2" value="Yes" edge="1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell><mxCell id="l" value="No" vertex="1" connectable="0" parent="e2"><mxGeometry as="geometry"/></mxCell>`
+        expect(cellLabels(xml, ["b", "a", "c", "e", "missing"])).toEqual([
+            "Bold line",
+            "Start",
+        ])
+        expect(cellLabels(xml, ["z"], "p2")).toEqual(["Other page"])
+        // Connectors and their labels are left out
+        expect(cellLabels(doc(wrapped + labelled), ["u1", "e2", "l"])).toEqual([
+            "Linked",
+        ])
     })
 })
 

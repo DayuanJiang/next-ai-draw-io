@@ -141,13 +141,31 @@ function collectCells(
     return cells
 }
 
-/** What changed on one page (the first when no id is given) */
+/** The document has pages, and none with this id */
+function lacksPage(xml: string, pageId: string): boolean {
+    const doc = parseXml(xml)
+    const diagrams = doc ? Array.from(doc.getElementsByTagName("diagram")) : []
+    return (
+        diagrams.length > 0 &&
+        !diagrams.some((diagram) => diagram.getAttribute("id") === pageId)
+    )
+}
+
+/**
+ * What changed on one page (the first when no id is given). A page the
+ * document before did not have is new: all of its cells were added (it is
+ * not compared with the first page).
+ */
 export function diffDiagrams(
     beforeXml: string,
     afterXml: string,
     pageId?: string | null,
 ): DiagramDiff {
-    const before = collectCells(beforeXml, pageId)
+    const isNewPage =
+        !!pageId && lacksPage(beforeXml, pageId) && !lacksPage(afterXml, pageId)
+    const before = isNewPage
+        ? new Map<string, CellInfo>()
+        : collectCells(beforeXml, pageId)
     const after = collectCells(afterXml, pageId)
     const summary: ChangeSummary = { ...EMPTY_SUMMARY }
     const touchedIds: string[] = []
@@ -170,6 +188,52 @@ export function diffDiagrams(
         else summary.shapesRemoved++
     }
     return { summary, touchedIds, fromScratch: before.size === 0 }
+}
+
+/** A label as plain text: labels can hold HTML; long ones are cut */
+export function plainLabel(text: string, max = 80): string {
+    const plain = text
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ")
+        .trim()
+    return plain.length > max ? `${plain.slice(0, max)}…` : plain
+}
+
+/**
+ * The labels of the shapes among these cells on one page (the first when
+ * no id is given), in the order of the ids. Connectors and their labels
+ * ("Yes", "No") are left out, as are shapes without a label.
+ */
+export function cellLabels(
+    xml: string,
+    ids: string[],
+    pageId?: string | null,
+): string[] {
+    const cells = cellsIn(pageModel(xml, pageId))
+    const edges = new Set(
+        cells
+            .filter(({ cell }) => cell.getAttribute("edge") === "1")
+            .map(({ id }) => id),
+    )
+    const labels = new Map<string, string>()
+    for (const { id, cell, node } of cells) {
+        if (edges.has(id) || edges.has(cell.getAttribute("parent") ?? "")) {
+            continue
+        }
+        // A wrapper keeps the label in its own attribute
+        const value =
+            node === cell
+                ? cell.getAttribute("value")
+                : node.getAttribute("label")
+        const label = plainLabel(value ?? "", 40)
+        if (label) labels.set(id, label)
+    }
+    return ids.flatMap((id) => labels.get(id) ?? [])
 }
 
 // Where the view was scrolled to, saved with the page; not a change

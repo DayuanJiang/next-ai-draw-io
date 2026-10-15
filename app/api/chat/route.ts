@@ -451,7 +451,9 @@ ${foldCells(previousXml)}
 ${foldCells(xml || "")}
 """
 
-IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed.${selectionContext ? `\n\n${selectionContext}` : ""}`
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. The user can also undo or restore your earlier edits with the version buttons, so never reuse positions from your earlier tool calls; take every position from the Current diagram XML.${selectionContext ? `\n\n${selectionContext}` : ""}
+
+Write your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or these notes.`
 
     const systemMessages = isSingleSystemProvider
         ? [

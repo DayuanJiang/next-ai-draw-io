@@ -61,11 +61,25 @@ export function clampPanelWidth(width: number): number {
     return Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, width))
 }
 
+/**
+ * Whether a key press in a message box sends it: Cmd/Ctrl+Enter always
+ * does, plain Enter too unless the user chose Cmd/Ctrl+Enter, and
+ * Shift+Enter adds a line
+ */
+export function isSendKey(
+    event: Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey">,
+    shortcut: SendShortcut,
+): boolean {
+    if (event.key !== "Enter") return false
+    if (event.metaKey || event.ctrlKey) return true
+    return shortcut === "enter" && !event.shiftKey
+}
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
     hydrated: false,
     theme: "system",
     isDark: false,
-    sendShortcut: "ctrl-enter",
+    sendShortcut: "enter",
     minimalStyle: false,
     vlmValidationEnabled: false,
     customSystemMessage: "",
@@ -73,7 +87,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     panelWidth: PANEL_DEFAULT_WIDTH,
 
     hydrate: () => {
-        if (get().hydrated) return
+        // A page of another language renders <html> again, without the
+        // dark class: put it back
+        if (get().hydrated) {
+            applyDarkClass(get().isDark)
+            return
+        }
         // Stored as "true"/"false"; missing means follow the system
         const storedDark = read(STORAGE_KEYS.darkMode)
         const theme: ThemePreference =
@@ -89,10 +108,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             hydrated: true,
             theme,
             isDark,
+            // Stored only when picked in Settings: a stored "ctrl-enter" is
+            // the user's own choice, so it stays
             sendShortcut:
-                read(STORAGE_KEYS.sendShortcut) === "enter"
-                    ? "enter"
-                    : "ctrl-enter",
+                read(STORAGE_KEYS.sendShortcut) === "ctrl-enter"
+                    ? "ctrl-enter"
+                    : "enter",
             minimalStyle: read(STORAGE_KEYS.minimalStyle) === "true",
             vlmValidationEnabled:
                 read(STORAGE_KEYS.vlmValidationEnabled) === "true",

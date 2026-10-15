@@ -2,6 +2,7 @@ import pako from "pako"
 import { describe, expect, it } from "vitest"
 import {
     pageModelXml,
+    pageNameOf,
     pageSelectorFor,
     placeOnPage,
     replacePageModel,
@@ -47,6 +48,17 @@ describe("pageModelXml", () => {
         expect(pageModelXml(file, "b")).toContain('id="B"')
         expect(pageModelXml(model(box("Z")), "b")).toBe(model(box("Z")))
         expect(pageModelXml("<broken", "a")).toBeNull()
+    })
+})
+
+describe("pageNameOf", () => {
+    it("names the page in a document with several pages only", () => {
+        expect(pageNameOf(TWO_PAGES, "b")).toBe("Page b")
+        expect(pageNameOf(TWO_PAGES, undefined)).toBe("Page a")
+        expect(pageNameOf(`<mxfile>${page("a", box("A"))}</mxfile>`, "a")).toBe(
+            null,
+        )
+        expect(pageNameOf(model(box("Z")), "a")).toBeNull()
     })
 })
 

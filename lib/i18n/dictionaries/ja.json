@@ -12,7 +12,8 @@
         "settings": "設定",
         "hidePanel": "チャットパネルを非表示",
         "showPanel": "チャットパネルを表示",
-        "aiChat": "AI チャット"
+        "aiChat": "AI チャット",
+        "diagrams": "図の一覧"
     },
     "chat": {
         "placeholder": "ダイアグラムを説明するか、ファイルをアップロード...",
@@ -35,8 +36,10 @@
         "attach": "追加",
         "placeholderFollowUp": "変更したい内容を入力。図形を選んでから頼むこともできます",
         "emptyThread": "キャンバスに直接描くか、下で描きたいものを伝えてください。",
+        "openFileAfterAnswer": "回答が終わるまでお待ちください。そのあと {name} をもう一度開いてください。",
         "attachedImage": "添付画像",
-        "retry": "再試行"
+        "retry": "再試行",
+        "sendKeyHint": "{send} 送信 · {newline} 改行"
     },
     "examples": {
         "paperToDiagram": "論文を図に",
@@ -49,7 +52,7 @@
         "replicateDescription": "既存のフローチャートをアップロードして複製",
         "creativeDrawing": "自由なイラスト",
         "creativeDescription": "楽しくてクリエイティブなものを描く",
-        "cachedNote": "例は保存済みの回答を使うので、すぐに表示され、AI を呼び出しません。",
+        "cachedNote": "例を選んでから送信を押してください。保存済みの回答がすぐに表示され、AI は呼び出しません。",
         "mcpServer": "MCP サーバー",
         "mcpDescription": "Claude Desktop、VS Code、Cursor で使用",
         "mcpTagline": "Claude Code、Cursor、VS Code がローカルのファイルやコードを読んで図を描きます。キャンバスはここと同じで、リアルタイム表示、変更のハイライト、取り消しができます。"
@@ -67,7 +70,7 @@
         "diagramStyle": "図のスタイル",
         "diagramStyleDescription": "AI が新しい図を描くときのスタイル。スタイル付きは色やアイコンを使い、ミニマルは素朴な図形だけにします。",
         "sendShortcut": "送信のショートカット",
-        "sendShortcutDescription": "メッセージの送信方法を選択します。",
+        "sendShortcutDescription": "Shift+Enter は常に改行、Cmd/Ctrl+Enter は常に送信です。",
         "enterToSend": "Enterで送信",
         "ctrlEnterToSend": "Cmd/Ctrl+Enterで送信",
         "proxy": "プロキシ設定",
@@ -110,13 +113,14 @@
             "svg": "SVG 画像",
             "xmlsvg": "編集できる SVG"
         },
-        "savedSuccessfully": "エクスポートしました",
+        "savedSuccessfully": "{name} をエクスポートしました",
         "hints": {
             "drawio": "すべて編集できるまま保存",
             "png": "スライドや文書向けの画像",
             "svg": "拡大してもぼやけない画像",
             "xmlsvg": "draw.io でも開ける画像"
-        }
+        },
+        "transparentBackground": "背景を透明にする"
     },
     "dialogs": {
         "clearSuccess": "新しいチャットを開始しました"
@@ -202,7 +206,8 @@
         "thinking": "考え中...",
         "thoughtFor": "{duration} 秒考えました",
         "thoughtForOne": "1 秒考えました",
-        "thoughtBrief": "数秒考えました"
+        "thoughtBrief": "数秒考えました",
+        "thinkingFor": "考え中... {duration} 秒"
     },
     "sessionHistory": {
         "empty": "まだ図はありません",
@@ -303,7 +308,8 @@
         "bedrockAuthAccessKey": "アクセスキー",
         "moreOptions": "その他のオプション：ベース URL、表示名",
         "moreOptionsName": "その他のオプション：表示名",
-        "keyRejected": "プロバイダーがこの API キーを拒否しました。上のキーが最後までコピーされているか確認してください。",
+        "keyRejected": "プロバイダーがこの API キーを拒否しました。入力の誤り、有効期限切れ、無効化、または別のアカウントのキーである可能性があります。新しいキーは「API キーを取得」から作成できます。",
+        "keyRejectedNoLink": "プロバイダーがこの API キーを拒否しました。入力の誤り、有効期限切れ、無効化、または別のアカウントのキーである可能性があります。",
         "modelNotFound": "プロバイダーがこのモデル ID を見つけられません。綴りを確認してください。",
         "modelWorks": "使用可能",
         "modelWorksTime": "使用可能 · {seconds} 秒",
@@ -332,7 +338,7 @@
         "backToProviders": "プロバイダー一覧に戻る",
         "deleteProviderOnly": "{name} を削除",
         "addProviderEntry": "プロバイダーを追加…",
-        "awsKeysRejected": "AWS がこのアクセスキーを拒否しました。2 つとも最後までコピーされているか確認してください。",
+        "awsKeysRejected": "AWS がこのアクセスキーを拒否しました。入力の誤り、無効化、削除済み、または別のアカウントのキーである可能性があります。",
         "validationFailedCountOne": "{count} 個のモデルがテストに失敗しました",
         "validationFailedCountOther": "{count} 個のモデルがテストに失敗しました",
         "deleteProviderNamedOne": "{name} とそのモデルを削除",
@@ -343,7 +349,12 @@
         "awsSessionToken": "AWS セッショントークン（任意）",
         "awsSessionTokenHint": "一時的な認証情報（ASIA で始まるアクセスキー）の場合だけ必要です。",
         "bedrockBothSaved": "このプロバイダーにはアクセスキーも保存されていますが、API キーがある間は使われません。",
-        "removeAccessKeys": "アクセスキーを削除"
+        "removeAccessKeys": "アクセスキーを削除",
+        "providerSays": "プロバイダーの応答: {message}",
+        "catalogModelsNote": "モデル一覧を取得できませんでした。以下は models.dev に載っているモデルで、{name} ではまだ確認していません。",
+        "savedInBrowser": "このブラウザーに保存しました",
+        "selectedModelFailed": "{model} はテストでエラーになりました。モデル設定で確認してください。",
+        "demoModelNote": "お試し用のデモモデルです。より良い図には、自分の API キーでプロバイダーを追加してください。"
     },
     "templates": {
         "emptyTitle": "保存したプロンプトはまだありません",
@@ -545,7 +556,7 @@
         "shape": "図形",
         "connector": "コネクタ",
         "remove": "選択した図形を送らない",
-        "placeholder": "選択した図形をどう変えたいか書いてください"
+        "placeholder": "変更内容を書いてください。右上の「フォーマット」で自分でスタイルを変えることもできます"
     },
     "versions": {
         "strip": "バージョン",
@@ -596,7 +607,13 @@
         "noPreview": "プレビューなし",
         "compareSince": "バージョン {n} から現在までの変更：",
         "isOnCanvas": "現在のキャンバスはこのバージョンと同じです。",
-        "differsElsewhere": "1 ページ目の図形と線はバージョン {n} と同じですが、重なり順、ほかのページ、またはページ設定が変わっています。"
+        "differsElsewhere": "1 ページ目の図形と線はバージョン {n} と同じですが、重なり順、ほかのページ、またはページ設定が変わっています。",
+        "showChanges": "変更箇所を表示",
+        "outlineFaded": "AI が変更した箇所を 3 秒間ハイライトしました。",
+        "showAgain": "もう一度表示",
+        "editedSince": "このバージョンの後にキャンバスを手で変更しています",
+        "changedNames": "変更・追加：{names}",
+        "changedNamesMore": "変更・追加：{names} ほか {n} 件"
     },
     "lobby": {
         "title": "どんな図を描きますか？",
@@ -618,6 +635,10 @@
         "restoreFailed": "復元に失敗しました。もう一度お試しください。",
         "userEdit": "手で変更しました",
         "showVersions": "バージョンを表示",
-        "hideVersions": "バージョンを隠す"
+        "hideVersions": "バージョンを隠す",
+        "openedFile": "ファイルを開きました",
+        "addedPage": "ページを追加しました",
+        "fileChanged": "未保存の変更あり",
+        "fileChangedHint": "このファイルを開いた、または保存した後の変更は、まだファイルに入っていません。図をこのファイルに保存するよう AI に頼んでください。"
     }
 }

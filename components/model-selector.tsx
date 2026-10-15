@@ -1,6 +1,7 @@
 "use client"
 
 import {
+    AlertCircle,
     Bot,
     Check,
     ChevronDown,
@@ -41,6 +42,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { formatMessage } from "@/lib/i18n/utils"
 import type { FlattenedModel, ProviderName } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -265,9 +267,19 @@ export function ModelSelector({
             ),
         )
 
+    // A model whose test failed can still be picked: its button says so
+    const selectedFailed = selectedModel?.validated === false
     const tooltipContent = selectedModel
-        ? `${selectedModel.modelId} ${dict.modelConfig.clickToChange}`
+        ? selectedFailed
+            ? formatMessage(dict.modelConfig.selectedModelFailed, {
+                  model: selectedModel.modelId,
+              })
+            : `${selectedModel.modelId} ${dict.modelConfig.clickToChange}`
         : `${dict.modelConfig.usingServerDefault} ${dict.modelConfig.clickToChange}`
+    // The server names its provider a demo (the public demo site)
+    const demoServer = serverModels.some((m) =>
+        /\bdemo\b/i.test(m.providerLabel),
+    )
 
     const wrapperRef = useRef<HTMLDivElement | null>(null)
     const [showLabel, setShowLabel] = useState(true)
@@ -324,12 +336,16 @@ export function ModelSelector({
                                 className={cn(
                                     "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 font-normal text-muted-foreground transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent hover:text-foreground",
                                     !showLabel && "px-1.5 justify-center",
+                                    selectedFailed &&
+                                        "text-destructive hover:text-destructive",
                                 )}
                                 // accessibility: expose label to screen readers
                                 aria-label={tooltipContent}
                                 data-testid="model-selector"
                             >
-                                {selectedModel ? (
+                                {selectedFailed ? (
+                                    <AlertCircle className="size-3.5 flex-shrink-0" />
+                                ) : selectedModel ? (
                                     <ProviderLogo
                                         provider={selectedModel.provider}
                                         className="size-3.5 flex-shrink-0 opacity-80"
@@ -381,7 +397,10 @@ export function ModelSelector({
                         />
                         <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
                             <div className="flex-1 min-h-0 overflow-hidden">
-                                <ModelList className="overflow-y-auto scrollbar-thin">
+                                <ModelList
+                                    className="overflow-y-auto scrollbar-thin"
+                                    label={dict.modelConfig.models}
+                                >
                                     <CommandEmpty>
                                         {dict.modelConfig.noModelsFound}
                                     </CommandEmpty>
@@ -429,6 +448,14 @@ export function ModelSelector({
                                                         .serverModels
                                                 }
                                             />
+                                            {demoServer && (
+                                                <p className="mx-1 px-2 pt-1.5 text-xs text-muted-foreground">
+                                                    {
+                                                        dict.modelConfig
+                                                            .demoModelNote
+                                                    }
+                                                </p>
+                                            )}
                                             {renderGroups(
                                                 groupedServerModels,
                                                 "server",

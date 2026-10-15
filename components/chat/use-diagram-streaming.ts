@@ -41,6 +41,23 @@ function getCompleteOperations(
     )
 }
 
+/** A connector's end names a cell the page does not have (pass one page:
+ * draw.io looks the ends up on the connector's own page) */
+function hasDanglingEdge(xml: string): boolean {
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    const ids = new Set(
+        Array.from(doc.querySelectorAll("mxCell, object, UserObject")).map(
+            (el) => el.getAttribute("id"),
+        ),
+    )
+    return Array.from(doc.getElementsByTagName("mxCell")).some((cell) =>
+        ["source", "target"].some((end) => {
+            const id = cell.getAttribute(end)
+            return !!id && !ids.has(id)
+        }),
+    )
+}
+
 interface UseDiagramStreamingParams {
     messages: UIMessage[]
     processedToolCallsRef: RefObject<Set<string>>
@@ -256,6 +273,9 @@ export function useDiagramStreaming({
                 if (lastProcessedXmlRef.current.get(resultKey) === result) {
                     continue
                 }
+                // A connector to a shape an operation still to come adds:
+                // draw.io would log an error for it; the next preview has it
+                if (hasDanglingEdge(targetPageXml(result, selector))) continue
                 // Load the full document so other pages stay intact
                 loadDiagram(result, true, "preview")
                 lastProcessedXmlRef.current.set(resultKey, result)
