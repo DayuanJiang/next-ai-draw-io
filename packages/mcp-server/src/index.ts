@@ -50,6 +50,7 @@ import {
     describeChanges,
     markPageSeen,
 } from "./edit-gate.ts"
+import { imageRefNote, restoreImageData } from "./embedded-images.ts"
 import { createExclusive } from "./exclusive.ts"
 import {
     addHistory,
@@ -603,7 +604,10 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
     },
     async ({ xml: inputXml, screenshot }) => {
         const session = activeSession()
-        const prepared = prepareNewDiagram(inputXml)
+        // The pictures get_diagram showed as references go back in
+        const prepared = prepareNewDiagram(
+            restoreImageData(inputXml, session.xml),
+        )
         if (!prepared.ok) {
             log.error(prepared.error)
             return fail(prepared.error)
@@ -1020,8 +1024,10 @@ registerTool(
         // No selector → return full mxfile
         if (!hasPageSelector(pageSelector)) {
             session.lastSeenXml = liveXml
+            const shown = foldCells(session.xml)
+            const note = imageRefNote(shown)
             return ok(
-                `Current diagram XML. ${COMPACT_NOTE}\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}${changesNote}`,
+                `Current diagram XML. ${COMPACT_NOTE}\n\n${shown}\n\n${note ? `${note}\n\n` : ""}${pageList}${staleNote}${changesNote}`,
             )
         }
 
@@ -1045,8 +1051,10 @@ registerTool(
             session.lastSeenXml === liveXml
                 ? ""
                 : `\n\nNote: ${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector before editing.`
+        const shown = foldCells(projection.xml)
+        const note = imageRefNote(shown)
         return ok(
-            `Page ${projection.index} ("${projection.name}"). ${COMPACT_NOTE}\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${changesNote}${otherPagesNote}`,
+            `Page ${projection.index} ("${projection.name}"). ${COMPACT_NOTE}\n\n${shown}\n\n${note ? `${note}\n\n` : ""}${pageList}${staleNote}${changesNote}${otherPagesNote}`,
         )
     },
     { needsSession: true },
@@ -1694,7 +1702,10 @@ registerTool(
         // half-broken model never gets into the session
         let cleanXml: string | undefined
         if (xml?.trim()) {
-            const prepared = prepareNewModel(xml)
+            // The pictures get_diagram showed as references go back in
+            const prepared = prepareNewModel(
+                restoreImageData(xml, currentSession?.xml),
+            )
             if (!prepared.ok) return fail(prepared.error)
             if (prepared.fixes.length > 0) {
                 log.info(

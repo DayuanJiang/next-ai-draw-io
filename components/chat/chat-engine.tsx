@@ -55,6 +55,7 @@ import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
 import { formatXML, isRealDiagram } from "@/lib/utils"
+import { rememberImages } from "@/packages/mcp-server/src/embedded-images.ts"
 import { parseDrawioFileContent } from "@/packages/mcp-server/src/load-diagram.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { BLANK_MXFILE, hasCells } from "@/packages/mcp-server/src/pages.ts"
@@ -1190,6 +1191,10 @@ export function ChatEngineProvider({
         continuationRetryCountRef.current = 0
         validationRetryCountRef.current = 0
         partialXmlRef.current = ""
+        // The model sees the pictures in them as references; its XML gets
+        // them back from here (embedded-images.ts)
+        rememberImages(xml)
+        rememberImages(previousXml)
         continuationOriginalRef.current = null
         stoppedRef.current = false
         currentTurnRef.current = turnIndex

@@ -13,6 +13,7 @@ import {
 } from "@/packages/mcp-server/src/compact-cells.ts"
 import { applyDiagramOperations } from "@/packages/mcp-server/src/diagram-operations.ts"
 import { targetPageXml } from "@/packages/mcp-server/src/edit-diagram.ts"
+import { restoreImageData } from "@/packages/mcp-server/src/embedded-images.ts"
 import {
     BLANK_MXFILE,
     wrapCellsInModel,
@@ -113,7 +114,11 @@ export function useDiagramStreaming({
             const model = addDefaultStyles(
                 applyStyleClasses(
                     expandCompactCells(
-                        autoFixXml(wrapCellsInModel(completeCells)).fixed,
+                        autoFixXml(
+                            wrapCellsInModel(
+                                restoreImageData(completeCells, chartXML),
+                            ),
+                        ).fixed,
                     ),
                     classes,
                 ),
@@ -262,7 +267,13 @@ export function useDiagramStreaming({
                             ? {
                                   ...op,
                                   new_xml: addDefaultStyles(
-                                      expandCompactCells(op.new_xml, layer),
+                                      expandCompactCells(
+                                          restoreImageData(
+                                              op.new_xml,
+                                              originalXml,
+                                          ),
+                                          layer,
+                                      ),
                                       edges,
                                   ),
                               }
