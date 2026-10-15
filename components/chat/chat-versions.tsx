@@ -22,6 +22,7 @@ export function ChatVersionsProvider({
     const versions = useVersionsStore((s) => s.versions)
     const onCanvasId = useVersionsStore((s) => s.onCanvasVersionId)
     const undoneId = useVersionsStore((s) => s.undoneVersionId)
+    const editedSinceId = useVersionsStore((s) => s.editedSinceId)
     const isBusy = useCanvasStore((s) => s.isBusy)
 
     // Only the latest version can be undone, and only while it is (or was)
@@ -33,6 +34,7 @@ export function ChatVersionsProvider({
         versions,
         onCanvasId,
         undoneId,
+        editedSinceId,
         isBusy,
         canUndo: undoable && latest.id === onCanvasId,
         canRedo: undoable && latest.id === undoneId,

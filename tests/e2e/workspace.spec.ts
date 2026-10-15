@@ -277,6 +277,40 @@ test.describe("Workspace", () => {
         ).toContainText("order-flow")
     })
 
+    test("a .drawio file opened while an answer runs asks to wait", async ({
+        page,
+    }) => {
+        // The answer stays open until released
+        let release!: () => void
+        const released = new Promise<void>((r) => {
+            release = r
+        })
+        await page.route("**/api/chat", async (route) => {
+            await released
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: 'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Draw a box")
+        await expect(
+            page.getByRole("button", { name: "Stop generation" }),
+        ).toBeVisible()
+        await openDrawioFile(
+            page,
+            "later.drawio",
+            `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="Later" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`,
+        )
+        await expect(
+            page.getByText(
+                "Wait for the answer to finish, then open later.drawio again.",
+            ),
+        ).toBeVisible()
+        release()
+    })
+
     test("a file with a comment or DOCTYPE before its root opens", async ({
         page,
     }) => {

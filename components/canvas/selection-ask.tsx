@@ -41,10 +41,11 @@ export function SelectionAsk({
         return null
     }
 
-    // Above the selection's top-right corner, kept inside the canvas
+    // Above the selection, starting past its right edge (connectors from
+    // above end at the middle of its top), kept inside the canvas
     const approxWidth = 168
     const left = Math.min(
-        Math.max(8, rect.x + rect.width - approxWidth / 2),
+        Math.max(8, rect.x + rect.width + GAP),
         width - approxWidth - 8,
     )
     const above = rect.y - BUTTON_HEIGHT - GAP

@@ -21,6 +21,8 @@ export interface VersionItem {
     summary: ChangeSummary
     /** Drawn on an empty canvas (the card shows totals, not changes) */
     fromScratch?: boolean
+    /** The cells the change added or changed, to outline them again */
+    touchedIds?: string[]
 }
 
 /**
@@ -34,6 +36,9 @@ export interface VersionsSource {
     onCanvasId: string | null
     /** The latest version, when its change was undone */
     undoneId: string | null
+    /** The canvas was changed by hand since this version (no version is
+     * on it now) */
+    editedSinceId?: string | null
     /** Something is changing the canvas: version actions wait */
     isBusy: boolean
     /** The latest version's change can be undone */

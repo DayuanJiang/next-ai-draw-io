@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useVersionsContext } from "@/components/canvas/versions-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { cn } from "@/lib/utils"
@@ -13,9 +13,12 @@ export function VersionStrip({
     minVersions?: number
 }) {
     const dict = useDictionary()
-    const { versions, onCanvasId } = useVersionsContext()
+    const { versions, onCanvasId, editedSinceId } = useVersionsContext()
     const openCompare = useUiStore((s) => s.openCompare)
     const scrollRef = useRef<HTMLDivElement>(null)
+    // Scrolled away from the oldest: the thumbnail cut at the left edge
+    // fades out, so it reads as "more this way"
+    const [scrolled, setScrolled] = useState(false)
 
     // Keep the newest version in view
     useEffect(() => {
@@ -32,22 +35,43 @@ export function VersionStrip({
             </span>
             <div
                 ref={scrollRef}
+                onScroll={(event) =>
+                    setScrolled(event.currentTarget.scrollLeft > 1)
+                }
+                style={
+                    scrolled
+                        ? {
+                              maskImage:
+                                  "linear-gradient(to right, transparent, #000 40px)",
+                          }
+                        : undefined
+                }
                 className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto p-1 scrollbar-thin"
             >
                 {versions.map((version) => {
                     const isCurrent = version.id === onCanvasId
+                    // The canvas is this version with hand edits since
+                    const isEdited = !isCurrent && version.id === editedSinceId
+                    const note = isCurrent
+                        ? ` · ${dict.versions.currentCanvas}`
+                        : isEdited
+                          ? ` · ${dict.versions.editedSince}`
+                          : ""
                     return (
                         <button
                             key={version.id}
                             type="button"
                             onClick={() => openCompare(version.id)}
-                            title={`v${version.number}${isCurrent ? ` · ${dict.versions.currentCanvas}` : ""}`}
+                            title={`v${version.number}${note}`}
                             className={cn(
                                 "sheet-light relative flex h-12 w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-white transition-colors hover:border-foreground/30",
                                 // An outline with a gap reads on the white
-                                // picture in both themes
+                                // picture in both themes; a lighter one
+                                // after hand edits
                                 isCurrent &&
                                     "outline-2 outline-offset-2 outline-foreground",
+                                isEdited &&
+                                    "outline-2 outline-offset-2 outline-foreground/35",
                             )}
                             data-testid="version-thumb"
                         >

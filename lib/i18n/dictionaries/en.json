@@ -12,7 +12,8 @@
         "settings": "Settings",
         "hidePanel": "Hide chat panel",
         "showPanel": "Show chat panel",
-        "aiChat": "AI chat"
+        "aiChat": "AI chat",
+        "diagrams": "Diagrams"
     },
     "chat": {
         "placeholder": "Describe your diagram or upload a file...",
@@ -35,8 +36,10 @@
         "attach": "Add",
         "placeholderFollowUp": "Ask for a change, or select shapes to edit them",
         "emptyThread": "Draw on the canvas, or describe what you want below.",
+        "openFileAfterAnswer": "Wait for the answer to finish, then open {name} again.",
         "attachedImage": "Attached image",
-        "retry": "Retry"
+        "retry": "Retry",
+        "sendKeyHint": "{send} send · {newline} new line"
     },
     "examples": {
         "paperToDiagram": "Paper to diagram",
@@ -49,7 +52,7 @@
         "replicateDescription": "Upload and replicate an existing flowchart",
         "creativeDrawing": "Creative drawing",
         "creativeDescription": "Draw something fun and creative",
-        "cachedNote": "Examples use saved answers: they appear instantly and don't call the AI.",
+        "cachedNote": "Pick an example, then press Send: the saved answer appears instantly and doesn't call the AI.",
         "mcpServer": "MCP Server",
         "mcpDescription": "Use in Claude Desktop, VS Code & Cursor",
         "mcpTagline": "Let Claude Code, Cursor or VS Code draw from your local files and code. You get the same canvas as here: live preview, outlined changes, undo."
@@ -67,7 +70,7 @@
         "diagramStyle": "Diagram style",
         "diagramStyleDescription": "How the AI draws new diagrams: Styled uses colors and icons, Minimal keeps shapes plain.",
         "sendShortcut": "Send shortcut",
-        "sendShortcutDescription": "Choose how to send messages.",
+        "sendShortcutDescription": "Shift+Enter always adds a new line, and Cmd/Ctrl+Enter always sends.",
         "enterToSend": "Enter to send",
         "ctrlEnterToSend": "Cmd/Ctrl+Enter to send",
         "proxy": "Proxy settings",
@@ -110,13 +113,14 @@
             "svg": "SVG image",
             "xmlsvg": "Editable SVG"
         },
-        "savedSuccessfully": "Diagram exported",
+        "savedSuccessfully": "Exported {name}",
         "hints": {
             "drawio": "Keeps everything editable",
             "png": "A picture for slides and documents",
             "svg": "A picture that scales without blur",
             "xmlsvg": "A picture that still opens in draw.io"
-        }
+        },
+        "transparentBackground": "Transparent background"
     },
     "dialogs": {
         "clearSuccess": "Started a fresh chat"
@@ -202,7 +206,8 @@
         "thinking": "Thinking...",
         "thoughtFor": "Thought for {duration} seconds",
         "thoughtForOne": "Thought for 1 second",
-        "thoughtBrief": "Thought for a few seconds"
+        "thoughtBrief": "Thought for a few seconds",
+        "thinkingFor": "Thinking... {duration} s"
     },
     "sessionHistory": {
         "empty": "No diagrams yet",
@@ -348,7 +353,8 @@
         "bedrockAuthAccessKey": "Access keys",
         "moreOptions": "More options: base URL, display name",
         "moreOptionsName": "More options: display name",
-        "keyRejected": "The provider rejected this API key. Check that the key above was copied in full.",
+        "keyRejected": "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account. To make a new one, use Get API key.",
+        "keyRejectedNoLink": "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account.",
         "modelNotFound": "The provider can't find this model ID. Check its spelling.",
         "modelWorks": "Works",
         "modelWorksTime": "Works · {seconds} s",
@@ -377,7 +383,7 @@
         "backToProviders": "Back to providers",
         "deleteProviderOnly": "Delete {name}",
         "addProviderEntry": "Add a provider…",
-        "awsKeysRejected": "AWS rejected these access keys. Check that both were copied in full.",
+        "awsKeysRejected": "AWS rejected these access keys. They may be mistyped, deactivated, deleted, or from another account.",
         "validationFailedCountOne": "{count} model failed the test",
         "validationFailedCountOther": "{count} models failed the test",
         "deleteProviderNamedOne": "Delete {name} and its model",
@@ -388,7 +394,12 @@
         "awsSessionToken": "AWS session token (optional)",
         "awsSessionTokenHint": "Only for temporary credentials: access keys that start with ASIA.",
         "bedrockBothSaved": "This provider also keeps an access key pair, unused while there is an API key.",
-        "removeAccessKeys": "Remove the access keys"
+        "removeAccessKeys": "Remove the access keys",
+        "providerSays": "Provider says: {message}",
+        "catalogModelsNote": "The model list did not load. These models come from models.dev and are not checked with {name}.",
+        "savedInBrowser": "Saved in this browser",
+        "selectedModelFailed": "{model} failed its test. Check it in model settings.",
+        "demoModelNote": "Demo models for trying the app. For better diagrams, add a provider with your own API key."
     },
     "admin": {
         "title": "Admin Settings",
@@ -545,7 +556,7 @@
         "shape": "shape",
         "connector": "connector",
         "remove": "Don't send the selection",
-        "placeholder": "Describe how to change the selected shapes"
+        "placeholder": "Describe the change, or restyle it yourself with Format at the top right"
     },
     "versions": {
         "strip": "Versions",
@@ -596,7 +607,13 @@
         "noPreview": "No preview",
         "compareSince": "Since version {n}, the canvas has changed:",
         "isOnCanvas": "This version is what the canvas shows now.",
-        "differsElsewhere": "The shapes and connectors on the first page are the same as in version {n}; their order, other pages or the page settings differ."
+        "differsElsewhere": "The shapes and connectors on the first page are the same as in version {n}; their order, other pages or the page settings differ.",
+        "showChanges": "Show changes",
+        "outlineFaded": "AI changes were outlined for 3 seconds.",
+        "showAgain": "Show again",
+        "editedSince": "You changed the canvas by hand since this version",
+        "changedNames": "Changed or added: {names}",
+        "changedNamesMore": "Changed or added: {names} and {n} more"
     },
     "lobby": {
         "title": "What would you like to draw?",
@@ -618,6 +635,10 @@
         "restoreFailed": "Restore failed. Please try again.",
         "userEdit": "Changed by hand",
         "showVersions": "Show the versions",
-        "hideVersions": "Hide the versions"
+        "hideVersions": "Hide the versions",
+        "openedFile": "Opened the file",
+        "addedPage": "Added a page",
+        "fileChanged": "unsaved changes",
+        "fileChangedHint": "Changes since this file was opened or saved are not in it yet. Ask the AI to save the diagram to the file."
     }
 }

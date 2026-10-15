@@ -45,9 +45,10 @@ import {
 import { buildChatHeaders } from "@/lib/chat-request"
 import { pageModelXml, placeOnPage } from "@/lib/diagram-pages"
 import { EMPTY_DRAWIO_DOCUMENT } from "@/lib/drawio/drawio-config"
+import { clearHighlights } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
-import type { SessionMetadata } from "@/lib/session-storage"
+import type { SessionMetadata, StoredMessage } from "@/lib/session-storage"
 import { sanitizeMessages } from "@/lib/session-storage"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
@@ -111,6 +112,24 @@ function viewedPageId(): string | null {
 function selectionOf(message: ChatUIMessage): MessageSelection {
     const selected = message.metadata?.selectedCells
     return Array.isArray(selected) ? selected : []
+}
+
+/** The message with the reasoning seconds measured on screen in its metadata */
+function withReasoningSeconds(
+    message: StoredMessage,
+    seconds: Record<number, number> | undefined,
+): StoredMessage {
+    if (!seconds) return message
+    const metadata = (message.metadata ?? {}) as {
+        reasoningSeconds?: Record<number, number>
+    }
+    return {
+        ...message,
+        metadata: {
+            ...metadata,
+            reasoningSeconds: { ...metadata.reasoningSeconds, ...seconds },
+        },
+    }
 }
 
 function newLangfuseSessionId() {
@@ -209,7 +228,11 @@ export interface ChatEngine {
     selectSession: (id: string) => Promise<void>
     deleteSession: (id: string) => Promise<void>
     renameSession: (title: string) => Promise<void>
-    openDiagramFile: (file: File) => Promise<void>
+    /** keepComposer: what is typed and attached stays (a file dropped there) */
+    openDiagramFile: (
+        file: File,
+        options?: { keepComposer?: boolean },
+    ) => Promise<void>
     /**
      * Save the chat on screen, then leave the page (another language) with
      * the chat's session id; nothing happens while an answer runs
@@ -221,6 +244,8 @@ export interface ChatEngine {
 
     langfuseSessionId: string
     loadedMessageIdsRef: React.RefObject<Set<string>>
+    /** Seconds of the reasoning rows that streamed on screen */
+    reasoningSecondsRef: React.RefObject<Map<string, Record<number, number>>>
     /** Stop was pressed in the turn on screen (until the next message) */
     stoppedRef: React.RefObject<boolean>
     validationStates: Record<string, ValidationState>
@@ -716,6 +741,11 @@ export function ChatEngineProvider({
 
     // Message IDs loaded from a session (skip animations and replays)
     const loadedMessageIdsRef = useRef<Set<string>>(new Set())
+    // Seconds each reasoning row took as it streamed (message id, then the
+    // index of the row's first part); saved in the messages' metadata
+    const reasoningSecondsRef = useRef(
+        new Map<string, Record<number, number>>(),
+    )
 
     useDiagramStreaming({
         messages,
@@ -863,7 +893,13 @@ export function ChatEngineProvider({
                 continuationOriginalRef.current ??
                 previewOriginal ??
                 (chartXMLRef.current || "")
-            const messages = sanitizeMessages(messagesRef.current)
+            const messages = sanitizeMessages(messagesRef.current).map(
+                (message) =>
+                    withReasoningSeconds(
+                        message,
+                        reasoningSecondsRef.current.get(message.id),
+                    ),
+            )
             savedMessagesRef.current.add(messages)
             const data = {
                 messages,
@@ -1164,6 +1200,8 @@ export function ChatEngineProvider({
         // Its Undo would take this answer's diagram away
         toast.dismiss("version-restored")
         startTurn()
+        // The outline of the last AI change is done with
+        clearHighlights()
 
         const config = getSelectedAIConfig()
         const { customSystemMessage, minimalStyle, maxOutputTokens } =
@@ -1187,13 +1225,22 @@ export function ChatEngineProvider({
             }),
         }
         turnRequestsRef.current = 0
-        // The selection stays with the message, for regenerate and retry
+        // The selection stays with the message, for regenerate and retry,
+        // and its chip names a connector as one
         sendMessage(
             {
                 ...(messageId !== undefined && { messageId }),
                 parts,
                 ...(selected.length > 0 && {
-                    metadata: { selectedCells: selected },
+                    metadata: {
+                        selectedCells: selectedCells.map(
+                            ({ id, label, isEdge }) => ({
+                                id,
+                                label,
+                                isEdge: !!isEdge,
+                            }),
+                        ),
+                    },
                 }),
             },
             options,
@@ -1256,14 +1303,23 @@ export function ChatEngineProvider({
             )
             if (cached) {
                 const toolCallId = `cached-${Date.now()}`
-                const userText = await processFilesAndAppendContent(text)
+                // The attached picture shows in the message, as when sent
+                const fileParts: any[] = []
+                const userText = await processFilesAndAppendContent(
+                    text,
+                    fileParts,
+                )
                 currentTurnRef.current = 0
                 startTurn()
+                clearHighlights()
                 setMessages([
                     {
                         id: `user-${Date.now()}`,
                         role: "user" as const,
-                        parts: [{ type: "text" as const, text: userText }],
+                        parts: [
+                            { type: "text" as const, text: userText },
+                            ...fileParts,
+                        ],
                     },
                     {
                         id: `assistant-${Date.now()}`,
@@ -1755,7 +1811,7 @@ export function ChatEngineProvider({
     )
 
     // Clear everything for a new conversation (the old one is saved)
-    const startNewChat = () => {
+    const startNewChat = (keepComposer = false) => {
         // Clear session state BEFORE the URL, so the URL effect does not
         // bring the old session back
         sessionManager.clearCurrentSession()
@@ -1764,12 +1820,14 @@ export function ChatEngineProvider({
         // A new conversation brings the start screen back
         useUiStore.getState().setHeroDismissed(false)
         setMessages([])
-        setInput("")
         clearDiagram()
         useVersionsStore.getState().clear()
         setValidationStates({})
-        handleFileChange([])
-        setUrlData(new Map())
+        if (!keepComposer) {
+            setInput("")
+            handleFileChange([])
+            setUrlData(new Map())
+        }
         setLangfuseSessionId(newLangfuseSessionId())
         xmlSnapshotsRef.current.clear()
         setPendingTitle(null)
@@ -1820,12 +1878,25 @@ export function ChatEngineProvider({
         })
     }
 
-    const openDiagramFile = async (file: File) => {
+    const openDiagramFile = async (
+        file: File,
+        { keepComposer = false }: { keepComposer?: boolean } = {},
+    ) => {
+        // It would start a new chat while the answer still goes to this
+        // one: a toast asks the user to open it again after the answer
+        if (isTurnActive()) {
+            toast.info(
+                formatMessage(dict.chat.openFileAfterAnswer, {
+                    name: file.name,
+                }),
+            )
+            return
+        }
         if (!canStartTurn()) return
-        await whileLeaving(() => openFile(file))
+        await whileLeaving(() => openFile(file, keepComposer))
     }
 
-    const openFile = async (file: File) => {
+    const openFile = async (file: File, keepComposer: boolean) => {
         const xml = await readDiagramFile(file).catch(() => null)
         if (!xml) {
             toast.error(
@@ -1838,7 +1909,7 @@ export function ChatEngineProvider({
         // A loaded file starts a fresh conversation named after it
         const open = () => {
             if (isTurnActive()) return
-            startNewChat()
+            startNewChat(keepComposer)
             // This empty chat is ours: the effect that follows session
             // changes must not clear the file it is about to show
             lastSyncedSessionIdRef.current = null
@@ -1892,6 +1963,7 @@ export function ChatEngineProvider({
         undoVersion,
         langfuseSessionId,
         loadedMessageIdsRef,
+        reasoningSecondsRef,
         stoppedRef,
         validationStates,
         modelConfig,

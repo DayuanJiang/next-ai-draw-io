@@ -190,12 +190,11 @@ function GeneralTab({ open }: { open: boolean }) {
     }, [open])
 
     // The page mounts anew in the other language: the chat is saved first
-    // (it may not be yet), and its session goes into the new URL
+    // (it may not be yet), and its session goes into the new URL. Settings
+    // stay open on this tab (the UI store keeps both across the change).
     const changeLanguage = (lang: string) =>
         engine.leavePage((sessionId) => {
             localStorage.setItem(STORAGE_KEYS.locale, lang)
-            // The page reloads in the new language; close settings as before
-            useUiStore.getState().setSettingsOpen(false)
             // Keep the desktop app's menu language in sync
             window.electronAPI
                 ?.setUserLocale?.(lang)

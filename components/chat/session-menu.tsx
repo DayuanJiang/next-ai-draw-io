@@ -38,10 +38,13 @@ export function SessionMenu({
     children,
     align = "start",
     onOpenFile,
+    hideActions = false,
 }: {
     children: React.ReactNode
     align?: "start" | "center" | "end"
     onOpenFile: () => void
+    /** No New and Open buttons (the start screen has its own) */
+    hideActions?: boolean
 }) {
     const dict = useDictionary()
     const t = dict.sessionHistory
@@ -125,7 +128,7 @@ export function SessionMenu({
                                 <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
                             </button>
                         )}
-                        <div className="mt-2 flex gap-1.5">
+                        <div className="mt-2 flex gap-1.5" hidden={hideActions}>
                             <button
                                 type="button"
                                 disabled={engine.isBusy}

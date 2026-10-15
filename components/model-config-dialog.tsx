@@ -9,6 +9,7 @@ import {
     Eye,
     EyeOff,
     Loader2,
+    Lock,
     Plus,
     RefreshCw,
     Trash2,
@@ -129,6 +130,27 @@ function savedProviders(): ProviderConfig[] {
     }
 }
 
+/** Nothing entered since the provider's tile was clicked: no credentials,
+ * name or own URL, at most the untested model it came with */
+function isUntouched(p: ProviderConfig): boolean {
+    const def = PROVIDERS[p.provider]
+    // Nothing to enter (EdgeOne): the tile set it up
+    if (def.credential === "none") return false
+    return (
+        !p.apiKey &&
+        !p.awsAccessKeyId &&
+        !p.awsSecretAccessKey &&
+        !p.awsSessionToken &&
+        !p.awsRegion &&
+        !p.vertexApiKey &&
+        !p.name &&
+        (p.baseUrl || "") === (def.defaultBaseUrl || "") &&
+        p.models.every(
+            (m) => m.modelId === def.models?.[0] && m.validated === undefined,
+        )
+    )
+}
+
 export function ModelConfigDialog({
     open,
     modelConfig,
@@ -148,10 +170,10 @@ export function ModelConfigDialog({
     const [validationStatus, setValidationStatus] =
         useState<ValidationStatus>("idle")
     const [validationError, setValidationError] = useState<string>("")
-    // Per provider, the credentials a test was refused with: the key field is
-    // marked until they change, here or in another tab, or a test passes. A
-    // model list says nothing about the key: some providers list models
-    // without one.
+    // Per provider, the credentials a test or a model list was refused with
+    // (invalid_api_key): the key field is marked until they change, here or
+    // in another tab, or a test passes. A list that works says nothing
+    // about the key: some providers list models without one.
     const [rejectedKeys, setRejectedKeys] = useState<Record<string, string>>({})
     const markRejected = (
         providerId: string,
@@ -178,17 +200,21 @@ export function ModelConfigDialog({
         value: string
     } | null>(null)
     // Models fetched from the provider, per provider config, with the
-    // credentials they were fetched with
+    // credentials they were fetched with; failed: the list did not come
     const [fetchedModels, setFetchedModels] = useState<
-        Record<string, { askedWith: string; models: ListedModel[] }>
+        Record<
+            string,
+            { askedWith: string; models: ListedModel[]; failed?: boolean }
+        >
     >({})
     // The providers whose model list is being fetched
     const [fetchingFor, setFetchingFor] = useState<string[]>([])
     const [fetchModelsError, setFetchModelsError] = useState("")
     const [modelPickerOpen, setModelPickerOpen] = useState(false)
-    // models.dev data for hints, loaded with the dialog (it is ~180 KB)
-    const [getModelInfo, setGetModelInfo] = useState<
-        typeof import("@/lib/model-catalog").getModelInfo | null
+    // models.dev data for hints, and models to pick when the provider's own
+    // list is not available, loaded with the dialog (it is ~180 KB)
+    const [catalog, setCatalog] = useState<
+        typeof import("@/lib/model-catalog") | null
     >(null)
 
     const {
@@ -226,6 +252,35 @@ export function ModelConfigDialog({
     selectedProviderIdRef.current = selectedProviderId
     const configRef = useRef(config)
     configRef.current = config
+    // A provider still as its tile created it goes when its page is left
+    // (another page shown, or settings closed): only looking adds nothing
+    const openProviderRef = useRef<string | null>(null)
+    const deleteProviderRef = useRef(deleteProvider)
+    deleteProviderRef.current = deleteProvider
+    const dropIfUntouched = (providerId: string) => {
+        const p = configRef.current.providers.find((x) => x.id === providerId)
+        if (p && isUntouched(p)) deleteProviderRef.current(providerId)
+    }
+    useEffect(() => {
+        const left = openProviderRef.current
+        openProviderRef.current = open ? selectedProviderId : null
+        if (!left || left === openProviderRef.current) return
+        dropIfUntouched(left)
+    }, [open, selectedProviderId])
+    // Also when this view goes away with the page open (settings on
+    // another tab), with the latest config and page from the refs
+    useEffect(
+        () => () => {
+            const left = openProviderRef.current
+            if (!left) return
+            // A tick later, and only if the view stayed gone: React's
+            // development remount runs this cleanup too
+            setTimeout(() => {
+                if (closedRef.current) dropIfUntouched(left)
+            }, 0)
+        },
+        [],
+    )
     // Set when this view goes away (settings closed or on another tab): its
     // config no longer follows edits, the saved one does
     const closedRef = useRef(false)
@@ -289,22 +344,38 @@ export function ModelConfigDialog({
     }, [open])
 
     useEffect(() => {
-        if (!open || getModelInfo) return
-        import("@/lib/model-catalog").then((catalog) =>
-            setGetModelInfo(() => catalog.getModelInfo),
-        )
-    }, [open, getModelInfo])
+        if (!open || catalog) return
+        import("@/lib/model-catalog").then(setCatalog)
+    }, [open, catalog])
 
     // What to do about an error kind, worded for this page, where the
     // credentials can be fixed
     const errorHints = (p: ProviderConfig): Record<string, string> => ({
         ...(dict.errors.llm as Record<string, string>),
+        // "Get API key" is named only where its link shows
         invalid_api_key:
             PROVIDERS[p.provider].credential === "aws" && !p.apiKey
                 ? t.awsKeysRejected
-                : t.keyRejected,
+                : PROVIDERS[p.provider].apiKeyUrl
+                  ? t.keyRejected
+                  : t.keyRejectedNoLink,
         model_not_found: t.modelNotFound,
     })
+    // A test's error: the hint for its kind, then on its own line what the
+    // provider said (classified errors carry the provider's message)
+    const testErrorText = (
+        hints: Record<string, string>,
+        code: string | undefined,
+        message: string | undefined,
+    ) =>
+        code
+            ? [
+                  hints[code],
+                  message && formatMessage(t.providerSays, { message }),
+              ]
+                  .filter(Boolean)
+                  .join("\n")
+            : (message ?? "")
 
     // Requests in flight, by provider id: a second request for the same
     // provider (the button clicked while the automatic fetch runs, or the
@@ -314,11 +385,24 @@ export function ModelConfigDialog({
     // overtaken by a click with: one automatic fetch per set of credentials
     const autoFetched = useRef<Record<string, string>>({})
 
+    // A list that did not come: models.dev's stands in, unless the
+    // provider's own came for these credentials before
+    const markListFailed = (providerId: string, askedWith: string) =>
+        setFetchedModels((current) =>
+            current[providerId]?.askedWith === askedWith
+                ? current
+                : {
+                      ...current,
+                      [providerId]: { askedWith, models: [], failed: true },
+                  },
+        )
+
     /**
      * Fetch the shown provider's model list. A click opens the picker with
      * the result and shows what went wrong; the automatic fetch after
-     * credentials were entered (auto) only fills the list, so it never
-     * takes the focus or flashes an error while the user is still typing.
+     * credentials were entered (auto) only fills the list and marks a
+     * refused key, so it never takes the focus or flashes an error text
+     * while the user is still typing.
      */
     const handleFetchModels = async (auto = false) => {
         if (!selectedProvider) return
@@ -360,20 +444,28 @@ export function ModelConfigDialog({
                 if (data.models.length > 0) setModelPickerOpen(true)
                 else setFetchModelsError(t.noModelsReturned)
             } else {
+                markListFailed(providerId, askedWith)
+                // A key the list was refused with is marked as a test marks
+                // it (providers that list without a key never answer so),
+                // also after the automatic fetch, which shows no text
+                if (data.code === "invalid_api_key") {
+                    markRejected(providerId, askedWith, true)
+                }
                 if (!stillShown || auto) return
+                // The hint for the error's kind says it all; data.error is
+                // this server's own text (the status), shown without one
                 setFetchModelsError(
-                    [hints[data.code], data.error].filter(Boolean).join(" ") ||
+                    hints[data.code] ||
+                        data.error ||
                         formatMessage(t.requestFailed, {
                             status: response.status,
                         }),
                 )
             }
         } catch {
-            if (
-                !auto &&
-                selectedProviderIdRef.current === providerId &&
-                credentialsOf(providerId) === askedWith
-            ) {
+            if (credentialsOf(providerId) !== askedWith) return
+            markListFailed(providerId, askedWith)
+            if (!auto && selectedProviderIdRef.current === providerId) {
                 setFetchModelsError(dict.errors.networkError)
             }
         } finally {
@@ -386,18 +478,31 @@ export function ModelConfigDialog({
 
     // The provider's own list, if fetched with the credentials it has now,
     // else the record's short list (only providers that cannot list models
-    // have one)
-    const fetched = selectedProvider
-        ? fetchedModels[selectedProvider.id]
-        : undefined
+    // have one). A list that failed for the provider's own endpoint: the
+    // ones models.dev knows for it, not checked with the provider.
+    const fetched =
+        selectedProvider &&
+        fetchedModels[selectedProvider.id]?.askedWith ===
+            credentialsOf(selectedProvider.id)
+            ? fetchedModels[selectedProvider.id]
+            : undefined
     const recordModels = selectedProvider
         ? (PROVIDERS[selectedProvider.provider].models ?? [])
         : []
-    const suggestedModels: ListedModel[] = selectedProvider
-        ? fetched && fetched.askedWith === credentialsOf(selectedProvider.id)
+    const fromCatalog =
+        !!selectedProvider &&
+        !!fetched?.failed &&
+        (selectedProvider.baseUrl || "") ===
+            (PROVIDERS[selectedProvider.provider].defaultBaseUrl || "")
+    const suggestedModels: ListedModel[] = !selectedProvider
+        ? []
+        : fromCatalog
+          ? (catalog?.listCatalogModels(selectedProvider.provider) ?? []).map(
+                (id) => ({ id, tools: true }),
+            )
+          : fetched
             ? fetched.models
             : recordModels.map((id) => ({ id }))
-        : []
     // The picker closes when there is nothing left to pick from, so it does
     // not open by itself once there is again
     if (modelPickerOpen && suggestedModels.length === 0) {
@@ -410,7 +515,7 @@ export function ModelConfigDialog({
     const supportsTools = (model: ListedModel) =>
         selectedProvider
             ? (model.tools ??
-              getModelInfo?.(selectedProvider.provider, model.id)?.tools)
+              catalog?.getModelInfo(selectedProvider.provider, model.id)?.tools)
             : undefined
 
     // Filter out already-added models from suggestions
@@ -648,12 +753,8 @@ export function ModelConfigDialog({
                           }
                         : {
                               validated: false,
-                              // The hint for the error's kind, then the
-                              // provider's own message
                               validationError:
-                                  [hints[data.code], data.error]
-                                      .filter(Boolean)
-                                      .join(" ") ||
+                                  testErrorText(hints, data.code, data.error) ||
                                   (response.ok
                                       ? t.validationError
                                       : formatMessage(t.requestFailed, {
@@ -720,6 +821,9 @@ export function ModelConfigDialog({
         markRejected(selectedProviderId, askedWith, rejected)
         // The status line is about the provider shown now
         if (selectedProviderIdRef.current !== selectedProviderId) return
+        // The model rows say why the key was refused: a model list error
+        // shown before would say it again
+        if (rejected) setFetchModelsError("")
         if (idChanged) {
             setValidationStatus("idle")
         } else if (allValid) {
@@ -945,13 +1049,15 @@ export function ModelConfigDialog({
                 </div>
                 {/* Show validation error inline */}
                 {model.validated === false && model.validationError && (
-                    <p className="px-3 pb-2 pl-11 text-xs text-destructive">
+                    <p className="whitespace-pre-line px-3 pb-2 pl-11 text-xs text-destructive">
                         {model.validationError}
                     </p>
                 )}
                 {!model.validationWarning &&
-                    getModelInfo?.(selectedProvider.provider, model.modelId)
-                        ?.tools === false && (
+                    catalog?.getModelInfo(
+                        selectedProvider.provider,
+                        model.modelId,
+                    )?.tools === false && (
                         <p className="px-3 pb-2 pl-11 text-xs text-amber-600 dark:text-amber-400">
                             {t.mayNotDraw}
                         </p>
@@ -1081,6 +1187,16 @@ export function ModelConfigDialog({
                                         renderProviderSecret(field, id)
                                     }
                                 />
+                            )}
+                            {/* Saved on every change: no button to press */}
+                            {(provider.apiKey ||
+                                provider.awsAccessKeyId ||
+                                provider.awsSecretAccessKey ||
+                                provider.vertexApiKey) && (
+                                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Lock className="size-3.5 shrink-0" />
+                                    {t.savedInBrowser}
+                                </p>
                             )}
                         </Step>
 
@@ -1227,7 +1343,22 @@ export function ModelConfigDialog({
                                                 <CommandInput
                                                     placeholder={t.searchModels}
                                                 />
-                                                <CommandList className="max-h-72">
+                                                {fromCatalog && (
+                                                    <p className="border-b px-3 py-2 text-xs text-muted-foreground">
+                                                        {formatMessage(
+                                                            t.catalogModelsNote,
+                                                            {
+                                                                name: providerName(
+                                                                    provider,
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </p>
+                                                )}
+                                                <CommandList
+                                                    className="max-h-72"
+                                                    label={t.models}
+                                                >
                                                     <CommandEmpty>
                                                         {t.noModelsFound}
                                                     </CommandEmpty>

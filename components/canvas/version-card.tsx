@@ -1,10 +1,13 @@
-import { Redo2, RotateCcw, Undo2 } from "lucide-react"
+import { Pencil, Redo2, RotateCcw, Undo2 } from "lucide-react"
+import { useMemo } from "react"
 import { Shimmer } from "@/components/ai-elements/shimmer"
 import {
     useVersionsContext,
     type VersionItem,
 } from "@/components/canvas/versions-context"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { pageNameOf } from "@/lib/diagram-pages"
+import { highlightChangedCells } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
 import { cn } from "@/lib/utils"
 import { describeChangeSummary, describeTotals } from "@/lib/version-text"
@@ -54,8 +57,34 @@ interface VersionCardProps extends React.ComponentProps<"div"> {
     label: string
     /** Goes after the summary text (the chat adds its "Show XML" link) */
     afterSummary?: React.ReactNode
+    /** The canvas was changed by hand since this version: the card says so */
+    editedSince?: boolean
     /** Panel below the card (the chat shows the AI's XML there) */
     children?: React.ReactNode
+}
+
+/** A link in the card's summary line, after a separator */
+export function SummaryLink({
+    onClick,
+    children,
+}: {
+    onClick: () => void
+    children: React.ReactNode
+}) {
+    // A text link, so the card's only button is the action (undo or
+    // restore); it wraps as one unit with its separator
+    return (
+        <span className="whitespace-nowrap">
+            <span aria-hidden> · </span>
+            <button
+                type="button"
+                onClick={onClick}
+                className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
+            >
+                {children}
+            </button>
+        </span>
+    )
 }
 
 /**
@@ -68,6 +97,7 @@ export function VersionCard({
     isLatest,
     label,
     afterSummary,
+    editedSince,
     children,
     className,
     ...rest
@@ -82,6 +112,15 @@ export function VersionCard({
     const summary = version.fromScratch
         ? describeTotals(version.summary, t)
         : describeChangeSummary(version.summary, t)
+    // In a document with several pages, the page the change was made on
+    const pageName = useMemo(
+        () => pageNameOf(version.xml, version.pageId),
+        [version.xml, version.pageId],
+    )
+    // The outline of the change, again, for the version on the canvas (a
+    // diagram drawn from nothing is outlined nowhere)
+    const canShowChanges =
+        isOnCanvas && !version.fromScratch && !!version.touchedIds?.length
     const badge = (
         <span
             className={cn(
@@ -110,12 +149,41 @@ export function VersionCard({
     )
     const summaryLine = (
         <div className="text-xs text-muted-foreground">
+            {pageName && (
+                <span className="font-medium text-foreground/80">
+                    {pageName}:{" "}
+                </span>
+            )}
             {summary}
+            {canShowChanges && (
+                <SummaryLink
+                    onClick={() =>
+                        highlightChangedCells(
+                            version.touchedIds ?? [],
+                            version.pageId,
+                        )
+                    }
+                >
+                    {t.showChanges}
+                </SummaryLink>
+            )}
             {afterSummary}
+            {editedSince && (
+                <div
+                    className="mt-1 flex items-center gap-1 text-foreground/80"
+                    data-testid="version-edited-since"
+                >
+                    <Pencil className="size-3 shrink-0" />
+                    {t.editedSince}
+                </div>
+            )}
         </div>
     )
 
     if (!isLatest) {
+        // The picture, number and title on the first row; what changed and
+        // restore under it, across the card: in a narrow panel the title
+        // and the summary each get the width
         return (
             <div
                 className={cn(
@@ -125,7 +193,7 @@ export function VersionCard({
                 data-testid="version-card"
                 {...rest}
             >
-                <div className="flex items-center gap-2.5 p-1.5 pr-2">
+                <div className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 p-1.5 pr-2">
                     <button
                         type="button"
                         onClick={() => openCompare(version.id)}
@@ -139,12 +207,13 @@ export function VersionCard({
                         />
                     </button>
                     {badge}
-                    <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] text-foreground">
-                            {title}
-                        </div>
-                        {summaryLine}
+                    <div
+                        className="col-span-2 truncate text-[13px] text-foreground"
+                        title={title}
+                    >
+                        {title}
                     </div>
+                    <div className="col-span-3 pl-1">{summaryLine}</div>
                     {restoreButton}
                 </div>
                 {children}
@@ -184,7 +253,10 @@ export function VersionCard({
             {/* Title row with the action; the summary runs under both */}
             <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5">
                 {badge}
-                <div className="truncate text-[13px] font-medium text-foreground">
+                <div
+                    className="truncate text-[13px] font-medium text-foreground"
+                    title={title}
+                >
                     {title}
                 </div>
                 {canUndo ? (

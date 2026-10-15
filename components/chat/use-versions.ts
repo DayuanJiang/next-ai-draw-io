@@ -12,6 +12,15 @@ import { formatMessage } from "@/lib/i18n/utils"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 import { useVersionsStore } from "@/stores/versions-store"
 
+/** The newest version before the latest one that is this document */
+function olderVersionShowing(xml: string) {
+    return useVersionsStore
+        .getState()
+        .versions.slice(0, -1)
+        .reverse()
+        .find((v) => isSameDocument(v.xml, xml))
+}
+
 interface UseVersionsParams {
     /** Index of the user message whose turn is running */
     currentTurnRef: RefObject<number>
@@ -64,9 +73,12 @@ export function useVersions({
                 toolCallId,
                 summary,
                 fromScratch,
+                touchedIds,
             })
             // Mark what changed, unless the whole diagram is new
-            if (!fromScratch) highlightChangedCells(touchedIds)
+            if (!fromScratch) {
+                highlightChangedCells(touchedIds, pageId, { navigate: false })
+            }
             // The picture is of the canvas: take it right away, before a
             // newer version can be on it; once one is, this one gets none
             // rather than the newer one's
@@ -108,9 +120,13 @@ export function useVersions({
             latest?.beforeXml !== undefined &&
             isSameDocument(latest.beforeXml || BLANK_MXFILE, chartXML)
         ) {
-            store.setUndone(latest.id)
+            store.setUndone(latest.id, olderVersionShowing(chartXML)?.id)
         } else {
-            store.clearCanvasFlags()
+            // Ctrl+Z can land on an older version: from one on the canvas,
+            // or back through hand edits made since
+            const older = olderVersionShowing(chartXML)
+            if (older) store.setOnCanvas(older.id)
+            else store.clearCanvasFlags()
         }
     }, [chartXML, isBusy])
 
@@ -153,7 +169,7 @@ export function useVersions({
                         if (getChatGeneration() !== generation) return
                         apply(before)
                         const now = useVersionsStore.getState()
-                        if (wasUndone) now.setUndone(wasUndone)
+                        if (wasUndone) now.setUndone(wasUndone, wasOnCanvas)
                         else if (wasOnCanvas) now.setOnCanvas(wasOnCanvas)
                     },
                 },
@@ -173,8 +189,9 @@ export function useVersions({
             return
         }
         if (version.beforeXml === undefined) return
-        apply(version.beforeXml || BLANK_MXFILE)
-        store.setUndone(versionId)
+        const before = version.beforeXml || BLANK_MXFILE
+        apply(before)
+        store.setUndone(versionId, olderVersionShowing(before)?.id)
     }
 
     return { restoreVersion, undoVersion }

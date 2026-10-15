@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getModelInfo } from "@/lib/model-catalog"
+import { getModelInfo, listCatalogModels } from "@/lib/model-catalog"
 import catalog from "@/lib/model-catalog.json"
 
 describe("getModelInfo", () => {
@@ -28,5 +28,27 @@ describe("getModelInfo", () => {
     it("knows nothing about providers models.dev does not list", () => {
         expect(getModelInfo("sglang", "anything")).toBeUndefined()
         expect(getModelInfo("openai", "not-a-model")).toBeUndefined()
+    })
+})
+
+describe("listCatalogModels", () => {
+    it("lists the provider's models that can call tools", () => {
+        const ids = listCatalogModels("anthropic")
+        expect(ids.length).toBeGreaterThan(0)
+        for (const id of ids) {
+            expect(
+                catalog.anthropic[id as keyof typeof catalog.anthropic],
+            ).toMatchObject({ tools: true })
+        }
+        const withoutTools = Object.entries(catalog.openai)
+            .filter(([, info]) => !info.tools)
+            .map(([id]) => id)
+        for (const id of withoutTools) {
+            expect(listCatalogModels("openai")).not.toContain(id)
+        }
+    })
+
+    it("has nothing for providers models.dev does not list", () => {
+        expect(listCatalogModels("sglang")).toEqual([])
     })
 })

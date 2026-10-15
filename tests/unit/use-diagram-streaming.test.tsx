@@ -64,6 +64,55 @@ describe("the streaming preview of a second edit", () => {
             AFTER_FIRST_EDIT,
         )
     })
+
+    it("waits with the preview while a connector points at a shape still to come", () => {
+        mocks.loadDiagram.mockClear()
+        const edgeTo = (target: string) =>
+            `<mxCell id="e" edge="1" parent="1" source="a" target="${target}"><mxGeometry relative="1" as="geometry"/></mxCell>`
+        const streaming = (operations: unknown[]) =>
+            [
+                {
+                    id: "m1",
+                    role: "assistant",
+                    parts: [
+                        {
+                            type: "tool-edit_diagram",
+                            toolCallId: "edit-3",
+                            state: "input-streaming",
+                            input: { operations },
+                        },
+                    ],
+                },
+            ] as any
+        const connect = {
+            operation: "add",
+            cell_id: "e",
+            new_xml: edgeTo("gateway"),
+        }
+        const { rerender } = renderHook(
+            ({ messages }) =>
+                useDiagramStreaming({
+                    messages,
+                    processedToolCallsRef: { current: new Set() },
+                    editDiagramOriginalXmlRef: { current: new Map() },
+                    loadedMessageIdsRef: { current: new Set() },
+                }),
+            { initialProps: { messages: streaming([connect]) } },
+        )
+        expect(mocks.loadDiagram).not.toHaveBeenCalled()
+        rerender({
+            messages: streaming([
+                connect,
+                {
+                    operation: "add",
+                    cell_id: "gateway",
+                    new_xml: box("gateway"),
+                },
+            ]),
+        })
+        expect(mocks.loadDiagram).toHaveBeenCalledTimes(1)
+        expect(mocks.loadDiagram.mock.calls[0][0]).toContain('id="gateway"')
+    })
 })
 
 describe("the streaming preview of display_diagram", () => {
@@ -230,6 +279,55 @@ describe("the streaming preview on the model's page", () => {
                 "whiteSpace=wrap",
             )
             expect(cellOn(loaded, "pa", "c")).toBeNull()
+        } finally {
+            mocks.canvas = null
+        }
+    })
+
+    it("waits while a connector there points at a shape only another page has", () => {
+        mocks.loadDiagram.mockClear()
+        mocks.canvas = twoPages
+        const connect = {
+            operation: "add",
+            cell_id: "e",
+            new_xml:
+                '<mxCell id="e" edge="1" parent="L" source="s" target="g"><mxGeometry relative="1" as="geometry"/></mxCell>',
+        }
+        const part = (operations: unknown[]) => ({
+            type: "tool-edit_diagram",
+            toolCallId: "edit-cross",
+            state: "input-streaming",
+            input: { operations },
+        })
+        try {
+            const { rerender } = renderHook(
+                ({ operations }) =>
+                    useDiagramStreaming({
+                        messages: [
+                            {
+                                id: "m1",
+                                role: "assistant",
+                                parts: [part(operations)],
+                            },
+                        ] as any,
+                        processedToolCallsRef: { current: new Set() },
+                        editDiagramOriginalXmlRef: { current: new Map() },
+                        loadedMessageIdsRef: { current: new Set() },
+                        turnPageIdRef: { current: "pb" },
+                    }),
+                { initialProps: { operations: [connect] as unknown[] } },
+            )
+            // "s" is on page A only
+            expect(mocks.loadDiagram).not.toHaveBeenCalled()
+            rerender({
+                operations: [
+                    connect,
+                    { operation: "add", cell_id: "s", new_xml: box2("s", "L") },
+                ],
+            })
+            expect(mocks.loadDiagram).toHaveBeenCalledTimes(1)
+            const loaded = mocks.loadDiagram.mock.calls[0][0] as string
+            expect(cellOn(loaded, "pb", "e")?.getAttribute("source")).toBe("s")
         } finally {
             mocks.canvas = null
         }

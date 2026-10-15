@@ -102,7 +102,7 @@ test("shows a hint when the provider rejects the key", async ({ page }) => {
     await fetchButton(dialog).click()
     await expect(
         dialog.getByText(
-            "The provider rejected this API key. Check that the key above was copied in full. Incorrect API key",
+            "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account. To make a new one, use Get API key.",
         ),
     ).toBeVisible()
 })
@@ -122,7 +122,7 @@ test("a fetch error stays with its provider", async ({ page }) => {
         ],
     })
     await fetchButton(dialog).click()
-    const error = dialog.getByText("Incorrect API key")
+    const error = dialog.getByText("The provider rejected this API key.")
     await expect(error).toBeVisible()
     await showProvider(dialog, "p2")
     await expect(error).toHaveCount(0)

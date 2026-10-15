@@ -74,4 +74,20 @@ describe("findCachedResponse", () => {
             expect(response.xml.length).toBeGreaterThan(0)
         }
     })
+
+    it("every example fits the width of one draw.io page", () => {
+        // A4 is 827 px wide; a wider example shows draw.io's page break line
+        for (const response of CACHED_EXAMPLE_RESPONSES) {
+            for (const [, attrs] of response.xml.matchAll(
+                /<mxGeometry\b([^>]*)>/g,
+            )) {
+                if (attrs.includes('relative="1"')) continue
+                const x = Number(attrs.match(/\bx="([-\d.]+)"/)?.[1] ?? 0)
+                const width = Number(
+                    attrs.match(/\bwidth="([\d.]+)"/)?.[1] ?? 0,
+                )
+                expect(x + width).toBeLessThanOrEqual(827)
+            }
+        }
+    })
 })

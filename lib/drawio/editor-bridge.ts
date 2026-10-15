@@ -9,7 +9,8 @@
  * With an external draw.io (cross-origin) none of this is available and the
  * app uses the postMessage protocol only.
  */
-import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
+import { create } from "zustand"
+import { isSameDocument, plainLabel, sameFileVars } from "@/lib/diagram-diff"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 import type { SelectionAnswer } from "@/packages/mcp-server/src/selection.ts"
 import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
@@ -47,8 +48,92 @@ export function attachEditor(editorUi: EditorUi, frameWindow: FrameWindow) {
     keepPanelsOnResize()
     closeSidePanels()
     softenGrid()
+    quietUnload()
+    confirmDeleteAll()
+    nameEmbedFiles()
     useCanvasStore.getState().set({ hasEditor: true })
     syncAll()
+}
+
+// The app saves every change on its own (the web app in the browser, the
+// MCP preview on its server): draw.io's "changes may not be saved" prompt
+// on a reload would be wrong
+function quietUnload() {
+    try {
+        ui.onBeforeUnload = () => undefined
+    } catch {
+        // ignore
+    }
+}
+
+// draw.io's pages menu removes every page at once with "Delete All": ask
+// first. The menu is built each time it opens; its item is wrapped then.
+function confirmDeleteAll() {
+    const menu = ui?.menus?.get?.("pages")
+    const build = menu?.funct
+    const label = win?.mxResources?.get?.("deleteAll")
+    if (typeof build !== "function" || build.naiWrapped || !label) return
+    const askFirst = (run: () => void) => {
+        const r = win.mxResources
+        if (typeof ui.confirm === "function") {
+            ui.confirm(r.get("areYouSure"), run, null, label, r.get("cancel"))
+        } else if (win.confirm(r.get("areYouSure"))) {
+            run()
+        }
+    }
+    const wrapped = function (this: any, popup: any, ...rest: unknown[]) {
+        const addItem = popup?.addItem
+        if (typeof addItem !== "function")
+            return build.apply(this, [popup, ...rest])
+        const own = Object.hasOwn(popup, "addItem")
+        popup.addItem = function (
+            this: any,
+            title: unknown,
+            image: unknown,
+            funct: unknown,
+            ...more: unknown[]
+        ) {
+            const action =
+                title === label && typeof funct === "function"
+                    ? (...args: unknown[]) => askFirst(() => funct(...args))
+                    : funct
+            return addItem.call(this, title, image, action, ...more)
+        }
+        try {
+            return build.apply(this, [popup, ...rest])
+        } finally {
+            if (own) popup.addItem = addItem
+            else delete popup.addItem
+        }
+    }
+    wrapped.naiWrapped = true
+    menu.funct = wrapped
+}
+
+// The name draw.io's own export dialogs propose; none: diagram-YYYY-MM-DD,
+// as the app's export dialog has it
+let fileTitle: string | null = null
+
+/** The diagram's name, for draw.io's own export and save dialogs */
+export function setFileTitle(title: string | null) {
+    fileTitle = title?.trim() || null
+}
+
+// The embedded editor's file has no title (draw.io makes a new one on every
+// load), so its export dialogs would propose ".drawio.png"
+function nameEmbedFiles() {
+    const proto = win?.EmbedFile?.prototype
+    const original = proto?.getTitle
+    if (typeof original !== "function" || original.naiWrapped) return
+    const wrapped = function (this: any) {
+        return (
+            original.call(this) ||
+            fileTitle ||
+            `diagram-${new Date().toLocaleDateString("sv-SE")}`
+        )
+    }
+    wrapped.naiWrapped = true
+    proto.getTitle = wrapped
 }
 
 // draw.io's simple UI opens or closes its format panel and shape library
@@ -156,6 +241,11 @@ function withoutUndo(fn: () => void) {
 /** Id of the page on the canvas, when draw.io has pages */
 function currentPageId(): string | null {
     const id = ui?.currentPage?.getId?.()
+    return id === undefined || id === null ? null : String(id)
+}
+
+function firstPageId(): string | null {
+    const id = ui?.pages?.[0]?.getId?.()
     return id === undefined || id === null ? null : String(id)
 }
 
@@ -450,11 +540,17 @@ let fitting = false
 
 /** The zoom changed: if the user did it, a later resize keeps their view */
 function zoomChanged() {
-    if (!fitting) lastAutoFitAt = 0
+    if (fitting) return
+    lastAutoFitAt = 0
+    lastOpenedAt = 0
 }
 
 /** Fit again if the last automatic fit just happened (layout still moving) */
 export function refitIfRecent(windowMs = 1500) {
+    if (Date.now() - lastOpenedAt < windowMs) {
+        placeOpenedDiagram()
+        return true
+    }
     if (Date.now() - lastAutoFitAt < windowMs) {
         fitDiagram()
         return true
@@ -464,6 +560,42 @@ export function refitIfRecent(windowMs = 1500) {
 
 // Room around a fitted diagram (half of this on each side)
 const FIT_BORDER = 128
+
+// When a diagram was last opened; the chat panel sliding in right after
+// places it again for the canvas's final width
+let lastOpenedAt = 0
+
+/** A diagram just opened comes into view; an empty page keeps the view */
+export function fitOpenedDiagram() {
+    if (!graph() || isEmptyModel()) return
+    lastOpenedAt = Date.now()
+    placeOpenedDiagram()
+}
+
+// As draw.io opens a file: the page in the middle. Shapes that still reach
+// out of view (off the page, or a page wider than the canvas) are fitted
+function placeOpenedDiagram() {
+    const g = graph()
+    if (!g) return
+    fitting = true
+    try {
+        ui?.resetScrollbars?.()
+    } catch {
+        // ignore
+    } finally {
+        fitting = false
+    }
+    const b = g.getGraphBounds()
+    const c = g.container
+    const left = b.x - c.scrollLeft
+    const top = b.y - c.scrollTop
+    const inView =
+        left >= 0 &&
+        top >= 0 &&
+        left + b.width <= c.clientWidth &&
+        top + b.height <= c.clientHeight
+    if (!inView) fitDiagram()
+}
 
 /** Fit the shapes (not the whole page) into the canvas, at most at 100% */
 function fitDiagram() {
@@ -501,13 +633,51 @@ export function keepCenter(oldWidth: number, newWidth: number) {
     container.scrollLeft += (oldWidth - newWidth) / 2
 }
 
+/** An empty page goes to the middle of the canvas; false when it has shapes */
+export function centerEmptyPage(): boolean {
+    if (!ui || !isEmptyModel() || typeof ui.resetScrollbars !== "function") {
+        return false
+    }
+    try {
+        ui.resetScrollbars()
+        return true
+    } catch {
+        return false
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Highlighting what the AI changed
 // ---------------------------------------------------------------------------
 
 let highlights: any[] = []
+let fadeTimer: ReturnType<typeof setTimeout> | null = null
+let offerTimer: ReturnType<typeof setTimeout> | null = null
+// An outline waiting for draw.io to draw the cells (highlightChangedCells)
+let outlineTimer: ReturnType<typeof setTimeout> | null = null
 
-export function clearHighlights() {
+// The outline stays this long, then fades; the canvas offers to show it
+// again for a while after
+const OUTLINE_MS = 3000
+const FADE_MS = 400
+const OFFER_MS = 6000
+
+/**
+ * The cells of an outline that faded on its own, while the canvas offers
+ * to show it again (null: no offer), and draw.io's drawing area (between
+ * its toolbars and panels) in the frame's pixels: its top and middle
+ */
+export const useFadedOutline = create<{
+    ids: string[] | null
+    /** The page the outline was on */
+    pageId: string | null
+    top: number
+    middle: number | null
+}>(() => ({ ids: null, pageId: null, top: 0, middle: null }))
+
+function removeOutline() {
+    if (fadeTimer) clearTimeout(fadeTimer)
+    fadeTimer = null
     for (const h of highlights) {
         try {
             h.destroy()
@@ -518,13 +688,52 @@ export function clearHighlights() {
     highlights = []
 }
 
+function endOffer() {
+    if (offerTimer) clearTimeout(offerTimer)
+    offerTimer = null
+    if (useFadedOutline.getState().ids) useFadedOutline.setState({ ids: null })
+}
+
+/** Ends the outline of what the AI changed (also one still to come), and
+ * the offer to show it again */
+export function clearHighlights() {
+    if (outlineTimer) clearTimeout(outlineTimer)
+    outlineTimer = null
+    removeOutline()
+    endOffer()
+}
+
+/** The outline fades out; the canvas then offers to show it again */
+function fadeOutline(ids: string[]) {
+    for (const h of highlights) {
+        const node = h.shape?.node as SVGElement | undefined
+        if (!node) continue
+        node.style.transition = `opacity ${FADE_MS}ms`
+        node.style.opacity = "0"
+    }
+    fadeTimer = setTimeout(() => {
+        removeOutline()
+        const area = (
+            graph()?.container as HTMLElement | undefined
+        )?.getBoundingClientRect()
+        useFadedOutline.setState({
+            ids,
+            pageId: currentPageId(),
+            top: area?.top ?? 0,
+            middle: area ? area.left + area.width / 2 : null,
+        })
+        offerTimer = setTimeout(endOffer, OFFER_MS)
+    }, FADE_MS)
+}
+
 // Outline of changed shapes: dark enough to show on white paper and on
 // draw.io's pale fills (yellow ones included)
 const HIGHLIGHT_OUTLINE = "#a86b00"
 
 /**
- * Marks changed cells: shapes get a soft halo plus a thin outline,
- * connectors only the outline (a halo would cover their labels and arrows)
+ * Marks changed cells for a few seconds: shapes get a soft halo plus a thin
+ * outline, connectors only the outline (a halo would cover their labels and
+ * arrows). Drawn over the canvas, never part of the diagram.
  */
 export function highlightCells(ids: string[], color: string) {
     clearHighlights()
@@ -548,19 +757,46 @@ export function highlightCells(ids: string[], color: string) {
         if (!g.model.isEdge(cell)) add(state, color, 8, 18)
         add(state, HIGHLIGHT_OUTLINE, 2, 100)
     }
+    if (highlights.length > 0) {
+        fadeTimer = setTimeout(() => fadeOutline(ids), OUTLINE_MS)
+    }
 }
 
 /**
  * Marks the cells an AI change touched in the page's marker color, once
- * draw.io has drawn them (the web app's versions and the MCP shell share it)
+ * draw.io has drawn them (the web app's versions and the MCP shell share
+ * it). navigate (Show changes) shows that page first; the automatic outline
+ * after a change leaves the user on the page they are on.
  */
-export function highlightChangedCells(ids: string[]) {
-    setTimeout(() => {
+export function highlightChangedCells(
+    ids: string[],
+    pageId?: string | null,
+    { navigate = true }: { navigate?: boolean } = {},
+) {
+    if (ids.length === 0) {
+        clearHighlights()
+        return
+    }
+    if (outlineTimer) clearTimeout(outlineTimer)
+    // No page id: the first page (as commits and versions name it)
+    const page = pageId ?? firstPageId()
+    if (navigate && page) selectPage(page)
+    // Only on the page the change belongs to: a full load may still be
+    // bringing it back (wait a little), the user may have gone to another
+    // one (then nothing is drawn, as cell ids repeat across pages)
+    let tries = 0
+    const draw = () => {
+        outlineTimer = null
+        if (page && currentPageId() !== page) {
+            if (++tries < 15) outlineTimer = setTimeout(draw, 100)
+            return
+        }
         const marker = getComputedStyle(document.documentElement)
             .getPropertyValue("--marker")
             .trim()
         highlightCells(ids, marker || "#ffd84d")
-    }, 60)
+    }
+    outlineTimer = setTimeout(draw, 60)
 }
 
 // ---------------------------------------------------------------------------
@@ -575,17 +811,7 @@ function cellLabel(cell: any): string {
     } catch {
         text = ""
     }
-    // Labels can contain HTML
-    text = text
-        .replace(/<br\s*\/?>/gi, " ")
-        .replace(/<[^>]+>/g, "")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/\s+/g, " ")
-        .trim()
-    return text.length > 80 ? `${text.slice(0, 80)}…` : text
+    return plainLabel(text)
 }
 
 function readSelection(): SelectedCell[] {
@@ -710,7 +936,8 @@ function installListeners(): () => void {
         cleanups.push(() => source.removeListener(handler))
     }
 
-    // Any user action ends the "what the AI just changed" highlight
+    // Any user action ends the "what the AI just changed" highlight: a
+    // click on the canvas, a selection, another page
     const onSelection = () => {
         clearHighlights()
         syncAll()
@@ -727,10 +954,36 @@ function installListeners(): () => void {
     listen(g.view, mxEvent.SCALE, onScale)
     listen(g.view, mxEvent.TRANSLATE, syncSelectionRect)
     listen(g.view, mxEvent.SCALE_AND_TRANSLATE, onScale)
-    listen(ui.editor, "pageSelected", syncAll)
+    // Another page ends the outline on screen, but not one still to come:
+    // a full load that restores the AI's page fires this too
+    listen(ui.editor, "pageSelected", () => {
+        removeOutline()
+        endOffer()
+        syncAll()
+    })
+
+    // draw.io closes its menus on a press inside its own page only; Escape
+    // and a press in the app close them too
+    const closeMenus = () => {
+        try {
+            ui?.hideCurrentMenu?.()
+        } catch {
+            // ignore
+        }
+    }
+    const onAppKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") closeMenus()
+    }
+    document.addEventListener("pointerdown", closeMenus, true)
+    document.addEventListener("keydown", onAppKeyDown, true)
+    cleanups.push(() => {
+        document.removeEventListener("pointerdown", closeMenus, true)
+        document.removeEventListener("keydown", onAppKeyDown, true)
+    })
 
     // Capture phase, so the app shortcut wins before draw.io's key handler
     const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") closeMenus()
         if (appShortcutHandler?.(event)) {
             event.preventDefault()
             event.stopPropagation()
@@ -763,9 +1016,11 @@ function installListeners(): () => void {
 
     const container = g.container as HTMLElement | undefined
     container?.addEventListener("scroll", syncSelectionRect, { passive: true })
-    cleanups.push(() =>
-        container?.removeEventListener("scroll", syncSelectionRect),
-    )
+    container?.addEventListener("pointerdown", clearHighlights, true)
+    cleanups.push(() => {
+        container?.removeEventListener("scroll", syncSelectionRect)
+        container?.removeEventListener("pointerdown", clearHighlights, true)
+    })
 
     return () => {
         for (const cleanup of cleanups) cleanup()

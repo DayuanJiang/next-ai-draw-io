@@ -40,9 +40,9 @@ import { formatMessage } from "@/lib/i18n/utils"
 import { modKey } from "@/lib/platform"
 import { extractUrlContent } from "@/lib/url-utils"
 import { cn } from "@/lib/utils"
-import { useSettingsStore } from "@/stores/settings-store"
+import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
-import { ATTACHMENT_ACCEPT, validateFiles } from "./attachments"
+import { ATTACHMENT_ACCEPT, isDiagramFile, validateFiles } from "./attachments"
 import { useChatEngine } from "./chat-engine"
 
 function showValidationErrors(errors: string[], dict: any) {
@@ -149,6 +149,7 @@ export function Composer({
     const openSettings = useUiStore((s) => s.openSettings)
     const focusToken = useUiStore((s) => s.focusComposerToken)
 
+    const formRef = useRef<HTMLFormElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -174,6 +175,15 @@ export function Composer({
     useEffect(() => {
         adjustHeight()
     }, [input, adjustHeight])
+
+    // On the start screen an attachment makes the box taller: keep its
+    // Send row in view
+    const attachmentCount = files.length + urlData.size
+    useEffect(() => {
+        if (isHero && attachmentCount > 0) {
+            formRef.current?.scrollIntoView({ block: "nearest" })
+        }
+    }, [isHero, attachmentCount])
 
     // Focus requests from elsewhere (new chat, "ask AI" button, ⌘/)
     useEffect(() => {
@@ -201,7 +211,13 @@ export function Composer({
         }
     }, [isDisabled, isLeaving])
 
-    const addFiles = (newFiles: File[]) => {
+    const addFiles = (added: File[]) => {
+        // A draw.io file is opened as the diagram, as "Open .drawio file"
+        // does; what is typed and attached stays for the next message
+        const diagram = added.find(isDiagramFile)
+        if (diagram) engine.openDiagramFile(diagram, { keepComposer: true })
+        const newFiles = added.filter((file) => !isDiagramFile(file))
+        if (newFiles.length === 0) return
         const { validFiles, errors } = validateFiles(
             newFiles,
             files.length,
@@ -214,11 +230,7 @@ export function Composer({
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Enter that confirms an IME candidate must not send the message
         if (e.nativeEvent.isComposing || e.keyCode === 229) return
-        const shouldSend =
-            sendShortcut === "enter"
-                ? e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey
-                : (e.metaKey || e.ctrlKey) && e.key === "Enter"
-        if (shouldSend) {
+        if (isSendKey(e, sendShortcut)) {
             e.preventDefault()
             if (canSend) engine.submit()
         }
@@ -298,6 +310,7 @@ export function Composer({
 
     return (
         <form
+            ref={formRef}
             id={isHero ? "hero-chat-form" : "chat-form"}
             onSubmit={(e) => {
                 e.preventDefault()
@@ -319,7 +332,8 @@ export function Composer({
             className={cn(
                 "group/composer relative w-full rounded-[14px] border border-border bg-card transition-[border-color,box-shadow] duration-150",
                 "focus-within:border-foreground/20 focus-within:shadow-[0_0_0_4px_var(--accent)]",
-                isHero && "rounded-[18px] border-transparent shadow-pop",
+                isHero &&
+                    "scroll-mb-6 rounded-[18px] border-transparent shadow-pop",
                 isDragging &&
                     "border-foreground/30 shadow-[0_0_0_4px_var(--marker-soft)]",
             )}
@@ -467,7 +481,12 @@ export function Composer({
                             className="hidden shrink-0 font-sans text-[11px] text-faint sm:inline"
                             aria-hidden
                         >
-                            {sendShortcut === "enter" ? "↵" : `${modKey}↵`}
+                            {formatMessage(
+                                dict.chat.sendKeyHint,
+                                sendShortcut === "enter"
+                                    ? { send: "↵", newline: "⇧↵" }
+                                    : { send: `${modKey}↵`, newline: "↵" },
+                            )}
                         </kbd>
                     )}
                     {isBusy ? (

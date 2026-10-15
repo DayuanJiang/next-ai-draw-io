@@ -18,6 +18,9 @@ afterEach(cleanup)
 // jsdom has no scrolling; the strip scrolls to its newest version
 Element.prototype.scrollTo = vi.fn()
 
+const bridge = vi.hoisted(() => ({ highlightChangedCells: vi.fn() }))
+vi.mock("@/lib/drawio/editor-bridge", () => bridge)
+
 const version = (id: string, number: number): VersionItem => ({
     id,
     number,
@@ -116,6 +119,76 @@ describe("VersionCard", () => {
         fireEvent.click(getByTestId("version-restore"))
         expect(idle.restore).toHaveBeenCalledWith("v1")
     })
+
+    it("outlines the changes of the version on the canvas again, on its page", () => {
+        const changed = {
+            ...version("v2", 2),
+            pageId: "p2",
+            touchedIds: ["a", "b"],
+        }
+        const value = source({ versions: [version("v1", 1), changed] })
+        const { getByText, queryByText, rerender } = mount(
+            <VersionCard version={changed} isLatest label="x" />,
+            value,
+        )
+        fireEvent.click(getByText("Show changes"))
+        expect(bridge.highlightChangedCells).toHaveBeenCalledWith(
+            ["a", "b"],
+            "p2",
+        )
+        // Not for a version off the canvas, nor one drawn from nothing
+        const off = source({ onCanvasId: "v1" })
+        rerender(
+            <DictionaryProvider dictionary={en as unknown as Dictionary}>
+                <VersionsProvider value={off}>
+                    <VersionCard version={changed} isLatest label="x" />
+                    <VersionCard
+                        version={{ ...changed, id: "v1", fromScratch: true }}
+                        isLatest={false}
+                        label="x"
+                    />
+                </VersionsProvider>
+            </DictionaryProvider>,
+        )
+        expect(queryByText("Show changes")).toBeNull()
+    })
+
+    it("names the page the change was made on when there are several", () => {
+        const twoPages = {
+            ...version("v2", 2),
+            xml: '<mxfile><diagram id="p1" name="Overview"/><diagram id="p2" name="Checkout"/></mxfile>',
+            pageId: "p2",
+        }
+        const { container } = mount(
+            <VersionCard version={twoPages} isLatest={false} label="x" />,
+            source(),
+        )
+        expect(container.textContent).toContain("Checkout: Added 2 shapes")
+    })
+
+    it("says when the canvas was changed by hand since the version", () => {
+        const value = source({ onCanvasId: null })
+        const { queryByTestId, rerender } = mount(
+            <VersionCard version={value.versions[1]} isLatest label="x" />,
+            value,
+        )
+        expect(queryByTestId("version-edited-since")).toBeNull()
+        rerender(
+            <DictionaryProvider dictionary={en as unknown as Dictionary}>
+                <VersionsProvider value={value}>
+                    <VersionCard
+                        version={value.versions[1]}
+                        isLatest
+                        label="x"
+                        editedSince
+                    />
+                </VersionsProvider>
+            </DictionaryProvider>,
+        )
+        expect(queryByTestId("version-edited-since")?.textContent).toContain(
+            "by hand",
+        )
+    })
 })
 
 describe("VersionStrip", () => {
@@ -125,6 +198,17 @@ describe("VersionStrip", () => {
         expect(thumbs).toHaveLength(2)
         expect(thumbs[1].title).toContain("Canvas now")
         expect(thumbs[0].title).not.toContain("Canvas now")
+    })
+
+    it("marks the version hand edits were made on, more lightly", () => {
+        const { getAllByTestId } = mount(
+            <VersionStrip />,
+            source({ onCanvasId: null, editedSinceId: "v1" }),
+        )
+        const thumbs = getAllByTestId("version-thumb")
+        expect(thumbs[0].title).toContain("by hand")
+        expect(thumbs[0].className).toContain("outline-foreground/35")
+        expect(thumbs[1].title).toBe("v2")
     })
 
     it("hides below the minimum", () => {
